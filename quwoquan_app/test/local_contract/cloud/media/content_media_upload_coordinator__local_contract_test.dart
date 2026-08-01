@@ -30,7 +30,7 @@ void main() {
           coordinator.uploadPreparedSource(
             source: source,
             mediaType: ContentMediaType.video,
-            contentType: 'video/mp4',
+            mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
           throwsA(
@@ -67,13 +67,13 @@ void main() {
             ]),
           ),
           mediaType: ContentMediaType.video,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           uploadStream:
               (
                 _,
                 body, {
                 required contentLength,
-                required contentType,
+                required mimeType,
                 required expectedSha256,
                 abortTrigger,
               }) async {
@@ -101,6 +101,39 @@ void main() {
     );
 
     test(
+      'complete command carries only the explicitly disclosed EXIF snapshot',
+      () async {
+        final media = RecordingContentMediaFacet();
+        final coordinator = ContentMediaUploadCoordinator(media: media);
+        final capturedAt = DateTime.utc(2026, 5, 2, 8, 30);
+
+        await coordinator.uploadPreparedSource(
+          source: PreparedContentMediaSource(
+            fileSize: 1,
+            sha256Digest: sha256.convert(const <int>[1]).toString(),
+            openRead: () => Stream<List<int>>.value(const <int>[1]),
+          ),
+          mediaType: ContentMediaType.image,
+          mimeType: 'image/jpeg',
+          captureMetadata: ContentMediaCaptureMetadata(
+            cameraModel: 'ILCE-7M4',
+            capturedAt: capturedAt,
+          ),
+          uploadStream: _drainUpload,
+        );
+
+        expect(media.completeCommands, hasLength(1));
+        expect(
+          media.completeCommands.single.captureMetadata?.toWire(),
+          <String, Object?>{
+            'cameraModel': 'ILCE-7M4',
+            'capturedAt': capturedAt.toIso8601String(),
+          },
+        );
+      },
+    );
+
+    test(
       'cancellation aborts both data plane and authoritative session',
       () async {
         final media = RecordingContentMediaFacet();
@@ -116,14 +149,14 @@ void main() {
             openRead: () => Stream<List<int>>.value(bytes),
           ),
           mediaType: ContentMediaType.video,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           cancellationSignal: cancellation,
           uploadStream:
               (
                 _,
                 _, {
                 required contentLength,
-                required contentType,
+                required mimeType,
                 required expectedSha256,
                 abortTrigger,
               }) async {
@@ -163,13 +196,13 @@ void main() {
               openRead: () => Stream<List<int>>.value(bytes),
             ),
             mediaType: ContentMediaType.image,
-            contentType: 'image/jpeg',
+            mimeType: 'image/jpeg',
             uploadStream:
                 (
                   _,
                   _, {
                   required contentLength,
-                  required contentType,
+                  required mimeType,
                   required expectedSha256,
                   abortTrigger,
                 }) async {
@@ -207,13 +240,13 @@ void main() {
               openRead: () => Stream<List<int>>.value(bytes),
             ),
             mediaType: ContentMediaType.image,
-            contentType: 'image/jpeg',
+            mimeType: 'image/jpeg',
             uploadStream:
                 (
                   _,
                   _, {
                   required contentLength,
-                  required contentType,
+                  required mimeType,
                   required expectedSha256,
                   abortTrigger,
                 }) async {
@@ -264,7 +297,7 @@ void main() {
             openRead: () => Stream<List<int>>.value(bytes),
           ),
           mediaType: ContentMediaType.video,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           uploadStream: _drainUpload,
         );
 
@@ -290,7 +323,7 @@ void main() {
         final initialized = await media.initUpload(
           InitContentMediaUploadCommand(
             mediaType: ContentMediaType.video,
-            contentType: 'video/mp4',
+            mimeType: 'video/mp4',
             fileSize: bytes.length,
             expectedSha256: sha256.convert(bytes).toString(),
           ),
@@ -312,7 +345,7 @@ void main() {
             openRead: () => Stream<List<int>>.value(bytes),
           ),
           mediaType: ContentMediaType.video,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           uploadStream: _drainUpload,
           checkpoint: persisted.single,
           onCheckpoint: (updated) async {
@@ -353,7 +386,7 @@ void main() {
         final expired = await media.initUpload(
           InitContentMediaUploadCommand(
             mediaType: ContentMediaType.video,
-            contentType: 'video/mp4',
+            mimeType: 'video/mp4',
             fileSize: bytes.length,
             expectedSha256: digest,
           ),
@@ -374,7 +407,7 @@ void main() {
             openRead: () => Stream<List<int>>.value(bytes),
           ),
           mediaType: ContentMediaType.video,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           uploadStream: _drainUpload,
           checkpoint: durable,
           onCheckpoint: (updated) async => durable = updated,
@@ -410,7 +443,7 @@ void main() {
               openRead: () => Stream<List<int>>.value(bytes),
             ),
             mediaType: ContentMediaType.video,
-            contentType: 'video/mp4',
+            mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
           throwsA(isA<StateError>()),
@@ -442,7 +475,7 @@ void main() {
               openRead: () => Stream<List<int>>.value(bytes),
             ),
             mediaType: ContentMediaType.video,
-            contentType: 'video/mp4',
+            mimeType: 'video/mp4',
             uploadStream: _drainUpload,
           ),
           throwsA(isA<StateError>()),
@@ -505,7 +538,7 @@ Future<void> _drainUpload(
   Uri _,
   Stream<List<int>> body, {
   required int contentLength,
-  required String contentType,
+  required String mimeType,
   required String expectedSha256,
   Future<void>? abortTrigger,
 }) async {

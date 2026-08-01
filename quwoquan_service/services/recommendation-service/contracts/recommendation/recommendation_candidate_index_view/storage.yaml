@@ -1,0 +1,26 @@
+backend: mongodb
+role: projection
+collections:
+  rm_discovery_feed: {entity: RecommendationCandidateIndexView, role: projection}
+  rm_premium_pool: {entity: RecommendationPremiumCandidateProjection, role: projection}
+  rm_entity_tags: {entity: RecommendationEntityTagProjection, role: projection}
+  recommendation_candidate_tombstones:
+    entity: RecommendationCandidateTombstone
+    role: projection_checkpoint
+    indexes:
+    - name: idx_recommendation_candidate_tombstone_sequence
+      keys: {sourceSequence: 1}
+  recommendation_candidate_projection_checkpoints: {entity: RecommendationCandidateProjectionCheckpoint, role: checkpoint}
+  recommendation_candidate_source_inbox:
+    entity: RecommendationCandidateSourceInbox
+    role: inbox
+    indexes:
+    - name: uq_recommendation_candidate_source_event
+      keys: {_id: 1}
+      unique: true
+  recommendation_candidate_source_failures:
+    entity: RecommendationCandidateSourceFailure
+    role: append_only
+    indexes:
+    - name: idx_recommendation_candidate_source_failure_updated
+      keys: {updatedAt: 1}

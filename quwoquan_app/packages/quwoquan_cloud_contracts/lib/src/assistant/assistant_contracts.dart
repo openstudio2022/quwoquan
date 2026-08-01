@@ -38,13 +38,13 @@ AssistantLearningFactAppendReceipt decodeAssistantLearningFactAppendReceipt(
   );
 }
 
-/// AssistantConversation 的纯 Dart client projection。
+/// AssistantSession 的纯 Dart client projection。
 ///
-/// 字段逐项对应 `assistant_conversation/fields.yaml`；ID、状态与时间戳采用
+/// 字段逐项对应 `assistant_session/fields.yaml`；ID、状态与时间戳采用
 /// fail-closed 解码，允许领域合同明确允许为空的 turn ID 与 summary 保持空串。
-final class AssistantConversationProjection {
-  const AssistantConversationProjection({
-    required this.conversationId,
+final class AssistantSessionProjection {
+  const AssistantSessionProjection({
+    required this.sessionId,
     required this.userId,
     required this.state,
     required this.activeTurnId,
@@ -54,7 +54,7 @@ final class AssistantConversationProjection {
     required this.updatedAt,
   });
 
-  final String conversationId;
+  final String sessionId;
   final String userId;
   final String state;
   final String activeTurnId;
@@ -64,21 +64,21 @@ final class AssistantConversationProjection {
   final DateTime updatedAt;
 }
 
-/// AssistantConversation owner keyset page；`nextCursor == null` 表示末页。
-final class AssistantConversationListProjection {
-  const AssistantConversationListProjection({
+/// AssistantSession owner keyset page；`nextCursor == null` 表示末页。
+final class AssistantSessionListProjection {
+  const AssistantSessionListProjection({
     required this.items,
     required this.nextCursor,
   });
 
-  final List<AssistantConversationProjection> items;
+  final List<AssistantSessionProjection> items;
   final String? nextCursor;
 }
 
-AssistantConversationProjection decodeAssistantConversation(Object? response) {
-  final value = _object(response, 'AssistantConversation');
-  return AssistantConversationProjection(
-    conversationId: _requiredField(value, 'conversationId'),
+AssistantSessionProjection decodeAssistantSession(Object? response) {
+  final value = _object(response, 'AssistantSession');
+  return AssistantSessionProjection(
+    sessionId: _requiredField(value, 'sessionId'),
     userId: _requiredField(value, 'userId'),
     state: _requiredField(value, 'state'),
     activeTurnId: _stringField(value, 'activeTurnId'),
@@ -89,19 +89,15 @@ AssistantConversationProjection decodeAssistantConversation(Object? response) {
   );
 }
 
-AssistantConversationListProjection decodeAssistantConversationList(
-  Object? response,
-) {
-  final value = _object(response, 'AssistantConversationList');
+AssistantSessionListProjection decodeAssistantSessionList(Object? response) {
+  final value = _object(response, 'AssistantSessionList');
   final rawItems = value['items'];
   if (rawItems is! List) {
-    throw const FormatException(
-      'AssistantConversationList.items must be a list',
-    );
+    throw const FormatException('AssistantSessionList.items must be a list');
   }
-  return AssistantConversationListProjection(
+  return AssistantSessionListProjection(
     items: rawItems
-        .map<AssistantConversationProjection>(decodeAssistantConversation)
+        .map<AssistantSessionProjection>(decodeAssistantSession)
         .toList(growable: false),
     nextCursor: _optionalField(value, 'nextCursor'),
   );

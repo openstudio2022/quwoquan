@@ -1,0 +1,16 @@
+backend: mongodb
+role: append_only
+collections:
+  recommendation_subject_closure_facts:
+    entity: RecommendationSubjectClosureFact
+    role: append_only
+    indexes:
+    - {name: uq_recommendation_subject_closure_account, keys: {accountId: 1}, unique: true}
+    - {name: uq_recommendation_subject_closure_event, keys: {sourceEventId: 1}, unique: true}
+    - {name: idx_recommendation_subject_closure_subject, keys: {subjectIds: 1}}
+  recommendation_subject_closure_failures:
+    entity: RecommendationSubjectClosureFailure
+    role: reliable_task
+    description: events.user.account 消费失败的有界尝试计数；成功或进入脱敏 DLQ 后立即删除。
+    indexes:
+    - {name: ttl_recommendation_subject_closure_failures, keys: {updatedAt: 1}, ttl_days: 7}

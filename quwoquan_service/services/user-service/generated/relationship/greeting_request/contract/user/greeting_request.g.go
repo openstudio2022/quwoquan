@@ -2,19 +2,22 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 )
 
 type GreetingRequest struct {
-	ID                     string     `json:"id" db:"id"`
-	RequesterPersonaID     string     `json:"requesterPersonaId" db:"requester_persona_id"`
-	TargetPersonaID        string     `json:"targetPersonaId" db:"target_persona_id"`
-	RequestMessage         string     `json:"requestMessage" db:"request_message"`
-	Status                 string     `json:"status" db:"status"`
-	Source                 string     `json:"source" db:"source"`
-	PromotedConversationID string     `json:"promotedConversationId" db:"promoted_conversation_id"`
-	ExpireAt               *time.Time `json:"expireAt" db:"expire_at"`
-	DecisionAt             *time.Time `json:"decisionAt" db:"decision_at"`
-	CreatedAt              time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt              time.Time  `json:"updatedAt" db:"updated_at"`
+	ID                     string          `json:"id" db:"id"`
+	RequesterPersonaID     string          `json:"requesterPersonaId" db:"requester_persona_id"`
+	TargetPersonaID        string          `json:"targetPersonaId" db:"target_persona_id"`
+	RequestMessage         string          `json:"requestMessage" db:"request_message"`
+	IntersectionRef        json.RawMessage `json:"intersectionRef" db:"intersection_ref"`
+	IntersectionSnapshot   json.RawMessage `json:"intersectionSnapshot" db:"intersection_snapshot"`
+	Status                 string          `json:"status" db:"status"`
+	Source                 string          `json:"source" db:"source"`
+	PromotedConversationID string          `json:"promotedConversationId" db:"promoted_conversation_id"`
+	ExpireAt               *time.Time      `json:"expireAt" db:"expire_at"`
+	DecisionAt             *time.Time      `json:"decisionAt" db:"decision_at"`
+	CreatedAt              time.Time       `json:"createdAt" db:"created_at"`
+	UpdatedAt              time.Time       `json:"updatedAt" db:"updated_at"`
 }

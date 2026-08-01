@@ -7,11 +7,9 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .local_environment_auth import open_local_acceptance_session
-
-
 PUBLISH_TOKEN_ENV_DEFAULT = "QWQ_FILTER_CATALOG_PUBLISH_TOKEN"
 LOCAL_FILTER_CATALOG_TARGETS = {
+    "alpha-local": "alpha",
     "beta-local": "beta",
     "gamma-local": "gamma",
 }
@@ -36,6 +34,8 @@ def execute_filter_catalog_command(
     rollback_release_id: str,
     token_env: str,
     prod_gray_activation: bool,
+    token_value: str = "",
+    ssl_cafile: str = "",
     diagnostic_log_path: Path | None = None,
 ) -> FilterCatalogCommandExecution:
     """以 target 绑定的身份调用唯一 Data CLI，不泄漏 bearer token。"""
@@ -49,23 +49,24 @@ def execute_filter_catalog_command(
         raise ValueError(f"unsupported filter catalog action: {action}")
     normalized_token_env = _token_env_name(token_env)
     process_env = os.environ.copy()
-    local_environment = LOCAL_FILTER_CATALOG_TARGETS.get(target_name)
+    normalized_cafile = str(ssl_cafile or "").strip()
+    if normalized_cafile:
+        ca_path = Path(normalized_cafile).expanduser()
+        if not ca_path.is_absolute() or not ca_path.is_file() or ca_path.is_symlink():
+            raise ValueError("FilterCatalogRelease TLS CA file is invalid")
+        process_env["SSL_CERT_FILE"] = str(ca_path)
     if action in MUTATING_ACTIONS:
-        if local_environment is not None:
-            session = open_local_acceptance_session(
-                api_base_url,
-                environment=local_environment,
-                target_name=target_name,
-                subject=f"filter-catalog-{local_environment}-publisher",
-                profile="content-filter-catalog-publisher",
-            )
-            process_env[normalized_token_env] = session.access_token
-        elif target_name == "prod-hosted":
-            token = process_env.get(normalized_token_env, "").strip()
+        if target_name in {*LOCAL_FILTER_CATALOG_TARGETS, "prod-hosted"}:
+            token = str(token_value or "").strip() or process_env.get(
+                normalized_token_env,
+                "",
+            ).strip()
             if not token:
                 raise ValueError(
-                    f"prod FilterCatalogRelease mutation requires {normalized_token_env}"
+                    "FilterCatalogRelease mutation requires a protected canonical "
+                    f"publisher token in {normalized_token_env}"
                 )
+            process_env[normalized_token_env] = token
         else:
             raise ValueError(
                 f"FilterCatalogRelease publish target is unsupported: {target_name}"

@@ -29,3 +29,13 @@ capabilities:
 - auditable
 taggable: false
 vector_enabled: false
+business_rules:
+- endpoint secret 只在单次 provider 调用内经 user-service typed reader 获取，不持久化到 Integration 账本。
+- deliveryKey 对同一业务通知与 endpoint 幂等，attempt 与 dead-letter 只由 Integration 事实对象追加。
+- provider result 必须映射为 canonical ExternalInteraction 状态，不向调用方泄漏第三方原始错误。
+lifecycle:
+  refresh_semantics: resolve_endpoint_at_delivery_time
+  tombstone: detach_immediately_when_device_registration_is_revoked
+external_authority:
+  owner: apns_voip_or_fcm_provider
+  identity_contract: endpoint_ref_and_delivery_key

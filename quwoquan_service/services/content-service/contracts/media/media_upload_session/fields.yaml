@@ -178,6 +178,7 @@ types:
   CompleteMediaUploadRequest:
     fields:
       - {name: accessPolicy, type: enum, enum_ref: MediaAssetAccessPolicy, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: captureMetadata, type: MediaCaptureMetadata, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
   InitContentMediaUploadCommand:
     fields:
       - name: mediaType
@@ -185,7 +186,7 @@ types:
         enum_ref: MediaType
         client_dart_type: ContentMediaType
         client_wire: canonicalEnum
-      - name: contentType
+      - name: mimeType
         type: string
         constraints:
           - NOT_BLANK
@@ -214,6 +215,12 @@ types:
         client_dart_type: ContentMediaAccessPolicy
         client_default: ContentMediaAccessPolicy.ownerOnly
         client_wire: canonicalEnum
+      - name: captureMetadata
+        type: MediaCaptureMetadata
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentMediaCaptureMetadata?
+        client_wire: toWire
   GetContentMediaUploadSessionQuery:
     fields:
       - name: sessionId

@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	testsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 func TestAnonymousFeedSessionsDoNotEvictEachOthersRankedWindows(t *testing.T) {
@@ -26,10 +27,14 @@ func TestAnonymousFeedSessionsDoNotEvictEachOthersRankedWindows(t *testing.T) {
 			Status: "published", Visibility: "public",
 		})
 	}
+	engine := newTerminalFeedEngine(candidates)
 	service := NewFeedService(
-		newTerminalFeedEngine(candidates),
+		engine,
 		fixtureFeedReader{posts: posts},
-		readyActiveSupplyOption(),
+		testsupport.RankedRecommendationOptions(
+			engine,
+			readyActiveSupplyOption(),
+		)...,
 	)
 
 	var firstSessionCursor string

@@ -10,8 +10,7 @@ import (
 )
 
 // sameIndustry 的可证事实只有「双方都声明了同一职业标签」，结论句必须停在「同行」：
-// 说成「同事」会把行业相似伪装成组织归属（同公司/同团队在注册表中是 deferred，
-// 因为分类树里没有企业实例节点）。
+// 说成「同事」会把行业相似伪装成组织归属；分类树里没有可证企业实例节点。
 func TestExplainSameIndustryStopsAtSameTrade(t *testing.T) {
 	now := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
 	reason := displayReadyFactReason(

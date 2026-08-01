@@ -46,8 +46,8 @@ class RuntimeFailureWire {
       kind: (json['kind'] as String?)?.trim() ?? "",
       nature: (json['nature'] as String?)?.trim() ?? "",
       messageKey: (json['messageKey'] as String?)?.trim() ?? "",
-      recoveryAction: parseToolRecoveryAction((json['recoveryAction'] as String?)?.trim() ?? ""),
-      disruptionLevel: parseToolDisruptionLevel((json['disruptionLevel'] as String?)?.trim() ?? ""),
+      recoveryAction: parseToolRecoveryActionStrict((json['recoveryAction'] as String?)?.trim() ?? ""),
+      disruptionLevel: parseToolDisruptionLevelStrict((json['disruptionLevel'] as String?)?.trim() ?? ""),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       context: (json['context'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
     );

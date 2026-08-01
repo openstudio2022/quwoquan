@@ -1,0 +1,277 @@
+types:
+  CitationDestination:
+    description: 助手与搜索引用的唯一跳转目标；internal 只允许 canonical object type/id，external 只允许校验后的 HTTPS URL。
+    fields:
+    - name: kind
+      source: kind
+      type: enum
+      enum_ref: CitationDestinationKind
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: objectTypeRef
+      source: objectTypeRef
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: objectId
+      source: objectId
+      type: string
+      constraints: [NULLABLE]
+      classification: SENSITIVE
+      log_policy: mask
+      api_exposure: read
+      ops_exposure: read
+    - name: url
+      source: url
+      type: string
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: external destination 仅允许规范化 HTTPS URL。
+  AssistantRunVisibleReferenceView:
+    description: AssistantRun 终态快照中的可点击引用；destination 必须先通过 canonical 引用校验。
+    fields:
+    - name: title
+      source: title
+      type: string
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: destination
+      source: destination
+      type: CitationDestination
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: source
+      source: source
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: snippet
+      source: snippet
+      type: string
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+  AssistantRunVisibleProcessView:
+    description: AssistantRun 唯一可公开的过程条目；禁止包含模型原始推理、检索 query、tool input 或 provider 诊断。
+    fields:
+    - name: processId
+      source: processId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: scope
+      source: scope
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: stage
+      source: stage
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: actionCode
+      source: actionCode
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: status
+      source: status
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: order
+      source: order
+      type: int
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: summary
+      source: summary
+      type: string
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: skillId
+      source: skillId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: searchedDocumentCount
+      source: searchedDocumentCount
+      type: int
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: processedDocumentCount
+      source: processedDocumentCount
+      type: int
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: acceptedDocumentCount
+      source: acceptedDocumentCount
+      type: int
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: acceptedReferences
+      source: acceptedReferences
+      type: '[]AssistantRunVisibleReferenceView'
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+  AssistantRunTerminalFailureView:
+    description: AssistantRun 终态公开失败的脱敏投影；不包含内部 location、cause、context 或 provider 原文。
+    fields:
+    - name: code
+      source: code
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: origin
+      source: origin
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: kind
+      source: kind
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: nature
+      source: nature
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  AssistantSelectedPolicyRefView:
+    description: Run 创建时冻结的 immutable policy release 选择；release 变更或回滚不得改写既有 Run。
+    fields:
+    - name: policyId
+      source: policyId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: releaseDigest
+      source: releaseDigest
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: cohort
+      source: cohort
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read
+  AssistantRunTerminalSnapshotView:
+    description: 无 TTL 的 AssistantRun 终态用户可见快照；GetRun、SSE 终态重放与历史恢复只消费该事实。
+    fields:
+    - name: answerText
+      source: answerText
+      type: string
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: processes
+      source: processes
+      type: '[]AssistantRunVisibleProcessView'
+      constraints: [NOT_NULL]
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: failure
+      source: failure
+      type: AssistantRunTerminalFailureView
+      constraints: [NULLABLE]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: selectedPolicyRef
+      source: selectedPolicyRef
+      type: AssistantSelectedPolicyRefView
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: read

@@ -255,11 +255,19 @@ def _dispatch_fleet(
     discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
     blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
     delivered = _delivered_count(ctx, stage, queue_stage)
-    if blocking:
+    if queue_stage is QueueJobStage.PUBLISH:
+        # Publish delivery may be proven by canonical objects even when resume
+        # jobs are dead (idempotent re-apply). Prefer the fleet's finalized count
+        # and commercial pass over the local succeeded-job ledger alone.
+        delivered = max(delivered, int(report.finalized_object_count or 0))
+    publish_quota_met = queue_stage is QueueJobStage.PUBLISH and bool(report.passed)
+    quota_met = _quota_reached(ctx, stage, queue_stage) or publish_quota_met
+    if blocking and not publish_quota_met:
         status = ReliableTaskDispatchStatus.BLOCKED
-    elif _quota_reached(ctx, stage, queue_stage):
+    elif quota_met:
         # 配额已交付即收工：过采出来的剩余候选继续跑只是纯浪费额度。
         status = ReliableTaskDispatchStatus.COMPLETED
+        blocking = ()
     elif _active_jobs(ctx.execution_id, queue_stage):
         status = ReliableTaskDispatchStatus.WAITING
     else:

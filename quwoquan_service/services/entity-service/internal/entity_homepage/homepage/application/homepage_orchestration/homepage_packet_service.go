@@ -180,7 +180,7 @@ func (s *HomepageService) SearchHomepages(
 		attribute.String("homepage.type", homepageType))
 	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
-	result, err := s.queries.Search(ctx, homepageports.SearchQuery{
+	result, err := s.queries.Search(ctx, homepageports.SearchRequestFact{
 		Query: query, HomepageType: homepageType, City: city, Status: status, Cursor: cursor, Limit: limit,
 	})
 	return result, err

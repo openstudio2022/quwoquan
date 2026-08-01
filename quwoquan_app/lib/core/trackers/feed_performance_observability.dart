@@ -2,10 +2,11 @@
 
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/media/app_video_runtime_budget.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
-/// 首页推荐性能指标名（首屏可交互 TTI / 视频自动播放启动 / 视频自动播放失败）。
+/// 首页性能 operationId；wire eventType 由 product-ops codegen 拥有。
 class FeedPerformanceMetricNames {
   static const String firstScreenTtiMs = 'home_feed_first_screen_tti_ms';
   static const String videoAutoplayStartupMs =
@@ -14,88 +15,57 @@ class FeedPerformanceMetricNames {
   static const String videoPlaybackStartupMs =
       'home_feed_video_playback_startup_ms';
   static const String videoPlaybackFailed = 'home_feed_video_playback_failed';
-  static const String feedLoadFailed = 'home_feed_load_failed';
-  static const String frameJankRatio = 'home_feed_frame_jank_ratio';
-  static const String imageCacheBytes = 'home_feed_image_cache_bytes';
-  static const String activeVideoControllerCount =
-      'home_feed_active_video_controller_count';
-  static const String mediaDownloadQueue = 'home_feed_media_download_queue';
-  static const String postCacheHitSource = 'home_feed_post_cache_hit_source';
 
   const FeedPerformanceMetricNames._();
 }
 
-/// 首页推荐性能可观测：首屏 TTI + 视频自动播放启动/失败归因。
+/// 首页首屏、媒体和资源预算的 typed 产品观测。
 ///
-/// 仅消费统一埋点出口 [AnalyticsService]，不触碰 `discovery_feed_provider`
-/// 的实时补丁消费逻辑（任务约束：性能度量仅在 widget 层旁路采集）。
-/// 每个 channel 的首屏 TTI 只上报一次；`force` 刷新通过 [resetChannel]
-/// 复位后可重新计时。
+/// 调用方只能提交 codegen 生成的 payload，不再经过 dynamic analytics
+/// 和 local-only denylist。全局帧分母由 `AppRuntimeDiagnostics` 唯一生产，
+/// 本类不建立第二条 jank 采样轨。
 class FeedPerformanceObservability {
-  FeedPerformanceObservability({required AnalyticsService analytics})
-    : _analytics = analytics;
+  FeedPerformanceObservability({required AppTelemetryRecorder telemetry})
+    : _telemetry = telemetry;
 
-  final AnalyticsService _analytics;
-
-  /// 每个 channel 的首屏请求起点（首次触发加载时铸造）。
+  final AppTelemetryRecorder _telemetry;
   final Map<String, Stopwatch> _firstScreenTimers = <String, Stopwatch>{};
-
-  /// 已上报首屏 TTI 的 channel，避免重复上报。
   final Set<String> _firstScreenReported = <String>{};
-
-  /// 已上报加载失败的 `channel::reason`，避免同因重复上报；首屏成功后复位。
   final Set<String> _loadFailureReported = <String>{};
 
-  /// 标记某 channel 的首屏加载开始计时（幂等：已计时或已上报则忽略）。
   void markFeedRequested(String channelId) {
     final id = channelId.trim();
-    if (id.isEmpty || _firstScreenReported.contains(id)) {
-      return;
-    }
+    if (id.isEmpty || _firstScreenReported.contains(id)) return;
     _firstScreenTimers.putIfAbsent(id, () => Stopwatch()..start());
   }
 
-  /// 首屏内容首帧渲染：上报首屏可交互耗时（每 channel 仅一次）。
   void markFirstContentReady(String channelId, {required int itemCount}) {
     final id = channelId.trim();
-    if (id.isEmpty || _firstScreenReported.contains(id)) {
+    if (id.isEmpty || itemCount < 0 || _firstScreenReported.contains(id)) {
       return;
     }
     final timer = _firstScreenTimers.remove(id);
-    if (timer == null) {
-      return;
-    }
+    if (timer == null) return;
     timer.stop();
     _firstScreenReported.add(id);
-    // 首屏成功后复位该 channel 的失败去重，使后续真实失败能再次上报。
     _loadFailureReported.removeWhere((key) => key.startsWith('$id::'));
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.firstScreenTtiMs,
-          properties: <String, dynamic>{
-            'channelId': id,
-            'durationMs': timer.elapsedMilliseconds,
-            'itemCount': itemCount,
-          },
-        ),
+    _record(
+      AppTelemetryPayload.performanceSample(
+        operationId: FeedPerformanceMetricNames.firstScreenTtiMs,
+        durationMs: timer.elapsedMilliseconds,
+        result: 'ok',
       ),
     );
   }
 
-  /// `force` 刷新：复位该 channel 的首屏计时与上报标记，便于重新度量。
   void resetChannel(String channelId) {
     final id = channelId.trim();
-    if (id.isEmpty) {
-      return;
-    }
+    if (id.isEmpty) return;
     _firstScreenTimers.remove(id);
     _firstScreenReported.remove(id);
     _loadFailureReported.removeWhere((key) => key.startsWith('$id::'));
   }
 
-  /// 首页加载失败（阻断态空内容）：按 canonical error code 去重上报归因。
   void recordFeedLoadFailed({
     required String channelId,
     required String errorCode,
@@ -113,8 +83,8 @@ class FeedPerformanceObservability {
     if (id.isEmpty || !_loadFailureReported.add('$id::$normalizedCode')) {
       return;
     }
-    unawaited(
-      _analytics.trackOperationResult(
+    _record(
+      AppTelemetryPayload.operationResult(
         operationId: operation,
         result: 'failed',
         surfaceId: surface,
@@ -127,33 +97,24 @@ class FeedPerformanceObservability {
     );
   }
 
-  /// 视频播放启动成功：自动播放与手动播放使用不同事件，避免指标混淆。
   void recordVideoPlaybackStarted({
     required String contentId,
     required int startupMs,
     required int candidateIndex,
     required bool autoPlay,
   }) {
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: autoPlay
-              ? FeedPerformanceMetricNames.videoAutoplayStartupMs
-              : FeedPerformanceMetricNames.videoPlaybackStartupMs,
-          properties: <String, dynamic>{
-            'contentId': contentId,
-            'durationMs': startupMs,
-            'candidateIndex': candidateIndex,
-            'autoPlay': autoPlay,
-            'result': 'ok',
-          },
-        ),
+    if (contentId.trim().isEmpty || candidateIndex < 0) return;
+    _record(
+      AppTelemetryPayload.performanceSample(
+        operationId: autoPlay
+            ? FeedPerformanceMetricNames.videoAutoplayStartupMs
+            : FeedPerformanceMetricNames.videoPlaybackStartupMs,
+        durationMs: startupMs < 0 ? 0 : startupMs,
+        result: 'ok',
       ),
     );
   }
 
-  /// 视频播放失败：自动播放与手动播放使用不同事件，并只记录脱敏分类。
   void recordVideoPlaybackFailed({
     required String contentId,
     required int candidatesTried,
@@ -162,49 +123,16 @@ class FeedPerformanceObservability {
     required bool retryable,
     required bool autoPlay,
   }) {
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: autoPlay
-              ? FeedPerformanceMetricNames.videoAutoplayFailed
-              : FeedPerformanceMetricNames.videoPlaybackFailed,
-          properties: <String, dynamic>{
-            'contentId': contentId,
-            'candidatesTried': candidatesTried,
-            'mediaFailureKind': failureKind,
-            'userScene': userScene,
-            'retryable': retryable,
-            'autoPlay': autoPlay,
-            'result': 'failed',
-          },
-        ),
-      ),
-    );
-  }
-
-  void recordFrameJankRatio({
-    required String surfaceId,
-    required int sampledFrames,
-    required int jankyFrames,
-    required double ratio,
-  }) {
-    final normalizedSurface = surfaceId.trim();
-    if (normalizedSurface.isEmpty || sampledFrames <= 0) {
-      return;
-    }
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.frameJankRatio,
-          properties: <String, dynamic>{
-            'surfaceId': normalizedSurface,
-            'sampledFrames': sampledFrames,
-            'jankyFrames': jankyFrames.clamp(0, sampledFrames),
-            'ratio': ratio.clamp(0, 1),
-          },
-        ),
+    if (contentId.trim().isEmpty || candidatesTried < 0) return;
+    _record(
+      AppTelemetryPayload.operationResult(
+        operationId: autoPlay
+            ? FeedPerformanceMetricNames.videoAutoplayFailed
+            : FeedPerformanceMetricNames.videoPlaybackFailed,
+        result: 'failed',
+        surfaceId: _nonEmpty(userScene),
+        failReasonCode: _nonEmpty(failureKind) ?? 'unknown',
+        recoveryAction: retryable ? 'retry' : 'absorb',
       ),
     );
   }
@@ -214,17 +142,16 @@ class FeedPerformanceObservability {
     required int currentSizeBytes,
     required int maxSizeBytes,
   }) {
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.imageCacheBytes,
-          properties: <String, dynamic>{
-            'profile': profile,
-            'currentSizeBytes': currentSizeBytes < 0 ? 0 : currentSizeBytes,
-            'maxSizeBytes': maxSizeBytes < 0 ? 0 : maxSizeBytes,
-          },
-        ),
+    final current = _nonNegative(currentSizeBytes);
+    final limit = _nonNegative(maxSizeBytes);
+    _record(
+      AppTelemetryPayload.homeFeedResourceSnapshot(
+        resourceKind: AppTelemetryValueResourceKind.imageCacheBytes,
+        currentValue: current,
+        result: current <= limit ? 'within_budget' : 'over_budget',
+        resourceProfile: _resourceProfile(profile),
+        limitValue: limit,
+        surfaceId: 'home_feed',
       ),
     );
   }
@@ -233,20 +160,17 @@ class FeedPerformanceObservability {
     required String surfaceId,
     required int activeCount,
   }) {
-    final normalizedSurface = surfaceId.trim();
-    if (normalizedSurface.isEmpty) {
-      return;
-    }
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.activeVideoControllerCount,
-          properties: <String, dynamic>{
-            'surfaceId': normalizedSurface,
-            'activeCount': activeCount < 0 ? 0 : activeCount,
-          },
-        ),
+    final surface = surfaceId.trim();
+    if (surface.isEmpty) return;
+    final current = _nonNegative(activeCount);
+    const limit = AppVideoRuntimeBudget.maxConcurrentControllers;
+    _record(
+      AppTelemetryPayload.homeFeedResourceSnapshot(
+        resourceKind: AppTelemetryValueResourceKind.activeVideoControllers,
+        currentValue: current,
+        result: current <= limit ? 'within_budget' : 'over_budget',
+        limitValue: limit,
+        surfaceId: surface,
       ),
     );
   }
@@ -258,49 +182,35 @@ class FeedPerformanceObservability {
     required int inflightDownloads,
     required int cacheSizeBytes,
   }) {
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.mediaDownloadQueue,
-          properties: <String, dynamic>{
-            'profile': profile,
-            'activeDownloads': activeDownloads < 0 ? 0 : activeDownloads,
-            'queuedDownloads': queuedDownloads < 0 ? 0 : queuedDownloads,
-            'inflightDownloads': inflightDownloads < 0 ? 0 : inflightDownloads,
-            'cacheSizeBytes': cacheSizeBytes < 0 ? 0 : cacheSizeBytes,
-          },
-        ),
+    _record(
+      AppTelemetryPayload.homeFeedResourceSnapshot(
+        resourceKind: AppTelemetryValueResourceKind.mediaDownloads,
+        currentValue: _nonNegative(activeDownloads),
+        result: 'observed',
+        resourceProfile: _resourceProfile(profile),
+        queuedValue: _nonNegative(queuedDownloads),
+        inflightValue: _nonNegative(inflightDownloads),
+        cacheSizeBytes: _nonNegative(cacheSizeBytes),
+        surfaceId: 'home_feed',
       ),
     );
   }
 
-  void recordPostCacheHitSource({
-    required String source,
-    required String cacheClass,
-  }) {
-    final normalizedSource = source.trim();
-    if (normalizedSource.isEmpty) {
-      return;
-    }
-    unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.postCacheHitSource,
-          properties: <String, dynamic>{
-            'source': normalizedSource,
-            'cacheClass': cacheClass.trim().isEmpty ? 'unknown' : cacheClass,
-          },
-        ),
-      ),
-    );
+  void _record(AppTelemetryPayload payload) {
+    unawaited(_telemetry.record(payload));
+  }
+
+  int _nonNegative(int value) => value < 0 ? 0 : value;
+
+  String? _nonEmpty(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _resourceProfile(String value) {
+    final normalized = value.trim();
+    return AppTelemetryValueResourceProfile.values.contains(normalized)
+        ? normalized
+        : null;
   }
 }
-
-final feedPerformanceObservabilityProvider =
-    Provider<FeedPerformanceObservability>((ref) {
-      return FeedPerformanceObservability(
-        analytics: ref.read(analyticsProvider),
-      );
-    });

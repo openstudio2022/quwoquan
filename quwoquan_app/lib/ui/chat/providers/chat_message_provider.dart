@@ -10,8 +10,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
+import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_send_outbox.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -22,25 +26,65 @@ const _uuid = Uuid();
 class ChatMessageState {
   final List<MessageDto> messages;
   final bool isLoading;
+  final bool isRefreshing;
+  final bool isLoadingOlder;
+  final bool hasMore;
+  final int nextBeforeSeq;
   final String? error;
 
   const ChatMessageState({
     this.messages = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
+    this.isLoadingOlder = false,
+    this.hasMore = true,
+    this.nextBeforeSeq = 0,
     this.error,
   });
 
   ChatMessageState copyWith({
     List<MessageDto>? messages,
     bool? isLoading,
+    bool? isRefreshing,
+    bool? isLoadingOlder,
+    bool? hasMore,
+    int? nextBeforeSeq,
     String? error,
   }) {
     return ChatMessageState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+      hasMore: hasMore ?? this.hasMore,
+      nextBeforeSeq: nextBeforeSeq ?? this.nextBeforeSeq,
       error: error,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is ChatMessageState &&
+            other.messages == messages &&
+            other.isLoading == isLoading &&
+            other.isRefreshing == isRefreshing &&
+            other.isLoadingOlder == isLoadingOlder &&
+            other.hasMore == hasMore &&
+            other.nextBeforeSeq == nextBeforeSeq &&
+            other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    messages,
+    isLoading,
+    isRefreshing,
+    isLoadingOlder,
+    hasMore,
+    nextBeforeSeq,
+    error,
+  );
 }
 
 /// 管理单个会话的消息列表、发送、撤回、seq gap 补全。
@@ -62,6 +106,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   // seq=0 表示消息尚未被服务端确认（发送中/发送失败）
   static const int _unconfirmedSeq = 0;
+  static const int _pageSize = 50;
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
@@ -76,22 +121,131 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   /// 加载消息并按 seq 排序，之后检测 gap。
   Future<void> loadMessages({int? maxSeq}) async {
-    state = state.copyWith(isLoading: true, error: null);
+    if (state.isLoading || state.isRefreshing) return;
+    final hadVisibleMessages = state.messages.isNotEmpty;
+    state = state.copyWith(
+      isLoading: !hadVisibleMessages,
+      isRefreshing: hadVisibleMessages,
+      error: null,
+    );
+    final namespace = await _resolveLocalNamespace();
+    if (!hadVisibleMessages && namespace != null) {
+      try {
+        final cached = await ref
+            .read(localChatSearchStoreProvider)
+            .readTimeline(
+              namespace: namespace,
+              conversationId: conversationId,
+              limit: _pageSize,
+            );
+        if (!ref.mounted) return;
+        if (cached.value.isNotEmpty) {
+          state = state.copyWith(
+            messages: _sorted(cached.value),
+            isLoading: false,
+            isRefreshing: true,
+            nextBeforeSeq: _oldestConfirmedSeq(cached.value),
+          );
+        }
+      } catch (error, stackTrace) {
+        _recordLocalTimelineFailure(
+          operation: 'read_latest',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
     try {
-      final loaded = await _repo.listMessages(conversationId: conversationId);
+      final loaded = await _repo.listMessages(
+        conversationId: conversationId,
+        limit: _pageSize,
+      );
       final hydrated = await _hydrateSenderSnapshots(
         loaded.map(_normalizeSenderAvatar).toList(growable: false),
       );
+      if (!ref.mounted) return;
       final merged = _mergeMessages(state.messages, hydrated);
-      state = state.copyWith(messages: _sorted(merged), isLoading: false);
+      state = state.copyWith(
+        messages: _sorted(merged),
+        isLoading: false,
+        isRefreshing: false,
+        hasMore: loaded.length >= _pageSize,
+        nextBeforeSeq: _oldestConfirmedSeq(merged),
+      );
+      unawaited(_persistMessages(hydrated, namespace: namespace));
       if (maxSeq != null && maxSeq > 0) {
         await _detectAndFillGap(maxSeq);
       }
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
+        isRefreshing: false,
         error: runtimeErrorDisplayMessage(e),
       );
+    }
+  }
+
+  /// 读取更早一页；本地命中先展示，远端 beforeSeq 校准后合并。
+  Future<int> loadOlderMessages() async {
+    if (state.isLoadingOlder || !state.hasMore) return 0;
+    final beforeSeq = _oldestConfirmedSeq(state.messages);
+    if (beforeSeq <= 0) return 0;
+    final previousCount = state.messages.length;
+    state = state.copyWith(isLoadingOlder: true, error: null);
+    final namespace = await _resolveLocalNamespace();
+    if (namespace != null) {
+      try {
+        final cached = await ref
+            .read(localChatSearchStoreProvider)
+            .readTimeline(
+              namespace: namespace,
+              conversationId: conversationId,
+              beforeSeq: beforeSeq,
+              limit: _pageSize,
+            );
+        if (!ref.mounted) return 0;
+        if (cached.value.isNotEmpty) {
+          final merged = _mergeMessages(state.messages, cached.value);
+          state = state.copyWith(
+            messages: _sorted(merged),
+            nextBeforeSeq: _oldestConfirmedSeq(merged),
+          );
+        }
+      } catch (error, stackTrace) {
+        _recordLocalTimelineFailure(
+          operation: 'read_older',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    try {
+      final loaded = await _repo.listMessages(
+        conversationId: conversationId,
+        before: beforeSeq.toString(),
+        limit: _pageSize,
+      );
+      final hydrated = await _hydrateSenderSnapshots(
+        loaded.map(_normalizeSenderAvatar).toList(growable: false),
+      );
+      if (!ref.mounted) return 0;
+      final merged = _mergeMessages(state.messages, hydrated);
+      state = state.copyWith(
+        messages: _sorted(merged),
+        isLoadingOlder: false,
+        hasMore: loaded.length >= _pageSize,
+        nextBeforeSeq: _oldestConfirmedSeq(merged),
+      );
+      unawaited(_persistMessages(hydrated, namespace: namespace));
+      return merged.length - previousCount;
+    } catch (error) {
+      if (!ref.mounted) return 0;
+      state = state.copyWith(
+        isLoadingOlder: false,
+        error: runtimeErrorDisplayMessage(error),
+      );
+      return state.messages.length - previousCount;
     }
   }
 
@@ -145,15 +299,13 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       clientMsgId: clientMsgId,
       senderId: resolvedSenderPersonaId,
       senderName: senderName ?? activeContext.displayName,
-      senderAvatar: resolveAvatarImageUrl(
-        senderAvatar ?? activeContext.avatarUrl,
-      ),
+      senderAvatar: _resolveAvatar(senderAvatar ?? activeContext.avatarUrl),
       type: type,
       content: content,
       mediaAssetId: media?.assetId,
       mediaDeliveryUrl: media?.deliveryUrl,
       mediaType: media?.mediaType,
-      mediaContentType: media?.contentType,
+      mediaContentType: media?.mimeType,
       mediaFileSizeBytes: media?.fileSizeBytes,
       status: 'sending',
     );
@@ -301,6 +453,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         );
         final merged = _mergeMessages(state.messages, hydrated);
         state = state.copyWith(messages: _sorted(merged));
+        unawaited(_persistMessages(hydrated));
       }
     } catch (e) {
       state = state.copyWith(error: runtimeErrorDisplayMessage(e));
@@ -318,6 +471,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     state = state.copyWith(
       messages: _sorted([...state.messages, _normalizeSenderAvatar(msg)]),
     );
+    unawaited(_persistMessages(<MessageDto>[msg]));
   }
 
   /// 实时事件：标记某消息已撤回。
@@ -328,6 +482,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
           : m;
     }).toList();
     state = state.copyWith(messages: _sorted(updated));
+    unawaited(_removePersistedMessage(messageId));
   }
 
   Future<List<MessageDto>> _hydrateSenderSnapshots(
@@ -366,8 +521,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
             return message.copyWith(
               senderName: senderName.isEmpty ? member.displayName : senderName,
               senderAvatar: senderAvatar.isEmpty
-                  ? resolveAvatarImageUrl(member.avatarUrl)
-                  : resolveAvatarImageUrl(senderAvatar),
+                  ? _resolveAvatar(member.avatarUrl)
+                  : _resolveAvatar(senderAvatar),
             );
           })
           .toList(growable: false);
@@ -385,11 +540,18 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }
 
   MessageDto _normalizeSenderAvatar(MessageDto message) {
-    final avatar = resolveAvatarImageUrl(message.senderAvatar);
+    final avatar = _resolveAvatar(message.senderAvatar);
     if ((message.senderAvatar ?? '') == avatar) {
       return message;
     }
     return message.copyWith(senderAvatar: avatar);
+  }
+
+  String _resolveAvatar(String? raw) {
+    return resolveAvatarImageUrl(
+      raw,
+      endpointConfig: ref.read(mediaEndpointConfigProvider),
+    );
   }
 
   // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────
@@ -433,6 +595,85 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     if (localMaxSeq < maxSeq) {
       await syncFromSeq(localMaxSeq);
     }
+  }
+
+  int _oldestConfirmedSeq(List<MessageDto> messages) {
+    var oldest = 0;
+    for (final message in messages) {
+      if (message.seq <= _unconfirmedSeq) continue;
+      if (oldest == 0 || message.seq < oldest) oldest = message.seq;
+    }
+    return oldest;
+  }
+
+  Future<LocalSearchNamespace?> _resolveLocalNamespace() async {
+    try {
+      final context = await ref.read(activePersonaContextProvider.future);
+      return LocalSearchNamespace.fromActivePersonaContext(context);
+    } catch (error, stackTrace) {
+      _recordLocalTimelineFailure(
+        operation: 'resolve_namespace',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _persistMessages(
+    List<MessageDto> messages, {
+    LocalSearchNamespace? namespace,
+  }) async {
+    if (messages.isEmpty) return;
+    try {
+      final resolvedNamespace = namespace ?? await _resolveLocalNamespace();
+      if (resolvedNamespace == null) return;
+      await ref
+          .read(localChatSearchStoreProvider)
+          .upsertMessages(
+            namespace: resolvedNamespace,
+            messages: messages
+                .map(LocalChatSearchMessageRecord.fromMessageDto)
+                .toList(growable: false),
+          );
+    } catch (error, stackTrace) {
+      _recordLocalTimelineFailure(
+        operation: 'persist',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _removePersistedMessage(String messageId) async {
+    try {
+      final namespace = await _resolveLocalNamespace();
+      if (namespace == null) return;
+      await ref
+          .read(localChatSearchStoreProvider)
+          .removeMessage(namespace: namespace, messageId: messageId);
+    } catch (error, stackTrace) {
+      _recordLocalTimelineFailure(
+        operation: 'remove',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _recordLocalTimelineFailure({
+    required String operation,
+    required Object error,
+    required StackTrace stackTrace,
+  }) {
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'chat.message.local_timeline.$operation',
+        error: error,
+        stackTrace: stackTrace,
+        operationId: ChatApiMetadata.listMessagesOperation,
+      ),
+    );
   }
 
   // ── 合并去重（按 id / clientMsgId）──────────────────────────────

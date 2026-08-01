@@ -607,6 +607,7 @@ func PostDetailProjection() bson.D {
 		{Key: "articleTemplate", Value: 1},
 		{Key: "articleFontPreset", Value: 1},
 		{Key: "videoUrl", Value: 1},
+		{Key: "sourceAttribution", Value: 1},
 		{Key: "coverStrategy", Value: 1},
 		{Key: "coverFrameTimeMs", Value: 1},
 		{Key: "location", Value: 1},

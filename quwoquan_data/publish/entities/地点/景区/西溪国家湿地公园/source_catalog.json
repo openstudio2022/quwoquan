@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/西溪国家湿地公园__wikipedia__2f5a3092/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "西溪国家湿地公园__wikipedia__2f5a3092",
+    "entityName": "西溪国家湿地公园",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%BA%AA%E6%BF%95%E5%9C%B0",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%BA%AA%E6%BF%95%E5%9C%B0",
+    "title": "西溪濕地",
+    "fetchedAt": "2026-07-31T02:01:26Z",
+    "snapshotHash": "sha256:ffe570e4273655b77fb255db91a38cf8603c191598b7429c4740468cd999848c",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation",
+    "evidenceRef": "evidence/sources/西溪国家湿地公园__wikipedia__2f5a3092/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "西溪国家湿地公园__wikipedia__2f5a3092",
+      "entityName": "西溪国家湿地公园",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%BA%AA%E6%BF%95%E5%9C%B0",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%BA%AA%E6%BF%95%E5%9C%B0",
+      "title": "西溪濕地",
+      "fetchedAt": "2026-07-31T02:01:26Z",
+      "snapshotHash": "sha256:ffe570e4273655b77fb255db91a38cf8603c191598b7429c4740468cd999848c",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "licensed_adaptation",
+      "evidenceRef": "evidence/sources/西溪国家湿地公园__wikipedia__2f5a3092/meta.json"
+    }
+  ]
+}

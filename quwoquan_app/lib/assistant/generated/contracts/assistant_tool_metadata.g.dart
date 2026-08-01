@@ -23,8 +23,8 @@ class AssistantToolRecoveryPolicyWire {
 
   factory AssistantToolRecoveryPolicyWire.fromJson(Map<String, dynamic> json) {
     return AssistantToolRecoveryPolicyWire(
-      action: parseToolRecoveryAction((json['action'] as String?)?.trim() ?? "fail_turn"),
-      disruptionLevel: parseToolDisruptionLevel((json['disruptionLevel'] as String?)?.trim() ?? "partial"),
+      action: parseToolRecoveryActionStrict((json['action'] as String?)?.trim() ?? "fail_turn"),
+      disruptionLevel: parseToolDisruptionLevelStrict((json['disruptionLevel'] as String?)?.trim() ?? "partial"),
       userVisibleSummary: (json['userVisibleSummary'] as String?)?.trim() ?? "",
     );
   }
@@ -78,10 +78,16 @@ class AssistantToolMetadataWire {
     required this.toolName,
     this.displayName = "",
     this.description = "",
+    required this.namespace,
     this.placement = "cloud",
     this.inputSchema = const <String, dynamic>{},
     this.outputSchema = const <String, dynamic>{},
     this.requiresConfirmation = false,
+    this.idempotency = "none",
+    this.sensitivity = "internal",
+    this.environmentScopes = const <String>[],
+    this.serverInjectedInputs = const <String>[],
+    this.readOnly = true,
     this.resilience = const AssistantToolResiliencePolicyWire(),
     this.recovery = const AssistantToolRecoveryPolicyWire(),
   });
@@ -89,10 +95,16 @@ class AssistantToolMetadataWire {
   final String toolName;
   final String displayName;
   final String description;
+  final String namespace;
   final String placement;
   final Map<String, dynamic> inputSchema;
   final Map<String, dynamic> outputSchema;
   final bool requiresConfirmation;
+  final String idempotency;
+  final String sensitivity;
+  final List<String> environmentScopes;
+  final List<String> serverInjectedInputs;
+  final bool readOnly;
   final AssistantToolResiliencePolicyWire resilience;
   final AssistantToolRecoveryPolicyWire recovery;
 
@@ -100,10 +112,16 @@ class AssistantToolMetadataWire {
         'toolName': toolName,
         'displayName': displayName,
         'description': description,
+        'namespace': namespace,
         'placement': placement,
         'inputSchema': inputSchema,
         'outputSchema': outputSchema,
         'requiresConfirmation': requiresConfirmation,
+        'idempotency': idempotency,
+        'sensitivity': sensitivity,
+        'environmentScopes': environmentScopes,
+        'serverInjectedInputs': serverInjectedInputs,
+        'readOnly': readOnly,
         'resilience': resilience.toJson(),
         'recovery': recovery.toJson(),
       };
@@ -113,25 +131,43 @@ class AssistantToolMetadataWire {
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       displayName: (json['displayName'] as String?)?.trim() ?? "",
       description: (json['description'] as String?)?.trim() ?? "",
+      namespace: (json['namespace'] as String?)?.trim() ?? "",
       placement: (json['placement'] as String?)?.trim() ?? "cloud",
       inputSchema: (json['inputSchema'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       outputSchema: (json['outputSchema'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       requiresConfirmation: json['requiresConfirmation'] == true,
+      idempotency: (json['idempotency'] as String?)?.trim() ?? "none",
+      sensitivity: (json['sensitivity'] as String?)?.trim() ?? "internal",
+      environmentScopes: _assistantStringList(json['environmentScopes']),
+      serverInjectedInputs: _assistantStringList(json['serverInjectedInputs']),
+      readOnly: json['readOnly'] != false,
       resilience: json['resilience'] is Map ? AssistantToolResiliencePolicyWire.fromJson((json['resilience'] as Map).cast<String, dynamic>()) : const AssistantToolResiliencePolicyWire(),
       recovery: json['recovery'] is Map ? AssistantToolRecoveryPolicyWire.fromJson((json['recovery'] as Map).cast<String, dynamic>()) : const AssistantToolRecoveryPolicyWire(),
     );
   }
 
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
 }
 
 class AssistantToolMetadataWireFields {
   static const String toolName = 'toolName';
   static const String displayName = 'displayName';
   static const String description = 'description';
+  static const String namespace = 'namespace';
   static const String placement = 'placement';
   static const String inputSchema = 'inputSchema';
   static const String outputSchema = 'outputSchema';
   static const String requiresConfirmation = 'requiresConfirmation';
+  static const String idempotency = 'idempotency';
+  static const String sensitivity = 'sensitivity';
+  static const String environmentScopes = 'environmentScopes';
+  static const String serverInjectedInputs = 'serverInjectedInputs';
+  static const String readOnly = 'readOnly';
   static const String resilience = 'resilience';
   static const String recovery = 'recovery';
 }

@@ -1,3 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 /// Typed DTO for the Conversation entity.
 /// Maps to quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml → Conversation.
 class ConversationDto {
@@ -11,12 +13,14 @@ class ConversationDto {
   final String? circleId;
   final String? circleGroupId;
   final String originType;
+  final ChatGreetingIntersectionSnapshot? originIntersectionSnapshot;
   final int maxSeq;
   final int memberCount;
   final int maxGroupSize;
   final bool receiptEnabled;
   final String? lastMessageId;
   final String? lastMessagePreview;
+  final MessageType lastMessageType;
   final DateTime? lastMessageTime;
   final int messageCount;
   final String status;
@@ -37,12 +41,14 @@ class ConversationDto {
     this.circleId,
     this.circleGroupId,
     this.originType = 'direct_init',
+    this.originIntersectionSnapshot,
     required this.maxSeq,
     required this.memberCount,
     required this.maxGroupSize,
     required this.receiptEnabled,
     this.lastMessageId,
     this.lastMessagePreview,
+    required this.lastMessageType,
     this.lastMessageTime,
     required this.messageCount,
     required this.status,
@@ -63,12 +69,16 @@ class ConversationDto {
       circleId: _optionalTypedString(map, 'circleId'),
       circleGroupId: _optionalString(map['circleGroupId']),
       originType: _optionalString(map['originType']) ?? 'direct_init',
+      originIntersectionSnapshot: _optionalIntersectionSnapshot(
+        map['originIntersectionSnapshot'],
+      ),
       maxSeq: (map['maxSeq'] as num?)?.toInt() ?? 0,
       memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
       maxGroupSize: _requiredInt(map, 'maxGroupSize'),
       receiptEnabled: _requiredBool(map, 'receiptEnabled'),
       lastMessageId: _optionalTypedString(map, 'lastMessageId'),
       lastMessagePreview: _optionalTypedString(map, 'lastMessagePreview'),
+      lastMessageType: MessageType.fromWire(map['lastMessageType']),
       lastMessageTime: _optionalDateTime(map, 'lastMessageTime'),
       messageCount: (map['messageCount'] as num?)?.toInt() ?? 0,
       status: _requiredString(map, 'status'),
@@ -90,12 +100,25 @@ class ConversationDto {
     if (circleId != null) 'circleId': circleId,
     if (circleGroupId != null) 'circleGroupId': circleGroupId,
     'originType': originType,
+    if (originIntersectionSnapshot != null)
+      'originIntersectionSnapshot': <String, Object?>{
+        'intersectionId': originIntersectionSnapshot!.intersectionId,
+        'evidenceId': originIntersectionSnapshot!.evidenceId,
+        'sourceRef': originIntersectionSnapshot!.sourceRef,
+        'objectTypeRef': originIntersectionSnapshot!.objectTypeRef,
+        'objectId': originIntersectionSnapshot!.objectId,
+        'primaryText': originIntersectionSnapshot!.primaryText,
+        if (originIntersectionSnapshot!.dimension != null)
+          'dimension': originIntersectionSnapshot!.dimension,
+        'resolvedAt': originIntersectionSnapshot!.resolvedAt.toIso8601String(),
+      },
     'maxSeq': maxSeq,
     'memberCount': memberCount,
     'maxGroupSize': maxGroupSize,
     'receiptEnabled': receiptEnabled,
     if (lastMessageId != null) 'lastMessageId': lastMessageId,
     if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
+    'lastMessageType': lastMessageType.wireValue,
     if (lastMessageTime != null)
       'lastMessageTime': lastMessageTime!.toIso8601String(),
     'messageCount': messageCount,
@@ -178,4 +201,24 @@ DateTime? _parseDateTime(Object? value) {
     return DateTime.tryParse(value);
   }
   return null;
+}
+
+ChatGreetingIntersectionSnapshot? _optionalIntersectionSnapshot(Object? value) {
+  if (value == null) return null;
+  if (value is! Map) {
+    throw const FormatException(
+      'Conversation.originIntersectionSnapshot must be an object when present',
+    );
+  }
+  final map = Map<String, dynamic>.from(value);
+  return ChatGreetingIntersectionSnapshot(
+    intersectionId: _requiredString(map, 'intersectionId'),
+    evidenceId: _requiredString(map, 'evidenceId'),
+    sourceRef: _requiredString(map, 'sourceRef'),
+    objectTypeRef: _requiredString(map, 'objectTypeRef'),
+    objectId: _requiredString(map, 'objectId'),
+    primaryText: _requiredString(map, 'primaryText'),
+    dimension: _optionalTypedString(map, 'dimension'),
+    resolvedAt: _requiredDateTime(map, 'resolvedAt'),
+  );
 }

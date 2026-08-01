@@ -112,7 +112,7 @@ def _source_asset_ref(
 
 
 def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
-    """content_plan packet 只承载 article/image/route 篇目合同。
+    """content_plan packet 承载 article/image/video/route 篇目合同。
 
     实体主页（entityHomepagesPerTarget）不是篇目：主页三件套的唯一真相源在
     build_homepage/build_validate 车道（`_homepages_done` + review sidecars），
@@ -127,6 +127,7 @@ def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
         or int(quotas.get("routeArticles") or 0)
         or int(quotas.get("entityArticlesPerTarget") or 0)
         or int(quotas.get("imageWorksPerTarget") or 0)
+        or int(quotas.get("videoWorksPerTarget") or 0)
     )
 
 

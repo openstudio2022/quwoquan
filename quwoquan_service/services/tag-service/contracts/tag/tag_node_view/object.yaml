@@ -31,3 +31,12 @@ relationships:
   target_object: tag.TagTaxonomyRelease
 capabilities:
 - queryable
+business_rules:
+- 节点只来自已验证且已激活的 TagTaxonomyRelease，不接受在线临时创建或编辑。
+- tagRef 等于 canonical 目录路径且在同一 release 内唯一，查询不得通过字符串前缀猜测跨轴关系。
+- 新 release 激活采用完整投影切换；旧 release 只用于回滚与审计，不与当前节点并行读取。
+lifecycle:
+  source_events: [TagTaxonomyReleaseActivated, TagTaxonomyReleaseRetired]
+  checkpoint: active_taxonomy_release_digest
+  rebuild: import_active_immutable_taxonomy_release
+  tombstone: remove_nodes_from_retired_release_after_atomic_switch

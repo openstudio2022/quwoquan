@@ -175,7 +175,7 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		t.Fatalf("outbox leaked OTP secret material: %+v", outboxDocument)
 	}
 
-	reopenedStore := reliabletaskmongo.New(integrationMongoDB)
+	reopenedStore := reliabletaskmongo.NewExternalInteraction(integrationMongoDB)
 	reopenedService, err := application.NewExternalInteractionService(
 		reopenedStore,
 		map[string]reliabletask.ExternalProvider{"aliyun_sms": smsProvider},

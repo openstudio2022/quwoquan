@@ -1,7 +1,10 @@
 """Frozen execution-spec materialization and pre-freeze source qualification."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from core.control_types import TargetSelector
+from core.data_issue import DataIssueCode
 from core.paths import REPO_ROOT
 from core.runtime_policy import active_runtime_policy
 from content.execution import store
@@ -14,6 +17,23 @@ from content.execution.source_selection import (
     TargetSourceCandidate,
     TargetSourceQualification,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _QualifiedVideoSource:
+    """Non-persisted pre-freeze proof that a target has media supply."""
+
+    title: str
+    url: str
+    mode: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "provider": "video_media_precheck",
+            "title": self.title,
+            "url": self.url,
+            "mode": self.mode,
+        }
 
 
 def _homepage_source_qualifier(
@@ -43,6 +63,55 @@ def _homepage_source_qualifier(
     )
 
 
+def _video_source_qualifier(
+    target: TargetSourceCandidate,
+) -> TargetSourceQualification:
+    """Fast, bounded Commons precheck before the deeper frozen plan is built."""
+
+    from content.source.research.auto_plan_video import qualified_video_frame_count
+    from content.source.research.image_search_providers import (
+        _commons_images,
+    )
+
+    aliases = list(dict.fromkeys([target.name, *target.aliases]))
+    try:
+        # This gate deliberately makes at most four Commons API queries per
+        # entity. The full planner adds Wikidata/Openverse/page-image rescue
+        # only after a candidate is frozen; probing every provider for every
+        # reference leaf makes scale selection unbounded.
+        frames = _commons_images(
+            target.name,
+            entity_aliases=aliases,
+            limit=40,
+        )
+        qualified_frames = qualified_video_frame_count(
+            entity_id=target.name,
+            entity_aliases=aliases,
+            vertical="travel",
+            image_pool=frames,
+        )
+    except (OSError, TimeoutError, ValueError):
+        return TargetSourceQualification(
+            accepted=False,
+            qualified_source=None,
+            rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+        )
+    if qualified_frames >= 2:
+        return TargetSourceQualification(
+            accepted=True,
+            qualified_source=_QualifiedVideoSource(
+                title=target.name,
+                url=str(frames[0]["url"]),
+                mode="rights_cleared_frames",
+            ),
+        )
+    return TargetSourceQualification(
+        accepted=False,
+        qualified_source=None,
+        rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+    )
+
+
 def ensure_execution_spec(
     recipe: dict[str, Any],
     selection: dict[str, Any],
@@ -51,6 +120,7 @@ def ensure_execution_spec(
     target_selector: TargetSelector,
     content_type: str,
     target_names: tuple[str, ...],
+    inherit_frozen_targets: bool = False,
 ) -> str:
     if not selection:
         raise SystemExit("[task execute] recipe.selection is required for an execution work package")
@@ -61,12 +131,23 @@ def ensure_execution_spec(
     if store.spec_exists(execution_id):
         return execution_id
     source_qualifier = None
+    qualification_source_key = "qualifiedHomepageSource"
+    persist_qualified_source = True
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
-        if content_type != "homepage":
+        if content_type == "homepage":
+            source_qualifier = lambda target: _homepage_source_qualifier(execution_id, target)
+        elif content_type == "video":
+            source_qualifier = _video_source_qualifier
+            qualification_source_key = "qualifiedVideoSource"
+            persist_qualified_source = False
+        else:
             raise SystemExit(
-                "[task execute] GATE_BLOCK source-ready-priority currently requires homepage carrier"
+                "[task execute] GATE_BLOCK source-ready-priority requires homepage or video carrier"
             )
-        source_qualifier = lambda target: _homepage_source_qualifier(execution_id, target)
+        if inherit_frozen_targets:
+            # Qualifier remains only to satisfy the selector contract; inherited
+            # names are frozen without another network precheck.
+            persist_qualified_source = False
     create_execution_selection(
         SelectionRequest(
             execution_id=execution_id,
@@ -88,7 +169,10 @@ def ensure_execution_spec(
             selection_policy=SelectionPolicy.FROZEN,
             target_selector=target_selector,
             source_qualifier=source_qualifier,
+            qualification_source_key=qualification_source_key,
+            persist_qualified_source=persist_qualified_source,
             target_names=target_names,
+            inherit_frozen_targets=bool(inherit_frozen_targets),
         )
     )
     return execution_id

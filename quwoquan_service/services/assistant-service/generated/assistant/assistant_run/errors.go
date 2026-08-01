@@ -15,15 +15,23 @@ var (
 	ErrModelProviderUnavailable        = errors.New("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
 	ErrPageContextUnavailable          = errors.New("ASSISTANT.SYSTEM.page_context_unavailable")
 	ErrPublicSearchProviderUnavailable = errors.New("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
+	ErrRunExecutionFailed              = errors.New("ASSISTANT.SYSTEM.run_execution_failed")
 	ErrRunIdempotencyConflict          = errors.New("ASSISTANT.USER.run_idempotency_conflict")
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
 	ErrRunNotFound                     = errors.New("ASSISTANT.USER.run_not_found")
 	ErrRunPolicyUnavailable            = errors.New("ASSISTANT.SYSTEM.run_policy_unavailable")
+	ErrRunStateConflict                = errors.New("ASSISTANT.USER.run_state_conflict")
 	ErrRunStorageUnavailable           = errors.New("ASSISTANT.SYSTEM.run_storage_unavailable")
+	ErrRunUnauthorized                 = errors.New("ASSISTANT.USER.run_unauthorized")
 	ErrSkillConsentRequired            = errors.New("ASSISTANT.USER.skill_consent_required")
 	ErrStreamUnavailable               = errors.New("ASSISTANT.SYSTEM.stream_unavailable")
 	ErrUpstreamTimeout                 = errors.New("ASSISTANT.MIDDLEWARE.upstream_timeout")
 	ErrWeatherProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
+	ErrWebBudgetExhausted              = errors.New("ASSISTANT.MIDDLEWARE.web_budget_exhausted")
+	ErrWebBudgetUnavailable            = errors.New("ASSISTANT.SYSTEM.web_budget_unavailable")
+	ErrWebEvidenceUnavailable          = errors.New("ASSISTANT.SYSTEM.web_evidence_unavailable")
+	ErrWebFetchUnavailable             = errors.New("ASSISTANT.MIDDLEWARE.web_fetch_unavailable")
+	ErrWebTargetRejected               = errors.New("ASSISTANT.USER.web_target_rejected")
 )
 
 // AppErrorFromFinanceProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.finance_provider_unavailable (user_message from errors.yaml).
@@ -62,6 +70,12 @@ func AppErrorFromPublicSearchProviderUnavailable(debugMessage string) *rterr.App
 	return rterr.NewAppError(code, "公开信息检索暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }
 
+// AppErrorFromRunExecutionFailed returns *AppError for ASSISTANT.SYSTEM.run_execution_failed (user_message from errors.yaml).
+func AppErrorFromRunExecutionFailed(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_execution_failed")
+	return rterr.NewAppError(code, "本次任务执行失败，请稍后重试", debugMessage).WithMetadata("run_execution_failed", 0).WithRecovery("retry", 3)
+}
+
 // AppErrorFromRunIdempotencyConflict returns *AppError for ASSISTANT.USER.run_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromRunIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.run_idempotency_conflict")
@@ -86,10 +100,22 @@ func AppErrorFromRunPolicyUnavailable(debugMessage string) *rterr.AppError {
 	return rterr.NewAppError(code, "助手策略暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
+// AppErrorFromRunStateConflict returns *AppError for ASSISTANT.USER.run_state_conflict (user_message from errors.yaml).
+func AppErrorFromRunStateConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.run_state_conflict")
+	return rterr.NewAppError(code, "本次任务状态已经变化，请刷新后重试", debugMessage).WithMetadata("state_conflict", 409).WithRecovery("refresh", 0)
+}
+
 // AppErrorFromRunStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.run_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromRunStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_storage_unavailable")
 	return rterr.NewAppError(code, "助手执行服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromRunUnauthorized returns *AppError for ASSISTANT.USER.run_unauthorized (user_message from errors.yaml).
+func AppErrorFromRunUnauthorized(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.run_unauthorized")
+	return rterr.NewAppError(code, "请先登录后使用助手能力", debugMessage).WithMetadata("run_unauthorized", 401).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSkillConsentRequired returns *AppError for ASSISTANT.USER.skill_consent_required (user_message from errors.yaml).
@@ -107,11 +133,41 @@ func AppErrorFromStreamUnavailable(debugMessage string) *rterr.AppError {
 // AppErrorFromUpstreamTimeout returns *AppError for ASSISTANT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.upstream_timeout")
-	return rterr.NewAppError(code, "请求超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 8)
+	return rterr.NewAppError(code, "请求超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecovery("retry", 8)
 }
 
 // AppErrorFromWeatherProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.weather_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromWeatherProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
 	return rterr.NewAppError(code, "天气数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
+}
+
+// AppErrorFromWebBudgetExhausted returns *AppError for ASSISTANT.MIDDLEWARE.web_budget_exhausted (user_message from errors.yaml).
+func AppErrorFromWebBudgetExhausted(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.web_budget_exhausted")
+	return rterr.NewAppError(code, "本次任务的网页探索预算已用完", debugMessage).WithMetadata("web_budget_exhausted", 0).WithRecovery("surface", 0)
+}
+
+// AppErrorFromWebBudgetUnavailable returns *AppError for ASSISTANT.SYSTEM.web_budget_unavailable (user_message from errors.yaml).
+func AppErrorFromWebBudgetUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.web_budget_unavailable")
+	return rterr.NewAppError(code, "网页探索预算状态暂时不可用，请稍后重试", debugMessage).WithMetadata("web_budget_unavailable", 0).WithRecovery("retry", 3)
+}
+
+// AppErrorFromWebEvidenceUnavailable returns *AppError for ASSISTANT.SYSTEM.web_evidence_unavailable (user_message from errors.yaml).
+func AppErrorFromWebEvidenceUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.web_evidence_unavailable")
+	return rterr.NewAppError(code, "网页证据暂时无法安全保存或读取，请稍后重试", debugMessage).WithMetadata("web_evidence_unavailable", 0).WithRecovery("retry", 3)
+}
+
+// AppErrorFromWebFetchUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.web_fetch_unavailable (user_message from errors.yaml).
+func AppErrorFromWebFetchUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.web_fetch_unavailable")
+	return rterr.NewAppError(code, "公开网页暂时无法读取，请稍后重试", debugMessage).WithMetadata("web_fetch_unavailable", 0).WithRecovery("retry", 3)
+}
+
+// AppErrorFromWebTargetRejected returns *AppError for ASSISTANT.USER.web_target_rejected (user_message from errors.yaml).
+func AppErrorFromWebTargetRejected(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.web_target_rejected")
+	return rterr.NewAppError(code, "该网页目标不符合公开只读访问规则", debugMessage).WithMetadata("web_target_rejected", 0).WithRecovery("surface", 0)
 }

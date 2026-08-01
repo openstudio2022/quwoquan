@@ -7,6 +7,7 @@ client_projection:
   strict: true
   dart_imports:
   - chat_message_card_attribute_dto.g.dart
+  - chat_message_card_object_ref_dto.g.dart
   fields:
   - name: kind
     dart_type: String
@@ -16,6 +17,11 @@ client_projection:
     dart_type: String
     nullable: false
     source: title
+  - name: objectRef
+    dart_type: ChatMessageCardObjectRefDto
+    nullable: true
+    source: objectRef
+    map_from_string_key_class: ChatMessageCardObjectRefDto
   - name: subtitle
     dart_type: String
     nullable: true

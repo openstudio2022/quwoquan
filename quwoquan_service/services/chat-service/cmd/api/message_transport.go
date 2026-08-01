@@ -14,7 +14,7 @@ func requireChatMessageTransport(
 	environment string,
 	router *rtredis.Router,
 	sceneModes map[string]string,
-) (*runtimemessaging.RedisMessageTransport, error) {
+) (*runtimemessaging.RedisMessageTransport, *runtimemessaging.RedisMessageTransport, error) {
 	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
@@ -31,17 +31,27 @@ func requireChatMessageTransport(
 		router, sceneModes,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	realtime, ok := resolved.Scene("realtime")
 	if !ok {
-		return nil, fmt.Errorf("message transport root chat-service-api is missing realtime scene")
+		return nil, nil, fmt.Errorf("message transport root chat-service-api is missing realtime scene")
 	}
 	durable, ok := resolved.Scene("general")
 	if !ok {
-		return nil, fmt.Errorf("message transport root chat-service-api is missing general scene")
+		return nil, nil, fmt.Errorf("message transport root chat-service-api is missing general scene")
 	}
-	return runtimemessaging.NewRedisMessageTransportForRoot(
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
 		"chat-service-api", messageBinding.AdapterID, realtime, durable,
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+	resumeTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api-resume", messageBinding.AdapterID, realtime, realtime,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return transport, resumeTransport, nil
 }

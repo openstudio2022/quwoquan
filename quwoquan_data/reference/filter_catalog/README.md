@@ -2,7 +2,7 @@
 
 本目录是滤镜目录的数据工程发布入口。唯一可编辑业务数据是
 `releases/<releaseId>/filter_catalog_release.json`；App bootstrap、
-四环境 seed/import manifest 与 `bootstrap_binding.json` 都由 `qwq-data`
+四环境 immutable-release import manifest 与 `bootstrap_binding.json` 都由 `qwq-data`
 从该 artifact 生成，不是第二真相源。
 
 ## CLI
@@ -16,9 +16,10 @@ python3 -B quwoquan_data/scripts/cli.py filter-catalog materialize \
 python3 -B quwoquan_data/scripts/cli.py filter-catalog validate
 ```
 
-`materialize` 会更新唯一 bootstrap binding、App replica、alpha/beta/gamma
-seed 引用和 prod release import 输入。prod 不使用 test fixture 或 `seedRefs`，
-其 manifest 只声明 Stage 与人工灰度 Activate 输入。
+`materialize` 会更新唯一 bootstrap binding、App replica，以及四环境对同一
+immutable release 的 import 输入。Alpha/Beta/Gamma 采用 Stage 后 Activate，
+Prod 只声明 Stage 与受保护的灰度 Activate；任何环境都不使用 test fixture、
+`seedRefs` 或直接存储写入。
 
 ## Canonical digest
 
@@ -51,4 +52,4 @@ Dart 可用 `BigInt` 加十进制字符串实现。跨语言固定向量位于
 - canonical digest、固定 digest vector 与 release 不可变路径；
 - App bootstrap 为 canonical 的精确生成投影；
 - alpha/beta/gamma/prod manifest 全覆盖并引用同一 artifact；
-- alpha/beta/gamma metadata seed manifest 通过 `releaseInputs` 引用对应输入。
+- 四环境 input 的 `deliveryMode=immutable_release`，不得退回 seed 语义。

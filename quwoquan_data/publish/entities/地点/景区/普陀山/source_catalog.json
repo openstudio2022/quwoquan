@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/普陀山__wikipedia__208c1929/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "普陀山__wikipedia__208c1929",
+    "entityName": "普陀山",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
+    "title": "普陀山",
+    "fetchedAt": "2026-07-31T02:02:01Z",
+    "snapshotHash": "sha256:d90bb4d1951c97041487b5401fca373c9878ba2cefcf449273c93404ee07e7b5",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation",
+    "evidenceRef": "evidence/sources/普陀山__wikipedia__208c1929/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "普陀山__wikipedia__208c1929",
+      "entityName": "普陀山",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%99%AE%E9%99%80%E5%B1%B1",
+      "title": "普陀山",
+      "fetchedAt": "2026-07-31T02:02:01Z",
+      "snapshotHash": "sha256:d90bb4d1951c97041487b5401fca373c9878ba2cefcf449273c93404ee07e7b5",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "licensed_adaptation",
+      "evidenceRef": "evidence/sources/普陀山__wikipedia__208c1929/meta.json"
+    }
+  ]
+}

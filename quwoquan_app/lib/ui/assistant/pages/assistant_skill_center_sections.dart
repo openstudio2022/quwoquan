@@ -2,20 +2,20 @@ part of 'assistant_skill_center_page.dart';
 
 // 仅承载技能中心各区块的纯 Widget 构建逻辑。
 extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
-  /// 进入指定云端会话续聊（经 conversationId 透传给对话页）。
-  void _openConversation(String conversationId) {
+  /// 进入指定云端会话续聊（经 sessionId 透传给对话页）。
+  void _openSession(String sessionId) {
     context.push(
       AppRoutePaths.assistantPersonal,
       extra: AssistantOpenContext(
         source: AssistantSource.chat,
         visitTarget: const VisitTarget.page('assistant_skill_center_recent'),
         experienceLevel: ExperienceLevel.returning,
-        conversationId: conversationId,
+        sessionId: sessionId,
       ),
     );
   }
 
-  String _conversationUpdatedLabel(AppLocalizations l10n, String updatedAt) {
+  String _sessionUpdatedLabel(AppLocalizations l10n, String updatedAt) {
     final parsed = DateTime.tryParse(updatedAt.trim());
     if (parsed == null) {
       return '';
@@ -104,7 +104,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
   }
 
   Widget _buildTasksSection({
-    required AsyncValue<List<AssistantUserTaskView>> tasksAsync,
+    required AsyncValue<List<AssistantTaskItemView>> tasksAsync,
     required Color fgPrimary,
     required Color fgSecondary,
     required Color blockBg,
@@ -214,7 +214,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
 
   Widget _buildSessionsSection({
     required AppLocalizations l10n,
-    required AsyncValue<List<AssistantConversationWire>> sessionsAsync,
+    required AsyncValue<List<AssistantSessionWire>> sessionsAsync,
     required Color fgPrimary,
     required Color fgSecondary,
     required Color blockBg,
@@ -276,19 +276,19 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
                 children: [
                   ...visibleSessions.map((item) {
                     final topicTitle = item.summary.trim();
-                    final updatedLabel = _conversationUpdatedLabel(
+                    final updatedLabel = _sessionUpdatedLabel(
                       l10n,
                       item.updatedAt,
                     );
                     return CupertinoButton(
                       key: ValueKey<String>(
-                        'assistant_recent_session_${item.conversationId}',
+                        'assistant_recent_session_${item.sessionId}',
                       ),
                       padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
                       minimumSize: const Size.square(
                         AppSpacing.minInteractiveSize,
                       ),
-                      onPressed: () => _openConversation(item.conversationId),
+                      onPressed: () => _openSession(item.sessionId),
                       child: Row(
                         children: [
                           Expanded(

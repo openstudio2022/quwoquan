@@ -11,7 +11,7 @@ void main() {
               eventId: 'fact-1',
               factType: 'user_feedback',
               assistantTurnId: 'turn-1',
-              referralSource: 'assistant_conversation',
+              referralSource: 'assistant_session',
               domainId: 'assistant',
               feedbackType: 'useful',
               trainingEligible: false,
@@ -25,16 +25,18 @@ void main() {
       expect(body.containsKey('queryText'), isFalse);
       expect(body['occurredAt'], '2026-07-26T00:00:00.000Z');
 
-      final receipt =
-          decodeAssistantLearningFactAppendReceipt(<String, Object?>{
-            'eventId': 'fact-1',
-            'accepted': true,
-            'deduplicated': false,
-            'appendSequence': 7,
-            'payloadDigest':
-                '0000000000000000000000000000000000000000000000000000000000000000',
-            'recordedAt': '2026-07-26T00:00:01Z',
-          });
+      final receipt = decodeAssistantLearningFactAppendReceipt(<
+        String,
+        Object?
+      >{
+        'eventId': 'fact-1',
+        'accepted': true,
+        'deduplicated': false,
+        'appendSequence': 7,
+        'payloadDigest':
+            '0000000000000000000000000000000000000000000000000000000000000000',
+        'recordedAt': '2026-07-26T00:00:01Z',
+      });
       expect(receipt.appendSequence, 7);
       expect(receipt.recordedAt, DateTime.utc(2026, 7, 26, 0, 0, 1));
     },

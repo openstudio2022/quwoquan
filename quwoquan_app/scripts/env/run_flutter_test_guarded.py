@@ -233,7 +233,11 @@ def _dart_define_values(args: list[str]) -> dict[str, str]:
 
 def _with_runtime_environment_defines(args: list[str]) -> list[str]:
   defined = _dart_define_values(args)
-  runtime_env = defined.get("APP_RUNTIME_ENV", "alpha").strip() or "alpha"
+  runtime_env = (
+    defined.get("APP_RUNTIME_ENV")
+    or os.environ.get("QWQ_APP_RUNTIME_ENV")
+    or "alpha"
+  ).strip()
   result = subprocess.run(
     [
       sys.executable,

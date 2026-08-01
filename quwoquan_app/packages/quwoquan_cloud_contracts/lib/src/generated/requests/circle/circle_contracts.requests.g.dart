@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../circle/circle_contracts.dart';
 
@@ -28,6 +28,10 @@ final class ArchiveCircleCommand {
   }
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class CreateCircleCommand {
@@ -91,6 +95,27 @@ final class CreateCircleCommand {
   final String? linkedHomepageId;
   final String? linkedHomepageType;
   final String? linkedHomepageTitle;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "name": this.name,
+    if (this.description != null) "description": this.description!,
+    if (this.rulesText != null) "rulesText": this.rulesText!,
+    if (this.welcomeMessage != null) "welcomeMessage": this.welcomeMessage!,
+    if (this.coverUrl != null) "coverUrl": this.coverUrl!,
+    if (this.iconUrl != null) "iconUrl": this.iconUrl!,
+    if (this.category != null) "category": this.category!,
+    if (this.subCategory != null) "subCategory": this.subCategory!,
+    if (this.tags.isNotEmpty) "tags": this.tags.map((value) => value).toList(growable: false),
+    if (this.visibility != null) "visibility": this.visibility!,
+    if (this.joinPolicy != null) "joinPolicy": this.joinPolicy!,
+    if (this.kind != null) "kind": this.kind!,
+    if (this.displaySubjectType != null) "displaySubjectType": this.displaySubjectType!,
+    if (this.followEnabled != null) "followEnabled": this.followEnabled!,
+    if (this.autoSyncChat != null) "autoSyncChat": this.autoSyncChat!,
+    if (this.linkedHomepageId != null) "linkedHomepageId": this.linkedHomepageId!,
+    if (this.linkedHomepageType != null) "linkedHomepageType": this.linkedHomepageType!,
+    if (this.linkedHomepageTitle != null) "linkedHomepageTitle": this.linkedHomepageTitle!,
+  };
 }
 
 final class UpdateCircleCommand {
@@ -157,6 +182,28 @@ final class UpdateCircleCommand {
   final String? linkedHomepageId;
   final String? linkedHomepageType;
   final String? linkedHomepageTitle;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.name != null) "name": this.name!,
+    if (this.description != null) "description": this.description!,
+    if (this.rulesText != null) "rulesText": this.rulesText!,
+    if (this.welcomeMessage != null) "welcomeMessage": this.welcomeMessage!,
+    if (this.coverUrl != null) "coverUrl": this.coverUrl!,
+    if (this.iconUrl != null) "iconUrl": this.iconUrl!,
+    if (this.category != null) "category": this.category!,
+    if (this.subCategory != null) "subCategory": this.subCategory!,
+    if (this.tags != null) "tags": this.tags!.map((value) => value).toList(growable: false),
+    if (this.visibility != null) "visibility": this.visibility!,
+    if (this.joinPolicy != null) "joinPolicy": this.joinPolicy!,
+    if (this.kind != null) "kind": this.kind!,
+    if (this.displaySubjectType != null) "displaySubjectType": this.displaySubjectType!,
+    if (this.followEnabled != null) "followEnabled": this.followEnabled!,
+    if (this.autoSyncChat != null) "autoSyncChat": this.autoSyncChat!,
+    if (this.linkedHomepageId != null) "linkedHomepageId": this.linkedHomepageId!,
+    if (this.linkedHomepageType != null) "linkedHomepageType": this.linkedHomepageType!,
+    if (this.linkedHomepageTitle != null) "linkedHomepageTitle": this.linkedHomepageTitle!,
+  };
 }
 
 final class UpdateCircleSectionsCommand {
@@ -175,6 +222,11 @@ final class UpdateCircleSectionsCommand {
 
   final String circleId;
   final List<CircleSectionConfigInput> sections;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "sections": this.sections.map((value) => <String, Object?>{'sectionType': value.sectionType, 'visible': value.visible, 'order': value.order, if (value.customTitle != null) 'customTitle': value.customTitle}).toList(growable: false),
+  };
 }
 
 CloudOperationRequestPayload encodeCircleCircleArchiveCircleGeneratedRequest(ArchiveCircleCommand request) {

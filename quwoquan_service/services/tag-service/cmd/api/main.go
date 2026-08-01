@@ -25,9 +25,9 @@ import (
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	signalstream "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/messaging"
-	feedbackhttp "quwoquan_service/services/tag-service/internal/tag/tag_feedback/adapters/inbound/http"
-	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/application/tagfeedback"
-	"quwoquan_service/services/tag-service/internal/tag/tag_feedback/infrastructure/tagfeedbackstore"
+	feedbackhttp "quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/adapters/inbound/http"
+	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/application/tagfeedback"
+	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/infrastructure/tagfeedbackstore"
 	nodehttp "quwoquan_service/services/tag-service/internal/tag/tag_node_view/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
@@ -168,7 +168,7 @@ func main() {
 	}
 	feedbackSink := tagfeedbackstore.NewSink(db)
 	if err := feedbackSink.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("tag-service ensure tag_feedback indexes: %v", err)
+		log.Fatalf("tag-service ensure tag_feedback_fact indexes: %v", err)
 	}
 	feedbackFacade, err := tagfeedback.NewFacade(feedbackSink, tagService)
 	if err != nil {

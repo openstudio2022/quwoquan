@@ -99,7 +99,6 @@ int timeBucketPriority(String bucket) {
   }
 }
 
-
 int _mutualCountFor(IntersectionReason item) {
   if (item.mutualCount > 0) return item.mutualCount;
   for (final point in item.intersectionPoints) {

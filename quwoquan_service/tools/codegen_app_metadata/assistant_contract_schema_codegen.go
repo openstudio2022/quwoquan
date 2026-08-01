@@ -27,13 +27,14 @@ type assistantSubcontractSchema struct {
 }
 
 type assistantContractField struct {
-	Name     string      `yaml:"name"`
-	Type     string      `yaml:"type"`
-	Required bool        `yaml:"required"`
-	Default  interface{} `yaml:"default"`
-	Ref      string      `yaml:"ref"`
-	EnumRef  string      `yaml:"enum_ref"`
-	Strict   bool        `yaml:"strict"`
+	Name         string      `yaml:"name"`
+	Type         string      `yaml:"type"`
+	Required     bool        `yaml:"required"`
+	Default      interface{} `yaml:"default"`
+	Ref          string      `yaml:"ref"`
+	EnumRef      string      `yaml:"enum_ref"`
+	Strict       bool        `yaml:"strict"`
+	AllowUnknown bool        `yaml:"allow_unknown"`
 }
 
 type assistantContractIndex struct {
@@ -507,10 +508,14 @@ func assistantRenderFromJsonValue(field assistantContractField, schema *assistan
 	case "list<map>":
 		return fmt.Sprintf("_assistantMapList(json['%s'])", field.Name)
 	case "enum":
-		if field.Strict || (field.Required && field.Default == nil) {
-			return fmt.Sprintf("parse%sStrict((json['%s'] as String?)?.trim() ?? '')", field.EnumRef, field.Name)
+		fallback := "''"
+		if !field.Required && field.Default != nil {
+			fallback = fmt.Sprintf("%q", assistantDefaultString(field.Default))
 		}
-		return fmt.Sprintf("parse%s((json['%s'] as String?)?.trim() ?? %q)", field.EnumRef, field.Name, assistantDefaultString(field.Default))
+		if field.AllowUnknown {
+			return fmt.Sprintf("parse%s((json['%s'] as String?)?.trim() ?? %s)", field.EnumRef, field.Name, fallback)
+		}
+		return fmt.Sprintf("parse%sStrict((json['%s'] as String?)?.trim() ?? %s)", field.EnumRef, field.Name, fallback)
 	case "object":
 		if field.Ref != "" {
 			className := assistantResolveRefClassName(field.Ref, schema, index)

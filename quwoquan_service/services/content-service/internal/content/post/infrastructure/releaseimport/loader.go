@@ -15,6 +15,7 @@ import (
 	"time"
 
 	runtimemedia "quwoquan_service/runtime/media"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 )
 
@@ -83,41 +84,41 @@ type IntersectionHintDoc struct {
 
 // PostDoc 是灌入运行库的文章文档（与 publish post manifest + article.md 对齐）。
 type PostDoc struct {
-	PostRef               string                   `json:"postRef" bson:"postRef"`
-	ContentType           string                   `json:"contentType" bson:"contentType"`
-	ContentIdentity       string                   `json:"contentIdentity" bson:"contentIdentity"`
-	Title                 string                   `json:"title" bson:"title"`
-	Body                  string                   `json:"body" bson:"body"`
-	Angle                 string                   `json:"angle" bson:"angle"`
-	Seq                   int                      `json:"seq" bson:"seq"`
-	EntityRefs            []string                 `json:"entityRefs" bson:"entityRefs"`
-	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
-	TagRefs               []string                 `json:"tagRefs" bson:"tagRefs"`
-	IntersectionHints     []IntersectionHintDoc    `json:"intersectionHints" bson:"intersectionHints"`
-	SemanticMentions      any                      `json:"semanticMentions" bson:"semanticMentions"`
-	AuthorID              string                   `json:"authorId" bson:"authorId"`
-	CreatorProfileID      string                   `json:"creatorProfileId" bson:"creatorProfileId"`
-	CreatorArchetype      string                   `json:"creatorArchetype" bson:"creatorArchetype"`
-	CreatorProfileVersion string                   `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
-	CreatorDisclosure     map[string]any           `json:"creatorDisclosure" bson:"creatorDisclosure"`
-	ExperienceClaimMode   string                   `json:"experienceClaimMode" bson:"experienceClaimMode"`
-	AuthorQualitySignals  map[string]any           `json:"authorQualitySignals" bson:"authorQualitySignals"`
-	Assets                []AssetManifestItem      `json:"assets" bson:"assets"`
-	SourceCollectionID    string                   `json:"sourceCollectionId" bson:"sourceCollectionId"`
-	SourcePlatform        string                   `json:"sourcePlatform" bson:"sourcePlatform"`
-	SourceAttribution     any                      `json:"sourceAttribution,omitempty" bson:"sourceAttribution,omitempty"`
-	Creator               any                      `json:"creator" bson:"creator"`
-	Page                  any                      `json:"page" bson:"page"`
-	LicenseProof          any                      `json:"licenseProof" bson:"licenseProof"`
-	Template              string                   `json:"template" bson:"template"`
-	GeneratorModel        string                   `json:"generatorModel" bson:"generatorModel"`
-	ArticleMarkdown       string                   `json:"articleMarkdown" bson:"articleMarkdown"`
-	ArticleDigest         string                   `json:"articleDigest" bson:"articleDigest"`
-	ArticleAssetManifest  *ArticleAssetManifestDoc `json:"articleAssetManifest" bson:"articleAssetManifest"`
-	SourceTaskId          string                   `json:"sourceTaskId" bson:"sourceTaskId"`
-	CreatedAt             time.Time                `json:"createdAt" bson:"createdAt"`
-	UpdatedAt             time.Time                `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt           time.Time                `json:"publishedAt" bson:"publishedAt"`
+	PostRef               string                             `json:"postRef" bson:"postRef"`
+	ContentType           string                             `json:"contentType" bson:"contentType"`
+	ContentIdentity       string                             `json:"contentIdentity" bson:"contentIdentity"`
+	Title                 string                             `json:"title" bson:"title"`
+	Body                  string                             `json:"body" bson:"body"`
+	Angle                 string                             `json:"angle" bson:"angle"`
+	Seq                   int                                `json:"seq" bson:"seq"`
+	EntityRefs            []string                           `json:"entityRefs" bson:"entityRefs"`
+	NormalizedEntityRefs  []string                           `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
+	TagRefs               []string                           `json:"tagRefs" bson:"tagRefs"`
+	IntersectionHints     []IntersectionHintDoc              `json:"intersectionHints" bson:"intersectionHints"`
+	SemanticMentions      []postmodel.PostSemanticMention    `json:"semanticMentions" bson:"semanticMentions"`
+	AuthorID              string                             `json:"authorId" bson:"authorId"`
+	CreatorProfileID      string                             `json:"creatorProfileId" bson:"creatorProfileId"`
+	CreatorArchetype      string                             `json:"creatorArchetype" bson:"creatorArchetype"`
+	CreatorProfileVersion string                             `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
+	CreatorDisclosure     postmodel.PostCreatorDisclosure    `json:"creatorDisclosure" bson:"creatorDisclosure"`
+	ExperienceClaimMode   string                             `json:"experienceClaimMode" bson:"experienceClaimMode"`
+	AuthorQualitySignals  postmodel.PostAuthorQualitySignals `json:"authorQualitySignals" bson:"authorQualitySignals"`
+	Assets                []AssetManifestItem                `json:"assets" bson:"assets"`
+	SourceCollectionID    string                             `json:"sourceCollectionId" bson:"sourceCollectionId"`
+	SourcePlatform        string                             `json:"sourcePlatform" bson:"sourcePlatform"`
+	SourceAttribution     postmodel.SourceAttribution        `json:"sourceAttribution,omitempty" bson:"sourceAttribution,omitempty"`
+	Creator               any                                `json:"creator" bson:"creator"`
+	Page                  any                                `json:"page" bson:"page"`
+	LicenseProof          any                                `json:"licenseProof" bson:"licenseProof"`
+	Template              string                             `json:"template" bson:"template"`
+	GeneratorModel        string                             `json:"generatorModel" bson:"generatorModel"`
+	ArticleMarkdown       string                             `json:"articleMarkdown" bson:"articleMarkdown"`
+	ArticleDigest         string                             `json:"articleDigest" bson:"articleDigest"`
+	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest" bson:"articleAssetManifest"`
+	SourceTaskId          string                             `json:"sourceTaskId" bson:"sourceTaskId"`
+	CreatedAt             time.Time                          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt             time.Time                          `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt           time.Time                          `json:"publishedAt" bson:"publishedAt"`
 }
 
 // EntityDoc 是灌入运行库的实体文档（与 publish entity _entity.json + page.md 对齐）。
@@ -386,45 +387,46 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 }
 
 type postManifest struct {
-	ContentType           string                   `json:"contentType"`
-	ContentIdentity       string                   `json:"contentIdentity"`
-	Title                 string                   `json:"title"`
-	Caption               string                   `json:"caption"`
-	DisplayTitle          string                   `json:"displayTitle"`
-	Body                  string                   `json:"body"`
-	EntityRefs            []string                 `json:"entityRefs"`
-	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs"`
-	TagRefs               []string                 `json:"tagRefs"`
-	IntersectionHints     []IntersectionHintDoc    `json:"intersectionHints"`
-	SemanticMentions      any                      `json:"semanticMentions"`
-	AuthorID              string                   `json:"authorId"`
-	CreatorProfileID      string                   `json:"creatorProfileId"`
-	CreatorArchetype      string                   `json:"creatorArchetype"`
-	CreatorProfileVersion string                   `json:"creatorProfileVersion"`
-	CreatorDisclosure     map[string]any           `json:"creatorDisclosure"`
-	ExperienceClaimMode   string                   `json:"experienceClaimMode"`
-	AuthorQualitySignals  map[string]any           `json:"authorQualitySignals"`
-	Assets                []AssetManifestItem      `json:"assets"`
-	SourceCollectionID    string                   `json:"sourceCollectionId"`
-	SourcePlatform        string                   `json:"sourcePlatform"`
-	SourceAttribution     any                      `json:"sourceAttribution"`
-	Creator               any                      `json:"creator"`
-	Page                  any                      `json:"page"`
-	LicenseProof          any                      `json:"licenseProof"`
-	SourceCreator         string                   `json:"sourceCreator"`
-	SourceCollectionURL   string                   `json:"sourceCollectionUrl"`
-	LicenseProofRef       string                   `json:"licenseProofRef"`
-	Template              string                   `json:"template"`
-	GeneratorModel        string                   `json:"generatorModel"`
-	ArticleDigest         string                   `json:"articleMarkdownDigest"`
-	PublishTitle          string                   `json:"publishTitle"`
-	PublishAngle          string                   `json:"publishAngle"`
-	PublishSeq            int                      `json:"publishSeq"`
-	SourceTaskId          string                   `json:"sourceTaskId"`
-	ArticleAssetManifest  *ArticleAssetManifestDoc `json:"articleAssetManifest"`
-	CreatedAt             string                   `json:"createdAt"`
-	UpdatedAt             string                   `json:"updatedAt"`
-	PublishedAt           string                   `json:"publishedAt"`
+	ContentType           string                             `json:"contentType"`
+	ContentIdentity       string                             `json:"contentIdentity"`
+	Title                 string                             `json:"title"`
+	Caption               string                             `json:"caption"`
+	DisplayTitle          string                             `json:"displayTitle"`
+	Body                  string                             `json:"body"`
+	EntityRefs            []string                           `json:"entityRefs"`
+	NormalizedEntityRefs  []string                           `json:"normalizedEntityRefs"`
+	TagRefs               []string                           `json:"tagRefs"`
+	IntersectionHints     []IntersectionHintDoc              `json:"intersectionHints"`
+	SemanticMentions      []postmodel.PostSemanticMention    `json:"semanticMentions"`
+	AuthorID              string                             `json:"authorId"`
+	CreatorProfileID      string                             `json:"creatorProfileId"`
+	CreatorArchetype      string                             `json:"creatorArchetype"`
+	CreatorProfileVersion string                             `json:"creatorProfileVersion"`
+	CreatorProfileDigest  string                             `json:"creatorProfileDigest"`
+	CreatorDisclosure     postmodel.PostCreatorDisclosure    `json:"creatorDisclosure"`
+	ExperienceClaimMode   string                             `json:"experienceClaimMode"`
+	AuthorQualitySignals  postmodel.PostAuthorQualitySignals `json:"authorQualitySignals"`
+	Assets                []AssetManifestItem                `json:"assets"`
+	SourceCollectionID    string                             `json:"sourceCollectionId"`
+	SourcePlatform        string                             `json:"sourcePlatform"`
+	SourceAttribution     postmodel.SourceAttribution        `json:"sourceAttribution"`
+	Creator               any                                `json:"creator"`
+	Page                  any                                `json:"page"`
+	LicenseProof          any                                `json:"licenseProof"`
+	SourceCreator         string                             `json:"sourceCreator"`
+	SourceCollectionURL   string                             `json:"sourceCollectionUrl"`
+	LicenseProofRef       string                             `json:"licenseProofRef"`
+	Template              string                             `json:"template"`
+	GeneratorModel        string                             `json:"generatorModel"`
+	ArticleDigest         string                             `json:"articleMarkdownDigest"`
+	PublishTitle          string                             `json:"publishTitle"`
+	PublishAngle          string                             `json:"publishAngle"`
+	PublishSeq            int                                `json:"publishSeq"`
+	SourceTaskId          string                             `json:"sourceTaskId"`
+	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest"`
+	CreatedAt             string                             `json:"createdAt"`
+	UpdatedAt             string                             `json:"updatedAt"`
+	PublishedAt           string                             `json:"publishedAt"`
 }
 
 func parseManifestTime(ref string, field string, raw string) (time.Time, error) {
@@ -739,6 +741,24 @@ func systemAuthorManifest(m postManifest) bool {
 		strings.HasPrefix(creatorProfileID, "qwq_creator_")
 }
 
+// resolveCreatorProfileVersion binds the runtime creatorProfileVersion field.
+// Canonical release manifests pin creators with content-addressed
+// creatorProfileDigest; that digest is the authoritative profile binding and
+// is accepted when creatorProfileVersion is omitted.
+func resolveCreatorProfileVersion(m *postManifest) string {
+	if m == nil {
+		return ""
+	}
+	if version := strings.TrimSpace(m.CreatorProfileVersion); version != "" {
+		return version
+	}
+	if digest := strings.TrimSpace(m.CreatorProfileDigest); digest != "" {
+		m.CreatorProfileVersion = digest
+		return digest
+	}
+	return ""
+}
+
 func validateCreatorProjection(m postManifest, ref string) error {
 	if !systemAuthorManifest(m) {
 		return nil
@@ -753,21 +773,21 @@ func validateCreatorProjection(m postManifest, ref string) error {
 		return fmt.Errorf("%s: system creator manifest missing creatorArchetype", ref)
 	}
 	if strings.TrimSpace(m.CreatorProfileVersion) == "" {
-		return fmt.Errorf("%s: system creator manifest missing creatorProfileVersion", ref)
+		return fmt.Errorf("%s: system creator manifest missing creatorProfileVersion or creatorProfileDigest", ref)
 	}
 	if strings.TrimSpace(m.ExperienceClaimMode) == "" {
 		return fmt.Errorf("%s: system creator manifest missing experienceClaimMode", ref)
 	}
-	if m.CreatorDisclosure == nil {
+	if strings.TrimSpace(m.CreatorDisclosure.Type) == "" {
 		return fmt.Errorf("%s: system creator manifest missing creatorDisclosure", ref)
 	}
-	if m.CreatorDisclosure["type"] != "platform_virtual_creator" {
+	if m.CreatorDisclosure.Type != "platform_virtual_creator" {
 		return fmt.Errorf("%s: creatorDisclosure.type must be platform_virtual_creator", ref)
 	}
-	if m.CreatorDisclosure["visible"] != true {
+	if !m.CreatorDisclosure.Visible {
 		return fmt.Errorf("%s: creatorDisclosure.visible must be true", ref)
 	}
-	if strings.TrimSpace(fmt.Sprint(m.CreatorDisclosure["displayText"])) == "" {
+	if strings.TrimSpace(m.CreatorDisclosure.DisplayText) == "" {
 		return fmt.Errorf("%s: creatorDisclosure.displayText is required", ref)
 	}
 	return nil
@@ -825,6 +845,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if jerr := json.Unmarshal(raw, &m); jerr != nil {
 			return jerr
 		}
+		_ = resolveCreatorProfileVersion(&m)
 		if err := validateCreatorProjection(m, postRef); err != nil {
 			return err
 		}

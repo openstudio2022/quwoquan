@@ -207,7 +207,7 @@ func main() {
 	if err := router.PingAll(ctx); err != nil {
 		log.Fatalf("chat-service redis dependency unavailable: %v", err)
 	}
-	messageTransport, err := requireChatMessageTransport(
+	messageTransport, realtimeResumeTransport, err := requireChatMessageTransport(
 		ctx,
 		appEnv,
 		router,
@@ -335,8 +335,9 @@ func main() {
 			}
 		},
 	)
-	eventPublisher := mq.NewEventPublisherWithTransport(
+	eventPublisher := mq.NewEventPublisherWithTransports(
 		messageTransport,
+		realtimeResumeTransport,
 		recipientResolver,
 	)
 	messageOutboxRelay := application.NewMessageOutboxRelay(
@@ -527,6 +528,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("content-service MediaAsset delivery reader invalid: %v", err)
 	}
+	intersectionCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"chat-service",
+		[]string{"content.my_intersections.read"},
+	)
+	if err != nil {
+		log.Fatalf("content-service intersection credential init failed: %v", err)
+	}
+	contactIntersectionResolver, err := httpadapter.NewContactIntersectionResolverClient(
+		contentServiceBaseURL,
+		profileClient,
+		intersectionCredentials,
+	)
+	if err != nil {
+		log.Fatalf("content-service contact intersection reader invalid: %v", err)
+	}
 
 	conversationSvc := application.NewConversationService(
 		chatStorage,
@@ -576,6 +593,7 @@ func main() {
 		application.WithRelationshipGate(relationshipGate),
 		application.WithSocialContactResolver(socialContactResolver),
 		application.WithCircleListResolver(circleListResolver),
+		application.WithContactIntersectionResolver(contactIntersectionResolver),
 	)
 	circleGroupChatSyncService := application.NewCircleGroupChatSyncService(
 		conversationSvc,

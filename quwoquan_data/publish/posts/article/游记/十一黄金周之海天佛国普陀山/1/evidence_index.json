@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-article-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "普陀山__article_qunar_base_3",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:a077de51bf9bd68ff7ef1d72de9b0226edbf33f4180c4b7e360e9dec4c5b98d3"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:168cadb3d2f292528d5845c17ea8e6ff5b6fcb3b34cd979861b78f69e299a943"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:78ee20b4a4f21a6721f3490637753af8d2a47f63129f10322e275c98ec56620d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:df27d78b62ab1effa03b9301893048e3bbb949e2df693e5c95d2cf3e3bbed97d"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:cb18f2b8b76a67fc450414c0c9e0a7101cb33adaba1db394067b614aba41ed6e"
+    }
+  ]
+}

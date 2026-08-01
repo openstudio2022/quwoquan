@@ -5,9 +5,10 @@ from content.execution.support import AUTO, Any, DataIssue, DataIssueCode, DataI
 
 def _run_post_plan(ctx: ExecutionContext) -> StageResult:
     """校验 content_plan 已物化 brief。"""
+    from content.execution.source_ready_scope import source_ready_runtime_spec
     from content.post.content_plan_validation import validate_content_plan
     from content.post.content_plan_state import load_content_plan_packet
-    active_spec = _active_spec(ctx)
+    active_spec = source_ready_runtime_spec(ctx.execution_id, _active_spec(ctx))
     if _is_homepage_only_execution(ctx):
         return StageResult(
             ExecutionStage.POST_PLAN,
@@ -85,6 +86,19 @@ def _clear_compose_base_draft_assignments(
     cleaned["assignments"] = assignments
     return cleaned, duplicate_sources, changed
 
+COMPOSE_BRIEF_ABSORBED_FILE = "compose_brief_absorbed.json"
+
+
+def compose_brief_absorbed_path(execution_id: str, ref: str) -> Path:
+    from content.post.object_index import content_object_stage_dir
+    from core.paths import STAGE_COMPOSE
+
+    return (
+        content_object_stage_dir(execution_id, ref, STAGE_COMPOSE)
+        / COMPOSE_BRIEF_ABSORBED_FILE
+    )
+
+
 def _run_post_compose(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.post_recovery import _content_type_for_carrier
     from content.execution.recovery.stage_reset import _compose_brief_gate_failures
@@ -106,13 +120,16 @@ def _run_post_compose(ctx: ExecutionContext) -> StageResult:
         read_writing_pack,
         writing_pack_path,
     )
-    from core.io import read_json
+    from core.io import read_json, write_json
     from core.paths import STAGE_COMPOSE
+    from content.execution import spec_contract
     overrides = load_writing_intent_overrides(ctx.execution_id)
     expected_refs = list(iter_content_refs(ctx.execution_id))
     pending_refs: list[str] = []
     non_article_pending_refs: set[str] = set()
     for ref in expected_refs:
+        if compose_brief_absorbed_path(ctx.execution_id, ref).is_file():
+            continue
         needs_prepare = False
         coords = content_object.content_coords(ctx.execution_id, ref) or {}
         expected_content_type = str(coords.get("contentType") or "")
@@ -236,12 +253,64 @@ def _run_post_compose(ctx: ExecutionContext) -> StageResult:
             content_type=selected_type,
             stage=PostStage.COMPOSE_BRIEF,
             refs=tuple(selected_refs),
-            allow_partial=False,
+            allow_partial=True,
             materialize=False,
         )
     )
     gate_failures, fallback_stage = _compose_brief_gate_failures(ctx, selected_refs)
     if gate_failures:
+        failed_refs = {
+            str(issue.ref or "").strip()
+            for issue in gate_failures
+            if str(issue.ref or "").strip()
+        }
+        ready_refs: list[str] = []
+        for ref in expected_refs:
+            if ref in failed_refs:
+                continue
+            if compose_brief_absorbed_path(ctx.execution_id, ref).is_file():
+                continue
+            gate_path = (
+                content_object_stage_dir(ctx.execution_id, ref, STAGE_COMPOSE)
+                / "compose_brief_gate.json"
+            )
+            if not gate_path.is_file():
+                continue
+            try:
+                gate = read_json(gate_path)
+                gate_payload = (
+                    gate.get("payload") if isinstance(gate.get("payload"), Mapping) else gate
+                )
+            except (OSError, ValueError, TypeError):
+                continue
+            if isinstance(gate_payload, Mapping) and gate_payload.get("passed") is True:
+                ready_refs.append(ref)
+        approved_quota = spec_contract.approved_quota(ctx.execution_id)
+        if len(ready_refs) >= approved_quota:
+            for ref in sorted(failed_refs):
+                issues = [
+                    issue.as_dict()
+                    for issue in gate_failures
+                    if str(issue.ref or "").strip() == ref
+                ]
+                write_json(
+                    compose_brief_absorbed_path(ctx.execution_id, ref),
+                    {
+                        "schema": "quwoquan_data.compose_brief_absorbed",
+                        "executionId": ctx.execution_id,
+                        "ref": ref,
+                        "reason": "compose-brief gate failed; absorbed as object-level discard",
+                        "issues": issues,
+                    },
+                )
+            return StageResult(
+                ExecutionStage.POST_COMPOSE,
+                AUTO,
+                StageStatus.DONE,
+                "compose-brief absorbed object failures; "
+                f"ready={len(ready_refs)} absorbed={len(failed_refs)} "
+                f"quota={approved_quota}",
+            )
         effective_fallback = fallback_stage or ExecutionStage.DOWNLOAD_PLAN
         return StageResult(
             ExecutionStage.POST_COMPOSE,

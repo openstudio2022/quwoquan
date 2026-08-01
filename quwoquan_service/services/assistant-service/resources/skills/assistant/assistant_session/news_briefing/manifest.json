@@ -1,0 +1,14 @@
+{
+  "skillId": "news_briefing",
+  "displayName": "新闻简报",
+  "description": "按关注话题定时生成新闻摘要。",
+  "domainId": "content",
+  "problemClass": "realtime_info",
+  "executionTarget": "cloud",
+  "activationProfileRef": "activation.proactive",
+  "contextProfileRef": "context.proactive",
+  "capabilityProfileRef": "capability.web3",
+  "presentationProfileRef": "presentation.news",
+  "evaluationProfileRef": "evaluation.realtime_info",
+  "replayAssetRef": "assistant.replay.news_briefing.v1"
+}

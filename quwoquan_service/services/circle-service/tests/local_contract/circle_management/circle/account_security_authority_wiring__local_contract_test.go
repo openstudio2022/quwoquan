@@ -284,8 +284,8 @@ func TestCircleAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 	}
 
 	wantBaseURLs := map[string]string{
-		"alpha": "http://127.0.0.1:18081",
-		"beta":  "http://127.0.0.1:18081",
+		"alpha": "http://user-service:18081",
+		"beta":  "http://user-service:18081",
 		"gamma": "http://user-service:18081",
 		"prod":  "http://user-service:18081",
 	}

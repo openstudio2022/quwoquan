@@ -60,7 +60,7 @@ type ExactLookup struct {
 	SourceEntityRef   string
 }
 
-type SearchQuery struct {
+type SearchRequestFact struct {
 	Query        string
 	HomepageType string
 	City         string
@@ -106,7 +106,7 @@ type DetailProjectionStore interface {
 // Reader 是 Homepage 的具名读端口：精确解析、搜索、来源对账与 backfill cursor。
 type Reader interface {
 	FindExact(ctx context.Context, lookup ExactLookup) (homepagemodel.Snapshot, bool, error)
-	Search(ctx context.Context, query SearchQuery) (Page, error)
+	Search(ctx context.Context, query SearchRequestFact) (Page, error)
 	ListBySourceOwner(ctx context.Context, sourceOwner, cursor string, limit int) (Page, error)
 	Scan(ctx context.Context, cursor string, limit int) (Page, error)
 	Count(ctx context.Context) (int64, error)

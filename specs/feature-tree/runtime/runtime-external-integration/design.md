@@ -51,13 +51,13 @@
   **Prod** evidence。
 
 <a id="dec-003"></a>
-### DEC-003 Alpha/Beta/Gamma 对等替代与 Prod hosted receipt
-- 决策：Alpha、Beta、Gamma 启用 Port 对等的 local substitute Adapter；需要密钥的替身材料由 `local_provider_credentials` 写入 `QWQ_DEPLOY_WORK_ROOT/<target>/secrets/`，由本地基础设施直接提供的替身只消费 topology 派生 endpoint。Gamma 继续运行 gamma-local 完整第一方拓扑、production Remote composition、黑盒 API 与真机 Journey，但不访问真实第三方租户、不要求真实第三方凭据。Prod（含 gray）使用生产租户，并以绑定 Prod topology 的 hosted Remote receipt 证明 adapter health、callback drain、last-good 和生产回滚。
+### DEC-003 Alpha/Beta/Gamma 受管非生产 Provider 与 Prod hosted receipt
+- 决策：Alpha、Beta、Gamma required 验收启用受管非生产租户的非内存 Provider Adapter；endpoint/secret 只由受保护环境注入，stackctl 仅校验、传递并脱敏，不生成凭据。Gamma 继续运行 gamma-local 完整第一方拓扑、production Remote composition、黑盒 API 与真机 Journey。Prod（含 gray）使用独立生产租户，并以绑定 Prod topology 的 hosted Remote receipt 证明 adapter health、callback drain、last-good 和生产回滚。
 - 理由：Alpha/Beta/Gamma 负责可重复验证 Port 语义、故障模型与真实第一方用户结果；领域可在 Gamma 使用 Elasticsearch、Redis、MinIO 等完整本地引擎替身提高持久化和网络证据强度。只有 Prod 验证真实 SDK、鉴权、限流、回调、推送与 RTC 媒体链。
-- 被否决方案：以 substitute evidence 提升 Prod readiness、在 Gamma 注入真实第三方凭据、缺 Provider 时跨实现 fallback，以及以页面 Mock、alpha `push.mode: fake` 或 schema secretRefs 旁路绕过 Binding。
+- 被否决方案：以 nonprod evidence 提升 Prod readiness、在 Gamma 注入生产租户凭据、缺 Provider 时跨实现 fallback，以及以页面 Mock、进程内 fixture/recorder/capture 或 schema secretRefs 旁路绕过 Binding。
 - 约束与影响：governance 要求 Alpha/Beta/Gamma 选择 fixture/local_* Port 对等 Adapter；Prod 禁止 mock、fixture、recorder 与本地替代 Adapter。
-- 约束与影响：Alpha/Beta/Gamma 启动验证替代材料或本地 topology；Prod 验证外部注入真实 Provider 材料、secret file 与远端安全 authority，并拒绝 localhost。
-- 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma substitute receipt 不能替代 Prod hosted receipt。OSS 与 SLS 必须登记 capability 并走 Binding。
+- 约束与影响：Alpha/Beta/Gamma 启动验证受保护注入的 sandbox/nonprod 材料及本地基础设施 topology；Prod 验证外部注入的生产 Provider 材料、secret file 与远端安全 authority，并拒绝 localhost。
+- 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。OSS 与 SLS 必须登记 capability 并走 Binding。
 - 关联要求：`REQ-006`
 - 关联验收：`SIT-002`、`SIT-003`
 

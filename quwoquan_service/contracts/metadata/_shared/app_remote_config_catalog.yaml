@@ -210,15 +210,3 @@ categories:
         activation_policy: request
         fallback: empty_state
         expiry: never
-  - id: seed_fixture
-    source: contracts/metadata/_shared/test_fixtures/app_*_seed_manifest.json
-    remote_editable: false
-    description: alpha/beta/gamma 测试与联调数据，不是 prod 启动配置源。
-    items:
-      - key: app_alpha_seed_manifest
-        owner: runtime
-        risk_level: low
-        reload_policy: test_only
-        activation_policy: test_only
-        fallback: none
-        expiry: never

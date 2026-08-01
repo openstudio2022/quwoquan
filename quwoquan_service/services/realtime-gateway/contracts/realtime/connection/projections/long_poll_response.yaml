@@ -1,0 +1,13 @@
+read_model: LongPollResponse
+description: 每个可信 account/device 独立 cursor 的实时事件切片；仅用于传输恢复，Chat seq gap 仍由消息同步接口修复。
+source_entities:
+- Connection
+consumers:
+- app
+fields:
+- name: events
+  type: '[]object'
+- name: nextCursor
+  type: string
+- name: transportResumed
+  type: bool

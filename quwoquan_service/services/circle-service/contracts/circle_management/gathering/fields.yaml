@@ -1,0 +1,200 @@
+description: Gathering 聚合、参与者名单与 App 读切片的服务本地单轨契约。
+fields:
+- name: _id
+  type: string
+  constraints: [PK, NOT_NULL]
+  role: authoritative_state
+- name: version
+  type: int64
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: creatorPersonaId
+  type: string
+  constraints: [NOT_NULL]
+  role: authoritative_state
+  reference: true
+- name: title
+  type: string
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: description
+  type: string
+  constraints: [NULLABLE]
+  role: authoritative_state
+- name: targetRef
+  type: GatheringTargetRef
+  constraints: [NOT_NULL]
+  role: owned_value
+- name: startAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: endAt
+  type: timestamp
+  constraints: [NULLABLE]
+  role: authoritative_state
+- name: capacity
+  type: int
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: joinPolicy
+  type: enum
+  enum_ref: GatheringJoinPolicy
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: status
+  type: enum
+  enum_ref: GatheringStatus
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: conversationId
+  type: string
+  constraints: [NULLABLE]
+  role: authoritative_state
+  reference: true
+- name: conversationBindingStatus
+  type: enum
+  enum_ref: GatheringConversationBindingStatus
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: participants
+  type: '[]GatheringParticipant'
+  constraints: [NOT_NULL]
+  role: owned_value
+- name: createdAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  role: authoritative_state
+- name: updatedAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  role: authoritative_state
+types:
+  GatheringTargetRef:
+    description: 可导航目标对象引用；不得携带展示文案或客户端 URL。
+    fields:
+    - name: objectTypeRef
+      type: string
+      constraints: [NOT_BLANK]
+    - name: objectId
+      type: string
+      constraints: [NOT_BLANK]
+    - name: routeId
+      type: string
+      constraints: [NOT_BLANK]
+  GatheringParticipant:
+    description: Gathering 聚合内参与者值对象；数量由 joined 状态实时派生。
+    fields:
+    - name: personaId
+      type: string
+      constraints: [NOT_BLANK]
+    - name: role
+      type: enum
+      enum_ref: GatheringParticipantRole
+      constraints: [NOT_NULL]
+    - name: state
+      type: enum
+      enum_ref: GatheringParticipantState
+      constraints: [NOT_NULL]
+    - name: requestedAt
+      type: timestamp
+      constraints: [NOT_NULL]
+    - name: decidedAt
+      type: timestamp
+      constraints: [NULLABLE]
+  GatheringSlice:
+    description: Gathering 详情 named Slice；participantCount 由 participants 中 joined 条目派生。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: creatorPersonaId, type: string, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NOT_NULL]}
+    - {name: description, type: string, constraints: [NULLABLE]}
+    - {name: targetRef, type: object, object_ref: GatheringTargetRef, constraints: [NOT_NULL]}
+    - {name: startAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: endAt, type: timestamp, constraints: [NULLABLE]}
+    - {name: capacity, type: int, constraints: [NOT_NULL]}
+    - {name: joinPolicy, type: enum, enum_ref: GatheringJoinPolicy, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
+    - {name: conversationId, type: string, constraints: [NULLABLE]}
+    - {name: participantCount, type: int, constraints: [NOT_NULL]}
+    - {name: participants, type: '[]GatheringParticipant', constraints: [NOT_NULL]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  CreateGatheringCommand:
+    fields:
+    - name: title
+      type: string
+      client_dart_type: String
+    - name: description
+      type: string
+      constraints: [NULLABLE]
+      client_dart_type: String?
+    - name: targetRef
+      type: GatheringTargetRef
+      client_dart_type: GatheringTargetRef
+      client_wire: toWire
+    - name: startAt
+      type: timestamp
+      client_dart_type: DateTime
+    - name: endAt
+      type: timestamp
+      constraints: [NULLABLE]
+      client_dart_type: DateTime?
+    - name: capacity
+      type: int
+      client_dart_type: int
+    - name: joinPolicy
+      type: GatheringJoinPolicy
+      enum_ref: GatheringJoinPolicy
+      client_dart_type: GatheringJoinPolicy
+  GatheringIDCommand:
+    fields:
+    - name: gatheringId
+      type: string
+      client_dart_type: String
+  ApproveGatheringParticipantCommand:
+    fields:
+    - name: gatheringId
+      type: string
+      client_dart_type: String
+    - name: participantPersonaId
+      type: string
+      client_dart_type: String
+  GatheringCommandResult:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
+    - {name: participantState, type: enum, enum_ref: GatheringParticipantState, constraints: [NULLABLE]}
+    - {name: conversationId, type: string, constraints: [NULLABLE]}
+    - {name: idempotentReplay, type: bool, constraints: [NOT_NULL]}
+  GatheringCommandReceipt:
+    fields:
+    - {name: _id, type: string, constraints: [PK, NOT_NULL]}
+    - {name: commandDigest, type: string, constraints: [NOT_NULL]}
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
+    - {name: aggregateSnapshot, type: object, object_ref: Gathering, constraints: [NOT_NULL]}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL]}
+  GatheringOutbox:
+    fields:
+    - {name: _id, type: string, constraints: [PK, NOT_NULL]}
+    - {name: outboxSequence, type: int64, constraints: [NOT_NULL]}
+    - {name: eventType, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateId, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: payloadJson, type: json, constraints: [NOT_NULL]}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL]}
+enums:
+  GatheringStatus:
+    values: [draft, open, full, cancelled, completed]
+  GatheringJoinPolicy:
+    values: [open, approval]
+  GatheringParticipantRole:
+    values: [owner, member]
+  GatheringParticipantState:
+    values: [pending, joined, left, rejected]
+  GatheringConversationBindingStatus:
+    values: [pending, bound, failed]

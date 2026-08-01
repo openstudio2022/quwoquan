@@ -3,11 +3,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 
 /// 私人助理头像：彩色花瓣标识（用于趣聊列表与对话气泡）
 class AssistantAvatar extends StatelessWidget {
-  const AssistantAvatar({
-    super.key,
-    this.radius = 20,
-    this.onTap,
-  });
+  const AssistantAvatar({super.key, this.radius = 20, this.onTap});
 
   final double radius;
   final VoidCallback? onTap;
@@ -29,26 +25,17 @@ class AssistantAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: Center(
-        child: _AvatarPetalMark(
-          size: radius * 1.0,
-        ),
-      ),
+      child: Center(child: _AvatarPetalMark(size: radius * 1.0)),
     );
     if (onTap != null) {
-      return GestureDetector(
-        onTap: onTap,
-        child: box,
-      );
+      return GestureDetector(onTap: onTap, child: box);
     }
     return box;
   }
 }
 
 class _AvatarPetalMark extends StatelessWidget {
-  const _AvatarPetalMark({
-    required this.size,
-  });
+  const _AvatarPetalMark({required this.size});
 
   final double size;
 

@@ -238,12 +238,12 @@ pages:
     experience_owner: assistant
     data_owners: [assistant, app]
     object_ids:
-      - assistant.assistant_preference_fact
+      - assistant.assistant_preference
       - assistant.skill_consent
     query_slices:
-      - assistant.assistant_preference_fact
+      - assistant.assistant_preference
       - assistant.skill_consent
-    typed_presentation: [PersonalContentAccessState, AssistantPreferenceFact]
+    typed_presentation: [PersonalContentAccessState, AssistantPreference]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.management, lifecycle: [enter, exit, update, failure] }
@@ -253,7 +253,7 @@ pages:
   - page_id: assistant.reference_webview
     source_path: lib/ui/assistant/pages/assistant_reference_webview_page.dart
     page_kind: embedded
-    parent_page_id: assistant.personal_conversation
+    parent_page_id: assistant.personal_session
     surface_ids: [personalAssistantDialog]
     experience_owner: assistant
     data_owners: [assistant]
@@ -263,9 +263,9 @@ pages:
     data_contract_reason: 仅展示父对话传入的外部引用 URL，不发起业务对象查询。
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { inherit_from: assistant.personal_conversation }
+    telemetry_descriptor: { inherit_from: assistant.personal_session }
     entry_widget: AssistantReferenceWebViewPage
-    mount_evidence: [lib/ui/assistant/pages/personal_assistant_conversation_page.dart]
+    mount_evidence: [lib/ui/assistant/pages/personal_assistant_session_page.dart]
 
   - page_id: assistant.skill_center
     source_path: lib/ui/assistant/pages/assistant_skill_center_page.dart
@@ -274,46 +274,43 @@ pages:
     surface_ids: [assistantSkills]
     experience_owner: assistant
     data_owners: [assistant]
-    object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent]
+    object_ids: [assistant.assistant_run, assistant.assistant_session, assistant.skill_consent]
     query_slices:
       - assistant.assistant_run
-      - assistant.assistant_conversation
+      - assistant.assistant_session
       - assistant.skill_consent
-    typed_presentation: [SkillSubscriptionWire, AssistantConversationWire]
+    typed_presentation: [SkillSubscriptionWire, AssistantSessionWire]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.skill_center, lifecycle: [enter, exit, refresh, update, failure] }
     entry_widget: AssistantSkillCenterPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 
-  - page_id: assistant.personal_conversation
-    source_path: lib/ui/assistant/pages/personal_assistant_conversation_page.dart
+  - page_id: assistant.personal_session
+    source_path: lib/ui/assistant/pages/personal_assistant_session_page.dart
     page_kind: routed
     route_id: assistantPersonal
-    additional_route_ids: [chatDetail]
-    surface_ids: [personalAssistantDialog, personalAssistantChatAlias, assistantHistory]
+    surface_ids: [personalAssistantDialog, assistantHistory]
     experience_owner: assistant
     data_owners: [assistant, notification]
-    object_ids: [assistant.assistant_run, assistant.assistant_conversation, assistant.skill_consent, notification.notification]
+    object_ids: [assistant.assistant_run, assistant.assistant_session, assistant.skill_consent, notification.notification]
     query_slices:
       - assistant.assistant_run
-      - assistant.assistant_conversation
+      - assistant.assistant_session
       - assistant.skill_consent
       - notification.notification
     typed_presentation:
-      - AssistantConversationWire
-      - AssistantConversationListPage
-      - AssistantTurnEnvelopeWire
+      - AssistantSessionWire
+      - AssistantSessionListPage
+      - AssistantRunResponseWire
       - AssistantTurnListView
       - AssistantStreamEventWire
       - SkillSubscriptionWire
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.assistant.personal_conversation, lifecycle: [enter, exit, turn_submit, stream_failure] }
-    entry_widget: PersonalAssistantConversationPage
-    route_registration_evidence:
-      - lib/app/navigation/app_router.dart
-      - lib/app/navigation/app_router_chat_routes.dart
+    telemetry_descriptor: { event_namespace: page.assistant.personal_session, lifecycle: [enter, exit, turn_submit, stream_failure] }
+    entry_widget: PersonalAssistantSessionPage
+    route_registration_evidence: [lib/app/navigation/app_router.dart]
 
   - page_id: chat.detail
     source_path: lib/ui/chat/pages/chat_conversation_page.dart
@@ -1141,9 +1138,9 @@ pages:
     surface_ids: [globalSearchLanding, globalSearchSuggestions]
     experience_owner: search
     data_owners: [search, user, chat, circle]
-    object_ids: [search.search_query, search.recent_search_state, chat.conversation, circle.circle]
+    object_ids: [search.search_index_view, search.search_request_fact, search.recent_search_state, chat.conversation, circle.circle]
     query_slices:
-      - search.search_query.projection.search_response_view
+      - search.search_index_view.projection.search_response_view
       - search.recent_search_state.projection.recent_search_entry_wire
     typed_presentation: [SearchHit, RecentSearchReadPresentation]
     auth_requirement: optional
@@ -1159,8 +1156,8 @@ pages:
     surface_ids: [locationPlaceLanding]
     experience_owner: search
     data_owners: [search]
-    object_ids: [search.search_query]
-    query_slices: [search.search_query.projection.search_response_view]
+    object_ids: [search.search_index_view, search.search_request_fact]
+    query_slices: [search.search_index_view.projection.search_response_view]
     typed_presentation: [SearchHit, LocationPlaceLandingPageRouteExtra]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
@@ -1175,9 +1172,9 @@ pages:
     surface_ids: [globalSearchNetworkResults]
     experience_owner: search
     data_owners: [search, content, circle]
-    object_ids: [search.search_query, content.post, circle.circle]
+    object_ids: [search.search_index_view, search.search_request_fact, content.post, circle.circle]
     query_slices:
-      - search.search_query.projection.search_response_view
+      - search.search_index_view.projection.search_response_view
       - content.post.projection.post_read_presentation
     typed_presentation: [SearchHit, CanonicalSearchContentHit, PostReadPresentation]
     auth_requirement: optional

@@ -29,8 +29,7 @@ Future<ContentReportReason?> showContentReportReasonSheet(
 String contentReportReasonLabel(ContentReportReason reason) {
   return switch (reason) {
     ContentReportReason.spam => ContentText.profileReportReasonSpam,
-    ContentReportReason.harassment =>
-      ContentText.profileReportReasonHarassment,
+    ContentReportReason.harassment => ContentText.profileReportReasonHarassment,
     ContentReportReason.violence => ContentText.reportReasonViolence,
     ContentReportReason.adult => ContentText.profileReportReasonPornography,
     ContentReportReason.copyright => ContentText.reportReasonCopyright,

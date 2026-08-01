@@ -103,19 +103,18 @@ List<String> entityRefsForPayload(CreateEditorState state) {
   return refs.toList(growable: false);
 }
 
-/// 与 [entityRefsForPayload] 对称：合并发布设置里的 tagRefs、EXIF 派生的摄影标签与正文
+/// 与 [entityRefsForPayload] 对称：合并发布设置里的 tagRefs 与正文
 /// inline tag mention（剥离 `tag:` 前缀，对齐 front matter `tag_refs` 不带前缀的格式），
 /// 去重后投影为 active tagRefs。只采纳正文里已存在的 `@[label](tag:ref)`，
 /// 不在创作端自造 tag 候选。
 ///
-/// EXIF 派生标签不经创作者勾选：它们是照片自带的客观事实，创作者的控制点是披露开关
-/// （关掉某组后 `captureDerivedTagRefs` 自然不含该组），而不是逐条取消打标。
+/// EXIF 只随 MediaAsset 上传并由服务端投影内部推荐特征；这里禁止把器材、参数或光线
+/// 写入公开 tagRefs，避免它们进入搜索筛选、Creator chip 或可见交集文案。
 List<String> tagRefsForPayload(CreateEditorState state) {
   final refs = <String>{
     ...state.settings.tagRefs
         .map((ref) => ref.trim())
         .where((ref) => ref.isNotEmpty),
-    ...state.settings.captureDerivedTagRefs,
   };
   for (final node in state.articleDocument.nodes) {
     for (final span in node.spans) {
@@ -132,7 +131,7 @@ List<String> tagRefsForPayload(CreateEditorState state) {
 }
 
 /// 发布侧 grounding 真相源（R-CS06）：把正文 entity / tag 内联 + 发布设置里的
-/// active refs 投影为结构化 `semanticMentions` 行 `{kind,status:published,targetRef}`。
+/// active refs 投影为 canonical [PostSemanticMention]。
 ///
 /// 服务端 `semantic.Project`（content-service domain/post/semantic）把 `status=published`
 /// 且 `targetRef` 合法的 mention 投影为只读 `post.entityRefs/tagRefs`；本函数与
@@ -142,10 +141,17 @@ List<String> tagRefsForPayload(CreateEditorState state) {
 /// targetRef 形态：entity 用完整 `entity:`/`homepage_` id；tag 用层级 bare ref（去 `tag:`
 /// 前缀，与全应用 tagRef 口径一致）。[isSemanticTargetRefValid] 防御性过滤畸形 ref，
 /// 避免单个非法内联触发服务端整篇发布拒绝。
-List<Map<String, dynamic>> semanticMentionsForPayload(CreateEditorState state) {
-  final rows = <Map<String, dynamic>>[];
+List<PostSemanticMention> semanticMentionsForPayload(CreateEditorState state) {
+  final rows = <PostSemanticMention>[];
   final seen = <String>{};
-  void addRow(String kind, String rawRef) {
+  void addRow(
+    String kind,
+    String rawRef, {
+    required String surface,
+    required String location,
+    int? rangeStart,
+    int? rangeEnd,
+  }) {
     final ref = rawRef.trim();
     if (ref.isEmpty || !isSemanticTargetRefValid(kind, ref)) {
       return;
@@ -153,20 +159,91 @@ List<Map<String, dynamic>> semanticMentionsForPayload(CreateEditorState state) {
     if (!seen.add('$kind|$ref')) {
       return;
     }
-    rows.add(<String, dynamic>{
-      'kind': kind,
-      'status': 'published',
-      'targetRef': ref,
-    });
+    rows.add(
+      PostSemanticMention(
+        mentionId: 'published:$kind:$ref',
+        kind: kind,
+        surface: surface.trim().isEmpty ? ref : surface.trim(),
+        location: location,
+        rangeStart: rangeStart,
+        rangeEnd: rangeEnd,
+        status: 'published',
+        targetRef: ref,
+      ),
+    );
   }
 
-  for (final ref in entityRefsForPayload(state)) {
-    addRow('entity', ref);
+  var bodyOffset = 0;
+  for (final node in state.articleDocument.nodes) {
+    for (final span in node.spans.where((span) => span.isInlineMention)) {
+      final rawTarget = span.targetId?.trim() ?? '';
+      final kind = span.isEntity ? 'entity' : 'tag';
+      final target = kind == 'tag' && rawTarget.startsWith('tag:')
+          ? rawTarget.substring('tag:'.length).trim()
+          : rawTarget;
+      final start = span.start.clamp(0, node.text.length);
+      final end = span.end.clamp(start, node.text.length);
+      final inlineSurface = span.displayText?.trim().isNotEmpty == true
+          ? span.displayText!.trim()
+          : node.text.substring(start, end).trim();
+      addRow(
+        kind,
+        target,
+        surface: inlineSurface,
+        location: node.isDocumentTitle ? 'title' : 'body',
+        rangeStart: node.isDocumentTitle ? start : bodyOffset + start,
+        rangeEnd: node.isDocumentTitle ? end : bodyOffset + end,
+      );
+    }
+    if (!node.isDocumentTitle && !node.isFigure) {
+      bodyOffset += node.text.length + 1;
+    }
   }
+
+  final entityLabels = _semanticLabelsByRef(
+    state.settings.entityRefs,
+    state.settings.entityNames,
+  );
+  final homepage = state.settings.homepage;
+  if (homepage != null) {
+    final ref = homepageEntityRef(homepage);
+    if (ref.isNotEmpty) entityLabels[ref] = homepage.title;
+  }
+  for (final ref in entityRefsForPayload(state)) {
+    addRow(
+      'entity',
+      ref,
+      surface: entityLabels[ref] ?? ref,
+      location: 'publicationSettings',
+    );
+  }
+  final tagLabels = _semanticLabelsByRef(
+    state.settings.tagRefs,
+    state.settings.tagLabels,
+  );
   for (final ref in tagRefsForPayload(state)) {
-    addRow('tag', ref);
+    addRow(
+      'tag',
+      ref,
+      surface: tagLabels[ref] ?? ref,
+      location: 'publicationSettings',
+    );
   }
   return rows;
+}
+
+Map<String, String> _semanticLabelsByRef(
+  List<String> refs,
+  List<String> labels,
+) {
+  final result = <String, String>{};
+  for (var index = 0; index < refs.length; index++) {
+    final ref = refs[index].trim();
+    if (ref.isEmpty || index >= labels.length) continue;
+    final label = labels[index].trim();
+    if (label.isNotEmpty) result[ref] = label;
+  }
+  return result;
 }
 
 /// 防御性镜像服务端 `semantic.ValidTargetRef`（唯一权威：
@@ -242,19 +319,6 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
         if (summary.isNotEmpty) 'summary': summary,
         'videoUrl': videoPath,
         'mediaUrls': <String>[videoPath],
-        'mediaItems': <Map<String, Object?>>[
-          <String, Object?>{
-            'kind': 'video',
-            'url': videoPath,
-            if (thumbnailUrl.isNotEmpty) 'thumbnailUrl': thumbnailUrl,
-            if (coverUrl.isNotEmpty) 'coverUrl': coverUrl,
-            'coverStrategy': coverStrategy,
-            'coverFrameTimeMs': state.videoCoverTimeMs,
-            if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
-            if (state.videoWidth > 0) 'width': state.videoWidth,
-            if (state.videoHeight > 0) 'height': state.videoHeight,
-          },
-        ],
         if (coverUrl.isNotEmpty) 'coverUrl': coverUrl,
         if (thumbnailUrl.isNotEmpty) 'thumbnailUrl': thumbnailUrl,
         'coverStrategy': coverStrategy,
@@ -262,15 +326,6 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
         if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
         if (state.videoWidth > 0) 'width': state.videoWidth,
         if (state.videoHeight > 0) 'height': state.videoHeight,
-        'deviceInfo': <String, Object?>{
-          if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
-          if (state.videoWidth > 0) 'width': state.videoWidth,
-          if (state.videoHeight > 0) 'height': state.videoHeight,
-          if (state.videoTrimStartMs > 0) 'trimStartMs': state.videoTrimStartMs,
-          if (state.videoTrimEndMs > 0) 'trimEndMs': state.videoTrimEndMs,
-          'coverFrameTimeMs': state.videoCoverTimeMs,
-          'muted': state.videoMuted,
-        },
         ...settings,
       };
     }
@@ -449,6 +504,9 @@ buildPostPublicationPayloadWithRemoteMedia({
       media: media,
       localOrRemotePath: path,
       mediaType: ContentMediaType.image,
+      captureMetadata: index == 0
+          ? _contentMediaCaptureMetadata(state.settings)
+          : null,
       sourceReader: sourceReader,
       uploadStream: uploadStream,
       telemetry: telemetry,
@@ -587,6 +645,7 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   required ContentMediaFacet media,
   required String localOrRemotePath,
   required ContentMediaType mediaType,
+  ContentMediaCaptureMetadata? captureMetadata,
   required ContentMediaSourceReader sourceReader,
   required ContentMediaStreamObjectUpload uploadStream,
   AppTelemetryRecorder? telemetry,
@@ -651,11 +710,12 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   final uploaded = await coordinator.uploadPreparedSource(
     source: source,
     mediaType: mediaType,
-    contentType: contentMediaTypeForPath(path, mediaType),
+    mimeType: contentMediaMimeTypeForPath(path, mediaType),
     uploadStream: uploadStream,
     onProgress: onProgress,
     cancellationSignal: cancellationSignal,
     accessPolicy: ContentMediaAccessPolicy.referencedPost,
+    captureMetadata: captureMetadata,
     checkpoint: durableCheckpoint,
     onCheckpoint: (updated) async {
       await onMediaPrepared?.call(updated);
@@ -674,6 +734,25 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   await onMediaPrepared?.call(prepared);
   preparedAssetsBySlot[slot] = prepared;
   return _ResolvedMediaReference(assetId: assetId);
+}
+
+ContentMediaCaptureMetadata? _contentMediaCaptureMetadata(
+  PublishSettings settings,
+) {
+  final value = settings.disclosedCaptureMetadata;
+  if (value.isEmpty) return null;
+  return ContentMediaCaptureMetadata(
+    cameraMake: value.cameraMake,
+    cameraModel: value.cameraModel,
+    lensModel: value.lensModel,
+    focalLengthMm: value.focalLengthMm,
+    apertureFNumber: value.apertureFNumber,
+    shutterSpeedSeconds: value.shutterSpeedSeconds,
+    isoSensitivity: value.isoSensitivity,
+    capturedAt: value.capturedAt,
+    gpsLatitude: value.gpsLatitude,
+    gpsLongitude: value.gpsLongitude,
+  );
 }
 
 Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
@@ -768,21 +847,15 @@ submitContentPostPublicationCommandFromPreparedPayload(
   title: _optionalPayloadText(payload['title']),
   body: _optionalPayloadText(payload['body']),
   summary: _optionalPayloadText(payload['summary']),
-  semanticMentions: _structuredObjectList(
-    payload['semanticMentions'],
-    'semanticMentions',
-  ),
+  semanticMentions: decodePostSemanticMentionList(payload['semanticMentions']),
   mediaAssetIds: mediaAssetIds,
-  mediaItems: _structuredObjectList(payload['mediaItems'], 'mediaItems'),
   articleMarkdown: _optionalPayloadText(payload['articleMarkdown']),
   markdownDialect: _optionalPayloadText(payload['markdownDialect']),
-  articleAssetManifest: _optionalStructuredObject(
+  articleAssetManifest: decodeOptionalPostArticleAssetManifestInput(
     payload['articleAssetManifest'],
-    'articleAssetManifest',
   ),
-  articleRenderProfile: _optionalStructuredObject(
+  articleRenderProfile: decodeOptionalPostArticleRenderProfile(
     payload['articleRenderProfile'],
-    'articleRenderProfile',
   ),
   coverStrategy: _optionalPayloadText(payload['coverStrategy']),
   coverFrameTimeMs: _optionalPayloadInt(
@@ -790,15 +863,15 @@ submitContentPostPublicationCommandFromPreparedPayload(
     'coverFrameTimeMs',
   ),
   illustrationAssetId: _optionalPayloadText(payload['illustrationAssetId']),
-  location: _optionalStructuredObject(payload['location'], 'location'),
+  location: decodeOptionalGeoPoint(payload['location']),
   locationName: _optionalPayloadText(payload['locationName']),
   geoTagRef: _optionalPayloadText(payload['geoTagRef']),
   visitedAt: _optionalPayloadTimestamp(payload['visitedAt'], 'visitedAt'),
+  captureDisclosure: _payloadStringList(payload['captureDisclosure']),
   primaryHomepageId: _optionalPayloadText(payload['primaryHomepageId']),
   primaryHomepageType: _optionalPayloadText(payload['primaryHomepageType']),
-  primaryHomepageSnapshot: _optionalStructuredObject(
+  primaryHomepageSnapshot: decodeOptionalPostHomepageSnapshot(
     payload['primaryHomepageSnapshot'],
-    'primaryHomepageSnapshot',
   ),
   visibility: _optionalPostVisibility(payload['visibility']),
   assistantUsePolicy: _optionalAssistantUsePolicy(
@@ -806,10 +879,9 @@ submitContentPostPublicationCommandFromPreparedPayload(
   ),
   sourcePostId: _optionalPayloadText(payload['sourcePostId']),
   sourceType: _optionalPostSourceType(payload['sourceType']),
-  deviceInfo: _optionalStructuredObject(payload['deviceInfo'], 'deviceInfo'),
-  publishLocation: _optionalStructuredObject(
+  deviceInfo: decodeOptionalPostDeviceInfo(payload['deviceInfo']),
+  publishLocation: decodeOptionalPostPublishLocation(
     payload['publishLocation'],
-    'publishLocation',
   ),
   authorDisplayNameSnapshot: _optionalPayloadText(authorDisplayNameSnapshot),
   authorAvatarUrlSnapshot: _optionalPayloadText(authorAvatarUrlSnapshot),
@@ -912,6 +984,15 @@ String? _optionalPayloadText(Object? raw) {
   return value.isEmpty ? null : value;
 }
 
+List<String> _payloadStringList(Object? raw) {
+  if (raw is! Iterable) return const <String>[];
+  return raw
+      .map((value) => value.toString().trim())
+      .where((value) => value.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+}
+
 int? _optionalPayloadInt(Object? raw, String field) {
   if (raw == null) return null;
   if (raw is int) return raw;
@@ -930,50 +1011,4 @@ DateTime? _optionalPayloadTimestamp(Object? raw, String field) {
     throw ArgumentError.value(raw, field, 'must be an RFC3339 timestamp');
   }
   return parsed.toUtc();
-}
-
-List<ContentPostStructuredObject> _structuredObjectList(
-  Object? raw,
-  String field,
-) {
-  if (raw == null) return const <ContentPostStructuredObject>[];
-  if (raw is! List) throw ArgumentError.value(raw, field, 'must be a list');
-  return raw
-      .map((value) => _requiredStructuredObject(value, field))
-      .toList(growable: false);
-}
-
-ContentPostStructuredObject? _optionalStructuredObject(
-  Object? raw,
-  String field,
-) => raw == null ? null : _requiredStructuredObject(raw, field);
-
-ContentPostStructuredObject _requiredStructuredObject(
-  Object? raw,
-  String field,
-) {
-  final value = _structuredValue(raw, field);
-  if (value is! ContentPostStructuredObject) {
-    throw ArgumentError.value(raw, field, 'must be an object');
-  }
-  return value;
-}
-
-ContentPostStructuredValue _structuredValue(Object? raw, String field) {
-  if (raw == null) return const ContentPostStructuredNull();
-  if (raw is String) return ContentPostStructuredText(raw);
-  if (raw is num) return ContentPostStructuredNumber(raw);
-  if (raw is bool) return ContentPostStructuredBoolean(raw);
-  if (raw is List) {
-    return ContentPostStructuredArray(
-      raw.map((value) => _structuredValue(value, field)),
-    );
-  }
-  if (raw is Map) {
-    return ContentPostStructuredObject(<String, ContentPostStructuredValue>{
-      for (final entry in raw.entries)
-        entry.key.toString(): _structuredValue(entry.value, field),
-    });
-  }
-  throw ArgumentError.value(raw, field, 'unsupported structured value');
 }

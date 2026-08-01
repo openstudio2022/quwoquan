@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import domain_governance
@@ -82,7 +85,30 @@ class DomainGovernanceDnsLocalContractTest(unittest.TestCase):
                 public_domain_tls.PublicDomainTlsError,
                 "QWQ_ACME_DNS_API_TOKEN",
             ):
-                public_domain_tls.issue_certificate("alpha-local")
+                public_domain_tls.issue_certificate("prod-sim")
+
+    def test_local_managed_certificate_uses_topology_sans_without_protected_inputs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            deploy_root = Path(temporary) / "deploy"
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "PATH": os.environ.get("PATH", ""),
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
+                clear=True,
+            ):
+                evidence = public_domain_tls.issue_certificate("alpha-local")
+                verified = public_domain_tls.verify_certificate("alpha-local")
+
+            self.assertEqual(evidence["profile"], "local-managed")
+            self.assertEqual(evidence["kind"], "local-managed")
+            self.assertEqual(evidence["sans"], verified["sans"])
+            self.assertIn("api.alpha.quwoquan.com", evidence["sans"])
+            self.assertIn("cdn.alpha.quwoquan.com", evidence["sans"])
+            self.assertTrue(Path(evidence["rootCertificate"]).is_file())
 
 
 if __name__ == "__main__":

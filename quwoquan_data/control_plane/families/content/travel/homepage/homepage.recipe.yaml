@@ -8,8 +8,10 @@ title: 旅行地点主页执行（通用模板）
 presetRef: content/travel/homepage/base
 runtimeProfile: cursor_local_calibrated
 selection:
-  category: 景区
-  # 目标集在 execution 初始化时冻结；任何对象失败均阻断该档，不使用 reserve/replacement。
+  # 全旅游地点：在冻结前以地点实体分区选取，覆盖景区、博物馆、古镇等地点类型。
+  category: 地点
+  # 目标集在 execution 初始化时冻结；来源短缺只能以同一冻结池的审计丢弃吸收，
+  # 且 source-ready 数必须仍满足 approvedQuota，禁止 reserve/replacement。
   entityHomepagesPerTarget: 1
   entityArticlesPerTarget: 0
   imageWorksPerTarget: 0
@@ -19,7 +21,9 @@ contract:
 execution:
   model: grok-4.5
   modelFamily: grok
-  modelParameters: []
+  modelParameters:
+    - { id: effort, value: high }
+    - { id: fast, value: "true" }
   reviewModel: composer-2.5
   reviewModelFamily: composer
   reviewModelParameters: []

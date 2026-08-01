@@ -27,14 +27,25 @@ final class AppPageExperienceTracker {
     AppPageContextStore? pageContextStore,
     DateTime Function()? now,
     this._anrDedupeWindow = const Duration(seconds: 10),
+    this.visitMaxAge = const Duration(hours: 24),
+    this.maxVisits = 2048,
   }) : _pageContextStore = pageContextStore ?? AppPageContextStore.instance,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now {
+    if (visitMaxAge <= Duration.zero) {
+      throw ArgumentError.value(visitMaxAge, 'visitMaxAge', 'must be positive');
+    }
+    if (maxVisits <= 0) {
+      throw ArgumentError.value(maxVisits, 'maxVisits', 'must be positive');
+    }
+  }
 
   static final AppPageExperienceTracker instance = AppPageExperienceTracker();
 
   final AppPageContextStore _pageContextStore;
   final DateTime Function() _now;
   final Duration _anrDedupeWindow;
+  final Duration visitMaxAge;
+  final int maxVisits;
   final List<_PageExperienceVisit> _visits = <_PageExperienceVisit>[];
   final Map<String, DateTime> _lastAnrBySource = <String, DateTime>{};
   AppTelemetryRecorder? _reporter;
@@ -63,6 +74,7 @@ final class AppPageExperienceTracker {
     if (reporter != null) {
       attachReporter(reporter);
     }
+    _pruneVisits(_now());
     _visits.removeWhere((visit) => visit.pageVisitId == normalizedVisit);
     _visits.add(
       _PageExperienceVisit(
@@ -71,6 +83,9 @@ final class AppPageExperienceTracker {
         openedAt: openedAt,
       ),
     );
+    while (_visits.length > maxVisits) {
+      _visits.removeAt(0);
+    }
   }
 
   void endPageVisit(String pageVisitId) {
@@ -206,8 +221,12 @@ final class AppPageExperienceTracker {
     required int sampledFrames,
     required int jankyFrames,
     required int worstFrameMs,
+    required int worstBuildFrameMs,
+    required int worstRasterFrameMs,
     required int jankThresholdMs,
     required String result,
+    String? surfaceId,
+    String? channelId,
     DateTime? occurredAt,
   }) {
     final reporter = _reporter;
@@ -222,8 +241,12 @@ final class AppPageExperienceTracker {
         sampledFrames: sampledFrames,
         jankyFrames: jankyFrames,
         worstFrameMs: _nonNegative(worstFrameMs),
+        worstBuildFrameMs: _nonNegative(worstBuildFrameMs),
+        worstRasterFrameMs: _nonNegative(worstRasterFrameMs),
         jankThresholdMs: jankThresholdMs <= 0 ? 1 : jankThresholdMs,
         result: result,
+        surfaceId: _nonEmpty(surfaceId),
+        channelId: _nonEmpty(channelId),
       ),
       pageName: _pageContextStore.pageName,
       occurredAt: occurredAt ?? _now(),
@@ -249,6 +272,7 @@ final class AppPageExperienceTracker {
   }
 
   _PageExperienceVisit? _activeVisitFor(String pageName) {
+    _pruneVisits(_now());
     for (var index = _visits.length - 1; index >= 0; index -= 1) {
       final visit = _visits[index];
       if (visit.pageName == pageName) {
@@ -256,6 +280,11 @@ final class AppPageExperienceTracker {
       }
     }
     return null;
+  }
+
+  void _pruneVisits(DateTime now) {
+    final cutoff = now.subtract(visitMaxAge);
+    _visits.removeWhere((visit) => visit.openedAt.isBefore(cutoff));
   }
 
   int _nonNegativeDurationMs(DateTime startedAt, DateTime completedAt) {

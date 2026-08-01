@@ -65,6 +65,7 @@ def run_campaign(
     clones: dict[str, DetachedClone] = {}
     plan: dict[str, Any] | None = None
     plan_digest: str | None = None
+    submissions: dict[str, dict[str, Any]] | None = None
     final_status = "blocked"
     final_phase = "submission"
     failure: str | None = None
@@ -192,6 +193,8 @@ def run_campaign(
                     commit_sha=str(plan["gitCommitSha"]),
                     source_digest=str(plan["sourceDigest"]),
                 )
+                # Canonical publish shares PUBLISH_ROOT + mutex; concurrent
+                # carrier publish races leave orphan media and dead object jobs.
                 published = run_phase(
                     clones,
                     submissions,
@@ -199,7 +202,7 @@ def run_campaign(
                     runtime=runtime,
                     root_execution_id=root_id,
                     timeout_seconds=effective_lane_timeout,
-                    worker_count=policy.campaign_lane_workers,
+                    worker_count=1,
                     lane_runner=lane_runner,
                     carriers=tuple(publishable),
                 )
@@ -256,15 +259,6 @@ def run_campaign(
                     failure = "partial campaign; blocked lanes: " + ", ".join(
                         lane_failures
                     )
-                maybe_write_copy_ready_receipt(
-                    root_execution_id=root_id,
-                    plan=plan,
-                    submissions=submissions,
-                    lanes=lanes,
-                    campaigns_root=runtime.campaigns_root,
-                    output_root=runtime.output_root,
-                    assessed_at=utc_now(),
-                )
         except Exception as exc:  # noqa: BLE001
             caught = exc
             failure = f"{type(exc).__name__}: {exc}"
@@ -285,6 +279,27 @@ def run_campaign(
                 )
                 if caught is None:
                     caught = RuntimeError(failure)
+            # COPY_READY predicates require cleanupStatus=cleaned; write only
+            # after disposable clones are cleaned so the receipt can materialize.
+            lanes_ready_for_copy = all(
+                str(lanes[carrier].get("status") or "") in {"finalized", "partial"}
+                and str(lanes[carrier].get("cleanupStatus") or "") == "cleaned"
+                for carrier in CAMPAIGN_CARRIERS
+            )
+            if (
+                plan is not None
+                and submissions is not None
+                and lanes_ready_for_copy
+            ):
+                maybe_write_copy_ready_receipt(
+                    root_execution_id=root_id,
+                    plan=plan,
+                    submissions=submissions,
+                    lanes=lanes,
+                    campaigns_root=runtime.campaigns_root,
+                    output_root=runtime.output_root,
+                    assessed_at=utc_now(),
+                )
             write_report(
                 runtime,
                 root_id,

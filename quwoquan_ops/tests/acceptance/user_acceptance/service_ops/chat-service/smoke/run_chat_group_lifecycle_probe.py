@@ -31,7 +31,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     LocalAcceptanceSession,
     LocalEnvironmentHTTPError,
-    open_local_acceptance_session,
+    open_reference_acceptance_session,
     request_local_environment_json,
 )
 
@@ -89,7 +89,7 @@ class ProbeClient:
         self.session: LocalAcceptanceSession | None = None
         self.token = ""
         if args.env in LOCAL_TARGETS:
-            self.session = open_local_acceptance_session(
+            self.session = open_reference_acceptance_session(
                 args.base_url,
                 environment=args.env,
                 target_name=LOCAL_TARGETS[args.env],

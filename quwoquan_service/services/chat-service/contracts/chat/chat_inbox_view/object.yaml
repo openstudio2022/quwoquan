@@ -1,5 +1,5 @@
 kind: projection
-description: ChatInboxView 的领域对象契约。
+description: Conversation、Message 与 persona 私有会话状态事件合并出的收件箱排序视图；不拥有消息或成员事实。
 identity:
   fields:
   - conversationId
@@ -18,3 +18,12 @@ relationships:
   reference_fields:
   - conversationId
   target_object: chat.Conversation
+business_rules:
+- 每个 persona 与 conversation 至多一条 inbox 行，排序游标由最后已提交消息序列和时间共同决定。
+- 未读数只由 Message 与 ConversationUserState 事件推进，查询不得回扫 message 集合补算。
+- Conversation tombstone 必须移除可见内容并保留幂等处理水位。
+lifecycle:
+  source_events: [ConversationCreated, ConversationUpdated, ConversationDissolved, MessageSent, ConversationUserStateChanged]
+  checkpoint: chat_outbox_sequence
+  rebuild: replay_chat_authoritative_outbox
+  tombstone: hide_conversation_and_retain_checkpoint

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 )
 
 type reactionReceipt struct {

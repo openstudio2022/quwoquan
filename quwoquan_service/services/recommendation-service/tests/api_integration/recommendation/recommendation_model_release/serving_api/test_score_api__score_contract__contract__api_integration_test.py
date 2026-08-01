@@ -18,10 +18,44 @@ client = ServiceAuthorizedTestClient(app)
 SCORE_PATH = SCORE_RECOMMENDATION_CANDIDATES_PATH
 
 
+class _HealthyConsumer:
+    def healthy(self) -> bool:
+        return True
+
+
+def _mark_runtime_ready() -> None:
+    app.state.runtime_workload = "full"
+    app.state.ranked_window_facade = object()
+    app.state.candidate_post_lifecycle_consumer = _HealthyConsumer()
+    app.state.user_account_closed_consumer = _HealthyConsumer()
+    app.state.content_behavior_consumer = _HealthyConsumer()
+    app.state.feed_page_delivered_consumer = _HealthyConsumer()
+
+
 def test_health():
+    _mark_runtime_ready()
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
+
+
+def test_content_release_health_does_not_claim_experiment_scoring_readiness():
+    _mark_runtime_ready()
+    app.state.runtime_workload = "content-release"
+    app.state.ranked_window_facade = None
+    app.state.experiment_policy_consumer = None
+
+    r = client.get("/health")
+
+    assert r.status_code == 200
+    assert r.json() == {"status": "content_release_only"}
+
+
+def test_health_fails_closed_when_projection_consumer_is_missing():
+    app.state.candidate_post_lifecycle_consumer = None
+    r = client.get("/health")
+    assert r.status_code == 503
+    assert r.json()["detail"] == {"status": "not_ready"}
 
 
 def test_score_empty_candidates():

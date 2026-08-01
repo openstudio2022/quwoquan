@@ -66,9 +66,7 @@ SKIP_FILES = {
     "generated_manifest.json",
 }
 SKIP_PATHS = {
-    "quwoquan_app/lib/core/auth/auth_session_persona_key_migration.dart",
     "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/mongo_following_subject_persona_migration.go",
 }
 IMMUTABLE_MIGRATION_PARTS = ("resources", "migrations")
 MINIMUM_SCANNED_FILES = 100
@@ -140,15 +138,6 @@ def _verify_matcher_contract() -> list[str]:
         if _matches(value)
     )
     scan_cases = {
-        Path(
-            "quwoquan_app/lib/core/auth/"
-            "auth_session_persona_key_migration.dart"
-        ): False,
-        Path(
-            "quwoquan_service/services/user-service/internal/account/"
-            "user_account/infrastructure/persistence/"
-            "mongo_following_subject_persona_migration.go"
-        ): False,
         Path("quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json"): False,
         Path("quwoquan_service/contract_graph.breaking.json"): True,
         Path(

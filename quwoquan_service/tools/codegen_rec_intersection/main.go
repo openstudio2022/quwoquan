@@ -219,14 +219,6 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	}
 	b.WriteString("}\n\n")
 
-	b.WriteString("// IntersectionActionTargetAvailabilityByKey: actionKey → available|deferred（registry.actionKeyMeta）。\n")
-	b.WriteString("// deferred = 承接页/数据源未就绪，消费方不得下发可执行行动（§24.10 诚实红线）。\n")
-	b.WriteString("var IntersectionActionTargetAvailabilityByKey = map[string]string{\n")
-	for _, key := range akKeys {
-		b.WriteString(fmt.Sprintf("\t%q: %q,\n", key, r.ActionKeyMeta[key].TargetAvailability))
-	}
-	b.WriteString("}\n\n")
-
 	b.WriteString("// IntersectionRequiredGatesByActionKey: actionKey → 前置安全门有序列表（registry.actionKeyMeta.requiredGates ⊆ gateKeys）。\n")
 	b.WriteString("var IntersectionRequiredGatesByActionKey = map[string][]string{\n")
 	for _, key := range akKeys {
@@ -252,23 +244,6 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	b.WriteString("// 未登记的 kind 不受冷启动闸门约束（对象池天然等于用户池等情形）。\n")
 	b.WriteString("var IntersectionColdStartSupplyKeyByKind = map[string]string{\n")
 	writeSortedStringMap(&b, r.ColdStartSupply.SupplyKeyByKind)
-	b.WriteString("}\n\n")
-
-	// ── deferred kind 闸门（registry.kinds[].status；诚实红线的运行时执行点） ──
-	b.WriteString("// IntersectionDeferredKinds: status == deferred 的 kind 集合（registry.kinds[].status）。\n")
-	b.WriteString("// deferred = 可证数据源缺位，注册表登记占位但禁止产出；消费方必须在下发前整条丢弃，\n")
-	b.WriteString("// 不得依赖「没有 producer」这种隐式保证（deferredReason 说明缺什么）。\n")
-	b.WriteString("var IntersectionDeferredKinds = map[string]struct{}{\n")
-	deferredKinds := make([]string, 0, len(r.Kinds))
-	for _, k := range r.Kinds {
-		if strings.TrimSpace(k.Status) == "deferred" {
-			deferredKinds = append(deferredKinds, k.Kind)
-		}
-	}
-	sort.Strings(deferredKinds)
-	for _, kind := range deferredKinds {
-		b.WriteString(fmt.Sprintf("\t%q: {},\n", kind))
-	}
 	b.WriteString("}\n\n")
 
 	writeStatementTemplates(&b, r)

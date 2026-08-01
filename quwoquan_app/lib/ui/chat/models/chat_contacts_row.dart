@@ -101,9 +101,9 @@ class ChatContactsRow {
         dto.avatarUrl,
         endpointConfig: mediaEndpointConfig,
       ),
-      subtitle: dto.subtitle.trim().isNotEmpty
-          ? dto.subtitle.trim()
-          : dto.summaryIntersections.take(2).join(' · '),
+      subtitle: kind == ChatContactsRowKind.user
+          ? dto.summaryIntersections.take(2).join(' · ')
+          : dto.subtitle.trim(),
       relationState: dto.relationState,
       source: dto.kind,
       isStarred: dto.isStarred,

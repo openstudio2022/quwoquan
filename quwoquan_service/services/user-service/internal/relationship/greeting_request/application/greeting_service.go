@@ -45,6 +45,17 @@ type UserEventPublisher interface {
 	PublishUserEvent(ctx context.Context, eventType, userID, actorID string, payload map[string]any) error
 }
 
+// GreetingIntersectionResolver 以发起方身份回查目标用户当前仍成立的交集事实。
+// 引用不成立或依赖暂时不可用时 Send 必须降级为普通问候，不能信任客户端文案。
+type GreetingIntersectionResolver interface {
+	ResolveGreetingIntersection(
+		ctx context.Context,
+		requesterPersonaID string,
+		targetPersonaID string,
+		ref usermodel.GreetingIntersectionRef,
+	) (*usermodel.GreetingIntersectionSnapshot, error)
+}
+
 // GreetingPromotion 是打招呼升级为正式会话时要带过去的破冰上下文。
 //
 // GreetingRequestID 让 Chat 侧把会话标成 originType=greeting_reply（漏斗归因），
@@ -53,6 +64,7 @@ type UserEventPublisher interface {
 type GreetingPromotion struct {
 	GreetingRequestID string
 	OpeningMessage    string
+	Intersection      *usermodel.GreetingIntersectionSnapshot
 }
 
 type ConversationGateway interface {
@@ -130,6 +142,7 @@ type GreetingService struct {
 	events        UserEventPublisher
 	stream        GreetingEventStream
 	notifyPolicy  greetingNotifyPolicyReader
+	intersections GreetingIntersectionResolver
 }
 
 func NewGreetingService(
@@ -140,10 +153,15 @@ func NewGreetingService(
 	events UserEventPublisher,
 	stream GreetingEventStream,
 	notifyPolicy greetingNotifyPolicyReader,
+	intersectionResolvers ...GreetingIntersectionResolver,
 ) *GreetingService {
 	if greetings == nil || commands == nil || relationships == nil ||
 		conversations == nil || events == nil || stream == nil || notifyPolicy == nil {
 		panic("greeting application requires all declared ports")
+	}
+	var intersections GreetingIntersectionResolver = ordinaryGreetingIntersectionResolver{}
+	if len(intersectionResolvers) > 0 && intersectionResolvers[0] != nil {
+		intersections = intersectionResolvers[0]
 	}
 	return &GreetingService{
 		greetings:     greetings,
@@ -153,7 +171,19 @@ func NewGreetingService(
 		events:        events,
 		stream:        stream,
 		notifyPolicy:  notifyPolicy,
+		intersections: intersections,
 	}
+}
+
+type ordinaryGreetingIntersectionResolver struct{}
+
+func (ordinaryGreetingIntersectionResolver) ResolveGreetingIntersection(
+	context.Context,
+	string,
+	string,
+	usermodel.GreetingIntersectionRef,
+) (*usermodel.GreetingIntersectionSnapshot, error) {
+	return nil, nil
 }
 
 type SendGreetingRequest struct {
@@ -162,6 +192,7 @@ type SendGreetingRequest struct {
 	RequestMessage     string
 	Source             string
 	IdempotencyKey     string
+	IntersectionRef    *usermodel.GreetingIntersectionRef
 }
 
 func (s *GreetingService) Send(ctx context.Context, req SendGreetingRequest) (*usermodel.GreetingRequest, error) {
@@ -215,6 +246,25 @@ func (s *GreetingService) Send(ctx context.Context, req SendGreetingRequest) (*u
 		Status:             usermodel.GreetingStatusPending,
 		Source:             source,
 		ExpireAt:           &expireAt,
+	}
+	if req.IntersectionRef != nil && req.IntersectionRef.Complete() {
+		ref := req.IntersectionRef.Normalized()
+		greeting.IntersectionRef = usermodel.EncodeIntersectionRef(&ref)
+		snapshot, resolveErr := s.intersections.ResolveGreetingIntersection(
+			ctx,
+			requesterID,
+			targetID,
+			ref,
+		)
+		if resolveErr != nil {
+			slog.WarnContext(ctx, "greeting intersection reference degraded",
+				slog.String("outcome", "ordinary_greeting"),
+				slog.String("sourceRef", ref.SourceRef),
+				slog.String("error", resolveErr.Error()),
+			)
+		} else {
+			greeting.IntersectionSnapshot = usermodel.EncodeIntersectionSnapshot(snapshot)
+		}
 	}
 
 	allowsGreeting, policyErr := s.notifyPolicy.AllowsStrangerGreeting(ctx, targetID)
@@ -287,6 +337,7 @@ func (s *GreetingService) Reply(ctx context.Context, actorID, requestID, idempot
 		GreetingPromotion{
 			GreetingRequestID: greeting.ID,
 			OpeningMessage:    greeting.RequestMessage,
+			Intersection:      usermodel.DecodeIntersectionSnapshot(greeting.IntersectionSnapshot),
 		},
 	)
 	if err != nil {

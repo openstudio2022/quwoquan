@@ -276,3 +276,28 @@ types:
       log_policy: allow
       api_exposure: none
       ops_exposure: read
+  FeedPageDeliveredRecommendationItem:
+    description: Content 权限 hydration 后实际进入响应的一项推荐归因；ordinal 与特征只能来自 Recommendation 稳定窗口。
+    fields:
+    - {name: ordinal, source: ordinal, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: contentId, source: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: featureSnapshotDigest, source: featureSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: itemFeatureSnapshot, source: itemFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+  FeedPageDelivered:
+    description: FeedDeliveryPage 成功持久化后发布的推荐交付事件；只包含最终响应项，不包含 hydration/权限过滤丢弃项。
+    fields:
+    - {name: deliveryPageId, source: deliveryPageId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: feedRequestId, source: feedRequestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: personaId, source: personaId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: rankingSnapshotDigest, source: rankingSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: items, source: items, type: '[]FeedPageDeliveredRecommendationItem', constraints: [NOT_NULL, MIN_ITEMS_1], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}

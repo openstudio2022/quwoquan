@@ -85,6 +85,22 @@ type ApprovedMutation struct {
 	OutboxEvents     []MutationOutboxEvent `json:"outboxEvents"`
 }
 
+// Mutation is the atomic boundary for an ordinary control-plane state change.
+// It commits document, workflow, audit, outbox and idempotency receipt together;
+// dangerous operations use ApprovedMutation to add the dual-approval invariant.
+type Mutation struct {
+	Namespace      string                `json:"namespace"`
+	ObjectType     string                `json:"objectType"`
+	ObjectID       string                `json:"objectId"`
+	Intent         string                `json:"intent"`
+	PayloadDigest  string                `json:"payloadDigest"`
+	IdempotencyKey string                `json:"idempotencyKey"`
+	Document       Document              `json:"document"`
+	Workflow       WorkflowState         `json:"workflow"`
+	Audit          AuditEvent            `json:"audit"`
+	OutboxEvents   []MutationOutboxEvent `json:"outboxEvents"`
+}
+
 type MutationReceipt struct {
 	ObjectType     string `json:"objectType"`
 	ObjectID       string `json:"objectId"`
@@ -99,6 +115,7 @@ type MutationReceipt struct {
 // mutations. Approval verification, document/workflow state, audit, outbox and
 // idempotency receipt must commit in one database transaction.
 type AtomicMutationStore interface {
+	CommitMutation(Mutation) (MutationReceipt, error)
 	CommitApprovedMutation(ApprovedMutation) (MutationReceipt, error)
 	GetMutationReceipt(
 		objectType string,
@@ -107,41 +124,60 @@ type AtomicMutationStore interface {
 	) (MutationReceipt, bool, error)
 }
 
-func ValidateApprovedMutation(mutation ApprovedMutation) error {
+func ValidateMutation(mutation Mutation) error {
 	for name, value := range map[string]string{
-		"namespace":        mutation.Namespace,
-		"objectType":       mutation.ObjectType,
-		"objectId":         mutation.ObjectID,
-		"intent":           mutation.Intent,
-		"approvalDecision": mutation.ApprovalDecision,
-		"payloadDigest":    mutation.PayloadDigest,
-		"idempotencyKey":   mutation.IdempotencyKey,
+		"namespace":      mutation.Namespace,
+		"objectType":     mutation.ObjectType,
+		"objectId":       mutation.ObjectID,
+		"intent":         mutation.Intent,
+		"payloadDigest":  mutation.PayloadDigest,
+		"idempotencyKey": mutation.IdempotencyKey,
 	} {
 		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("approved mutation %s is required", name)
+			return fmt.Errorf("mutation %s is required", name)
 		}
 	}
 	if len(strings.TrimSpace(mutation.PayloadDigest)) != 64 {
-		return errors.New("approved mutation payload digest must be sha256")
+		return errors.New("mutation payload digest must be sha256")
 	}
 	if mutation.Document == nil ||
 		mutation.Workflow.ObjectType != mutation.ObjectType ||
 		mutation.Workflow.ObjectID != mutation.ObjectID ||
 		mutation.Audit.ObjectType != mutation.ObjectType ||
 		mutation.Audit.ObjectID != mutation.ObjectID {
-		return errors.New("approved mutation state, workflow and audit must share object identity")
+		return errors.New("mutation state, workflow and audit must share object identity")
 	}
 	if mutation.Audit.AuditID == "" {
-		return errors.New("approved mutation audit id is required")
+		return errors.New("mutation audit id is required")
 	}
 	if len(mutation.OutboxEvents) == 0 {
-		return errors.New("approved mutation requires at least one transactional outbox event")
+		return errors.New("mutation requires at least one transactional outbox event")
 	}
 	for _, event := range mutation.OutboxEvents {
 		if event.EventID == "" || event.EventType == "" ||
 			event.AggregateType == "" || event.AggregateID == "" ||
 			event.Payload == nil {
-			return errors.New("approved mutation outbox event is incomplete")
+			return errors.New("mutation outbox event is incomplete")
+		}
+	}
+	return nil
+}
+
+func ValidateApprovedMutation(mutation ApprovedMutation) error {
+	if err := ValidateMutation(Mutation{
+		Namespace: mutation.Namespace, ObjectType: mutation.ObjectType,
+		ObjectID: mutation.ObjectID, Intent: mutation.Intent,
+		PayloadDigest: mutation.PayloadDigest, IdempotencyKey: mutation.IdempotencyKey,
+		Document: mutation.Document, Workflow: mutation.Workflow,
+		Audit: mutation.Audit, OutboxEvents: mutation.OutboxEvents,
+	}); err != nil {
+		return err
+	}
+	for name, value := range map[string]string{
+		"approvalDecision": mutation.ApprovalDecision,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("approved mutation %s is required", name)
 		}
 	}
 	return nil

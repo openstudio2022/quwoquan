@@ -10,7 +10,6 @@ import (
 
 // 交集召回通道的准入口径合约：
 //   - 只有物化出正边权的交集才能当种子（未物化 / 零权不进召回）；
-//   - deferred kind 不得借历史快照复活成供给；
 //   - 人对象与非人对象分开连接（authorId vs entityRefs），不得混淆；
 //   - 种子按边权降序截断，保证 $in 谓词有界且保留最强边。
 
@@ -42,24 +41,9 @@ func TestIntersectionRecallSeeds_SplitsPeopleAndObjects(t *testing.T) {
 	}
 }
 
-func TestIntersectionRecallSeeds_DropsUnmaterializedAndDeferred(t *testing.T) {
-	deferred := ""
-	for _, kind := range []string{
-		"coPresentHere", "nearbyAffinity", "coPlannedTrip", "coCreatedContent",
-		"sameSchool", "sameCompany", "coMemberCircle", "commonContact",
-	} {
-		if recommendation.IsDeferredIntersectionKind(kind) {
-			deferred = kind
-			break
-		}
-	}
-	if deferred == "" {
-		t.Fatal("registry has no deferred kind left; remove or replace the obsolete recall guard deliberately")
-	}
-
+func TestIntersectionRecallSeeds_DropsUnmaterialized(t *testing.T) {
 	people, objects := recommendation.IntersectionRecallSeeds(
 		[]intersectionapp.IntersectionReasonView{
-			seedReason(deferred, "u_deferred", "person", 0.9),
 			seedReason("commonFollower", "u_unmaterialized", "person", 0),
 			seedReason("commonFollower", "", "person", 0.9),
 			seedReason("commonFollower", "u_ok", "person", 0.3),
@@ -70,7 +54,7 @@ func TestIntersectionRecallSeeds_DropsUnmaterializedAndDeferred(t *testing.T) {
 		t.Fatalf("no object seeds expected, got %v", objects)
 	}
 	if len(people) != 1 || people[0] != "u_ok" {
-		t.Fatalf("only materialized non-deferred edges may seed recall, got %v", people)
+		t.Fatalf("only materialized edges may seed recall, got %v", people)
 	}
 }
 

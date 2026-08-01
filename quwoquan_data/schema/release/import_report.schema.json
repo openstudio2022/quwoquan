@@ -76,6 +76,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "candidateEventsPublished": {
+          "type": "integer",
+          "minimum": 0
+        },
         "postsRemoved": {
           "type": "integer",
           "minimum": 0

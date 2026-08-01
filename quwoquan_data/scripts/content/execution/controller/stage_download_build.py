@@ -62,9 +62,32 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.download_freshness import _content_plan_source_shortfall_entity_ids, _download_content_capacity_preflight, _download_fetch_stale_entity_ids, _resolve_download_content_capacity_shortfall
     from content.execution.recovery.download_gate import _build_prepare_homepage_retry_entity_ids, _download_repair_path, _download_retry_entity_ids, _download_retry_lane, _download_stage_gate_issues
     from content.execution.recovery.download_repair import _record_download_repair
-    from content.execution.recovery.download_unresolved import _write_download_availability
+    from content.execution.recovery.download_unresolved import (
+        absorb_download_shortfall_if_quota_met,
+        _write_download_availability,
+    )
     from content.source.handler import handle_download
     from content.source.gate import gate_download
+
+    # A prior fetch pass may have already produced an auditable frozen-pool
+    # partition with enough homepage-ready targets. Do not requeue its
+    # ineligible oversample tail: doing so reopens a settled discard decision
+    # and burns the ReAct budget before build_prepare can consume that scope.
+    persisted_availability = _write_download_availability(
+        ctx,
+        {},
+        source="download_fetch_resume",
+    )
+    persisted_absorbed = absorb_download_shortfall_if_quota_met(
+        ctx,
+        persisted_availability,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        stage_enum=ExecutionStage.DOWNLOAD_FETCH,
+        auto_mode=AUTO,
+        done_status=StageStatus.DONE,
+    )
+    if persisted_absorbed is not None:
+        return persisted_absorbed
 
     def current_gate_issues(entity_ids: list[str]) -> list[DataIssue]:
         issues = gate_download(ctx.execution_id, target_entities=set(ctx.entity_ids))
@@ -74,6 +97,33 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 issues.append(issue)
                 seen.add(issue)
         return issues
+
+    def _fail_or_absorb(
+        *,
+        issues: list[DataIssue],
+        message: str,
+        source: str,
+    ) -> StageResult:
+        _record_download_repair(ctx, issues)
+        availability = _write_download_availability(ctx, {}, source=source)
+        absorbed = absorb_download_shortfall_if_quota_met(
+            ctx,
+            availability,
+            stage=DataIssueStage.DOWNLOAD_FETCH,
+            stage_enum=ExecutionStage.DOWNLOAD_FETCH,
+            auto_mode=AUTO,
+            done_status=StageStatus.DONE,
+        )
+        if absorbed is not None:
+            return absorbed
+        return StageResult(
+            ExecutionStage.DOWNLOAD_FETCH,
+            AUTO,
+            StageStatus.FAILED,
+            message,
+            fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
+            issue_records=issues,
+        )
 
     retry_entity_ids = _download_retry_entity_ids(ctx)
     build_prepare_retry_entity_ids = _build_prepare_homepage_retry_entity_ids(ctx)
@@ -94,16 +144,13 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     if not target_entity_ids:
         issues = current_gate_issues(ctx.entity_ids)
         if issues:
-            _record_download_repair(ctx, issues)
-            _write_download_availability(ctx, {}, source="download_fetch_failed")
-            return StageResult(
-                ExecutionStage.DOWNLOAD_FETCH,
-                AUTO,
-                StageStatus.FAILED,
-                "persisted download artifacts do not satisfy the frozen target set:\n  - "
-                + "\n  - ".join(issue_messages(issues[:10])),
-                fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
-                issue_records=issues,
+            return _fail_or_absorb(
+                issues=issues,
+                message=(
+                    "persisted download artifacts do not satisfy the frozen target set:\n  - "
+                    + "\n  - ".join(issue_messages(issues[:10]))
+                ),
+                source="download_fetch_failed",
             )
         capacity_result = _resolve_download_content_capacity_shortfall(
             ctx,
@@ -165,18 +212,13 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                     attributes={"exitCode": code},
                 )]
             rendered_issues = issue_messages(issues)
-            _record_download_repair(ctx, issues)
-            _write_download_availability(ctx, {}, source="download_fetch_failed")
             message = f"download gate failed with exit code {code}"
             if issues:
                 message += ": " + "; ".join(rendered_issues[:5])
-            return StageResult(
-                ExecutionStage.DOWNLOAD_FETCH,
-                AUTO,
-                StageStatus.FAILED,
-                message,
-                fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
-                issue_records=issues,
+            return _fail_or_absorb(
+                issues=issues,
+                message=message,
+                source="download_fetch_failed",
             )
     except ExecutionSourceDigestDriftError as exc:
         issue = _source_digest_drift_issue(exc)
@@ -209,15 +251,10 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     issues = current_gate_issues(target_entity_ids)
     if issues:
         rendered_issues = issue_messages(issues)
-        _record_download_repair(ctx, issues)
-        _write_download_availability(ctx, {}, source="download_fetch_failed")
-        return StageResult(
-            ExecutionStage.DOWNLOAD_FETCH,
-            AUTO,
-            StageStatus.FAILED,
-            "download gate failed:\n  - " + "\n  - ".join(rendered_issues[:10]),
-            fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
-            issue_records=issues,
+        return _fail_or_absorb(
+            issues=issues,
+            message="download gate failed:\n  - " + "\n  - ".join(rendered_issues[:10]),
+            source="download_fetch_failed",
         )
     repair_path = _download_repair_path(ctx)
     if repair_path.is_file():

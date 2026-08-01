@@ -7,20 +7,27 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_presentation_stream_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_run_stream_event.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantDeviceActionExecutionReceipt;
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/platform/assistant_device_action_bridge.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
@@ -34,6 +41,7 @@ import 'package:uuid/uuid.dart';
 part 'personal_assistant_stream_controller_projection.dart';
 part 'personal_assistant_stream_controller_models.dart';
 part 'personal_assistant_stream_controller_telemetry.dart';
+part 'personal_assistant_stream_controller_actions.dart';
 
 class PersonalAssistantStreamController
     extends Notifier<PersonalAssistantStreamState> {
@@ -41,7 +49,7 @@ class PersonalAssistantStreamController
   _PersonalAssistantRetryKind? _retryKind;
   String _retryValue = '';
   String _retryRunClientRequestId = '';
-  String _retryConversationClientRequestId = '';
+  String _retrySessionClientRequestId = '';
   List<AssistantIntersectionEvidenceRef> _pendingIntersectionEvidenceRefs =
       const <AssistantIntersectionEvidenceRef>[];
   AssistantOpenContext? _openContext;
@@ -52,6 +60,11 @@ class PersonalAssistantStreamController
   PersonalAssistantStreamState build() {
     return const PersonalAssistantStreamState();
   }
+
+  Ref get _telemetryRef => ref;
+  Ref get _actionsRef => ref;
+  PersonalAssistantStreamState get _actionsState => state;
+  set _actionsState(PersonalAssistantStreamState value) => state = value;
 
   /// 页面入口设置的交集引用只消费给下一次 StartAssistantRun，避免后续手工对话继续
   /// 携带已经过期的页面证据。所有带页面上下文的完整会话入口也必须在首个
@@ -109,10 +122,10 @@ class PersonalAssistantStreamController
           .where((row) => !currentIds.contains(row.id))
           .toList(growable: false);
       state = state.copyWith(
-        // 云端最近会话绑定为当前会话，后续 send 续聊同一 conversation。
-        conversationId: state.conversationId.isEmpty
-            ? snapshot.conversationId
-            : state.conversationId,
+        // 云端最近会话绑定为当前会话，后续 send 续聊同一 AssistantSession。
+        sessionId: state.sessionId.isEmpty
+            ? snapshot.sessionId
+            : state.sessionId,
         transcript: <AssistantTranscriptTimelineRow>[
           ...importedRows,
           ...state.transcript,
@@ -143,17 +156,18 @@ class PersonalAssistantStreamController
   }
 
   /// 切换到指定云端会话：清空当前时间线并恢复该会话的终态轮次。
-  Future<void> switchConversation(String conversationId) async {
-    final target = conversationId.trim();
+  Future<void> switchSession(String sessionId) async {
+    final target = sessionId.trim();
     if (target.isEmpty || state.running) {
       return;
     }
-    if (target == state.conversationId && state.historyInitialized) {
+    if (target == state.sessionId && state.historyInitialized) {
       return;
     }
     state = state.copyWith(
-      conversationId: target,
-      turnId: '',
+      sessionId: target,
+      runId: '',
+      runStatus: '',
       answer: '',
       transcript: const <AssistantTranscriptTimelineRow>[],
       processSummary: const PersonalAssistantProcessSummary(),
@@ -169,7 +183,7 @@ class PersonalAssistantStreamController
       final personaId = await _historyPersonaId();
       final snapshot = await ref
           .read(assistantHistoryLoaderProvider)
-          .load(personaId: personaId, conversationId: target);
+          .load(personaId: personaId, sessionId: target);
       state = state.copyWith(
         transcript:
             snapshot?.transcript ?? const <AssistantTranscriptTimelineRow>[],
@@ -182,7 +196,7 @@ class PersonalAssistantStreamController
       _clearRetry();
     } catch (error, stackTrace) {
       developer.log(
-        'assistant conversation switch failed conversationId=$target',
+        'assistant session switch failed sessionId=$target',
         name: 'personal_assistant',
         error: error,
         stackTrace: stackTrace,
@@ -194,18 +208,19 @@ class PersonalAssistantStreamController
         errorFailure: runtimeFailureFromError(error),
         retryAvailable: true,
       );
-      _rememberRetry(_PersonalAssistantRetryKind.switchConversation, target);
+      _rememberRetry(_PersonalAssistantRetryKind.switchSession, target);
     }
   }
 
-  /// 开启新会话：清空状态；下一次 send 自动创建云端 conversation。
-  void startNewConversation() {
+  /// 开启新会话：清空状态；下一次 send 自动创建云端 AssistantSession。
+  void startNewSession() {
     if (state.running) {
       return;
     }
     state = state.copyWith(
-      conversationId: '',
-      turnId: '',
+      sessionId: '',
+      runId: '',
+      runStatus: '',
       answer: '',
       transcript: const <AssistantTranscriptTimelineRow>[],
       processSummary: const PersonalAssistantProcessSummary(),
@@ -218,28 +233,6 @@ class PersonalAssistantStreamController
       historyLoading: false,
     );
     _clearRetry();
-  }
-
-  /// 停止当前生成：发送 CancelAssistantRun 命令；SSE 会以
-  /// cancelled 终态事件结束流，send() 收尾时落停止态。
-  Future<void> stopGeneration() async {
-    final runId = state.turnId.trim();
-    if (runId.isEmpty || !state.running) {
-      return;
-    }
-    try {
-      await ref
-          .read(assistantConversationRunFacetProvider)
-          .cancelAssistantRun(runId: runId);
-    } catch (error, stackTrace) {
-      // 取消命令失败不阻塞（流可能已自然完成）；记录后由流终态兜底。
-      developer.log(
-        'assistant cancel run failed runId=$runId',
-        name: 'personal_assistant',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
   }
 
   /// 重新生成上一轮回答；[option] 携带风格约束（简洁/详细/口语化/深思）。
@@ -271,8 +264,8 @@ class PersonalAssistantStreamController
       RegenerateOption.regenerate || null => null,
     };
     if (preference != null) {
-      final conversationId = state.conversationId.trim();
-      if (conversationId.isEmpty) {
+      final sessionId = state.sessionId.trim();
+      if (sessionId.isEmpty) {
         return;
       }
       try {
@@ -280,7 +273,7 @@ class PersonalAssistantStreamController
             .read(assistantPreferenceFactFacetProvider)
             .setAssistantPreference(
               scope: AssistantPreferenceScope.session,
-              conversationId: conversationId,
+              sessionId: sessionId,
               kind: preference.kind,
               value: preference.value,
               sourceType: AssistantPreferenceSourceType.explicitRewrite,
@@ -311,7 +304,7 @@ class PersonalAssistantStreamController
   }
 
   Future<void> _reportRegenerateInteraction(RegenerateOption? option) async {
-    final runId = state.turnId.trim();
+    final runId = state.runId.trim();
     if (runId.isEmpty) {
       return;
     }
@@ -343,44 +336,8 @@ class PersonalAssistantStreamController
     return ref.read(currentUserIdProvider).trim();
   }
 
-  Future<void> refreshManagementSummary() async {
-    if (!ref.mounted) {
-      return;
-    }
-    if (state.managementSummaryLoading) {
-      return;
-    }
-    state = state.copyWith(managementSummaryLoading: true);
-    try {
-      final unread = await ref
-          .read(appMessageQueryProvider)
-          .getUnreadCount(GetAppMessageUnreadCountQuery());
-      if (!ref.mounted) {
-        return;
-      }
-      state = state.copyWith(
-        appMessageUnreadCount: unread.unreadCount,
-        managementSummaryLoading: false,
-      );
-    } catch (error, stackTrace) {
-      // 结构化记录 NOTIFICATION.* 错误码后降级为徽标缺省，不阻断助手会话。
-      final domainCode = error is CloudException
-          ? (error.domainErrorCode?.code ?? error.code ?? '')
-          : '';
-      developer.log(
-        'assistant unread-count degraded (code=$domainCode)',
-        name: 'personal_assistant',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (ref.mounted) {
-        state = state.copyWith(managementSummaryLoading: false);
-      }
-    }
-  }
-
-  Future<void> openTurnFromAppMessage(String turnId) async {
-    final trimmed = turnId.trim();
+  Future<void> openRunFromAppMessage(String runId) async {
+    final trimmed = runId.trim();
     if (trimmed.isEmpty) {
       return;
     }
@@ -395,14 +352,15 @@ class PersonalAssistantStreamController
       retryAvailable: false,
     );
     try {
-      final turn = await ref
-          .read(assistantConversationRunFacetProvider)
+      final run = await ref
+          .read(assistantSessionRunFacetProvider)
           .getAssistantRun(runId: trimmed);
       state = state.copyWith(
-        conversationId: turn.conversationId,
-        turnId: turn.turnId,
-        answer: _openedTurnAnswer(turn),
-        transcript: _appendOpenedTurnTranscript(state.transcript, turn),
+        sessionId: run.sessionId,
+        runId: run.runId,
+        runStatus: run.status,
+        answer: _openedRunAnswer(run),
+        transcript: _appendOpenedRunTranscript(state.transcript, run),
         running: false,
         errorMessage: '',
         errorFailure: null,
@@ -411,7 +369,7 @@ class PersonalAssistantStreamController
       _clearRetry();
     } catch (error) {
       developer.log(
-        'open proactive turn failed turnId=$trimmed',
+        'open proactive run failed runId=$trimmed',
         name: 'personal_assistant',
         error: error,
       );
@@ -421,7 +379,7 @@ class PersonalAssistantStreamController
         errorFailure: runtimeFailureFromError(error),
         retryAvailable: true,
       );
-      _rememberRetry(_PersonalAssistantRetryKind.openTurn, trimmed);
+      _rememberRetry(_PersonalAssistantRetryKind.openRun, trimmed);
     }
   }
 
@@ -444,7 +402,7 @@ class PersonalAssistantStreamController
             .read(assistantPersonalizationFacetProvider)
             .reportPageContext(
               context: context,
-              userAction: 'open_assistant_conversation',
+              userAction: 'open_assistant_session',
             );
       } catch (_) {
         _pageContextReportFuture = null;
@@ -458,7 +416,7 @@ class PersonalAssistantStreamController
   Future<void> _send(
     String text, {
     String runClientRequestId = '',
-    String conversationClientRequestId = '',
+    String sessionClientRequestId = '',
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.running) {
@@ -472,15 +430,12 @@ class PersonalAssistantStreamController
       runClientRequestId,
       scope: 'run',
     );
-    final resolvedConversationClientRequestId =
-        state.conversationId.trim().isEmpty
-        ? _assistantClientRequestId(
-            conversationClientRequestId,
-            scope: 'conversation',
-          )
+    final resolvedSessionClientRequestId = state.sessionId.trim().isEmpty
+        ? _assistantClientRequestId(sessionClientRequestId, scope: 'session')
         : '';
+    final pendingUserRowId = 'user_${DateTime.now().microsecondsSinceEpoch}';
     _debugPersonalAssistant(
-      'send text="${_debugSnippet(trimmed)}" existingConversation=${state.conversationId}',
+      'send text="${_debugSnippet(trimmed)}" existingSession=${state.sessionId}',
     );
     state = state.copyWith(
       running: true,
@@ -492,42 +447,45 @@ class PersonalAssistantStreamController
       processSummary: const PersonalAssistantProcessSummary(),
       feedbackMessage: '',
       feedbackType: '',
-      transcript: <AssistantTranscriptTimelineRow>[
-        ...state.transcript,
-        _personalAssistantUserRow(
-          id: 'user_${DateTime.now().microsecondsSinceEpoch}',
-          text: trimmed,
-        ),
-      ],
       events: const <AssistantStreamEventWire>[],
     );
-    final repository = ref.read(assistantConversationRunFacetProvider);
+    final repository = ref.read(assistantSessionRunFacetProvider);
     final turnStartedAt = DateTime.now();
     var runStarted = false;
     try {
       await _ensureOpenPageContextReported();
-      var conversationId = state.conversationId;
-      if (conversationId.isEmpty) {
-        final conversation = await repository.createAssistantConversation(
-          summary: AssistantText.assistantCloudConversationSummary,
-          clientRequestId: resolvedConversationClientRequestId,
+      var sessionId = state.sessionId;
+      if (sessionId.isEmpty) {
+        final session = await repository.createAssistantSession(
+          summary: AssistantText.assistantCloudSessionSummary,
+          clientRequestId: resolvedSessionClientRequestId,
         );
-        conversationId = conversation.conversationId.trim();
-        if (conversationId.isEmpty) {
+        sessionId = session.sessionId.trim();
+        if (sessionId.isEmpty) {
           throw const FormatException(
-            'CreateAssistantConversation returned an empty conversationId',
+            'CreateAssistantSession returned an empty sessionId',
           );
         }
         // 创建成功后立即固定会话，StartAssistantRun 超时/失败的重试才会沿用该
-        // conversation 与同一 run intent，而不是额外创建空会话。
-        state = state.copyWith(conversationId: conversationId);
-        _debugPersonalAssistant('conversation created id=$conversationId');
+        // AssistantSession 与同一 run intent，而不是额外创建空会话。
+        state = state.copyWith(sessionId: sessionId);
+        _debugPersonalAssistant('session created id=$sessionId');
       }
-      final turn = await repository.startAssistantRun(
-        conversationId: conversationId,
+      state = state.copyWith(
+        sessionId: sessionId,
+        transcript: <AssistantTranscriptTimelineRow>[
+          ...state.transcript,
+          _personalAssistantUserRow(
+            id: pendingUserRowId,
+            sessionId: sessionId,
+            text: trimmed,
+          ),
+        ],
+      );
+      final run = await repository.startAssistantRun(
+        sessionId: sessionId,
         text: trimmed,
         clientRequestId: resolvedRunClientRequestId,
-        domainId: 'assistant',
         intersectionEvidenceRefs: _pendingIntersectionEvidenceRefs,
       );
       _pendingIntersectionEvidenceRefs =
@@ -541,39 +499,44 @@ class PersonalAssistantStreamController
         operationId: AssistantApiMetadata.startAssistantRunOperation,
       );
       _debugPersonalAssistant(
-        'turn created conversationId=$conversationId turnId=${turn.turnId} traceId=${turn.traceId}',
+        'run created sessionId=$sessionId runId=${run.runId} traceId=${run.traceId}',
       );
       var answer = '';
       var lastSeq = 0;
       var failed = false;
       var cancelled = false;
+      var runStatus = run.status;
       var firstAnswerObserved = false;
       var terminalEventObserved = false;
       final startedAt = turnStartedAt;
       var processSummary = const PersonalAssistantProcessSummary();
+      final presentationProjection = AssistantPresentationStreamProjection();
+      AssistantPresentationDocumentWire? presentationDocument;
       final events = <AssistantStreamEventWire>[];
-      final assistantItemId = 'assistant_${turn.turnId}';
+      final assistantItemId = 'assistant_${run.runId}';
       var transcript = <AssistantTranscriptTimelineRow>[
         ...state.transcript,
         _personalAssistantAssistantRow(
           id: assistantItemId,
+          sessionId: sessionId,
           text: '',
-          turnId: turn.turnId,
-          traceId: turn.traceId,
+          runId: run.runId,
+          traceId: run.traceId,
           sourceQuery: trimmed,
           streaming: true,
         ),
       ];
       state = state.copyWith(
-        conversationId: conversationId,
-        turnId: turn.turnId,
+        sessionId: sessionId,
+        runId: run.runId,
+        runStatus: run.status,
         transcript: List<AssistantTranscriptTimelineRow>.unmodifiable(
           transcript,
         ),
       );
-      _reportPendingSuggestedAction(turn.turnId);
+      _reportPendingSuggestedAction(run.runId);
       await for (final event in repository.watchAssistantRunEvents(
-        runId: turn.turnId,
+        runId: run.runId,
       )) {
         if (event.seq <= lastSeq) {
           continue;
@@ -590,9 +553,39 @@ class PersonalAssistantStreamController
             streamEvent.restarted) {
           answer = '';
           processSummary = const PersonalAssistantProcessSummary();
+          presentationProjection.reset();
+          presentationDocument = null;
+        }
+        if (streamEvent.type ==
+                AssistantRunStreamEventType.presentationSnapshot ||
+            streamEvent.type == AssistantRunStreamEventType.presentationPatch ||
+            streamEvent.type ==
+                AssistantRunStreamEventType.presentationCommit) {
+          try {
+            presentationDocument = presentationProjection.apply(event);
+          } on FormatException catch (error, stackTrace) {
+            developer.log(
+              'assistant presentation stream degraded',
+              name: 'assistant.presentation',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
         if (streamEvent.type == AssistantRunStreamEventType.cancelled) {
           cancelled = true;
+        }
+        if (streamEvent.runStatus.isNotEmpty) {
+          runStatus = streamEvent.runStatus;
+        } else if (streamEvent.type.isTerminal) {
+          runStatus = switch (streamEvent.type) {
+            AssistantRunStreamEventType.completed => 'completed',
+            AssistantRunStreamEventType.failed => 'failed',
+            AssistantRunStreamEventType.cancelled => 'cancelled',
+            _ => runStatus,
+          };
+        } else {
+          runStatus = state.runStatus.isEmpty ? runStatus : state.runStatus;
         }
         if (streamEvent.type == AssistantRunStreamEventType.answerDelta &&
             !firstAnswerObserved) {
@@ -630,7 +623,7 @@ class PersonalAssistantStreamController
           );
         }
         _debugPersonalAssistant(
-          'stream event type=${event.eventType} seq=${event.seq} turnId=${turn.turnId} '
+          'stream event type=${event.eventType} seq=${event.seq} runId=${run.runId} '
           'process=${streamEvent.process?.stage ?? ''} '
           'status=${streamEvent.process?.status ?? ''}',
         );
@@ -646,16 +639,18 @@ class PersonalAssistantStreamController
             transcript,
             assistantItemId,
             text: failureMessage,
-            turnId: turn.turnId,
-            traceId: turn.traceId,
+            runId: run.runId,
+            traceId: run.traceId,
             sourceQuery: trimmed,
             eventType: event.eventType.wireName,
             streaming: false,
             processSummary: processSummary,
+            presentationDocument: presentationDocument,
           );
           state = state.copyWith(
-            conversationId: conversationId,
-            turnId: turn.turnId,
+            sessionId: sessionId,
+            runId: run.runId,
+            runStatus: 'failed',
             answer: answer,
             transcript: transcript,
             processSummary: processSummary,
@@ -679,18 +674,20 @@ class PersonalAssistantStreamController
             transcript,
             assistantItemId,
             text: answer,
-            turnId: turn.turnId,
-            traceId: turn.traceId,
+            runId: run.runId,
+            traceId: run.traceId,
             sourceQuery: trimmed,
             eventType: event.eventType.wireName,
             streaming:
                 streamEvent.type != AssistantRunStreamEventType.completed,
             processSummary: processSummary,
+            presentationDocument: presentationDocument,
           );
         }
         state = state.copyWith(
-          conversationId: conversationId,
-          turnId: turn.turnId,
+          sessionId: sessionId,
+          runId: run.runId,
+          runStatus: runStatus,
           answer: answer,
           transcript: List<AssistantTranscriptTimelineRow>.unmodifiable(
             transcript,
@@ -711,6 +708,7 @@ class PersonalAssistantStreamController
           : answer;
       state = state.copyWith(
         running: false,
+        runStatus: runStatus,
         answerGateOpen: finalAnswerText.isNotEmpty || state.answerGateOpen,
         processSummary: processSummary.copyWith(
           elapsedMs: DateTime.now().difference(startedAt).inMilliseconds,
@@ -721,8 +719,8 @@ class PersonalAssistantStreamController
                 transcript,
                 assistantItemId,
                 text: finalAnswerText,
-                turnId: turn.turnId,
-                traceId: turn.traceId,
+                runId: run.runId,
+                traceId: run.traceId,
                 sourceQuery: trimmed,
                 streaming: false,
                 processSummary: processSummary.copyWith(
@@ -730,10 +728,11 @@ class PersonalAssistantStreamController
                       .difference(startedAt)
                       .inMilliseconds,
                 ),
+                presentationDocument: presentationDocument,
               ),
       );
       _debugPersonalAssistant(
-        'turn completed turnId=${turn.turnId} answerLength=${answer.length} '
+        'run completed runId=${run.runId} answerLength=${answer.length} '
         'events=${events.length} processLines=${processSummary.lines.length}',
       );
       if (!failed) {
@@ -782,7 +781,7 @@ class PersonalAssistantStreamController
         _PersonalAssistantRetryKind.send,
         trimmed,
         runClientRequestId: resolvedRunClientRequestId,
-        conversationClientRequestId: resolvedConversationClientRequestId,
+        sessionClientRequestId: resolvedSessionClientRequestId,
       );
     }
   }
@@ -808,10 +807,10 @@ class PersonalAssistantStreamController
         return _send(
           value,
           runClientRequestId: _retryRunClientRequestId,
-          conversationClientRequestId: _retryConversationClientRequestId,
+          sessionClientRequestId: _retrySessionClientRequestId,
         );
-      case _PersonalAssistantRetryKind.openTurn:
-        return openTurnFromAppMessage(value);
+      case _PersonalAssistantRetryKind.openRun:
+        return openRunFromAppMessage(value);
       case _PersonalAssistantRetryKind.history:
         state = state.copyWith(
           errorMessage: '',
@@ -820,8 +819,8 @@ class PersonalAssistantStreamController
         );
         _clearRetry();
         return ensureHistoryInitialized();
-      case _PersonalAssistantRetryKind.switchConversation:
-        return switchConversation(value);
+      case _PersonalAssistantRetryKind.switchSession:
+        return switchSession(value);
     }
   }
 
@@ -846,19 +845,19 @@ class PersonalAssistantStreamController
     _PersonalAssistantRetryKind kind,
     String value, {
     String runClientRequestId = '',
-    String conversationClientRequestId = '',
+    String sessionClientRequestId = '',
   }) {
     _retryKind = kind;
     _retryValue = value;
     _retryRunClientRequestId = runClientRequestId.trim();
-    _retryConversationClientRequestId = conversationClientRequestId.trim();
+    _retrySessionClientRequestId = sessionClientRequestId.trim();
   }
 
   void _clearRetry() {
     _retryKind = null;
     _retryValue = '';
     _retryRunClientRequestId = '';
-    _retryConversationClientRequestId = '';
+    _retrySessionClientRequestId = '';
   }
 
   @visibleForTesting
@@ -888,7 +887,7 @@ class PersonalAssistantStreamController
   ///
   /// 仅记录 internal/external 类型，不上传 URL、标题或引用正文。
   void reportReferenceOpened({required bool external}) {
-    final assistantTurnId = state.turnId.trim();
+    final assistantTurnId = state.runId.trim();
     if (assistantTurnId.isEmpty) {
       return;
     }
@@ -939,7 +938,7 @@ class PersonalAssistantStreamController
   }
 
   Future<void> _reportFeedbackInteraction(String feedbackType) async {
-    final runId = state.turnId.trim();
+    final runId = state.runId.trim();
     if (feedbackType.isEmpty || runId.isEmpty) {
       return;
     }

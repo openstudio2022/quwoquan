@@ -1,0 +1,31 @@
+events:
+- name: SkillPackageReleaseStaged
+  aggregate: SkillPackageRelease
+  payload_entity: SkillPackageReleaseStagedEventPayload
+  payload_fields:
+  - packageId
+  - packageVersion
+  - releaseDigest
+  - stagedAt
+  no_consumer_reason: 当前阶段仅写同事务审计 outbox，publisher readback 后续独立接线。
+  description: 完整校验后的不可变 Skill Package release 已写入。
+- name: SkillPackageReleaseActivated
+  aggregate: SkillPackageRelease
+  payload_entity: SkillPackageActivationEventPayload
+  payload_fields:
+  - packageId
+  - releaseDigest
+  - revision
+  - activatedAt
+  no_consumer_reason: Resolver 每次读取 active 指针，不依赖异步事件刷新缓存。
+  description: active 指针已通过 compare-and-swap 切换。
+- name: SkillPackageReleaseRolledBack
+  aggregate: SkillPackageRelease
+  payload_entity: SkillPackageActivationEventPayload
+  payload_fields:
+  - packageId
+  - releaseDigest
+  - revision
+  - activatedAt
+  no_consumer_reason: Resolver 每次读取 active 指针，不依赖异步事件刷新缓存。
+  description: active 指针已精确恢复到 previous release。

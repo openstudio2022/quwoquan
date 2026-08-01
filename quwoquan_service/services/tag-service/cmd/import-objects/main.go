@@ -1,8 +1,7 @@
 // Command import-objects 把对象↔tagRef 倒排（object_tag_index）幂等灌入 mongo。
 //
 // 真相源是各源对象的 tagRefs（content.tagRefs / circle.tags / user.interestTags），
-// 经数据工程生成 flat manifest，或由环境 seed manifest 显式选择 contract seed ref
-// 后由本工具回填；
+// 经 Data Engineering immutable release 生成 flat manifest 后由本工具回填；
 // object_tag_index 是派生倒排，幂等可重跑、可重建（删表后重灌得到同一结果）。
 package main
 
@@ -22,7 +21,6 @@ import (
 
 func main() {
 	file := flag.String("objects-file", "", "path to object-tag manifest JSON (required)")
-	seedRefs := flag.String("seed-refs", "", "comma-separated seed refs declared by the environment manifest")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	dbName := flag.String("db", "quwoquan_tag", "target database")
 	releaseID := flag.String("release-id", "", "data release id (required)")
@@ -45,7 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("read objects file: %v", err)
 	}
-	entries, err := importmanifest.Decode(raw, splitCSV(*seedRefs))
+	entries, err := importmanifest.Decode(raw)
 	if err != nil {
 		log.Fatalf("parse objects file: %v", err)
 	}
@@ -115,11 +113,4 @@ func main() {
 		deleted,
 		*dbName,
 	)
-}
-
-func splitCSV(value string) []string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return strings.Split(value, ",")
 }

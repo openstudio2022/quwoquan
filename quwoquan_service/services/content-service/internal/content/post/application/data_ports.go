@@ -3,7 +3,8 @@ package post
 import (
 	"context"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -24,6 +25,7 @@ type MediaAssetBindingSlice struct {
 	MediaType                     string
 	MimeType                      string
 	Version                       int64
+	CaptureMetadata               mediamodel.CaptureMetadata
 	PublicSliceKey                string
 	VerifiedDurationMs            int64
 	VideoWidth                    int

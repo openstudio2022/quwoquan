@@ -1,0 +1,21 @@
+{
+  "skillId": "shopping_decision",
+  "displayName": "购物决策助手",
+  "description": "选购对比、性价比分析、产品测评、买哪个好。",
+  "domainId": "shopping_decision",
+  "problemClass": "complex_reasoning",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "买哪个",
+    "对比",
+    "选购",
+    "参数",
+    "测评"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web3",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.complex_reasoning",
+  "replayAssetRef": "assistant.replay.shopping_decision.v1"
+}

@@ -12,12 +12,12 @@ class AuthorImpactEvidencePage {
   final bool hasMore;
 
   AuthorImpactEvidencePage({
-    required this.impactId,
-    required this.evidenceSnapshotId,
-    required this.totalCount,
-    required this.items,
-    required this.nextCursor,
-    required this.hasMore,
+    this.impactId = '',
+    this.evidenceSnapshotId = '',
+    this.totalCount = 0,
+    this.items = const <AuthorImpactEvidenceItem>[],
+    this.nextCursor = '',
+    this.hasMore = false,
   });
 
   factory AuthorImpactEvidencePage.fromMap(Map<String, dynamic> m) {

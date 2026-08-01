@@ -12,19 +12,31 @@ class RecommendationApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'ActivateRecommendationModelRelease': '/internal/recommendation/model-releases:activate',
     'BatchScoreRecommendationCandidates': '/internal/recommendation/model-releases:batch-score',
+    'CreateRankedRecommendationWindow': '/internal/recommendation/ranked-pages',
+    'GetRankedRecommendationPage': '/internal/recommendation/ranked-pages/{windowId}',
     'ScoreRecommendationCandidates': '/internal/recommendation/model-releases:score',
+    'StageRecommendationModelRelease': '/internal/recommendation/model-releases:stage',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'ActivateRecommendationModelRelease': 'POST',
     'BatchScoreRecommendationCandidates': 'POST',
+    'CreateRankedRecommendationWindow': 'POST',
+    'GetRankedRecommendationPage': 'GET',
     'ScoreRecommendationCandidates': 'POST',
+    'StageRecommendationModelRelease': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'ActivateRecommendationModelRelease': 'required',
     'BatchScoreRecommendationCandidates': 'required',
+    'CreateRankedRecommendationWindow': 'required',
+    'GetRankedRecommendationPage': 'required',
     'ScoreRecommendationCandidates': 'required',
+    'StageRecommendationModelRelease': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -35,9 +47,30 @@ class RecommendationApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String activateRecommendationModelReleaseOperation = 'ActivateRecommendationModelRelease';
   static const String batchScoreRecommendationCandidatesOperation = 'BatchScoreRecommendationCandidates';
+  static const String createRankedRecommendationWindowOperation = 'CreateRankedRecommendationWindow';
+  static const String getRankedRecommendationPageOperation = 'GetRankedRecommendationPage';
   static const String scoreRecommendationCandidatesOperation = 'ScoreRecommendationCandidates';
+  static const String stageRecommendationModelReleaseOperation = 'StageRecommendationModelRelease';
 
+  static const String activateRecommendationModelReleasePath = '/internal/recommendation/model-releases:activate';
   static const String batchScoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:batch-score';
+  static const String createRankedRecommendationWindowPath = '/internal/recommendation/ranked-pages';
+  static const String getRankedRecommendationPagePathTemplate = '/internal/recommendation/ranked-pages/{windowId}';
+  static String getRankedRecommendationPagePath({required String windowId}) {
+    return _fillPath(getRankedRecommendationPagePathTemplate, <String, String>{
+      'windowId': windowId,
+    });
+  }
   static const String scoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:score';
+  static const String stageRecommendationModelReleasePath = '/internal/recommendation/model-releases:stage';
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

@@ -216,7 +216,7 @@ void main() {
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
         mediaType: ContentMediaType.video,
-        contentType: 'video/mp4',
+        mimeType: 'video/mp4',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
       ),
@@ -263,7 +263,7 @@ void main() {
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
         mediaType: ContentMediaType.image,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
       ),
@@ -337,7 +337,7 @@ void main() {
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
         mediaType: ContentMediaType.image,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
       ),
@@ -684,7 +684,7 @@ Future<void> _recordCompletedMedia({
   final initialized = await media.initUpload(
     InitContentMediaUploadCommand(
       mediaType: ContentMediaType.image,
-      contentType: 'image/jpeg',
+      mimeType: 'image/jpeg',
       fileSize: 4,
       expectedSha256: 'sha256:$_pendingVideoDigest',
     ),

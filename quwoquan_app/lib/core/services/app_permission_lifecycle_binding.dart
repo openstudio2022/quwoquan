@@ -3,10 +3,7 @@ import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 
 /// 绑定全局 Toast 锚点与生命周期 observer，供设置返回复检使用。
 class AppPermissionLifecycleBinding extends StatefulWidget {
-  const AppPermissionLifecycleBinding({
-    super.key,
-    required this.child,
-  });
+  const AppPermissionLifecycleBinding({super.key, required this.child});
 
   final Widget child;
 

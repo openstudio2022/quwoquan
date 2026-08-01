@@ -106,10 +106,7 @@ ArticleFontStack _nativeArticleFontStack(ArticleFontPreset preset) {
     ArticleFontPreset.mono => 'Menlo',
     ArticleFontPreset.clean => null,
   };
-  return ArticleFontStack(
-    fontFamily: fontFamily,
-    fontFamilyFallback: fallback,
-  );
+  return ArticleFontStack(fontFamily: fontFamily, fontFamilyFallback: fallback);
 }
 
 ArticleFontStack _bundledArticleFontStack(ArticleFontPreset preset) {

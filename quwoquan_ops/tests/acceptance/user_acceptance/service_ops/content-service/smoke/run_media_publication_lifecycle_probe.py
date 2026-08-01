@@ -35,7 +35,6 @@ from report_feedback_probe_support import (
 
 SCHEMA = "content-media-publication-lifecycle-probe-report"
 SCENARIO = "content.media_publication.lifecycle"
-MEDIA_VIEWER_SUBJECT = "fixture_user_friend"
 _PNG_PAYLOAD = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/"
     "iZk9HQAAAABJRU5ErkJggg=="
@@ -213,7 +212,7 @@ def _init_upload(
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     body = {
         "mediaType": media_type,
-        "contentType": content_type,
+        "mimeType": content_type,
         "fileSize": len(payload),
         "expectedSha256": digest,
     }
@@ -960,7 +959,6 @@ def main() -> int:
                 environment=args.env,
                 base_url=args.base_url,
                 target_name=args.target_name,
-                subject=MEDIA_VIEWER_SUBJECT,
             )
             viewer_client = ProbeClient(
                 args.base_url,

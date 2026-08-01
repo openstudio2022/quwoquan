@@ -1,5 +1,5 @@
 kind: projection
-description: CircleSearchItemView 的领域对象契约。
+description: Circle 主档与关联 Homepage 事件构建的可重建搜索条目，供 search-service 只读消费 canonical 字段。
 identity:
   fields:
   - circleId
@@ -32,3 +32,12 @@ local_identity_reasons:
     as an aggregate Store identity
   domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
+business_rules:
+- 搜索条目只投影 Circle 的公开字段和 canonical homepage 引用，不复制成员或私密治理状态。
+- 同一 circleId 的版本必须单调应用，重复事件不得产生第二条搜索条目。
+- Circle 或 Homepage tombstone 必须从可搜索集合移除对应条目。
+lifecycle:
+  source_events: [CircleCreated, CircleUpdated, CircleDeleted, HomepageUpdated, HomepageDeleted]
+  checkpoint: circle_outbox_sequence
+  rebuild: replay_circle_and_homepage_public_events
+  tombstone: delete_search_item_keep_checkpoint

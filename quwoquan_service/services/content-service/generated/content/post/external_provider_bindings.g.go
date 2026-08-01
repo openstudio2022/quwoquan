@@ -20,20 +20,20 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"content.embedding.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.embed.protocol_fixture",
-			EndpointRef: "environment_binding:content.embedding_fixture",
+			AdapterID:   "ext.embed.openai_compatible",
+			EndpointRef: "environment_binding:content.embedding",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
+				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_FIXTURE_API_KEY",
+				"CONTENT_EMBEDDING_API_KEY",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
-			AdapterID:               "infra.redis.message_transport_fixture",
+			AdapterID:               "infra.redis.message_transport",
 			EndpointRef:             "",
 			EndpointEnvironmentKeys: map[string]string{},
 			SecretEnvironmentKeys:   []string{},
@@ -61,15 +61,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"beta": {
 		"content.embedding.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.embed.protocol_fixture",
-			EndpointRef: "environment_binding:content.embedding_fixture",
+			AdapterID:   "ext.embed.openai_compatible",
+			EndpointRef: "environment_binding:content.embedding",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
+				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_FIXTURE_API_KEY",
+				"CONTENT_EMBEDDING_API_KEY",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
@@ -101,13 +101,17 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"gamma": {
 		"content.embedding.generation": {
-			State:                   "enabled",
-			AdapterID:               "ext.embed.protocol_fixture",
-			EndpointRef:             "",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     1000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.embed.openai_compatible",
+			EndpointRef: "environment_binding:content.embedding",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{
+				"CONTENT_EMBEDDING_API_KEY",
+			},
+			TimeoutMilliseconds: 10000,
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",

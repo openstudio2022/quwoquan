@@ -1,25 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
-import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 
 import '../../../support/recording_app_telemetry_recorder.dart';
 
 /// 任务 B · FeedPerformanceObservability 单元测试。
 ///
-/// 复用真实 [AnalyticsService] + 强类型 recorder，覆盖 façade -> Reporter
-/// 的目录化投影与本地诊断隔离。
+/// 直接覆盖 façade -> typed Reporter，防止性能事实再次被
+/// dynamic analytics/local-only denylist 丢弃。
 void main() {
   late RecordingAppTelemetryRecorder ops;
-  late AnalyticsService analytics;
   late FeedPerformanceObservability observability;
 
-  setUp(() async {
+  setUp(() {
     ops = RecordingAppTelemetryRecorder();
-    analytics = AnalyticsService.forTesting(telemetryReporter: ops);
-    await analytics.initialize(const AnalyticsConfig());
-    observability = FeedPerformanceObservability(analytics: analytics);
+    observability = FeedPerformanceObservability(telemetry: ops);
   });
 
   List<RecordedAppTelemetry> eventsNamed(String name) {
@@ -211,13 +207,7 @@ void main() {
   });
 
   group('资源与长滑指标', () {
-    test('上报 jank 比例、图片缓存、视频活跃数、下载队列和 post cache source', () async {
-      observability.recordFrameJankRatio(
-        surfaceId: 'home_feed',
-        sampledFrames: 120,
-        jankyFrames: 9,
-        ratio: 0.075,
-      );
+    test('图片缓存、视频 controller 和下载队列进入 typed reporter', () async {
       observability.recordImageCacheBudget(
         profile: 'compact',
         currentSizeBytes: 1024,
@@ -234,24 +224,25 @@ void main() {
         inflightDownloads: 3,
         cacheSizeBytes: 4096,
       );
-      observability.recordPostCacheHitSource(
-        source: 'memory',
-        cacheClass: 'recent',
-      );
 
-      expect(eventsNamed(FeedPerformanceMetricNames.frameJankRatio), isEmpty);
-      expect(eventsNamed(FeedPerformanceMetricNames.imageCacheBytes), isEmpty);
+      final resources = ops.recorded
+          .where((event) => event.eventType == 'home_feed_resource_snapshot')
+          .toList(growable: false);
+      expect(resources, hasLength(3));
       expect(
-        eventsNamed(FeedPerformanceMetricNames.activeVideoControllerCount),
-        isEmpty,
+        resources.map((event) => event.extensions['resourceKind']).toSet(),
+        <Object?>{
+          'image_cache_bytes',
+          'active_video_controllers',
+          'media_downloads',
+        },
       );
+      expect(resources.first.extensions['currentValue'], 1024);
+      expect(resources.first.extensions['limitValue'], 2048);
+      expect(resources.first.extensions['result'], 'within_budget');
       expect(
-        eventsNamed(FeedPerformanceMetricNames.mediaDownloadQueue),
-        isEmpty,
-      );
-      expect(
-        eventsNamed(FeedPerformanceMetricNames.postCacheHitSource),
-        isEmpty,
+        resources.every((event) => !event.extensions.containsKey('contentId')),
+        isTrue,
       );
     });
   });

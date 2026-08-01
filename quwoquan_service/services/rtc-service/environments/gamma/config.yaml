@@ -12,11 +12,11 @@ externalBindings:
     state: enabled
   rtc.room.transport:
     state: enabled
-    adapter: infra.livekit_protocol_fixture
-    endpointRef: environment_binding:rtc.livekit_fixture
+    adapter: infra.livekit_sfu
+    endpointRef: environment_binding:rtc.livekit
     endpointEnvs:
-      connection: RTC_MEDIA_FIXTURE_CONNECTION_URL
+      connection: RTC_MEDIA_CONNECTION_URL
     secretRefs:
-    - RTC_MEDIA_FIXTURE_API_KEY
-    - RTC_MEDIA_FIXTURE_API_SECRET
-    timeoutMs: 1000
+    - RTC_MEDIA_API_KEY
+    - RTC_MEDIA_API_SECRET
+    timeoutMs: 10000

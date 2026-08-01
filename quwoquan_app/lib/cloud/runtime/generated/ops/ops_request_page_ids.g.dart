@@ -5,7 +5,6 @@ class OpsRequestPageIds {
   const OpsRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'AssignExperimentVariant': 'ops.assign.experiment.variant',
     'GetAccountEnforcementCase': 'ops.get.account.enforcement.case',
     'GetAppRecoveryVersion': 'ops.get.app.recovery.version',
     'GetConfigSnapshot': 'ops.get.config.snapshot',
@@ -36,7 +35,6 @@ class OpsRequestPageIds {
     'UpdateExperimentRollout': 'ops.update.experiment.rollout',
   };
 
-  static const String assignExperimentVariant = 'ops.assign.experiment.variant';
   static const String getAccountEnforcementCase = 'ops.get.account.enforcement.case';
   static const String getAppRecoveryVersion = 'ops.get.app.recovery.version';
   static const String getConfigSnapshot = 'ops.get.config.snapshot';

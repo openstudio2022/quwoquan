@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""交集 kind 注册表单一真相源门禁（Phase 0 漂移收口 §20d + §23 去桥接闭集校验）。
+"""交集 kind 注册表单一真相源门禁。
 
 唯一真相源:
   services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 
 校验项:
   1. 顶层四闭集结构完整：dimensions / lifecycleStates / verticals / objectKinds 均非空，且包含
-     §22/§23 要求的必备成员（lifecycleStates 含 archived/expired，verticals 含 travel_photography/campus，
+     必备成员（lifecycleStates 含 archived/expired，verticals 含 travel_photography，
      objectKinds 含 route/photo_spot/gear）。objectKinds 每项 roles ⊆ {object,count}，roles 含 object 必填 assetKind。
   2. 注册表每个 kind 结构完整（必填 valueTier/computability/evidenceRank/vertical 等且取值合法），
      且与顶层闭集一致：objectKind/countObjectKind ∈ objectKinds，dimensions ⊆ dimensions 闭集，vertical ∈ verticals 闭集。
@@ -24,9 +24,11 @@
      objectKinds 每项必填 dimension（∈ dimensions 闭集）与 label；生成表的 objectKindByObjectType /
      dimensionByObjectKind / labelByObjectKind 与注册表逐字段一致；且
      intersection_source_object_types.go 必须查这三张表，不得回归 objectID 子串/前缀嗅探。
-  9. 概念收敛迁移：actionKeyMigrations / objectKindMigrations / actionDispatchMigrations 的旧名必须在
-     对应闭集里零残留、新名必须已登记，且 actionKeyMeta.dispatch 全部 ∈ actionDispatch 闭集
-     （防止 companion/trip/meetup/voice_room 的旧值以别名形式回归成第二真相源）。
+  9. 垂类生产者必须引用本注册表 factProducerShapes；shape 明确输入、输出 kind/object/taxonomy
+     与可见性，禁止自由文本生产者与 recommendation-only 事实回流成交集句。
+ 10. 每个 kind 必须逐项拥有唯一 statementTemplates.byKind 模板；结论句生产代码不得在展示字段
+     重新写中文字面量，Dart cloud intersection 展示字段由 App semantic gate 同步扫描。
+ 11. 注册表禁止 migration/alias/deferred 状态；actionKeyMeta.dispatch 全部属于当前 actionDispatch 闭集。
 
 退出码: 0 通过 / 1 失败。
 """
@@ -62,11 +64,16 @@ OBJECT_TYPES_GO = (
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}
-COMPUTABILITY = {"R1", "R2", "R3", "R4"}
+COMPUTABILITY = {"R1", "R2", "R3"}
 LEVELS = {"sharedFact", "bridgeFact", "impactFact", "affinity"}
 CLASSES = {"fact", "affinity"}
-STATUSES = {"active", "deferred"}
 OBJECT_KIND_ROLES = {"object", "count"}
+PRODUCER_VISIBILITIES = {"intersection", "recommendation_only", "object_derivation"}
+HAN_CHARACTER = re.compile(r"[\u3400-\u9fff]")
+DISPLAY_FIELD_LITERAL = re.compile(
+    r"\b(?:PrimaryText|DisplayText|ReasonText|StatementText)\s*(?::|=)\s*"
+    r"(?:`[^`\n]*[\u3400-\u9fff][^`\n]*`|\"[^\"\n]*[\u3400-\u9fff][^\"\n]*\")"
+)
 
 # §23 去桥接：闭集必备成员（防止回归把扩展项删回旧集合）。
 REQUIRED_DIMENSIONS = {"identity", "location", "content", "interest", "relationship"}
@@ -79,7 +86,7 @@ REQUIRED_LIFECYCLE_STATES = {
     "archived",
     "expired",
 }
-REQUIRED_VERTICALS = {"general", "travel_photography", "campus"}
+REQUIRED_VERTICALS = {"general", "travel_photography"}
 REQUIRED_OBJECT_KINDS = {
     "person",
     "circle",
@@ -102,7 +109,6 @@ REQUIRED = [
     "valueTier",
     "computability",
     "evidenceRank",
-    "status",
 ]
 
 
@@ -225,7 +231,12 @@ def validate_icon_key_by_dimension(data: dict, dim_set: set[str]) -> None:
 def load_registry() -> tuple[dict[str, dict], dict]:
     if not REGISTRY.exists():
         fail(f"missing registry: {REGISTRY}")
-    data = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
+    raw = REGISTRY.read_text(encoding="utf-8")
+    if re.search(r"\bdeferred\b", raw, flags=re.IGNORECASE):
+        fail("canonical registry retains deferred vocabulary")
+    if re.search(r"^\s+status\s*:", raw, flags=re.MULTILINE):
+        fail("canonical registry retains redundant status tracks")
+    data = yaml.safe_load(raw)
     dim_set, _life_set, vert_set, object_kinds = load_closed_sets(data)
     validate_icon_key_by_dimension(data, dim_set)
     validate_object_type_bindings(data, object_kinds)
@@ -262,45 +273,28 @@ def load_registry() -> tuple[dict[str, dict], dict]:
             fail(f"kind {item['kind']} dimensions {sorted(bad_dims)} not in dimensions closed set")
         if item["vertical"] not in vert_set:
             fail(f"kind {item['kind']} invalid vertical {item['vertical']} (not in verticals closed set)")
-        if item["status"] not in STATUSES:
-            fail(f"kind {item['kind']} invalid status {item['status']}")
         if not isinstance(item["evidenceRank"], int):
             fail(f"kind {item['kind']} evidenceRank must be int")
         if item["kind"] in by_kind:
             fail(f"duplicate kind {item['kind']}")
         by_kind[item["kind"]] = item
     validate_vertical_extension_contract(data, vert_set, object_kinds, set(by_kind))
-    validate_concept_migrations(data, object_kinds)
+    validate_single_track_registry(data)
     return by_kind, data
 
 
-def validate_concept_migrations(data: dict, object_kinds: set[str]) -> None:
-    """概念收敛迁移：旧名必须在注册表里零残留，且新名必须已登记。
+def validate_single_track_registry(data: dict) -> None:
+    """当前注册表只允许可生产、可承接的单轨名称。"""
+    for retired in (
+        "migrations",
+        "actionKeyMigrations",
+        "objectKindMigrations",
+        "actionDispatchMigrations",
+    ):
+        if retired in data:
+            fail(f"{retired} is forbidden: rename migrations must finish outside the canonical registry")
 
-    收敛是一次性迁移而不是别名层：一旦旧名与新名同时存在，同一件事就有两套 actionKey /
-    objectKind / dispatch，端与云会各自选一套，即第二真相源。
-    """
-    action_keys = set(data.get("actionHintLegend") or {})
     dispatch_set = set(data.get("actionDispatch") or [])
-    targets = {
-        "actionKeyMigrations": (action_keys, "actionHintLegend"),
-        "objectKindMigrations": (object_kinds, "objectKinds"),
-        "actionDispatchMigrations": (dispatch_set, "actionDispatch"),
-    }
-    for section, (registered, registered_name) in targets.items():
-        mapping = data.get(section)
-        if not isinstance(mapping, dict):
-            fail(f"{section} must be a mapping (旧名 → 标准名，删除用空串)")
-        for old, new in sorted(mapping.items()):
-            if old in registered:
-                fail(
-                    f"{section}: legacy name {old!r} still registered in {registered_name} "
-                    "(收敛是一次性迁移，禁止旧名与新名并存)"
-                )
-            if new and new not in registered:
-                fail(f"{section}: target {new!r} not registered in {registered_name}")
-
-    # dispatch 收敛后，actionKeyMeta 不得再引用被迁移掉的旧类别。
     for key, meta in sorted((data.get("actionKeyMeta") or {}).items()):
         dispatch = (meta or {}).get("dispatch")
         if dispatch not in dispatch_set:
@@ -324,6 +318,12 @@ def validate_vertical_extension_contract(
     for flag in ("forbidNewKind", "forbidNewDimension", "forbidNewActionKey", "forbidClientVerticalBranch"):
         if contract.get(flag) is not True:
             fail(f"verticalExtensionContract.{flag} must be true (§23.4 禁止垂类结构分叉)")
+
+    producer_shapes = validate_fact_producer_shapes(
+        data,
+        object_kinds=object_kinds,
+        registered_kinds=registered_kinds,
+    )
 
     declared = contract.get("verticals")
     if not isinstance(declared, dict) or not declared:
@@ -353,6 +353,20 @@ def validate_vertical_extension_contract(
             fail(f"verticalExtensionContract.verticals[{name}].objectKinds must be non-empty")
         if not entry["taxonomyRoots"]:
             fail(f"verticalExtensionContract.verticals[{name}].taxonomyRoots must be non-empty")
+        unknown_producers = set(entry["factProducers"]) - set(producer_shapes)
+        if unknown_producers:
+            fail(
+                f"verticalExtensionContract.verticals[{name}].factProducers references "
+                f"unknown factProducerShapes {sorted(unknown_producers)}"
+            )
+        for producer_id in entry["factProducers"]:
+            output_kinds = set(producer_shapes[producer_id]["outputKinds"])
+            undeclared_outputs = output_kinds - set(entry["instantiatedKinds"])
+            if undeclared_outputs:
+                fail(
+                    f"verticalExtensionContract.verticals[{name}].factProducer {producer_id!r} "
+                    f"outputs kinds absent from instantiatedKinds: {sorted(undeclared_outputs)}"
+                )
         bad_kinds = set(entry["instantiatedKinds"]) - registered_kinds
         if bad_kinds:
             fail(
@@ -370,7 +384,7 @@ def validate_vertical_extension_contract(
                 f"forbidNewKind=true (禁止垂类专有 kind: {sorted(entry['newKinds'])})"
             )
 
-    # 垂类专有 kind 的另一种伪装：把垂类名写进 kind 名（travel.*/travelXxx/campus_*）。
+    # 垂类专有 kind 的另一种伪装：把垂类名写进 kind 名。
     for prefix in sorted(expected_verticals):
         head = prefix.split("_", 1)[0].lower()
         offenders = sorted(k for k in registered_kinds if k.lower().startswith(head))
@@ -379,6 +393,63 @@ def validate_vertical_extension_contract(
                 f"kind name must not carry vertical prefix {head!r}: {offenders} "
                 "(§23.4 垂类扩展只改 vertical 字段，禁止独立垂类 kind)"
             )
+
+
+def validate_fact_producer_shapes(
+    data: dict,
+    *,
+    object_kinds: set[str],
+    registered_kinds: set[str],
+) -> dict[str, dict]:
+    """生产者 shape 与交集/推荐/对象派生输出保持互斥且可静态验证。"""
+    shapes = data.get("factProducerShapes")
+    if not isinstance(shapes, dict) or not shapes:
+        fail("factProducerShapes must be a non-empty mapping")
+    required = {
+        "visibility",
+        "inputRefs",
+        "outputKinds",
+        "outputObjectKinds",
+        "outputTaxonomyRoots",
+    }
+    for producer_id, shape in sorted(shapes.items()):
+        if not isinstance(shape, dict):
+            fail(f"factProducerShapes[{producer_id}] must be a mapping")
+        missing = required - set(shape)
+        if missing:
+            fail(f"factProducerShapes[{producer_id}] missing fields {sorted(missing)}")
+        visibility = shape["visibility"]
+        if visibility not in PRODUCER_VISIBILITIES:
+            fail(f"factProducerShapes[{producer_id}].visibility invalid: {visibility!r}")
+        for field in ("inputRefs", "outputKinds", "outputObjectKinds", "outputTaxonomyRoots"):
+            if not isinstance(shape[field], list):
+                fail(f"factProducerShapes[{producer_id}].{field} must be a list")
+        if not shape["inputRefs"]:
+            fail(f"factProducerShapes[{producer_id}].inputRefs must be non-empty")
+        unknown_kinds = set(shape["outputKinds"]) - registered_kinds
+        if unknown_kinds:
+            fail(f"factProducerShapes[{producer_id}] outputs unknown kinds {sorted(unknown_kinds)}")
+        unknown_objects = set(shape["outputObjectKinds"]) - object_kinds
+        if unknown_objects:
+            fail(
+                f"factProducerShapes[{producer_id}] outputs unknown objectKinds "
+                f"{sorted(unknown_objects)}"
+            )
+        if visibility == "intersection" and not shape["outputKinds"]:
+            fail(f"factProducerShapes[{producer_id}] intersection producer must output kinds")
+        if visibility != "intersection" and shape["outputKinds"]:
+            fail(
+                f"factProducerShapes[{producer_id}] {visibility} producer must not output intersection kinds"
+            )
+        if visibility == "recommendation_only" and not shape["outputTaxonomyRoots"]:
+            fail(
+                f"factProducerShapes[{producer_id}] recommendation_only producer must output taxonomy roots"
+            )
+        if visibility == "object_derivation" and not shape["outputObjectKinds"]:
+            fail(
+                f"factProducerShapes[{producer_id}] object_derivation producer must output objectKinds"
+            )
+    return shapes
 
 
 def validate_action_labels(data: dict) -> None:
@@ -456,7 +527,6 @@ def parse_generated_table() -> dict[str, dict]:
     # §24 M0：意图时态 / 行动阶梯 str 表。
     moment_by_kind = parse_str_map("IntersectionMomentByKind")
     action_tier = parse_str_map("IntersectionActionTierByKey")
-    target_avail = parse_str_map("IntersectionActionTargetAvailabilityByKey")
     action_dispatch = parse_str_map("IntersectionActionDispatchByKey")
 
     def parse_action_keys(var_name: str) -> dict[str, list[str]]:
@@ -493,7 +563,6 @@ def parse_generated_table() -> dict[str, dict]:
         "actionLabelL10nKeyByKey": action_label_l10n_key,
         "momentByKind": moment_by_kind,
         "actionTierByKey": action_tier,
-        "targetAvailabilityByKey": target_avail,
         "dispatchByKey": action_dispatch,
         "requiredGatesByActionKey": required_gates,
         "moments": moments,
@@ -543,7 +612,6 @@ def expected_from_registry(by_kind: dict[str, dict], data: dict) -> dict[str, di
         },
         "momentByKind": {k: (v.get("moment") or "current") for k, v in by_kind.items()},
         "actionTierByKey": {k: v.get("tier", "") for k, v in action_meta.items()},
-        "targetAvailabilityByKey": {k: v.get("targetAvailability", "") for k, v in action_meta.items()},
         "dispatchByKey": {k: v.get("dispatch", "") for k, v in action_meta.items()},
         "requiredGatesByActionKey": {k: list(v.get("requiredGates") or []) for k, v in action_meta.items()},
         "moments": list(data.get("moments") or []),
@@ -585,6 +653,12 @@ def validate_statement_templates(data: dict, by_kind: dict[str, dict], problems:
     src = GENERATED_TABLE.read_text(encoding="utf-8") if GENERATED_TABLE.exists() else ""
     seen_keys: dict[str, str] = {}
     count = 0
+    missing_kinds = set(by_kind) - set(st["byKind"])
+    if missing_kinds:
+        problems.append(
+            "statementTemplates.byKind missing kinds "
+            f"{sorted(missing_kinds)}（canonical kind 不得依赖代码内兜底文案）"
+        )
 
     def check_one(owner: str, template: str, l10n_key: str) -> None:
         nonlocal count
@@ -671,6 +745,28 @@ def check_statements_template_driven(problems: list[str]) -> None:
                     "（文案真相源是 registry.statementTemplates）"
                 )
 
+    # 所有 content-service 交集生产/投影源码都不得直接给展示字段写中文。
+    # 只扫 production Go，测试与 fixture 文案仍由各自 contract fixture 管理。
+    producer_roots = (
+        HYDRATION_PACKAGE,
+        HYDRATION_PACKAGE.parent / "authorimpact",
+        HYDRATION_PACKAGE.parent.parent / "infrastructure" / "recommendation",
+    )
+    for root in producer_roots:
+        if not root.exists():
+            problems.append(f"intersection producer root missing: {root}")
+            continue
+        for path in sorted(root.rglob("*.go")):
+            if path.name.endswith("_test.go"):
+                continue
+            src = path.read_text(encoding="utf-8")
+            for match in DISPLAY_FIELD_LITERAL.finditer(src):
+                line_no = src.count("\n", 0, match.start()) + 1
+                problems.append(
+                    f"hardcoded Han display literal in {path.relative_to(REPO_ROOT)}:{line_no}: "
+                    f"{match.group(0)!r}（展示句必须来自 registry 模板或结构化事实）"
+                )
+
 
 def check_consumers_table_driven(problems: list[str]) -> None:
     """消费方必须查 generated.Intersection* 表，不得回归手写 kind switch。"""
@@ -749,7 +845,6 @@ def main() -> int:
         # §24 M0：意图时态 / 行动阶梯 map 表逐字段一致。
         "momentByKind",
         "actionTierByKey",
-        "targetAvailabilityByKey",
         "dispatchByKey",
         "requiredGatesByActionKey",
     ):

@@ -1,0 +1,25 @@
+{
+  "skillId": "fortune_astrology",
+  "displayName": "星座运势助手",
+  "description": "星座运势、占卜塔罗、八字运程、趣味解读。",
+  "domainId": "fortune_astrology",
+  "problemClass": "general",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "算命",
+    "卜卦",
+    "求签",
+    "八字",
+    "星座运势",
+    "金牛座",
+    "感情运势",
+    "水逆",
+    "星盘"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web2",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.general",
+  "replayAssetRef": "assistant.replay.fortune_astrology.v1"
+}

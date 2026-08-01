@@ -26,7 +26,7 @@ import 'package:quwoquan_app/cloud/remote/search/hot_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/recent_search_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_feedback_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_query_remote.dart';
-import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_remote.dart';
+import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_fact_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/account/account_lifecycle_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/account_session/account_session_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/authentication_challenge/authentication_challenge_remote.dart';

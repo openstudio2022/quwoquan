@@ -53,9 +53,9 @@ class ContextContinuityPolicy {
 
   factory ContextContinuityPolicy.fromJson(Map<String, dynamic> json) {
     return ContextContinuityPolicy(
-      queryIntent: parseQueryIntent((json['queryIntent'] as String?)?.trim() ?? ""),
-      problemClass: parseProblemClass((json['problemClass'] as String?)?.trim() ?? "general"),
-      continuityMode: parseContextContinuityMode((json['continuityMode'] as String?)?.trim() ?? "unknown"),
+      queryIntent: parseQueryIntentStrict((json['queryIntent'] as String?)?.trim() ?? ""),
+      problemClass: parseProblemClassStrict((json['problemClass'] as String?)?.trim() ?? "general"),
+      continuityMode: parseContextContinuityModeStrict((json['continuityMode'] as String?)?.trim() ?? "unknown"),
       explicitContinuation: json['explicitContinuation'] == true,
       topicOverlap: (json['topicOverlap'] as num?)?.toDouble() ?? 0,
       allowHistorySummary: json['allowHistorySummary'] == true,

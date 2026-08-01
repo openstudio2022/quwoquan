@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 间距尺寸枚举
-enum SpacingSize {
-  xs,
-  sm,
-  md,
-  lg,
-  xl,
-}
+enum SpacingSize { xs, sm, md, lg, xl }
 
 /// BuildContext扩展方法 - 用于获取间距
 extension SpacingExtension on BuildContext {
@@ -60,4 +54,3 @@ extension SpacingExtension on BuildContext {
     }
   }
 }
-

@@ -3,6 +3,8 @@ package ports
 import (
 	"context"
 	"time"
+
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 )
 
 // Creation is the MediaAsset-owned immutable state produced when a verified
@@ -18,6 +20,7 @@ type Creation struct {
 	MediaType        string
 	MimeType         string
 	FileSize         int64
+	CaptureMetadata  mediamodel.CaptureMetadata
 	AccessPolicy     string
 	ProcessingStatus string
 	CoverStrategy    string

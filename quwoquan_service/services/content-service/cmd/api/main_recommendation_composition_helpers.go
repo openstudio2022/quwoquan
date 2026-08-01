@@ -24,11 +24,7 @@ func applyRecommendationCandidateGates(
 	for _, candidateSource := range rawCandidateSources {
 		// 类型判定必须基于原始源：门禁嵌套包装后类型断言会失效。
 		_, isAuthorRecall := candidateSource.(*recinfra.AuthorRecallSource)
-		gated := recinfra.GatePremiumStreamSource(candidateSource)
-		if gated == nil {
-			continue
-		}
-		gated = recinfra.GateFollowFeedSource(gated, isAuthorRecall)
+		gated := recinfra.GateFollowFeedSource(candidateSource, isAuthorRecall)
 		if restrictionReader != nil {
 			gated = recinfra.GateAccountRestrictedSource(
 				gated,

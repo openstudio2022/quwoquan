@@ -90,7 +90,7 @@ void main() {
     });
   });
 
-  group('captureDerivedTagRefs', () {
+  group('capture payload boundary', () {
     const captured = MediaCaptureMetadata(
       cameraMake: 'SONY',
       cameraModel: 'ILCE-7M4',
@@ -98,32 +98,26 @@ void main() {
       isoSensitivity: 6400,
     );
 
-    test('默认全开时派生器材与参数标签', () {
+    test('端侧不把器材与参数派生成公开 tagRefs', () {
       const settings = PublishSettings(captureMetadata: captured);
 
+      final payload = settings.toPayloadFields();
+      expect(payload, isNot(contains('tagRefs')));
       expect(
-        settings.captureDerivedTagRefs,
-        containsAll(<String>[
-          'Topic/摄影/器材/机身类型/全画幅微单',
-          'Topic/摄影/拍摄参数/焦段/长焦',
-          'Topic/摄影/拍摄参数/感光度/高感夜拍',
-        ]),
+        payload['captureDisclosure'],
+        containsAll(<String>['gear', 'parameters']),
       );
     });
 
-    test('关闭某组后该组派生标签立刻消失，不需要额外撤回动作', () {
-      final settings = const PublishSettings(
-        captureMetadata: captured,
-      ).copyWith(
-        captureDisclosure: <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.gear,
-        },
-      );
+    test('关闭某组后请求只保留仍披露的闭集', () {
+      final settings = const PublishSettings(captureMetadata: captured)
+          .copyWith(
+            captureDisclosure: <MediaCaptureDisclosureGroup>{
+              MediaCaptureDisclosureGroup.gear,
+            },
+          );
 
-      expect(
-        settings.captureDerivedTagRefs,
-        <String>['Topic/摄影/器材/机身类型/全画幅微单'],
-      );
+      expect(settings.toPayloadFields()['captureDisclosure'], <String>['gear']);
     });
 
     test('拍摄元数据不落草稿：toMap 不含 PII，恢复后为空', () {

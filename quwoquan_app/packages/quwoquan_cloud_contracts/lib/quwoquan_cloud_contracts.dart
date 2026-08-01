@@ -39,6 +39,8 @@ export 'src/entity/homepage_commands.dart'
     hide HomepageDetailProjection, decodeHomepageDetail;
 export 'src/entity/homepage_review_contracts.dart';
 export 'src/generated/circle_contract_enums.g.dart';
+export 'src/generated/chat_contract_enums.g.dart';
+export 'src/generated/content_contract_enums.g.dart';
 export 'src/generated/operation_contracts.g.dart';
 export 'src/integration/location_queries.dart';
 export 'src/notification/app_message_contracts.dart';
@@ -54,7 +56,7 @@ export 'src/search/search_feedback_contracts.dart';
 export 'src/search/search_query_contracts.dart';
 export 'src/structured_value.dart';
 export 'src/tag/tag_catalog_contracts.dart';
-export 'src/tag/tag_feedback_contracts.dart';
+export 'src/tag/tag_feedback_fact_contracts.dart';
 export 'src/user/account_session_contracts.dart';
 export 'src/user/authentication_challenge_contracts.dart';
 export 'src/user/contact_discovery_contracts.dart';

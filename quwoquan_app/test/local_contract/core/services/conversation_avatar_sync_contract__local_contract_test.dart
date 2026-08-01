@@ -23,6 +23,7 @@ void main() {
         'memberCount': 5,
         'maxGroupSize': 1000,
         'receiptEnabled': true,
+        'lastMessageType': 'text',
         'messageCount': 12,
         'status': 'active',
         'createdAt': '2026-05-19T00:00:00Z',

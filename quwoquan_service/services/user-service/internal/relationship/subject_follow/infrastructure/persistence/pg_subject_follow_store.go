@@ -146,15 +146,15 @@ func loadReceipt(ctx context.Context, tx pgx.Tx, command sfmodel.Command) (sfmod
 			"subject follow idempotency key was reused with a different command",
 		)
 	}
-	var result sfmodel.MutationResult
-	if err := json.Unmarshal(payload, &result); err != nil {
+	result, err := decodeSubjectFollowReceipt(payload)
+	if err != nil {
 		return sfmodel.MutationResult{}, false, fmt.Errorf("decode subject follow receipt: %w", err)
 	}
 	return result, true, nil
 }
 
 func saveReceipt(ctx context.Context, tx pgx.Tx, command sfmodel.Command, result sfmodel.MutationResult) error {
-	payload, err := json.Marshal(result)
+	payload, err := encodeSubjectFollowReceipt(result)
 	if err != nil {
 		return fmt.Errorf("encode subject follow receipt: %w", err)
 	}
@@ -169,6 +169,103 @@ func saveReceipt(ctx context.Context, tx pgx.Tx, command sfmodel.Command, result
 		return fmt.Errorf("save subject follow receipt: %w", err)
 	}
 	return nil
+}
+
+// subjectFollowReceiptDTO 是 receipt 存储边界的唯一 JSON 合同。领域 struct
+// 不承担 wire/persistence 命名；显式 DTO 防止 Go 字段名被隐式编码为
+// Follow/PersonaID 等第二套键名。
+type subjectFollowReceiptDTO struct {
+	Follow           subjectFollowReceiptStateDTO `json:"follow"`
+	Changed          bool                         `json:"changed"`
+	IdempotentReplay bool                         `json:"idempotentReplay"`
+	OccurredAt       time.Time                    `json:"occurredAt"`
+}
+
+type subjectFollowReceiptStateDTO struct {
+	ID          string     `json:"id"`
+	PersonaID   string     `json:"personaId"`
+	SubjectType string     `json:"subjectType"`
+	SubjectID   string     `json:"subjectId"`
+	State       string     `json:"state"`
+	Version     int64      `json:"version"`
+	FollowedAt  *time.Time `json:"followedAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+var subjectFollowReceiptKeys = map[string]struct{}{
+	"follow": {}, "changed": {}, "idempotentReplay": {}, "occurredAt": {},
+}
+
+var subjectFollowReceiptStateKeys = map[string]struct{}{
+	"id": {}, "personaId": {}, "subjectType": {}, "subjectId": {},
+	"state": {}, "version": {}, "followedAt": {}, "updatedAt": {},
+}
+
+func encodeSubjectFollowReceipt(result sfmodel.MutationResult) ([]byte, error) {
+	return json.Marshal(subjectFollowReceiptDTO{
+		Follow: subjectFollowReceiptStateDTO{
+			ID:          result.Follow.ID,
+			PersonaID:   result.Follow.PersonaID,
+			SubjectType: result.Follow.SubjectType,
+			SubjectID:   result.Follow.SubjectID,
+			State:       result.Follow.State,
+			Version:     result.Follow.Version,
+			FollowedAt:  result.Follow.FollowedAt,
+			UpdatedAt:   result.Follow.UpdatedAt,
+		},
+		Changed:          result.Changed,
+		IdempotentReplay: result.IdempotentReplay,
+		OccurredAt:       result.OccurredAt,
+	})
+}
+
+func decodeSubjectFollowReceipt(payload []byte) (sfmodel.MutationResult, error) {
+	top, err := decodeExactJSONObject(payload, subjectFollowReceiptKeys)
+	if err != nil {
+		return sfmodel.MutationResult{}, err
+	}
+	if _, err := decodeExactJSONObject(top["follow"], subjectFollowReceiptStateKeys); err != nil {
+		return sfmodel.MutationResult{}, fmt.Errorf("follow: %w", err)
+	}
+
+	var receipt subjectFollowReceiptDTO
+	if err := json.Unmarshal(payload, &receipt); err != nil {
+		return sfmodel.MutationResult{}, err
+	}
+	return sfmodel.MutationResult{
+		Follow: sfmodel.SubjectFollow{
+			ID:          receipt.Follow.ID,
+			PersonaID:   receipt.Follow.PersonaID,
+			SubjectType: receipt.Follow.SubjectType,
+			SubjectID:   receipt.Follow.SubjectID,
+			State:       receipt.Follow.State,
+			Version:     receipt.Follow.Version,
+			FollowedAt:  receipt.Follow.FollowedAt,
+			UpdatedAt:   receipt.Follow.UpdatedAt,
+		},
+		Changed:          receipt.Changed,
+		IdempotentReplay: receipt.IdempotentReplay,
+		OccurredAt:       receipt.OccurredAt,
+	}, nil
+}
+
+func decodeExactJSONObject(
+	payload []byte,
+	expected map[string]struct{},
+) (map[string]json.RawMessage, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &object); err != nil {
+		return nil, err
+	}
+	if object == nil || len(object) != len(expected) {
+		return nil, errors.New("JSON object has missing or unknown fields")
+	}
+	for key := range object {
+		if _, ok := expected[key]; !ok {
+			return nil, fmt.Errorf("JSON object contains non-canonical field %q", key)
+		}
+	}
+	return object, nil
 }
 
 func lockRow(ctx context.Context, tx pgx.Tx, command sfmodel.Command) (sfmodel.SubjectFollow, bool, error) {

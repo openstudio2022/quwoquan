@@ -435,7 +435,6 @@ void main() {
                 actionKey: 'start_gathering',
                 label: '发起结伴',
                 dispatch: 'gathering',
-                targetAvailability: 'available',
                 isPrimary: true,
                 target: IntersectionTarget(
                   objectId: 'p_west_lake',
@@ -477,7 +476,6 @@ void main() {
                 actionKey: 'message_person',
                 label: '私信',
                 dispatch: 'message',
-                targetAvailability: 'available',
                 isPrimary: true,
                 target: IntersectionTarget(
                   objectId: 'u_zhou',
@@ -516,7 +514,6 @@ void main() {
                 actionKey: 'message_person',
                 label: '私信',
                 dispatch: 'message',
-                targetAvailability: 'available',
                 isPrimary: true,
                 target: IntersectionTarget(
                   objectId: 'fixture_circle_photo',

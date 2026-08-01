@@ -316,9 +316,21 @@ def _stage_review(execution_id: str, refs, *, materialize: bool, allow_partial: 
     approved = len(statuses) - len(failed)
     print(f"[post] review handled {len(statuses)} ref(s); approved={approved} failed={len(failed)}")
     if materialize and approved:
-        paths = materialize_posts(execution_id, "article", refs=check_refs)
-        paths += materialize_posts(execution_id, "image", refs=check_refs)
-        paths += materialize_posts(execution_id, "video", refs=check_refs)
+        from pathlib import Path
+
+        paths: list[Path] = []
+        for carrier in ("article", "image", "video"):
+            try:
+                paths += materialize_posts(execution_id, carrier, refs=check_refs)
+            except ValueError as exc:
+                # Per-object delivery defects are absorbed into allow_partial
+                # review closure; do not abort sibling refs in the same batch.
+                print(
+                    f"[post] materialize {carrier} object defect: {exc}",
+                    file=sys.stderr,
+                )
+                if not allow_partial:
+                    raise
         print(f"[post] Materialized {len(paths)} approved post package(s).")
     if failed:
         for row in failed[:10]:

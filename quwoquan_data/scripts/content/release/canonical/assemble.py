@@ -144,7 +144,7 @@ def _copy_post_surface(src: Path, dst: Path, *, manifest: dict) -> None:
     dst.mkdir(parents=True, exist_ok=True)
     release_manifest = dict(manifest)
     if _is_image_manifest(manifest):
-        # Legacy gallery packages are upgraded to the structured image surface.
+        # Image packages retain the canonical structured image surface.
         release_manifest["contentType"] = "image"
     else:
         article = src / "article.md"

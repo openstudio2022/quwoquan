@@ -58,7 +58,7 @@
 
 - canonical：`specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md`
 - canonical：`quwoquan_service/services/recommendation-service/config/schema.yaml`
-- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/projections/premium_pool_projection.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_candidate_index_view/projections/premium_candidate_projection.yaml`
 - canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
 
 ## 5. 验收场景

@@ -1,13 +1,13 @@
 domain: OPS
 aggregate: ExperimentAssignmentFact
-description: ExperimentAssignmentFact 查询、追加与统计的对象本地稳定错误语义。
+description: ExperimentAssignmentFact 查询与统计的对象本地稳定错误语义；追加只接受 Recommendation/Search 的 typed observed event。
 errors:
 - code: OPS.USER.experiment_assignment_unauthorized
   kind: USER
   reason: unauthorized
   http_status: 401
   emitted_by:
-  - {surface: http, operations: [GetExperimentAssignment, AssignExperimentVariant]}
+  - {surface: http, operations: [GetExperimentAssignment]}
   recovery_action: reauth
   dart_const: experimentAssignmentUnauthorized
   go_const: ErrExperimentAssignmentUnauthorized
@@ -19,7 +19,7 @@ errors:
   reason: invalid_argument
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [GetExperimentAssignment, AssignExperimentVariant, GetExperimentStats]}
+  - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
   recovery_action: surface
   dart_const: experimentAssignmentInvalidArgument
   go_const: ErrExperimentAssignmentInvalidArgument
@@ -31,7 +31,7 @@ errors:
   reason: experiment_not_found
   http_status: 404
   emitted_by:
-  - {surface: http, operations: [GetExperimentAssignment, AssignExperimentVariant, GetExperimentStats]}
+  - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
   recovery_action: refresh
   dart_const: experimentAssignmentExperimentNotFound
   go_const: ErrExperimentAssignmentExperimentNotFound
@@ -50,24 +50,12 @@ errors:
   user_message:
     zh: 实验分配尚未生成
     en: Experiment assignment has not been created
-- code: OPS.USER.experiment_assignment_not_running
-  kind: USER
-  reason: experiment_not_running
-  http_status: 409
-  emitted_by:
-  - {surface: http, operations: [AssignExperimentVariant]}
-  recovery_action: refresh
-  dart_const: experimentAssignmentNotRunning
-  go_const: ErrExperimentAssignmentNotRunning
-  user_message:
-    zh: 实验当前不可分配
-    en: Experiment is not available for assignment
 - code: OPS.SYSTEM.experiment_assignment_storage_read_failed
   kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [GetExperimentAssignment, AssignExperimentVariant, GetExperimentStats]}
+  - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: experimentAssignmentStorageReadFailed
@@ -75,16 +63,3 @@ errors:
   user_message:
     zh: 实验分配读取失败，请稍后重试
     en: Experiment assignment read failed, please retry
-- code: OPS.SYSTEM.experiment_assignment_storage_write_failed
-  kind: SYSTEM
-  reason: storage_write_failed
-  http_status: 500
-  emitted_by:
-  - {surface: http, operations: [AssignExperimentVariant]}
-  recovery_action: retry
-  recovery_after_seconds: 2
-  dart_const: experimentAssignmentStorageWriteFailed
-  go_const: ErrExperimentAssignmentStorageWriteFailed
-  user_message:
-    zh: 实验分配写入失败，请稍后重试
-    en: Experiment assignment write failed, please retry

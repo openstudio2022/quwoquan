@@ -29,6 +29,7 @@ type mediaAssetDocument struct {
 	MediaType                     string                               `bson:"mediaType"`
 	MimeType                      string                               `bson:"mimeType"`
 	FileSize                      int64                                `bson:"fileSize"`
+	CaptureMetadata               mediamodel.CaptureMetadata           `bson:"captureMetadata,omitempty"`
 	AccessPolicy                  mediamodel.AccessPolicy              `bson:"accessPolicy"`
 	ProcessingStatus              mediamodel.ProcessingStatus          `bson:"processingStatus"`
 	ProcessingVersion             int64                                `bson:"processingVersion,omitempty"`
@@ -163,6 +164,7 @@ func mediaAssetReadProjection() bson.D {
 		{Key: "mediaType", Value: 1},
 		{Key: "mimeType", Value: 1},
 		{Key: "fileSize", Value: 1},
+		{Key: "captureMetadata", Value: 1},
 		{Key: "accessPolicy", Value: 1},
 		{Key: "processingStatus", Value: 1},
 		{Key: "processorProfile", Value: 1},
@@ -265,6 +267,7 @@ func mediaAssetSliceFromDocument(document mediaAssetDocument) mediaapp.MediaAsse
 		MediaType:                     document.MediaType,
 		MimeType:                      document.MimeType,
 		FileSize:                      document.FileSize,
+		CaptureMetadata:               document.CaptureMetadata,
 		AccessPolicy:                  document.AccessPolicy,
 		ProcessingStatus:              document.ProcessingStatus,
 		ProcessorProfile:              document.ProcessorProfile,
@@ -685,6 +688,7 @@ func mediaAssetDocumentFromModel(asset *mediamodel.MediaAsset) mediaAssetDocumen
 		MediaType:                     string(snapshot.MediaType),
 		MimeType:                      snapshot.MimeType,
 		FileSize:                      snapshot.FileSize,
+		CaptureMetadata:               snapshot.CaptureMetadata,
 		AccessPolicy:                  snapshot.AccessPolicy,
 		ProcessingStatus:              snapshot.ProcessingStatus,
 		ProcessingVersion:             snapshot.ProcessingVersion,
@@ -739,6 +743,7 @@ func mediaAssetFromDocument(
 		MediaType:                     mediamodel.MediaType(document.MediaType),
 		MimeType:                      document.MimeType,
 		FileSize:                      document.FileSize,
+		CaptureMetadata:               document.CaptureMetadata,
 		AccessPolicy:                  document.AccessPolicy,
 		ProcessingStatus:              document.ProcessingStatus,
 		ProcessingVersion:             document.ProcessingVersion,

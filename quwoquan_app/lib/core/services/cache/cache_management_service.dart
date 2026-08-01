@@ -75,7 +75,7 @@ class CacheManagementService {
     return CacheUsageEstimate(
       postObjects: _postCache.detailCount + _postCache.projectionCount,
       querySnapshots: _querySnapshotStore.count,
-      userProfiles: _userProfileCache.diskCount,
+      userProfiles: _userProfileCache.entryCount,
       conversations: _conversationCache.activeDiskCount,
     );
   }
@@ -146,7 +146,7 @@ class CacheManagementService {
     if (_postCache.detailCount != 0 ||
         _postCache.projectionCount != 0 ||
         _querySnapshotStore.count != 0 ||
-        _userProfileCache.diskCount != 0 ||
+        _userProfileCache.entryCount != 0 ||
         _userProfileCache.memoryCount != 0 ||
         _conversationCache.totalEntryCount != 0) {
       throw StateError('terminal account closure cache verification failed');

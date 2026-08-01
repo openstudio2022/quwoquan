@@ -131,6 +131,47 @@ func TestDefaultPolicyArtifactsAreImmutableAndPairConsistently(t *testing.T) {
 	}
 }
 
+func TestAutonomousWebPolicyCandidateIsImmutableAndPairConsistent(t *testing.T) {
+	t.Parallel()
+	resourceRoot := filepath.Join(policyPublicationServiceRoot(), "resources", "policies")
+	release, err := releaseresource.LoadReleaseArtifact(
+		resourceRoot,
+		"assistant/assistant-default/releases/af1a08bf19d3a7bc5dca987e1da4c976e310aaccb482c38e980b7803c9ac4a34.json",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollout, err := loadRolloutArtifact(
+		resourceRoot,
+		"assistant/assistant-default/rollouts/revision-3.json",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rollout.ExpectedRevision != 2 ||
+		release.Release.PolicyID != rollout.PolicyID ||
+		len(rollout.Assignments) != 1 ||
+		rollout.Assignments[0].ReleaseDigest != release.Release.ReleaseDigest {
+		t.Fatalf("release=%+v rollout=%+v", release, rollout)
+	}
+	for _, template := range release.Release.Templates {
+		allowed := make(map[string]bool, len(template.AllowedTools))
+		for _, toolName := range template.AllowedTools {
+			allowed[toolName] = true
+		}
+		for _, required := range []string{"web_search", "web_open", "web_find"} {
+			if !allowed[required] {
+				t.Fatalf(
+					"candidate template %q must allow autonomous exploration tool %q: %v",
+					template.TemplateID,
+					required,
+					template.AllowedTools,
+				)
+			}
+		}
+	}
+}
+
 func TestEveryNonAlphaEnvironmentReferencesValidPolicyArtifacts(t *testing.T) {
 	t.Parallel()
 	type environmentConfig struct {

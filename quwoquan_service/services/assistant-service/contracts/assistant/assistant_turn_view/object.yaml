@@ -1,5 +1,5 @@
 kind: projection
-description: AssistantTurnView 的领域对象契约。
+description: AssistantRun 事件按 turnId 投影出的不可变对话轮次视图，供会话恢复、审计与引用定位读取。
 identity:
   fields:
   - turnId
@@ -16,8 +16,8 @@ relationships:
   name: runEvents
   on_delete: retain
   reference_fields:
-  - conversationId
-  target_object: assistant.AssistantConversation
+  - sessionId
+  target_object: assistant.AssistantSession
 local_identity_reasons:
   domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
@@ -25,3 +25,12 @@ local_identity_reasons:
     an aggregate Store identity
   traceId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
+business_rules:
+- 只消费 AssistantRun 的已提交事件，绝不从模型流式片段直接形成完成态。
+- 同一 turnId 的事件按 run sequence 幂等应用，终态之后拒绝回退到处理中。
+- AssistantSession 删除时保留审计视图，但所有账号可识别字段按隐私级联规则清除。
+lifecycle:
+  source_events: [AssistantRunStarted, AssistantRunStreamed, AssistantRunCompleted, AssistantRunCancelled, AssistantRunFailed]
+  checkpoint: assistant_run_event_sequence
+  rebuild: replay_assistant_run_outbox
+  tombstone: redact_subject_and_retain_audit_identity

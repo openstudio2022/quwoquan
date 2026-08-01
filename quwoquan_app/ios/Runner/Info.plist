@@ -142,5 +142,9 @@
 	<string>需要获取位置以展示附近地点供选择</string>
 	<key>NSContactsUsageDescription</key>
 	<string>需要访问通讯录以发现已注册趣我圈的联系人</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>经你确认后，将日程和提醒写入系统日历</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>经你确认后，将日程和提醒写入系统日历</string>
 </dict>
 </plist>

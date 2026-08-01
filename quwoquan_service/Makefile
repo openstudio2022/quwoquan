@@ -2,11 +2,14 @@
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-link-templates-go codegen-link-templates-go
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
+.PHONY: verify-assistant-tool-catalog codegen-assistant-tool-catalog
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
 MONGODB_URI ?= mongodb://127.0.0.1:27017/?directConnection=true
 ML_DRY_RUN ?= false
+ML_CANDIDATE_EVIDENCE ?=
+ML_ACTIVE_EVIDENCE ?=
 ML_GUARDRAIL_ENV ?= gamma
 ML_GUARDRAIL_WINDOW_HOURS ?= 4
 ML_GUARDRAIL_DRY_RUN ?= true
@@ -99,7 +102,7 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance
+verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
@@ -116,10 +119,13 @@ verify-assistant-service-errors: service-contract-view
 	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain assistant --output-root services/assistant-service/generated --check
 
 verify-assistant-runtime-enums: service-contract-view
-	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_conversation/assistant_runtime_enums.g.go --check-assistant-runtime-enums-go
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_session/assistant_runtime_enums.g.go --check-assistant-runtime-enums-go
+
+verify-assistant-tool-catalog: service-contract-view
+	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go --check
 
 verify-assistant-citation-destinations: service-contract-view
-	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_conversation/citation_destinations.g.go --check-citation-destinations-go
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_session/citation_destinations.g.go --check-citation-destinations-go
 
 verify-link-templates-go: service-contract-view
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/generate_link_templates_go.py --metadata-dir "$(CONTRACT_VIEW)" --output generated/linktemplates/link_templates.g.go --check
@@ -183,7 +189,7 @@ verify-api-edge-rate-limit-single-track:
 verify-content-architecture:
 	python3 scripts/verify/verify_content_application_boundaries.py
 
-codegen: codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 
 codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)"
@@ -232,10 +238,13 @@ codegen-assistant-service-errors:
 	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain assistant --output-root services/assistant-service/generated
 
 codegen-assistant-runtime-enums:
-	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_conversation/assistant_runtime_enums.g.go
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_session/assistant_runtime_enums.g.go
+
+codegen-assistant-tool-catalog:
+	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go
 
 codegen-assistant-citation-destinations:
-	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_conversation/citation_destinations.g.go
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_session/citation_destinations.g.go
 
 codegen-external-provider-bindings:
 	PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/cli/lib/external_provider_governance.py --quiet --go-bindings
@@ -322,7 +331,7 @@ verify-ml-features:
 	$(ML_PYTHON) $(ML_SCRIPTS)/verify_feature_consistency.py
 
 verify-ml-tests:
-	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) services/recommendation-service/tests/local_contract/recommendation/recommendation/recommendation_model_release -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release -q
 
 verify-rec-policy-advisor:
 	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) scripts/recommendation/test_rec_policy_advisor.py -q
@@ -334,9 +343,9 @@ verify-content-flywheel-loop:
 	$(ML_PYTHON) scripts/recommendation/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
 
 verify-ml-model-quality:
+	@test -n "$(strip $(ML_CANDIDATE_EVIDENCE))" || (echo "ML_CANDIDATE_EVIDENCE is required" >&2; exit 1)
 	@mkdir -p "$(ML_REPORT_ROOT)"
-	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "$(ML_REPORT_ROOT)/eval_report_$(SCENARIO).json"
-	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "$(ML_REPORT_ROOT)/eval_report_$(SCENARIO)_multiobjective.json"
+	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --candidate-evidence "$(ML_CANDIDATE_EVIDENCE)" $(if $(strip $(ML_ACTIVE_EVIDENCE)),--active-evidence "$(ML_ACTIVE_EVIDENCE)",) $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "$(ML_REPORT_ROOT)/model_release_verification.json"
 
 verify-ml-e2e:
 	$(ML_PYTHON) $(ML_SCRIPTS)/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --full-pipeline $(if $(strip $(REC_MODEL_URL)),--rec-model $(REC_MODEL_URL),--skip-service)

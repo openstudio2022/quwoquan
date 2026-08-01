@@ -6,6 +6,8 @@ import (
 	"hash/fnv"
 	"strings"
 	"time"
+
+	runtimeexperiments "quwoquan_service/runtime/experiments"
 )
 
 var (
@@ -26,17 +28,16 @@ type AudienceRule struct {
 }
 
 type Experiment struct {
-	ID             string       `json:"id"`
-	Key            string       `json:"key"`
-	Version        int64        `json:"version"`
-	Status         string       `json:"status"`
-	Variants       []Variant    `json:"variants"`
-	AudienceRule   AudienceRule `json:"audienceRule"`
-	AllocationSeed string       `json:"allocationSeed"`
-	StartsAt       string       `json:"startsAt,omitempty"`
-	EndsAt         string       `json:"endsAt,omitempty"`
-	CreatedAt      string       `json:"createdAt"`
-	UpdatedAt      string       `json:"updatedAt"`
+	ID           string       `json:"id"`
+	Key          string       `json:"key"`
+	Version      int64        `json:"version"`
+	Status       string       `json:"status"`
+	Variants     []Variant    `json:"variants"`
+	AudienceRule AudienceRule `json:"audienceRule"`
+	StartsAt     string       `json:"startsAt,omitempty"`
+	EndsAt       string       `json:"endsAt,omitempty"`
+	CreatedAt    string       `json:"createdAt"`
+	UpdatedAt    string       `json:"updatedAt"`
 }
 
 type AssignmentFact struct {
@@ -69,9 +70,6 @@ func (e Experiment) Validate() error {
 	}
 	if _, known := experimentStatuses[e.Status]; !known {
 		return fmt.Errorf("unknown experiment status %q", e.Status)
-	}
-	if strings.TrimSpace(e.AllocationSeed) == "" {
-		return errors.New("experiment allocation seed is required")
 	}
 	if strings.TrimSpace(e.AudienceRule.Kind) == "" {
 		return errors.New("experiment audience rule kind is required")
@@ -151,11 +149,22 @@ func (e Experiment) Assign(subjectKey string, now time.Time) (AssignmentFact, er
 		return AssignmentFact{}, ErrDisabled
 	}
 	experimentRevision := e.Version
+	buckets := make([]runtimeexperiments.BucketDef, 0, len(e.Variants))
+	for _, variant := range e.Variants {
+		buckets = append(buckets, runtimeexperiments.BucketDef{
+			Name:              variant.Key,
+			WeightBasisPoints: variant.AllocationBasisPoints,
+		})
+	}
+	selected, err := runtimeexperiments.AssignBucket(e.ID, subjectKey, buckets)
+	if err != nil {
+		return AssignmentFact{}, err
+	}
 	return AssignmentFact{
 		ID:                 assignmentID(e.ID, experimentRevision, subjectKey),
 		ExperimentID:       e.ID,
 		SubjectKey:         subjectKey,
-		Variant:            e.selectVariant(subjectKey),
+		Variant:            selected,
 		ExperimentRevision: experimentRevision,
 		AssignedAt:         now.UTC().Format(time.RFC3339),
 	}, nil
@@ -234,20 +243,6 @@ func variantsEqual(left, right []Variant) bool {
 		}
 	}
 	return true
-}
-
-func (e Experiment) selectVariant(subjectKey string) string {
-	hasher := fnv.New32a()
-	_, _ = hasher.Write([]byte(e.AllocationSeed + ":" + e.ID + ":" + subjectKey))
-	position := int(hasher.Sum32() % 10_000)
-	cumulative := 0
-	for _, variant := range e.Variants {
-		cumulative += variant.AllocationBasisPoints
-		if position < cumulative {
-			return variant.Key
-		}
-	}
-	return e.Variants[len(e.Variants)-1].Key
 }
 
 func assignmentID(experimentID string, experimentRevision int64, subjectKey string) string {

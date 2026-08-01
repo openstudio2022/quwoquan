@@ -4,55 +4,6 @@
 
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
-class AssistantSkillToolPolicyWire {
-  const AssistantSkillToolPolicyWire({
-    this.allowedTools = const <String>[],
-    this.preferredTools = const <String>[],
-    this.maxToolCalls = 4,
-    this.allowDeviceContext = false,
-    this.allowDeviceActionProposal = false,
-  });
-
-  final List<String> allowedTools;
-  final List<String> preferredTools;
-  final int maxToolCalls;
-  final bool allowDeviceContext;
-  final bool allowDeviceActionProposal;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'allowedTools': allowedTools,
-        'preferredTools': preferredTools,
-        'maxToolCalls': maxToolCalls,
-        'allowDeviceContext': allowDeviceContext,
-        'allowDeviceActionProposal': allowDeviceActionProposal,
-      };
-
-  factory AssistantSkillToolPolicyWire.fromJson(Map<String, dynamic> json) {
-    return AssistantSkillToolPolicyWire(
-      allowedTools: _assistantStringList(json['allowedTools']),
-      preferredTools: _assistantStringList(json['preferredTools']),
-      maxToolCalls: (json['maxToolCalls'] as num?)?.toInt() ?? 4,
-      allowDeviceContext: json['allowDeviceContext'] == true,
-      allowDeviceActionProposal: json['allowDeviceActionProposal'] == true,
-    );
-  }
-
-  static List<String> _assistantStringList(Object? value) {
-    if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
-    }
-    return const <String>[];
-  }
-}
-
-class AssistantSkillToolPolicyWireFields {
-  static const String allowedTools = 'allowedTools';
-  static const String preferredTools = 'preferredTools';
-  static const String maxToolCalls = 'maxToolCalls';
-  static const String allowDeviceContext = 'allowDeviceContext';
-  static const String allowDeviceActionProposal = 'allowDeviceActionProposal';
-}
-
 class AssistantSkillManifestWire {
   const AssistantSkillManifestWire({
     required this.skillId,
@@ -63,8 +14,13 @@ class AssistantSkillManifestWire {
     this.tagRefs = const <String>[],
     this.executionTarget = "cloud",
     this.routingHints = const <String>[],
+    required this.activationProfileRef,
+    required this.contextProfileRef,
+    required this.capabilityProfileRef,
+    required this.presentationProfileRef,
+    required this.evaluationProfileRef,
+    required this.replayAssetRef,
     this.promptAssets = const <String>[],
-    this.toolPolicy = const AssistantSkillToolPolicyWire(),
     this.examples = const <String>[],
   });
 
@@ -76,8 +32,13 @@ class AssistantSkillManifestWire {
   final List<String> tagRefs;
   final String executionTarget;
   final List<String> routingHints;
+  final String activationProfileRef;
+  final String contextProfileRef;
+  final String capabilityProfileRef;
+  final String presentationProfileRef;
+  final String evaluationProfileRef;
+  final String replayAssetRef;
   final List<String> promptAssets;
-  final AssistantSkillToolPolicyWire toolPolicy;
   final List<String> examples;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -89,8 +50,13 @@ class AssistantSkillManifestWire {
         'tagRefs': tagRefs,
         'executionTarget': executionTarget,
         'routingHints': routingHints,
+        'activationProfileRef': activationProfileRef,
+        'contextProfileRef': contextProfileRef,
+        'capabilityProfileRef': capabilityProfileRef,
+        'presentationProfileRef': presentationProfileRef,
+        'evaluationProfileRef': evaluationProfileRef,
+        'replayAssetRef': replayAssetRef,
         'promptAssets': promptAssets,
-        'toolPolicy': toolPolicy.toJson(),
         'examples': examples,
       };
 
@@ -100,12 +66,17 @@ class AssistantSkillManifestWire {
       displayName: (json['displayName'] as String?)?.trim() ?? "",
       description: (json['description'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
-      problemClass: parseProblemClass((json['problemClass'] as String?)?.trim() ?? "general"),
+      problemClass: parseProblemClassStrict((json['problemClass'] as String?)?.trim() ?? "general"),
       tagRefs: _assistantStringList(json['tagRefs']),
       executionTarget: (json['executionTarget'] as String?)?.trim() ?? "cloud",
       routingHints: _assistantStringList(json['routingHints']),
+      activationProfileRef: (json['activationProfileRef'] as String?)?.trim() ?? "",
+      contextProfileRef: (json['contextProfileRef'] as String?)?.trim() ?? "",
+      capabilityProfileRef: (json['capabilityProfileRef'] as String?)?.trim() ?? "",
+      presentationProfileRef: (json['presentationProfileRef'] as String?)?.trim() ?? "",
+      evaluationProfileRef: (json['evaluationProfileRef'] as String?)?.trim() ?? "",
+      replayAssetRef: (json['replayAssetRef'] as String?)?.trim() ?? "",
       promptAssets: _assistantStringList(json['promptAssets']),
-      toolPolicy: json['toolPolicy'] is Map ? AssistantSkillToolPolicyWire.fromJson((json['toolPolicy'] as Map).cast<String, dynamic>()) : const AssistantSkillToolPolicyWire(),
       examples: _assistantStringList(json['examples']),
     );
   }
@@ -127,7 +98,12 @@ class AssistantSkillManifestWireFields {
   static const String tagRefs = 'tagRefs';
   static const String executionTarget = 'executionTarget';
   static const String routingHints = 'routingHints';
+  static const String activationProfileRef = 'activationProfileRef';
+  static const String contextProfileRef = 'contextProfileRef';
+  static const String capabilityProfileRef = 'capabilityProfileRef';
+  static const String presentationProfileRef = 'presentationProfileRef';
+  static const String evaluationProfileRef = 'evaluationProfileRef';
+  static const String replayAssetRef = 'replayAssetRef';
   static const String promptAssets = 'promptAssets';
-  static const String toolPolicy = 'toolPolicy';
   static const String examples = 'examples';
 }

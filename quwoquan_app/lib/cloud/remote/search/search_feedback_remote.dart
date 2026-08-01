@@ -22,7 +22,7 @@ final class RemoteSearchFeedbackAdapter implements SearchFeedbackCommandWriter {
     ReportSearchFeedbackCommand command,
   ) {
     final base = invocationContext(SearchRequestPageIds.reportSearchFeedback);
-    return client.searchFeedbackFactReportSearchFeedback(
+    return client.searchSearchFeedbackFactReportSearchFeedback(
       command,
       context: CloudOperationInvocationContext(
         surfaceId: base.surfaceId,
@@ -34,8 +34,7 @@ final class RemoteSearchFeedbackAdapter implements SearchFeedbackCommandWriter {
         shareId: base.shareId,
         modelId: base.modelId,
         experimentBucket: base.experimentBucket,
-        idempotencyKey:
-            base.idempotencyKey ?? _feedbackIdempotencyKey(command),
+        idempotencyKey: base.idempotencyKey ?? _feedbackIdempotencyKey(command),
         deadlineAt: base.deadlineAt,
         cancellation: base.cancellation,
       ),

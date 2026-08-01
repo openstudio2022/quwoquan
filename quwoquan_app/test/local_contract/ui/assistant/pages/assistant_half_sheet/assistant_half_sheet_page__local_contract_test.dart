@@ -164,7 +164,7 @@ void main() {
     expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
     expect(find.text(SearchText.reload), findsOneWidget);
     final attemptsBeforeRetry = facet.calls
-        .where((call) => call == 'getEntryPersonalization')
+        .where((call) => call == 'getAssistantEntry')
         .length;
 
     await tester.tap(find.text(SearchText.reload));
@@ -172,7 +172,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(
-      facet.calls.where((call) => call == 'getEntryPersonalization').length,
+      facet.calls.where((call) => call == 'getAssistantEntry').length,
       greaterThan(attemptsBeforeRetry),
     );
     await _disposeTree(tester);
@@ -249,8 +249,7 @@ void main() {
       facet.calls,
       containsAllInOrder(<String>[
         'reportPageContext:open_assistant_entry',
-        'getEntryPersonalization',
-        'getSuggestedActions',
+        'getAssistantEntry',
       ]),
     );
     // 页面上下文只保留服务端可验证的最小定位与当前页读取授权。
@@ -393,7 +392,7 @@ class _RecordingPersonalizationFacet implements AssistantPersonalizationFacet {
   AssistantContextSnapshot? lastContextSnapshot;
 
   @override
-  Future<PageContextAck> reportPageContext({
+  Future<PageContextReceipt> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
   }) async {
@@ -402,46 +401,41 @@ class _RecordingPersonalizationFacet implements AssistantPersonalizationFacet {
       context,
       userAction: userAction,
     );
-    return const PageContextAck(accepted: true, contextKey: 'ctx_uat');
+    return const PageContextReceipt(
+      accepted: true,
+      contextKey: 'ctx_uat',
+      expiresAt: null,
+    );
   }
 
   @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+  Future<AssistantEntryResponse> getAssistantEntry({
     required AssistantOpenContext context,
   }) async {
-    calls.add('getEntryPersonalization');
+    calls.add('getAssistantEntry');
     final error = entryError;
     if (error != null) {
       throw error;
     }
-    return const AssistantEntryPersonalizationView(
+    return const AssistantEntryResponse(
       welcomeMessage: '服务端欢迎语（UAT）',
       suggestionLines: <String>['服务端建议'],
-      chips: <AssistantEntryPersonalizationChipView>[
-        AssistantEntryPersonalizationChipView(
+      chips: <AssistantEntryChip>[
+        AssistantEntryChip(
           chipId: 'uat_find',
           label: '服务端找资料',
           actionType: 'command',
           value: 'find',
         ),
       ],
-      personalized: true,
-    );
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    calls.add('getSuggestedActions');
-    return const SuggestedActionListView(
-      items: <SuggestedAction>[
-        SuggestedAction(
+      actions: <AssistantEntryAction>[
+        AssistantEntryAction(
           actionId: 'uat_action',
-          type: 'command',
+          actionType: 'command',
           label: '服务端动作',
         ),
       ],
+      personalized: true,
     );
   }
 }

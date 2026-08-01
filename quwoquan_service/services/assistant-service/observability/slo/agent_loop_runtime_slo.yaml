@@ -1,0 +1,30 @@
+service: assistant-service
+domain: assistant
+capability: agent-loop-runtime
+
+metrics:
+  stop_total: assistant_agent_stop_total
+  replan_total: assistant_agent_replan_total
+  budget_boundary_total: assistant_agent_budget_boundary_total
+
+privacy:
+  permitted_labels: [reason]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, prompt, answer, tool_arguments, observation]
+
+slis:
+  - id: assistant_agent_bounded_completion
+    description: AgentLoop 以完成、等待、受控阻断或预算边界结束且不进入无限循环。
+    sli: sum(rate(assistant_agent_stop_total{reason!="other"}[15m])) / clamp_min(sum(rate(assistant_agent_stop_total[15m])), 0.001)
+    objective: 0.999
+
+alerts:
+  unclassified_stop_reason:
+    condition: sum(rate(assistant_agent_stop_total{reason="other"}[10m])) > 0
+    severity: warning
+  replan_loop:
+    condition: sum(rate(assistant_agent_replan_total[10m])) / clamp_min(sum(rate(assistant_agent_stop_total[10m])), 0.001) > 5
+    severity: warning
+  budget_exhaustion:
+    condition: sum(rate(assistant_agent_budget_boundary_total[15m])) / clamp_min(sum(rate(assistant_agent_stop_total[15m])), 0.001) > 0.05
+    severity: warning

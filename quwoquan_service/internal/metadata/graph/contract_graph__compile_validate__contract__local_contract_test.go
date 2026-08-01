@@ -155,7 +155,7 @@ func TestAppendOnlyFactDeleteIsRejected(t *testing.T) {
 func aggregateObject(name string) string {
 	return `
 kind: aggregate_root
-description: ` + name + ` lifecycle
+description: canonical ` + name + ` lifecycle fixture
 identity:
   fields: [id]
   version_source: store_commit

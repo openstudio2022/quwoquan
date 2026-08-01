@@ -61,7 +61,7 @@
 - GIVEN codegen 产物 search_registry.g.dart 与 metadata 一致且幂等。
 - WHEN 调用 search(request) 以 mode=suggest|result 区分，返回统一 envelope。
 - THEN response 含 requestId/experimentBucket/relatedTerms；hit 含 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
-- THEN 登录态从可信 principal 派生 experiment subject；匿名态必须按 SearchQuery contract 携带稳定 `X-Session-Id`，缺失时返回 `SEARCH.USER.invalid_argument`。
+- THEN 登录态从可信 principal 派生 experiment subject；匿名态必须按 SearchRequestFact contract 携带稳定 `X-Session-Id`，缺失时返回 `SEARCH.USER.invalid_argument`。
 - THEN suggest 与 result 共用同一接口，无第二套建议专用接口。
 
 <a id="gwt-002"></a>

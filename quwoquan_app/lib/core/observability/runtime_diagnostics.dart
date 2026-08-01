@@ -66,6 +66,8 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
   int _sampledFrames = 0;
   int _jankyFrames = 0;
   int _worstFrameMs = 0;
+  int _worstBuildFrameMs = 0;
+  int _worstRasterFrameMs = 0;
   Timer? _anrWatchdog;
   DateTime? _lastWatchdogTick;
   bool _watchdogEligible = true;
@@ -307,15 +309,31 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
 
   void _onFrameTimings(List<FrameTiming> timings) {
     for (final timing in timings) {
-      recordFrameDuration(timing.totalSpan);
+      recordFrameTiming(
+        total: timing.totalSpan,
+        build: timing.buildDuration,
+        raster: timing.rasterDuration,
+      );
     }
   }
 
-  /// 用于 Flutter timing callback 与 local_contract 的同一帧耗时入口。
-  void recordFrameDuration(Duration total) {
+  /// 用于 Flutter timing callback 与 local_contract 的同一帧时序入口。
+  void recordFrameTiming({
+    required Duration total,
+    required Duration build,
+    required Duration raster,
+  }) {
     final milliseconds = total.inMilliseconds;
+    final buildMilliseconds = build.inMilliseconds;
+    final rasterMilliseconds = raster.inMilliseconds;
     _sampledFrames += 1;
     _worstFrameMs = milliseconds > _worstFrameMs ? milliseconds : _worstFrameMs;
+    _worstBuildFrameMs = buildMilliseconds > _worstBuildFrameMs
+        ? buildMilliseconds
+        : _worstBuildFrameMs;
+    _worstRasterFrameMs = rasterMilliseconds > _worstRasterFrameMs
+        ? rasterMilliseconds
+        : _worstRasterFrameMs;
     if (total >= jankThreshold) {
       _jankyFrames += 1;
     }
@@ -323,9 +341,13 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
     final sampled = _sampledFrames;
     final janky = _jankyFrames;
     final worst = _worstFrameMs;
+    final worstBuild = _worstBuildFrameMs;
+    final worstRaster = _worstRasterFrameMs;
     _sampledFrames = 0;
     _jankyFrames = 0;
     _worstFrameMs = 0;
+    _worstBuildFrameMs = 0;
+    _worstRasterFrameMs = 0;
     final observedAt = _now();
     final isSevere = worst >= severeFrameThreshold.inMilliseconds;
     final result = janky == 0 ? 'ok' : (isSevere ? 'severe' : 'degraded');
@@ -344,6 +366,8 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
             'sampledFrames': '$sampled',
             'jankyFrames': '$janky',
             'worstFrameMs': '$worst',
+            'worstBuildFrameMs': '$worstBuild',
+            'worstRasterFrameMs': '$worstRaster',
             'jankThresholdMs': '${jankThreshold.inMilliseconds}',
           },
           occurredAt: observedAt,
@@ -355,8 +379,11 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
         sampledFrames: sampled,
         jankyFrames: janky,
         worstFrameMs: worst,
+        worstBuildFrameMs: worstBuild,
+        worstRasterFrameMs: worstRaster,
         jankThresholdMs: jankThreshold.inMilliseconds,
         result: result,
+        surfaceId: _pageContextStore.pageName,
         occurredAt: observedAt,
       ),
     );

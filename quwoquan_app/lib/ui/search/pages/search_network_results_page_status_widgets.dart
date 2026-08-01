@@ -8,7 +8,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
   });
 
   final String query;
-  final AssistantSearchResultView? result;
+  final AssistantRunTerminalSnapshotView? result;
   final bool isDark;
 
   @override
@@ -21,7 +21,12 @@ class _XiaoquSummaryCard extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final citationCount = result?.citations?.length ?? 0;
+    final citationCount =
+        result?.processes.fold<int>(
+          0,
+          (count, process) => count + process.acceptedReferences.length,
+        ) ??
+        0;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.primaryColor.withValues(alpha: 0.1),
@@ -68,8 +73,8 @@ class _XiaoquSummaryCard extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
             Text(
-              result?.summary?.trim().isNotEmpty == true
-                  ? result!.summary!.trim()
+              result?.answerText.trim().isNotEmpty == true
+                  ? result!.answerText.trim()
                   : SearchText.searchCircleAggregationSummary,
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,

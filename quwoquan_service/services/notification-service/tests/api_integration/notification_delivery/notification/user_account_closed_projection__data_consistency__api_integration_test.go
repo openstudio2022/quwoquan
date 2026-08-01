@@ -237,27 +237,6 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 		t.Fatalf("command receipt retained direct account references: %v", receipt)
 	}
 
-	var attempt struct {
-		TaskID            string `bson:"taskId"`
-		RequestID         string `bson:"requestId"`
-		ProviderRequestID string `bson:"providerRequestId"`
-		MaskedRecipient   string `bson:"maskedRecipient"`
-	}
-	if err := notificationMongoDB.Collection(
-		"external_provider_attempt_ledger",
-	).FindOne(
-		context.Background(),
-		bson.M{"_id": "attempt-account-owner"},
-	).Decode(&attempt); err != nil {
-		t.Fatalf("read anonymized provider attempt: %v", err)
-	}
-	if attempt.TaskID == "job-account-owner" ||
-		attempt.RequestID == "request-account-owner" ||
-		attempt.ProviderRequestID == "provider-request-owner" ||
-		attempt.MaskedRecipient != "" {
-		t.Fatalf("provider attempt retained direct account references: %v", attempt)
-	}
-
 	var inbox bson.M
 	if err := notificationMongoDB.Collection(
 		persistence.UserAccountClosedInboxCollection,

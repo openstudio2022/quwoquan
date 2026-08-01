@@ -29,7 +29,7 @@ func (p *UnavailableLocationProvider) Nearby(
 
 func (p *UnavailableLocationProvider) Search(
 	context.Context,
-	model.SearchQuery,
+	model.SearchRequestFact,
 ) ([]model.POI, error) {
 	return nil, p.unavailableError()
 }

@@ -18,9 +18,9 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 // fakeES simulates the subset of the ES HTTP API the writer/indexer uses, so the

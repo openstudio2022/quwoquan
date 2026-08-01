@@ -51,6 +51,30 @@ void main() {
         'source': 'profile',
       });
     });
+
+    test('send command 只发送交集引用意图，不接受客户端展示文案', () {
+      const intersectionRef = GreetingIntersectionRef(
+        intersectionId: 'intersection_1',
+        evidenceId: 'evidence_1',
+        sourceRef: 'coVisitedEntity',
+        objectTypeRef: 'user',
+        objectId: 'user_b',
+      );
+      final payload =
+          encodeUserGreetingRequestSendGreetingRequestGeneratedRequest(
+            SendGreetingCommand(
+              targetPersonaId: 'user_b',
+              intersectionRef: intersectionRef,
+            ),
+          );
+
+      final body = payload.body! as Map<String, Object?>;
+      expect(body['intersectionRef'], intersectionRef.toWire());
+      expect(
+        (body['intersectionRef']! as Map<String, Object?>).keys,
+        isNot(contains('primaryText')),
+      );
+    });
   });
 
   group('AlphaGreetingRequestFacet', () {

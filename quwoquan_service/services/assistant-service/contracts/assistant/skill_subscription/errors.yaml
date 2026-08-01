@@ -6,6 +6,20 @@ description: 'SkillSubscription 聚合错误码。格式：MODULE.KIND.REASON。
 
   '
 errors:
+- code: ASSISTANT.USER.subscription_unauthorized
+  kind: USER
+  reason: subscription_unauthorized
+  http_status: 401
+  emitted_by:
+  - surface: http
+    operations: [ListSkillSubscriptions, CreateSkillSubscription, GetSkillSubscription, UpdateSkillSubscriptionStatus]
+  recovery_action: surface
+  dart_const: subscriptionUnauthorized
+  go_const: ErrSubscriptionUnauthorized
+  l10n_key: assistant.error.subscription_unauthorized
+  user_message:
+    zh: 请先登录后管理技能订阅
+    en: Please sign in to manage skill subscriptions
 - code: ASSISTANT.USER.subscription_not_found
   kind: USER
   reason: not_found
@@ -74,8 +88,8 @@ errors:
   go_const: ErrSubscriptionDestinationForbidden
   l10n_key: assistant.error.subscription_destination_forbidden
   user_message:
-    zh: 你已不在该会话中，无法创建或继续投递此订阅
-    en: You are no longer a member of this conversation
+    zh: 你已不在该群聊中，无法创建或继续投递此订阅
+    en: You are no longer a member of this chat conversation
 - code: ASSISTANT.SYSTEM.subscription_storage_unavailable
   kind: SYSTEM
   reason: unavailable
@@ -104,8 +118,8 @@ errors:
   go_const: ErrSubscriptionDestinationValidationUnavailable
   l10n_key: assistant.error.subscription_destination_validation_unavailable
   user_message:
-    zh: 暂时无法验证会话成员资格，请稍后重试
-    en: Conversation membership cannot be verified right now
+    zh: 暂时无法验证群聊成员资格，请稍后重试
+    en: Chat conversation membership cannot be verified right now
 - code: ASSISTANT.SYSTEM.subscription_delivery_failed
   kind: SYSTEM
   reason: delivery_failed

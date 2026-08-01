@@ -50,17 +50,18 @@ class DefaultImagePickGateway implements ImagePickGateway {
         );
         return captured?.type == CreateMediaType.image ? captured?.path : null;
       case ImagePickSource.photoLibrary:
-        final picked = await Navigator.of(context).push<CreateMediaPickerResult>(
-          CupertinoPageRoute<CreateMediaPickerResult>(
-            settings: RouteSettings(name: galleryRouteName),
-            fullscreenDialog: true,
-            builder: (_) => CreateMediaPickerPage(
-              entryMode: MediaPickerEntryMode.image,
-              maxSelection: 1,
-              filterRepository: _filterRepository,
-            ),
-          ),
-        );
+        final picked = await Navigator.of(context)
+            .push<CreateMediaPickerResult>(
+              CupertinoPageRoute<CreateMediaPickerResult>(
+                settings: RouteSettings(name: galleryRouteName),
+                fullscreenDialog: true,
+                builder: (_) => CreateMediaPickerPage(
+                  entryMode: MediaPickerEntryMode.image,
+                  maxSelection: 1,
+                  filterRepository: _filterRepository,
+                ),
+              ),
+            );
         if (picked == null || picked.items.isEmpty) {
           return null;
         }

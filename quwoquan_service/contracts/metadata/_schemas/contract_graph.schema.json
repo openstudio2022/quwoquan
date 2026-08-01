@@ -498,6 +498,11 @@
                   "type": "array",
                   "items": { "$ref": "#/$defs/relationship" }
                 },
+                "counterSources": {
+                  "type": "object",
+                  "propertyNames": { "type": "string", "minLength": 1 },
+                  "additionalProperties": { "type": "string", "minLength": 1 }
+                },
                 "localIdentityReasons": {
                   "type": "object",
                   "propertyNames": { "type": "string", "minLength": 1 },
@@ -652,7 +657,7 @@
       "additionalProperties": false,
       "required": ["commands", "queries", "crossContext"],
       "properties": {
-        "commands": { "enum": ["aggregate_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
+        "commands": { "enum": ["aggregate_facade", "cli_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
         "queries": { "enum": ["named_reader", "via_aggregate_projection", "external_port", "none"] },
         "crossContext": { "enum": ["public_contract_only", "event_only", "forbidden"] }
       }

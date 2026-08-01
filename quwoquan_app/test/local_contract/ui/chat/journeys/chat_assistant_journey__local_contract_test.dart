@@ -8,7 +8,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 聊天助手旅程：邀请助手 → @小趣 → 收到回复
 ///
-/// PersonalAssistantConversationPage 中助手交互依赖 AssistantEngine 等重型运行时，旅程测试通过
+/// PersonalAssistantSessionPage 中助手交互依赖 AssistantEngine 等重型运行时，旅程测试通过
 /// 轻量测试 Widget 验证 ChatRepository.inviteAssistant / removeAssistant 的
 /// 核心交互链路与 UI 状态反馈。
 void main() {

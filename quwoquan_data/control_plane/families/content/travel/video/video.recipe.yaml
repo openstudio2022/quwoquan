@@ -14,7 +14,9 @@ contract:
 execution:
   model: grok-4.5
   modelFamily: grok
-  modelParameters: []
+  modelParameters:
+    - { id: effort, value: high }
+    - { id: fast, value: "true" }
   reviewModel: composer-2.5
   reviewModelFamily: composer
   reviewModelParameters: []

@@ -22,7 +22,7 @@ type OpsProjectionReader interface {
 
 // OpsQueryService owns the GetLearningOpsSummary application query. Keeping
 // the reader and projection view under AssistantLearningFact prevents the
-// conversation aggregate from becoming a second owner of learning state.
+// session aggregate from becoming a second owner of learning state.
 type OpsQueryService struct {
 	projections OpsProjectionReader
 }

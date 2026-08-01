@@ -35,7 +35,7 @@ void main() {
             uri,
             stream, {
             required contentLength,
-            required contentType,
+            required mimeType,
             required expectedSha256,
             abortTrigger,
           }) async {
@@ -43,7 +43,7 @@ void main() {
                 .expand((chunk) => chunk)
                 .toList();
             expect(uploadedBytes.length, contentLength);
-            uploads.add(contentType);
+            uploads.add(mimeType);
           },
     );
     final command = submitContentPostPublicationCommandFromPreparedPayload(
@@ -93,12 +93,12 @@ void main() {
       Uri _,
       Stream<List<int>> stream, {
       required int contentLength,
-      required String contentType,
+      required String mimeType,
       required String expectedSha256,
       Future<void>? abortTrigger,
     }) async {
       await stream.drain<void>();
-      if (contentType == 'image/jpeg' && rejectCoverUpload) {
+      if (mimeType == 'image/jpeg' && rejectCoverUpload) {
         throw StateError('simulated cover transport failure');
       }
     }

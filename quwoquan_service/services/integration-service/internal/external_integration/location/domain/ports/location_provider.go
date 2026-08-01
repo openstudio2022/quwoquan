@@ -10,5 +10,5 @@ import (
 // 具体供应商协议只允许存在于 infrastructure adapter。
 type LocationProvider interface {
 	Nearby(context.Context, model.NearbyQuery) ([]model.POI, error)
-	Search(context.Context, model.SearchQuery) ([]model.POI, error)
+	Search(context.Context, model.SearchRequestFact) ([]model.POI, error)
 }

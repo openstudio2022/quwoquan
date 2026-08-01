@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
@@ -113,7 +114,7 @@ class _CustomMockChatRepository extends MockChatRepository {
         title: '自定义会话',
         avatarUrl: '',
         lastMessagePreview: '来自自定义仓库',
-        lastMessageType: 'text',
+        lastMessageType: MessageType.text,
         lastMessageTime: null,
         lastSeq: 1,
         unreadCount: 0,

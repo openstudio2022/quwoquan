@@ -618,12 +618,6 @@ func (w *Worker) Ready(maxStaleness time.Duration) error {
 	return nil
 }
 
-// Healthy remains the worker-local readiness compatibility name. HTTP
-// lifecycle routes must call Ready or Live explicitly.
-func (w *Worker) Healthy(maxStaleness time.Duration) error {
-	return w.Ready(maxStaleness)
-}
-
 func (w *Worker) recordSuccess() {
 	w.mu.Lock()
 	defer w.mu.Unlock()

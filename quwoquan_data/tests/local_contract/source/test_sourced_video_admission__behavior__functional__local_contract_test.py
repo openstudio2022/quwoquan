@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import tempfile
+from email.message import Message
 
 import cv2
 import numpy as np
@@ -31,6 +33,7 @@ from content.post.video.sourced_package import (  # noqa: E402
     render_sourced_video_package,
 )
 from content.source import sourced_video_admission  # noqa: E402
+from content.source import handler_fetch_video  # noqa: E402
 from content.source.sourced_video_admission import (  # noqa: E402
     probe_sourced_video,
     scan_sourced_video_watermark,
@@ -127,6 +130,31 @@ def test_video_commercial_matrix_covers_all_sources_and_blocks_wrong_mode() -> N
         raise AssertionError("YouTube without commercial authorization must block")
 
 
+def test_sample_frames_falls_back_to_ffmpeg_when_opencv_seek_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """Commons WebM/VP9 often breaks OpenCV CAP_PROP_POS_FRAMES; ffmpeg must admit."""
+    source = _video(tmp_path / "fallback.mp4", seconds=2)
+
+    def fail_opencv(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        sourced_video_admission,
+        "_sample_frames_with_opencv",
+        fail_opencv,
+    )
+    with tempfile.TemporaryDirectory(prefix="qwq_ffmpeg_frames_") as temp:
+        samples = sourced_video_admission._sample_frames(
+            source,
+            sample_count=3,
+            output_dir=Path(temp),
+        )
+        assert len(samples) == 3
+        assert all(path.suffix == ".png" and path.stat().st_size > 0 for path in samples)
+
+
 def test_sampled_watermark_hit_is_fail_closed(
     monkeypatch,
     tmp_path: Path,
@@ -151,6 +179,77 @@ def test_sampled_watermark_hit_is_fail_closed(
     evidence = scan_sourced_video_watermark(source)
     assert evidence["watermarkDetected"] is True
     assert evidence["decision"] == "blocked"
+
+
+def test_anonymous_video_download_records_public_access_evidence(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class Response:
+        def __init__(self) -> None:
+            self.headers = Message()
+            self.headers["Content-Type"] = "video/webm"
+            self.headers["Content-Length"] = "4"
+            self.headers["ETag"] = "public-etag"
+            self._remaining = [b"test", b""]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def getcode(self) -> int:
+            return 200
+
+        def geturl(self) -> str:
+            return "https://upload.wikimedia.org/video.webm"
+
+        def read(self, _size: int) -> bytes:
+            return self._remaining.pop(0)
+
+    requests = []
+
+    class Opener:
+        def open(self, request, *, timeout: int):
+            requests.append((request, timeout))
+            return Response()
+
+    monkeypatch.setattr(
+        handler_fetch_video,
+        "load_runtime_policy",
+        lambda _profile: type("Policy", (), {"source_video_read_timeout_seconds": 3})(),
+    )
+    monkeypatch.setattr(handler_fetch_video.urllib.request, "build_opener", lambda *_handlers: Opener())
+
+    target = tmp_path / "source.webm"
+    evidence = handler_fetch_video._download_sourced_video(
+        "https://upload.wikimedia.org/video.webm",
+        target,
+    )
+
+    assert target.read_bytes() == b"test"
+    assert requests[0][0].get_header("Cookie") is None
+    assert evidence == {
+        "schema": "quwoquan_data.anonymous_video_download",
+        "anonymousAccess": True,
+        "credentialAssertion": "no_cookie_no_api_key_no_account_session",
+        "requestedUrl": "https://upload.wikimedia.org/video.webm",
+        "finalUrl": "https://upload.wikimedia.org/video.webm",
+        "redirectChain": [],
+        "httpStatus": 200,
+        "contentType": "video/webm",
+        "contentLength": 4,
+        "responseHeaders": {
+            "Content-Type": "video/webm",
+            "Content-Length": "4",
+            "ETag": "public-etag",
+        },
+        "sha256": (
+            "sha256:9f86d081884c7d659a2feaa0c55ad015"
+            "a3bf4f1b2b0b822cd15d6c15b0f00a08"
+        ),
+    }
 
 
 def test_sourced_video_runs_from_source_unit_to_delivery_package(

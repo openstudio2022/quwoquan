@@ -30,6 +30,7 @@ class PersonalContentAccessState {
     DateTime? updatedAt,
     String? errorMessage,
     bool clearError = false,
+    bool clearUpdatedAt = false,
   }) {
     return PersonalContentAccessState(
       granted: granted ?? this.granted,
@@ -37,7 +38,7 @@ class PersonalContentAccessState {
       isSyncing: isSyncing ?? this.isSyncing,
       grantedScope: grantedScope ?? this.grantedScope,
       source: source ?? this.source,
-      updatedAt: updatedAt ?? this.updatedAt,
+      updatedAt: clearUpdatedAt ? null : (updatedAt ?? this.updatedAt),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -115,6 +116,7 @@ class PersonalContentAccessNotifier
             .grantSkillConsent(
               skillId: kPersonalContentAccessSkillId,
               grantedScope: kPersonalContentAccessSkillId,
+              clientRequestId: const Uuid().v4(),
             );
         state = state.copyWith(
           granted: consent.granted,
@@ -129,11 +131,14 @@ class PersonalContentAccessNotifier
       }
       await ref
           .read(assistantSkillConsentFacetProvider)
-          .revokeSkillConsent(skillId: kPersonalContentAccessSkillId);
+          .revokeSkillConsent(
+            skillId: kPersonalContentAccessSkillId,
+            clientRequestId: const Uuid().v4(),
+          );
       state = state.copyWith(
         granted: false,
         grantedScope: kPersonalContentAccessSkillId,
-        updatedAt: DateTime.now(),
+        clearUpdatedAt: true,
         source: 'repository',
         isHydrating: false,
         isSyncing: false,

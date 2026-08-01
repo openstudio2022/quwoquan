@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart'
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const List<String> messageHomeFilters = <String>[
   'all',
@@ -182,7 +183,7 @@ ConversationCacheRecord _conversationCacheRecordFromMessageHomeRow(
     avatarUrl: row.avatarUrl.trim(),
     groupAvatarVersion: row.groupAvatarVersion,
     lastMessagePreview: row.summary.trim(),
-    lastMessageType: 'text',
+    lastMessageType: MessageType.text,
     lastMessageAt: row.lastActiveAt?.toIso8601String() ?? '',
     unreadCount: row.unreadCount,
     mentionUnreadCount: row.mentionUnreadCount,

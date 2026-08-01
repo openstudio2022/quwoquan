@@ -52,7 +52,7 @@ local_identity_reasons:
   pageId: 可信请求上下文中的页面标识，不是业务对象 identity
   pageVisitId: 可信请求上下文中的页面访问关联键，不是业务对象 identity
   routeId: 可信请求上下文中的路由标识，不是业务对象 identity
-  sessionId: 可信请求上下文中的运行会话关联键，不是业务对象 identity
+  clientSessionId: 可信请求上下文中的 App 启动会话关联键，不是 AssistantSession identity
   suggestedActionId: Run 冻结建议动作中的局部标识，不是独立聚合 identity
   surfaceId: 可信请求上下文中的界面标识，不是业务对象 identity
   traceId: 可信请求上下文中的可观测关联键，不是业务对象 identity

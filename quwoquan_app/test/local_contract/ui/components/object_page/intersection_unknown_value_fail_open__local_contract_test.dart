@@ -12,12 +12,10 @@ import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 
-/// T2：零发版判据 —— 完全未登记的交集仍必须带着云侧文案正常渲染。
+/// T2：未知展示值可降级，但未登记 action dispatch 必须 fail-closed。
 ///
-/// 这是「新增 kind / objectKind / dispatch / iconKey / 垂类不需要发端」这条产品承诺的
-/// 持续证明。历史上端侧有四处 fail-closed（objectType 白名单、未知 binding 归 hidden、
-/// 未知 dispatch 的行动 pill 永不渲染、未知 objectKind 当人物头像），它们的共同后果是
-/// 云侧登记新值后旧版本上内容**静默消失或张冠李戴**，而不是优雅降级。
+/// 未知 kind/objectKind/iconKey 不应让可信主句消失；但行动必须来自当前生成闭集，
+/// 未登记 dispatch 不能渲染成不可兑现的入口。
 IntersectionReason _unregisteredReason({
   String displayBinding = '',
   String dispatch = 'teleport_v9',
@@ -50,11 +48,7 @@ IntersectionReason _unregisteredReason({
     primarySpans: <IntersectionTextSpan>[
       IntersectionTextSpan(text: '林清越', role: 'actor'),
       IntersectionTextSpan(text: '也停靠过', role: 'plain'),
-      IntersectionTextSpan(
-        text: '星港七号',
-        role: 'object',
-        target: objectTarget,
-      ),
+      IntersectionTextSpan(text: '星港七号', role: 'object', target: objectTarget),
     ],
     totalPointCount: 1,
     factPointCount: 1,
@@ -80,7 +74,6 @@ IntersectionReason _unregisteredReason({
         actionKey: 'dock_together',
         label: '一起停靠',
         dispatch: dispatch,
-        targetAvailability: 'available',
         target: objectTarget,
         isPrimary: true,
       ),
@@ -114,10 +107,13 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
 }
 
 void main() {
-  group('未登记 kind / objectKind / dispatch / iconKey 仍可渲染', () {
+  group('未知展示值降级与 action 闭集', () {
     test('展示合同放行：objectType 不在任何端侧白名单里也不丢句子', () {
       final reason = _unregisteredReason();
-      expect(displayReadyIntersectionReason(reason)?.primaryText, reason.primaryText);
+      expect(
+        displayReadyIntersectionReason(reason)?.primaryText,
+        reason.primaryText,
+      );
       expect(isDisplayableIntersectionReason(reason), isTrue);
     });
 
@@ -131,12 +127,12 @@ void main() {
       expect(isDisplayableIntersectionReason(reason), isFalse);
     });
 
-    test('未知 dispatch + 有落点 → 行动 pill 照常渲染', () {
+    test('未知 dispatch + 有落点 → 行动仍 fail-closed', () {
       final hint = _unregisteredReason().actionHints.single;
-      expect(isDisplayableIntersectionActionHint(hint), isTrue);
+      expect(isDisplayableIntersectionActionHint(hint), isFalse);
     });
 
-    testWidgets('整卡渲染：主句、行动 pill 与共同点计数全部来自云侧字段', (tester) async {
+    testWidgets('整卡渲染可信主句，但不渲染未知行动', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
         title: '你和这里的交集',
         reasons: <IntersectionReason>[_unregisteredReason()],
@@ -146,7 +142,7 @@ void main() {
       await _pump(tester, card!);
 
       expect(find.text('林清越也停靠过星港七号'), findsOneWidget);
-      expect(find.text('一起停靠'), findsOneWidget);
+      expect(find.text('一起停靠'), findsNothing);
     });
 
     testWidgets('宿主 objectType 未登记（objectKind 查表落空）也不清空整张卡', (tester) async {
@@ -173,10 +169,7 @@ void main() {
     testWidgets('未知 objectKind 不得渲染成人物头像', (tester) async {
       await _pump(
         tester,
-        IntersectionEntity(
-          reason: _unregisteredReason(),
-          isDark: false,
-        ),
+        IntersectionEntity(reason: _unregisteredReason(), isDark: false),
       );
       final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
       expect(

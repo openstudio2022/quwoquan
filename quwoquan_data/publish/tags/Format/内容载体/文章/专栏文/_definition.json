@@ -1,7 +1,1 @@
-{
-  "label": "专栏文",
-  "labelEn": "Column Article",
-  "description": "专栏连载文章",
-  "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
-}
+{"axisRole":"contentFormat","createdAt":"2026-05-15T00:00:00+08:00","description":"专栏连载文章","label":"专栏文","labelEn":"Column Article","updatedAt":"2026-05-15T00:00:00+08:00"}

@@ -1,0 +1,4 @@
+description: RecommendationFeedbackFact 只消费 ContentBehaviorFact 可重放事实流，不暴露写 API。
+api_routes: []
+consumers:
+- {name: content-behavior-facts, channel: events.content.behavior_facts, source_event: ContentBehaviorRecorded, capabilities: [resolve_exposure, append_feedback_fact]}

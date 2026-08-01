@@ -39,15 +39,23 @@ mixin _RemoteAssistantSkillConsent on _RemoteAssistantRepositoryBase
   Future<AssistantSkillConsent> grantSkillConsent({
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
+    required String clientRequestId,
   }) async {
+    final requestId = _requireAssistantCommandRequestId(
+      clientRequestId,
+      operation: AssistantApiMetadata.grantSkillConsentOperation,
+    );
     final path = AssistantApiMetadata.grantSkillConsentPath(skillId: skillId);
     final uri = _assistantUri(path);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: _headersForSettings(
-        operationId: AssistantApiMetadata.grantSkillConsentOperation,
-        clientPageId: AssistantRequestPageIds.grantSkillConsent,
-      ),
+      headers: <String, String>{
+        ..._headersForSettings(
+          operationId: AssistantApiMetadata.grantSkillConsentOperation,
+          clientPageId: AssistantRequestPageIds.grantSkillConsent,
+        ),
+        'Idempotency-Key': requestId,
+      },
       body: <String, dynamic>{'grantedScope': grantedScope},
     );
     try {
@@ -73,16 +81,26 @@ mixin _RemoteAssistantSkillConsent on _RemoteAssistantRepositoryBase
   }
 
   @override
-  Future<void> revokeSkillConsent({required String skillId}) async {
+  Future<void> revokeSkillConsent({
+    required String skillId,
+    required String clientRequestId,
+  }) async {
+    final requestId = _requireAssistantCommandRequestId(
+      clientRequestId,
+      operation: AssistantApiMetadata.revokeSkillConsentOperation,
+    );
     final uri = _assistantUri(
       AssistantApiMetadata.revokeSkillConsentPath(skillId: skillId),
     );
     await _httpClient.deleteJson(
       uri,
-      headers: _headersForSettings(
-        operationId: AssistantApiMetadata.revokeSkillConsentOperation,
-        clientPageId: AssistantRequestPageIds.revokeSkillConsent,
-      ),
+      headers: <String, String>{
+        ..._headersForSettings(
+          operationId: AssistantApiMetadata.revokeSkillConsentOperation,
+          clientPageId: AssistantRequestPageIds.revokeSkillConsent,
+        ),
+        'Idempotency-Key': requestId,
+      },
     );
     await _store.revoke(skillId);
   }

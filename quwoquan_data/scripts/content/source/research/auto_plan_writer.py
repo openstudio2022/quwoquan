@@ -26,6 +26,7 @@ from content.source.research.auto_plan_lanes import (
 )
 from content.source.research.auto_plan_video import (
     discover_commons_sourced_videos,
+    qualified_video_frame_count,
     write_video_lane,
 )
 from content.source.research.auto_plan_article import write_article_lane
@@ -33,6 +34,7 @@ from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
 )
 from governance.coverage.license import rights_proof_required
+from governance.content_supply_policy import load_content_supply_policy
 from content.source.research.auto_plan_report import (
     _source_availability_summary,
     _write_auto_report_artifacts,
@@ -431,6 +433,67 @@ def _write_auto_research_plans_impl(
                         "images": len(rescue_pool),
                     }
                 )
+        if "video" in selected_lanes:
+            minimum_video_frames = (
+                load_content_supply_policy(vertical).video_delivery.minimum_source_frames
+            )
+            initial_video_frames = qualified_video_frame_count(
+                entity_id=entity_id,
+                entity_aliases=entity_aliases,
+                vertical=vertical,
+                image_pool=open_license_image_pool,
+            )
+            if initial_video_frames < minimum_video_frames:
+                video_rescue_pools = _discover_open_license_image_pools(
+                    entity_id,
+                    entity_aliases=entity_aliases,
+                    qid=qid,
+                    wiki_title=wiki_title,
+                    voyage_title=voyage_title,
+                    rejected_image_urls=rejected_image_urls,
+                    commons_limit=60,
+                    wikidata_limit=60,
+                    openverse_limit=80,
+                    page_limit=32,
+                )
+                video_rescue_pool = (
+                    video_rescue_pools["openverse"]
+                    + video_rescue_pools["commons"]
+                    + (video_rescue_pools.get("hint_commons") or [])
+                    + video_rescue_pools["wikidata_commons"]
+                    + video_rescue_pools["wiki_page_images"]
+                    + video_rescue_pools["voyage_page_images"]
+                )
+                known_urls = {
+                    str(item.get("url") or "").strip()
+                    for item in open_license_image_pool
+                    if str(item.get("url") or "").strip()
+                }
+                additions = [
+                    item
+                    for item in video_rescue_pool
+                    if str(item.get("url") or "").strip()
+                    and str(item.get("url") or "").strip() not in known_urls
+                ]
+                if additions:
+                    open_license_image_pool = [*open_license_image_pool, *additions]
+                repaired_video_frames = qualified_video_frame_count(
+                    entity_id=entity_id,
+                    entity_aliases=entity_aliases,
+                    vertical=vertical,
+                    image_pool=open_license_image_pool,
+                )
+                report.setdefault("rescueEvents", []).append(
+                    {
+                        "entityId": entity_id,
+                        "lane": "video",
+                        "reason": "qualified_video_frames_below_minimum",
+                        "qualifiedFramesBefore": initial_video_frames,
+                        "qualifiedFramesAfter": repaired_video_frames,
+                        "minimumFrames": minimum_video_frames,
+                        "addedCandidates": len(additions),
+                    }
+                )
         # 正文来源的 imageUrls 仍只能来自该页面自身图位；开放许可检索结果进入独立
         # homepageMediaCollections，禁止伪装为正文同源图片。
         homepage_image_pool = wiki_page_images or voyage_page_images
@@ -554,10 +617,13 @@ def _write_auto_research_plans_impl(
                 voyage_title=voyage_title,
             )
         if "video" in selected_lanes:
+            video_provider_funnel: list[dict[str, Any]] = []
             sourced_video_pool = discover_commons_sourced_videos(
                 entity_id,
                 entity_aliases=entity_aliases,
+                diagnostics=video_provider_funnel,
             )
+            report.setdefault("videoProviderFunnels", []).extend(video_provider_funnel)
             write_video_lane(
                 entity_id=entity_id,
                 entity_aliases=entity_aliases,

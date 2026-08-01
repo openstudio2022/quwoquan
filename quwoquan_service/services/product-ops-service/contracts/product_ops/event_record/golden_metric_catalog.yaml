@@ -84,11 +84,13 @@ metrics:
     aggregation: sum_ratio
   dimensions:
   - pageName
+  - surfaceId
+  - channelId
   - appVersion
   - networkClass
   target:
     operator: less_than
-    value: 0.05
+    value: 0.01
   freshness_seconds: 300
 - metric_id: video_playback_ready_p95_ms
   business: app_experience

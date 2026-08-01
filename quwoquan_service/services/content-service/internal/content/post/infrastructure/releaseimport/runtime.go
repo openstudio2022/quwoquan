@@ -27,7 +27,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	runtimemedia "quwoquan_service/runtime/media"
+	rtredis "quwoquan_service/runtime/redis"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	postmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
@@ -43,6 +47,8 @@ func Run() {
 	mediaImageBaseURL := flag.String("media-image-base-url", "", "environment image media public base URL")
 	mediaVideoBaseURL := flag.String("media-video-base-url", "", "environment video media public base URL")
 	creatorReceipt := flag.String("creator-receipt", "", "user-service creator import receipt")
+	redisAddr := flag.String("redis-addr", "", "canonical Redis address for post lifecycle projection")
+	redisDB := flag.Int("redis-db", 0, "canonical Redis database for post lifecycle projection")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	entitiesDB := flag.String("entities-db", "quwoquan_entity", "target db for entities")
 	env := flag.String("env", "", "environment label (for logging)")
@@ -55,6 +61,9 @@ func Run() {
 
 	if strings.TrimSpace(*releaseRoot) == "" {
 		log.Fatalf("--release-root is required; full-tree import and sample bundle fallback are forbidden")
+	}
+	if !*dryRun && strings.TrimSpace(*redisAddr) == "" {
+		log.Fatalf("--redis-addr is required for recommendation candidate projection")
 	}
 	desired, err := LoadReleaseDesiredState(*releaseRoot)
 	if err != nil {
@@ -160,11 +169,12 @@ func Run() {
 
 	now := time.Now().UTC()
 	opts := NormalizeImportOptions(ImportOptions{
-		ReleaseID:      desired.ReleaseID,
-		ManifestDigest: releaseBinding.ManifestDigest,
-		Mode:           *mode,
-		DeletePolicy:   *deletePolicy,
-		SourceOwner:    *sourceOwner,
+		ReleaseID:         desired.ReleaseID,
+		ManifestDigest:    releaseBinding.ManifestDigest,
+		Mode:              *mode,
+		DeletePolicy:      *deletePolicy,
+		SourceOwner:       *sourceOwner,
+		ProjectionVersion: now.UnixMilli(),
 	})
 	np, err := UpsertPostsWithOptions(ctx, postsColl, posts, now, opts)
 	if err != nil {
@@ -198,6 +208,17 @@ func Run() {
 	if err != nil {
 		log.Fatalf("apply missing feed policy: %v", err)
 	}
+	candidateEvents, err := PublishImportedPostLifecycle(
+		ctx,
+		strings.TrimSpace(*redisAddr),
+		*redisDB,
+		posts,
+		opts,
+		now,
+	)
+	if err != nil {
+		log.Fatalf("publish recommendation candidate lifecycle: %v", err)
+	}
 	stateColl := client.Database(*postsDB).Collection("data_release_state")
 	if err := UpsertReleaseState(ctx, stateColl, *env, opts, now, bson.M{
 		"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,
@@ -218,6 +239,7 @@ func Run() {
 			"postsLoaded": len(posts), "entitiesLoaded": len(entities),
 			"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,
 			"postsRemoved": tp, "entitiesRemoved": te, "feedRemoved": tf,
+			"candidateEventsPublished": candidateEvents,
 		},
 		"postBindings": postBindings,
 		"auditEvents":  []string{"DataReleasePrepared", "DataReleaseActivated"},
@@ -225,8 +247,8 @@ func Run() {
 	}); err != nil {
 		log.Fatalf("write import report: %v", err)
 	}
-	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d entities=%d discoveryFeed=%d removed posts=%d entities=%d feed=%d",
-		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, np, ne, nf, tp, te, tf)
+	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d entities=%d discoveryFeed=%d candidateEvents=%d removed posts=%d entities=%d feed=%d",
+		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, np, ne, nf, candidateEvents, tp, te, tf)
 }
 
 // EnsureUnique 幂等建唯一索引（已存在则忽略）。
@@ -255,11 +277,12 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 }
 
 type ImportOptions struct {
-	ReleaseID      string
-	ManifestDigest string
-	Mode           string
-	DeletePolicy   string
-	SourceOwner    string
+	ReleaseID         string
+	ManifestDigest    string
+	Mode              string
+	DeletePolicy      string
+	SourceOwner       string
+	ProjectionVersion int64
 }
 
 func NormalizeImportOptions(opts ImportOptions) ImportOptions {
@@ -275,7 +298,74 @@ func NormalizeImportOptions(opts ImportOptions) ImportOptions {
 	if opts.SourceOwner == "" {
 		opts.SourceOwner = "qwq_data"
 	}
+	if opts.ProjectionVersion <= 0 {
+		opts.ProjectionVersion = time.Now().UTC().UnixMilli()
+	}
 	return opts
+}
+
+func PublishImportedPostLifecycle(
+	ctx context.Context,
+	redisAddr string,
+	redisDB int,
+	posts []PostDoc,
+	opts ImportOptions,
+	occurredAt time.Time,
+) (int, error) {
+	opts = NormalizeImportOptions(opts)
+	router, err := platformredis.NewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {
+				Mode:           "standalone",
+				Addr:           redisAddr,
+				DB:             redisDB,
+				DialTimeoutMs:  3000,
+				ReadTimeoutMs:  3000,
+				WriteTimeoutMs: 3000,
+			},
+		},
+		DefaultScene: "general",
+	})
+	if err != nil {
+		return 0, fmt.Errorf("configure Redis lifecycle publisher: %w", err)
+	}
+	publisher := postmessaging.NewPostLifecycleStreamPublisher(router.Scene("general"))
+	for _, post := range posts {
+		entityRefs := post.NormalizedEntityRefs
+		if len(entityRefs) == 0 {
+			entityRefs = post.EntityRefs
+		}
+		payload, err := json.Marshal(bson.M{
+			"postId":           RuntimePostID(post.PostRef),
+			"status":           "published",
+			"visibility":       "public",
+			"moderationStatus": importedModerationStatus,
+			"contentType":      post.ContentType,
+			"authorId":         post.AuthorID,
+			"tagRefs":          post.TagRefs,
+			"entityRefs":       entityRefs,
+			"contentVertical":  post.Angle,
+			"publishedAt":      post.PublishedAt,
+			"updatedAt":        post.UpdatedAt,
+			"releaseId":        opts.ReleaseID,
+		})
+		if err != nil {
+			return 0, fmt.Errorf("encode imported post lifecycle %s: %w", post.PostRef, err)
+		}
+		postID := RuntimePostID(post.PostRef)
+		if err := publisher.Publish(ctx, postports.OutboxEvent{
+			EventID:          fmt.Sprintf("data-release:%s:%s:PostPublished", opts.ReleaseID, postID),
+			EventType:        "PostPublished",
+			AggregateType:    "Post",
+			AggregateID:      postID,
+			AggregateVersion: opts.ProjectionVersion,
+			Payload:          payload,
+			OccurredAt:       occurredAt,
+		}); err != nil {
+			return 0, fmt.Errorf("%s: %w", post.PostRef, err)
+		}
+	}
+	return len(posts), nil
 }
 
 func sourceHash(v any) string {
@@ -291,6 +381,28 @@ func RuntimePostID(postRef string) string {
 	}
 	sum := sha256.Sum256([]byte("qwq-content-post:" + ref))
 	return "data_post_" + hex.EncodeToString(sum[:])
+}
+
+// CanonicalImportReportPostRef projects the loader storage postRef
+// (posts/<carrier>/...) into the release-object postRef consumed by
+// import_report.schema.json and ship verify (carrier/...).
+func CanonicalImportReportPostRef(storagePostRef string) (string, error) {
+	ref := strings.TrimSpace(strings.ReplaceAll(storagePostRef, "\\", "/"))
+	if ref == "" {
+		return "", fmt.Errorf("imported postRef is empty")
+	}
+	reportRef := strings.TrimPrefix(ref, "posts/")
+	if reportRef == ref || reportRef == "" {
+		return "", fmt.Errorf("imported postRef must be under posts/: %q", storagePostRef)
+	}
+	switch {
+	case strings.HasPrefix(reportRef, "article/"),
+		strings.HasPrefix(reportRef, "image/"),
+		strings.HasPrefix(reportRef, "video/"):
+		return reportRef, nil
+	default:
+		return "", fmt.Errorf("imported postRef carrier is unsupported: %q", storagePostRef)
+	}
 }
 
 // ImportedPostBinding is the releaseimport-owned mapping from a canonical
@@ -312,23 +424,27 @@ func ImportedPostBindings(posts []PostDoc) ([]ImportedPostBinding, error) {
 	seenRefs := make(map[string]struct{}, len(posts))
 	seenIDs := make(map[string]struct{}, len(posts))
 	for _, post := range posts {
-		postRef := strings.TrimSpace(post.PostRef)
+		storagePostRef := strings.TrimSpace(post.PostRef)
 		contentType := strings.TrimSpace(post.ContentType)
 		authorID := strings.TrimSpace(post.AuthorID)
-		postID := RuntimePostID(postRef)
-		if postRef == "" || postID == "" || contentType == "" || authorID == "" {
+		postID := RuntimePostID(storagePostRef)
+		reportPostRef, err := CanonicalImportReportPostRef(storagePostRef)
+		if err != nil {
+			return nil, err
+		}
+		if storagePostRef == "" || postID == "" || contentType == "" || authorID == "" {
 			return nil, fmt.Errorf("imported post binding requires postRef, contentType, and authorId")
 		}
-		if _, exists := seenRefs[postRef]; exists {
-			return nil, fmt.Errorf("duplicate imported postRef %q", postRef)
+		if _, exists := seenRefs[reportPostRef]; exists {
+			return nil, fmt.Errorf("duplicate imported postRef %q", reportPostRef)
 		}
 		if _, exists := seenIDs[postID]; exists {
 			return nil, fmt.Errorf("duplicate imported postId %q", postID)
 		}
-		seenRefs[postRef] = struct{}{}
+		seenRefs[reportPostRef] = struct{}{}
 		seenIDs[postID] = struct{}{}
 		bindings = append(bindings, ImportedPostBinding{
-			PostRef: postRef, PostID: postID, ContentType: contentType, AuthorID: authorID,
+			PostRef: reportPostRef, PostID: postID, ContentType: contentType, AuthorID: authorID,
 		})
 	}
 	sort.Slice(bindings, func(left, right int) bool {
@@ -421,6 +537,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"authorQualitySignals":  p.AuthorQualitySignals,
 			"sourceCollectionId":    p.SourceCollectionID,
 			"sourcePlatform":        p.SourcePlatform,
+			"sourceAttribution":     p.SourceAttribution,
 			"creator":               p.Creator,
 			"page":                  p.Page,
 			"licenseProof":          p.LicenseProof,
@@ -433,6 +550,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"createdAt":            p.CreatedAt,
 			"updatedAt":            p.UpdatedAt,
 			"publishedAt":          p.PublishedAt,
+			"version":              opts.ProjectionVersion,
 			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
 			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
 			"status":           "published",

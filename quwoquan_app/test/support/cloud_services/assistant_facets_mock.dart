@@ -6,6 +6,8 @@ library;
 
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantDeviceActionExecutionReceipt;
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
@@ -99,23 +101,23 @@ final class AssistantPrototypeFixture {
 /// `MockAssistantRepository`；行为收口归阶段 3b）。
 class AlphaAssistantFacets
     implements
-        AssistantConversationRunFacet,
+        AssistantSessionRunFacet,
+        AssistantRunControlFacet,
         AssistantSkillSubscriptionFacet,
         AssistantSkillConsentFacet,
         AssistantLearningFactAppendFacet,
         AssistantPersonalizationFacet,
         AssistantPersonalDataFacet,
-        AssistantPreferenceFactFacet,
-        AssistantXiaoquSearchFacet,
-        AssistantCreationSuggestFacet {
+        AssistantPreferenceFacet,
+        AssistantSearchRunFacet,
+        AssistantCreationRunFacet {
   AlphaAssistantFacets({AssistantConsentStore? store})
     : _store =
-          store ?? AssistantConsentStore(actorScope: 'alpha_mock_assistant');
+          store ?? AssistantConsentStore(accountId: 'alpha_mock_assistant');
 
   final AssistantConsentStore _store;
   final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
-  final List<AssistantPreferenceFact> _preferences =
-      <AssistantPreferenceFact>[];
+  final List<AssistantPreference> _preferences = <AssistantPreference>[];
 
   @override
   Future<AssistantLearningFactAppendReceipt> appendUserFact({
@@ -141,6 +143,7 @@ class AlphaAssistantFacets
   Future<AssistantSkillConsent> grantSkillConsent({
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
+    required String clientRequestId,
   }) async {
     final consent = AssistantSkillConsent(
       skillId: skillId,
@@ -153,35 +156,36 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<void> revokeSkillConsent({required String skillId}) {
+  Future<void> revokeSkillConsent({
+    required String skillId,
+    required String clientRequestId,
+  }) {
     return _store.revoke(skillId);
   }
 
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    // alpha/test 确定性 fixture（production Remote 失败一律抛 CloudException，
-    // 不再存在共享 fallback 构造器）。
     final trimmedQuery = query.trim();
-    return AssistantSearchResultView(
-      queryEcho: trimmedQuery,
-      summary: trimmedQuery.isEmpty
+    return AssistantRunTerminalSnapshotView(
+      answerText: trimmedQuery.isEmpty
           ? '小趣搜会结合圈子讨论结果和已有公开内容，为你梳理当前最相关的线索。'
           : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子讨论与内容方向。',
-      searchIntensity: searchIntensity,
-      citations: const <AssistantSearchCitationView>[],
+      processes: const <AssistantRunVisibleProcessView>[],
     );
   }
 
   @override
-  Future<PageContextAck> reportPageContext({
+  Future<PageContextReceipt> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
   }) async {
-    return PageContextAck(
+    return PageContextReceipt(
       accepted: true,
       contextKey: 'mock:${assistantPageTypeForSource(context.source).wireName}',
       expiresAt: DateTime.now()
@@ -192,36 +196,9 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+  Future<AssistantEntryResponse> getAssistantEntry({
     required AssistantOpenContext context,
   }) async {
-    return _entryPersonalizationFixture(context);
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    final personalization = _entryPersonalizationFixture(context);
-    return SuggestedActionListView(
-      items: personalization.chips
-          .map(
-            (chip) => SuggestedAction(
-              actionId: chip.chipId,
-              type: chip.actionType,
-              label: chip.label,
-              payload: <String, dynamic>{'value': chip.value ?? ''},
-            ),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  /// alpha/test 确定性个性化 fixture（原 lib 内 fallback 构造器已随
-  /// B8 阶段 3b 删除；数据内联至此，production 不可达）。
-  AssistantEntryPersonalizationView _entryPersonalizationFixture(
-    AssistantOpenContext context,
-  ) {
     final pageType = assistantPageTypeForSource(context.source);
     final welcome = switch (pageType) {
       AssistantPageContextType.chat => '我可以结合当前会话帮你整理话题、找资料或写回复。',
@@ -230,35 +207,36 @@ class AlphaAssistantFacets
       AssistantPageContextType.home => '我可以结合当前主页、关系和交集帮你解释信息。',
       _ => '有什么想让我帮忙的？',
     };
-    return AssistantEntryPersonalizationView(
+    return AssistantEntryResponse(
       welcomeMessage: welcome,
       suggestionLines: const <String>['说一句你想做的事，或选上面的推荐试试'],
-      chips: const <AssistantEntryPersonalizationChipView>[
-        AssistantEntryPersonalizationChipView(
+      chips: const <AssistantEntryChip>[
+        AssistantEntryChip(
           chipId: 'find',
           label: '帮我找',
           actionType: 'command',
           value: 'find',
         ),
-        AssistantEntryPersonalizationChipView(
+        AssistantEntryChip(
           chipId: 'remember',
           label: '帮我记',
           actionType: 'command',
           value: 'remember',
         ),
-        AssistantEntryPersonalizationChipView(
+        AssistantEntryChip(
           chipId: 'share',
           label: '帮我分享',
           actionType: 'command',
           value: 'share',
         ),
       ],
+      actions: const <AssistantEntryAction>[],
       personalized: false,
     );
   }
 
   @override
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
+  Future<List<AssistantTaskItemView>> listAssistantTasks({
     int limit = kAssistantListPageDefaultLimit,
     String? status,
   }) async {
@@ -275,11 +253,12 @@ class AlphaAssistantFacets
             if (time.isNotEmpty) time,
             if (category.isNotEmpty) category,
           ].join(' · ');
-          return AssistantUserTaskView(
+          return AssistantTaskItemView(
             taskId: row.taskKey,
             title: row.title,
             description: desc.isEmpty ? null : desc,
             status: row.status,
+            updatedAt: DateTime.now().toUtc().toIso8601String(),
           );
         })
         .take(limit)
@@ -287,32 +266,36 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantPreferenceFact> setAssistantPreference({
+  Future<AssistantPreference> setAssistantPreference({
     required AssistantPreferenceScope scope,
-    String conversationId = '',
+    String sessionId = '',
     required AssistantPreferenceKind kind,
     required String value,
     required AssistantPreferenceSourceType sourceType,
+    String sourceSessionId = '',
+    bool confirmed = false,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     final index = _preferences.indexWhere(
       (fact) =>
           fact.scope == scope &&
-          (fact.conversationId ?? '') == conversationId.trim() &&
+          (fact.sessionId ?? '') == sessionId.trim() &&
           fact.kind == kind,
     );
     final existing = index < 0 ? null : _preferences[index];
-    final fact = AssistantPreferenceFact(
+    final fact = AssistantPreference(
       preferenceId:
           existing?.preferenceId ?? 'apf_alpha_${_preferences.length + 1}',
       userId: 'alpha_persona',
       scope: scope,
-      conversationId: conversationId.trim().isEmpty
-          ? null
-          : conversationId.trim(),
+      sessionId: sessionId.trim().isEmpty ? null : sessionId.trim(),
       kind: kind,
       value: value.trim(),
       sourceType: sourceType,
+      sourceSessionId: sourceSessionId.trim().isEmpty
+          ? null
+          : sourceSessionId.trim(),
+      confirmedAt: confirmed ? now : null,
       status: AssistantPreferenceStatus.active,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -327,9 +310,9 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<List<AssistantPreferenceFact>> listAssistantPreferences({
+  Future<List<AssistantPreference>> listAssistantPreferences({
     AssistantPreferenceScope? scope,
-    String conversationId = '',
+    String sessionId = '',
     AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
   }) async {
     return _preferences
@@ -337,14 +320,14 @@ class AlphaAssistantFacets
           (fact) =>
               fact.status == status &&
               (scope == null || fact.scope == scope) &&
-              (conversationId.trim().isEmpty ||
-                  (fact.conversationId ?? '') == conversationId.trim()),
+              (sessionId.trim().isEmpty ||
+                  (fact.sessionId ?? '') == sessionId.trim()),
         )
         .toList(growable: false);
   }
 
   @override
-  Future<AssistantPreferenceFact> revokeAssistantPreference({
+  Future<AssistantPreference> revokeAssistantPreference({
     required String preferenceId,
   }) async {
     final index = _preferences.indexWhere(
@@ -358,11 +341,11 @@ class AlphaAssistantFacets
       return current;
     }
     final now = DateTime.now().toUtc();
-    final revoked = AssistantPreferenceFact(
+    final revoked = AssistantPreference(
       preferenceId: current.preferenceId,
       userId: current.userId,
       scope: current.scope,
-      conversationId: current.conversationId,
+      sessionId: current.sessionId,
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
@@ -380,7 +363,7 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantPreferenceFact> restoreAssistantPreference({
+  Future<AssistantPreference> restoreAssistantPreference({
     required String preferenceId,
   }) async {
     final index = _preferences.indexWhere(
@@ -398,11 +381,11 @@ class AlphaAssistantFacets
     if (deadline == null || !now.isBefore(deadline)) {
       throw StateError('assistant preference restore expired');
     }
-    final restored = AssistantPreferenceFact(
+    final restored = AssistantPreference(
       preferenceId: current.preferenceId,
       userId: current.userId,
       scope: current.scope,
-      conversationId: current.conversationId,
+      sessionId: current.sessionId,
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
@@ -476,51 +459,22 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
+  Future<AssistantRunEnvelopeWire> startCreationRun({
+    required String sessionId,
+    required String clientRequestId,
+    required AssistantCreationRunIntent intent,
+    AssistantContextSnapshot? contextSnapshot,
   }) async {
-    final enabled = _subscriptions.any(
-      (item) =>
-          item.skillId == 'creation_assistant' &&
-          item.status == SkillSubscriptionStatus.active,
-    );
-    if (!enabled) {
-      return const AssistantCreationSuggestResponse(
-        suggestedTagRefs: <String>[],
-        suggestedHomepages: <AssistantSuggestedHomepageView>[],
-        available: false,
-        unavailableReason: 'skill_not_enabled',
-      );
-    }
-    final text = <String?>[
-      request.draftTitle,
-      request.draftSummary,
-      request.bodyDigest,
-    ].whereType<String>().join(' ');
-    final tagRefs = <String>{
-      if (text.contains('九寨') || text.contains('旅行')) 'Topic/旅行',
-      if (text.contains('摄影') || text.contains('照片')) 'Topic/摄影',
-    }.toList(growable: false);
-    return AssistantCreationSuggestResponse(
-      suggestedTagRefs: tagRefs,
-      suggestedHomepages: <AssistantSuggestedHomepageView>[
-        if ((request.primaryHomepageId ?? '').trim().isNotEmpty)
-          AssistantSuggestedHomepageView(
-            id: request.primaryHomepageId!.trim(),
-            type: 'homepage',
-            displayName: request.primaryHomepageId!.trim(),
-            reason: '已作为主关联主页',
-          ),
-      ],
-      suggestedTitle:
-          (request.draftTitle ?? '').trim().isEmpty &&
-              (request.primaryHomepageId ?? '').trim().isNotEmpty
-          ? '我和${request.primaryHomepageId!.trim()}有关的一次发现'
-          : null,
-      suggestedSummary: (request.draftSummary ?? '').trim().isEmpty
-          ? (request.bodyDigest ?? '').trim()
-          : null,
-      available: true,
+    return AssistantRunEnvelopeWire(
+      runId: 'arn_mock_creation_${clientRequestId.trim()}',
+      sessionId: sessionId,
+      goal: <String?>[
+        intent.draftTitle,
+        intent.draftSummary,
+        intent.bodyDigest,
+      ].whereType<String>().join(' ').trim(),
+      traceId: 'trace_mock_creation_${clientRequestId.trim()}',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
@@ -576,7 +530,7 @@ class AlphaAssistantFacets
       ),
       trigger: SkillSubscriptionTriggerWire(cron: cron),
       destination: const SkillSubscriptionDestinationWire(
-        destinationType: 'user',
+        destinationType: SkillSubscriptionDestinationType.user,
         destinationId: 'mock-user',
       ),
       createdAt: now,
@@ -621,13 +575,13 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: 'acv_mock_personal_assistant',
+    return AssistantSessionWire(
+      sessionId: 'asn_mock_personal_assistant',
       userId: 'mock-user',
       summary: summary,
       createdAt: now,
@@ -636,22 +590,20 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    return const AssistantConversationListPage(
-      items: <AssistantConversationWire>[],
-    );
+    return const AssistantSessionListPage(items: <AssistantSessionWire>[]);
   }
 
   @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
+  Future<AssistantSessionWire> getAssistantSession({
+    required String sessionId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: conversationId,
+    return AssistantSessionWire(
+      sessionId: sessionId,
       userId: 'mock-user',
       createdAt: now,
       updatedAt: now,
@@ -659,8 +611,8 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
@@ -668,8 +620,8 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
     String turnType = 'user',
@@ -678,34 +630,69 @@ class AlphaAssistantFacets
     List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
         const <AssistantIntersectionEvidenceRef>[],
   }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: 'atn_mock_personal_assistant',
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId,
-      domainId: domainId,
-      input: AssistantTurnInputWire(text: text),
-      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
+    return AssistantRunEnvelopeWire(
+      runId: 'arn_mock_personal_assistant',
+      sessionId: sessionId,
+      goal: text,
       traceId: 'trace_mock_personal_assistant',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
+  Future<AssistantRunEnvelopeWire> getAssistantRun({
     required String runId,
   }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_mock_personal_assistant',
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_mock_personal_assistant',
       traceId: 'trace_mock_personal_assistant',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
     required String runId,
+    required String commandRequestId,
+  }) {
+    return getAssistantRun(runId: runId);
+  }
+
+  @override
+  Future<AssistantRunEnvelopeWire> pauseAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    String reason = '',
+  }) {
+    return getAssistantRun(runId: runId);
+  }
+
+  @override
+  Future<AssistantRunEnvelopeWire> resumeAssistantRun({
+    required String runId,
+    required String commandRequestId,
+  }) {
+    return getAssistantRun(runId: runId);
+  }
+
+  @override
+  Future<AssistantRunEnvelopeWire> steerAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    required String instruction,
+  }) {
+    return getAssistantRun(runId: runId);
+  }
+
+  @override
+  Future<AssistantRunEnvelopeWire> continueAssistantToolUse({
+    required String runId,
+    required String toolUseId,
+    required String commandRequestId,
+    required String decision,
+    required String continuationToken,
+    AssistantDeviceActionExecutionReceipt? executionReceipt,
   }) {
     return getAssistantRun(runId: runId);
   }
@@ -713,13 +700,14 @@ class AlphaAssistantFacets
   @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
+    String lastEventId = '',
   }) async* {
     final createdAt = DateTime.now().toUtc().toIso8601String();
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
       eventId: '$runId:run_started',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
+      sessionId: 'asn_mock_personal_assistant',
+      runId: runId,
       seq: 1,
       eventType: AssistantStreamEventType.runStarted,
       payload: const <String, dynamic>{'status': 'running', 'restarted': false},
@@ -728,8 +716,8 @@ class AlphaAssistantFacets
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
       eventId: '$runId:process_replace',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
+      sessionId: 'asn_mock_personal_assistant',
+      runId: runId,
       seq: 2,
       eventType: AssistantStreamEventType.processReplace,
       payload: const <String, dynamic>{'processes': <Object?>[]},
@@ -738,8 +726,8 @@ class AlphaAssistantFacets
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
       eventId: '$runId:searching',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
+      sessionId: 'asn_mock_personal_assistant',
+      runId: runId,
       seq: 3,
       eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
@@ -758,8 +746,8 @@ class AlphaAssistantFacets
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
       eventId: '$runId:answer_delta',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
+      sessionId: 'asn_mock_personal_assistant',
+      runId: runId,
       seq: 4,
       eventType: AssistantStreamEventType.answerDelta,
       payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
@@ -768,8 +756,8 @@ class AlphaAssistantFacets
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
       eventId: '$runId:completed',
-      conversationId: 'acv_mock_personal_assistant',
-      turnId: runId,
+      sessionId: 'asn_mock_personal_assistant',
+      runId: runId,
       seq: 5,
       eventType: AssistantStreamEventType.completed,
       payload: const <String, dynamic>{

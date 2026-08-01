@@ -15,8 +15,8 @@ import (
 
 	runtimeconfig "quwoquan_service/runtime/config"
 	runtimegovernance "quwoquan_service/runtime/governance"
-	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
 )
 
 const (

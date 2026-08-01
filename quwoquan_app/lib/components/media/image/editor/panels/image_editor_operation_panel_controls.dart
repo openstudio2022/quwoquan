@@ -436,10 +436,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
         label: MediaText.imageEditorCropOriginal,
         value: 'original',
       ),
-      _CropRatioEntry(
-        label: MediaText.imageEditorCropFree,
-        value: 'free',
-      ),
+      _CropRatioEntry(label: MediaText.imageEditorCropFree, value: 'free'),
       _CropRatioEntry(
         label: MediaText.imageEditorCropRatio1x1,
         value: '1x1',

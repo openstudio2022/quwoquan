@@ -1,0 +1,76 @@
+dart_class: AssistantRunRuntimeWire
+library_path: assistant/generated/contracts/assistant_run_runtime.g.dart
+output_path: assistant/generated/contracts/assistant_run_runtime.g.dart
+contract: assistant_run_runtime
+kind: shared_wire_contract
+fields:
+  - { name: runId, type: string, required: true }
+  - { name: state, type: enum, enum_ref: AssistantRunState, required: true }
+  - { name: revision, type: int, required: true }
+  - { name: reasoningProfile, type: enum, enum_ref: AssistantReasoningProfile, default: balanced }
+  - { name: definitionOfDone, type: object, ref: definition_of_done, required: true }
+  - { name: taskGraph, type: object, ref: task_graph, default: {} }
+  - { name: checkpoint, type: object, ref: checkpoint }
+  - { name: items, type: list<object>, ref: run_item, default: [] }
+  - { name: budget, type: object, ref: run_budget, default: {} }
+subcontracts:
+  definition_of_done:
+    class_name: AssistantDefinitionOfDoneWire
+    fields:
+      - { name: outcome, type: string, required: true }
+      - { name: constraints, type: list<string>, default: [] }
+      - { name: verificationRequirements, type: list<string>, default: [] }
+      - { name: frozenAt, type: string, required: true }
+  task_graph:
+    class_name: AssistantTaskGraphWire
+    fields:
+      - { name: graphRevision, type: int, default: 0 }
+      - { name: tasks, type: list<object>, ref: task_node, default: [] }
+  task_node:
+    class_name: AssistantTaskNodeWire
+    fields:
+      - { name: taskId, type: string, required: true }
+      - { name: goal, type: string, required: true }
+      - { name: dependencies, type: list<string>, default: [] }
+      - { name: status, type: enum, enum_ref: AssistantTaskStatus, default: pending }
+      - { name: ownerAgent, type: string, default: root }
+      - { name: attempt, type: int, default: 0 }
+      - { name: budget, type: map, default: {} }
+      - { name: artifactRefs, type: list<string>, default: [] }
+      - { name: verification, type: map, default: {} }
+      - { name: blockReason, type: string, default: '' }
+  checkpoint:
+    class_name: AssistantRunCheckpointWire
+    fields:
+      - { name: checkpointId, type: string, required: true }
+      - { name: revision, type: int, required: true }
+      - { name: goalSummary, type: string, required: true }
+      - { name: decisionSummary, type: list<string>, default: [] }
+      - { name: completedTaskIds, type: list<string>, default: [] }
+      - { name: openTaskIds, type: list<string>, default: [] }
+      - { name: evidenceRefs, type: list<string>, default: [] }
+      - { name: pendingApprovalRef, type: string, default: '' }
+      - { name: remainingBudget, type: map, default: {} }
+      - { name: createdAt, type: string, required: true }
+  run_item:
+    class_name: AssistantRunItemWire
+    fields:
+      - { name: itemId, type: string, required: true }
+      - { name: kind, type: enum, enum_ref: AssistantRunItemKind, required: true }
+      - { name: status, type: enum, enum_ref: AssistantRunItemStatus, required: true }
+      - { name: sequence, type: int, required: true }
+      - { name: taskId, type: string, default: '' }
+      - { name: summary, type: string, default: '' }
+      - { name: payload, type: map, default: {} }
+      - { name: artifactRefs, type: list<string>, default: [] }
+      - { name: startedAt, type: string, required: true }
+      - { name: completedAt, type: string, default: '' }
+  run_budget:
+    class_name: AssistantRunBudgetWire
+    fields:
+      - { name: maxDurationMs, type: int, default: 0 }
+      - { name: maxTokens, type: int, default: 0 }
+      - { name: maxToolCalls, type: int, default: 0 }
+      - { name: maxSubagents, type: int, default: 0 }
+      - { name: maxCostMicros, type: int, default: 0 }
+      - { name: checkpointIntervalMs, type: int, default: 0 }

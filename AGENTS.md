@@ -59,7 +59,7 @@
 
 - Review：从产品、架构、代码、质量、测试、用户、运维、运营八角色检查契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
 - 三层测试：`local_contract`、`api_integration`、`user_acceptance` 必须映射 UAT/DOM/SIT/GWT/contract；Remote 行为必须能回到测试树内对象级 typed double/Provider/Widget/领域规则覆盖，任何测试 double 不得进入环境 App。
-- 四环境：`alpha`、`beta`、`gamma`、`prod` 的 App 均使用同一 Remote composition，第一方业务数据均来自 canonical immutable release activation；分层证明配置、包纯度、URL/topology、部署与回滚。不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
+- 四环境：`alpha`、`beta`、`gamma`、`prod` 的 App 均使用同一 Remote composition；内容、Creator、实体与媒体只来自 canonical immutable release activation，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可由 `stackctl verify` 使用真实非生产身份创建候选绑定验收数据，Prod 只接受真实用户或正式运营行为；任何环境均禁止 fixture、直接数据库 seed 与派生投影预填。分层证明配置、包纯度、URL/topology、部署与回滚。不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
 - 错误链路：metadata errors、HTTP 响应、端侧 mapper/UI、恢复动作、埋点、日志、告警和测试必须同源。
 - 可观测与配置：新增页面、API、行为信号、推荐策略和数据发布必须声明 SLI/SLO、指标、采样、保留、告警、配置来源、灰度与回滚。
 - 无法证明时返回 `GATE_BLOCK`，补规格、metadata、测试或运维证据。

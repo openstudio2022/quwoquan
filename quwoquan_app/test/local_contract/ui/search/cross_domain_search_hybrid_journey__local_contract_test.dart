@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/search/search_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
@@ -95,7 +95,7 @@ void main() {
       );
     });
 
-    testWidgets('SearchQuery 结构化失败展示重试，并在重试后恢复结果', (tester) async {
+    testWidgets('AssistantRun 结构化失败展示重试，并在重试后恢复结果', (tester) async {
       _configureTestViewport(tester);
       final assistant = _FailOnceAssistantSearchFacet();
       final harness =
@@ -112,7 +112,7 @@ void main() {
       await _pumpUntil(
         tester,
         find.byType(AppPageErrorState),
-        reason: 'SearchQuery 失败后未展示结构化页面错误',
+        reason: 'AssistantRun 失败后未展示结构化页面错误',
       );
 
       final errorState = tester.widget<AppPageErrorState>(
@@ -132,7 +132,7 @@ void main() {
       await _pumpUntil(
         tester,
         find.text('$_query 的小趣搜索结果'),
-        reason: '重试后 SearchQuery 未恢复小趣结果',
+        reason: '重试后 AssistantRun 未恢复小趣结果',
       );
 
       expect(assistant.attempts, 2);
@@ -175,11 +175,11 @@ final class _SearchJourneyHarness {
   final HybridSearchRepository searchRepository;
   final AlphaSearchFeedbackWriter feedback;
   final MockChatRepository chatRepository;
-  final AssistantXiaoquSearchFacet assistantSearch;
+  final AssistantSearchRunFacet assistantSearch;
 
   static Future<_SearchJourneyHarness> create({
     required CanonicalSearchQueryFacet canonicalSearch,
-    AssistantXiaoquSearchFacet? assistantSearch,
+    AssistantSearchRunFacet? assistantSearch,
   }) async {
     final tempDirectory = Directory(
       '${Directory.systemTemp.path}/cross_domain_search_local_contract_'
@@ -268,7 +268,7 @@ final class _SearchJourneyHarness {
         recentSearchQueryProvider.overrideWithValue(recentSearches),
         recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
         searchFeedbackCommandWriterProvider.overrideWithValue(feedback),
-        assistantXiaoquSearchFacetProvider.overrideWithValue(assistantSearch),
+        assistantSearchRunFacetProvider.overrideWithValue(assistantSearch),
         chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
         circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
         homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
@@ -313,7 +313,7 @@ final class _RecordingCanonicalSearchFacet
   final List<CanonicalSearchQuery> requests = <CanonicalSearchQuery>[];
 
   @override
-  Future<CanonicalSearchResult> search(
+  Future<SearchResponseView> search(
     CanonicalSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
@@ -327,20 +327,23 @@ final class _RecordingCanonicalSearchFacet
   }
 }
 
-final class _FailOnceAssistantSearchFacet
-    implements AssistantXiaoquSearchFacet {
+final class _FailOnceAssistantSearchFacet implements AssistantSearchRunFacet {
   _FailOnceAssistantSearchFacet()
     : failure = CloudErrorMapper.fromStatusCode(
         503,
-        requestPath: SearchApiMetadata.operationToPathTemplate['SearchQuery'],
+        requestPath: AssistantApiMetadata.startAssistantRunPath(
+          sessionId: 'assistant-search-session',
+        ),
       );
 
   final CloudException failure;
   int attempts = 0;
 
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
@@ -348,28 +351,26 @@ final class _FailOnceAssistantSearchFacet
     if (attempts == 1) {
       throw failure;
     }
-    return _assistantResult(query, searchIntensity);
+    return _assistantResult(query);
   }
 }
 
-final class _AssistantSearchFacet implements AssistantXiaoquSearchFacet {
+final class _AssistantSearchFacet implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
-  }) async => _assistantResult(query, searchIntensity);
+  }) async => _assistantResult(query);
 }
 
-AssistantSearchResultView _assistantResult(
-  String query,
-  SearchIntensity searchIntensity,
-) => AssistantSearchResultView(
-  queryEcho: query,
-  summary: '$query 的小趣搜索结果',
-  searchIntensity: searchIntensity,
-  citations: const <AssistantSearchCitationView>[],
-);
+AssistantRunTerminalSnapshotView _assistantResult(String query) =>
+    AssistantRunTerminalSnapshotView(
+      answerText: '$query 的小趣搜索结果',
+      processes: const <AssistantRunVisibleProcessView>[],
+    );
 
 final class _RecordingBehaviorRepository extends BehaviorRepository {
   final List<BehaviorEvent> events = <BehaviorEvent>[];

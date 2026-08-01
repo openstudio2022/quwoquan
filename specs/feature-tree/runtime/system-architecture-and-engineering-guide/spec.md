@@ -106,7 +106,7 @@
 - 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - prod gray 仅是 rollout stage
 - 每个服务以 environments/<env> 作为该环境唯一入口，四环境只依赖公共 config/resources/deploy 基线，环境之间不继承
-- 公共资源与环境 seed/release/artifact 引用职责分离；gamma 只消费环境自治的不可变测试 seed 且不注入 App Mock，prod 不含 fixture 或测试 seed
+- 公共资源、Data release 与 artifact 引用职责分离；Alpha/Beta/Gamma 的候选绑定验收数据只经真实非生产主体和领域公开 command/event 创建，Prod 只接受真实用户或正式运营行为且不含 fixture、测试 seed 或非生产 runner
 - 第一方服务部署归服务 deploy/base 与 environments/<env>/deploy；Ops 环境目录只做可执行装配，不维护第一方 workload/topology 注册表
 - 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
 - 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包；`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 仅能位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
@@ -117,10 +117,10 @@
 
 - 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环；共享 capability 由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生，禁止外置 consumer/root 清单
 - 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
-- gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- alpha/beta/gamma required 验收只选择受管非生产租户的非内存 Provider 且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
 - Provider request、attempt、result 与 dead-letter 账本只由 `integration.ExternalInteraction` 及其事实对象维护；消费方只保存 `externalInteractionId` 与幂等 inbox receipt，禁止复制 provider 状态账本
 - 声明 identity、事件 payload 或 projection 的 `external_reference` 必须拥有字段契约并使用 typed payload，禁止以未声明字段或原始 `object` 形成第二真相源
-- coturn 和 livekit 位于 Ops external workload；seed-box 数量为零，seed 由各领域服务 job 自治执行
+- coturn 和 livekit 位于 Ops external workload；seed-box 和领域业务 seed job 数量均为零，非生产验收写入只由 `stackctl verify` 编排领域公开 command/event
 - legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
 - 上述特殊资产均不被扫描为领域服务或业务对象 owner
 
@@ -201,7 +201,7 @@
 - THEN 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - THEN prod gray 仅是 rollout stage
 - THEN 每个服务以 environments/<env> 作为该环境唯一入口，环境之间不存在引用或继承
-- THEN 公共资源与环境 seed/release/artifact 引用职责分离；gamma 只消费环境自治的不可变测试 seed 且不注入 App Mock，prod 不含 fixture 或测试 seed
+- THEN 公共资源、Data release 与 artifact 引用职责分离；Alpha/Beta/Gamma 验收数据只经真实非生产主体和领域公开 command/event 创建，Prod 不含 fixture、测试 seed 或非生产 runner
 - THEN 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
 - THEN 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包，`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
 - THEN `QWQ_DEPLOY_WORK_ROOT` 解析后为仓库和 `QWQ_OUTPUT_ROOT` 外的绝对 target-scoped 目录，符号链接逃逸和对根目录的 destructive cleanup 均 fail-closed
@@ -213,10 +213,10 @@
 - WHEN 参与者发起“外部 capability 与特殊资产归位”对应动作。
 - THEN 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环，且共享 capability 仅由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生
 - THEN 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
-- THEN gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- THEN alpha/beta/gamma required 验收只选择受管非生产租户的非内存 Provider 且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
 - THEN Provider request、attempt、result 与 dead-letter 账本只存在于 `integration.ExternalInteraction` 及其事实对象，消费方只保存 `externalInteractionId` 与幂等 inbox receipt
 - THEN 每个声明 identity、事件 payload 或 projection 的 `external_reference` 都有对应字段契约并使用 typed payload，不存在未声明字段或原始 `object`
-- THEN coturn 和 livekit 位于 Ops external workload，seed-box 不存在且 seed 由服务 job 自治执行
+- THEN coturn 和 livekit 位于 Ops external workload，seed-box 与领域业务 seed job 均不存在，非生产验收写入由 `stackctl verify` 单轨编排
 - THEN legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
 - THEN 上述特殊资产均不被扫描为领域服务或业务对象 owner
 

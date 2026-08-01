@@ -69,6 +69,7 @@ class ReliableTaskFleetReport:
     outcomes: tuple[ReliableTaskFleetOutcome, ...]
     passed: bool = True
     accepted_content_throughput_status: str = "MEASURED"
+    finalized_object_count: int = 0
 
     @classmethod
     def from_document(cls, value: object) -> "ReliableTaskFleetReport":
@@ -77,6 +78,7 @@ class ReliableTaskFleetReport:
         try:
             total = int(value.get("total"))
             succeeded = int(value.get("succeeded"))
+            finalized_object_count = int(value.get("finalizedObjectCount") or 0)
         except (TypeError, ValueError) as exc:
             raise ValueError("ReliableTask fleet report counts must be integers") from exc
         raw_outcomes = value.get("taskOutcomes")
@@ -92,6 +94,8 @@ class ReliableTaskFleetReport:
             raise ValueError(
                 "ReliableTask fleet report accepted throughput status is invalid"
             )
+        if finalized_object_count < 0:
+            raise ValueError("ReliableTask fleet report finalizedObjectCount is invalid")
         outcomes = tuple(ReliableTaskFleetOutcome.from_document(item) for item in raw_outcomes)
         if total < 1 or succeeded < 0 or len(outcomes) != total:
             raise ValueError("ReliableTask fleet report outcome count is invalid")
@@ -103,6 +107,7 @@ class ReliableTaskFleetReport:
             outcomes=outcomes,
             passed=passed,
             accepted_content_throughput_status=accepted_status,
+            finalized_object_count=finalized_object_count,
         )
 
 

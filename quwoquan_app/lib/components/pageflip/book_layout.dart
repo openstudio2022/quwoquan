@@ -12,10 +12,7 @@ StPageFlipLayout computeStPageFlipLayout({
 }) {
   final safeViewportWidth = math.max(1.0, viewportSize.width).toDouble();
   final safeViewportHeight = math.max(1.0, viewportSize.height).toDouble();
-  final middlePoint = Offset(
-    safeViewportWidth / 2,
-    safeViewportHeight / 2,
-  );
+  final middlePoint = Offset(safeViewportWidth / 2, safeViewportHeight / 2);
 
   final orientation =
       orientationOverride ??
@@ -50,14 +47,8 @@ Offset convertBookPointToViewport(
   return Offset(x, point.dy + bounds.top);
 }
 
-Offset convertViewportPointToBook(
-  Offset point,
-  StPageFlipBoundsRect bounds,
-) {
-  return Offset(
-    point.dx - bounds.left,
-    point.dy - bounds.top,
-  );
+Offset convertViewportPointToBook(Offset point, StPageFlipBoundsRect bounds) {
+  return Offset(point.dx - bounds.left, point.dy - bounds.top);
 }
 
 Offset convertViewportPointToPage(
@@ -100,10 +91,7 @@ StPageFlipRectPoints convertRectPointsToViewport(
   );
 }
 
-Rect resolveBookPageRect(
-  StPageFlipLayout layout, {
-  required bool isRightPage,
-}) {
+Rect resolveBookPageRect(StPageFlipLayout layout, {required bool isRightPage}) {
   final bounds = layout.bounds;
   final x = isRightPage ? bounds.left + bounds.pageWidth : bounds.left;
   return Rect.fromLTWH(x, bounds.top, bounds.pageWidth, bounds.height);

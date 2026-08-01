@@ -169,6 +169,7 @@ class _ResyncChatRepository extends MockChatRepository {
         'memberCount': 3,
         'maxGroupSize': 500,
         'receiptEnabled': true,
+        'lastMessageType': 'text',
         'messageCount': 0,
         'status': 'active',
         'createdAt': '2026-04-23T09:00:00.000Z',

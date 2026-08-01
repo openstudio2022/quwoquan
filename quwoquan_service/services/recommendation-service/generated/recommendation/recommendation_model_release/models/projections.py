@@ -8,23 +8,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 
-class LearningEvent(BaseModel):
-    """Read model: LearningEvents, collection: rec_learning_events"""
-    _id: str | None = None
-    eventId: str | None = None
-    userId: str | None = None
-    personaId: str | None = None
-    scenario: str | None = None
-    eventType: str | None = None
-    targetId: str | None = None
-    labels: dict[str, Any] | None = None
-    context: dict[str, Any] | None = None
-    occurredAt: float | None = None
-    createdAt: float | None = None
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
 class TrainingSample(BaseModel):
     """Read model: TrainingSamples, collection: rec_training_samples"""
     _id: str | None = None
@@ -47,11 +30,16 @@ class ModelRegistryEntry(BaseModel):
     """Read model: ModelRegistry, collection: rec_model_registry"""
     _id: str | None = None
     scenario: str | None = None
-    version: str | None = None
-    metrics: dict[str, Any] | None = None
-    artifactPath: str | None = None
-    production: bool | None = None
+    modelDigest: str | None = None
+    featureContractDigest: str | None = None
+    artifactUri: str | None = None
+    verificationDigest: str | None = None
+    evaluationMetrics: dict[str, Any] | None = None
+    status: str | None = None
+    version: int | None = None
     createdAt: float | None = None
+    activatedAt: float | None = None
+    retiredAt: float | None = None
     updatedAt: float | None = None
 
     model_config = ConfigDict(populate_by_name=True)

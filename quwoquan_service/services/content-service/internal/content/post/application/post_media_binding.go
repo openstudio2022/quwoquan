@@ -7,13 +7,16 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 func rejectClientMediaDeliveryReferences(post *postmodel.Post) error {
 	if post == nil {
 		return nil
+	}
+	if err := validateCaptureDisclosure(post); err != nil {
+		return err
 	}
 	if len(asStringSlice(post.MediaUrls)) > 0 ||
 		strings.TrimSpace(post.VideoUrl) != "" ||
@@ -25,22 +28,15 @@ func rejectClientMediaDeliveryReferences(post *postmodel.Post) error {
 			"Post command cannot carry media delivery references",
 		)
 	}
-	for _, row := range mediaItemRows(post.MediaItems) {
-		for _, forbidden := range []string{
-			"url",
-			"coverUrl",
-			"thumbnailUrl",
-			"localPath",
-			"objectKey",
-			"cdnUrl",
-		} {
-			if strings.TrimSpace(asString(row[forbidden])) != "" {
-				return rterr.NewInvalidArgument(
-					rterr.ModuleContent,
-					"发布内容只能引用媒体资产",
-					"Post mediaItems exposed "+forbidden,
-				)
-			}
+	for _, item := range post.MediaItems {
+		if strings.TrimSpace(item.Url) != "" ||
+			strings.TrimSpace(item.CoverUrl) != "" ||
+			strings.TrimSpace(item.ThumbnailUrl) != "" {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"发布内容只能引用媒体资产",
+				"Post mediaItems exposed a delivery reference",
+			)
 		}
 	}
 	return nil
@@ -62,6 +58,9 @@ func (s *PostService) prepareMediaAssetsForPublication(
 	if err := validateArticleMediaCommand(post, assetIDs); err != nil {
 		return err
 	}
+	// Client-owned capture tags are never trusted. Start from a withdrawn
+	// subtree and repopulate it only from bound MediaAsset facts below.
+	projectCaptureMetadataFeatures(post, nil, nil)
 	if len(assetIDs) == 0 {
 		post.MediaAssetIds = nil
 		post.MediaUrls = nil
@@ -130,6 +129,7 @@ func (s *PostService) prepareMediaAssetsForPublication(
 			err.Error(),
 		)
 	}
+	projectCaptureMetadataFeatures(post, assets, bound)
 	post.MediaAssetIds = append([]string(nil), bound...)
 	return nil
 }
@@ -145,10 +145,6 @@ func ProjectBoundMediaAssets(
 	if post == nil {
 		return fmt.Errorf("post is required")
 	}
-	// The draft carries non-delivery presentation metadata from the App. Keep it
-	// before clearing all client-controlled URL fields below; the bind projection
-	// will rebuild each media item with canonical public slice references.
-	metadataByAssetID := boundMediaItemMetadata(post.MediaItems)
 	manualCoverIDs := make(map[string]struct{})
 	for _, assetID := range boundAssetIDs {
 		asset := assets[assetID]
@@ -156,11 +152,6 @@ func ProjectBoundMediaAssets(
 			continue
 		}
 		coverAssetID := strings.TrimSpace(asset.ManualCoverAssetID)
-		if draftCoverAssetID := strings.TrimSpace(
-			asString(metadataByAssetID[assetID]["coverAssetId"]),
-		); draftCoverAssetID != "" {
-			coverAssetID = draftCoverAssetID
-		}
 		if coverAssetID != "" {
 			manualCoverIDs[coverAssetID] = struct{}{}
 		}
@@ -175,7 +166,7 @@ func ProjectBoundMediaAssets(
 	post.ThumbnailUrl = ""
 
 	mediaURLs := make([]string, 0, len(boundAssetIDs))
-	mediaItems := make([]map[string]any, 0, len(boundAssetIDs))
+	mediaItems := make([]postmodel.PostMediaItem, 0, len(boundAssetIDs))
 	var firstImageSlice string
 	var firstVideoSlice string
 	var firstVideoCover string
@@ -191,9 +182,12 @@ func ProjectBoundMediaAssets(
 				continue
 			}
 			mediaURLs = append(mediaURLs, publicSliceKey)
-			item := boundMediaItem(metadataByAssetID[assetID])
-			item["kind"] = "image"
-			item["url"] = publicSliceKey
+			item := postmodel.PostMediaItem{
+				Kind:              "image",
+				MediaAssetId:      asset.AssetID,
+				MediaAssetVersion: asset.Version,
+				Url:               publicSliceKey,
+			}
 			mediaItems = append(mediaItems, item)
 			if firstImageSlice == "" {
 				firstImageSlice = publicSliceKey
@@ -202,28 +196,35 @@ func ProjectBoundMediaAssets(
 			coverSlice, err := boundVideoCoverSlice(
 				asset,
 				assets,
-				metadataByAssetID[assetID],
 			)
 			if err != nil {
 				return err
 			}
 			mediaURLs = append(mediaURLs, publicSliceKey)
-			item := boundMediaItem(metadataByAssetID[assetID])
-			item["kind"] = "video"
-			item["mediaAssetId"] = asset.AssetID
-			item["mediaAssetVersion"] = asset.Version
-			item["url"] = publicSliceKey
-			item["coverUrl"] = coverSlice
-			item["durationMs"] = asset.VerifiedDurationMs
-			item["width"] = asset.VideoWidth
-			item["height"] = asset.VideoHeight
+			item := postmodel.PostMediaItem{
+				Kind:                     "video",
+				MediaAssetId:             asset.AssetID,
+				MediaAssetVersion:        asset.Version,
+				Url:                      publicSliceKey,
+				CoverUrl:                 coverSlice,
+				ThumbnailUrl:             coverSlice,
+				DurationMs:               asset.VerifiedDurationMs,
+				Width:                    int64(asset.VideoWidth),
+				Height:                   int64(asset.VideoHeight),
+				CoverStrategy:            strings.TrimSpace(asset.CoverStrategy),
+				CoverFrameTimeMs:         asset.CoverFrameTimeMs,
+				PreviewTrackVersion:      int64(asset.PreviewTrackVersion),
+				PreviewTrackManifestUrl:  strings.TrimSpace(asset.PreviewTrackManifestSliceKey),
+				HlsCmafDescriptorVersion: int64(asset.HLSCMAFDescriptorVersion),
+				HlsCmafMasterManifestUrl: strings.TrimSpace(asset.HLSCMAFMasterManifestSliceKey),
+			}
 			if asset.PreviewTrackVersion > 0 {
-				item["previewTrackVersion"] = asset.PreviewTrackVersion
-				item["previewTrackManifestUrl"] = asset.PreviewTrackManifestSliceKey
+				item.PreviewTrackVersion = int64(asset.PreviewTrackVersion)
+				item.PreviewTrackManifestUrl = asset.PreviewTrackManifestSliceKey
 			}
 			if asset.HLSCMAFDescriptorVersion > 0 {
-				item["hlsCmafDescriptorVersion"] = asset.HLSCMAFDescriptorVersion
-				item["hlsCmafMasterManifestUrl"] = asset.HLSCMAFMasterManifestSliceKey
+				item.HlsCmafDescriptorVersion = int64(asset.HLSCMAFDescriptorVersion)
+				item.HlsCmafMasterManifestUrl = asset.HLSCMAFMasterManifestSliceKey
 			}
 			mediaItems = append(mediaItems, item)
 			if firstVideoSlice == "" {
@@ -276,23 +277,15 @@ func validateArticleMediaCommand(
 	for _, assetID := range boundAssetIDs {
 		allowed[strings.TrimSpace(assetID)] = struct{}{}
 	}
-	for _, row := range articleManifestRows(post.ArticleAssetManifest) {
-		for _, forbidden := range []string{
-			"localPath",
-			"objectKey",
-			"cdnUrl",
-			"uploadUrl",
-			"presignUrl",
-		} {
-			if strings.TrimSpace(asString(row[forbidden])) != "" {
-				return rterr.NewInvalidArgument(
-					rterr.ModuleContent,
-					"文章素材只能引用媒体资产",
-					"article media command exposed "+forbidden,
-				)
-			}
+	for _, asset := range post.ArticleAssetManifest.Assets {
+		if strings.TrimSpace(asset.PublicSliceKey) != "" {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"文章素材只能引用媒体资产",
+				"article media command exposed a storage or delivery reference",
+			)
 		}
-		assetID := strings.TrimSpace(asString(row["assetId"]))
+		assetID := strings.TrimSpace(asset.AssetId)
 		if assetID == "" {
 			return rterr.NewInvalidArgument(
 				rterr.ModuleContent,
@@ -316,124 +309,51 @@ func projectArticleAssetManifest(
 	assets map[string]MediaAssetBindingSlice,
 	boundAssetIDs []string,
 ) {
-	metadata := make(map[string]map[string]any)
-	for _, row := range articleManifestRows(post.ArticleAssetManifest) {
-		assetID := strings.TrimSpace(asString(row["assetId"]))
+	metadata := make(map[string]postmodel.PostArticleAsset)
+	for _, asset := range post.ArticleAssetManifest.Assets {
+		assetID := strings.TrimSpace(asset.AssetId)
 		if assetID != "" {
-			metadata[assetID] = row
+			metadata[assetID] = asset
 		}
 	}
-	rows := make([]map[string]any, 0, len(boundAssetIDs))
+	rows := make([]postmodel.PostArticleAsset, 0, len(boundAssetIDs))
 	for _, assetID := range boundAssetIDs {
 		asset := assets[assetID]
 		if !strings.EqualFold(strings.TrimSpace(asset.MediaType), "image") {
 			continue
 		}
 		source := metadata[assetID]
-		role := strings.TrimSpace(asString(source["role"]))
+		role := strings.TrimSpace(source.Role)
 		if role == "" {
 			role = "figure"
 		}
-		row := map[string]any{
-			"assetId":        assetID,
-			"kind":           "image",
-			"role":           role,
-			"publicSliceKey": strings.TrimSpace(asset.PublicSliceKey),
-		}
-		for _, field := range []string{"layout", "caption"} {
-			if value := strings.TrimSpace(asString(source[field])); value != "" {
-				row[field] = value
-			}
+		row := postmodel.PostArticleAsset{
+			AssetId:        assetID,
+			Kind:           "image",
+			Role:           role,
+			Layout:         strings.TrimSpace(source.Layout),
+			Caption:        strings.TrimSpace(source.Caption),
+			PublicSliceKey: strings.TrimSpace(asset.PublicSliceKey),
 		}
 		rows = append(rows, row)
 	}
-	post.ArticleAssetManifest = map[string]any{
-		"schema":          "article-asset-manifest",
-		"markdownVersion": "qwq-rich-md",
-		"assets":          rows,
-	}
-}
-
-func articleManifestRows(manifest map[string]any) []map[string]any {
-	raw, exists := manifest["assets"]
-	if !exists {
-		return nil
-	}
-	rows := make([]map[string]any, 0)
-	switch values := raw.(type) {
-	case []map[string]any:
-		rows = append(rows, values...)
-	case []any:
-		for _, value := range values {
-			if row, ok := value.(map[string]any); ok {
-				rows = append(rows, row)
-			}
-		}
-	}
-	return rows
-}
-
-func boundMediaItemMetadata(raw any) map[string]map[string]any {
-	items := mediaItemRows(raw)
-	result := make(map[string]map[string]any, len(items))
-	for _, item := range items {
-		assetID := strings.TrimSpace(asString(item["mediaId"]))
-		if assetID == "" {
-			continue
-		}
-		result[assetID] = item
-	}
-	return result
-}
-
-func mediaItemRows(raw any) []map[string]any {
-	items := make([]map[string]any, 0)
-	switch value := raw.(type) {
-	case []map[string]any:
-		items = append(items, value...)
-	case []any:
-		for _, item := range value {
-			if typed, ok := item.(map[string]any); ok {
-				items = append(items, typed)
-			}
-		}
-	}
-	return items
-}
-
-func boundMediaItem(source map[string]any) map[string]any {
-	item := make(map[string]any)
-	// The client may retain non-delivery presentation metadata while a draft is
-	// awaiting binding. URL-shaped fields are deliberately excluded: only this
-	// function supplies url/coverUrl from public slice projection.
-	for _, field := range []string{
-		"mediaId",
-		"coverAssetId",
-		"durationMs",
-		"width",
-		"height",
-		"title",
-		"coverStrategy",
-		"coverFrameTimeMs",
-	} {
-		if value, exists := source[field]; exists {
-			item[field] = value
-		}
-	}
-	return item
+	manifest := post.ArticleAssetManifest
+	manifest.Schema = "article-asset-manifest"
+	manifest.MarkdownVersion = "qwq-rich-md"
+	manifest.MarkdownDialect = defaultString(
+		strings.TrimSpace(post.MarkdownDialect),
+		"qwq-rich-md",
+	)
+	manifest.ArticleMarkdownDigest = strings.TrimSpace(post.ArticleMarkdownDigest)
+	manifest.Assets = rows
+	post.ArticleAssetManifest = manifest
 }
 
 func boundVideoCoverSlice(
 	video MediaAssetBindingSlice,
 	assets map[string]MediaAssetBindingSlice,
-	presentation map[string]any,
 ) (string, error) {
 	coverAssetID := strings.TrimSpace(video.ManualCoverAssetID)
-	if draftCoverAssetID := strings.TrimSpace(
-		asString(presentation["coverAssetId"]),
-	); draftCoverAssetID != "" {
-		coverAssetID = draftCoverAssetID
-	}
 	if coverAssetID != "" {
 		cover, found := assets[coverAssetID]
 		if !found || !cover.Ready || !strings.EqualFold(cover.MediaType, "image") {

@@ -41,12 +41,10 @@ def environment_preflight(
     credential_issues: list[str] = []
     if require_cursor_key:
         try:
-            from core.cursor_credentials import cursor_key_file_issues, resolve_cursor_api_key
+            from core.cursor_credentials import cursor_key_file_issues
         except Exception:  # noqa: BLE001
-            from cursor_credentials import cursor_key_file_issues, resolve_cursor_api_key  # type: ignore
+            from cursor_credentials import cursor_key_file_issues  # type: ignore
         credential_issues = cursor_key_file_issues()
-        if not credential_issues:
-            resolve_cursor_api_key()
     runtime = runtime_report()
     cursor_key = (
         {

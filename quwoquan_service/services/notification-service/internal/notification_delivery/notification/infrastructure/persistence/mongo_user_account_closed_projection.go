@@ -54,7 +54,6 @@ type MongoUserAccountClosedProjection struct {
 	recipients       *mongo.Collection
 	commandReceipts  *mongo.Collection
 	deliveryOutbox   *mongo.Collection
-	providerAttempts *mongo.Collection
 	restrictions     *mongo.Collection
 	restrictionInbox *mongo.Collection
 	inbox            *mongo.Collection
@@ -78,7 +77,6 @@ func NewMongoUserAccountClosedProjection(
 		recipients:       db.Collection("notification_delivery_job_recipients"),
 		commandReceipts:  db.Collection(closedAccountDeliveryReceiptCollection),
 		deliveryOutbox:   db.Collection(closedAccountDeliveryOutboxCollection),
-		providerAttempts: db.Collection("external_provider_attempt_ledger"),
 		restrictions:     db.Collection("notification_user_account_restrictions"),
 		restrictionInbox: db.Collection("notification_user_account_restriction_inbox"),
 		inbox:            db.Collection(UserAccountClosedInboxCollection),
@@ -171,19 +169,6 @@ func (projection *MongoUserAccountClosedProjection) EnsureIndexes(
 	); err != nil {
 		return fmt.Errorf(
 			"ensure notification account cleanup recipient index: %w",
-			err,
-		)
-	}
-	if _, err := projection.providerAttempts.Indexes().CreateOne(
-		ctx,
-		mongo.IndexModel{
-			Keys: bson.D{{Key: "taskId", Value: 1}},
-			Options: options.Index().
-				SetName("idx_notification_provider_attempt_task_cleanup"),
-		},
-	); err != nil {
-		return fmt.Errorf(
-			"ensure notification account cleanup attempt index: %w",
 			err,
 		)
 	}

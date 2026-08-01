@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
@@ -40,13 +40,11 @@ func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
 	if fontPreset := strings.TrimSpace(asString(frontMatter["fontPreset"])); fontPreset != "" {
 		post.ArticleFontPreset = fontPreset
 	}
-	if len(post.ArticleRenderProfile) > 0 {
-		if template := strings.TrimSpace(asString(post.ArticleRenderProfile["template"])); template != "" {
-			post.ArticleTemplate = template
-		}
-		if fontPreset := strings.TrimSpace(asString(post.ArticleRenderProfile["fontPreset"])); fontPreset != "" {
-			post.ArticleFontPreset = fontPreset
-		}
+	if template := strings.TrimSpace(post.ArticleRenderProfile.Template); template != "" {
+		post.ArticleTemplate = template
+	}
+	if fontPreset := strings.TrimSpace(post.ArticleRenderProfile.FontPreset); fontPreset != "" {
+		post.ArticleFontPreset = fontPreset
 	}
 	post.MediaUrls = markdownAssetURIs(markdown)
 }

@@ -73,8 +73,7 @@ Uint8List? _locateExifTiffBlock(Uint8List bytes) {
     if (lengthOffset + 2 > bytes.length) {
       return null;
     }
-    final segmentLength =
-        (bytes[lengthOffset] << 8) | bytes[lengthOffset + 1];
+    final segmentLength = (bytes[lengthOffset] << 8) | bytes[lengthOffset + 1];
     if (segmentLength < 2) {
       return null;
     }
@@ -132,10 +131,7 @@ MediaCaptureMetadata _metadataFromExif(img.ExifData exif) {
 String? _ascii(img.IfdValue? value) {
   if (value == null) return null;
   // EXIF ascii 以 NUL 结尾，部分机身还会补空格。
-  final text = value
-      .toString()
-      .replaceAll('\u0000', '')
-      .trim();
+  final text = value.toString().replaceAll('\u0000', '').trim();
   return text.isEmpty ? null : text;
 }
 

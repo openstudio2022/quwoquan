@@ -8,7 +8,7 @@ tables:
       type: VARCHAR(36)
       constraints:
       - PK
-    - name: user_id
+    - name: account_id
       type: VARCHAR(36)
       constraints:
       - NOT_NULL
@@ -17,7 +17,7 @@ tables:
       constraints:
       - NOT_NULL
     - name: granted_scope
-      type: JSONB
+      type: TEXT
       constraints:
       - NOT_NULL
     - name: granted_at
@@ -28,14 +28,23 @@ tables:
     - name: revoked_at
       type: TIMESTAMPTZ
     indexes:
-    - name: idx_consent_user_skill
+    - name: idx_skill_consents_account_active
       columns:
-      - user_id
-      - skill_id
+      - account_id
+      - granted_at
+      condition: revoked_at IS NULL
     unique_constraints:
-    - name: uq_consent_active
+    - name: uq_skill_consents_account_skill_active
       columns:
-      - user_id
+      - account_id
       - skill_id
       condition: revoked_at IS NULL
+  skill_consent_command_receipts:
+    entity: SkillConsent
+    role: authoritative
+    description: 与授权事实及事件在同一 PostgreSQL 事务提交的命令回执；同一账号的 Idempotency-Key 只能对应同一 operation 与 payload digest。
+  skill_consent_events:
+    entity: SkillConsent
+    role: append_only
+    description: 与授权事实及命令回执同事务追加的 SkillConsentGranted/SkillConsentRevoked 审计事件存储。
 role: authoritative

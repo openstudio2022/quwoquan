@@ -9,19 +9,19 @@ import (
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
-// Post, discovery-feed and playable premium-video projections may serve a
+// Post and discovery-feed projections may serve a
 // release-bound initial page. The counts are live readback counts, never the
 // importer's attempted-write counters.
 type ActiveSupplySnapshot struct {
-	Environment           string
-	SourceOwner           string
-	Status                string
-	ActiveReleaseID       string
-	ManifestDigest        string
-	ReadbackStatus        string
-	Posts                 int64
-	DiscoveryPosts        int64
-	PremiumPlayableVideos int64
+	Environment     string
+	SourceOwner     string
+	Status          string
+	ActiveReleaseID string
+	ManifestDigest  string
+	ReadbackStatus  string
+	Posts           int64
+	DiscoveryPosts  int64
+	PlayableVideos  int64
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
@@ -45,7 +45,7 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.DiscoveryPosts == 0 &&
-		snapshot.PremiumPlayableVideos == 0
+		snapshot.PlayableVideos == 0
 }
 
 func (snapshot ActiveSupplySnapshot) DiscoveryReady() bool {
@@ -54,22 +54,22 @@ func (snapshot ActiveSupplySnapshot) DiscoveryReady() bool {
 		snapshot.DiscoveryPosts > 0
 }
 
-func (snapshot ActiveSupplySnapshot) PremiumVideoReady() bool {
-	return snapshot.DiscoveryReady() && snapshot.PremiumPlayableVideos > 0
+func (snapshot ActiveSupplySnapshot) PlayableVideoReady() bool {
+	return snapshot.DiscoveryReady() && snapshot.PlayableVideos > 0
 }
 
 func (snapshot ActiveSupplySnapshot) Ready() bool {
-	return snapshot.PremiumVideoReady()
+	return snapshot.PlayableVideoReady()
 }
 
 type ActiveSupplyReader interface {
 	ActiveSupplySnapshot(ctx context.Context) (ActiveSupplySnapshot, error)
 }
 
-// PremiumPlayableSupplyReader counts the currently eligible premium video
-// projection whose discovery candidate and hydrated Post are bound to the same
-// active canonical release.
-type PremiumPlayableSupplyReader interface {
+// PlayableVideoSupplyReader counts canonical playable video Posts bound to the
+// same active release. Premium recommendation eligibility belongs exclusively
+// to recommendation-service and is not part of Content release attestation.
+type PlayableVideoSupplyReader interface {
 	CountActiveReleasePlayableVideos(
 		ctx context.Context,
 		activeReleaseID string,

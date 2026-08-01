@@ -4,23 +4,20 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/application"
 	"testing"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
-func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t *testing.T) {
+func TestProjectBoundMediaAssetsReplacesClientDeliveryReferences(t *testing.T) {
 	post := &postmodel.Post{
 		ContentType: "video",
-		MediaItems: []map[string]any{
-			{
-				"mediaId":    "mas_video_001",
-				"durationMs": int64(12_000),
-				"width":      int64(1080),
-				"height":     int64(1920),
-				"url":        "https://untrusted.example/video.mp4",
-				"coverUrl":   "https://untrusted.example/cover.jpg",
-				"unexpected": "must-not-survive",
-			},
-		},
+		MediaItems: []postmodel.PostMediaItem{{
+			MediaAssetId: "mas_video_001",
+			DurationMs:   12_000,
+			Width:        1080,
+			Height:       1920,
+			Url:          "https://untrusted.example/video.mp4",
+			CoverUrl:     "https://untrusted.example/cover.jpg",
+		}},
 	}
 	const videoSlice = "media/video/s/asset/mas_video_001/v3/source.mp4"
 	const coverSlice = "media/video/s/asset/mas_video_001/v3/cover.jpg"
@@ -59,42 +56,32 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	if post.CoverUrl != coverDeliveryReference {
 		t.Fatalf("cover URL must be the verified VOD cover slice: %q", post.CoverUrl)
 	}
-	items, ok := post.MediaItems.([]map[string]any)
-	if !ok || len(items) != 1 {
+	items := post.MediaItems
+	if len(items) != 1 {
 		t.Fatalf("expected one projected media item, got %#v", post.MediaItems)
 	}
 	item := items[0]
-	if item["url"] != videoSlice {
+	if item.Url != videoSlice {
 		t.Fatalf("media item must replace client URL: %#v", item)
 	}
-	if item["coverUrl"] != post.CoverUrl {
+	if item.CoverUrl != post.CoverUrl {
 		t.Fatalf("media item must replace client cover URL: %#v", item)
 	}
-	if item["durationMs"] != int64(12_500) || item["width"] != 720 || item["height"] != 1280 {
+	if item.DurationMs != int64(12_500) || item.Width != 720 || item.Height != 1280 {
 		t.Fatalf("video descriptor must replace unverified client metadata: %#v", item)
 	}
-	if item["mediaAssetId"] != "mas_video_001" || item["mediaAssetVersion"] != int64(3) ||
-		item["previewTrackVersion"] != 2 ||
-		item["previewTrackManifestUrl"] != "media/video/s/asset/mas_video_001/v3/storyboard.json" ||
-		item["hlsCmafDescriptorVersion"] != 1 ||
-		item["hlsCmafMasterManifestUrl"] != hlsMasterSlice {
+	if item.MediaAssetId != "mas_video_001" || item.MediaAssetVersion != int64(3) ||
+		item.PreviewTrackVersion != 2 ||
+		item.PreviewTrackManifestUrl != "media/video/s/asset/mas_video_001/v3/storyboard.json" ||
+		item.HlsCmafDescriptorVersion != 1 ||
+		item.HlsCmafMasterManifestUrl != hlsMasterSlice {
 		t.Fatalf("video identity and preview track must come from the asset: %#v", item)
-	}
-	if _, found := item["unexpected"]; found {
-		t.Fatalf("unapproved client metadata must not survive projection: %#v", item)
 	}
 }
 
 func TestProjectBoundMediaAssetsBindsDraftManualCoverAfterBothAssetsReady(t *testing.T) {
 	post := &postmodel.Post{
 		ContentType: "video",
-		MediaItems: []map[string]any{
-			{
-				"mediaId":       "mas_video_002",
-				"coverAssetId":  "mas_cover_002",
-				"coverStrategy": "manual",
-			},
-		},
 	}
 	const videoSlice = "media/video/s/asset/mas_video_002/v2/source.mp4"
 	const coverSlice = "media/image/s/asset/mas_cover_002/v2/source.jpg"
@@ -109,6 +96,8 @@ func TestProjectBoundMediaAssetsBindsDraftManualCoverAfterBothAssetsReady(t *tes
 			VerifiedDurationMs:  8_000,
 			VideoWidth:          1080,
 			VideoHeight:         1920,
+			CoverStrategy:       "manual",
+			ManualCoverAssetID:  "mas_cover_002",
 		},
 		"mas_cover_002": {
 			AssetID:          "mas_cover_002",
@@ -134,8 +123,8 @@ func TestProjectBoundMediaAssetsBindsDraftManualCoverAfterBothAssetsReady(t *tes
 	if len(post.MediaUrls) != 1 || post.MediaUrls[0] != videoSlice {
 		t.Fatalf("cover-only image leaked into post media list: %+v", post.MediaUrls)
 	}
-	items, ok := post.MediaItems.([]map[string]any)
-	if !ok || len(items) != 1 || items[0]["coverUrl"] != coverSlice {
+	items := post.MediaItems
+	if len(items) != 1 || items[0].CoverUrl != coverSlice {
 		t.Fatalf("manual cover projection mismatch: %#v", post.MediaItems)
 	}
 }
@@ -145,18 +134,10 @@ func TestProjectBoundMediaAssetsRebuildsArticleManifestFromPublicSlices(
 ) {
 	post := &postmodel.Post{
 		ContentType: "article",
-		ArticleAssetManifest: map[string]any{
-			"assets": []any{
-				map[string]any{
-					"assetId": "mas_article_cover",
-					"role":    "cover",
-				},
-				map[string]any{
-					"assetId": "mas_article_figure",
-					"role":    "figure",
-					"layout":  "wrapLeft",
-					"caption": "配图",
-				},
+		ArticleAssetManifest: postmodel.PostArticleAssetManifest{
+			Assets: []postmodel.PostArticleAsset{
+				{AssetId: "mas_article_cover", Role: "cover"},
+				{AssetId: "mas_article_figure", Role: "figure", Layout: "wrapLeft", Caption: "配图"},
 			},
 		},
 	}
@@ -181,21 +162,19 @@ func TestProjectBoundMediaAssetsRebuildsArticleManifestFromPublicSlices(
 	); err != nil {
 		t.Fatalf("project article media: %v", err)
 	}
-	rows, ok := post.ArticleAssetManifest["assets"].([]map[string]any)
-	if !ok || len(rows) != 2 {
+	rows := post.ArticleAssetManifest.Assets
+	if len(rows) != 2 {
 		t.Fatalf(
 			"article manifest rows were not rebuilt: %#v",
 			post.ArticleAssetManifest,
 		)
 	}
 	for _, row := range rows {
-		if row["publicSliceKey"] == "" ||
-			row["objectKey"] != nil ||
-			row["localPath"] != nil {
+		if row.PublicSliceKey == "" {
 			t.Fatalf("article manifest exposed storage authority: %#v", row)
 		}
 	}
-	if rows[1]["layout"] != "wrapLeft" || rows[1]["caption"] != "配图" {
+	if rows[1].Layout != "wrapLeft" || rows[1].Caption != "配图" {
 		t.Fatalf("article presentation metadata was lost: %#v", rows[1])
 	}
 }

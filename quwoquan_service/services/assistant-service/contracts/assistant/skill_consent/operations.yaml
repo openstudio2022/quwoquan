@@ -1,5 +1,5 @@
 commercial_defaults:
-  block_reason: canonical operation awaits object-centered commercial migration
+  block_reason: 未声明的 SkillConsent operation 默认阻断；已声明操作仍需同一候选四环境 Remote UAT、SLI/SLO 读回与回滚证据
   gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
   status: blocked
   target_story: app-cloud-business-object-commercial-closure
@@ -12,13 +12,13 @@ api_routes:
     facet: SkillConsentCommandFacade
     kind: command
     method: grantConsent
-  description: 授权 Skill；命名状态迁移，重复授权持久化 no-op receipt，产生版本化事实与事件。
+  description: 授权 Skill；命名状态迁移，重复授权持久化 no-op receipt，仅真实状态变化追加不可变事实与审计事件。
   method: POST
   operation: GrantSkillConsent
   path: /assistant/skills/{skillId}/consent
   commercial:
     status: blocked
-    block_reason: command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentGranted outbox event; store/domain model remain under AssistantConversation
+    block_reason: 对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
     gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   request_bindings:
@@ -32,7 +32,8 @@ api_routes:
     idempotency: required
   error_codes:
   - ASSISTANT.USER.consent_invalid_argument
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.consent_idempotency_conflict
+  - ASSISTANT.USER.consent_unauthorized
   - ASSISTANT.SYSTEM.consent_unavailable
   privacy:
     request_classification: SENSITIVE
@@ -72,7 +73,7 @@ api_routes:
   path: /assistant/skills/{skillId}/consent
   commercial:
     status: blocked
-    block_reason: command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentRevoked outbox event; store/domain model remain under AssistantConversation
+    block_reason: 对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
     gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   request_bindings:
@@ -86,7 +87,8 @@ api_routes:
     idempotency: required
   error_codes:
   - ASSISTANT.USER.consent_invalid_argument
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.consent_idempotency_conflict
+  - ASSISTANT.USER.consent_unauthorized
   - ASSISTANT.SYSTEM.consent_unavailable
   privacy:
     request_classification: SENSITIVE
@@ -125,7 +127,7 @@ api_routes:
   path: /assistant/consents
   commercial:
     status: blocked
-    block_reason: query has real PostgreSQL evidence but SkillConsent domain model, store and HTTP adapter remain physically owned by AssistantConversation
+    block_reason: 对象专属 QueryFacade 与真实 PostgreSQL 读证据已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
     gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   reliability:
@@ -135,7 +137,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.consent_unauthorized
   - ASSISTANT.SYSTEM.consent_unavailable
   privacy:
     request_classification: INTERNAL
@@ -183,30 +185,31 @@ contract_test:
         - DELETE /assistant/skills/{skillId}/consent
     service_side:
       data_management:
-        cleanup: TRUNCATE skill_consents CASCADE
+        cleanup: TRUNCATE skill_consent_events, skill_consent_command_receipts, skill_consents CASCADE
         seed: fixture 工厂预制到真实 PG
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
         postgres: embedded-postgres
       scenarios:
       - assertions:
-        - SELECT * FROM skill_consents WHERE user_id=? AND skill_id=? → row exists, revoked_at IS NULL
-        - eventSpy.AssertPublished('SkillConsentGranted', {skillId, grantedScope})
+        - SELECT * FROM skill_consents WHERE account_id=? AND skill_id=? → row exists, revoked_at IS NULL
+        - skill_consent_command_receipts contains canonical response
+        - skill_consent_events contains SkillConsentGranted
         command: GrantSkillConsent
         name: grant_consent
         seed: []
       - assertions:
-        - PG unique violation (partial index) → handled gracefully
+        - distinct Idempotency-Key 的重复授权返回 changed=false/replayed=false
+        - partial unique index 保持一个 active fact，命令回执分别持久化
         command: GrantSkillConsent x2 (same user+skill)
         name: duplicate_consent_rejected
         seed:
         - fixture.NewSkillConsent()
       - assertions:
         - SELECT revoked_at FROM skill_consents → NOT NULL
-        - eventSpy.AssertPublished('SkillConsentRevoked')
+        - skill_consent_command_receipts contains canonical response
+        - skill_consent_events contains SkillConsentRevoked
         command: RevokeSkillConsent
         name: revoke_consent
         seed:
         - fixture.NewSkillConsent()
-      spy_targets:
-      - event_publisher

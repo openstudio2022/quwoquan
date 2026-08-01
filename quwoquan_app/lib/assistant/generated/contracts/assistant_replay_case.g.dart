@@ -105,43 +105,53 @@ class AssistantReplayModelStepWireFields {
 
 class AssistantReplayRequestWire {
   const AssistantReplayRequestWire({
-    required this.conversationId,
+    required this.sessionId,
     required this.turnId,
     this.userId = "",
     this.inputText = "",
+    required this.skillId,
+    required this.domainId,
     this.clientContext = const <String, dynamic>{},
   });
 
-  final String conversationId;
+  final String sessionId;
   final String turnId;
   final String userId;
   final String inputText;
+  final String skillId;
+  final String domainId;
   final Map<String, dynamic> clientContext;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'conversationId': conversationId,
+        'sessionId': sessionId,
         'turnId': turnId,
         'userId': userId,
         'inputText': inputText,
+        'skillId': skillId,
+        'domainId': domainId,
         'clientContext': clientContext,
       };
 
   factory AssistantReplayRequestWire.fromJson(Map<String, dynamic> json) {
     return AssistantReplayRequestWire(
-      conversationId: (json['conversationId'] as String?)?.trim() ?? "",
+      sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
       userId: (json['userId'] as String?)?.trim() ?? "",
       inputText: (json['inputText'] as String?)?.trim() ?? "",
+      skillId: (json['skillId'] as String?)?.trim() ?? "",
+      domainId: (json['domainId'] as String?)?.trim() ?? "",
       clientContext: (json['clientContext'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
     );
   }
 }
 
 class AssistantReplayRequestWireFields {
-  static const String conversationId = 'conversationId';
+  static const String sessionId = 'sessionId';
   static const String turnId = 'turnId';
   static const String userId = 'userId';
   static const String inputText = 'inputText';
+  static const String skillId = 'skillId';
+  static const String domainId = 'domainId';
   static const String clientContext = 'clientContext';
 }
 
@@ -186,14 +196,14 @@ class AssistantReplayCaseWire {
   const AssistantReplayCaseWire({
     required this.replayCaseId,
     this.title = "",
-    this.request = const AssistantReplayRequestWire(conversationId: "", turnId: ""),
+    this.request = const AssistantReplayRequestWire(sessionId: "", turnId: "", skillId: "", domainId: ""),
     this.fakeModelScript = const <AssistantReplayModelStepWire>[],
     this.fakeToolScript = const <AssistantReplayToolStepWire>[],
     this.fakeDeviceContext = const <String, dynamic>{},
     this.expectedStreamEvents = const <AssistantStreamEventWire>[],
     this.expectedTraceEvents = const <AssistantTraceEventWire>[],
     this.expectations = const AssistantReplayExpectationsWire(selectedSkillId: "", selectedDomainId: "", finalAnswerMode: FinalAnswerMode.blocked),
-    this.expectedRunResponse = const AssistantRunResponseWire(conversationId: "", turnId: ""),
+    this.expectedRunResponse = const AssistantRunResponseWire(sessionId: "", turnId: ""),
   });
 
   final String replayCaseId;
@@ -224,14 +234,14 @@ class AssistantReplayCaseWire {
     return AssistantReplayCaseWire(
       replayCaseId: (json['replayCaseId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
-      request: json['request'] is Map ? AssistantReplayRequestWire.fromJson((json['request'] as Map).cast<String, dynamic>()) : const AssistantReplayRequestWire(conversationId: "", turnId: ""),
+      request: json['request'] is Map ? AssistantReplayRequestWire.fromJson((json['request'] as Map).cast<String, dynamic>()) : const AssistantReplayRequestWire(sessionId: "", turnId: "", skillId: "", domainId: ""),
       fakeModelScript: (json['fakeModelScript'] as List?)?.whereType<Map>().map((item) => AssistantReplayModelStepWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantReplayModelStepWire>[],
       fakeToolScript: (json['fakeToolScript'] as List?)?.whereType<Map>().map((item) => AssistantReplayToolStepWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantReplayToolStepWire>[],
       fakeDeviceContext: (json['fakeDeviceContext'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       expectedStreamEvents: (json['expectedStreamEvents'] as List?)?.whereType<Map>().map((item) => AssistantStreamEventWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantStreamEventWire>[],
       expectedTraceEvents: (json['expectedTraceEvents'] as List?)?.whereType<Map>().map((item) => AssistantTraceEventWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTraceEventWire>[],
       expectations: json['expectations'] is Map ? AssistantReplayExpectationsWire.fromJson((json['expectations'] as Map).cast<String, dynamic>()) : const AssistantReplayExpectationsWire(selectedSkillId: "", selectedDomainId: "", finalAnswerMode: FinalAnswerMode.blocked),
-      expectedRunResponse: json['expectedRunResponse'] is Map ? AssistantRunResponseWire.fromJson((json['expectedRunResponse'] as Map).cast<String, dynamic>()) : const AssistantRunResponseWire(conversationId: "", turnId: ""),
+      expectedRunResponse: json['expectedRunResponse'] is Map ? AssistantRunResponseWire.fromJson((json['expectedRunResponse'] as Map).cast<String, dynamic>()) : const AssistantRunResponseWire(sessionId: "", turnId: ""),
     );
   }
 

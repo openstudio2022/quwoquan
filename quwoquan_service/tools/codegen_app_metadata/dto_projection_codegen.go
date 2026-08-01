@@ -34,14 +34,14 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 		dt := normalizeDartType(f.DartType)
 		if f.Nullable {
 			b.WriteString(fmt.Sprintf("    this.%s,\n", f.Name))
-		} else if proj.Strict {
-			b.WriteString(fmt.Sprintf("    required this.%s,\n", f.Name))
 		} else if md := mapEmptyCtorDefaultFromYaml(f, dt); md != "" {
 			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, md))
 		} else if cd := constSafeCtorDefaultFromYaml(f, dt); cd != "" {
 			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, cd))
 		} else if ld := listCtorDefaultConst(dt); ld != "" {
 			b.WriteString(fmt.Sprintf("    this.%s = %s,\n", f.Name, ld))
+		} else if proj.Strict {
+			b.WriteString(fmt.Sprintf("    required this.%s,\n", f.Name))
 		} else {
 			b.WriteString(fmt.Sprintf("    required this.%s,\n", f.Name))
 		}
@@ -197,6 +197,9 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 // Always use field name; source only describes the storage/projection origin
 // (e.g. Mongo `_id`) and must never appear as a client wire key.
 func projectionWireKey(f projectionFieldDef) string {
+	if wireName := strings.TrimSpace(f.WireName); wireName != "" {
+		return wireName
+	}
 	return strings.TrimSpace(f.Name)
 }
 

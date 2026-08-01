@@ -22,7 +22,7 @@ func TestResolveLocationLookupFailsClosedForMissingMaterial(t *testing.T) {
 		"gamma",
 		runtimeconfig.MapRuntimeConfigProvider{
 			Values: map[string]string{
-				"INTEGRATION_LOCATION_FIXTURE_BASE_URL": "https://map.fixture.test",
+				"INTEGRATION_LOCATION_BAIDU_BASE_URL": "https://api.map.baidu.com",
 			},
 		},
 	)
@@ -34,15 +34,15 @@ func TestResolveLocationLookupFailsClosedForMissingMaterial(t *testing.T) {
 		"gamma",
 		runtimeconfig.MapRuntimeConfigProvider{
 			Values: map[string]string{
-				"INTEGRATION_LOCATION_FIXTURE_BASE_URL": "https://map.fixture.test",
-				"INTEGRATION_LOCATION_FIXTURE_AK":       "fixture-ak",
+				"INTEGRATION_LOCATION_BAIDU_BASE_URL": "https://api.map.baidu.com",
+				"INTEGRATION_LOCATION_BAIDU_AK":       "test-ak",
 			},
 		},
 	)
 	if err != nil {
-		t.Fatalf("enabled fixture location binding resolution failed: %v", err)
+		t.Fatalf("enabled location binding resolution failed: %v", err)
 	}
-	if binding.AdapterID != "ext.map.protocol_fixture" {
+	if binding.AdapterID != "ext.map.baidu" {
 		t.Fatalf("unexpected adapter: %s", binding.AdapterID)
 	}
 }

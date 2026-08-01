@@ -31,7 +31,6 @@ import (
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
@@ -87,6 +86,7 @@ type postDetailClientWire struct {
 	CoverURL                string                                   `json:"coverUrl,omitempty"`
 	ThumbnailURL            string                                   `json:"thumbnailUrl,omitempty"`
 	VideoURL                string                                   `json:"videoUrl,omitempty"`
+	SourceAttribution       *postports.PostSourceAttributionSlice    `json:"sourceAttribution,omitempty"`
 	Width                   int64                                    `json:"width,omitempty"`
 	Height                  int64                                    `json:"height,omitempty"`
 	DurationMS              int64                                    `json:"durationMs,omitempty"`
@@ -143,6 +143,7 @@ func ProjectPostDetailForClient(
 		CoverURL:                detail.CoverURL,
 		ThumbnailURL:            detail.ThumbnailURL,
 		VideoURL:                detail.VideoURL,
+		SourceAttribution:       detail.SourceAttribution,
 		Width:                   detail.Width,
 		Height:                  detail.Height,
 		DurationMS:              detail.DurationMS,
@@ -539,17 +540,8 @@ func (h *ContentHandler) handleSubmitPostPublication(
 		)
 		return
 	}
-	encodedContent, err := json.Marshal(payload)
+	content, err := postapp.DecodeSubmitPostPublicationContent(payload)
 	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"发布内容格式不合法",
-			err.Error(),
-		))
-		return
-	}
-	var content postmodel.Post
-	if err := json.Unmarshal(encodedContent, &content); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"发布内容格式不合法",

@@ -20,7 +20,7 @@ const defaultIntersectionFreshnessTTL = 7 * 24 * time.Hour
 //   - AffinityReasons 透传底层 compute 后经 ApplyGraphWeights 真算边权（确定性算术，非 /score
 //     同步打分），替换原裸 count 启发式；ObjectReasons 为 viewer×object 点查，亦补边权真算。
 //
-// 架构基线 v2 §21：edgeWeight / lifecycleState / previousStrength / strengthDelta 全部在「写/刷新
+// 当前交集图契约：edgeWeight / lifecycleState / previousStrength / strengthDelta 全部在「写/刷新
 // 路径」物化完成，读路径（summary/list/feed 热命中）仅消费快照、零计算、零同步打分（R-IX01）。
 //
 // 它本身满足 intersectionapp.IntersectionSource，可在 main.go 中透明包裹 MongoIntersectionSource，

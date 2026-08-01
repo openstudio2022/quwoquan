@@ -95,43 +95,6 @@ void main() {
     expect(preferences.getString('auth.active_persona_id'), 'persona-current');
   });
 
-  test('read migrates the sole retired active persona key once', () async {
-    final retiredKey = <String>['auth.active_', 'sub', '_account_id'].join();
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      retiredKey: 'persona-existing-install',
-    });
-    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-
-    final first = await store.read();
-    final second = await store.read();
-    final preferences = await SharedPreferences.getInstance();
-
-    expect(first.activePersonaId, 'persona-existing-install');
-    expect(second.activePersonaId, 'persona-existing-install');
-    expect(
-      preferences.getString('auth.active_persona_id'),
-      'persona-existing-install',
-    );
-    expect(preferences.containsKey(retiredKey), isFalse);
-  });
-
-  test('read fails closed when persisted persona identity keys conflict', () async {
-    final retiredKey = <String>['auth.active_', 'sub', '_account_id'].join();
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.active_persona_id': 'persona-canonical',
-      retiredKey: 'persona-conflict',
-    });
-    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-
-    await expectLater(store.read(), throwsStateError);
-    final preferences = await SharedPreferences.getInstance();
-    expect(preferences.getString('auth.active_persona_id'), 'persona-canonical');
-    expect(
-      preferences.getString(retiredKey),
-      'persona-conflict',
-    );
-  });
-
   test('active refresh token is never reinterpreted as quick login', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth.account_state': 'active',

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../content/profile_interaction_contracts.dart';
 
@@ -22,6 +22,12 @@ final class AppendContentProfileInteractionReadFactCommand {
   final String personaId;
   final String activityId;
   final ContentProfileInteractionReadState state;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    "interactionId": this.activityId,
+    "state": switch (this.state) { ContentProfileInteractionReadState.seen => "seen", ContentProfileInteractionReadState.read => "read", },
+  };
 }
 
 final class ContentProfileInteractionPageQuery {
@@ -43,6 +49,13 @@ final class ContentProfileInteractionPageQuery {
   final ContentProfileInteractionType type;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    "type": switch (this.type) { ContentProfileInteractionType.like => "like", ContentProfileInteractionType.comment => "comment", ContentProfileInteractionType.share => "share", },
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 CloudOperationRequestPayload encodeContentProfileInteractionActivityViewListProfileInteractionActivitiesReceivedGeneratedRequest(ContentProfileInteractionPageQuery request) {

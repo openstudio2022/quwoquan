@@ -10,18 +10,18 @@ enum NetworkQuality {
   poor;
 
   Color get color => switch (this) {
-        NetworkQuality.good => AppColors.success,
-        NetworkQuality.slight => AppColors.warning,
-        NetworkQuality.weak => AppColors.networkCallQualityWeak,
-        NetworkQuality.poor => AppColors.error,
-      };
+    NetworkQuality.good => AppColors.success,
+    NetworkQuality.slight => AppColors.warning,
+    NetworkQuality.weak => AppColors.networkCallQualityWeak,
+    NetworkQuality.poor => AppColors.error,
+  };
 
   int get barCount => switch (this) {
-        NetworkQuality.good => 4,
-        NetworkQuality.slight => 3,
-        NetworkQuality.weak => 2,
-        NetworkQuality.poor => 1,
-      };
+    NetworkQuality.good => 4,
+    NetworkQuality.slight => 3,
+    NetworkQuality.weak => 2,
+    NetworkQuality.poor => 1,
+  };
 }
 
 class CallQualityNotifier extends Notifier<NetworkQuality> {
@@ -33,14 +33,11 @@ class CallQualityNotifier extends Notifier<NetworkQuality> {
 
 final callQualityProvider =
     NotifierProvider<CallQualityNotifier, NetworkQuality>(
-  CallQualityNotifier.new,
-);
+      CallQualityNotifier.new,
+    );
 
 class CallQualityIndicator extends ConsumerWidget {
-  const CallQualityIndicator({
-    super.key,
-    this.quality,
-  });
+  const CallQualityIndicator({super.key, this.quality});
 
   final NetworkQuality? quality;
 

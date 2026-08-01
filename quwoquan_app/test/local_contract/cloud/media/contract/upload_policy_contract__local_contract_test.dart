@@ -9,7 +9,7 @@ void main() {
       final error = validateUpload(
         category: MediaCategory.chatVoice,
         fileSize: 48000,
-        contentType: 'audio/mp4',
+        mimeType: 'audio/mp4',
       );
       expect(error, isNull);
     });
@@ -18,7 +18,7 @@ void main() {
       final error = validateUpload(
         category: MediaCategory.chatVoice,
         fileSize: 48000,
-        contentType: 'audio/aac',
+        mimeType: 'audio/aac',
       );
       expect(error, isNull);
     });
@@ -27,7 +27,7 @@ void main() {
       final error = validateUpload(
         category: MediaCategory.chatImage,
         fileSize: 1024 * 1024,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
       );
       expect(error, isNull);
     });
@@ -35,8 +35,9 @@ void main() {
     test('所有 Category 都映射到 metadata 生成策略', () {
       for (final category in MediaCategory.values) {
         expect(
-          ContentMediaUploadPolicy.mediaTypes[
-              contentMediaTypeForCategory(category).name],
+          ContentMediaUploadPolicy.mediaTypes[contentMediaTypeForCategory(
+            category,
+          ).name],
           isNotNull,
           reason: 'Missing generated policy for $category',
         );
@@ -45,11 +46,11 @@ void main() {
   });
 
   group('UploadPolicy — 单轨契约', () {
-    test('chatFile 允许任意 contentType（空 allowedTypes）', () {
+    test('chatFile 允许任意 mimeType（空 allowedTypes）', () {
       final error = validateUpload(
         category: MediaCategory.chatFile,
         fileSize: 1024 * 1024,
-        contentType: 'application/pdf',
+        mimeType: 'application/pdf',
       );
       expect(error, isNull);
     });
@@ -60,7 +61,7 @@ void main() {
       final error = validateUpload(
         category: MediaCategory.chatVoice,
         fileSize: 20 * 1024 * 1024,
-        contentType: 'audio/mp4',
+        mimeType: 'audio/mp4',
       );
       expect(
         error,
@@ -72,7 +73,7 @@ void main() {
       final error = validateUpload(
         category: MediaCategory.chatVoice,
         fileSize: 48000,
-        contentType: 'video/mp4',
+        mimeType: 'video/mp4',
       );
       expect(
         error,
@@ -85,14 +86,14 @@ void main() {
         validateUpload(
           category: MediaCategory.chatImage,
           fileSize: 30 * 1024 * 1024,
-          contentType: 'image/jpeg',
+          mimeType: 'image/jpeg',
         ),
         isNull,
       );
       final error = validateUpload(
         category: MediaCategory.chatImage,
         fileSize: 50 * 1024 * 1024 + 1,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
       );
       expect(
         error,

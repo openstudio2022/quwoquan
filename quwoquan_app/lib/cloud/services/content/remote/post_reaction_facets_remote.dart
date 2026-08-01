@@ -9,8 +9,7 @@ typedef ContentPostReactionInvocationContextFactory =
 
 /// Post ContentReaction 的 production Remote；operation、path、codec 与 retry
 /// 均由 generated client / Runtime executor 持有。
-final class RemoteContentPostReactionFacet
-    implements ContentPostReactionFacet {
+final class RemoteContentPostReactionFacet implements ContentPostReactionFacet {
   const RemoteContentPostReactionFacet({
     required this.client,
     required this.invocationContext,
@@ -43,9 +42,6 @@ final class RemoteContentPostReactionFacet
     UnlikeContentPostCommand command,
   ) => client.contentContentReactionUnlikePost(
     command,
-    context: invocationContext(
-      ContentRequestPageIds.unlikePost,
-      command: true,
-    ),
+    context: invocationContext(ContentRequestPageIds.unlikePost, command: true),
   );
 }

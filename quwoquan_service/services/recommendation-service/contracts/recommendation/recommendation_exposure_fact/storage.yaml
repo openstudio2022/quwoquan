@@ -1,23 +1,29 @@
 backend: mongodb
 role: append_only
 collections:
-  rec_learning_events:
+  recommendation_exposure_facts:
     entity: RecommendationExposureFact
     role: append_only
-    description: 曝光（rec_impression）与反馈（rec_engagement）事实的共用事件信封。 dedupe 由确定性 eventId 承载并作为 _id 提交——曝光
-      eventId 从 feedRequestId+targetId+eventType 派生，反馈 eventId 从 feedRequestId+targetId+action（缺 feedRequestId
-      时回退 clientEventId）派生； 重放写入被 _id 唯一约束拒绝后按已存在处理，禁止时间戳参与 eventId。
+    description: 只保存 FeedPageDelivered 对应的交付曝光；不与反馈共用信封，不接受 Content 直写。
     indexes:
-    - name: idx_rec_learning_user_type
+    - name: uq_recommendation_exposure_delivery_item
       keys:
-        userId: 1
-        eventType: 1
-        occurredAt: -1
-    - name: idx_rec_learning_scenario_time
+        deliveryPageId: 1
+        ordinal: 1
+        targetId: 1
+      unique: true
+    - name: idx_recommendation_exposure_attribution
       keys:
-        scenario: 1
-        occurredAt: -1
-    - name: ttl_rec_learning_events
+        requestId: 1
+        targetId: 1
+        exposedAt: -1
+    - name: ttl_recommendation_exposure_facts
       keys:
-        createdAt: 1
+        recordedAt: 1
       ttl_days: 30
+  recommendation_exposure_failures:
+    entity: RecommendationExposureFailure
+    role: reliable_task
+    description: events.content.feed_page_delivered 消费失败的有界尝试状态，成功或进入脱敏 DLQ 后删除。
+    indexes:
+    - {name: ttl_recommendation_exposure_failures, keys: {updatedAt: 1}, ttl_days: 7}

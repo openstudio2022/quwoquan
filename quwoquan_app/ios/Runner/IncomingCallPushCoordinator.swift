@@ -26,6 +26,23 @@ final class IncomingCallPushCoordinator {
   ) {
     self.defaults = defaults
     self.secretStore = secretStore
+    migrateLegacySecrets()
+  }
+
+  private func migrateLegacySecrets() {
+    if let token = defaults.string(forKey: StoreKey.voipToken),
+       !token.isEmpty,
+       secretStore.set(token, forKey: StoreKey.voipToken)
+    {
+      defaults.removeObject(forKey: StoreKey.voipToken)
+    }
+    if let mutations = defaults.array(forKey: StoreKey.endpointMutations),
+       JSONSerialization.isValidJSONObject(mutations),
+       let encoded = try? JSONSerialization.data(withJSONObject: mutations),
+       secretStore.set(encoded, forKey: StoreKey.endpointMutations)
+    {
+      defaults.removeObject(forKey: StoreKey.endpointMutations)
+    }
   }
 
   var backgroundPushConfigured: Bool {

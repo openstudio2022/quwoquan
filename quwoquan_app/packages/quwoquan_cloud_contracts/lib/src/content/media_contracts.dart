@@ -11,6 +11,48 @@ enum ContentMediaProcessingStatus { processing, ready, rejected, deleted }
 
 enum ContentMediaOriginalAccessPurpose { view, save }
 
+/// App 明确披露后随上传完成命令提交的拍摄事实。
+///
+/// 未披露分组必须在构造本对象前裁剪；本对象不提供日志字符串，避免 GPS/时间泄漏。
+final class ContentMediaCaptureMetadata {
+  const ContentMediaCaptureMetadata({
+    this.cameraMake,
+    this.cameraModel,
+    this.lensModel,
+    this.focalLengthMm,
+    this.apertureFNumber,
+    this.shutterSpeedSeconds,
+    this.isoSensitivity,
+    this.capturedAt,
+    this.gpsLatitude,
+    this.gpsLongitude,
+  });
+
+  final String? cameraMake;
+  final String? cameraModel;
+  final String? lensModel;
+  final double? focalLengthMm;
+  final double? apertureFNumber;
+  final double? shutterSpeedSeconds;
+  final int? isoSensitivity;
+  final DateTime? capturedAt;
+  final double? gpsLatitude;
+  final double? gpsLongitude;
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (cameraMake != null) 'cameraMake': cameraMake,
+    if (cameraModel != null) 'cameraModel': cameraModel,
+    if (lensModel != null) 'lensModel': lensModel,
+    if (focalLengthMm != null) 'focalLengthMm': focalLengthMm,
+    if (apertureFNumber != null) 'apertureFNumber': apertureFNumber,
+    if (shutterSpeedSeconds != null) 'shutterSpeedSeconds': shutterSpeedSeconds,
+    if (isoSensitivity != null) 'isoSensitivity': isoSensitivity,
+    if (capturedAt != null) 'capturedAt': capturedAt!.toUtc().toIso8601String(),
+    if (gpsLatitude != null) 'gpsLatitude': gpsLatitude,
+    if (gpsLongitude != null) 'gpsLongitude': gpsLongitude,
+  };
+}
+
 final class ContentMediaUploadSessionCommandResult {
   const ContentMediaUploadSessionCommandResult({
     required this.sessionId,
@@ -37,7 +79,7 @@ final class ContentMediaUploadSessionSlice {
     required this.version,
     required this.assetId,
     required this.mediaType,
-    required this.contentType,
+    required this.mimeType,
     required this.fileSize,
     required this.status,
     required this.createdAt,
@@ -49,7 +91,7 @@ final class ContentMediaUploadSessionSlice {
   final int version;
   final String? assetId;
   final ContentMediaType mediaType;
-  final String contentType;
+  final String mimeType;
   final int fileSize;
   final ContentMediaUploadStatus status;
   final DateTime createdAt;
@@ -62,7 +104,7 @@ final class ContentMediaAssetSlice {
     required this.assetId,
     required this.version,
     required this.mediaType,
-    required this.contentType,
+    required this.mimeType,
     required this.fileSize,
     required this.status,
     required this.accessPolicy,
@@ -79,7 +121,7 @@ final class ContentMediaAssetSlice {
   final String assetId;
   final int version;
   final ContentMediaType mediaType;
-  final String contentType;
+  final String mimeType;
   final int fileSize;
   final ContentMediaProcessingStatus status;
   final ContentMediaAccessPolicy accessPolicy;
@@ -171,7 +213,7 @@ ContentMediaUploadSessionSlice decodeContentMediaUploadSessionSlice(
     version: _positiveInteger(map, 'version'),
     assetId: _optionalString(map, 'assetId'),
     mediaType: _mediaType(map, 'mediaType'),
-    contentType: _string(map, 'contentType'),
+    mimeType: _string(map, 'mimeType'),
     fileSize: _positiveInteger(map, 'fileSize'),
     status: _uploadStatus(map, 'status'),
     createdAt: _timestamp(map, 'createdAt'),
@@ -186,7 +228,7 @@ ContentMediaAssetSlice decodeContentMediaAssetSlice(Object? value) {
     assetId: _string(map, 'assetId'),
     version: _positiveInteger(map, 'version'),
     mediaType: _mediaType(map, 'mediaType'),
-    contentType: _string(map, 'contentType'),
+    mimeType: _string(map, 'mimeType'),
     fileSize: _positiveInteger(map, 'fileSize'),
     status: _processingStatus(map, 'status'),
     accessPolicy: _accessPolicy(map, 'accessPolicy'),

@@ -37,7 +37,7 @@ api_routes:
       max_attempts: 2
       idempotency: none
     error_codes:
-      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.USER.subscription_unauthorized
       - ASSISTANT.SYSTEM.subscription_storage_unavailable
     privacy:
       request_classification: INTERNAL
@@ -95,7 +95,7 @@ api_routes:
       - ASSISTANT.USER.subscription_invalid_argument
       - ASSISTANT.USER.subscription_idempotency_conflict
       - ASSISTANT.USER.subscription_destination_forbidden
-      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.USER.subscription_unauthorized
       - ASSISTANT.SYSTEM.subscription_storage_unavailable
       - ASSISTANT.SYSTEM.subscription_destination_validation_unavailable
     privacy:
@@ -152,7 +152,7 @@ api_routes:
       idempotency: none
     error_codes:
       - ASSISTANT.USER.subscription_not_found
-      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.USER.subscription_unauthorized
       - ASSISTANT.SYSTEM.subscription_storage_unavailable
     privacy:
       request_classification: INTERNAL
@@ -215,7 +215,7 @@ api_routes:
       - ASSISTANT.USER.subscription_invalid_argument
       - ASSISTANT.USER.subscription_invalid_transition
       - ASSISTANT.USER.subscription_idempotency_conflict
-      - ASSISTANT.USER.unauthorized
+      - ASSISTANT.USER.subscription_unauthorized
       - ASSISTANT.SYSTEM.subscription_storage_unavailable
     privacy:
       request_classification: SENSITIVE

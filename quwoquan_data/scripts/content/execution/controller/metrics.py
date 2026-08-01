@@ -42,7 +42,11 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
         "reliabletask_fleet_report",
         label="reliabletask_fleet_report",
     )
-    accepted = int(report.get("commercialAcceptedCount") or 0)
+    commercial_accepted = int(report.get("commercialAcceptedCount") or 0)
+    finalized = int(report.get("finalizedObjectCount") or 0)
+    # Dead publish jobs may still finalize via absorption; readiness must honor
+    # finalizedObjectCount whenever the fleet report already passed.
+    accepted = max(commercial_accepted, finalized)
     required_quota = int(report.get("requiredQuota") or 0)
     if (
         report.get("passed") is not True

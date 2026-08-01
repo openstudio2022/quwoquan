@@ -1,5 +1,5 @@
 kind: append_only_fact
-description: RecommendationSignalFact 的领域对象契约。
+description: 一次搜索会话完成后由 Search 聚合点击与停留结果追加的不可变推荐信号事实。
 lifecycle:
   immutable: true
 identity:
@@ -19,7 +19,7 @@ relationships:
   on_delete: retain
   reference_fields:
   - searchRequestId
-  target_object: search.SearchQuery
+  target_object: search.SearchRequestFact
 - access: event
   cardinality: N:1
   consistency: eventual
@@ -49,3 +49,7 @@ relationships:
 local_identity_reasons:
   sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate
     reference
+business_rules:
+- 信号只从已落盘 SearchRequestFact 与 SearchFeedbackFact 汇总，禁止请求期直接写 Recommendation 存储。
+- 同一 searchRequestId 只产生一个终态信号，重放必须保持 payload digest 相同。
+- Recommendation 仅经 typed event 消费该事实，Search 不调用其私有 Store。

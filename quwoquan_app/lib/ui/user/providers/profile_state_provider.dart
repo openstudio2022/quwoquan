@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ProfileState {
   const ProfileState({
@@ -613,6 +614,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
   Future<GreetingRequestDto> sendGreeting({
     String? requestMessage,
     String source = 'profile',
+    GreetingIntersectionRef? intersectionRef,
   }) async {
     final targetUserId = state.profile?.personaId.isNotEmpty == true
         ? state.profile!.personaId
@@ -623,6 +625,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
           targetPersonaId: targetUserId,
           requestMessage: requestMessage,
           source: source,
+          intersectionRef: intersectionRef,
         );
     if (!ref.mounted) {
       return greeting;

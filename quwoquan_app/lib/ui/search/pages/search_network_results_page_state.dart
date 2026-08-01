@@ -21,7 +21,7 @@ class _SearchNetworkResultsPageState
   bool _isSlow = false;
   final AppRequestWaitController _waitController = AppRequestWaitController();
   UiErrorSemantic? _errorSemantic;
-  AssistantSearchResultView? _xiaoquResult;
+  AssistantRunTerminalSnapshotView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<SearchHit> _userResults = const <SearchHit>[];
   List<SearchHit> _groupResults = const <SearchHit>[];

@@ -11,7 +11,7 @@ def _download_plan_unresolved_entities(ctx: ExecutionContext) -> dict[str, dict[
     for entity in frozen_target_names(ctx):
         lane_issues = {
             lane: issue_messages(issues)
-            for lane in ("homepage", "article", "image")
+            for lane in ("homepage", "article", "image", "video")
             if (issues := _download_research_lane_issues(ctx, entity, etype, lane))
         }
         if lane_issues:
@@ -242,6 +242,20 @@ def absorb_download_shortfall_if_quota_met(
     )
 
 
+def _include_download_artifact_issues(source: str) -> bool:
+    """Artifact gate needs fetched ``source_refs``; download_plan must not use it.
+
+    ``gate_download`` fails every target before fetch because sources/ is absent.
+    Plan-stage availability therefore partitions only on research-plan unresolved
+    rows so oversample absorption can keep ready>=quota and advance to fetch.
+    """
+
+    normalized = str(source or "").strip()
+    if not normalized or normalized == "download_plan":
+        return False
+    return True
+
+
 def _write_download_availability(
     ctx: ExecutionContext,
     unresolved: Mapping[str, Mapping[str, list[str]]],
@@ -265,7 +279,11 @@ def _write_download_availability(
                 text = str(issue or "").strip()
                 if text and text not in entity_lanes[lane]:
                     entity_lanes[lane].append(text)
-    artifact_issues = _download_artifact_issues(ctx)
+    artifact_issues = (
+        _download_artifact_issues(ctx)
+        if _include_download_artifact_issues(source)
+        else {}
+    )
     ineligible: list[dict[str, Any]] = []
     deterministic: dict[str, dict[str, list[str]]] = {}
     exhausted = _download_plan_repair_exhausted_unresolved(ctx, merged_unresolved)

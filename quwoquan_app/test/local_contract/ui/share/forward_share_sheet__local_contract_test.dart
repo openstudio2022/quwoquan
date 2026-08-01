@@ -61,6 +61,29 @@ Widget _wrap({
 void main() {
   test('AppForwardPayload 对所有转发对象类型保持同一卡片 payload 契约', () {
     for (final kind in AppForwardSubjectKind.values) {
+      final objectRef = switch (kind) {
+        AppForwardSubjectKind.profileQr => null,
+        AppForwardSubjectKind.contentPost => ChatMessageCardObjectRef(
+          objectTypeRef: 'post',
+          objectId: 'post_1',
+          routeId: 'contentDetail',
+        ),
+        AppForwardSubjectKind.userProfile => ChatMessageCardObjectRef(
+          objectTypeRef: 'user',
+          objectId: 'user_1',
+          routeId: 'userProfile',
+        ),
+        AppForwardSubjectKind.entityProfile => ChatMessageCardObjectRef(
+          objectTypeRef: 'homepage',
+          objectId: 'homepage_1',
+          routeId: 'homepageDetail',
+        ),
+        AppForwardSubjectKind.circle => ChatMessageCardObjectRef(
+          objectTypeRef: 'circle',
+          objectId: 'circle_1',
+          routeId: 'circleDetail',
+        ),
+      };
       final payload = AppForwardPayload(
         kind: kind,
         title: '转发对象 ${kind.name}',
@@ -70,6 +93,7 @@ void main() {
         landingUrl: 'https://mock.quwoquan.local/${kind.name}/target',
         shareText: '分享 ${kind.name}',
         extra: <String, Object?>{'source': kind.name},
+        objectRef: objectRef,
       );
 
       final card = payload.toMessageCardCommand(message: '请看看');

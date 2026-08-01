@@ -1,0 +1,15 @@
+events:
+- name: TagFeedbackRecorded
+  producer: tag-service
+  consumers:
+  - content-service
+  channel: redis_stream
+  stream: events.tag.feedback
+  payload_entity: TagFeedbackFact
+  payload_fields:
+  - id
+  - actorId
+  - actorKind
+  - tagRef
+  - action
+  - recordedAt

@@ -132,6 +132,7 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 			"kind":"content_post",
 			"title":"城市漫步",
 			"subtitle":"周末路线",
+			"objectRef":{"objectTypeRef":"post","objectId":"post_001","routeId":"contentDetail"},
 			"attributes":[{"name":"postId","value":"post_001"}]
 		}
 	}`)
@@ -148,6 +149,11 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	if card["kind"] != "content_post" || card["title"] != "城市漫步" {
 		t.Fatalf("typed card projection mismatch: %#v", card)
 	}
+	objectRef := card["objectRef"].(map[string]any)
+	if objectRef["objectTypeRef"] != "post" || objectRef["objectId"] != "post_001" ||
+		objectRef["routeId"] != "contentDetail" {
+		t.Fatalf("typed card objectRef mismatch: %#v", objectRef)
+	}
 	attributes := card["attributes"].([]any)
 	if len(attributes) != 1 || attributes[0].(map[string]any)["name"] != "postId" {
 		t.Fatalf("typed card attributes mismatch: %#v", attributes)
@@ -162,6 +168,17 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	)
 	if invalid["code"] != "CHAT.USER.message_invalid" {
 		t.Fatalf("non-card message carrying card must be rejected: %#v", invalid)
+	}
+
+	missingObjectRef := doPost(
+		t,
+		"/chat/conversations/"+convID+"/messages",
+		`{"type":"card","clientMsgId":"card-without-object-ref","card":{"kind":"content_post","title":"x","attributes":[]}}`,
+		"user_test_001",
+		http.StatusBadRequest,
+	)
+	if missingObjectRef["code"] != "CHAT.USER.message_invalid" {
+		t.Fatalf("actionable card without objectRef must be rejected: %#v", missingObjectRef)
 	}
 }
 

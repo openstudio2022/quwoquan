@@ -1,0 +1,4 @@
+description: RecommendationSubjectClosureFact 仅消费用户域不可逆关闭事件。
+api_routes: []
+consumers:
+- {name: user-account-closed-stream, channel: events.user.account, source_event: UserAccountClosed, capabilities: [record_subject_closure, block_subject_revival]}

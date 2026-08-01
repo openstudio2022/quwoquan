@@ -45,3 +45,16 @@ tables:
       - experiment_revision
       - subject_key
 role: append_only
+streams:
+  events.ops.experiment_assignment_observed:
+    entity: ExperimentAssignmentFact
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Recommendation 与 Search 发布的确定性分桶观察事实；Product Ops 按精确 Experiment revision 校验后投影。
+  events.ops.experiment_assignment_observed.product_ops.dlq:
+    entity: ExperimentAssignmentFact
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: 仅保存违反 ExperimentAssignmentObserved typed contract 的不可重试消息。

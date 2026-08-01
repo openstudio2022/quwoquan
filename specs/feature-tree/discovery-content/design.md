@@ -49,6 +49,26 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`content-display-consistency`](./content-display-consistency/spec.md)、[`content-service-cloud-production`](./content-service-cloud-production/spec.md)、[`content-service-contract-foundation`](./content-service-contract-foundation/spec.md)、[`content-type-framework`](./content-type-framework/spec.md)、[`dual-rail-discovery-redesign`](./dual-rail-discovery-redesign/spec.md)、[`exposure-governance`](./exposure-governance/spec.md)、[`feed-orchestration-recommendation`](./feed-orchestration-recommendation/spec.md)、[`media-processing-helper-read`](./media-processing-helper-read/spec.md)、[`object-homepage-coverage-scaling`](./object-homepage-coverage-scaling/spec.md)、[`publish-comment-reaction`](./publish-comment-reaction/spec.md)
 
+<a id="dec-002"></a>
+### DEC-002 标签投入先接管道后扩定义，四阶段按供给杠杆排序
+- 决策：标签投入按「地点管道 → 画面语义轴与季节派生 → EXIF 派生目标转向 → 路线与大众拍照点」四阶段推进，每阶段的准出标准是该阶段结束时 `closure-scorecard` 的哪一级数字发生变化，而不是新增了多少标签定义。
+ - 阶段一（地点管道）：发布确认页选中 POI 后经 `GeoTagRefResolver` 解析出 `Topic/地理/行政区/...` 写入 `PublishSettings.geoTagRef`，
+  解析不出则保持为空，不用展示文本冒充标签。准出为 `poi` 退出 `UNWIRED_BASELINE`、带 POI 发布后 `post.geoTagRef` 非空、
+  同区域同期的两篇内容能产出 `region:` 前缀的 `declaredVisit` 交集。
+ - 阶段二（画面语义轴与季节派生）：把描述「作品拍出来是什么」的语义轴补成有维度的画面主体轴，
+  并与 `Entity/地点/自然景观` 经 `sameAsRefs` 对齐以免第二真相源。`creator_chip` 候选必须由内容形态、已解析地点与季节预筛，
+  不得让用户在全量标签里搜索。`visitedAt` 直接派生 `Topic/时间/四季`，是唯一零额外交互成本的采集通道。
+  准出为新轴每个叶子的 `collectionChannel` 与 `consumedBy` 均非空，且 `verified` 大于 0。
+ - 阶段三（EXIF 转向）：`extractMediaCaptureMetadata` 已能解析 `capturedAt` 与 GPS，把派生目标从器材参数改为季节与地点候选，
+  披露开关与坐标不落盘的既有约束原样保留。准出为 `exif` 退出 `UNWIRED_BASELINE`，且器材与参数叶子不再进入搜索筛选。
+ - 阶段四（路线与大众拍照点）：路线由同一用户 `declaredVisit` 的时序串联生成，大众拍照点由同一实体下高频共现的画面标签与
+  高互动作品聚合产生。准出为不建人工维护的机位库，也不产出器材与参数建议。
+- 理由：实测 5891 个定义只有 5 个被 canonical 内容真实使用，`verified` 为 0，瓶颈在采集与供给管道而不在定义广度。阶段顺序按供给杠杆排列：地点覆盖 70% 的定义且只差一次 resolver 接线，画面语义轴依赖地点与季节做候选预筛，EXIF 转向复用已建成能力，路线与拍照点必须等前三阶段产生真实 `declaredVisit` 供给后才有燃料。
+- 被否决方案：先补齐标签定义广度再谈接线。它会把 1178:1 的空转比继续放大，且新增叶子同样会落进孤儿区，无法转化为可用信号。
+- 约束与影响：阶段准出以 `closure-scorecard` 与 `verify_tag_collection_wiring.py` 的输出为准，不另建进度台账，未完成阶段以对应节点的 `OPEN` 承载。
+- 关联要求：`REQ-003`、`REQ-004`、`REQ-005`
+- 关联能力：[`publish-comment-reaction`](./publish-comment-reaction/spec.md)、[`feed-orchestration-recommendation`](./feed-orchestration-recommendation/spec.md)、[`object-homepage-coverage-scaling`](./object-homepage-coverage-scaling/spec.md)
+
 ## 6. 质量与运行约束
 
 - 沿用 AppRoot 全局质量约束并保持 metadata/code/test 单轨。

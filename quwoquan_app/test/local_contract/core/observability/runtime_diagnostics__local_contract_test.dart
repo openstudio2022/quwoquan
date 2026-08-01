@@ -40,8 +40,16 @@ void main() {
       severeFrameThreshold: const Duration(milliseconds: 200),
     );
 
-    diagnostics.recordFrameDuration(const Duration(milliseconds: 16));
-    diagnostics.recordFrameDuration(const Duration(milliseconds: 60));
+    diagnostics.recordFrameTiming(
+      total: const Duration(milliseconds: 16),
+      build: const Duration(milliseconds: 7),
+      raster: const Duration(milliseconds: 5),
+    );
+    diagnostics.recordFrameTiming(
+      total: const Duration(milliseconds: 60),
+      build: const Duration(milliseconds: 31),
+      raster: const Duration(milliseconds: 22),
+    );
     await _settle();
 
     final record = (await buffer.pending()).single;
@@ -51,6 +59,8 @@ void main() {
       'sampledFrames': '2',
       'jankyFrames': '1',
       'worstFrameMs': '60',
+      'worstBuildFrameMs': '31',
+      'worstRasterFrameMs': '22',
       'jankThresholdMs': '50',
     });
     final productRecord = recorder.records.single;
@@ -59,8 +69,11 @@ void main() {
       'sampledFrames': 2,
       'jankyFrames': 1,
       'worstFrameMs': 60,
+      'worstBuildFrameMs': 31,
+      'worstRasterFrameMs': 22,
       'jankThresholdMs': 50,
       'result': 'degraded',
+      'surfaceId': 'home',
     });
   });
 
@@ -80,8 +93,16 @@ void main() {
         jankThreshold: const Duration(milliseconds: 50),
       );
 
-      diagnostics.recordFrameDuration(const Duration(milliseconds: 16));
-      diagnostics.recordFrameDuration(const Duration(milliseconds: 20));
+      diagnostics.recordFrameTiming(
+        total: const Duration(milliseconds: 16),
+        build: const Duration(milliseconds: 6),
+        raster: const Duration(milliseconds: 4),
+      );
+      diagnostics.recordFrameTiming(
+        total: const Duration(milliseconds: 20),
+        build: const Duration(milliseconds: 8),
+        raster: const Duration(milliseconds: 7),
+      );
       await _settle();
 
       expect(await buffer.pending(), isEmpty);
@@ -91,8 +112,11 @@ void main() {
         'sampledFrames': 2,
         'jankyFrames': 0,
         'worstFrameMs': 20,
+        'worstBuildFrameMs': 8,
+        'worstRasterFrameMs': 7,
         'jankThresholdMs': 50,
         'result': 'ok',
+        'surfaceId': 'home',
       });
     },
   );

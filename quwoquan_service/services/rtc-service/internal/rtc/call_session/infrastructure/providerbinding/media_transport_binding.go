@@ -77,8 +77,8 @@ func ResolveMediaTransport(
 		}
 		secrets[key] = value
 	}
-	apiKey := firstSecret(secrets, "RTC_MEDIA_API_KEY", "RTC_MEDIA_FIXTURE_API_KEY")
-	apiSecret := firstSecret(secrets, "RTC_MEDIA_API_SECRET", "RTC_MEDIA_FIXTURE_API_SECRET")
+	apiKey := strings.TrimSpace(secrets["RTC_MEDIA_API_KEY"])
+	apiSecret := strings.TrimSpace(secrets["RTC_MEDIA_API_SECRET"])
 	if apiKey == "" || apiSecret == "" {
 		return MediaTransportBinding{}, fmt.Errorf(
 			"rtc media transport credential binding is incomplete for environment=%s",
@@ -92,13 +92,4 @@ func ResolveMediaTransport(
 		APISecret:     apiSecret,
 		Timeout:       time.Duration(binding.TimeoutMilliseconds) * time.Millisecond,
 	}, nil
-}
-
-func firstSecret(secrets map[string]string, keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(secrets[key]); value != "" {
-			return value
-		}
-	}
-	return ""
 }

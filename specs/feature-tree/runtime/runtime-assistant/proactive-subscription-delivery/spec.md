@@ -40,7 +40,7 @@
 - 投递前必须以订阅权威 `owner.userId` 从 user-service 回查同一账号的 `assistantEnabled` 与 UTC `quietHoursStart/End`；依赖缺失、鉴权失败、owner 不一致或畸形响应一律 fail-closed。
 - 敏感 Skill 必须仍有有效 consent；用户或会话投递都必须执行 `maxPerDay` 与 `cooldownMinutes`。
 - user 目的地必须等于订阅 `owner.userId`。
-- conversation/group 在创建时与每次投递前都必须经 chat 公开成员 Reader 同时确认创建者 Persona 仍是成员，且存在与订阅 `skillId` 一致的 assistant 成员。
+- `chat_conversation` 在创建时与每次投递前都必须经 chat 公开成员 Reader 同时确认创建者 Persona 仍是成员，且存在与订阅 `skillId` 一致的 assistant 成员。
 - 任一成员已移除或身份变化时禁止创建或清除待补偿坐标，不创建 Run、不回帖。
 - `quietHoursPolicy` 当前单轨只允许 `inherit_user_setting`；默认 `maxPerDay=1`、`cooldownMinutes=60`。
 

@@ -81,7 +81,7 @@ func TestBulkImportRequiresSystemCreatorDisclosure(t *testing.T) {
 	if item.CreatorProfileID != "agent_creator_travel_000000001" || item.CreatorArchetype != "travel_blogger" {
 		t.Fatalf("creator projection not stored: %+v", item)
 	}
-	if item.CreatorDisclosure["visible"] != true {
+	if !item.CreatorDisclosure.Visible {
 		t.Fatalf("creator disclosure not stored: %+v", item.CreatorDisclosure)
 	}
 }

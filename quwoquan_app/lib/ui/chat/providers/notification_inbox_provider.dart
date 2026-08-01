@@ -6,18 +6,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 不做本地拼接、不从会话标题猜测（commercial-message-system spec 4.1）。
 final notificationInboxProvider = FutureProvider<List<AppMessage>>((ref) async {
   final query = ref.watch(appMessageQueryProvider);
-  final slice = await query.listAppMessages(
-    ListAppMessagesQuery(limit: 50),
-  );
+  final slice = await query.listAppMessages(ListAppMessagesQuery(limit: 50));
   return slice.items;
 });
 
 /// 消息 tab 通知未读徽标唯一数据源：GetAppMessageUnreadCount。
 final appMessageUnreadCountProvider = FutureProvider<int>((ref) async {
   final query = ref.watch(appMessageQueryProvider);
-  final slice = await query.getUnreadCount(
-    GetAppMessageUnreadCountQuery(),
-  );
+  final slice = await query.getUnreadCount(GetAppMessageUnreadCountQuery());
   return slice.unreadCount;
 });
 

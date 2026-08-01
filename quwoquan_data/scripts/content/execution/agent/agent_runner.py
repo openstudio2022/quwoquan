@@ -63,6 +63,7 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
     )
 
     provider = AgentProvider.CURSOR_SDK
+    key: str | None = None
 
     def failure(
         kind: AgentFailureKind,
@@ -79,7 +80,7 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
         return AgentRunOutcome.failed(
             kind,
             provider=provider,
-            message=_redact_managed_secret(message),
+            message=_redact_managed_secret(message, api_key=key),
             started=started,
             retryable=retryable,
             error_code=error_code,
@@ -131,7 +132,7 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                 client = Client.launch_bridge(
                     workspace=str(workspace),
                     max_retries=_CURSOR_BRIDGE_MAX_RETRIES,
-                    allow_api_key_env_fallback=True,
+                    allow_api_key_env_fallback=False,
                 )
             owned_bridge = getattr(client, "_owned_bridge", None)
             endpoint = getattr(owned_bridge, "endpoint", None)

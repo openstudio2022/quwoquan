@@ -19,8 +19,14 @@ class CreationVisibilityPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
     final primary = AppColors.primaryColor;
 
     final options = mode == ProfileMode.mine
@@ -57,14 +63,18 @@ class CreationVisibilityPopup extends StatelessWidget {
               decoration: isActive
                   ? BoxDecoration(
                       color: primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
                     )
                   : null,
               child: Text(
                 _label(v),
                 style: TextStyle(
                   fontSize: AppTypography.md,
-                  fontWeight: isActive ? AppTypography.semiBold : AppTypography.normal,
+                  fontWeight: isActive
+                      ? AppTypography.semiBold
+                      : AppTypography.normal,
                   color: isActive ? primary : fg,
                 ),
               ),

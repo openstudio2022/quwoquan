@@ -38,7 +38,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
         realtimeConnectionManagerProvider;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
-import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
+import 'package:quwoquan_app/core/trackers/feed_performance_observability_provider.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';

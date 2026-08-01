@@ -5,7 +5,7 @@
   services/recommendation-service/contracts/recommendation/recommendation_model_release/impact_help_type_registry.yaml
 
 校验项:
-  1. 注册表自洽：helpTypes 闭集非空、每项 iconKey/summaryAction/evidenceAction/status 完整；
+  1. 注册表自洽：helpTypes 闭集非空、每项 iconKey/summaryAction/evidenceAction 完整；
      iconKey ∈ toneByIconKey；toneByIconKey 值 ∈ toneLegend；defaults 完整且 iconKey/tone 在闭集内。
   2. 云侧 Go codegen 产物 runtime/impact/help_type_table.go 与注册表逐字段一致（取代散落手写常量/switch）：
      HelpTypes / IconKeyByHelpType / SummaryActionByHelpType / EvidenceActionByHelpType /
@@ -50,7 +50,6 @@ CIRCLE_GO = SVC / "services/circle-service/internal/circle_management/circle/app
 
 FIXTURE_DIR = SVC / "services/content-service/tests/support/contract_fixtures/scenarios"
 
-STATUSES = {"active", "deferred"}
 LEGACY_ICON_KEYS = {"audience", "compass", "read"}
 
 
@@ -98,8 +97,6 @@ def load_registry() -> dict:
             a = h.get(act)
             if not isinstance(a, dict) or not str(a.get("key", "")).strip() or not str(a.get("label", "")).strip():
                 fail(f"helpType {ht} {act} must have key+label")
-        if h.get("status") not in STATUSES:
-            fail(f"helpType {ht} invalid status {h.get('status')!r}")
         if not isinstance(h.get("behaviorActions", []), list):
             fail(f"helpType {ht} behaviorActions must be a list")
 

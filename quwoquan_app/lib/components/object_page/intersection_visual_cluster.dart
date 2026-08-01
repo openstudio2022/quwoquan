@@ -125,8 +125,7 @@ class _VisualBadge extends StatelessWidget {
         ? BorderRadius.circular(size)
         : BorderRadius.circular(AppSpacing.radiusTen);
     final accent = AppColors.iosAccent(context);
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final fallback = Container(
       width: size,
       height: size,
@@ -160,10 +159,7 @@ class _VisualBadge extends StatelessWidget {
     final ringed = Container(
       decoration: BoxDecoration(
         borderRadius: radius,
-        border: Border.all(
-          color: ringColor,
-          width: AppSpacing.two,
-        ),
+        border: Border.all(color: ringColor, width: AppSpacing.two),
       ),
       child: inner,
     );

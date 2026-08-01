@@ -1,0 +1,21 @@
+read_model: SearchTermHeatView
+description: >-
+  SearchRequestFact 与 SearchFeedbackFact 重建的搜索词热力视图；它是热词展示、
+  相关词与排序热度的唯一读模型，不反向修改任何事实。
+source_entities:
+  - SearchRequestFact
+  - SearchFeedbackFact
+source_events:
+  - SearchQueryLogged
+  - SearchFeedbackRecorded
+consumers:
+  - app
+  - recommendation-service
+  - SearchIndexView
+fields:
+  - {name: query, source: normalizedTerm, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  - {name: relevance, type: float64, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  - {name: frequency, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  - {name: ctr, type: float64, constraints: [NOT_NULL, DEFAULT_0], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  - {name: topObjectIds, type: '[]string', constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none}
+  - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}

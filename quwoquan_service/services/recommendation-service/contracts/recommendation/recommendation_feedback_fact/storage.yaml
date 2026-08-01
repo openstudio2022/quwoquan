@@ -1,2 +1,17 @@
 backend: mongodb
 role: append_only
+collections:
+  recommendation_feedback_facts:
+    entity: RecommendationFeedbackFact
+    role: append_only
+    description: 只保存已归因到 RecommendationExposureFact 的 ContentBehaviorFact，不接受 Content 直写。
+    indexes:
+    - {name: uq_recommendation_feedback_source_event, keys: {sourceEventId: 1}, unique: true}
+    - {name: idx_recommendation_feedback_exposure_time, keys: {exposureId: 1, occurredAt: -1}}
+    - {name: ttl_recommendation_feedback_facts, keys: {recordedAt: 1}, ttl_days: 30}
+  recommendation_feedback_failures:
+    entity: RecommendationFeedbackFailure
+    role: reliable_task
+    description: events.content.behavior_facts 消费失败的有界尝试状态，成功或进入脱敏 DLQ 后删除。
+    indexes:
+    - {name: ttl_recommendation_feedback_failures, keys: {updatedAt: 1}, ttl_days: 7}

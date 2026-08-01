@@ -1,79 +1,139 @@
 from __future__ import annotations
 
-import json
-import os
-import stat
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from quwoquan_ops.cli.lib.local_provider_credentials import (
-    prepare_local_provider_credentials,
+    _required_material_for_environment,
+    load_protected_provider_environment,
+    provider_environment_reference_names,
 )
 
 
+def _material(environment: str, *, secret_root: Path | None = None) -> dict[str, str]:
+    endpoint_keys, secret_keys = _required_material_for_environment(environment)
+    material = {
+        key: (
+            f"https://provider.nonprod.test/{key.lower()}"
+            if key in endpoint_keys
+            else f"protected-{key.lower()}"
+        )
+        for key in endpoint_keys | secret_keys
+    }
+    if secret_root is not None:
+        for key in secret_keys:
+            if not key.endswith("_FILE"):
+                continue
+            path = secret_root / key.lower()
+            path.write_text("protected\n", encoding="utf-8")
+            path.chmod(0o600)
+            material[key] = str(path)
+    return material
+
+
 class LocalProviderCredentialsSecurityLocalContractTest(unittest.TestCase):
-    def test_materializer_writes_mode_600_outside_repo_and_output(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            work_root = Path(temporary_dir)
-            with mock.patch.dict(os.environ, {"QWQ_DEPLOY_WORK_ROOT": str(work_root)}):
-                values = prepare_local_provider_credentials(
-                    environment="alpha",
-                    target_name="alpha-local",
-                )
-            secret_path = work_root / "alpha-local" / "secrets" / "external-providers.env"
-            self.assertTrue(secret_path.is_file())
-            self.assertEqual(stat.S_IMODE(secret_path.stat().st_mode), 0o600)
-            self.assertNotIn(".qwq_output", str(secret_path))
-            self.assertIn("CONTENT_EMBEDDING_FIXTURE_API_KEY", values)
-            self.assertTrue(values["CONTENT_EMBEDDING_FIXTURE_API_KEY"])
-            serialized = json.dumps({"keys": sorted(values)}, sort_keys=True)
-            for value in values.values():
-                self.assertNotIn(value, serialized)
+    def test_reference_inventory_does_not_read_protected_values(self) -> None:
+        endpoint_keys, secret_keys = provider_environment_reference_names("alpha")
+        self.assertIn("ASSISTANT_MODEL_COMPLETION_URL", endpoint_keys)
+        self.assertIn("ASSISTANT_MODEL_API_KEY", secret_keys)
 
-    def test_materializer_is_idempotent(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            work_root = Path(temporary_dir)
-            with mock.patch.dict(os.environ, {"QWQ_DEPLOY_WORK_ROOT": str(work_root)}):
-                first = prepare_local_provider_credentials(
-                    environment="beta",
-                    target_name="beta-local",
-                )
-                second = prepare_local_provider_credentials(
-                    environment="beta",
-                    target_name="beta-local",
-                )
-            self.assertEqual(first, second)
+    def test_nonprod_login_requires_sms_material_but_not_optional_identity_material(self) -> None:
+        endpoint_keys, secret_keys = _required_material_for_environment("beta")
 
-    def test_gamma_materializes_fixture_credentials_without_topology_endpoints(
-        self,
-    ) -> None:
+        self.assertIn("INTEGRATION_SMS_ENDPOINT", endpoint_keys)
+        self.assertTrue(
+            {
+                "INTEGRATION_SMS_TOKEN",
+                "OTP_CODE_REF_KEYS_JSON",
+                "INTEGRATION_SERVICE_MTLS_CA_FILE",
+                "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
+                "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
+            }.issubset(secret_keys)
+        )
+        self.assertTrue(
+            {
+                "ALIYUN_DYPNS_ACCESS_KEY_ID",
+                "ALIYUN_DYPNS_ACCESS_KEY_SECRET",
+                "WECHAT_OAUTH_APP_SECRET",
+                "ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM",
+            }.isdisjoint(secret_keys)
+        )
+
+    def test_loader_returns_only_preinjected_material_and_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
-            work_root = Path(temporary_dir)
-            with mock.patch.dict(os.environ, {"QWQ_DEPLOY_WORK_ROOT": str(work_root)}):
-                values = prepare_local_provider_credentials(
+            root = Path(temporary_dir)
+            material = _material("alpha", secret_root=root)
+            before = sorted(path.name for path in root.iterdir())
+            values = load_protected_provider_environment(
+                environment="alpha",
+                target_name="alpha-local",
+                source=material,
+            )
+            self.assertIn("CONTENT_EMBEDDING_API_KEY", values)
+            self.assertIn("RTC_MEDIA_CONNECTION_URL", values)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), before)
+
+    def test_missing_material_fails_closed_without_exposing_values(self) -> None:
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "GATE_BLOCK: protected Provider material is missing",
+        ) as failure:
+            load_protected_provider_environment(
+                environment="beta",
+                target_name="beta-local",
+                source={},
+            )
+        self.assertIn("ASSISTANT_MODEL_API_KEY", str(failure.exception))
+
+    def test_placeholder_material_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            material = _material("gamma", secret_root=Path(temporary_dir))
+            material["ASSISTANT_MODEL_COMPLETION_URL"] = "https://fixture.local/model"
+            with self.assertRaisesRegex(RuntimeError, "placeholder values"):
+                load_protected_provider_environment(
                     environment="gamma",
                     target_name="gamma-local",
+                    source=material,
                 )
 
-            secret_path = (
-                work_root / "gamma-local" / "secrets" / "external-providers.env"
-            )
-            self.assertTrue(secret_path.is_file())
-            self.assertIn("ASSISTANT_MODEL_API_KEY", values)
-            self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_ENDPOINT", values)
-            self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_API_KEY", values)
-            self.assertNotIn("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT", values)
+    def test_target_and_environment_are_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            with self.assertRaisesRegex(ValueError, "target/environment mismatch"):
+                load_protected_provider_environment(
+                    environment="alpha",
+                    target_name="beta-local",
+                    source=_material("alpha", secret_root=Path(temporary_dir)),
+                )
 
-    def test_prod_credentials_are_never_materialized(self) -> None:
-        with self.assertRaisesRegex(
-            ValueError,
-            "only for Alpha/Beta/Gamma substitute environments",
-        ):
-            prepare_local_provider_credentials(
+    def test_file_material_must_exist_and_private_keys_are_owner_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            material = _material("beta", secret_root=root)
+            material["INTEGRATION_PUSH_APNS_KEY_FILE"] = str(root / "missing.p8")
+            with self.assertRaisesRegex(RuntimeError, "absolute regular file"):
+                load_protected_provider_environment(
+                    environment="beta",
+                    target_name="beta-local",
+                    source=material,
+                )
+
+            material = _material("beta", secret_root=root)
+            apns_key = Path(material["INTEGRATION_PUSH_APNS_KEY_FILE"])
+            apns_key.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "owner-only"):
+                load_protected_provider_environment(
+                    environment="beta",
+                    target_name="beta-local",
+                    source=material,
+                )
+
+    def test_prod_material_is_never_loaded_by_nonprod_facade(self) -> None:
+        with self.assertRaisesRegex(ValueError, "only valid for Alpha/Beta/Gamma"):
+            load_protected_provider_environment(
                 environment="prod",
                 target_name="prod-local",
+                source={},
             )
 
 

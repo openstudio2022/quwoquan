@@ -37,10 +37,10 @@ final assistantSkillCenterProvider =
     });
 
 /// 最近云端会话（R-ASSIST-001 收口）：唯一数据源是
-/// ListAssistantConversations 查询面，本地不再维护会话副本。
+/// ListAssistantSessions 查询面，本地不再维护会话副本。
 final assistantRecentSessionsProvider =
-    FutureProvider.autoDispose<List<AssistantConversationWire>>((ref) async {
-      final facet = ref.watch(assistantConversationRunFacetProvider);
-      final page = await facet.listAssistantConversations();
+    FutureProvider.autoDispose<List<AssistantSessionWire>>((ref) async {
+      final facet = ref.watch(assistantSessionRunFacetProvider);
+      final page = await facet.listAssistantSessions();
       return page.items;
     });

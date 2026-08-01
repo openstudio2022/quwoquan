@@ -31,8 +31,8 @@ class SlotFillEntry {
     return SlotFillEntry(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       value: json['value'],
-      source: parseSlotSource((json['source'] as String?)?.trim() ?? ""),
-      action: parseSlotFillAction((json['action'] as String?)?.trim() ?? ""),
+      source: parseSlotSourceStrict((json['source'] as String?)?.trim() ?? ""),
+      action: parseSlotFillActionStrict((json['action'] as String?)?.trim() ?? ""),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
     );
   }

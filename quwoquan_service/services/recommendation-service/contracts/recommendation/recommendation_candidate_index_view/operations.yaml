@@ -1,0 +1,4 @@
+description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。
+api_routes: []
+consumers:
+- {name: recommendation-ranking, capabilities: [list_candidates, list_premium_candidates, list_entity_tag_candidates]}

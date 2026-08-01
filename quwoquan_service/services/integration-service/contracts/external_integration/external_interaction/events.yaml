@@ -20,3 +20,8 @@ events:
   - normalizedError
   - recoveryAction
   - occurredAt
+consumption:
+- source_event: UserAccountClosed
+  source_service: user-service
+  channel: events.user.account
+  behavior: durable 幂等删除 Integration 自有的 external request、dead task、recovery receipt、result outbox 与 provider attempt；不得委托 Notification 访问本服务存储。

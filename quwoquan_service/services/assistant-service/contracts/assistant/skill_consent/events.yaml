@@ -8,7 +8,7 @@ events:
   payload_entity: SkillConsent
   payload_fields:
   - id
-  - userId
+  - accountId
   - skillId
   - grantedScope
 - name: SkillConsentRevoked
@@ -20,6 +20,6 @@ events:
   payload_entity: SkillConsent
   payload_fields:
   - id
-  - userId
+  - accountId
   - skillId
   - revokedAt

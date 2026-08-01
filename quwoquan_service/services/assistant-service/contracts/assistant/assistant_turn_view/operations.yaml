@@ -1,0 +1,64 @@
+commercial_defaults:
+  status: blocked
+  block_reason: AssistantTurnView 已有独立 Route、QueryFacade 与 Mongo Reader，但尚缺候选绑定的四环境 Remote UAT、SLI/SLO 读回和回滚证据
+  gap_id: ASSISTANT_TURN_VIEW_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: AssistantTurnView 对象专属终态轮次读侧。
+api_routes:
+- method: GET
+  path: /assistant/sessions/{sessionId}/turns
+  operation: ListSessionTurns
+  actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantTurnView 独立读侧已通过 local_contract 与真实 Mongo API integration，尚缺候选绑定的四环境 Remote UAT、SLI/SLO 读回和回滚证据
+    gap_id: ASSISTANT_TURN_VIEW_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  application:
+    kind: query
+    facet: AssistantTurnViewQueryFacade
+    method: listSessionTurns
+    reader: AssistantTurnViewReader
+    slice: AssistantTurnListView
+  description: owner 助手会话内终态轮次及 terminalSnapshot 列表；createdAt desc keyset 分页，是 transcript、过程/引用恢复与续聊的唯一数据源。
+  request_bindings:
+    path:
+    - {name: sessionId, field: sessionId}
+    query:
+    - {name: limit, field: limit, required: false}
+    - {name: cursor, field: cursor, required: false}
+  response_entity: AssistantTurnListView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.run_invalid_argument
+  - ASSISTANT.USER.session_not_found
+  - ASSISTANT.USER.turn_view_unauthorized
+  - ASSISTANT.SYSTEM.run_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_turn_view_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: session_owner
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private

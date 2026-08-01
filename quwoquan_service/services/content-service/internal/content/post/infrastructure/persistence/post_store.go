@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 // PostStore is a minimal persistence store used by content-service.

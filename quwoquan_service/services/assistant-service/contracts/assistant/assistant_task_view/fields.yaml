@@ -1,0 +1,22 @@
+description: 账号助手任务投影视图。
+fields:
+- {name: accountId, source: accountId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: lastLearningFactId, source: lastLearningFactId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: lastSubscriptionId, source: lastSubscriptionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+types:
+  AssistantTaskItemView:
+    description: 一项由事实投影出的助手任务。
+    fields:
+    - {name: taskId, source: taskId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: description, source: description, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: status, source: status, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: dueAt, source: dueAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: priority, source: priority, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: sourceSkillId, source: sourceSkillId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantTaskSlice:
+    description: 助手任务的强类型列表响应。
+    fields:
+    - {name: items, source: items, type: '[]AssistantTaskItemView', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}

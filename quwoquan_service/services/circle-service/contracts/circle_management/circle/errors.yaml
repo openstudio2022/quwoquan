@@ -47,6 +47,13 @@ errors:
     - circle.circle_membership.RejectCircleMember
     - circle.circle_membership.UpdateCircleMembershipRole
     - circle.circle_post_placement.PlacePostInCircle
+    - circle.gathering.ApproveGatheringParticipant
+    - circle.gathering.CancelGathering
+    - circle.gathering.CompleteGathering
+    - circle.gathering.CreateGathering
+    - circle.gathering.GetGathering
+    - circle.gathering.JoinGathering
+    - circle.gathering.LeaveGathering
   http_status: 400
   recovery_action: surface
   dart_const: invalidArgument

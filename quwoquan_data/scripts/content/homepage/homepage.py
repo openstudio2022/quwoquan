@@ -8,6 +8,7 @@
   作为 promote 发布门之前的采纳门。
 """
 from __future__ import annotations
+from copy import deepcopy
 import shutil
 import re
 from pathlib import Path
@@ -158,9 +159,32 @@ def _coverage_targets(
         out.append(row)
     return out
 def homepage_runtime_spec(execution_id: str, spec: dict[str, Any]) -> dict[str, Any]:
-    """Return the immutable execution specification used by homepage stages."""
-    del execution_id
-    return dict(spec or {})
+    """Project an eligible homepage delivery scope without changing the freeze.
+
+    The execution spec remains the immutable oversampled candidate pool.  Once
+    download_fetch has persisted its full candidate partition, a homepage-only
+    execution with enough source-ready entities may author only that ready
+    subset.  The persisted availability report is the single evidence source:
+    no replacement target is introduced and an incomplete ready pool remains
+    blocking instead of being silently narrowed.
+    """
+    from content.execution.source_ready_scope import source_ready_runtime_spec
+
+    runtime_spec = deepcopy(spec or {})
+    quotas = (
+        (runtime_spec.get("content") or {}).get("quotas")
+        if isinstance(runtime_spec.get("content"), dict)
+        else {}
+    )
+    homepage_only = (
+        int((quotas or {}).get("entityHomepagesPerTarget") or 0) > 0
+        and int((quotas or {}).get("entityArticlesPerTarget") or 0) == 0
+        and int((quotas or {}).get("imageWorksPerTarget") or 0) == 0
+        and int((quotas or {}).get("videoWorksPerTarget") or 0) == 0
+    )
+    if not homepage_only:
+        return runtime_spec
+    return source_ready_runtime_spec(execution_id, runtime_spec)
 def _catalog_keys(catalog_name: str, root_key: str) -> list[str]:
     path = _CONDITION_CATALOGS_ROOT / f"{catalog_name}.yaml"
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

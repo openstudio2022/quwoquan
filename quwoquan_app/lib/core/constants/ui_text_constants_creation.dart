@@ -112,6 +112,15 @@ abstract final class CreationText {
   static const String visitedAtConfirm = '确定';
   static const String visitedAtSheetTitle = '选择出行时间';
   static const String visitedAtSheetHint = '填写实际到过这里的日期，用来和同期到过的人产生交集；未来日期不可选。';
+  static const String captureDisclosureLabel = '拍摄信息';
+  static const String captureDisclosureNone = '不披露';
+  static const String captureDisclosureSheetTitle = '披露拍摄信息';
+  static const String captureDisclosureSheetHint =
+      '仅已开启的分组会随照片上传；位置和时间属于隐私信息，可随时关闭。';
+  static const String captureDisclosureGear = '相机与镜头';
+  static const String captureDisclosureParameters = '曝光参数';
+  static const String captureDisclosurePlace = '拍摄位置';
+  static const String captureDisclosureTime = '拍摄时间';
   static const String remindWhoLabel = '提醒谁看';
   static const String whoCanSeeLabel = '谁可以看';
   static const String visibilityPublic = '公开', visibilityPrivate = '私密';

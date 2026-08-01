@@ -119,15 +119,19 @@ func BuildDataContentFleetReport(
 		finalizedRate = float64(succeeded) / float64(total)
 		recoveryRate = finalizedRate
 	}
+	// Idempotent resume may leave jobs non-succeeded while canonical objects
+	// are already finalized on disk; count those toward the commercial quota.
+	quotaMet := commercialAccepted >= requiredQuota ||
+		finalizedObjectCount >= requiredQuota
 	acceptedStatus := "GATE_BLOCK_NO_COMMERCIAL_BATCH"
-	if publishTasks > 0 && commercialAccepted >= requiredQuota {
+	if publishTasks > 0 && quotaMet {
 		acceptedStatus = "MEASURED"
 	} else if publishTasks > 0 {
 		acceptedStatus = "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
 	}
 	passed := false
 	if total > 0 && publishTasks > 0 {
-		passed = commercialAccepted >= requiredQuota &&
+		passed = quotaMet &&
 			duplicatePublishCount == 0 &&
 			missingObjectCount == 0
 	} else if total > 0 {

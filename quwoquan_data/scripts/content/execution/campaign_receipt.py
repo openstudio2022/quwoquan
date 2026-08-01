@@ -306,20 +306,10 @@ def require_lane_review_receipt(
     return receipt
 
 
-# Backward-compatible alias used by older call sites / docs.
-def require_campaign_quota_barrier(root_execution_id: str) -> None:
-    """Deprecated cross-lane barrier; kept only to fail closed if still called."""
-    raise RuntimeError(
-        "cross-lane campaign quota barrier is retired; "
-        f"use per-lane review receipts for {root_execution_id}"
-    )
-
-
 __all__ = [
     "LaneReviewEvidence",
     "lane_receipt_path",
     "load_lane_receipt",
-    "require_campaign_quota_barrier",
     "require_lane_review_receipt",
     "write_publish_receipt",
     "write_review_receipt",

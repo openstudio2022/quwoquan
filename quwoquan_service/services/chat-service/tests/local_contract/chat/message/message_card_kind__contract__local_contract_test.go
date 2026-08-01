@@ -15,6 +15,7 @@ func TestMessageCardKindIsClosedSnakeCaseWireSet(t *testing.T) {
 		messagemodel.MessageCardKindUserProfile,
 		messagemodel.MessageCardKindEntityProfile,
 		messagemodel.MessageCardKindCircle,
+		messagemodel.MessageCardKindGathering,
 		messagemodel.MessageCardKindRTCCallLog,
 	}
 	for _, kind := range canonical {

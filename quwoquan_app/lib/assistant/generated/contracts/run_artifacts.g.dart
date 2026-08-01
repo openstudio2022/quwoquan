@@ -5,6 +5,7 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class RunArtifactsAnswerDecisionCore {
@@ -93,8 +94,8 @@ class AssistantAnswerDisplayBlock {
   factory AssistantAnswerDisplayBlock.fromJson(Map<String, dynamic> json) {
     return AssistantAnswerDisplayBlock(
       blockId: (json['blockId'] as String?)?.trim() ?? "",
-      kind: parseDisplayBlockKind((json['kind'] as String?)?.trim() ?? ""),
-      listStyle: parseDisplayListStyle((json['listStyle'] as String?)?.trim() ?? "plain"),
+      kind: parseDisplayBlockKindStrict((json['kind'] as String?)?.trim() ?? ""),
+      listStyle: parseDisplayListStyleStrict((json['listStyle'] as String?)?.trim() ?? "plain"),
       title: (json['title'] as String?)?.trim() ?? "",
       body: (json['body'] as String?)?.trim() ?? "",
       items: (json['items'] as List?)?.whereType<Map>().map((item) => AssistantDisplayItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantDisplayItem>[],
@@ -466,14 +467,14 @@ class EvidenceLedgerEntry {
     return EvidenceLedgerEntry(
       evidenceId: (json['evidenceId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
-      dimension: parseSearchPlanDimension((json['dimension'] as String?)?.trim() ?? ""),
+      dimension: parseSearchPlanDimensionStrict((json['dimension'] as String?)?.trim() ?? ""),
       dimensionLabel: (json['dimensionLabel'] as String?)?.trim() ?? "",
       searchPlanId: (json['searchPlanId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
       destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       source: (json['source'] as String?)?.trim() ?? "",
       sourceHost: (json['sourceHost'] as String?)?.trim() ?? "",
-      sourceTier: parseEvidenceSourceTier((json['sourceTier'] as String?)?.trim() ?? ""),
+      sourceTier: parseEvidenceSourceTierStrict((json['sourceTier'] as String?)?.trim() ?? ""),
       freshnessHours: (json['freshnessHours'] as num?)?.toInt() ?? 0,
       authorityScore: (json['authorityScore'] as num?)?.toDouble() ?? 0,
       relevanceScore: (json['relevanceScore'] as num?)?.toDouble() ?? 0,
@@ -645,9 +646,9 @@ class AssistantProcessDisplayBlock {
   factory AssistantProcessDisplayBlock.fromJson(Map<String, dynamic> json) {
     return AssistantProcessDisplayBlock(
       blockId: (json['blockId'] as String?)?.trim() ?? "",
-      stepId: parseProcessStepId((json['stepId'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "pending"),
-      kind: parseProcessDisplayBlockKind((json['kind'] as String?)?.trim() ?? ""),
+      stepId: parseProcessStepIdStrict((json['stepId'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "pending"),
+      kind: parseProcessDisplayBlockKindStrict((json['kind'] as String?)?.trim() ?? ""),
       title: (json['title'] as String?)?.trim() ?? "",
       body: (json['body'] as String?)?.trim() ?? "",
       items: (json['items'] as List?)?.whereType<Map>().map((item) => AssistantDisplayItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantDisplayItem>[],
@@ -689,7 +690,7 @@ class AssistantProcessDisplayState {
 
   factory AssistantProcessDisplayState.fromJson(Map<String, dynamic> json) {
     return AssistantProcessDisplayState(
-      activeStepId: parseProcessStepId((json['activeStepId'] as String?)?.trim() ?? ""),
+      activeStepId: parseProcessStepIdStrict((json['activeStepId'] as String?)?.trim() ?? ""),
       summary: (json['summary'] as String?)?.trim() ?? "",
       blocks: (json['blocks'] as List?)?.whereType<Map>().map((item) => AssistantProcessDisplayBlock.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantProcessDisplayBlock>[],
       finalAnswerReady: json['finalAnswerReady'] == true,
@@ -745,8 +746,8 @@ class ProcessTimelineFrame {
   factory ProcessTimelineFrame.fromJson(Map<String, dynamic> json) {
     return ProcessTimelineFrame(
       frameId: (json['frameId'] as String?)?.trim() ?? "",
-      stepId: parseProcessStepId((json['stepId'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "pending"),
+      stepId: parseProcessStepIdStrict((json['stepId'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "pending"),
       order: (json['order'] as num?)?.toInt() ?? 0,
       headline: (json['headline'] as String?)?.trim() ?? "",
       detail: (json['detail'] as String?)?.trim() ?? "",
@@ -977,7 +978,7 @@ class SlotValueSnapshot {
   factory SlotValueSnapshot.fromJson(Map<String, dynamic> json) {
     return SlotValueSnapshot(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
-      status: parseSlotValueStatus((json['status'] as String?)?.trim() ?? "inferred"),
+      status: parseSlotValueStatusStrict((json['status'] as String?)?.trim() ?? "inferred"),
       value: json['value'],
       source: (json['source'] as String?)?.trim() ?? "",
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
@@ -1182,6 +1183,7 @@ class RunArtifacts {
   const RunArtifacts({
     this.displayMarkdown = "",
     this.displayPlainText = "",
+    this.presentationDocument,
     this.displayState = const AssistantDisplayState(),
     this.journey = const AssistantJourney(),
     this.processTimeline = const <ProcessTimelineFrame>[],
@@ -1199,6 +1201,7 @@ class RunArtifacts {
 
   final String displayMarkdown;
   final String displayPlainText;
+  final AssistantPresentationDocumentWire? presentationDocument;
   final AssistantDisplayState displayState;
   final AssistantJourney journey;
   final List<ProcessTimelineFrame> processTimeline;
@@ -1216,6 +1219,7 @@ class RunArtifacts {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'displayMarkdown': displayMarkdown,
         'displayPlainText': displayPlainText,
+        'presentationDocument': presentationDocument?.toJson(),
         'displayState': displayState.toJson(),
         'journey': journey.toJson(),
         'processTimeline': processTimeline.map((item) => item.toJson()).toList(growable: false),
@@ -1235,6 +1239,7 @@ class RunArtifacts {
     return RunArtifacts(
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",
+      presentationDocument: json['presentationDocument'] is Map ? AssistantPresentationDocumentWire.fromJson((json['presentationDocument'] as Map).cast<String, dynamic>()) : null,
       displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
       processTimeline: (json['processTimeline'] as List?)?.whereType<Map>().map((item) => ProcessTimelineFrame.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ProcessTimelineFrame>[],
@@ -1256,6 +1261,7 @@ class RunArtifacts {
 class RunArtifactsFields {
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';
+  static const String presentationDocument = 'presentationDocument';
   static const String displayState = 'displayState';
   static const String journey = 'journey';
   static const String processTimeline = 'processTimeline';

@@ -50,6 +50,7 @@ python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
 python3 quwoquan_ops/gate/verify_object_relation_edge_type_contract.py
 python3 quwoquan_ops/gate/verify_homepage_type_contract.py
 python3 quwoquan_ops/gate/verify_tag_collection_wiring.py
+python3 quwoquan_data/scripts/cli.py governance taxonomy closure-scorecard --gate
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
 python3 quwoquan_app/scripts/runtime/verify_app_recoverable_error_surface.py
@@ -266,8 +267,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_permission_primer_copy.py || exit 1
     python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
     python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
-    python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
-    python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
+    python3 quwoquan_ops/gate/verify_nonprod_business_data_provisioning.py || exit 1
     python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py || exit 1
     python3 quwoquan_app/scripts/content/verify_article_contract_purity.py || exit 1
     python3 quwoquan_app/scripts/content/verify_post_view_projection_wire_keys.py || exit 1

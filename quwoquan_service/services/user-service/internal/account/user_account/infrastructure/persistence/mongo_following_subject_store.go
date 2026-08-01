@@ -38,7 +38,7 @@ func (s *MongoFollowingSubjectStore) EnsureIndexes(ctx context.Context) error {
 	if s == nil || s.collection == nil {
 		return nil
 	}
-	if err := s.migratePersonaIdentity(ctx); err != nil {
+	if err := s.assertCanonicalPersonaIdentity(ctx); err != nil {
 		return err
 	}
 	_, err := s.collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -60,6 +60,27 @@ func (s *MongoFollowingSubjectStore) EnsureIndexes(ctx context.Context) error {
 		},
 	})
 	return err
+}
+
+func (s *MongoFollowingSubjectStore) assertCanonicalPersonaIdentity(
+	ctx context.Context,
+) error {
+	invalid := s.collection.FindOne(ctx, bson.M{
+		"$or": bson.A{
+			bson.M{"viewerPersonaId": bson.M{"$exists": false}},
+			bson.M{"viewerPersonaId": ""},
+			bson.M{"viewerPersonaId": bson.M{"$not": bson.M{"$type": "string"}}},
+		},
+	})
+	if invalid.Err() == nil {
+		return errors.New(
+			"following_subjects contains non-canonical viewer Persona identity",
+		)
+	}
+	if !errors.Is(invalid.Err(), mongo.ErrNoDocuments) {
+		return fmt.Errorf("inspect following_subjects Persona identity: %w", invalid.Err())
+	}
+	return nil
 }
 
 // UpsertFollow 应用关注事实；sourceVersion 单调防止乱序回退。

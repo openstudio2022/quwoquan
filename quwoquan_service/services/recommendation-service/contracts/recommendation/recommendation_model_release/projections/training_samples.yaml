@@ -1,5 +1,5 @@
 read_model: TrainingSamples
-description: '推荐训练样本集合。由 SampleJoiner 从 rec_learning_events 拼接 impression 与 engagement，
+description: '推荐训练样本集合。由 SampleJoiner 从 recommendation_exposure_facts 与 recommendation_feedback_facts 拼接交付曝光和归因反馈，
 
   带 scenario、用户/物品/交叉特征快照、多目标标签。训练脚本读取生成 rec_datasets。
 

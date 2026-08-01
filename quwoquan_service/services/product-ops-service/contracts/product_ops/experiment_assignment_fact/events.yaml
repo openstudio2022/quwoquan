@@ -1,0 +1,9 @@
+events:
+- name: ExperimentAssignmentObserved
+  description: Recommendation 或 Search 按已激活策略完成一次确定性分桶后发布的不可变观察事实。
+  producers: [recommendation-service, search-service]
+  consumers: [product-ops-service]
+  channel: redis_stream
+  payload_entity: ExperimentAssignmentFact
+  payload_shape: exact
+  payload_fields: [id, experimentId, subjectKey, variant, experimentRevision, assignedAt]

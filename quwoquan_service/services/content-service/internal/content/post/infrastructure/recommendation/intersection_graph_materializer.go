@@ -8,7 +8,7 @@ import (
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 )
 
-// 架构基线 v2 §21 —— 交集 Graph / Lifecycle / Propagation 物化器（异步真算，读路径零计算消费）。
+// 交集 Graph / Lifecycle / Propagation 物化器（异步真算，读路径零计算消费）。
 //
 // 设计要点（对齐计划切片⑥与 R-IX01「读路径零同步打分」不变量）：
 //

@@ -56,7 +56,8 @@
         "tiktok",
         "weibo",
         "toutiao",
-        "tourism_video_site"
+        "tourism_video_site",
+        "image_collection"
       ]
     },
     "extractor": {
@@ -64,7 +65,8 @@
         "wikipedia_api",
         "baidu_baike_html",
         "toutiao_baike_html",
-        "sourced_video_direct_download"
+        "sourced_video_direct_download",
+        "image_collection_download"
       ]
     },
     "canonicalUrl": {
@@ -110,7 +112,8 @@
     "policyRevision": {
       "enum": [
         "encyclopedia-primary",
-        "sourced-video-attribution"
+        "sourced-video-attribution",
+        "image-collection-attribution"
       ]
     },
     "sourceUseMode": {
@@ -204,6 +207,35 @@
         },
         "hasVideo": {
           "const": true
+        }
+      }
+    },
+    {
+      "required": [
+        "researchLane",
+        "hasVideo"
+      ],
+      "properties": {
+        "sourceKind": {
+          "const": "image_collection"
+        },
+        "extractor": {
+          "const": "image_collection_download"
+        },
+        "policyRevision": {
+          "const": "image-collection-attribution"
+        },
+        "sourceUseMode": {
+          "const": "licensed_adaptation"
+        },
+        "rightsMode": {
+          "const": "licensed_adaptation"
+        },
+        "researchLane": {
+          "const": "video"
+        },
+        "hasVideo": {
+          "const": false
         }
       }
     }

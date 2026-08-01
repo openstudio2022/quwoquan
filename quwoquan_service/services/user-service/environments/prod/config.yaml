@@ -2,7 +2,6 @@ overrides:
   sys.user-service.es.enabled: true
   sys.user-service.es.shards: 3
   sys.user-service.integration.external_interaction_base_url: https://integration-service.prod
-  sys.user-service.integration.otp.mode: provider
   sys.user-service.redis.general.mode: cluster
   sys.user-service.redis.general.tls: true
 secretRefs:
@@ -11,6 +10,8 @@ secretRefs:
   sys.user-service.redis.general.password: REDIS_PASSWORD
 externalBindings:
   runtime.message.transport:
+    state: enabled
+  identity.sms.otp:
     state: enabled
   identity.carrier.one_tap:
     state: enabled

@@ -85,6 +85,36 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  LongPollResponse:
+    description: 每个设备独立持久 cursor 的实时事件切片；events 只是投递提示，Chat seq gap 仍由消息同步接口修复。
+    fields:
+    - name: events
+      source: events
+      type: '[]object'
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: none
+    - name: nextCursor
+      source: nextCursor
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: read
+      ops_exposure: none
+    - name: transportResumed
+      source: transportResumed
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
   IssueConnectionTicketRequest:
     description: 签发连接票据的唯一请求实体；账号、Persona 与设备身份只从已验签安全上下文注入，不接受客户端输入。
     fields:

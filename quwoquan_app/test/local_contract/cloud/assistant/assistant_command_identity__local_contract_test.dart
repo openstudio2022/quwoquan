@@ -22,7 +22,7 @@ void main() {
     () async {
       final transport = _AssistantCommandClient(<Map<String, Object?>>[
         <String, Object?>{
-          'conversationId': 'conversation-1',
+          'sessionId': 'session-1',
           'userId': 'user-1',
           'state': 'active',
           'activeTurnId': '',
@@ -32,8 +32,11 @@ void main() {
           'updatedAt': '2026-07-24T09:00:00Z',
         },
         <String, Object?>{
-          'turnId': 'turn-1',
-          'conversationId': 'conversation-1',
+          'runId': 'run-1',
+          'sessionId': 'session-1',
+          'status': 'queued',
+          'goal': 'help me plan today',
+          'streamState': <String, Object?>{},
           'createdAt': '2026-07-24T09:00:01Z',
         },
       ]);
@@ -41,26 +44,25 @@ void main() {
       final repository = RemoteAssistantRepository(
         httpClient: httpClient,
         operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-        conversationInvocationContext: assistantRemoteTestInvocationContext,
-        consentActorScope: 'assistant-command-identity-test',
+        sessionInvocationContext: assistantRemoteTestInvocationContext,
+        consentAccountId: 'assistant-command-identity-test',
       );
 
-      await repository.createAssistantConversation(
+      await repository.createAssistantSession(
         summary: 'assistant test',
-        clientRequestId: 'conversation-intent-1',
+        clientRequestId: 'session-intent-1',
       );
       await repository.startAssistantRun(
-        conversationId: 'conversation-1',
+        sessionId: 'session-1',
         text: 'help me plan today',
         clientRequestId: 'run-intent-1',
-        domainId: 'assistant',
       );
 
       expect(transport.requests, hasLength(2));
       final create = transport.requests[0];
       final createBody = jsonDecode(create.body) as Map<String, dynamic>;
-      expect(create.headers['Idempotency-Key'], 'conversation-intent-1');
-      expect(createBody['clientRequestId'], 'conversation-intent-1');
+      expect(create.headers['Idempotency-Key'], 'session-intent-1');
+      expect(createBody['clientRequestId'], 'session-intent-1');
       expect(createBody['summary'], 'assistant test');
       expect(create.headers['X-Client-Page-Id'], isNotEmpty);
       expect(create.headers['X-Client-Session-Id'], isNotEmpty);
@@ -73,11 +75,21 @@ void main() {
       final startBody = jsonDecode(start.body) as Map<String, dynamic>;
       expect(start.headers['Idempotency-Key'], 'run-intent-1');
       expect(startBody['clientRequestId'], 'run-intent-1');
-      expect(startBody['input'], <String, dynamic>{
-        'text': 'help me plan today',
+      expect(startBody['intent'], <String, dynamic>{
+        'kind': 'answer',
+        'answer': <String, dynamic>{'text': 'help me plan today'},
+        'search': null,
+        'creationAssistance': null,
       });
-      expect(startBody['trigger'], <String, dynamic>{'type': 'user_message'});
-      expect(startBody['domainId'], 'assistant');
+      expect(
+        startBody['surfaceCapabilities'],
+        containsPair('surfaceId', AppUiSurfaces.personalAssistantDialog.id),
+      );
+      expect(
+        (startBody['surfaceCapabilities']
+            as Map<String, dynamic>)['supportedNodeKinds'],
+        contains('markdown'),
+      );
       expect(start.headers['X-Client-Page-Id'], isNotEmpty);
       expect(start.headers['X-Client-Session-Id'], isNotEmpty);
       expect(start.headers['X-Client-Surface-Id'], isNotEmpty);
@@ -93,12 +105,12 @@ void main() {
     final repository = RemoteAssistantRepository(
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
-      consentActorScope: 'assistant-command-identity-test',
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
+      consentAccountId: 'assistant-command-identity-test',
     );
 
     await expectLater(
-      repository.createAssistantConversation(clientRequestId: ' '),
+      repository.createAssistantSession(clientRequestId: ' '),
       throwsArgumentError,
     );
     expect(transport.requests, isEmpty);
@@ -148,7 +160,7 @@ void main() {
         eventId: 'feedback:turn-1:useful',
         factType: AssistantLearningFactType.userFeedback.wireName,
         assistantTurnId: 'turn-1',
-        referralSource: AssistantReferralSource.assistantConversation.wireName,
+        referralSource: AssistantReferralSource.assistantSession.wireName,
         domainId: 'assistant',
         feedbackType: FeedbackType.useful.wireName,
         actionType: 'useful',
@@ -167,7 +179,7 @@ void main() {
       expect(body['eventId'], request.eventId);
       expect(body['factType'], 'user_feedback');
       expect(body['assistantTurnId'], request.assistantTurnId);
-      expect(body['referralSource'], 'assistant_conversation');
+      expect(body['referralSource'], 'assistant_session');
       expect(body['feedbackType'], 'useful');
       expect(body['trainingEligible'], isFalse);
       expect(outbound.headers['X-Client-Operation-Id'], isNotEmpty);

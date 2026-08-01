@@ -1,0 +1,45 @@
+service: assistant-service
+domain: assistant
+capability: autonomous-public-web-exploration
+
+metrics:
+  tool_total: assistant_public_web_tool_total
+  tool_duration_seconds: assistant_public_web_tool_duration_seconds
+  policy_boundary_total: assistant_public_web_policy_boundary_total
+
+privacy:
+  permitted_labels: [tool, outcome, reason]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, url, host, ip, query, document_id, source_id]
+
+slis:
+  - id: assistant_public_web_fetch_availability
+    description: 合法且仍有预算的 web_open/web_find 执行成功率；安全拒绝和预算边界不计作依赖故障。
+    sli: sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome="succeeded"}[5m])) / sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome=~"succeeded|fetch_unavailable|budget_unavailable|evidence_unavailable|failed"}[5m]))
+    objective: 0.99
+  - id: assistant_public_web_tool_latency
+    description: 公开网页工具端到端执行 P95，包含安全校验、抓取、解析与证据提交。
+    sli: histogram_quantile(0.95, sum(rate(assistant_public_web_tool_duration_seconds_bucket{outcome="succeeded"}[5m])) by (le, tool))
+    objective_seconds: 15
+  - id: assistant_public_web_evidence_availability
+    description: 已成功获取的网页证据能原子写入或读取 authoritative ledger 的比例。
+    sli: 1 - (sum(rate(assistant_public_web_policy_boundary_total{reason="web_evidence_unavailable"}[5m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_search|web_open|web_find"}[5m])), 0.001))
+    objective: 0.999
+
+failure_semantics:
+  web_target_rejected: do_not_retry_and_do_not_emit_target_details
+  web_fetch_unavailable: bounded_retry_then_follow_tool_recovery_policy
+  web_budget_exhausted: stop_exploration_and_synthesize_with_existing_evidence
+  web_budget_unavailable: do_not_fetch_without_authoritative_budget_reservation
+  web_evidence_unavailable: do_not_claim_unpersisted_evidence
+
+alerts:
+  tool_availability:
+    condition: sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome="succeeded"}[10m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome=~"succeeded|fetch_unavailable|budget_unavailable|evidence_unavailable|failed"}[10m])), 0.001) < 0.99
+    severity: warning
+  tool_latency:
+    condition: histogram_quantile(0.95, sum(rate(assistant_public_web_tool_duration_seconds_bucket{outcome="succeeded"}[10m])) by (le)) > 15
+    severity: warning
+  evidence_availability:
+    condition: 1 - (sum(rate(assistant_public_web_policy_boundary_total{reason="web_evidence_unavailable"}[10m])) / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_search|web_open|web_find"}[10m])), 0.001)) < 0.999
+    severity: critical

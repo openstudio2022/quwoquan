@@ -1,17 +1,18 @@
 package semantic_test
 
 import (
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 	"testing"
 )
 
 func TestProjectOnlyPublishedValidMentions(t *testing.T) {
-	raw := []any{
-		map[string]any{"kind": "entity", "status": "published", "targetRef": "/entity/地点/景区/九寨沟"},
-		map[string]any{"kind": "tag", "status": "published", "targetRef": "Topic/旅行/四川"},
-		map[string]any{"kind": "entity", "status": "pending_review", "candidateId": "candidate_entity_1"},
-		map[string]any{"kind": "tag", "status": "offline", "targetRef": "Topic/旧标签"},
-		map[string]any{"kind": "entity", "status": "published", "targetRef": "candidate:entity:bad"},
+	raw := []postmodel.PostSemanticMention{
+		{Kind: "entity", Status: "published", TargetRef: "/entity/地点/景区/九寨沟"},
+		{Kind: "tag", Status: "published", TargetRef: "Topic/旅行/四川"},
+		{Kind: "entity", Status: "pending_review", CandidateId: "candidate_entity_1"},
+		{Kind: "tag", Status: "offline", TargetRef: "Topic/旧标签"},
+		{Kind: "entity", Status: "published", TargetRef: "candidate:entity:bad"},
 	}
 
 	got := Project(raw)
@@ -30,8 +31,8 @@ func TestValidateSuppliedRefsRejectsCandidateAndManualProjection(t *testing.T) {
 	if err := ValidateSuppliedRefs(nil, []string{"candidate:entity:1"}, nil); err == nil {
 		t.Fatal("expected candidate active ref rejection")
 	}
-	raw := []any{
-		map[string]any{"kind": "tag", "status": "pending_review", "candidateId": "candidate_tag_1"},
+	raw := []postmodel.PostSemanticMention{
+		{Kind: "tag", Status: "pending_review", CandidateId: "candidate_tag_1"},
 	}
 	if err := ValidateSuppliedRefs(raw, nil, []string{"Topic/未审核"}); err == nil {
 		t.Fatal("expected manually supplied tag ref rejection")
@@ -39,13 +40,13 @@ func TestValidateSuppliedRefsRejectsCandidateAndManualProjection(t *testing.T) {
 }
 
 func TestApplyGovernanceEventPublishesThenOfflinesMention(t *testing.T) {
-	raw := []any{
-		map[string]any{
-			"mentionId":   "mention_1",
-			"kind":        "entity",
-			"status":      "pending_review",
-			"candidateId": "candidate_entity_1",
-			"surface":     "九寨沟",
+	raw := []postmodel.PostSemanticMention{
+		{
+			MentionId:   "mention_1",
+			Kind:        "entity",
+			Status:      "pending_review",
+			CandidateId: "candidate_entity_1",
+			Surface:     "九寨沟",
 		},
 	}
 	published, count, err := ApplyGovernanceEvent(raw, GovernanceEvent{

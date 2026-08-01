@@ -17,7 +17,7 @@ final class RemoteSearchHotQueryReader implements SearchHotQueryReader {
 
   @override
   Future<HotQuerySlice> listHotQueries(ListHotQueriesQuery query) {
-    return client.searchSearchQueryListHotQueries(
+    return client.searchSearchRequestFactListHotQueries(
       query,
       context: invocationContext(SearchRequestPageIds.listHotQueries),
     );

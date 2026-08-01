@@ -13,28 +13,38 @@ externalBindings:
     state: enabled
   identity.sms.otp:
     state: enabled
-    adapter: ext.sms.local_capture
-    endpointRef: environment_binding:integration.sms_fixture
+    adapter: ext.sms.aliyun
+    endpointRef: environment_binding:integration.sms
     endpointEnvs:
-      endpoint: INTEGRATION_SMS_FIXTURE_ENDPOINT
+      endpoint: INTEGRATION_SMS_ENDPOINT
     secretRefs:
-    - INTEGRATION_SMS_FIXTURE_TOKEN
-    timeoutMs: 1000
+    - INTEGRATION_SMS_TOKEN
+    - OTP_CODE_REF_KEYS_JSON
+    - INTEGRATION_SERVICE_MTLS_CA_FILE
+    - INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE
+    - INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE
+    timeoutMs: 10000
   integration.push.delivery:
     state: enabled
-    adapter: ext.push.local_recorder
-    endpointRef: environment_binding:integration.push_fixture
+    adapter: ext.push.dispatch
+    endpointRef: environment_binding:integration.push
     endpointEnvs:
-      user_service_base_url: INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL
+      user_service_base_url: INTEGRATION_PUSH_USER_SERVICE_BASE_URL
+      apns_environment: INTEGRATION_PUSH_APNS_ENVIRONMENT
+      apns_key_id: INTEGRATION_PUSH_APNS_KEY_ID
+      apns_team_id: INTEGRATION_PUSH_APNS_TEAM_ID
+      apns_topic: INTEGRATION_PUSH_APNS_TOPIC
+      fcm_project_id: INTEGRATION_PUSH_FCM_PROJECT_ID
     secretRefs:
-    - INTEGRATION_PUSH_FIXTURE_HMAC_KEY
-    timeoutMs: 1000
+    - INTEGRATION_PUSH_APNS_KEY_FILE
+    - INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
+    timeoutMs: 10000
   integration.location.lookup:
     state: enabled
-    adapter: ext.map.protocol_fixture
-    endpointRef: environment_binding:integration.location_fixture
+    adapter: ext.map.baidu
+    endpointRef: environment_binding:integration.location
     endpointEnvs:
-      base: INTEGRATION_LOCATION_FIXTURE_BASE_URL
+      base: INTEGRATION_LOCATION_BAIDU_BASE_URL
     secretRefs:
-    - INTEGRATION_LOCATION_FIXTURE_AK
-    timeoutMs: 1000
+    - INTEGRATION_LOCATION_BAIDU_AK
+    timeoutMs: 1200

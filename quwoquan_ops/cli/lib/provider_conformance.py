@@ -1480,8 +1480,6 @@ def validate_evidence(
                 if environment in governance.RELEASE_ADAPTER_ENVIRONMENTS
                 else {
                     *governance.READY_IMPLEMENTATION_STATUSES,
-                    "mock",
-                    "test_fixture_only",
                     "sandbox",
                 }
             )

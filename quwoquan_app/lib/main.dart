@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/app_bootstrap.dart';
+import 'package:quwoquan_app/main_prod.dart' as production_entrypoint;
 
 Future<void> main() async {
-  await runQuwoquanApp();
+  await production_entrypoint.main();
 }

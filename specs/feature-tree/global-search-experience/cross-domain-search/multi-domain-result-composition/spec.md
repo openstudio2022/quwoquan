@@ -43,7 +43,7 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/search-service/contracts/search/search_query/operations.yaml`
+- canonical：`quwoquan_service/services/search-service/contracts/search/search_request_fact/operations.yaml`
 - canonical：`quwoquan_service/services/entity-service/contracts/entity_homepage/homepage/operations.yaml`
 
 ## 5. 验收场景

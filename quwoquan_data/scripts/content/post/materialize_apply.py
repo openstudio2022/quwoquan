@@ -87,14 +87,30 @@ def materialize_posts(
             if execution_sequence <= 0:
                 raise RuntimeError(f"missing executionSequence for execution={execution_id}")
             post_dir = content_object.content_object_dir(execution_id, ref)
-            materialize_video_post(
-                execution_id=execution_id,
-                ref=ref,
-                post_dir=post_dir,
-                compose_payload=compose_payload,
-                review_payload=payload,
-                execution_sequence=execution_sequence,
-            )
+            try:
+                materialize_video_post(
+                    execution_id=execution_id,
+                    ref=ref,
+                    post_dir=post_dir,
+                    compose_payload=compose_payload,
+                    review_payload=payload,
+                    execution_sequence=execution_sequence,
+                )
+            except ValueError as exc:
+                # Object-level delivery shortfalls (e.g. sourced clip shorter than
+                # policy minimum) must typed-discard the ref, not abort the batch.
+                review_dir = post_dir / "5.review"
+                review_dir.mkdir(parents=True, exist_ok=True)
+                write_json(
+                    review_dir / "materialize_failure.json",
+                    {
+                        "schema": "quwoquan_data.video_materialize_failure",
+                        "ref": ref,
+                        "code": "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
+                        "message": str(exc),
+                    },
+                )
+                continue
             content_object.write_content_object_index(execution_id, ref)
             materialized.append(post_dir)
             continue
@@ -265,6 +281,10 @@ def materialize_posts(
             "creatorArchetype": compose_payload.get("creatorArchetype") or creator_payload.get("creatorArchetype"),
             "creatorProfileDigest": compose_payload.get("creatorProfileDigest")
             or creator_payload.get("creatorProfileDigest"),
+            "creatorProfileVersion": compose_payload.get("creatorProfileVersion")
+            or creator_payload.get("creatorProfileVersion")
+            or compose_payload.get("creatorProfileDigest")
+            or creator_payload.get("creatorProfileDigest"),
             "creatorDisclosure": compose_payload.get("creatorDisclosure") or creator_payload.get("creatorDisclosure"),
             "experienceClaimMode": compose_payload.get("experienceClaimMode")
             or creator_payload.get("experienceClaimMode"),
@@ -353,6 +373,7 @@ def materialize_posts(
             "creatorProfileId",
             "creatorArchetype",
             "creatorProfileDigest",
+            "creatorProfileVersion",
             "creatorDisclosure",
             "experienceClaimMode",
             "authorQualitySignals",

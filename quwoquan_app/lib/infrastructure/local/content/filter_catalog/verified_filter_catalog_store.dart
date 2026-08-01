@@ -19,7 +19,9 @@ final class SharedPreferencesVerifiedFilterCatalogStore
     if (source == null || source.trim().isEmpty) return null;
     final decoded = jsonDecode(source);
     if (decoded is! Map) {
-      throw const FormatException('verified filter catalog cache is not an object');
+      throw const FormatException(
+        'verified filter catalog cache is not an object',
+      );
     }
     final payload = decoded.map(
       (key, value) => MapEntry(key.toString(), value),

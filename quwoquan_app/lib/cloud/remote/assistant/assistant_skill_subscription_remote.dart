@@ -126,7 +126,9 @@ final class RemoteAssistantSkillSubscriptionAdapter
         cron: projection.trigger.cron,
       ),
       destination: SkillSubscriptionDestinationWire(
-        destinationType: projection.destination.destinationType,
+        destinationType: parseSkillSubscriptionDestinationTypeStrict(
+          projection.destination.destinationType,
+        ),
         destinationId: projection.destination.destinationId ?? '',
         maxPerDay: projection.destination.maxPerDay,
         cooldownMinutes: projection.destination.cooldownMinutes,

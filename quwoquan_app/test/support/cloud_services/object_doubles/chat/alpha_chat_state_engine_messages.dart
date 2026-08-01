@@ -62,6 +62,7 @@ extension AlphaChatMessageCommandState on AlphaChatStateEngine {
     conversation['lastSeq'] = nextSeq;
     conversation['lastMessageId'] = messageId;
     conversation['lastMessagePreview'] = command.content;
+    conversation['lastMessageType'] = command.type;
     conversation['lastMessageTime'] = timestamp.toIso8601String();
     conversation['messageCount'] = messages.length;
     conversation['updatedAt'] = timestamp.toIso8601String();

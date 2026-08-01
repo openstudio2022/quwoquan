@@ -10,7 +10,7 @@
 
 ### 本领域拥有
 
-- 拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略发布与助手学习事实的生命周期和写入决定权。
+- 拥有 `AssistantSession`、`AssistantRun`、流式事件、助手策略发布与助手学习事实的生命周期和写入决定权。
 - 只能通过本领域公开 command 修改其拥有事实。
 
 ### 本领域不拥有
@@ -29,34 +29,34 @@
 ## 3. Journey / Scenario 职责
 
 - [`JNY-007 / SCN-015`](../spec.md#scn-015)
-  - 本领域负责：在“小趣作为会话成员参与消息”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+  - 本领域负责：在“小趣作为会话成员参与消息”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
   - 进入条件：`chat-conversation` 已交付其公开结果。
-  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁，形成该场景中本领域负责的终态。
+  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁，形成该场景中本领域负责的终态。
   - 不负责：不写入 Conversation、Post、UserAccount 或搜索索引事实。
 - [`JNY-009 / SCN-017`](../spec.md#scn-017)
-  - 本领域负责：在“内容与页面上下文感知问答”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+  - 本领域负责：在“内容与页面上下文感知问答”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
   - 进入条件：用户发起“内容与页面上下文感知问答”且身份、输入与权限前置成立。
-  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁，供 `runtime` 继续处理。
+  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁，供 `runtime` 继续处理。
   - 不负责：不写入 Conversation、Post、UserAccount 或搜索索引事实。
 - [`JNY-009 / SCN-018`](../spec.md#scn-018)
-  - 本领域负责：在“群聊话题理解与会话内回复”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+  - 本领域负责：在“群聊话题理解与会话内回复”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
   - 进入条件：用户发起“群聊话题理解与会话内回复”且身份、输入与权限前置成立。
-  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁，供 `chat-conversation` 继续处理。
+  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁，供 `chat-conversation` 继续处理。
   - 不负责：不写入 Conversation、Post、UserAccount 或搜索索引事实。
 - [`JNY-009 / SCN-019`](../spec.md#scn-019)
-  - 本领域负责：在“搜索 handoff 与统一 grounding”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+  - 本领域负责：在“搜索 handoff 与统一 grounding”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
   - 进入条件：用户发起“搜索 handoff 与统一 grounding”且身份、输入与权限前置成立。
-  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁，供 `global-search-experience` 继续处理。
+  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁，供 `global-search-experience` 继续处理。
   - 不负责：不写入 Conversation、Post、UserAccount 或搜索索引事实。
 - [`JNY-009 / SCN-020`](../spec.md#scn-020)
-  - 本领域负责：在“小趣主动订阅与用户/会话投递”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+  - 本领域负责：在“小趣主动订阅与用户/会话投递”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
   - 进入条件：用户发起“小趣主动订阅与用户/会话投递”且身份、输入与权限前置成立。
-  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁，供 `chat-conversation` 继续处理。
+  - 交付给下游的结果：消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁，供 `chat-conversation` 继续处理。
   - 不负责：不写入 Conversation、Post、UserAccount 或搜索索引事实。
 
 ## 4. 业务能力
 
-- [`assistant-runtime-foundation`](./assistant-runtime-foundation/spec.md)：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
+- [`assistant-runtime-foundation`](./assistant-runtime-foundation/spec.md)：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
 - [`learning-event-feedback-injection`](./learning-event-feedback-injection/spec.md)：统一学习事件上报、反馈聚合与运行时上下文注入链路。
 - [`profile-proposal-apply-loop`](./profile-proposal-apply-loop/spec.md)：定义画像提案从生成、确认/拒绝到应用落档的完整闭环。
 - [`run-stream-policy`](./run-stream-policy/spec.md)：规范助手 Run/Stream 主链路的协议、策略模板与域路由行为。

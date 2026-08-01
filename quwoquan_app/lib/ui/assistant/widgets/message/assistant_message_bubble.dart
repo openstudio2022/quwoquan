@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
@@ -23,6 +25,8 @@ import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_process_draw
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
+
+part 'assistant_message_followup_card.dart';
 
 bool _containsInternalAssistantText(String text) {
   final normalized = text.trim();
@@ -62,6 +66,21 @@ String _resolveAssistantVisibleAnswerTextFromTranscriptRow({
   return '';
 }
 
+AssistantPresentationDocumentWire? _resolveAssistantPresentation(
+  AssistantTranscriptTimelineRow row,
+) {
+  if (row is! AssistantAnswerTranscriptRow) return null;
+  final raw = row.runArtifacts['presentationDocument'];
+  if (raw is! Map) return null;
+  try {
+    return AssistantPresentationDocumentWire.fromJson(
+      raw.cast<String, dynamic>(),
+    );
+  } on FormatException {
+    return null;
+  }
+}
+
 const double assistantBubbleMaxWidth = 280.0;
 const double assistantBubbleWidthFactor = 0.84;
 const double assistantBubbleImageSize = 200.0;
@@ -91,6 +110,9 @@ class AssistantMessageBubble extends StatelessWidget {
     this.onDetailedAnswer,
     this.onSwitchModelAnswer,
     this.onActionHintTap,
+    this.onPresentationAction,
+    this.canHandlePresentationAction,
+    this.onPresentationFallback,
     this.onReferenceTap,
     this.hideAvatarAndName = false,
     this.useFullWidth = false,
@@ -134,6 +156,10 @@ class AssistantMessageBubble extends StatelessWidget {
   final VoidCallback? onDetailedAnswer;
   final VoidCallback? onSwitchModelAnswer;
   final Future<void> Function(String hint)? onActionHintTap;
+  final void Function(AssistantActionIntentWire action)? onPresentationAction;
+  final bool Function(AssistantActionIntentWire action)?
+  canHandlePresentationAction;
+  final void Function(String reason)? onPresentationFallback;
   final void Function(AssistantCitation reference)? onReferenceTap;
 
   /// 单测与协议断言用 Map 视图（与 [PersistedTimelineTurnCodec.encode] 一致）。
@@ -234,6 +260,9 @@ class AssistantMessageBubble extends StatelessWidget {
     final answerText = isAssistantMessage
         ? renderAnswerBlocksToMarkdown(resolvedDisplayState.answer.blocks)
         : content;
+    final presentation = isAssistantMessage
+        ? _resolveAssistantPresentation(row)
+        : null;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble &&
         isRight &&
@@ -363,7 +392,11 @@ class AssistantMessageBubble extends StatelessWidget {
           transcriptRow: transcriptRow,
           content: answerText,
           answerBlocks: resolvedDisplayState.answer.blocks,
+          presentation: presentation,
           textColor: textColor,
+          onPresentationAction: onPresentationAction,
+          canHandlePresentationAction: canHandlePresentationAction,
+          onPresentationFallback: onPresentationFallback,
           onReferenceTap: onReferenceTap,
         ),
       );
@@ -901,78 +934,4 @@ class _BubbleTailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _AssistantFollowupCard extends StatelessWidget {
-  const _AssistantFollowupCard({
-    required this.followupPrompt,
-    required this.actionHints,
-    this.onActionHintTap,
-  });
-
-  final String followupPrompt;
-  final List<String> actionHints;
-  final Future<void> Function(String hint)? onActionHintTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (followupPrompt.isNotEmpty)
-            Text(
-              followupPrompt,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor,
-              ),
-            ),
-          if (actionHints.isNotEmpty) ...[
-            if (followupPrompt.isNotEmpty) SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: actionHints
-                  .map(
-                    (hint) => CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: onActionHintTap == null
-                          ? null
-                          : () => onActionHintTap!(hint),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.containerSm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.fullBorderRadius,
-                          ),
-                          color: AppColors.white.withValues(alpha: 0.8),
-                        ),
-                        child: Text(
-                          hint,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 }

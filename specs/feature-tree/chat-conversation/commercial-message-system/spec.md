@@ -88,7 +88,7 @@
 - 生产包默认 Remote，无 Mock/Remote 切换入口。
 - App UI/Provider 不从 MockChatRepository、MockIntersectionRepository、MockAppMessageRepository 或 PrototypeBundle 拼业务列表。
 - 服务端生产配置不允许 mock-user、memory store、noop resolver、baseURL 为空返回空。
-- App 不消费 Circle.conversationId 和 ChatInbox.avatarCompositeUrls 作为商用主渲染。
+- ChatInbox 头像契约只暴露云端预合成 `avatarUrl`，不保留端侧拼图字段。
 
 <a id="req-006"></a>
 ### REQ-006 metadata/codegen/Remote DTO 与商用消息体系一致
@@ -170,7 +170,7 @@
 - THEN 生产包默认 Remote，无 Mock/Remote 切换入口。
 - THEN App UI/Provider 不从 MockChatRepository、MockIntersectionRepository、MockAppMessageRepository 或 PrototypeBundle 拼业务列表。
 - THEN 服务端生产配置不允许 mock-user、memory store、noop resolver、baseURL 为空返回空。
-- THEN App 不消费 Circle.conversationId 和 ChatInbox.avatarCompositeUrls 作为商用主渲染。
+- THEN ChatInbox 头像契约只暴露云端预合成 `avatarUrl`，不保留端侧拼图字段。
 
 <a id="sit-006"></a>
 ### SIT-006 metadata/codegen/Remote DTO 与商用消息体系一致

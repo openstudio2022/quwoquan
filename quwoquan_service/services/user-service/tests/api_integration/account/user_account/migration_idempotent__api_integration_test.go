@@ -397,12 +397,193 @@ func TestPersonaActorSingleTrackMigrationRejectsAmbiguousGreetingJSON(t *testing
 	}
 }
 
+func TestSubjectFollowReceiptPersonaMigrationIsCanonicalAndIdempotent(t *testing.T) {
+	ctx := context.Background()
+	tx, err := pgPool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin subject follow receipt migration transaction: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `DELETE FROM subject_follow_command_receipts`); err != nil {
+		t.Fatalf("isolate subject follow receipt fixtures: %v", err)
+	}
+	legacy := mustJSON(t, map[string]any{
+		"Follow": map[string]any{
+			"ID":          "sf_receipt_migration",
+			"PersonaID":   "persona-receipt-migration",
+			"SubjectType": "homepage",
+			"SubjectID":   "homepage-receipt-migration",
+			"State":       "following",
+			"Version":     3,
+			"FollowedAt":  "2026-07-30T12:00:00Z",
+			"UpdatedAt":   "2026-07-30T12:01:00Z",
+		},
+		"Changed":          true,
+		"IdempotentReplay": false,
+		"OccurredAt":       "2026-07-30T12:01:00Z",
+	})
+	canonical := mustJSON(t, map[string]any{
+		"follow": map[string]any{
+			"id":          "sf_receipt_migration",
+			"personaId":   "persona-receipt-migration",
+			"subjectType": "homepage",
+			"subjectId":   "homepage-receipt-migration",
+			"state":       "following",
+			"version":     3,
+			"followedAt":  "2026-07-30T12:00:00Z",
+			"updatedAt":   "2026-07-30T12:01:00Z",
+		},
+		"changed":          true,
+		"idempotentReplay": false,
+		"occurredAt":       "2026-07-30T12:01:00Z",
+	})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO subject_follow_command_receipts (
+			receipt_id, persona_id, idempotency_key, operation,
+			aggregate_id, aggregate_version, response_json
+		) VALUES (
+			'subject-follow-receipt-migration',
+			'persona-receipt-migration',
+			'subject-follow-receipt-migration',
+			'FollowSubject',
+			'sf_receipt_migration', 3, $1::jsonb
+		)
+	`, legacy); err != nil {
+		t.Fatalf("seed legacy subject follow receipt: %v", err)
+	}
+
+	migrationSQL := readSubjectFollowReceiptPersonaMigrationSQL(t)
+	if _, err := tx.Exec(ctx, migrationSQL); err != nil {
+		t.Fatalf("apply subject follow receipt migration: %v", err)
+	}
+	var (
+		matches bool
+		first   string
+	)
+	if err := tx.QueryRow(ctx, `
+		SELECT response_json = $1::jsonb, response_json::text
+		FROM subject_follow_command_receipts
+		WHERE receipt_id = 'subject-follow-receipt-migration'
+	`, canonical).Scan(&matches, &first); err != nil {
+		t.Fatalf("read migrated subject follow receipt: %v", err)
+	}
+	if !matches {
+		t.Fatalf("subject follow receipt did not migrate to canonical JSON")
+	}
+
+	if _, err := tx.Exec(ctx, migrationSQL); err != nil {
+		t.Fatalf("rerun subject follow receipt migration: %v", err)
+	}
+	var second string
+	if err := tx.QueryRow(ctx, `
+		SELECT response_json::text
+		FROM subject_follow_command_receipts
+		WHERE receipt_id = 'subject-follow-receipt-migration'
+	`).Scan(&second); err != nil {
+		t.Fatalf("read idempotently migrated subject follow receipt: %v", err)
+	}
+	if second != first {
+		t.Fatalf("second subject follow receipt migration changed JSON: %s -> %s", first, second)
+	}
+}
+
+func TestSubjectFollowReceiptPersonaMigrationRejectsAmbiguousJSON(t *testing.T) {
+	canonicalFollow := map[string]any{
+		"id":          "sf_receipt_conflict",
+		"personaId":   "persona-receipt-conflict",
+		"subjectType": "homepage",
+		"subjectId":   "homepage-receipt-conflict",
+		"state":       "following",
+		"version":     1,
+		"followedAt":  "2026-07-30T12:00:00Z",
+		"updatedAt":   "2026-07-30T12:00:00Z",
+	}
+	cases := []struct {
+		name      string
+		payload   map[string]any
+		wantError string
+	}{
+		{
+			name: "mixed top-level keys",
+			payload: map[string]any{
+				"follow":           canonicalFollow,
+				"Follow":           canonicalFollow,
+				"changed":          true,
+				"idempotentReplay": false,
+				"occurredAt":       "2026-07-30T12:00:00Z",
+			},
+			wantError: "mixed, partial, or unknown top-level keys",
+		},
+		{
+			name: "mixed nested persona keys",
+			payload: map[string]any{
+				"follow": func() map[string]any {
+					mixed := make(map[string]any, len(canonicalFollow)+1)
+					for key, value := range canonicalFollow {
+						mixed[key] = value
+					}
+					mixed["PersonaID"] = "persona-receipt-conflict"
+					return mixed
+				}(),
+				"changed":          true,
+				"idempotentReplay": false,
+				"occurredAt":       "2026-07-30T12:00:00Z",
+			},
+			wantError: "mixed, partial, or unknown canonical follow keys",
+		},
+	}
+	migrationSQL := readSubjectFollowReceiptPersonaMigrationSQL(t)
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctx := context.Background()
+			tx, err := pgPool.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin subject follow receipt conflict transaction: %v", err)
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if _, err := tx.Exec(ctx, `DELETE FROM subject_follow_command_receipts`); err != nil {
+				t.Fatalf("isolate subject follow receipt conflict fixtures: %v", err)
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO subject_follow_command_receipts (
+					receipt_id, persona_id, idempotency_key, operation,
+					aggregate_id, aggregate_version, response_json
+				) VALUES (
+					'subject-follow-receipt-conflict',
+					'persona-receipt-conflict',
+					'subject-follow-receipt-conflict',
+					'FollowSubject', 'sf_receipt_conflict', 1, $1::jsonb
+				)
+			`, mustJSON(t, testCase.payload)); err != nil {
+				t.Fatalf("seed ambiguous subject follow receipt: %v", err)
+			}
+			if _, err := tx.Exec(ctx, migrationSQL); err == nil {
+				t.Fatal("ambiguous subject follow receipt JSON was accepted")
+			} else if !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("unexpected subject follow receipt migration failure: %v", err)
+			}
+		})
+	}
+}
+
 func retiredGreetingActorJSONKeys() (string, string) {
 	retiredActor := "Sub" + "Account"
 	return "requester" + retiredActor + "Id", "target" + retiredActor + "Id"
 }
 
 func readPersonaActorSingleTrackMigrationSQL(t *testing.T) string {
+	return readUserAccountMigrationSQL(t, "045_persona_actor_single_track.up.sql")
+}
+
+func readSubjectFollowReceiptPersonaMigrationSQL(t *testing.T) string {
+	return readUserAccountMigrationSQL(
+		t,
+		"046_subject_follow_receipt_persona_single_track.up.sql",
+	)
+}
+
+func readUserAccountMigrationSQL(t *testing.T, filename string) string {
 	t.Helper()
 	_, sourcePath, _, ok := runtime.Caller(0)
 	if !ok {
@@ -412,11 +593,11 @@ func readPersonaActorSingleTrackMigrationSQL(t *testing.T) string {
 		filepath.Dir(sourcePath),
 		"..", "..", "..", "..",
 		"resources", "migrations", "account", "user_account",
-		"045_persona_actor_single_track.up.sql",
+		filename,
 	))
 	contents, err := os.ReadFile(migrationPath)
 	if err != nil {
-		t.Fatalf("read persona actor migration %s: %v", migrationPath, err)
+		t.Fatalf("read user account migration %s: %v", migrationPath, err)
 	}
 	return string(contents)
 }

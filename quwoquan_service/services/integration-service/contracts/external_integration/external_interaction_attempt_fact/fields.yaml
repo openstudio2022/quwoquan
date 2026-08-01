@@ -31,6 +31,17 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: subjectDigest
+  source: subjectDigest
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SECRET
+  log_policy: omit
+  api_exposure: none
+  ops_exposure: none
+  description: 由请求所属 account/persona 不可逆派生的隐私清理定位摘要；不得作为业务查询键或跨服务标识。
+  role: append_only_fact
 - name: operation
   source: operation
   type: enum

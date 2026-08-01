@@ -137,7 +137,25 @@ if [[ "$TARGET_NAME" != "prod-hosted" ]]; then
   if ! PYTHONDONTWRITEBYTECODE=1 python3 \
     "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" verify \
     --target "$TARGET_NAME" >/dev/null; then
-    echo "GATE_BLOCK: local App launch requires a valid DNS-01 public certificate for $TARGET_NAME." >&2
+    echo "GATE_BLOCK: App launch requires the canonical certificate for $TARGET_NAME." >&2
+    exit 2
+  fi
+fi
+if [[ "$TARGET_NAME" == "alpha-local" \
+   || "$TARGET_NAME" == "beta-local" \
+   || "$TARGET_NAME" == "gamma-local" ]]; then
+  if [[ -z "${QWQ_DEVICE_TRUST_PLATFORM:-}" \
+     || -z "${QWQ_DEVICE_TRUST_RECEIPT:-}" \
+     || ! -f "${QWQ_DEVICE_TRUST_RECEIPT:-}" ]]; then
+    echo "GATE_BLOCK: local App launch requires a target/device system-trust receipt." >&2
+    exit 2
+  fi
+  if ! PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+    device-trust --target "$TARGET_NAME" \
+    --platform "$QWQ_DEVICE_TRUST_PLATFORM" \
+    --action verify --device "$DEVICE_ID" >/dev/null; then
+    echo "GATE_BLOCK: device default trust stack cannot reach $TARGET_NAME." >&2
     exit 2
   fi
 fi

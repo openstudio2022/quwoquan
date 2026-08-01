@@ -101,7 +101,7 @@ func (c *BaiduClient) Nearby(
 
 func (c *BaiduClient) Search(
 	ctx context.Context,
-	q model.SearchQuery,
+	q model.SearchRequestFact,
 ) (_ []model.POI, err error) {
 	defer func() {
 		err = normalizeLocationProviderError(ctx, err)

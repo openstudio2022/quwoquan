@@ -20,45 +20,45 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"integration.location.lookup": {
 			State:       "enabled",
-			AdapterID:   "ext.map.protocol_fixture",
-			EndpointRef: "environment_binding:integration.location_fixture",
+			AdapterID:   "ext.map.baidu",
+			EndpointRef: "environment_binding:integration.location",
 			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
+				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_FIXTURE_AK",
+				"INTEGRATION_LOCATION_BAIDU_AK",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 1200,
 			RequiredRedisScenes: []string{},
 		},
 	},
 	"beta": {
 		"integration.location.lookup": {
 			State:       "enabled",
-			AdapterID:   "ext.map.protocol_fixture",
-			EndpointRef: "environment_binding:integration.location_fixture",
+			AdapterID:   "ext.map.baidu",
+			EndpointRef: "environment_binding:integration.location",
 			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
+				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_FIXTURE_AK",
+				"INTEGRATION_LOCATION_BAIDU_AK",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 1200,
 			RequiredRedisScenes: []string{},
 		},
 	},
 	"gamma": {
 		"integration.location.lookup": {
 			State:       "enabled",
-			AdapterID:   "ext.map.protocol_fixture",
-			EndpointRef: "environment_binding:integration.location_fixture",
+			AdapterID:   "ext.map.baidu",
+			EndpointRef: "environment_binding:integration.location",
 			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
+				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_FIXTURE_AK",
+				"INTEGRATION_LOCATION_BAIDU_AK",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 1200,
 			RequiredRedisScenes: []string{},
 		},
 	},

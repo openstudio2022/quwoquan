@@ -76,7 +76,6 @@ class HomepageCanonicalReference {
         'title': title,
         if (subtitle != null && subtitle!.isNotEmpty) 'subtitle': subtitle,
         if (coverUrl != null && coverUrl!.isNotEmpty) 'coverUrl': coverUrl,
-        if (status != null && status!.isNotEmpty) 'status': status,
         if (canonicalEntityId != null && canonicalEntityId!.isNotEmpty)
           'canonicalEntityId': canonicalEntityId,
       },

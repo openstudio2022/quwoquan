@@ -1,0 +1,12 @@
+backend: mongodb
+role: projection
+collections:
+  rm_assistant_tasks:
+    entity: AssistantTaskView
+    role: projection
+    indexes:
+    - {name: uq_assistant_task_account_task, keys: {accountId: 1, taskId: 1}, unique: true}
+    - {name: idx_assistant_task_account_status_updated, keys: {accountId: 1, status: 1, updatedAt: -1}}
+  assistant_task_projection_checkpoints:
+    entity: AssistantTaskProjectionCheckpoint
+    role: checkpoint

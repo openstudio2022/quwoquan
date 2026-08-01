@@ -1,0 +1,14 @@
+types:
+  MediaCaptureMetadata:
+    description: Content service 内 MediaAsset 与 MediaUploadSession 共用的拍摄事实值；GPS 与拍摄时间必须保持 PII/mask。
+    fields:
+      - {name: cameraMake, type: string, constraints: [NULLABLE, MAX_LENGTH_128], classification: SENSITIVE, log_policy: redact, api_exposure: drop, ops_exposure: read}
+      - {name: cameraModel, type: string, constraints: [NULLABLE, MAX_LENGTH_128], classification: SENSITIVE, log_policy: redact, api_exposure: drop, ops_exposure: read}
+      - {name: lensModel, type: string, constraints: [NULLABLE, MAX_LENGTH_192], classification: SENSITIVE, log_policy: redact, api_exposure: drop, ops_exposure: read}
+      - {name: focalLengthMm, type: float64, constraints: [NULLABLE, POSITIVE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+      - {name: apertureFNumber, type: float64, constraints: [NULLABLE, POSITIVE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+      - {name: shutterSpeedSeconds, type: float64, constraints: [NULLABLE, POSITIVE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+      - {name: isoSensitivity, type: int, constraints: [NULLABLE, POSITIVE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+      - {name: capturedAt, type: timestamp, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: drop, ops_exposure: read}
+      - {name: gpsLatitude, type: float64, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: drop, ops_exposure: read}
+      - {name: gpsLongitude, type: float64, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: drop, ops_exposure: read}

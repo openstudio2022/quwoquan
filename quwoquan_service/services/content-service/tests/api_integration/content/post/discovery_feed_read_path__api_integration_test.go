@@ -180,12 +180,12 @@ func TestActiveSupplyReadbackSingleflightAndReleaseInvalidation(t *testing.T) {
 	}
 	seedActiveSupplyProjection(t, posts, feed, releaseA, digestA)
 	seedActiveSupplyProjection(t, posts, feed, releaseB, digestB)
-	premium := &countingPremiumPlayableReader{delay: 40 * time.Millisecond}
+	playableVideos := &countingPlayableVideoReader{delay: 40 * time.Millisecond}
 	reader := persistence.NewMongoActiveSupplyReader(
 		db,
 		environment,
 		persistence.WithActiveSupplyCachePolicy(time.Minute, 0),
-		persistence.WithPremiumPlayableSupplyReader(premium),
+		persistence.WithPlayableVideoSupplyReader(playableVideos),
 	)
 
 	const callers = 12
@@ -212,7 +212,7 @@ func TestActiveSupplyReadbackSingleflightAndReleaseInvalidation(t *testing.T) {
 			t.Fatalf("concurrent active supply read: %v", readErr)
 		}
 	}
-	if calls := premium.Calls(); calls != 1 {
+	if calls := playableVideos.Calls(); calls != 1 {
 		t.Fatalf("same release readiness work calls=%d want=1", calls)
 	}
 
@@ -230,7 +230,7 @@ func TestActiveSupplyReadbackSingleflightAndReleaseInvalidation(t *testing.T) {
 	if snapshot.ActiveReleaseID != releaseB || snapshot.ManifestDigest != digestB {
 		t.Fatalf("old release snapshot reused after switch: %+v", snapshot)
 	}
-	if calls := premium.Calls(); calls != 2 {
+	if calls := playableVideos.Calls(); calls != 2 {
 		t.Fatalf("release switch must invalidate readback cache, calls=%d want=2", calls)
 	}
 }
@@ -264,12 +264,12 @@ func TestActiveSupplyReadbackRejectsReleaseSwitchDuringInflightCounts(t *testing
 	}
 	seedActiveSupplyProjection(t, posts, feed, releaseA, digestA)
 	seedActiveSupplyProjection(t, posts, feed, releaseB, digestB)
-	premium := newReleaseSwitchPremiumReader()
+	playableVideos := newReleaseSwitchPlayableVideoReader()
 	reader := persistence.NewMongoActiveSupplyReader(
 		db,
 		environment,
 		persistence.WithActiveSupplyCachePolicy(time.Minute, 0),
-		persistence.WithPremiumPlayableSupplyReader(premium),
+		persistence.WithPlayableVideoSupplyReader(playableVideos),
 	)
 
 	result := make(chan error, 1)
@@ -278,7 +278,7 @@ func TestActiveSupplyReadbackRejectsReleaseSwitchDuringInflightCounts(t *testing
 		result <- readErr
 	}()
 	select {
-	case <-premium.started:
+	case <-playableVideos.started:
 	case <-time.After(5 * time.Second):
 		t.Fatal("active supply count did not reach controlled dependency")
 	}
@@ -289,7 +289,7 @@ func TestActiveSupplyReadbackRejectsReleaseSwitchDuringInflightCounts(t *testing
 	if err != nil {
 		t.Fatalf("switch active release during readback: %v", err)
 	}
-	close(premium.release)
+	close(playableVideos.release)
 	if readErr := <-result; readErr == nil || !strings.Contains(readErr.Error(), "changed during supply readback") {
 		t.Fatalf("inflight old release read must fail closed, err=%v", readErr)
 	}
@@ -301,32 +301,32 @@ func TestActiveSupplyReadbackRejectsReleaseSwitchDuringInflightCounts(t *testing
 	if snapshot.ActiveReleaseID != releaseB || snapshot.ManifestDigest != digestB {
 		t.Fatalf("switched release snapshot = %+v", snapshot)
 	}
-	if calls := premium.Calls(); calls != 2 {
+	if calls := playableVideos.Calls(); calls != 2 {
 		t.Fatalf("old flight must not populate cache, premium calls=%d want=2", calls)
 	}
 }
 
-type countingPremiumPlayableReader struct {
+type countingPlayableVideoReader struct {
 	mu    sync.Mutex
 	calls int
 	delay time.Duration
 }
 
-type releaseSwitchPremiumReader struct {
+type releaseSwitchPlayableVideoReader struct {
 	mu      sync.Mutex
 	calls   int
 	started chan struct{}
 	release chan struct{}
 }
 
-func newReleaseSwitchPremiumReader() *releaseSwitchPremiumReader {
-	return &releaseSwitchPremiumReader{
+func newReleaseSwitchPlayableVideoReader() *releaseSwitchPlayableVideoReader {
+	return &releaseSwitchPlayableVideoReader{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
 	}
 }
 
-func (reader *releaseSwitchPremiumReader) CountActiveReleasePlayableVideos(
+func (reader *releaseSwitchPlayableVideoReader) CountActiveReleasePlayableVideos(
 	ctx context.Context,
 	_ string,
 	_ string,
@@ -346,13 +346,13 @@ func (reader *releaseSwitchPremiumReader) CountActiveReleasePlayableVideos(
 	return 1, nil
 }
 
-func (reader *releaseSwitchPremiumReader) Calls() int {
+func (reader *releaseSwitchPlayableVideoReader) Calls() int {
 	reader.mu.Lock()
 	defer reader.mu.Unlock()
 	return reader.calls
 }
 
-func (reader *countingPremiumPlayableReader) CountActiveReleasePlayableVideos(
+func (reader *countingPlayableVideoReader) CountActiveReleasePlayableVideos(
 	ctx context.Context,
 	_ string,
 	_ string,
@@ -368,7 +368,7 @@ func (reader *countingPremiumPlayableReader) CountActiveReleasePlayableVideos(
 	}
 }
 
-func (reader *countingPremiumPlayableReader) Calls() int {
+func (reader *countingPlayableVideoReader) Calls() int {
 	reader.mu.Lock()
 	defer reader.mu.Unlock()
 	return reader.calls

@@ -16,6 +16,7 @@ class PlatformCapabilities {
     required this.mediaLibrary,
     required this.camera,
     required this.contacts,
+    required this.calendarWrite,
     required this.realtimeCommunication,
     required this.incomingCallUi,
     required this.webPushIncomingCall,
@@ -52,6 +53,10 @@ class PlatformCapabilities {
   /// baseline (no flutter_contacts support yet); business code hides the
   /// "phone contacts" entry and degrades gracefully when this is false.
   final bool contacts;
+
+  /// Create an event/reminder in the user's system calendar after explicit
+  /// confirmation. Initial web/OHOS/desktop profiles fail closed.
+  final bool calendarWrite;
 
   /// Real-time audio/video (WebRTC / LiveKit) availability.
   final bool realtimeCommunication;
@@ -138,6 +143,7 @@ class PlatformCapabilities {
     bool? mediaLibrary,
     bool? camera,
     bool? contacts,
+    bool? calendarWrite,
     bool? realtimeCommunication,
     bool? incomingCallUi,
     bool? webPushIncomingCall,
@@ -163,6 +169,7 @@ class PlatformCapabilities {
       mediaLibrary: mediaLibrary ?? this.mediaLibrary,
       camera: camera ?? this.camera,
       contacts: contacts ?? this.contacts,
+      calendarWrite: calendarWrite ?? this.calendarWrite,
       realtimeCommunication:
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
@@ -205,6 +212,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: true,
+    calendarWrite: true,
     realtimeCommunication: true,
     incomingCallUi: true,
     webPushIncomingCall: false,
@@ -231,6 +239,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: false,
+    calendarWrite: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,
@@ -259,6 +268,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: false,
+    calendarWrite: false,
     realtimeCommunication: false,
     incomingCallUi: false,
     webPushIncomingCall: false,
@@ -285,6 +295,7 @@ class CapabilityProfile {
     mediaLibrary: false,
     camera: false,
     contacts: false,
+    calendarWrite: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,

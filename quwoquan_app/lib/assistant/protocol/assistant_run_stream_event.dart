@@ -202,6 +202,7 @@ class AssistantRunStreamEvent {
     required this.text,
     required this.finalAnswer,
     required this.emergedTags,
+    required this.runStatus,
   });
 
   final AssistantStreamEventWire wire;
@@ -212,6 +213,7 @@ class AssistantRunStreamEvent {
   final String text;
   final String finalAnswer;
   final List<String> emergedTags;
+  final String runStatus;
 
   bool get isAnswerEvent =>
       type == AssistantRunStreamEventType.answerDelta ||
@@ -231,6 +233,7 @@ class AssistantRunStreamEvent {
       process: AssistantRunVisibleProcess.fromWire(payload['process']),
       text: _wireString(payload['text']),
       finalAnswer: _wireString(payload['finalAnswer']),
+      runStatus: _wireString(payload['status']),
       emergedTags: _wireList(payload['emergedTags'])
           .map(_wireString)
           .where((item) => item.isNotEmpty)

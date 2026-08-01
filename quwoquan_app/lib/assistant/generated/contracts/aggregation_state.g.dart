@@ -24,8 +24,8 @@ class AggregationExpansionPlanDto {
   factory AggregationExpansionPlanDto.fromJson(Map<String, dynamic> json) {
     return AggregationExpansionPlanDto(
       targetSkills: _assistantStringList(json['targetSkills']),
-      policy: parseContextScopeExpansionPolicy((json['policy'] as String?)?.trim() ?? "expand_scope_and_requery"),
-      reasonCode: parsePlannerReasonCode((json['reasonCode'] as String?)?.trim() ?? "need_more_evidence"),
+      policy: parseContextScopeExpansionPolicyStrict((json['policy'] as String?)?.trim() ?? "expand_scope_and_requery"),
+      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? "need_more_evidence"),
     );
   }
 
@@ -59,7 +59,7 @@ class AggregationBlockingSkillStateDto {
 
   factory AggregationBlockingSkillStateDto.fromJson(Map<String, dynamic> json) {
     return AggregationBlockingSkillStateDto(
-      stopReason: parseFinalAnswerMode((json['stopReason'] as String?)?.trim() ?? "blocked"),
+      stopReason: parseFinalAnswerModeStrict((json['stopReason'] as String?)?.trim() ?? "blocked"),
       answerReady: json['answerReady'] == true,
     );
   }
@@ -156,7 +156,7 @@ class AggregationStateDto {
       needExpansion: json['needExpansion'] == true,
       expansionPlan: json['expansionPlan'] is Map ? AggregationExpansionPlanDto.fromJson((json['expansionPlan'] as Map).cast<String, dynamic>()) : const AggregationExpansionPlanDto(),
       finalAnswerReady: json['finalAnswerReady'] == true,
-      finalAnswerMode: parseFinalAnswerMode((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
+      finalAnswerMode: parseFinalAnswerModeStrict((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
       clarificationNeeded: json['clarificationNeeded'] == true,
       answerOwner: (json['answerOwner'] as String?)?.trim() ?? "",
       clarificationSource: (json['clarificationSource'] as String?)?.trim() ?? "",

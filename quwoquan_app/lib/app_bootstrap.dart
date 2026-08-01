@@ -21,6 +21,7 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
+import 'package:quwoquan_app/core/platform/native_runtime_config_bridge.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
@@ -106,6 +107,11 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   _installRootIsolateErrorListener();
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
+    if (CloudRuntimeConfig.shouldLoadNativeRuntimePackage) {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        await NativeRuntimeConfigBridge.readRuntimePackage(),
+      );
+    }
     CloudRuntimeConfig.validateRequiredEndpoints();
     _configureStartupTelemetry();
     AppStartupRuntime.instance.markConfigurationValidated();
@@ -408,12 +414,12 @@ void _logBootstrapException({
   required String exceptionText,
   required String stackText,
 }) {
-  // 裸 `flutter run` 常见于缺 dart-define；必须在控制台可见，不能只进遥测。
+  // runtime package 缺失必须在控制台可见，不能只进遥测。
   final hint =
       exceptionText.contains('runtime_define_validation') ||
           exceptionText.contains('App runtime package is missing')
-      ? ' Repair: launch via quwoquan_app/run.sh (env-package dart-defines), '
-            'not bare `flutter run`.'
+      ? ' Repair: Debug may use `flutter run`; Profile/Release and explicit '
+            'environments require a complete canonical launcher handoff.'
       : '';
   debugPrint('[bootstrap] source=$source exception=$exceptionText$hint');
   if (stackText.isNotEmpty) {

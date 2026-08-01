@@ -1,0 +1,42 @@
+kind: append_only_fact
+description: '一次 canonical 搜索请求的追加事实，承载查询日志并关联后续反馈，
+
+  作为搜索词热力与 relevance 评测的派生数据源，不拥有搜索执行生命周期。
+
+  搜索执行由 SearchFacade 调用具名 Reader，统一对象检索读库为派生 ES 索引
+
+  quwoquan_objects，并由 search-service indexer 从各业务域灌入。
+
+  '
+identity:
+  fields:
+  - _id
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: viewerPersona
+  on_delete: retain
+  reference_fields:
+  - viewerId
+  target_object: user.Persona
+local_identity_reasons:
+  searchRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
+    a business-object reference
+capabilities:
+- queryable
+- searchable
+lifecycle:
+  immutable: true
+taggable: false
+vector_enabled: false
+business_rules:
+- 请求事实只记录 canonical query、筛选、可信 actor、实验 assignment 与时间，不拥有搜索执行或结果列表。
+- searchRequestId 在入口生成并幂等追加，重试不得产生第二条请求事实。
+- SearchTermHeatView 只从本事实重建，热词投影不得反向修改请求事实。

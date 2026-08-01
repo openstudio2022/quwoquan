@@ -1,0 +1,28 @@
+backend: mongodb+redis
+role: runtime
+collections:
+  rm_recommendation_experiment_policy:
+    entity: RecommendationExperimentPolicyView
+    role: projection
+    description: Product Ops ExperimentPolicyActivated 的单调本地投影；Recommendation 不维护私有实验配置真相源。
+    indexes:
+    - name: idx_recommendation_experiment_policy_revision
+      keys: {revision: -1, updatedAt: -1}
+streams:
+  events.ops.experiment_policy_activated.recommendation.dlq:
+    entity: RecommendationExperimentPolicyView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Recommendation 无法解释的 ExperimentPolicyActivated typed contract 消息。
+redis_cache:
+- key: recommendation:ranked-window:{windowId}
+  type: string
+  ttl_seconds: 900
+  scene: recommendation
+  description: 固化 subject、scenario、模型身份、用户特征与逐项候选特征的有界不可变排序窗口；单窗口编码不得超过 2 MiB，读取禁止 EXPIRE 续期。
+- key: recommendation:ranked-window-subject:{subjectId}
+  type: set
+  ttl_seconds: 900
+  scene: recommendation
+  description: 仅用于 UserAccountClosed 立即定位并删除活动窗口的本域隐私索引；索引续期不改变任何窗口的固定过期时间。

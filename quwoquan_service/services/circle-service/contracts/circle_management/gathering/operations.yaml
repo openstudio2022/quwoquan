@@ -1,0 +1,137 @@
+description: Gathering 对象专属 Command Facade 与 named Reader；所有命令由服务端裁决状态、容量、权限与幂等。
+commercial_defaults:
+  status: blocked
+  block_reason: 缺真实群会话绑定、三层测试、四环境与回滚证据
+  gap_id: CIRCLE_GATHERING_COMMERCIAL_CLOSURE
+  target_story: circle-community-gathering-coordination
+api_routes:
+  - method: POST
+    path: /gatherings
+    operation: CreateGathering
+    actor: persona
+    security: {auth_mode: required}
+    application:
+      kind: command
+      facet: GatheringCommandFacet
+      method: createGathering
+      aggregate_owner: Gathering
+      mutation_target: Gathering
+      invariant_target: Gathering
+    request_entity: CreateGatheringCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: creator_becomes_owner}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_create, trace: true, attributes: [outcome, join_policy, binding_status]}
+    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: object
+  - method: GET
+    path: /gatherings/{gatheringId}
+    operation: GetGathering
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: query, facet: GatheringQueryFacet, method: getGathering, reader: GatheringReader, slice: GatheringSlice}
+    request_entity: GatheringIDCommand
+    response_entity: GatheringSlice
+    authorization: {principal: persona, ownership_policy: authenticated_gathering_read}
+    reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_get, trace: true, attributes: [outcome, status]}
+    slo: {latency_p95_ms: 400, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringSlice, response_decoder: decodeGatheringSlice}
+    request_body_kind: none
+  - method: POST
+    path: /gatherings/{gatheringId}:join
+    operation: JoinGathering
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: command, facet: GatheringCommandFacet, method: joinGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
+    request_entity: GatheringIDCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: authenticated_join_request}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_full, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_join, trace: true, attributes: [outcome, join_policy, participant_state]}
+    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: none
+  - method: POST
+    path: /gatherings/{gatheringId}:approve
+    operation: ApproveGatheringParticipant
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: command, facet: GatheringCommandFacet, method: approveGatheringParticipant, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
+    request_entity: ApproveGatheringParticipantCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: gathering_creator_only}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_full, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_participant_state_invalid, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_participant_approve, trace: true, attributes: [outcome, status]}
+    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: object
+  - method: POST
+    path: /gatherings/{gatheringId}:leave
+    operation: LeaveGathering
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: command, facet: GatheringCommandFacet, method: leaveGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
+    request_entity: GatheringIDCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: gathering_participant_self}
+    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_participant_state_invalid, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_leave, trace: true, attributes: [outcome, status]}
+    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: none
+  - method: POST
+    path: /gatherings/{gatheringId}:cancel
+    operation: CancelGathering
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: command, facet: GatheringCommandFacet, method: cancelGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
+    request_entity: GatheringIDCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: gathering_creator_only}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_cancel, trace: true, attributes: [outcome, previous_status]}
+    slo: {latency_p95_ms: 700, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: none
+  - method: POST
+    path: /gatherings/{gatheringId}:complete
+    operation: CompleteGathering
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    actor: persona
+    security: {auth_mode: required}
+    application: {kind: command, facet: GatheringCommandFacet, method: completeGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
+    request_entity: GatheringIDCommand
+    response_entity: GatheringCommandResult
+    authorization: {principal: persona, ownership_policy: gathering_creator_only}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.SYSTEM.gathering_storage_failed]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: gathering_complete, trace: true, attributes: [outcome, previous_status]}
+    slo: {latency_p95_ms: 700, availability_percent: 99.9}
+    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
+    request_body_kind: none

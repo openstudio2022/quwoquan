@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.local_device_trust import install_device_trust
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
@@ -490,15 +491,34 @@ def launch_app(
     command_env = os.environ.copy()
     if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
         enable_android_adb_reverse(device_id, target_name, topology=manifest)
+    trust_platform = ""
     if (
         str(target.get("backend", "")).strip() == "local"
         and str(device.get("targetPlatform", "")).strip().lower() == "ios"
         and bool(device.get("emulator", False))
     ):
-        # start_app_instance is the shared launcher boundary for alpha/beta/
-        # gamma/prod-sim. It invokes the same fail-closed TLS helper before
-        # Flutter starts, with this explicit device identity.
+        trust_platform = "ios-simulator"
         command_env["QWQ_IOS_SIMULATOR_UDID"] = device_id
+    elif (
+        str(target.get("backend", "")).strip() == "local"
+        and device_kind.startswith("android")
+        and bool(device.get("emulator", False))
+    ):
+        trust_platform = "android-emulator"
+    if trust_platform and target_name in {
+        "alpha-local",
+        "beta-local",
+        "gamma-local",
+    }:
+        trust = install_device_trust(
+            target=target_name,
+            platform_name=trust_platform,
+            device=device_id,
+            lease_id=f"canonical-launcher:{env_name}:{device_id}",
+        )
+        command_env["QWQ_DEVICE_TRUST_PLATFORM"] = trust_platform
+        command_env["QWQ_DEVICE_TRUST_RECEIPT"] = str(trust["receipt"])
+        command_env["QWQ_DEVICE_TRUST_LEASE_ID"] = str(trust["leaseId"])
     command = build_start_app_command(
         env_name,
         device_id,

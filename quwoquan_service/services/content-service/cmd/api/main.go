@@ -20,6 +20,7 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
+	behaviorstream "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/messaging"
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
@@ -268,9 +269,6 @@ func main() {
 			persistence.WithActiveSupplyCachePolicy(
 				time.Duration(cfg.Feed.ActiveSupplyCacheTTLMS)*time.Millisecond,
 				time.Duration(cfg.Feed.ActiveSupplyCacheJitterMS)*time.Millisecond,
-			),
-			persistence.WithPremiumPlayableSupplyReader(
-				recinfra.NewMongoPremiumPoolCandidateReader(db),
 			),
 		)
 		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
@@ -640,8 +638,6 @@ func main() {
 		}
 		go relationshipProjectionConsumer.Run(ctx, 500*time.Millisecond)
 		viewerBlockReader = recinfra.NewPersonaBlockReader(db)
-		premiumPoolProjector := recinfra.NewPremiumPoolProjector(db)
-		go recinfra.NewPremiumPoolEventConsumer(router.Scene("general"), premiumPoolProjector, logger).Run(ctx)
 		searchSignalConsumer := recinfra.NewSearchSignalConsumer(router.Scene("general"), recommendProjector, instanceID, logger)
 		go searchSignalConsumer.Run(ctx, 500*time.Millisecond)
 
@@ -657,6 +653,18 @@ func main() {
 		}()
 		healthChecker.Register("behavior-projection-relay", func(hctx context.Context) error {
 			return behaviorProjectionRelay.Healthy(30 * time.Second)
+		})
+		behaviorStreamRelay := behaviorstream.NewStreamRelay(
+			db,
+			router.Scene("general"),
+		).WithConsumer("recommendation-behavior-facts")
+		go func() {
+			if err := behaviorStreamRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+				log.Printf("WARN: content-service behavior stream relay stopped: %v", err)
+			}
+		}()
+		healthChecker.Register("behavior-fact-stream-relay", func(hctx context.Context) error {
+			return behaviorStreamRelay.Healthy(30 * time.Second)
 		})
 
 		// Write-time search index projector (content.search_index_worker). Disabled
@@ -750,11 +758,6 @@ func main() {
 				&projectorAdapter{recommend: recommendProjector},
 			)),
 			"content-recommend-projection", "post_outbox_recommend", healthChecker, logger)
-		startPostOutboxRelay(ctx, store, store,
-			messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
-				&projectorAdapter{premium: premiumPoolProjector},
-			)),
-			"content-premium-projection", "post_outbox_premium", healthChecker, logger)
 		if searchBuilt.Projector != nil {
 			startPostOutboxRelay(ctx, store, store,
 				messaging.NewPostOutboxPublisher(messaging.NewInProcessProjectorPublisher(
@@ -801,7 +804,7 @@ func main() {
 		// API → posts.embedding，独立 outbox relay checkpoint + 每日成本护栏）随
 		// cfg.Embedding.Enabled 开启；向量召回读通道另由 VectorRecallEnabled 控制
 		// （S0 flag-off，S1 内容池阈值达标后开启，开启不需要重构）。
-		if cfg.Embedding.Enabled {
+		if cfg.Embedding.Enabled && !contentReleaseWorkload() {
 			embedder, err := resolveContentEmbeddingGateway(appEnv)
 			if err != nil {
 				log.Fatalf("content-service embedding binding invalid: %v", err)
@@ -847,13 +850,6 @@ func main() {
 			)
 			mongoCandidateSources = append(mongoCandidateSources, collabSource)
 			log.Printf("content-service collaborative recall enabled quotaPct=%d i2i=%d u2i=%d", collabCfg.QuotaPct, collabCfg.MaxI2ICandidates, collabCfg.MaxU2ICandidates)
-		}
-		if premiumPoolSourceRollbackDisabled() {
-			log.Printf("content-service premium pool source disabled by disable_premium_pool_source rollback flag")
-		} else {
-			premiumPoolSource := recinfra.NewPremiumPoolSource(recinfra.NewMongoPremiumPoolCandidateReader(db))
-			mongoCandidateSources = append(mongoCandidateSources, premiumPoolSource)
-			log.Printf("content-service premium pool source enabled recall_path=%s", recinfra.PremiumPoolRecallPath)
 		}
 		intersectionPolicy := rtrecpolicy.Baseline().Intersection
 		// 事实交集读穿透：MongoIntersectionSource（请求期 compute）外包一层
@@ -1047,6 +1043,7 @@ func main() {
 	)
 
 	recOpts = composeRecommendationModelScorer(cfg, appEnv, logger, recOpts)
+	rankedRecommendation := buildRankedRecommendationGateway(cfg)
 
 	// 推荐策略 Store 的具体实现仍在 composition root 显式选择。
 	policyStore := rtrecpolicy.NewStoreFromBaseline()
@@ -1072,6 +1069,7 @@ func main() {
 		activeSupplyReader:        activeSupplyReader,
 		feedCursorCodec:           feedCursorCodec,
 		feedRuntimeConfig:         cfg.Feed,
+		rankedRecommendation:      rankedRecommendation,
 		viewerBlockReader:         viewerBlockReader,
 		reactionStore:             reactionStore,
 		reactionService:           reactionServiceCore,

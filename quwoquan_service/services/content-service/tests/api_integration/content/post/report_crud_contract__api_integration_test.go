@@ -102,7 +102,7 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	}
 }
 
-func TestReportStoreBackfillsOnlyVerifiedLegacyReporterAccountOwnership(t *testing.T) {
+func TestReportStoreRejectsNonCanonicalReporterAccountOwnership(t *testing.T) {
 	suite := newReportPostgresSuite(t)
 	defer suite.TearDown(t)
 	suite.CleanPG(t)
@@ -113,139 +113,80 @@ func TestReportStoreBackfillsOnlyVerifiedLegacyReporterAccountOwnership(t *testi
 	if _, err := suite.PG.Exec(
 		`ALTER TABLE reports ALTER COLUMN reporter_account_id DROP NOT NULL`,
 	); err != nil {
-		t.Fatalf("make legacy account column nullable: %v", err)
+		t.Fatalf("prepare invalid account ownership row: %v", err)
 	}
 	now := time.Now().UTC()
 	if _, err := suite.PG.Exec(`
 INSERT INTO reports (
   id, version, reporter_id, reporter_account_id, target_type, target_id,
   reason, description, status, created_at, updated_at
-) VALUES ($1, 1, $2, NULL, 'post', 'legacy-target', 'spam',
-  'legacy report', 'pending', $3, $3)`,
-		"legacy-report-1",
-		"legacy-persona",
+) VALUES ($1, 1, $2, NULL, 'post', 'invalid-target', 'spam',
+  'invalid report ownership', 'pending', $3, $3)`,
+		"invalid-report-1",
+		"invalid-persona",
 		now,
 	); err != nil {
-		t.Fatalf("insert legacy report: %v", err)
+		t.Fatalf("insert invalid report: %v", err)
 	}
 	if _, err := suite.PG.Exec(`
 INSERT INTO report_outbox (
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
 ) VALUES ($1, $2, 1, 'content.report.created', $3::jsonb, $4)`,
-		"legacy-report-event-1",
-		"legacy-report-1",
-		`{"reportId":"legacy-report-1","reporterId":"legacy-persona"}`,
+		"invalid-report-event-1",
+		"invalid-report-1",
+		`{"reportId":"invalid-report-1","reporterId":"invalid-persona"}`,
 		now,
 	); err != nil {
-		t.Fatalf("insert legacy report outbox: %v", err)
+		t.Fatalf("insert invalid report outbox: %v", err)
 	}
 	if _, err := suite.PG.Exec(`
 INSERT INTO report_command_receipts (
   idempotency_key, aggregate_id, aggregate_version, command_name, command_digest,
   result_json, created_at, expires_at
-) VALUES ($1, $2, 1, 'CreateReport', 'legacy-digest', $3::jsonb, $4, $5)`,
-		"legacy-report-receipt-1",
-		"legacy-report-1",
-		`{"id":"legacy-report-1","reporterId":"legacy-persona"}`,
+) VALUES ($1, $2, 1, 'CreateReport', 'invalid-digest', $3::jsonb, $4, $5)`,
+		"invalid-report-receipt-1",
+		"invalid-report-1",
+		`{"id":"invalid-report-1","reporterId":"invalid-persona"}`,
 		now,
 		now.Add(time.Hour),
 	); err != nil {
-		t.Fatalf("insert legacy report receipt: %v", err)
+		t.Fatalf("insert invalid report receipt: %v", err)
 	}
 
 	if _, err := persistence.NewPGReportStore(suite.PG); err == nil ||
-		!strings.Contains(err.Error(), "requires a verified account backfill") {
-		t.Fatalf("legacy report without mapping error=%v; want fail-closed backfill error", err)
+		!strings.Contains(err.Error(), "must be canonical before startup") {
+		t.Fatalf("invalid report ownership error=%v; want fail-closed canonical error", err)
 	}
 
-	store, err := persistence.NewPGReportStore(
-		suite.PG,
-		persistence.WithReporterAccountBackfills(
-			[]persistence.ReporterAccountBackfill{
-				{ReporterID: "legacy-persona", AccountID: "legacy-account"},
-			},
-		),
-	)
-	if err != nil {
-		t.Fatalf("apply verified report account backfill: %v", err)
-	}
-	if result := store.ReporterAccountBackfillResult(); result.ReportsBackfilled != 1 ||
-		result.OutboxPayloadsBackfilled != 1 || result.ReceiptsBackfilled != 1 {
-		t.Fatalf("unexpected report account backfill result: %#v", result)
-	}
-
-	var reporterAccountID string
+	var reporterAccountID sql.NullString
 	if err := suite.PG.QueryRow(
 		`SELECT reporter_account_id FROM reports WHERE id = $1`,
-		"legacy-report-1",
+		"invalid-report-1",
 	).Scan(&reporterAccountID); err != nil {
-		t.Fatalf("read backfilled report account: %v", err)
+		t.Fatalf("read rejected report account: %v", err)
 	}
-	if reporterAccountID != "legacy-account" {
-		t.Fatalf("reporter account=%q want verified legacy account", reporterAccountID)
+	if reporterAccountID.Valid {
+		t.Fatalf("rejected reporter account was mutated to %q", reporterAccountID.String)
 	}
-	var outboxAccountID string
+	var outboxAccountID sql.NullString
 	if err := suite.PG.QueryRow(
 		`SELECT payload_json ->> 'reporterAccountId' FROM report_outbox WHERE event_id = $1`,
-		"legacy-report-event-1",
+		"invalid-report-event-1",
 	).Scan(&outboxAccountID); err != nil {
-		t.Fatalf("read backfilled report outbox: %v", err)
+		t.Fatalf("read rejected report outbox: %v", err)
 	}
-	if outboxAccountID != "legacy-account" {
-		t.Fatalf("outbox account=%q want verified legacy account", outboxAccountID)
+	if outboxAccountID.Valid {
+		t.Fatalf("rejected outbox account was mutated to %q", outboxAccountID.String)
 	}
-	var receiptAccountID string
+	var receiptAccountID sql.NullString
 	if err := suite.PG.QueryRow(
 		`SELECT result_json ->> 'reporterAccountId' FROM report_command_receipts WHERE idempotency_key = $1`,
-		"legacy-report-receipt-1",
+		"invalid-report-receipt-1",
 	).Scan(&receiptAccountID); err != nil {
-		t.Fatalf("read backfilled report receipt: %v", err)
+		t.Fatalf("read rejected report receipt: %v", err)
 	}
-	if receiptAccountID != "legacy-account" {
-		t.Fatalf("receipt account=%q want verified legacy account", receiptAccountID)
-	}
-}
-
-func TestReportStoreRejectsBackfillThatConflictsWithPersistedOwnership(t *testing.T) {
-	suite := newReportPostgresSuite(t)
-	defer suite.TearDown(t)
-	suite.CleanPG(t)
-
-	if _, err := persistence.NewPGReportStore(suite.PG); err != nil {
-		t.Fatalf("initialize report schema: %v", err)
-	}
-	if _, err := suite.PG.Exec(`
-INSERT INTO reports (
-  id, version, reporter_id, reporter_account_id, target_type, target_id,
-  reason, status, created_at, updated_at
-) VALUES ($1, 1, $2, $3, 'post', 'owned-target', 'spam', 'pending', $4, $4)`,
-		"owned-report-1",
-		"owned-persona",
-		"persisted-account",
-		time.Now().UTC(),
-	); err != nil {
-		t.Fatalf("insert persisted report ownership: %v", err)
-	}
-
-	if _, err := persistence.NewPGReportStore(
-		suite.PG,
-		persistence.WithReporterAccountBackfills(
-			[]persistence.ReporterAccountBackfill{
-				{ReporterID: "owned-persona", AccountID: "conflicting-account"},
-			},
-		),
-	); err == nil || !strings.Contains(err.Error(), "conflicts with persisted report ownership") {
-		t.Fatalf("conflicting account backfill error=%v; want fail-closed ownership conflict", err)
-	}
-	var persistedAccountID string
-	if err := suite.PG.QueryRow(
-		`SELECT reporter_account_id FROM reports WHERE id = $1`,
-		"owned-report-1",
-	).Scan(&persistedAccountID); err != nil {
-		t.Fatalf("read persisted account ownership: %v", err)
-	}
-	if persistedAccountID != "persisted-account" {
-		t.Fatalf("persisted account=%q must not be overwritten", persistedAccountID)
+	if receiptAccountID.Valid {
+		t.Fatalf("rejected receipt account was mutated to %q", receiptAccountID.String)
 	}
 }
 

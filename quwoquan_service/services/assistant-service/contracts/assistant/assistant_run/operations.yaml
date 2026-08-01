@@ -5,66 +5,14 @@ commercial_defaults:
   target_story: app-cloud-business-object-commercial-closure
 description: 小趣助手执行、上下文感知、Skill 路由与学习反馈
 api_routes:
+
 - method: POST
-  path: /assistant/search/xiaoqu
-  operation: SearchXiaoquResults
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: search query still belongs to AssistantRun instead of an object-owned search slice, and Prod public-search Provider conformance is unproven
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantSearchQueryFacade
-    method: searchXiaoquResults
-    reader: AssistantSearchReader
-    slice: AssistantSearchResultView
-  description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
-  request_entity: AssistantSearchXiaoquRequestWire
-  request_body_kind: object
-  response_entity: AssistantSearchResultView
-  reliability:
-    timeout_ms: 15000
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.unauthorized
-  - ASSISTANT.MIDDLEWARE.upstream_timeout
-  - ASSISTANT.SYSTEM.stream_unavailable
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_search_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 8000
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /assistant/conversations/{conversationId}/runs
+  path: /assistant/sessions/{sessionId}/runs
   operation: StartAssistantRun
   actor: persona
   commercial:
     status: blocked
-    block_reason: AssistantRun domain/store/HTTP adapter remain co-owned by AssistantConversation, and Prod model Provider conformance is unproven
+    block_reason: AssistantRun domain/store/HTTP adapter remain physically mixed with AssistantSession orchestration, and Prod model Provider conformance is unproven
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
@@ -79,8 +27,8 @@ api_routes:
   request_body_kind: object
   request_bindings:
     path:
-    - {name: conversationId, field: conversationId}
-  response_entity: AssistantTurnEnvelope
+    - {name: sessionId, field: sessionId}
+  response_entity: AssistantRunEnvelope
   success_status: 201
   reliability:
     timeout_ms: 5000
@@ -90,12 +38,13 @@ api_routes:
     idempotency: required
   error_codes:
   - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.conversation_not_found
+  - ASSISTANT.USER.session_not_found
   - ASSISTANT.USER.run_idempotency_conflict
   - ASSISTANT.USER.skill_consent_required
   - ASSISTANT.USER.intersection_evidence_not_found
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.run_unauthorized
   - ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable
+  - ASSISTANT.SYSTEM.consent_unavailable
   - ASSISTANT.SYSTEM.run_policy_unavailable
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
@@ -115,7 +64,7 @@ api_routes:
     availability_percent: 99.9
   authorization:
     principal: persona
-    ownership_policy: conversation_owner
+    ownership_policy: session_owner
   security:
     auth_mode: required
     principal: owner
@@ -128,20 +77,20 @@ api_routes:
   actor: persona
   commercial:
     status: blocked
-    block_reason: AssistantRun domain model, Mongo store and HTTP adapter remain physically co-owned by AssistantConversation
+    block_reason: AssistantRun domain model, Mongo store and HTTP adapter remain physically mixed with AssistantSession orchestration
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
-    facet: AssistantTurnQueryFacade
+    facet: AssistantRunQueryFacade
     method: getRun
     reader: AssistantRunReader
-    slice: AssistantTurnEnvelope
+    slice: AssistantRunEnvelope
   description: 读取已启动助手 Run 的当前信封；终态 answer/process/citation/failure/policy 只来自无 TTL terminalSnapshot。
   request_bindings:
     path:
     - {name: runId, field: runId}
-  response_entity: AssistantTurnEnvelope
+  response_entity: AssistantRunEnvelope
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -150,7 +99,7 @@ api_routes:
     idempotency: none
   error_codes:
   - ASSISTANT.USER.run_not_found
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.run_unauthorized
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
     request_classification: INTERNAL
@@ -175,70 +124,13 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: GET
-  path: /assistant/conversations/{conversationId}/turns
-  operation: ListConversationTurns
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: AssistantRun transcript reader and Mongo slice remain physically co-owned by AssistantConversation
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantTurnQueryFacade
-    method: listConversationTurns
-    reader: AssistantRunReader
-    slice: AssistantTurnListView
-  description: owner 会话内终态轮次及 terminalSnapshot 列表；createdAt desc keyset 分页，是 transcript、过程/引用恢复与续聊的唯一数据源。
-  request_bindings:
-    path:
-    - {name: conversationId, field: conversationId}
-    query:
-    - {name: limit, field: limit, required: false}
-    - {name: cursor, field: cursor, required: false}
-  response_entity: AssistantTurnListView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.conversation_not_found
-  - ASSISTANT.USER.unauthorized
-  - ASSISTANT.SYSTEM.run_storage_unavailable
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_run_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  authorization:
-    principal: persona
-    ownership_policy: conversation_owner
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
 - method: POST
   path: /assistant/runs/{runId}/cancel
   operation: CancelAssistantRun
   actor: persona
   commercial:
     status: blocked
-    block_reason: AssistantRun cancel aggregate/store/HTTP adapter remain physically co-owned by AssistantConversation
+    block_reason: AssistantRun cancel aggregate/store/HTTP adapter remain physically mixed with AssistantSession orchestration
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
@@ -249,19 +141,22 @@ api_routes:
     mutation_target: AssistantRun
     invariant_target: AssistantRun
   description: 取消运行中的助手 Run（running→cancelled CAS 并中断执行）；已终态取消幂等返回当前信封，不报错。
+  request_entity: AssistantRunCommandRequest
   request_bindings:
     path:
     - {name: runId, field: runId}
-  response_entity: AssistantTurnEnvelope
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: AssistantRunEnvelope
   reliability:
     timeout_ms: 1500
     cancellation: supported
     retry_mode: idempotent
     max_attempts: 2
-    idempotency: none
+    idempotency: required
   error_codes:
   - ASSISTANT.USER.run_not_found
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.run_unauthorized
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
     request_classification: INTERNAL
@@ -286,13 +181,92 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
+- method: POST
+  path: /assistant/runs/{runId}/pause
+  operation: PauseAssistantRun
+  actor: persona
+  commercial: {status: blocked, block_reason: 后台 Worker lease 与跨实例暂停恢复仍需真实环境证据, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: durable-agent-run-orchestration}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: pauseRun, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 在安全 Item/Task 边界暂停 Run；重复暂停幂等返回同一状态。
+  request_entity: AssistantPauseRunRequest
+  request_body_kind: object
+  request_bindings:
+    path: [{name: runId, field: runId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: AssistantRunEnvelope
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_run_control, trace: true, attributes: [operation, outcome, error_code, state]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  authorization: {principal: persona, ownership_policy: run_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: POST
+  path: /assistant/runs/{runId}/resume
+  operation: ResumeAssistantRun
+  actor: persona
+  commercial: {status: blocked, block_reason: 后台 Worker lease 与跨实例暂停恢复仍需真实环境证据, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: durable-agent-run-orchestration}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: resumeRun, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 从 paused 或可继续的等待状态恢复同一 Run；不会创建第二条执行主线。
+  request_entity: AssistantRunCommandRequest
+  request_bindings:
+    path: [{name: runId, field: runId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: AssistantRunEnvelope
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_run_control, trace: true, attributes: [operation, outcome, error_code, state]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  authorization: {principal: persona, ownership_policy: run_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: POST
+  path: /assistant/runs/{runId}/steer
+  operation: SteerAssistantRun
+  actor: persona
+  commercial: {status: blocked, block_reason: 安全边界 goal revision CAS 与恢复回放仍需真实环境证据, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: durable-agent-run-orchestration}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: steerRun, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 追加新的用户约束并在下一个安全边界形成 goal revision；不改写既有 Item 与证据。
+  request_entity: AssistantSteerRunRequest
+  request_body_kind: object
+  request_bindings:
+    path: [{name: runId, field: runId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: AssistantRunEnvelope
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_run_control, trace: true, attributes: [operation, outcome, error_code, state]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  authorization: {principal: persona, ownership_policy: run_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+- method: POST
+  path: /assistant/runs/{runId}/tool-uses/{toolUseId}/continue
+  operation: ContinueAssistantToolUse
+  actor: persona
+  commercial: {status: blocked, block_reason: 设备动作 confirmation 与 continuation 端云回执尚需真机证据, gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE, target_story: adaptive-presentation-runtime}
+  application: {kind: command, facet: AssistantRunCommandFacade, method: continueToolUse, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
+  description: 对等待确认的 typed ActionIntent 明确批准或拒绝；设备动作仅在批准且携带原生成功回执时产生 continuation。
+  request_entity: AssistantContinueToolUseRequest
+  request_body_kind: object
+  request_bindings:
+    path: [{name: runId, field: runId}, {name: toolUseId, field: toolUseId}]
+    injected: [{name: Idempotency-Key, field: idempotencyKey}]
+  response_entity: AssistantRunEnvelope
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.SYSTEM.run_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_tool_continuation, trace: true, attributes: [operation, outcome, error_code, decision]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  authorization: {principal: persona, ownership_policy: run_owner}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
 - method: GET
   path: /assistant/runs/{runId}/events
   operation: StreamAssistantRunEvents
   actor: persona
   commercial:
     status: blocked
-    block_reason: AssistantRun event journal and SSE adapter remain physically co-owned by AssistantConversation
+    block_reason: AssistantRun event journal and SSE adapter remain physically mixed with AssistantSession orchestration
     gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   application:
@@ -318,7 +292,7 @@ api_routes:
   error_codes:
   - ASSISTANT.USER.run_not_found
   - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.unauthorized
+  - ASSISTANT.USER.run_unauthorized
   - ASSISTANT.SYSTEM.stream_unavailable
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
@@ -345,272 +319,7 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: POST
-  path: /assistant/page-context
-  operation: ReportPageContext
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: page-context command is still modeled as an AssistantRun mutation instead of an object-owned PageContext aggregate
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: command
-    facet: AssistantContextCommandFacade
-    method: reportPageContext
-    aggregate_owner: AssistantRun
-    mutation_target: AssistantRun
-    invariant_target: AssistantRun
-  description: 页面上下文上报
-  request_entity: AssistantReportPageContextRequestWire
-  request_body_kind: object
-  response_entity: PageContextAck
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: optional
-  error_codes:
-  - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.unauthorized
-  - ASSISTANT.SYSTEM.page_context_unavailable
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_context_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 300
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /assistant/personalization
-  operation: GetEntryPersonalization
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: entry personalization read model is still declared and implemented under AssistantRun rather than its owning object
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantPersonalizationQueryFacade
-    method: getEntryPersonalization
-    reader: AssistantEntryPersonalizationReader
-    slice: AssistantEntryPersonalizationView
-  description: 私助半屏入口的欢迎语、chips 与建议行云下发
-  request_bindings:
-    query:
-    - {name: pageType, field: pageType, required: false}
-  response_entity: AssistantEntryPersonalizationView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.unauthorized
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_personalization_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /assistant/suggested-actions
-  operation: GetSuggestedActions
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: suggested-action read model is still declared and implemented under AssistantRun rather than its owning object
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantSuggestionQueryFacade
-    method: getSuggestedActions
-    reader: AssistantSuggestedActionReader
-    slice: SuggestedActionListView
-  description: 获取当前页面建议操作
-  request_bindings:
-    query:
-    - {name: pageType, field: pageType, required: true}
-    - {name: objectId, field: objectId, required: false}
-  response_entity: SuggestedActionListView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.unauthorized
-  - ASSISTANT.USER.run_invalid_argument
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_personalization_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /assistant/skills/creation-suggest
-  operation: SuggestCreationAssistance
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: creation assistance remains embedded in AssistantRun and Prod model/grounding Provider conformance is unproven
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantCreationQueryFacade
-    method: suggestCreationAssistance
-    reader: AssistantCreationSuggestionReader
-    slice: AssistantCreationSuggestResponse
-  description: '创作辅助建议：基于草稿摘要、已绑定圈子与主关联主页，返回可溯源标签、关联主页、标题与摘要建议。
 
-    不生成收藏、稍后看、关注内容等已退场动作建议。
-
-    '
-  request_entity: AssistantCreationSuggestRequest
-  request_body_kind: object
-  response_entity: AssistantCreationSuggestResponse
-  reliability:
-    timeout_ms: 10000
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.run_invalid_argument
-  - ASSISTANT.USER.skill_consent_required
-  - ASSISTANT.USER.unauthorized
-  - ASSISTANT.MIDDLEWARE.upstream_timeout
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_creation_suggest_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 5000
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /assistant/tasks
-  operation: ListAssistantTasks
-  actor: persona
-  commercial:
-    status: blocked
-    block_reason: AssistantTask has no object-owned contract/source/store boundary and remains embedded in AssistantRun
-    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
-  application:
-    kind: query
-    facet: AssistantPersonalDataQueryFacade
-    method: listTasks
-    reader: AssistantTaskReader
-    slice: AssistantUserTaskListView
-  description: 用户助手任务/待办列表（日程 tab 等）
-  request_bindings:
-    query:
-    - {name: limit, field: limit, required: false}
-    - {name: status, field: status, required: false}
-  response_entity: AssistantUserTaskListView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.USER.unauthorized
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_personal_data_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.5
-  authorization:
-    principal: persona
-    ownership_policy: requester_self
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
 consumers:
 - name: app
   capabilities:
@@ -687,7 +396,7 @@ contract_test:
       - name: run_persisted_and_replayable
         command: StartAssistantRun (stable clientRequestId replayed)
         seed:
-        - fixture.NewAssistantConversation()
+        - fixture.NewAssistantSession()
         assertions:
         - 'db.assistant_runs.FindOne({_id: runId}) → status streaming/completed'
         - replay same clientRequestId → same runId, no second run

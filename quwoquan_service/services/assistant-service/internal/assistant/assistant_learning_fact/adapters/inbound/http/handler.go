@@ -11,8 +11,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
 	learningerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_learning_fact"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 )
@@ -169,7 +169,7 @@ func (handler *Handler) handleAppendUserFact(
 			UserID:           principal.Actor.AccountID,
 			PersonaID:        principal.Actor.PersonaID,
 			TraceID:          request.Header.Get("X-Trace-Id"),
-			SessionID:        request.Header.Get("X-Client-Session-Id"),
+			ClientSessionID:  request.Header.Get("X-Client-Session-Id"),
 			PageVisitID:      request.Header.Get("X-Client-Page-Visit-Id"),
 			PageID:           request.Header.Get("X-Client-Page-Id"),
 			SurfaceID:        request.Header.Get("X-Client-Surface-Id"),

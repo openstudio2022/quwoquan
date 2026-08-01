@@ -1,0 +1,22 @@
+kind: projection
+description: 助手学习事实与 SkillSubscription 事件按账号投影出的用户任务视图，是日程与待办列表的唯一读取模型。
+identity:
+  fields: [accountId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: account, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: '1:1', consistency: eventual, access: named_reader, on_delete: tombstone}
+- {name: learningFacts, target_object: assistant.AssistantLearningFact, reference_fields: [lastLearningFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+- {name: subscriptions, target_object: assistant.SkillSubscription, reference_fields: [lastSubscriptionId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+business_rules:
+- 任务只由 typed 学习事实与订阅事实投影，不接受客户端直接写入视图。
+- 同一 taskId 只应用更高 source sequence，重复事件不得产生重复任务。
+- 账号关闭 tombstone 必须删除主体视图并保留 checkpoint 以阻断旧事件复活。
+lifecycle:
+  source_events: [AssistantLearningFactRecorded, SkillSubscriptionCreated, SkillSubscriptionUpdated, SkillSubscriptionCancelled, UserAccountClosed]
+  checkpoint: per_source_stream_sequence
+  rebuild: delete_subject_projection_then_replay_learning_and_subscription_events
+  tombstone: delete_subject_tasks_keep_closure_checkpoint

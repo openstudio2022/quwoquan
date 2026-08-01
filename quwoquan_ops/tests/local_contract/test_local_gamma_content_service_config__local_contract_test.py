@@ -160,18 +160,22 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "REC_MODEL_SERVICE_URL:",
         ):
             self.assertIn(binding, service_block)
+        self.assertIn(
+            'REC_MODEL_SERVICE_ENABLED: "${QWQ_COMPOSE_REC_MODEL_SERVICE_ENABLED:-true}"',
+            service_block,
+        )
 
         self.assertNotIn("SSL_CERT_FILE:", service_block)
         self.assertNotIn("object-storage-ca.crt", service_block)
 
-    def test_gamma_owns_content_elasticsearch_startup_dependency(self) -> None:
+    def test_content_service_waits_for_required_elasticsearch_dependency(self) -> None:
         content = service_compose("content-service")
         gamma_content_overlay = CONTENT_GAMMA_COMPOSE_FILE.read_text(encoding="utf-8")
         search = service_compose("search-service")
         entity = service_compose("entity-service")
         circle = service_compose("circle-service")
         expected = "elasticsearch:\n        condition: service_healthy"
-        self.assertNotIn(expected, content)
+        self.assertIn(expected, content)
         self.assertIn(expected, gamma_content_overlay)
         for dependency, condition in (
             ("mongodb", "service_healthy"),
@@ -196,6 +200,19 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             compose,
         )
         self.assertNotIn('test: ["CMD", "redis-cli", "ping"]', compose)
+
+    def test_mongo_init_waits_for_writable_primary_before_dependents(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("db.hello().isWritablePrimary", compose)
+        self.assertIn("mongo-init timed out waiting for writable primary", compose)
+        self.assertIn(
+            "recommendation-service:\n"
+            "    depends_on:\n"
+            "      mongo-init:\n"
+            "        condition: service_completed_successfully",
+            compose,
+        )
 
     def test_gamma_elasticsearch_uses_native_architecture_with_arm_sve_guard(self) -> None:
         compose = COMPOSE_FILE.read_text(encoding="utf-8")
@@ -248,17 +265,54 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', platform_ready)
         self.assertIn("gamma_platform_ops_ready", script)
 
-    def test_user_service_compose_injects_identity_fixture_material(self) -> None:
+    def test_recommendation_service_receives_the_selected_workload(self) -> None:
+        service_block = service_compose("recommendation-service")
+        gamma_config = (
+            ROOT
+            / "quwoquan_service/services/recommendation-service/environments/gamma/config.yaml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"', service_block)
+        self.assertIn(
+            "QWQ_COMPOSE_REC_POLICY_SOURCE:?QWQ_COMPOSE_REC_POLICY_SOURCE is required}",
+            service_block,
+        )
+        self.assertIn(
+            "sys.recommendation-service.redis.general.addr: redis:6379",
+            gamma_config,
+        )
+        self.assertIn(
+            "sys.recommendation-service.redis.rec.addr: redis:6379",
+            gamma_config,
+        )
+
+    def test_user_service_compose_injects_protected_nonprod_provider_material(self) -> None:
         service_block = service_compose("user-service")
+        user_main = (
+            ROOT / "quwoquan_service/services/user-service/cmd/api/main.go"
+        ).read_text(encoding="utf-8")
         for key in (
-            "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT:",
-            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID:",
-            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET:",
-            "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL:",
-            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL:",
-            "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL:",
+            "ALIYUN_DYPNS_ENDPOINT:",
+            "ALIYUN_DYPNS_ACCESS_KEY_ID:",
+            "ALIYUN_DYPNS_ACCESS_KEY_SECRET:",
+            "WECHAT_OAUTH_TOKEN_URL:",
+            "ALIPAY_OAUTH_TOKEN_URL:",
+            "QQ_OAUTH_USER_INFO_URL:",
         ):
             self.assertIn(key, service_block)
+        for key in (
+            "INTEGRATION_SERVICE_MTLS_CA_FILE:",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE:",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE:",
+            "INTEGRATION_SERVICE_MTLS_SERVER_NAME:",
+        ):
+            self.assertIn(key, service_block)
+        self.assertIn('QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"', service_block)
+        self.assertIn(
+            'strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")) != "content-release"',
+            user_main,
+        )
+        self.assertIn("WithExternalInteractionClient(externalInteractionClient)", user_main)
 
     def test_full_gamma_optional_services_have_nonproduction_runtime_prerequisites(self) -> None:
         product_runtime_config = (
@@ -283,14 +337,14 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             assistant_compose,
         )
 
-    def test_gamma_fixture_assistant_has_no_production_provider_compose_overlay(self) -> None:
-        fixture_services = {
-            "assistant-service": "ext.llm.protocol_fixture",
-            "integration-service": "ext.map.protocol_fixture",
-            "rtc-service": "infra.livekit_protocol_fixture",
-            "user-service": "ext.auth.carrier_one_tap_protocol_fixture",
+    def test_gamma_uses_nonmemory_provider_adapters_without_compose_overlay(self) -> None:
+        provider_services = {
+            "assistant-service": "ext.llm.xiaomi_mimo",
+            "integration-service": "ext.map.baidu",
+            "rtc-service": "infra.livekit_sfu",
+            "user-service": "ext.auth.carrier_one_tap",
         }
-        for service, adapter in fixture_services.items():
+        for service, adapter in provider_services.items():
             service_root = ROOT / "quwoquan_service" / "services" / service
             gamma_config = (service_root / "environments" / "gamma" / "config.yaml").read_text(
                 encoding="utf-8"
@@ -315,9 +369,9 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             rtc_compose,
         )
         for binding in (
-            "RTC_MEDIA_FIXTURE_CONNECTION_URL:",
-            "RTC_MEDIA_FIXTURE_API_KEY:",
-            "RTC_MEDIA_FIXTURE_API_SECRET:",
+            "RTC_MEDIA_CONNECTION_URL:",
+            "RTC_MEDIA_API_KEY:",
+            "RTC_MEDIA_API_SECRET:",
             "AUTH_JWT_SECRET:",
             "AUTH_JWT_ISSUER:",
             "AUTH_JWT_AUDIENCE:",
@@ -375,8 +429,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             'LOCAL_GAMMA_USER_PORT:-19210}:18081',
             "http://127.0.0.1:18081/healthz",
             "NOTIFICATION_USER_BASE_URL=http://user-service:18081",
-            "-e IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
-            "-e IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+            "-e ALIYUN_DYPNS_ENDPOINT",
+            "-e WECHAT_OAUTH_TOKEN_URL",
         ):
             self.assertIn(expected, start_script)
         self.assertIn("../gamma/local/Caddyfile", compose)
@@ -399,6 +453,15 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
 
         self.assertIn(
             "./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro",
+            init_block,
+        )
+        self.assertIn(
+            "SSL_CERT_FILE: /etc/ssl/certs/quwoquan-local-managed.crt",
+            init_block,
+        )
+        self.assertIn(
+            "${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:"
+            "/etc/ssl/certs/quwoquan-local-managed.crt:ro",
             init_block,
         )
         self.assertIn(
@@ -433,21 +496,9 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertIn("local-gamma-es:/usr/share/elasticsearch/data", service_block)
 
-    def test_user_service_uses_local_acceptance_identity_and_protocol_substitutes(self) -> None:
+    def test_user_service_uses_protected_nonprod_provider_bindings(self) -> None:
         service_block = service_compose("user-service")
 
-        self.assertIn("USER_AUTH_EXTERNAL_PROVIDER_MODE: anonymous_only", service_block)
-        for credential in (
-            "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
-            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID",
-            "IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET",
-            "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
-            "IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL",
-            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
-            "IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL",
-            "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
-        ):
-            self.assertIn(f"{credential}:", service_block)
         for credential in (
             "WECHAT_OAUTH_APP_ID",
             "WECHAT_OAUTH_APP_SECRET",
@@ -459,7 +510,9 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "ALIYUN_DYPNS_ACCESS_KEY_ID",
             "ALIYUN_DYPNS_ACCESS_KEY_SECRET",
         ):
-            self.assertNotIn(f"{credential}:", service_block)
+            self.assertIn(f"{credential}:", service_block)
+        self.assertNotIn("IDENTITY_ONE_TAP_FIXTURE_", service_block)
+        self.assertNotIn("IDENTITY_SOCIAL_FIXTURE_", service_block)
 
     def test_assistant_service_uses_generated_binding_without_runtime_selector(self) -> None:
         service_block = service_compose("assistant-service")
@@ -470,11 +523,11 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             service_block,
         )
         for binding in (
-            "ASSISTANT_MODEL_FIXTURE_ENDPOINT:",
-            "ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL:",
-            "ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL:",
-            "ASSISTANT_WEATHER_FIXTURE_FORECAST_URL:",
-            "ASSISTANT_FINANCE_FIXTURE_CHART_URL:",
+            "ASSISTANT_MODEL_COMPLETION_URL:",
+            "ASSISTANT_PUBLIC_SEARCH_URL:",
+            "ASSISTANT_WEATHER_GEOCODING_URL:",
+            "ASSISTANT_WEATHER_FORECAST_URL:",
+            "ASSISTANT_FINANCE_CHART_URL:",
         ):
             self.assertIn(binding, service_block)
         for selector in (

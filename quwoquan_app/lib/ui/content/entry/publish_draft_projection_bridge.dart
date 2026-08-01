@@ -33,9 +33,9 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     ArticleDetailWireKeys.articleMarkdown: markdown,
     ArticleDetailWireKeys.markdownDialect: 'qwq-rich-md',
     ArticleDetailWireKeys.articleAssetManifest:
-        buildArticleAssetManifestForPayload(state),
+        buildArticleAssetManifestForPayload(state).toJson(),
     ArticleDetailWireKeys.articleRenderProfile:
-        buildArticleRenderProfileForPayload(state),
+        buildArticleRenderProfileForPayload(state).toJson(),
     ArticleDetailWireKeys.articleTemplate: state.articleTemplate.name,
     ArticleDetailWireKeys.articleFontPreset: state.articleFontPreset.name,
   };

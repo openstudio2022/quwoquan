@@ -130,6 +130,8 @@ def apply_release(
                 env=env,
                 run=run,
                 mongo_uri=target.mongo_uri,
+                redis_addr=target.redis_addr,
+                redis_database=target.redis_database,
                 media_image_base_url=target.media_delivery_base_url,
                 media_video_base_url=target.media_delivery_base_url,
                 dry_run=bool(args.dry_run),
@@ -273,6 +275,7 @@ def rollback_release(
             destination=str(target.media_sync_root),
             run=run,
         )
+    verification_cases_ref = ""
     tag_import_ref = ""
     creator_import_ref = ""
     content_import_ref = ""
@@ -306,6 +309,8 @@ def rollback_release(
             env=env,
             run=run,
             mongo_uri=target.mongo_uri,
+            redis_addr=target.redis_addr,
+            redis_database=target.redis_database,
             media_image_base_url=target.media_delivery_base_url,
             media_video_base_url=target.media_delivery_base_url,
             dry_run=bool(args.dry_run),
@@ -316,7 +321,7 @@ def rollback_release(
         content_import_ref = (run / "import.json").relative_to(
             dependencies.output_root
         ).as_posix()
-        dependencies.run_homepage_importer(
+        homepage_import_report = dependencies.run_homepage_importer(
             release=release,
             env=env,
             run=run,
@@ -329,6 +334,25 @@ def rollback_release(
         homepage_import_ref = (run / "homepage-import.json").relative_to(
             dependencies.output_root
         ).as_posix()
+        expected_entities = contract.get("desiredRefs", {}).get("entities", [])
+        if not args.dry_run and expected_entities:
+            try:
+                verification_cases = (
+                    dependencies.write_homepage_verification_case_manifest(
+                        environment=target.environment,
+                        release_root=release,
+                        run_root=run,
+                        run_id=run_id,
+                        importer_report=homepage_import_report,
+                    )
+                )
+            except HomepageVerificationCaseError as exc:
+                raise SystemExit(
+                    f"[ship] homepage verification case manifest failed: {exc}"
+                ) from exc
+            verification_cases_ref = verification_cases.relative_to(
+                dependencies.output_root
+            ).as_posix()
     if args.import_to_db and not args.dry_run:
         dependencies.write_applied_ref(
             run=run,
@@ -351,6 +375,7 @@ def rollback_release(
                     else ReleaseRunStatus.PREPARED
                 )
             ),
+            "homepageVerificationCasesRef": verification_cases_ref,
             "tagImportReportRef": tag_import_ref,
             "creatorImportReportRef": creator_import_ref,
             "contentImportReportRef": content_import_ref,
@@ -444,6 +469,7 @@ def verify_release_consumers(
                 importer_report_path=import_run / "homepage-import.json",
                 output_path=run / "baseline-api-verification.json",
                 api_base_url=target.api_base_url,
+                ssl_cafile=target.ssl_cafile,
             )
         except BaselineApiVerificationError as exc:
             record_failure("baseline_api_verification", exc)
@@ -472,6 +498,13 @@ def verify_release_consumers(
             f"run={run_id} evidence={run}"
         )
         return
+    readiness_phase = str(
+        getattr(args, "readiness_phase", "commercial") or "commercial"
+    ).strip()
+    if readiness_phase not in {"consumer", "commercial"}:
+        raise SystemExit(
+            "[ship] --readiness-phase must be consumer or commercial"
+        )
     post_report: Path | None = None
     if dependencies.release_has_posts(contract):
         try:
@@ -485,6 +518,8 @@ def verify_release_consumers(
                 output_path=run / "post-api-verification.json",
                 api_base_url=target.api_base_url,
                 media_delivery_base_url=target.media_delivery_base_url,
+                ssl_cafile=target.ssl_cafile,
+                readiness_phase=readiness_phase,
             )
         except PostApiVerificationError as exc:
             record_failure("post_api_verification", exc)
@@ -512,6 +547,7 @@ def verify_release_consumers(
             case_manifest_path=case_manifest,
             output_path=run / "homepage-api-verification.json",
             api_base_url=target.api_base_url,
+            ssl_cafile=target.ssl_cafile,
         )
     except HomepageApiVerificationError as exc:
         record_failure("homepage_api_verification", exc)
@@ -534,6 +570,7 @@ def verify_release_consumers(
                 post_api_verification_path=post_report,
                 output_root=dependencies.output_root,
                 output_path=run / "release-readiness.json",
+                readiness_phase=readiness_phase,
             )
         except EnvironmentReleaseReadinessError as exc:
             record_failure("environment_release_readiness", exc)
@@ -560,6 +597,7 @@ def verify_release_consumers(
         "releaseId": release_id,
         "runId": run_id,
         "importRunId": str(args.import_run_id).strip(),
+        "readinessPhase": readiness_phase,
         "status": ReleaseRunStatus.COMPLETED,
         "tagConsumerVerificationRef": tag_report.relative_to(
             dependencies.output_root

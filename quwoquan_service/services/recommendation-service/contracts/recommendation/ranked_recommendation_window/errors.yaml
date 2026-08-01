@@ -1,0 +1,75 @@
+domain: RECOMMENDATION
+aggregate: RankedRecommendationWindow
+description: 固定排序窗口创建与续读的对象级错误语义。
+errors:
+- code: RECOMMENDATION.USER.ranked_window_unauthorized
+  kind: USER
+  reason: ranked_window_unauthorized
+  http_status: 401
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow, GetRankedRecommendationPage]}
+  recovery_action: none
+  dart_const: rankedWindowUnauthorized
+  go_const: ErrRankedWindowUnauthorized
+  user_message: {zh: 服务身份无效, en: Invalid service identity}
+- code: RECOMMENDATION.USER.ranked_window_forbidden
+  kind: USER
+  reason: ranked_window_forbidden
+  http_status: 403
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow, GetRankedRecommendationPage]}
+  recovery_action: none
+  dart_const: rankedWindowForbidden
+  go_const: ErrRankedWindowForbidden
+  user_message: {zh: 服务身份无权读取推荐窗口, en: Service identity cannot access ranked windows}
+- code: RECOMMENDATION.USER.ranked_window_invalid_argument
+  kind: USER
+  reason: ranked_window_invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow, GetRankedRecommendationPage]}
+  recovery_action: none
+  dart_const: rankedWindowInvalidArgument
+  go_const: ErrRankedWindowInvalidArgument
+  user_message: {zh: 推荐窗口参数无效, en: Invalid ranked window request}
+- code: RECOMMENDATION.USER.ranked_window_not_found
+  kind: USER
+  reason: ranked_window_not_found
+  http_status: 404
+  emitted_by:
+  - {surface: http, operations: [GetRankedRecommendationPage]}
+  recovery_action: refresh
+  dart_const: rankedWindowNotFound
+  go_const: ErrRankedWindowNotFound
+  user_message: {zh: 推荐窗口已过期，请重新刷新, en: Ranked window expired; refresh the feed}
+- code: RECOMMENDATION.USER.ranked_window_conflict
+  kind: USER
+  reason: ranked_window_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow]}
+  recovery_action: none
+  dart_const: rankedWindowConflict
+  go_const: ErrRankedWindowConflict
+  user_message: {zh: 相同幂等键已用于不同的推荐窗口请求, en: The idempotency key was already used for another ranked window request}
+- code: RECOMMENDATION.USER.ranked_window_subject_closed
+  kind: USER
+  reason: ranked_window_subject_closed
+  http_status: 410
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow, GetRankedRecommendationPage]}
+  recovery_action: none
+  dart_const: rankedWindowSubjectClosed
+  go_const: ErrRankedWindowSubjectClosed
+  user_message: {zh: 账号已关闭，不能继续生成或读取推荐窗口, en: The account is closed and cannot use ranked windows}
+- code: RECOMMENDATION.SYSTEM.ranked_window_failed
+  kind: SYSTEM
+  reason: ranked_window_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [CreateRankedRecommendationWindow, GetRankedRecommendationPage]}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  dart_const: rankedWindowFailed
+  go_const: ErrRankedWindowFailed
+  user_message: {zh: 推荐窗口暂时不可用, en: Ranked window is temporarily unavailable}

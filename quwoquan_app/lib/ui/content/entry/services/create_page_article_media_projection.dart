@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class ResolvedArticleMediaPayload {
   const ResolvedArticleMediaPayload({
@@ -9,13 +10,13 @@ final class ResolvedArticleMediaPayload {
   });
 
   final String markdown;
-  final Map<String, dynamic> assetManifest;
+  final PostArticleAssetManifestInput assetManifest;
 }
 
-Map<String, dynamic> buildArticleAssetManifestForPayload(
+PostArticleAssetManifestInput buildArticleAssetManifestForPayload(
   CreateEditorState state,
 ) {
-  final assets = <Map<String, Object?>>[];
+  final assets = <PostArticleAssetInput>[];
   if (state.articleCoverImagePath.trim().isNotEmpty) {
     assets.add(_manifestRow('cover', role: 'cover'));
   }
@@ -34,17 +35,17 @@ Map<String, dynamic> buildArticleAssetManifestForPayload(
   return _manifest(assets);
 }
 
-Map<String, dynamic> buildArticleRenderProfileForPayload(
+PostArticleRenderProfile buildArticleRenderProfileForPayload(
   CreateEditorState state,
 ) {
-  return <String, dynamic>{
-    'template': state.articleTemplate.name,
-    'fontPreset': state.articleFontPreset.name,
-    'layoutPolicy': <String, Object?>{
-      'wrapDowngrade': 'compactWidthToFullWidth',
-      'galleryDowngrade': 'singleColumn',
-    },
-  };
+  return PostArticleRenderProfile(
+    template: state.articleTemplate.name,
+    fontPreset: state.articleFontPreset.name,
+    layoutPolicy: const PostArticleLayoutPolicy(
+      wrapDowngrade: 'compactWidthToFullWidth',
+      galleryDowngrade: 'singleColumn',
+    ),
+  );
 }
 
 /// Rebinds editor-local figure identities to immutable MediaAsset identities.
@@ -59,7 +60,7 @@ ResolvedArticleMediaPayload projectResolvedArticleMediaPayload({
   required String visibility,
   required String assistantUsePolicy,
 }) {
-  final manifestRows = <Map<String, Object?>>[];
+  final manifestRows = <PostArticleAssetInput>[];
   final seen = <String>{};
   void addManifestRow(
     String assetId, {
@@ -107,27 +108,25 @@ ResolvedArticleMediaPayload projectResolvedArticleMediaPayload({
   );
 }
 
-Map<String, dynamic> _manifest(List<Map<String, Object?>> assets) {
-  return <String, dynamic>{
-    'schema': 'article-asset-manifest',
-    'markdownVersion': qwqRichMarkdownVersion,
-    'assets': assets,
-  };
-}
+PostArticleAssetManifestInput _manifest(List<PostArticleAssetInput> assets) =>
+    PostArticleAssetManifestInput(
+      schema: 'article-asset-manifest',
+      markdownVersion: qwqRichMarkdownVersion,
+      assets: assets,
+    );
 
-Map<String, Object?> _manifestRow(
+PostArticleAssetInput _manifestRow(
   String assetId, {
   required String role,
   String layout = '',
   String caption = '',
 }) {
-  return <String, Object?>{
-    'assetId': assetId,
-    'kind': 'image',
-    'role': role,
-    if (layout.trim().isNotEmpty) 'layout': layout.trim(),
-    if (caption.trim().isNotEmpty) 'caption': caption.trim(),
-  };
+  return PostArticleAssetInput(
+    assetId: assetId,
+    role: role,
+    layout: layout.trim().isEmpty ? null : layout.trim(),
+    caption: caption.trim().isEmpty ? null : caption.trim(),
+  );
 }
 
 String _assetIdFromReference(String value) {

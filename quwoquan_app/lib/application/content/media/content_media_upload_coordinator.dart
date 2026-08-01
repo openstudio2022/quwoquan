@@ -17,7 +17,7 @@ typedef ContentMediaStreamObjectUpload =
       Uri uploadUri,
       Stream<List<int>> bytes, {
       required int contentLength,
-      required String contentType,
+      required String mimeType,
       required String expectedSha256,
       Future<void>? abortTrigger,
     });
@@ -203,9 +203,10 @@ final class ContentMediaUploadCoordinator {
   Future<UploadedContentMedia> uploadPreparedSource({
     required PreparedContentMediaSource source,
     required ContentMediaType mediaType,
-    required String contentType,
+    required String mimeType,
     required ContentMediaStreamObjectUpload uploadStream,
     ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
+    ContentMediaCaptureMetadata? captureMetadata,
     ContentMediaUploadProgressCallback? onProgress,
     ContentMediaUploadCancellationSignal? cancellationSignal,
     ContentMediaPreparationCheckpoint? checkpoint,
@@ -215,16 +216,17 @@ final class ContentMediaUploadCoordinator {
     if (source.fileSize <= 0) throw StateError('media source is empty');
     validateContentMediaUploadPolicy(
       mediaType: mediaType,
-      contentType: contentType,
+      mimeType: mimeType,
       fileSize: source.fileSize,
     );
     cancellationSignal?.throwIfCancelled();
     return _upload(
       mediaType: mediaType,
-      contentType: contentType,
+      mimeType: mimeType,
       fileSize: source.fileSize,
       expectedSha256: source.sha256Digest,
       accessPolicy: accessPolicy,
+      captureMetadata: captureMetadata,
       cancellationSignal: cancellationSignal,
       checkpoint:
           checkpoint ??
@@ -245,7 +247,7 @@ final class ContentMediaUploadCoordinator {
             cancellationSignal: cancellationSignal,
           ),
           contentLength: source.fileSize,
-          contentType: contentType,
+          mimeType: mimeType,
           expectedSha256: digest,
           abortTrigger: cancellationSignal?.whenCancelled,
         ),
@@ -317,10 +319,11 @@ final class ContentMediaUploadCoordinator {
 
   Future<UploadedContentMedia> _upload({
     required ContentMediaType mediaType,
-    required String contentType,
+    required String mimeType,
     required int fileSize,
     required String expectedSha256,
     required ContentMediaAccessPolicy accessPolicy,
+    ContentMediaCaptureMetadata? captureMetadata,
     required ContentMediaPreparationCheckpoint checkpoint,
     Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
     onCheckpoint,
@@ -332,10 +335,11 @@ final class ContentMediaUploadCoordinator {
     try {
       final uploaded = await _uploadWithoutTelemetry(
         mediaType: mediaType,
-        contentType: contentType,
+        mimeType: mimeType,
         fileSize: fileSize,
         expectedSha256: expectedSha256,
         accessPolicy: accessPolicy,
+        captureMetadata: captureMetadata,
         checkpoint: checkpoint,
         onCheckpoint: onCheckpoint,
         writeObject: writeObject,
@@ -406,10 +410,11 @@ final class ContentMediaUploadCoordinator {
 
   Future<UploadedContentMedia> _uploadWithoutTelemetry({
     required ContentMediaType mediaType,
-    required String contentType,
+    required String mimeType,
     required int fileSize,
     required String expectedSha256,
     required ContentMediaAccessPolicy accessPolicy,
+    ContentMediaCaptureMetadata? captureMetadata,
     required ContentMediaPreparationCheckpoint checkpoint,
     Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
     onCheckpoint,
@@ -449,7 +454,7 @@ final class ContentMediaUploadCoordinator {
       final candidate = await media.initUpload(
         InitContentMediaUploadCommand(
           mediaType: mediaType,
-          contentType: contentType,
+          mimeType: mimeType,
           fileSize: fileSize,
           expectedSha256: expectedSha256,
         ),
@@ -509,6 +514,7 @@ final class ContentMediaUploadCoordinator {
       final completed = await _completeWithReconciliation(
         sessionId: sessionId,
         accessPolicy: accessPolicy,
+        captureMetadata: captureMetadata,
         completeIdempotencyKey: durable.completeIdempotencyKey,
         operationCancellation: operationCancellation,
         cancellationSignal: cancellationSignal,
@@ -534,6 +540,7 @@ final class ContentMediaUploadCoordinator {
   Future<UploadedContentMedia> _completeWithReconciliation({
     required String sessionId,
     required ContentMediaAccessPolicy accessPolicy,
+    ContentMediaCaptureMetadata? captureMetadata,
     required String completeIdempotencyKey,
     CloudOperationCancellationSignal? operationCancellation,
     ContentMediaUploadCancellationSignal? cancellationSignal,
@@ -548,6 +555,7 @@ final class ContentMediaUploadCoordinator {
           CompleteContentMediaUploadCommand(
             sessionId: sessionId,
             accessPolicy: accessPolicy,
+            captureMetadata: captureMetadata,
           ),
           ContentMediaUploadCommandContext(
             idempotencyKey: completeIdempotencyKey,
@@ -823,7 +831,7 @@ final class ContentMediaUploadCoordinator {
   }
 }
 
-String contentMediaTypeForPath(String path, ContentMediaType mediaType) {
+String contentMediaMimeTypeForPath(String path, ContentMediaType mediaType) {
   final lower = path.toLowerCase();
   return switch (mediaType) {
     ContentMediaType.image when lower.endsWith('.png') => 'image/png',
@@ -846,11 +854,11 @@ String contentMediaTypeForPath(String path, ContentMediaType mediaType) {
 
 void validateContentMediaUploadPolicy({
   required ContentMediaType mediaType,
-  required String contentType,
+  required String mimeType,
   required int fileSize,
 }) {
   final policy = ContentMediaUploadPolicy.mediaTypes[mediaType.name];
-  final normalizedContentType = contentType.trim().toLowerCase();
+  final normalizedContentType = mimeType.trim().toLowerCase();
   if (policy == null ||
       normalizedContentType.isEmpty ||
       (!policy.allowedContentTypes.contains('*/*') &&

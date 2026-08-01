@@ -4,7 +4,9 @@ policy:
   cursor:
     provider: cursor_sdk
     model: grok-4.5
-    modelParameters: []
+    modelParameters:
+      - { id: effort, value: high }
+      - { id: fast, value: "true" }
     runtime: local
   workers:
     author: 8

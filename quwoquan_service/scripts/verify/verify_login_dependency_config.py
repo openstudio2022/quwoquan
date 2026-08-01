@@ -40,6 +40,7 @@ RETIRED_KEYS = frozenset(
         "sandbox_phones",
     }
 )
+RETIRED_OTP_MODE_KEY = "sys.user-service.integration.otp.mode"
 
 
 def load_mapping(path: Path) -> dict[str, object]:
@@ -92,15 +93,26 @@ def verify_config(
         failures.append(
             f"{env}: sys.user-service.integration.external_interaction_base_url must use https"
         )
-    otp_mode = overrides.get(
-        "sys.user-service.integration.otp.mode",
-        defaults.get("sys.user-service.integration.otp.mode"),
-    )
-    expected_otp_mode = "provider" if env == "prod" else "fixed_test"
-    if otp_mode != expected_otp_mode:
+    if RETIRED_OTP_MODE_KEY in overrides or RETIRED_OTP_MODE_KEY in defaults:
         failures.append(
-            f"{env}: sys.user-service.integration.otp.mode must be {expected_otp_mode}"
+            f"{env}: retired OTP mode configuration {RETIRED_OTP_MODE_KEY}"
         )
+    bindings = config.get("externalBindings")
+    if not isinstance(bindings, Mapping):
+        failures.append(f"{env}: externalBindings must declare the login capability states")
+        return failures
+    sms_binding = bindings.get("identity.sms.otp")
+    if not isinstance(sms_binding, Mapping) or sms_binding.get("state") != "enabled":
+        failures.append(
+            f"{env}: identity.sms.otp consumer binding must be enabled"
+        )
+    optional_state = "enabled" if env == "prod" else "not_required"
+    for capability_id in ("identity.carrier.one_tap", "identity.social.login"):
+        binding = bindings.get(capability_id)
+        if not isinstance(binding, Mapping) or binding.get("state") != optional_state:
+            failures.append(
+                f"{env}: {capability_id} must be {optional_state} for the selected login profile"
+            )
     return failures
 
 
@@ -144,33 +156,32 @@ def verify_auth_boundary_isolation() -> list[str]:
 
 def verify_nonprod_source_isolation() -> list[str]:
     failures: list[str] = []
-    nonprod_files = (
+    retired_otp_files = (
         USER_CMD_API / "otp_runtime_nonprod.go",
         USER_CMD_API / "otp_dispatch_nonprod.go",
-    )
-    prod_files = (
         USER_CMD_API / "otp_runtime_prod.go",
         USER_CMD_API / "otp_dispatch_prod.go",
     )
-    for path in nonprod_files:
-        source = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if not source.startswith("//go:build nonprod\n"):
-            failures.append(f"nonprod OTP source must use nonprod build tag: {path}")
-    for path in prod_files:
-        source = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if not source.startswith("//go:build !nonprod\n"):
-            failures.append(f"prod OTP source must exclude nonprod build: {path}")
+    for path in retired_otp_files:
+        if path.exists():
+            failures.append(f"retired OTP runtime source must be deleted: {path}")
     for path in USER_CMD_API.glob("*.go"):
-        if path in nonprod_files or path.name.endswith("_test.go"):
+        if path.name.endswith("_test.go"):
             continue
-        if "123456" in path.read_text(encoding="utf-8"):
-            failures.append(f"fixed OTP code leaked into prod source set: {path}")
+        source = path.read_text(encoding="utf-8")
+        for retired_token in (
+            "fixed_test",
+            "USER_AUTH_OTP_MODE",
+            "otpExternalInteractionClientForEnvironment",
+        ):
+            if retired_token in source:
+                failures.append(f"retired OTP bypass leaked into runtime source: {path}")
     dockerfile = USER_DOCKERFILE.read_text(encoding="utf-8")
     if "ARG GO_BUILD_FLAGS=-p=1 -tags=nonprod" in dockerfile:
         failures.append("user-service production Dockerfile must not default to nonprod tag")
     compose = GAMMA_COMPOSE.read_text(encoding="utf-8")
-    if 'QWQ_COMPOSE_USER_GO_BUILD_FLAGS:--p=1 -tags=nonprod' not in compose:
-        failures.append("gamma-local user-service must explicitly compile the nonprod OTP adapter")
+    if "-tags=nonprod" in compose:
+        failures.append("gamma-local user-service must not compile a special OTP adapter")
     mtls_source = (USER_INTEGRATION / "service_mtls_client.go").read_text(encoding="utf-8")
     for env_name in (
         "INTEGRATION_SERVICE_MTLS_CA_FILE",

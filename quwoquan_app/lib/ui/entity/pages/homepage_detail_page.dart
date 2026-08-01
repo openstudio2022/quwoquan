@@ -27,6 +27,7 @@ import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
+        ChatMessageCardObjectRef,
         FollowSubjectCommand,
         FollowSubjectKind,
         UnfollowSubjectCommand;
@@ -206,6 +207,11 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       thumbnailUrl: detail.coverUrl ?? '',
       deeplink: AppLinkTemplates.entityHomepageAppDeepLink(widget.homepageId),
       landingUrl: AppPublicContentLinks.entityHomepageWebUrl(widget.homepageId),
+      objectRef: ChatMessageCardObjectRef(
+        objectTypeRef: 'homepage',
+        objectId: widget.homepageId,
+        routeId: 'homepageDetail',
+      ),
     );
     await ForwardShareSheet.show(context, payload: payload);
     if (!mounted) {

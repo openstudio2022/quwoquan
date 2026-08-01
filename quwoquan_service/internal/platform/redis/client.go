@@ -588,6 +588,38 @@ func (c *client) XAdd(
 	).Result()
 }
 
+func (c *client) XRead(
+	ctx context.Context,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]rtredis.StreamMessage, error) {
+	streamArguments := orderedStreamArguments(streams)
+	block = normalizeXReadGroupBlock(block)
+	result, err := c.raw.XRead(ctx, &goredis.XReadArgs{
+		Streams: streamArguments,
+		Count:   count,
+		Block:   block,
+	}).Result()
+	if errors.Is(err, goredis.Nil) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	output := make([]rtredis.StreamMessage, 0)
+	for _, stream := range result {
+		for _, message := range stream.Messages {
+			output = append(output, rtredis.StreamMessage{
+				Stream: stream.Stream,
+				ID:     message.ID,
+				Values: stringValueMap(message.Values),
+			})
+		}
+	}
+	return output, nil
+}
+
 func (c *client) XReadGroup(
 	ctx context.Context,
 	group, consumer string,

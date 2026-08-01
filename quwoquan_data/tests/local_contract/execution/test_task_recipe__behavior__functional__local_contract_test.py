@@ -23,12 +23,14 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 from content.execution import recipe  # noqa: E402
+from content.execution.model_contract import execution_model_pair  # noqa: E402
 from content.execution.identity import (  # noqa: E402
     build_execution_id,
     parse_execution_id,
     validate_execution_id,
 )
 from core.paths import FAMILIES_ROOT, iter_family_files  # noqa: E402
+from core.runtime_policy import load_runtime_policy  # noqa: E402
 
 
 EXECUTION_ID = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
@@ -82,6 +84,40 @@ def test_article_recipe_does_not_narrow_selection_to_scenic_subtype() -> None:
     article = recipe.load_recipe("content/travel/article/article")
 
     assert article["selection"]["category"] == "地点"
+
+
+def test_travel_video_recipe_uses_the_verified_grok_fast_binding() -> None:
+    video = recipe.load_recipe("content/travel/video/video")
+    author = execution_model_pair(video).author
+    runtime = load_runtime_policy(str(video["runtimeProfile"]))
+    expected_parameters = [
+        {"id": "effort", "value": "high"},
+        {"id": "fast", "value": "true"},
+    ]
+
+    assert author.model_id == "grok-4.5"
+    assert author.selection.parameters_document() == expected_parameters
+    assert runtime.cursor_model_selection.to_sdk_document() == {
+        "id": author.model_id,
+        "params": expected_parameters,
+    }
+
+
+def test_travel_image_recipe_uses_the_verified_grok_fast_binding() -> None:
+    image = recipe.load_recipe("content/travel/image/image")
+    author = execution_model_pair(image).author
+    runtime = load_runtime_policy(str(image["runtimeProfile"]))
+    expected_parameters = [
+        {"id": "effort", "value": "high"},
+        {"id": "fast", "value": "true"},
+    ]
+
+    assert author.model_id == "grok-4.5"
+    assert author.selection.parameters_document() == expected_parameters
+    assert runtime.cursor_model_selection.to_sdk_document() == {
+        "id": author.model_id,
+        "params": expected_parameters,
+    }
 
 
 def test_execution_facade_invokes_the_canonical_data_cli() -> None:
@@ -474,7 +510,17 @@ def test_execute_cli_accepts_only_explicit_generic_request_parameters() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    for option in ("--family", "--region-ref", "--selector", "--count", "--target"):
+    for option in (
+        "--family",
+        "--region-ref",
+        "--selector",
+        "--count",
+        "--target",
+        "--campaign-envelope",
+        "--image-scale-promotion",
+        "--video-scale-promotion",
+    ):
         assert option in result.stdout
+    assert "promote-scale" in result.stdout
     for retired in ("--rollout", "--province", "--mandatory", "--max-workers"):
         assert retired not in result.stdout

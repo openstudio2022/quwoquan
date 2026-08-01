@@ -138,6 +138,47 @@ def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     assert targets[0]["aliases"] == ["金沙湖", "金沙湖公园"]
 
 
+def test_select_targets_filters_to_declared_category(tmp_path: Path) -> None:
+    path = tmp_path / "类别筛选市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {"name": "景区对象", "entityType": "地点/景区"},
+                            {"name": "博物馆对象", "entityType": "地点/博物馆"},
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        quota=1,
+        target_selector=TargetSelector.ALL,
+        category="景区",
+    )
+
+    assert [target["name"] for target in targets] == ["景区对象"]
+    assert report["category"] == "景区"
+    with pytest.raises(ValueError, match="候选池耗尽"):
+        select_targets(
+            discovery_path=path,
+            limit=1,
+            quota=1,
+            target_selector=TargetSelector.ALL,
+            category="不存在的类别",
+        )
+
+
 def test_select_targets_applies_priority_only_when_explicit(tmp_path: Path) -> None:
     path = tmp_path / "排序市.yaml"
     path.write_text(
@@ -269,6 +310,163 @@ def test_source_ready_priority_qualifies_until_target_set_is_frozen(tmp_path: Pa
         "title": "可用百科来源对象",
         "url": "https://zh.wikipedia.org/wiki/可用百科来源对象",
     }
+
+
+def test_video_source_ready_priority_does_not_persist_homepage_evidence(
+    tmp_path: Path,
+) -> None:
+    path = _coverage_file(tmp_path / "视频预选市.yaml")
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        return TargetSourceQualification(
+            True,
+            QualifiedHomepageSource(
+                provider=HomepageAuthorityProvider.WIKIPEDIA,
+                title=target.name,
+                url="https://commons.wikimedia.org/wiki/File:video",
+            ),
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=1,
+        quota=1,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        qualification_source_key="qualifiedVideoSource",
+        persist_qualified_source=False,
+    )
+
+    assert "qualifiedHomepageSource" not in targets[0]
+    assert report["sourceQualification"]["candidates"][0][
+        "qualifiedVideoSource"
+    ] == {
+        "provider": "wikipedia",
+        "title": "测试实体甲",
+        "url": "https://commons.wikimedia.org/wiki/File:video",
+    }
+
+
+def test_video_source_ready_priority_fills_oversample_pool(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "视频过采市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "甲区",
+                        "leaves": [
+                            {
+                                "name": f"视频景区{index}",
+                                "canonicalName": f"视频景区{index}",
+                                "entityType": "地点/景区",
+                                "geoTagRef": f"Topic/地理/行政区/中国/test-region-a/甲区/{index}",
+                                "typeTagRefs": ["Entity/地点/景区/4A景区"],
+                            }
+                            for index in range(1, 6)
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        calls.append(target.name)
+        if target.name in {"视频景区1", "视频景区2"}:
+            return TargetSourceQualification(
+                True,
+                QualifiedHomepageSource(
+                    provider=HomepageAuthorityProvider.WIKIPEDIA,
+                    title=target.name,
+                    url=f"https://commons.wikimedia.org/wiki/File:{target.name}",
+                ),
+            )
+        return TargetSourceQualification(
+            False,
+            None,
+            rejection_code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=5,
+        quota=2,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        qualification_source_key="qualifiedVideoSource",
+        persist_qualified_source=False,
+    )
+
+    assert len(targets) == 5
+    assert [item["name"] for item in targets[:2]] == ["视频景区1", "视频景区2"]
+    assert report["sourceQualification"]["acceptedCount"] == 2
+    assert report["sourceQualification"]["oversampleFilled"] == 3
+    # Qualification may overshoot by one worker batch, but must include the
+    # accepted quota and must not evaluate the entire reference set.
+    assert {"视频景区1", "视频景区2"}.issubset(set(calls))
+    assert "视频景区5" not in calls
+
+
+def test_retry_inherit_frozen_targets_skips_source_requalification(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "继承冻结市.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "甲区",
+                        "leaves": [
+                            {
+                                "name": "继承景区甲",
+                                "canonicalName": "继承景区甲",
+                                "entityType": "地点/景区",
+                                "geoTagRef": "Topic/地理/行政区/中国/test-region-a/甲区",
+                                "typeTagRefs": ["Entity/地点/景区/5A景区"],
+                            },
+                            {
+                                "name": "继承景区乙",
+                                "canonicalName": "继承景区乙",
+                                "entityType": "地点/景区",
+                                "geoTagRef": "Topic/地理/行政区/中国/test-region-a/甲区",
+                                "typeTagRefs": ["Entity/地点/景区/4A景区"],
+                            },
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    def qualify(_target: TargetSourceCandidate) -> TargetSourceQualification:
+        raise AssertionError("inherited frozen targets must not re-qualify")
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=2,
+        quota=2,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        target_names=("继承景区乙", "继承景区甲"),
+        inherit_frozen_targets=True,
+        persist_qualified_source=False,
+    )
+
+    assert [item["name"] for item in targets] == ["继承景区乙", "继承景区甲"]
+    assert report["strategy"] == "inherited frozen target order"
+    assert report["inheritedFrozenTargets"] is True
+    assert "sourceQualification" not in report
 
 
 def test_source_ready_priority_uses_explicit_runtime_targets_before_freezing(tmp_path: Path) -> None:

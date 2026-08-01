@@ -29,6 +29,15 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
     monkeypatch.setattr(stackctl, "_script_probe_plan_for_target", lambda *_args: [])
     monkeypatch.setattr(
         stackctl,
+        "_candidate_workspace_report",
+        lambda _target: {
+            "status": "drifted",
+            "drifted": True,
+            "issues": ["managed inputs changed"],
+        },
+    )
+    monkeypatch.setattr(
+        stackctl,
         "_script_probes_for_target",
         lambda *_args: (_ for _ in ()).throw(
             AssertionError("status must not execute provider or secret materialization probes")
@@ -47,3 +56,5 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert report["readOnly"] is True
     assert report["checks"] == []
+    assert report["candidateWorkspace"]["status"] == "drifted"
+    assert result["candidateWorkspace"]["drifted"] is True

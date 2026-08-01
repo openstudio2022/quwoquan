@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import ssl
 import time
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 from core.runtime_policy import active_runtime_policy
 
@@ -79,6 +81,9 @@ class PublicApiClient:
     )
     platform: str = "android"
     app_version: str = "release-readiness"
+    # Local-managed environments (alpha/beta/gamma-local) present a private CA.
+    # Production public CAs leave this empty and use the process trust store.
+    ssl_cafile: str = ""
 
     def __post_init__(self) -> None:
         if not self.base_url.startswith("https://"):
@@ -87,6 +92,17 @@ class PublicApiClient:
             raise PublicApiClientError("public API sessionId must not be empty")
         if not self.platform.strip() or not self.app_version.strip():
             raise PublicApiClientError("public API client platform/appVersion must not be empty")
+        if self.ssl_cafile and not Path(self.ssl_cafile).is_file():
+            raise PublicApiClientError(
+                f"public API ssl_cafile is missing: {self.ssl_cafile}"
+            )
+
+    def _opener(self):
+        handlers: list[Any] = [ProxyHandler({})]
+        if self.ssl_cafile:
+            context = ssl.create_default_context(cafile=self.ssl_cafile)
+            handlers.append(HTTPSHandler(context=context))
+        return build_opener(*handlers)
 
     @staticmethod
     def _utc_now() -> str:
@@ -168,8 +184,7 @@ class PublicApiClient:
             ),
             method=method,
         )
-        handlers = [ProxyHandler({})]
-        opener = build_opener(*handlers)
+        opener = self._opener()
         try:
             with opener.open(
                 request,
@@ -311,8 +326,7 @@ class PublicApiClient:
             headers=headers,
             method="GET",
         )
-        handlers = [ProxyHandler({})]
-        opener = build_opener(*handlers)
+        opener = self._opener()
         try:
             with opener.open(
                 request,

@@ -7,7 +7,7 @@ errors:
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects, tag.tag_feedback.ReportTagFeedback]
+    operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects, tag.tag_feedback_fact.ReportTagFeedback]
   recovery_action: surface
   dart_const: tagInvalidArgument
   go_const: ErrTagInvalidArgument
@@ -19,7 +19,7 @@ errors:
   reason: tag_not_found
   http_status: 404
   emitted_by:
-  - {surface: http, operations: [ResolveTag, ListTagChildren, tag.tag_feedback.ReportTagFeedback]}
+  - {surface: http, operations: [ResolveTag, ListTagChildren, tag.tag_feedback_fact.ReportTagFeedback]}
   recovery_action: surface
   dart_const: tagNotFound
   go_const: ErrTagNotFound

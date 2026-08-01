@@ -1,9 +1,9 @@
 
 domain_operation_page_ids:
   assistant:
-    SearchXiaoquResults: assistant.search.xiaoqu
+    StartAssistantRun: assistant.run.start
     ReportPageContext: assistant.page_context.report
-    GetSuggestedActions: assistant.suggested_actions.get
+    GetAssistantEntry: assistant.entry.get
     AppendAssistantLearningFact: assistant.learning.facts.append
     ListSkills: assistant.skills.list
     GrantSkillConsent: assistant.skills.consent.grant
@@ -85,7 +85,7 @@ domain_operation_page_ids:
     ReportBehaviors: content.behaviors.report
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual
-    SearchQuery: search.query
+    SearchRequestFact: search.query
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
     UpdatePostSettings: content.post.settings

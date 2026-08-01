@@ -660,15 +660,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             self.assertEqual(released["blockers"], [])
             self.assertEqual(released["missingEvidence"], [])
 
-    def test_online_validator_rejects_legacy_envelope_and_tampering(self) -> None:
+    def test_online_validator_rejects_forbidden_envelope_and_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             artifact = self._build_input(Path(temporary))
             manifest = json.loads(
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
             manifest["schema"] = "mainline-release-artifact"
-            manifest["versions"] = {"imageVersion": "legacy"}
-            with self.assertRaisesRegex(ValueError, "legacy release evidence fields"):
+            manifest["versions"] = {"imageVersion": "forbidden"}
+            with self.assertRaisesRegex(ValueError, "release evidence manifest fields are forbidden"):
                 finalizer.validate_manifest(manifest)
 
             canonical = json.loads(

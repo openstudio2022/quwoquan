@@ -19,6 +19,26 @@ def register_recipe_parser(
     parser.add_argument("--execution-id", required=True, help="唯一 executionId")
     parser.add_argument("--retry-of", help="新 sequence 重试时指向原 executionId")
     parser.add_argument(
+        "--video-scale-promotion",
+        help=(
+            "travel/video M1000 的已批准 M100 promotion receipt；"
+            "首次运行时冻结到当前 execution"
+        ),
+    )
+    parser.add_argument(
+        "--image-scale-promotion",
+        help=(
+            "travel/image M1000 的已批准 M100 promotion receipt；"
+            "首次运行时冻结到当前 execution"
+        ),
+    )
+    parser.add_argument(
+        "--campaign-envelope",
+        help=(
+            "执行 M100 的 --stage promote-scale 时，提供该 execution 的冻结 campaign envelope"
+        ),
+    )
+    parser.add_argument(
         "--campaign-root-execution-id",
         help="四载体所属 homepage executionId；只作为协调根",
     )
@@ -60,6 +80,7 @@ def register_recipe_parser(
             "readiness-only",
             "submit-only",
             "review-only",
+            "promote-scale",
             "campaign-run",
         ],
         default="run",

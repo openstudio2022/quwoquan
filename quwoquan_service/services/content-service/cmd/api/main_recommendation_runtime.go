@@ -10,8 +10,40 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
+	deliveryrecommendation "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/recommendation"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
+
+func buildRankedRecommendationGateway(
+	cfg config,
+) deliveryapp.RankedRecommendationGateway {
+	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
+		log.Fatal("content-service requires recommendation-service ranked page endpoint")
+	}
+	tokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("ranked recommendation service auth config invalid: %v", err)
+	}
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		tokenConfig,
+		"content-service",
+		[]string{"recommendation.ranked_page"},
+	)
+	if err != nil {
+		log.Fatalf("ranked recommendation service credentials invalid: %v", err)
+	}
+	client, err := deliveryrecommendation.NewHTTPClient(
+		cfg.RecModelService.URL,
+		credentials,
+	)
+	if err != nil {
+		log.Fatalf("ranked recommendation service client invalid: %v", err)
+	}
+	return client
+}
 
 // buildRecommendationSignalRuntime keeps the read cache and buffered write
 // path on one HotPath so their subject-closure policy cannot drift.

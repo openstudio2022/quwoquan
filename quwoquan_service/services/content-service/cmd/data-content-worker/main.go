@@ -171,7 +171,7 @@ func run() error {
 			pythonWorkerModule,
 		},
 		WorkDir: cfg.WorkDir,
-		Environment: dataWorkerEnvironment(
+		Environment: importer.DataWorkerEnvironment(
 			os.Environ(),
 			cfg.EvidenceRoot,
 			cfg.PublishRoot,
@@ -434,32 +434,6 @@ func loadExecutionTasks(
 		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
 	})
 	return tasks, nil
-}
-
-func dataWorkerEnvironment(
-	current []string,
-	evidenceRoot string,
-	publishRoot string,
-	scriptsRoot string,
-) []string {
-	overrides := map[string]string{
-		"PYTHONDONTWRITEBYTECODE": "1",
-		"QWQ_OUTPUT_ROOT":         evidenceRoot,
-		"QWQ_PUBLISH_ROOT":        publishRoot,
-		"PYTHONPATH":              scriptsRoot,
-	}
-	result := make([]string, 0, len(current)+len(overrides))
-	for _, row := range current {
-		key, _, found := strings.Cut(row, "=")
-		if _, overridden := overrides[key]; found && overridden {
-			continue
-		}
-		result = append(result, row)
-	}
-	for key, value := range overrides {
-		result = append(result, key+"="+value)
-	}
-	return result
 }
 
 func writeJSONAtomically(path string, value any) error {

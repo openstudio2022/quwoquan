@@ -457,6 +457,16 @@ key_patterns:
     type: string
     description: 群组合成头像 CDN URL 缓存（24h TTL，头像变更时主动失效）
 
+  - pattern: "rt:resume:chat:user:{accountId}"
+    redis_scene: realtime
+    ttl_seconds: 86400
+    type: stream
+    description: |
+      chat-service 按可信接收者写入的短期可重放实时事件流。realtime-gateway 只从
+      已验签 accountId 派生 stream，客户端仅提交上次确认的 Redis stream cursor；
+      设备之间不共享 ACK。eventId/messageId/seq 负责应用层幂等，Chat Mongo 与
+      /chat/messages/sync 仍是消息权威与 gap 修复真相源。
+
   - pattern: "events.search.recommendation_signals"
     redis_scene: general
     ttl_seconds: 86400
@@ -502,7 +512,8 @@ key_patterns:
     type: stream
     description: |
       content-service 从 Post 权威 Mongo outbox 以独立 checkpoint 投递的跨上下文事实流。
-      circle-service 通过 consumer group、Mongo inbox 和版本投影维护 Post 外部引用；
+      circle-service 与 recommendation-service 通过各自 consumer group、Mongo inbox 和版本投影
+      维护 Post 外部引用及候选索引；
       重复 XADD 或 pending reclaim 不得重复产生业务副作用。持续写入会刷新 7 天保留期，
       全量 rebuild 由 Post outbox 重置专属投递 checkpoint 后重放，不以 Redis 作为权威存储。
 
@@ -511,6 +522,52 @@ key_patterns:
     ttl_seconds: 604800
     type: stream
     description: Circle Post 外部引用投影连续失败后的不可变死信；保留原 eventId、streamId 与错误摘要。
+
+  - pattern: "events.content.post_lifecycle.recommendation_candidate.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: RecommendationCandidateIndexView 连续失败后的不可变死信；只保留源坐标、事件身份、尝试次数和截断错误。
+
+  - pattern: "events.content.behavior_facts"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      content-service 从 ContentBehaviorFact 权威 Mongo 事实以独立 checkpoint 投递的可重放事实流。
+      recommendation-service 使用对象专属 consumer group 与事实唯一键幂等处理，禁止读取 Content Mongo 或直接写 Content 投影。
+
+  - pattern: "events.content.behavior_facts.recommendation-feedback.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: RecommendationFeedbackFact 连续失败后的脱敏死信；只保存源坐标、事件身份、尝试次数和截断错误。
+
+  - pattern: "events.content.feed_page_delivered"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: Content 确认 FeedDeliveryPage 后发布的可重放推荐交付事件；Recommendation 以独立 consumer group 幂等形成曝光事实。
+
+  - pattern: "events.content.feed_page_delivered.recommendation-exposure.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: RecommendationExposureFact 连续失败后的脱敏死信；只保存源坐标、事件身份、尝试次数和截断错误。
+
+  - pattern: "events.user.account"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: |
+      user-service 从 UserAccount 权威 PostgreSQL outbox 投递的账号状态事实流。每个下游使用独立
+      consumer group 与本域持久化幂等状态；Redis 只保存七天可重放传输副本，不能替代账号聚合或下游隐私事实。
+
+  - pattern: "events.user.account.recommendation-service.dlq"
+    redis_scene: general
+    ttl_seconds: 604800
+    type: stream
+    description: RecommendationSubjectClosureFact 连续失败后的脱敏死信；只保存源坐标、事件身份、尝试次数和截断错误。
 
   - pattern: "events.circle.post_placements"
     redis_scene: general

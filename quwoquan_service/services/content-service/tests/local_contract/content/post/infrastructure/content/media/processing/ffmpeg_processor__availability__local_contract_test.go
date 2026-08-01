@@ -210,7 +210,7 @@ func TestFFmpegInvalidNALDiagnosticIsRejectedAfterSuccessfulProbe(t *testing.T) 
 			// This case verifies diagnostic classification, not the timeout path.
 			// Leave enough scheduling headroom when the full local-contract suite
 			// launches many Go packages concurrently.
-			JobTimeout:          10 * time.Second,
+			JobTimeout:          30 * time.Second,
 			MinWorkDirFreeBytes: 1,
 		},
 	}

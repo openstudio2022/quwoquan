@@ -154,7 +154,7 @@ final class AlphaSearchFeedbackWriter implements SearchFeedbackCommandWriter {
 /// repository，也不在端侧合成 related terms。
 final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
   @override
-  Future<CanonicalSearchResult> search(
+  Future<SearchResponseView> search(
     CanonicalSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
@@ -191,10 +191,13 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
       if (postID.isEmpty) {
         continue;
       }
+      final contentIdentity = _optionalText(post['contentIdentity']);
       final content = CanonicalSearchContentHit(
         postId: postID,
-        contentType: contentType,
-        contentIdentity: _optionalText(post['contentIdentity']),
+        contentType: ContentType.fromWire(contentType),
+        contentIdentity: contentIdentity == null
+            ? null
+            : ContentIdentity.fromWire(contentIdentity),
         title: title.isEmpty ? postID : title,
         summary: _optionalText(post['summary']),
         coverUrl: _optionalText(post['coverUrl']),
@@ -204,18 +207,25 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
         categoryId: _optionalText(post['categoryId']),
         subCategory: _optionalText(post['subCategory']),
         likeCount: _integer(post['likeCount']),
-        highlightText: title,
-        matchedField: title.toLowerCase().contains(normalized)
-            ? 'title'
-            : 'body',
         publishedAt: _dateTime(post['publishedAt']),
       );
+      final matchedField = title.toLowerCase().contains(normalized)
+          ? 'title'
+          : 'body';
       hits.add(
         CanonicalSearchHit(
           target: target,
+          objectType: 'content.post',
           objectId: postID,
           title: content.title ?? postID,
           snippet: content.summary,
+          score: 1,
+          matchedTerms: <String>[normalized],
+          matchedTags: const <String>[],
+          evidence: <CanonicalSearchEvidence>[
+            CanonicalSearchEvidence(field: matchedField, snippet: title),
+          ],
+          rankReasons: const <CanonicalSearchRankReason>[],
           rankPosition: hits.length + 1,
           content: content,
         ),
@@ -227,8 +237,12 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
     final digest = sha256.convert(
       utf8.encode('${query.mode.wireValue}:$normalized'),
     );
-    return CanonicalSearchResult(
+    return SearchResponseView(
       hits: hits,
+      provenance: CanonicalSearchProvenance(
+        provider: 'alpha-typed-double',
+        generatedAt: DateTime.utc(2026, 7, 31),
+      ),
       requestId: 'alpha_${digest.toString().substring(0, 16)}',
     );
   }

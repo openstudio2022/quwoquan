@@ -87,21 +87,21 @@ class SkillSubscriptionSearchQueryPlanWireFields {
 
 class SkillSubscriptionDestinationWire {
   const SkillSubscriptionDestinationWire({
-    this.destinationType = "user",
+    this.destinationType = SkillSubscriptionDestinationType.user,
     this.destinationId = "",
     this.maxPerDay = 1,
     this.cooldownMinutes = 60,
     this.quietHoursPolicy = "inherit_user_setting",
   });
 
-  final String destinationType;
+  final SkillSubscriptionDestinationType destinationType;
   final String destinationId;
   final int maxPerDay;
   final int cooldownMinutes;
   final String quietHoursPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'destinationType': destinationType,
+        'destinationType': destinationType.wireName,
         'destinationId': destinationId,
         'maxPerDay': maxPerDay,
         'cooldownMinutes': cooldownMinutes,
@@ -110,7 +110,7 @@ class SkillSubscriptionDestinationWire {
 
   factory SkillSubscriptionDestinationWire.fromJson(Map<String, dynamic> json) {
     return SkillSubscriptionDestinationWire(
-      destinationType: (json['destinationType'] as String?)?.trim() ?? "user",
+      destinationType: parseSkillSubscriptionDestinationTypeStrict((json['destinationType'] as String?)?.trim() ?? "user"),
       destinationId: (json['destinationId'] as String?)?.trim() ?? "",
       maxPerDay: (json['maxPerDay'] as num?)?.toInt() ?? 1,
       cooldownMinutes: (json['cooldownMinutes'] as num?)?.toInt() ?? 60,
@@ -240,7 +240,7 @@ class SkillSubscriptionWire {
       skillId: (json['skillId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       tagRefs: _assistantStringList(json['tagRefs']),
-      status: parseSkillSubscriptionStatusStrict((json['status'] as String?)?.trim() ?? ''),
+      status: parseSkillSubscriptionStatusStrict((json['status'] as String?)?.trim() ?? "active"),
       searchQueryPlan: json['searchQueryPlan'] is Map ? SkillSubscriptionSearchQueryPlanWire.fromJson((json['searchQueryPlan'] as Map).cast<String, dynamic>()) : const SkillSubscriptionSearchQueryPlanWire(),
       trigger: json['trigger'] is Map ? SkillSubscriptionTriggerWire.fromJson((json['trigger'] as Map).cast<String, dynamic>()) : const SkillSubscriptionTriggerWire(),
       destination: json['destination'] is Map ? SkillSubscriptionDestinationWire.fromJson((json['destination'] as Map).cast<String, dynamic>()) : const SkillSubscriptionDestinationWire(),

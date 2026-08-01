@@ -1,0 +1,4 @@
+description: RecommendationExposureFact 只消费 Content 的实际交付事件，不开放第二写入口。
+api_routes: []
+consumers:
+- {name: feed-page-delivered, channel: events.content.feed_page_delivered, source_event: FeedPageDelivered, capabilities: [validate_window_attribution, append_exposure_facts]}

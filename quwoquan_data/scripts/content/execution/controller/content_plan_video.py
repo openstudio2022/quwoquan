@@ -326,6 +326,14 @@ def build_video_plan_for_target(
                 brief,
                 content_type="video",
             )
+            # evidenceRefs must be execution-local files; sourceVideo.sourceRef
+            # remains the HTTP(S) source post URL for admission/attribution.
+            local_evidence_ref = str(candidate.evidence.rights_ref or "").strip()
+            asset_ref = str(candidate.evidence.asset_ref or "").strip()
+            if asset_ref:
+                local_evidence_ref = (
+                    str(Path(asset_ref).parent.parent / "sourced_video_evidence.json")
+                )
             items.append(
                 {
                     "ref": ref,
@@ -335,7 +343,7 @@ def build_video_plan_for_target(
                     "title": target,
                     "entityRefs": [entity_ref],
                     "entityTags": [target],
-                    "evidenceRefs": [candidate.evidence.source_ref],
+                    "evidenceRefs": [local_evidence_ref],
                     "rationale": (
                         "Agent-authored caption for one admitted sourced video"
                     ),

@@ -1,0 +1,53 @@
+dart_class: AssistantContextProfileWire
+library_path: assistant/generated/contracts/assistant_skill_context.g.dart
+output_path: assistant/generated/contracts/assistant_skill_context.g.dart
+contract: assistant_skill_context
+kind: shared_wire_contract
+fields:
+  - { name: profileId, type: string, required: true }
+  - { name: requirements, type: list<object>, ref: context_requirement, default: [] }
+  - { name: assetDigest, type: string, required: true }
+subcontracts:
+  context_requirement:
+    class_name: AssistantContextRequirementWire
+    fields:
+      - { name: slotId, type: string, required: true }
+      - { name: required, type: bool, default: false }
+      - { name: acceptedSourceKinds, type: list<string>, default: [] }
+      - { name: authority, type: enum, enum_ref: AssistantContextAuthority, required: true }
+      - { name: sensitivity, type: enum, enum_ref: AssistantContextSensitivity, required: true }
+      - { name: consentScopes, type: list<string>, default: [] }
+      - { name: freshnessSeconds, type: int, default: 0 }
+      - { name: tokenBudget, type: int, default: 0 }
+      - { name: resolverRef, type: string, required: true }
+      - { name: fallbackPolicy, type: string, default: clarify }
+  context_snapshot:
+    class_name: AssistantContextSnapshotWire
+    fields:
+      - { name: snapshotId, type: string, required: true }
+      - { name: capturedAt, type: string, required: true }
+      - { name: segments, type: list<object>, ref: context_segment, default: [] }
+  context_segment:
+    class_name: AssistantContextSegmentWire
+    fields:
+      - { name: segmentId, type: string, required: true }
+      - { name: kind, type: string, required: true }
+      - { name: sourceRef, type: string, required: true }
+      - { name: authority, type: enum, enum_ref: AssistantContextAuthority, required: true }
+      - { name: sensitivity, type: enum, enum_ref: AssistantContextSensitivity, required: true }
+      - { name: capturedAt, type: string, required: true }
+      - { name: expiresAt, type: string, default: '' }
+      - { name: digest, type: string, required: true }
+      - { name: tokenCost, type: int, default: 0 }
+      - { name: value, type: map, default: {} }
+  trigger_envelope:
+    class_name: AssistantTriggerEnvelopeWire
+    fields:
+      - { name: kind, type: enum, enum_ref: AssistantTriggerKind, required: true }
+      - { name: triggerId, type: string, required: true }
+      - { name: occurredAt, type: string, required: true }
+      - { name: subscriptionRef, type: string, default: '' }
+      - { name: signalRefs, type: list<string>, default: [] }
+      - { name: reason, type: string, default: '' }
+      - { name: dedupeKey, type: string, required: true }
+      - { name: deliveryPolicyRef, type: string, default: '' }

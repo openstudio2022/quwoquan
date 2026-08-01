@@ -16,12 +16,12 @@ class TurnSynthesisState {
   final List<String> blockedIntentIds;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'interactionDirective': interactionDirective.toJson(),
-        'completedIntentIds': completedIntentIds,
-        'remainingIntentIds': remainingIntentIds,
-        'blockedIntentIds': blockedIntentIds,
-      };
+    'contractId': contractId,
+    'interactionDirective': interactionDirective.toJson(),
+    'completedIntentIds': completedIntentIds,
+    'remainingIntentIds': remainingIntentIds,
+    'blockedIntentIds': blockedIntentIds,
+  };
 
   factory TurnSynthesisState.fromJson(Map<String, dynamic> json) {
     return TurnSynthesisState(

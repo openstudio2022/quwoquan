@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../chat/conversation_contracts.dart';
 
@@ -33,6 +33,10 @@ final class ChatBatchGetConversationsQuery {
   }
 
   final List<String> conversationIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "ids": this.conversationIds.map((value) => value).toList(growable: false),
+  };
 }
 
 final class ChatCreateConversationCommand {
@@ -54,6 +58,13 @@ final class ChatCreateConversationCommand {
   final String? title;
   final int? maxGroupSize;
   final List<String> initialMemberIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "type": this.type,
+    if (this.title != null) "title": this.title!,
+    if (this.maxGroupSize != null) "maxGroupSize": this.maxGroupSize!,
+    if (this.initialMemberIds.isNotEmpty) "initialMemberIds": this.initialMemberIds.map((value) => value).toList(growable: false),
+  };
 }
 
 final class ChatDissolveConversationCommand {
@@ -66,6 +77,10 @@ final class ChatDissolveConversationCommand {
   }
 
   final String conversationId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
 }
 
 final class ChatGetConversationQuery {
@@ -78,6 +93,10 @@ final class ChatGetConversationQuery {
   }
 
   final String conversationId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
 }
 
 final class ChatGetGroupHomeQuery {
@@ -90,6 +109,10 @@ final class ChatGetGroupHomeQuery {
   }
 
   final String conversationId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
 }
 
 final class ChatGetMessageReceiptsQuery {
@@ -108,6 +131,11 @@ final class ChatGetMessageReceiptsQuery {
 
   final String conversationId;
   final String messageId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "messageId": this.messageId,
+  };
 }
 
 final class ChatListConversationTimestampsQuery {
@@ -123,6 +151,11 @@ final class ChatListConversationsQuery {
 
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class ChatUpdateAnnouncementCommand {
@@ -138,6 +171,11 @@ final class ChatUpdateAnnouncementCommand {
 
   final String conversationId;
   final String announcement;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "announcement": this.announcement,
+  };
 }
 
 final class ChatUpdateConversationTitleCommand {
@@ -156,6 +194,11 @@ final class ChatUpdateConversationTitleCommand {
 
   final String conversationId;
   final String title;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "title": this.title,
+  };
 }
 
 final class ChatUpdateGroupGovernanceSettingsCommand {
@@ -171,6 +214,11 @@ final class ChatUpdateGroupGovernanceSettingsCommand {
 
   final String conversationId;
   final bool nameEditableByAdminOnly;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "nameEditableByAdminOnly": this.nameEditableByAdminOnly,
+  };
 }
 
 CloudOperationRequestPayload encodeChatConversationBatchGetConversationsGeneratedRequest(ChatBatchGetConversationsQuery request) {

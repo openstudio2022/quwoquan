@@ -289,6 +289,28 @@ func (s *FileStore) CommitApprovedMutation(
 	if err := controlplane.ValidateApprovedMutation(mutation); err != nil {
 		return MutationReceipt{}, err
 	}
+	return s.commitMutation(mutation, true)
+}
+
+func (s *FileStore) CommitMutation(
+	mutation controlplane.Mutation,
+) (MutationReceipt, error) {
+	if err := controlplane.ValidateMutation(mutation); err != nil {
+		return MutationReceipt{}, err
+	}
+	return s.commitMutation(controlplane.ApprovedMutation{
+		Namespace: mutation.Namespace, ObjectType: mutation.ObjectType,
+		ObjectID: mutation.ObjectID, Intent: mutation.Intent,
+		PayloadDigest: mutation.PayloadDigest, IdempotencyKey: mutation.IdempotencyKey,
+		Document: mutation.Document, Workflow: mutation.Workflow,
+		Audit: mutation.Audit, OutboxEvents: mutation.OutboxEvents,
+	}, false)
+}
+
+func (s *FileStore) commitMutation(
+	mutation controlplane.ApprovedMutation,
+	requireDualApproval bool,
+) (MutationReceipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state, err := s.readLocked()
@@ -308,17 +330,19 @@ func (s *FileStore) CommitApprovedMutation(
 		existing.Replayed = true
 		return existing, nil
 	}
-	actors := map[string]struct{}{}
-	for _, approval := range state.Approvals[workflowKey(mutation.ObjectType, mutation.ObjectID)] {
-		actor := strings.TrimSpace(approval.Actor)
-		if approval.Decision == mutation.ApprovalDecision &&
-			approval.PayloadDigest == mutation.PayloadDigest &&
-			actor != "" && actor != "unverified" {
-			actors[actor] = struct{}{}
+	if requireDualApproval {
+		actors := map[string]struct{}{}
+		for _, approval := range state.Approvals[workflowKey(mutation.ObjectType, mutation.ObjectID)] {
+			actor := strings.TrimSpace(approval.Actor)
+			if approval.Decision == mutation.ApprovalDecision &&
+				approval.PayloadDigest == mutation.PayloadDigest &&
+				actor != "" && actor != "unverified" {
+				actors[actor] = struct{}{}
+			}
 		}
-	}
-	if len(actors) < 2 {
-		return MutationReceipt{}, controlplane.ErrDualApprovalRequired
+		if len(actors) < 2 {
+			return MutationReceipt{}, controlplane.ErrDualApprovalRequired
+		}
 	}
 	if state.Documents[mutation.Namespace] == nil {
 		state.Documents[mutation.Namespace] = map[string]Document{}

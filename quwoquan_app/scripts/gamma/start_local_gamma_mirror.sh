@@ -3,9 +3,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+STARTUP_ATTEMPT_PARTIAL=0
+STARTUP_ATTEMPT_RUNNING=0
 
 cleanup_active_child() {
   local exit_status="$?"
+  local cleanup_status=0
+  local cleanup_failure=""
+  set +e
   if [[ -n "$LOCAL_GAMMA_ACTIVE_CHILD_PID" ]] \
     && kill -0 "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1; then
     echo "[local-gamma] stopping active child before exit" >&2
@@ -13,6 +18,36 @@ cleanup_active_child() {
     wait "$LOCAL_GAMMA_ACTIVE_CHILD_PID" >/dev/null 2>&1 || true
   fi
   LOCAL_GAMMA_ACTIVE_CHILD_PID=""
+  if [[ "$exit_status" != "0" \
+     && "$STARTUP_ATTEMPT_PARTIAL" == "1" \
+     && "$STARTUP_ATTEMPT_RUNNING" != "1" \
+     && "${formal_release:-0}" != "1" ]]; then
+    echo "[local-gamma] startup failed after partial mutation; tearing down attempt resources" >&2
+    if declare -F stop_colima_tunnels >/dev/null 2>&1; then
+      stop_colima_tunnels || cleanup_status=$?
+    fi
+    if declare -p compose_cmd >/dev/null 2>&1; then
+      "${compose_cmd[@]}" ps -a >&2 || true
+      "${compose_cmd[@]}" logs --tail 120 \
+        user-service recommendation-service content-service entity-service \
+        api-edge gamma-proxy >&2 || true
+      "${compose_cmd[@]}" down --remove-orphans || cleanup_status=$?
+    else
+      cleanup_status=1
+    fi
+    if [[ "$cleanup_status" == "0" ]]; then
+      write_startup_attempt \
+        stopped \
+        "startup exited with status ${exit_status}" \
+        "" || true
+    else
+      cleanup_failure="partial runtime teardown failed with status ${cleanup_status}"
+      write_startup_attempt \
+        partial \
+        "startup exited with status ${exit_status}" \
+        "$cleanup_failure" || true
+    fi
+  fi
   trap - EXIT INT TERM HUP
   exit "$exit_status"
 }
@@ -73,25 +108,77 @@ eval "$(python3 "$ROOT/quwoquan_ops/cli/lib/local_run.py" \
   --env "$QWQ_LOCAL_RELEASE_ENV" --target "$QWQ_LOCAL_RELEASE_TARGET" \
   --action "$LOCAL_RUN_ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+write_startup_attempt() {
+  local status="$1"
+  local failure="${2:-}"
+  local cleanup_failure="${3:-}"
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT/quwoquan_ops/cli/lib/startup_attempt_receipt.py" \
+    --env "$QWQ_LOCAL_RELEASE_ENV" \
+    --target "$QWQ_LOCAL_RELEASE_TARGET" \
+    --attempt-id "$QWQ_LOCAL_RUN_ID" \
+    --status "$status" \
+    --workload "$WORKLOAD" \
+    --compose-project "${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-}" \
+    --candidate-digest "${QWQ_RELEASE_CANDIDATE_DIGEST:-}" \
+    --configuration-digest "${CONFIG_VERSION:-}" \
+    --image-transport-tag "${IMAGE_VERSION:-}" \
+    --run-root "$QWQ_RUN_ROOT" \
+    --failure "$failure" \
+    --cleanup-failure "$cleanup_failure"
+}
 COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
 COMPOSE_FILES=("$COMPOSE_FILE")
-while IFS= read -r service_compose_file; do
-  COMPOSE_FILES+=("$service_compose_file")
-done < <(find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 -path '*/deploy/compose.yaml' -type f | sort)
-while IFS= read -r service_environment_compose_file; do
-  COMPOSE_FILES+=("$service_environment_compose_file")
-done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort)
-COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
+if [[ "$WORKLOAD" == "content-release" ]]; then
+  # Compose interpolates every loaded file before it applies the selected
+  # service list. Loading full-workload service files here would therefore
+  # require unrelated Provider secrets (for example integration-service mTLS)
+  # even though those services are not started. Keep this slice structural:
+  # only load the canonical content consumer plane and its environment overlay.
+  content_release_services=(
+    api-edge
+    recommendation-service
+    content-service
+    user-service
+    entity-service
+  )
+  for content_release_service in "${content_release_services[@]}"; do
+    service_compose_file="$ROOT/quwoquan_service/services/${content_release_service}/deploy/compose.yaml"
+    if [[ ! -f "$service_compose_file" ]]; then
+      echo "[local-release] GATE_BLOCK: missing content-release compose file $service_compose_file" >&2
+      exit 2
+    fi
+    COMPOSE_FILES+=("$service_compose_file")
+
+    service_environment_compose_file="$ROOT/quwoquan_service/services/${content_release_service}/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml"
+    if [[ -f "$service_environment_compose_file" ]]; then
+      COMPOSE_FILES+=("$service_environment_compose_file")
+    fi
+  done
+else
+  while IFS= read -r service_compose_file; do
+    COMPOSE_FILES+=("$service_compose_file")
+  done < <(find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 -path '*/deploy/compose.yaml' -type f | sort)
+  while IFS= read -r service_environment_compose_file; do
+    COMPOSE_FILES+=("$service_environment_compose_file")
+  done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort)
+  COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
+fi
 COMPOSE_FILE_ARGS=()
 for service_compose_file in "${COMPOSE_FILES[@]}"; do
   COMPOSE_FILE_ARGS+=(-f "$service_compose_file")
 done
-if [[ "$QWQ_LOCAL_RELEASE_ENV" == "gamma" ]]; then
-  default_compose_project="quwoquan_service"
-else
-  default_compose_project="quwoquan_${QWQ_LOCAL_RELEASE_ENV}_release"
-fi
+default_compose_project="quwoquan_${QWQ_LOCAL_RELEASE_ENV}_release"
 LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-$default_compose_project}"
+LOCAL_GAMMA_RESOURCE_PREFIX="$(
+  printf '%s' "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" |
+    tr -c '[:alnum:]_.-' '-' |
+    sed 's/^-*//; s/-*$//'
+)"
+if [[ -z "$LOCAL_GAMMA_RESOURCE_PREFIX" ]]; then
+  echo "[local-gamma] GATE_BLOCK: Compose project has no safe resource prefix." >&2
+  exit 2
+fi
 LOCAL_GAMMA_REC_POLICY_SOURCE="$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
 export LOCAL_GAMMA_REC_POLICY_SOURCE
 if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
@@ -240,6 +327,12 @@ tls_exports="$(
     --allow-missing
 )" || exit $?
 eval "$tls_exports"
+# Host-side readiness probes must validate the same local-managed CA that
+# stackctl issued for this target.  Relying on the macOS system trust store
+# makes a correct canonical certificate fail with curl (60).
+if [[ -n "${QWQ_LOCAL_MANAGED_CA_FILE:-}" ]]; then
+  export CURL_CA_BUNDLE="${CURL_CA_BUNDLE:-$QWQ_LOCAL_MANAGED_CA_FILE}"
+fi
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/model"
 LOCAL_GAMMA_PORTAL_ROOT="${LOCAL_GAMMA_PORTAL_ROOT:-${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/build/ops-portal}"
 LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"
@@ -256,16 +349,14 @@ case "$STAGE" in
     LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-$QWQ_LOCAL_RELEASE_ENV}"
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-$QWQ_LOCAL_RELEASE_ENV}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-${QWQ_LOCAL_RELEASE_ENV}}"
-    # gamma-local 保持生产 Remote composition 与完整第一方拓扑；
-    # 所有外部 Provider 由服务 Binding 选择 Port 对等本地替身，并由 stackctl 统一材料化。
-    ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
+    # 三个本地环境保持 production Remote composition 与完整第一方拓扑；
+    # required Provider 材料由 stackctl 从受保护环境注入。
     ;;
   prod)
     LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-prod}"
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-prod}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-prod-onebox}"
-    # prod 只消费 environments/prod 的真实 Provider Binding，缺凭据必须 fail-fast。
-    ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}"
+    # prod 只消费 environments/prod 的正式 Provider Binding，缺凭据必须 fail-fast。
     ;;
   *)
     echo "[local-release] FAIL: unsupported STAGE=$STAGE" >&2
@@ -286,7 +377,6 @@ export \
   STAGE \
   LOCAL_GAMMA_APP_ENV \
   CONFIG_SOURCE_ENV \
-  ASSISTANT_SCENARIO_SEED_REFS \
   LOCAL_GAMMA_READY_INDEX_STREAM \
   LOCAL_GAMMA_READY_INDEX_GROUP \
   LOCAL_GAMMA_READY_INDEX_QUEUE \
@@ -412,15 +502,57 @@ local_gamma_has_existing_stack() {
 }
 
 stop_colima_tunnels() {
-  if [[ ! -f "$tunnel_pid_file" ]]; then
-    return 0
-  fi
+  local ssh_config="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/runtime/colima-ssh-config"
+  local port_variable=""
+  local port=""
+  local cancelled_ports=" "
+  while IFS= read -r port_variable; do
+    [[ "$port_variable" == LOCAL_GAMMA_*_PORT ]] || continue
+    port="${!port_variable:-}"
+    [[ -n "$port" ]] || continue
+    [[ "$cancelled_ports" != *" $port "* ]] || continue
+    if [[ -f "$ssh_config" ]]; then
+      ssh -F "$ssh_config" -O cancel \
+        -L "127.0.0.1:${port}:127.0.0.1:${port}" \
+        colima >/dev/null 2>&1 || true
+    fi
+    cancelled_ports="${cancelled_ports}${port} "
+  done < <(compgen -A variable LOCAL_GAMMA_ | sort)
+  [[ -f "$tunnel_pid_file" ]] || return 0
   while IFS= read -r pid; do
     if [[ -n "$pid" ]]; then
       kill "$pid" >/dev/null 2>&1 || true
     fi
   done < "$tunnel_pid_file"
   rm -f "$tunnel_pid_file"
+}
+
+restart_colima_for_stale_target_ports() {
+  local port_variable=""
+  local port=""
+  local listener_pid=""
+  local listener_command=""
+  local stale_mux=0
+  command -v colima >/dev/null 2>&1 || return 0
+  while IFS= read -r port_variable; do
+    [[ "$port_variable" == LOCAL_GAMMA_*_PORT ]] || continue
+    port="${!port_variable:-}"
+    [[ -n "$port" ]] || continue
+    while IFS= read -r listener_pid; do
+      [[ -n "$listener_pid" ]] || continue
+      listener_command="$(ps -p "$listener_pid" -o command= 2>/dev/null || true)"
+      case "$listener_command" in
+        *".colima/_lima/colima/ssh.sock [mux]"*)
+          stale_mux=1
+          ;;
+      esac
+    done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  done < <(compgen -A variable LOCAL_GAMMA_ | sort)
+  if [[ "$stale_mux" == "1" ]]; then
+    echo "[local-gamma] restarting Colima to release stale target port forwards"
+    colima stop
+    colima start
+  fi
 }
 
 LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES=(
@@ -450,7 +582,7 @@ cleanup_stale_named_gamma_containers() {
   local container_name=""
   local status=""
   for base_name in "${LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES[@]}"; do
-    for container_name in "quwoquan_service_${base_name}_1" "quwoquan_service-${base_name}-1"; do
+    for container_name in "${LOCAL_GAMMA_RESOURCE_PREFIX}_${base_name}_1" "${LOCAL_GAMMA_RESOURCE_PREFIX}-${base_name}-1"; do
       status="$(docker inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || true)"
       if [[ -z "$status" ]]; then
         continue
@@ -470,7 +602,7 @@ cleanup_existing_gamma_runtime() {
   local container_name=""
   local image_name=""
   for base_name in "${LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES[@]}"; do
-    for container_name in "quwoquan_service_${base_name}_1" "quwoquan_service-${base_name}-1"; do
+    for container_name in "${LOCAL_GAMMA_RESOURCE_PREFIX}_${base_name}_1" "${LOCAL_GAMMA_RESOURCE_PREFIX}-${base_name}-1"; do
       docker rm -f "$container_name" >/dev/null 2>&1 || true
       if command -v podman >/dev/null 2>&1; then
         podman rm -f "$container_name" >/dev/null 2>&1 || true
@@ -478,8 +610,8 @@ cleanup_existing_gamma_runtime() {
     done
   done
   if command -v podman >/dev/null 2>&1; then
-    podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
-    podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
+    podman pod rm -f "$LOCAL_GAMMA_RESOURCE_PREFIX" >/dev/null 2>&1 || true
+    podman pod rm -f "${LOCAL_GAMMA_RESOURCE_PREFIX}_default" >/dev/null 2>&1 || true
     if [[ "${skip_build:-0}" == "1" ]]; then
       return 0
     fi
@@ -720,17 +852,6 @@ PY
   while IFS= read -r service; do
     copy_service_package_config "$service"
   done < <(first_party_image_owners)
-
-  local -a report_account_backfill_args=(
-    --write-report-account-backfill
-    "$QWQ_LOCAL_RELEASE_ENV"
-    "$QWQ_LOCAL_RELEASE_TARGET"
-    "$out/report-account-backfill.json"
-    --empty
-  )
-  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 \
-    python3 -m quwoquan_ops.cli.lib.local_environment_auth \
-      "${report_account_backfill_args[@]}" >/dev/null
 
   if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" || ! -f "$package_root/runtime-shared/retention_policy.yaml" ]]; then
     echo "[local-gamma] FAIL: missing runtime shared package: $package_root/runtime-shared" >&2
@@ -1049,7 +1170,7 @@ if [[ "$down" == "1" ]]; then
   if [[ "$formal_release_teardown" != "1" ]]; then
     cleanup_stale_named_gamma_containers
   fi
-  rm -f "$stack_report"
+  restart_colima_for_stale_target_ports
   exit 0
 fi
 
@@ -1066,6 +1187,25 @@ mkdir -p \
   "${LOCAL_GAMMA_PORTAL_ROOT}" \
   "${QWQ_OUTPUT_ROOT}/env/repo/local/control-plane/process/platform-ops-service"
 validate_caddyfile_source
+# OCI build-only and prepare-only paths must not mutate the runtime startup
+# attempt receipt. Only a real compose/podman up owns prepared/partial/running.
+if [[ "$build_only" != "1" && "$skip_up" != "1" ]]; then
+  if [[ -f "${LOCAL_GAMMA_PROCESS_ROOT}/startup_attempt.json" ]]; then
+    leftover_status="$(
+      PYTHONDONTWRITEBYTECODE=1 python3 - "${LOCAL_GAMMA_PROCESS_ROOT}/startup_attempt.json" <<'PY'
+import json
+import sys
+payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+print(str(payload.get("status") or "").strip())
+PY
+    )"
+    if [[ "$leftover_status" != "stopped" && -n "$leftover_status" ]]; then
+      echo "[local-gamma] GATE_BLOCK: leftover startup attempt status=${leftover_status}; run stackctl down --target ${QWQ_LOCAL_RELEASE_TARGET} before retrying." >&2
+      exit 2
+    fi
+  fi
+  write_startup_attempt prepared
+fi
 
 if [[ "$skip_up" == "1" ]]; then
   echo "[local-gamma] prepared artifacts only"
@@ -1092,6 +1232,20 @@ if [[ "$formal_release" == "1" && "$podman_compose" == "1" ]]; then
 fi
 if [[ "$formal_release" == "1" ]]; then
   compose_up_args=(up -d --no-build)
+fi
+if [[ "$WORKLOAD" == "content-release" ]]; then
+  # Start only the canonical import/public-read role set. Compose adds the
+  # declared Mongo, Redis, Postgres, object-storage and Elasticsearch
+  # dependencies; unrelated full-workload services and their Providers remain
+  # outside this diagnostic runtime.
+  compose_up_args+=(
+    recommendation-service
+    content-service
+    user-service
+    entity-service
+    api-edge
+    gamma-proxy
+  )
 fi
 
 prepare_local_gamma_mongosh() {
@@ -1232,6 +1386,8 @@ if [[ "$build_only" == "1" ]]; then
   echo "[local-gamma] built services only: ${compose_build_services[*]}"
   exit 0
 fi
+write_startup_attempt partial
+STARTUP_ATTEMPT_PARTIAL=1
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
 export LOCAL_GAMMA_APP_ENV
@@ -1240,6 +1396,26 @@ export LOCAL_GAMMA_READY_INDEX_GROUP
 export LOCAL_GAMMA_READY_INDEX_QUEUE
 if [[ "$podman_compose" == "1" ]]; then
   echo "[local-gamma] startup mode: podman-manual"
+  # The manual Podman path historically reused quwoquan_service_* resources
+  # for every environment. Keep service network aliases stable, but rewrite
+  # every owned container/network/volume argument into the target's Compose
+  # namespace before invoking Podman.
+  podman() {
+    local -a isolated_args=()
+    local value=""
+    for value in "$@"; do
+      case "$value" in
+        quwoquan_service_local-gamma-*)
+          value="${LOCAL_GAMMA_RESOURCE_PREFIX}_local-${QWQ_LOCAL_RELEASE_ENV}-${value#quwoquan_service_local-gamma-}"
+          ;;
+        quwoquan_service_*)
+          value="${LOCAL_GAMMA_RESOURCE_PREFIX}_${value#quwoquan_service_}"
+          ;;
+      esac
+      isolated_args+=("$value")
+    done
+    command podman "${isolated_args[@]}"
+  }
   wait_healthy() {
     local name="$1"
     local status=""
@@ -1449,6 +1625,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONTENT_OSS_ENDPOINT \
     -e CONTENT_OSS_ACCESS_KEY_ID \
     -e CONTENT_OSS_ACCESS_KEY_SECRET \
+    -e CONTENT_EMBEDDING_ENDPOINT \
+    -e CONTENT_EMBEDDING_API_KEY \
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
     -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://recommendation-service:8000 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
@@ -1490,21 +1668,21 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
     -e REDIS_ADDR=redis:6379 \
-    -e IDENTITY_ONE_TAP_FIXTURE_ENDPOINT \
-    -e IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_ID \
-    -e IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET \
-    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL \
-    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL \
-    -e IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL \
-    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_ID \
-    -e IDENTITY_SOCIAL_FIXTURE_WECHAT_APP_SECRET \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_ID \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_APP_PRIVATE_KEY_PEM \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_PLATFORM_PUBLIC_KEY_PEM \
-    -e IDENTITY_SOCIAL_FIXTURE_ALIPAY_MERCHANT_PID \
-    -e IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID \
+    -e ALIYUN_DYPNS_ENDPOINT \
+    -e ALIYUN_DYPNS_ACCESS_KEY_ID \
+    -e ALIYUN_DYPNS_ACCESS_KEY_SECRET \
+    -e WECHAT_OAUTH_TOKEN_URL \
+    -e WECHAT_OAUTH_USER_INFO_URL \
+    -e WECHAT_OAUTH_APP_ID \
+    -e WECHAT_OAUTH_APP_SECRET \
+    -e ALIPAY_OAUTH_TOKEN_URL \
+    -e ALIPAY_OAUTH_USER_INFO_URL \
+    -e ALIPAY_OAUTH_APP_ID \
+    -e ALIPAY_OAUTH_APP_PRIVATE_KEY_PEM \
+    -e ALIPAY_OAUTH_PLATFORM_PUBLIC_KEY_PEM \
+    -e ALIPAY_OAUTH_MERCHANT_PID \
+    -e QQ_OAUTH_USER_INFO_URL \
+    -e QQ_OAUTH_APP_ID \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v "${ROOT}/quwoquan_service/contracts/metadata/user:/contracts/metadata/user:ro" \
     -v "${ROOT}/quwoquan_service/services/user-service/internal/account/user_account/infrastructure/migration:/internal/infrastructure/migration:ro" \
@@ -1521,12 +1699,22 @@ if [[ "$podman_compose" == "1" ]]; then
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e INTEGRATION_SERVICE_ADDR=:18086 \
     -e INTEGRATION_MONGO_URI=mongodb://mongodb:27017 -e INTEGRATION_MONGO_DATABASE=quwoquan_integration \
     -e INTEGRATION_PUSH_ENABLED=true \
-    -e INTEGRATION_SMS_FIXTURE_ENDPOINT \
-    -e INTEGRATION_SMS_FIXTURE_TOKEN \
-    -e INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL \
-    -e INTEGRATION_PUSH_FIXTURE_HMAC_KEY \
-    -e INTEGRATION_LOCATION_FIXTURE_BASE_URL \
-    -e INTEGRATION_LOCATION_FIXTURE_AK \
+    -e INTEGRATION_SMS_ENDPOINT \
+    -e INTEGRATION_SMS_TOKEN \
+    -e OTP_CODE_REF_KEYS_JSON \
+    -e INTEGRATION_SERVICE_MTLS_CA_FILE \
+    -e INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE \
+    -e INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE \
+    -e INTEGRATION_PUSH_USER_SERVICE_BASE_URL \
+    -e INTEGRATION_PUSH_APNS_ENVIRONMENT \
+    -e INTEGRATION_PUSH_APNS_KEY_ID \
+    -e INTEGRATION_PUSH_APNS_TEAM_ID \
+    -e INTEGRATION_PUSH_APNS_TOPIC \
+    -e INTEGRATION_PUSH_APNS_KEY_FILE \
+    -e INTEGRATION_PUSH_FCM_PROJECT_ID \
+    -e INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE \
+    -e INTEGRATION_LOCATION_BAIDU_BASE_URL \
+    -e INTEGRATION_LOCATION_BAIDU_AK \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -1536,6 +1724,11 @@ if [[ "$podman_compose" == "1" ]]; then
     -e AUTH_DEVICE_TICKET_AUDIENCE="${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}" \
     -e AUTH_DEVICE_TICKET_TOKEN_VERSION="${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -v "${INTEGRATION_SERVICE_MTLS_CA_FILE}:${INTEGRATION_SERVICE_MTLS_CA_FILE}:ro" \
+    -v "${INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE}:${INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE}:ro" \
+    -v "${INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE}:${INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE}:ro" \
+    -v "${INTEGRATION_PUSH_APNS_KEY_FILE}:${INTEGRATION_PUSH_APNS_KEY_FILE}:ro" \
+    -v "${INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE}:${INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE}:ro" \
     -p "${LOCAL_GAMMA_INTEGRATION_PORT:-19310}:18086" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
@@ -1577,13 +1770,12 @@ if [[ "$podman_compose" == "1" ]]; then
       -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e ASSISTANT_SERVICE_ADDR=:18087 \
       -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_assistant \
       -e REDIS_GENERAL_ADDR=redis:6379 -e REDIS_REC_ADDR=redis:6379 \
-      -e ASSISTANT_MODEL_FIXTURE_ENDPOINT \
+      -e ASSISTANT_MODEL_COMPLETION_URL \
       -e ASSISTANT_MODEL_API_KEY \
-      -e ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL \
-      -e ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL \
-      -e ASSISTANT_WEATHER_FIXTURE_FORECAST_URL \
-      -e ASSISTANT_FINANCE_FIXTURE_CHART_URL \
-      -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}" \
+      -e ASSISTANT_PUBLIC_SEARCH_URL \
+      -e ASSISTANT_WEATHER_GEOCODING_URL \
+      -e ASSISTANT_WEATHER_FORECAST_URL \
+      -e ASSISTANT_FINANCE_CHART_URL \
       -e ASSISTANT_NOTIFICATION_BASE_URL=http://notification-service:18087 \
       -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
       -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
@@ -1688,7 +1880,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
     -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}" \
     -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
-    --healthcheck-command "wget -qO- https://${QWQ_PUBLIC_API_HOST}:${LOCAL_GAMMA_HTTP_PORT:-19000}/healthz >/dev/null 2>&1" \
+    --healthcheck-command "wget --no-check-certificate -qO- https://${QWQ_PUBLIC_API_HOST}:${LOCAL_GAMMA_HTTP_PORT:-19000}/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 5s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_CADDY_IMAGE" >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
@@ -1818,7 +2010,7 @@ else
     while kill -0 "$compose_pid" >/dev/null 2>&1; do
       if (( SECONDS >= deadline )); then
         compose_up_timed_out=1
-        echo "[local-gamma] FAIL: compose up exceeded ${timeout_seconds}s; preserving the partial runtime for inspection" >&2
+        echo "[local-gamma] FAIL: compose up exceeded ${timeout_seconds}s; transactional teardown will preserve the receipt" >&2
         kill "$compose_pid" >/dev/null 2>&1 || true
         wait "$compose_pid" >/dev/null 2>&1 || true
         LOCAL_GAMMA_ACTIVE_CHILD_PID=""
@@ -1887,6 +2079,15 @@ gamma_platform_ops_ready() {
   curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" >/dev/null 2>&1
 }
 
+gamma_full_workload_dependencies_ready() {
+  if [[ "$WORKLOAD" == "content-release" ]]; then
+    return 0
+  fi
+  curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_INTEGRATION_PORT:-19310}/healthz" >/dev/null 2>&1 \
+    && curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}/healthz" >/dev/null 2>&1 \
+    && curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz" >/dev/null 2>&1
+}
+
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
   local gw_host="$QWQ_PUBLIC_API_HOST"
@@ -1916,9 +2117,7 @@ wait_local_gamma_host_ready() {
       && { [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && gamma_platform_ops_ready \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
-      && curl -fsS "http://127.0.0.1:${integration_port}/healthz" >/dev/null 2>&1 \
-      && curl -fsS "http://127.0.0.1:${notification_port}/healthz" >/dev/null 2>&1 \
-      && curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1
+      && gamma_full_workload_dependencies_ready
     then
       return 0
     fi
@@ -1932,17 +2131,11 @@ wait_local_gamma_host_ready() {
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps >&2 || true
   curl -fsS "http://127.0.0.1:${integration_port}/healthz" >&2 || true
   curl -fsS "http://127.0.0.1:${notification_port}/healthz" >&2 || true
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 80 gamma-proxy product-ops-service platform-ops-service user-service integration-service notification-service >&2 || true
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 80 gamma-proxy api-edge content-service entity-service product-ops-service platform-ops-service user-service integration-service notification-service >&2 || true
   return 1
 }
-ensure_gamma_filter_catalog_release() {
-  echo "[local-gamma] activating canonical FilterCatalogRelease"
-  PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/quwoquan_ops/cli/stackctl.py" \
-    --output-format json \
-    filter-catalog --target "$QWQ_LOCAL_RELEASE_TARGET" --action stage-and-activate
-}
 wait_local_gamma_host_ready
-ensure_gamma_filter_catalog_release
+echo "[local-gamma] FilterCatalog release is an explicit post-start release gate"
 
 
 
@@ -2014,6 +2207,8 @@ path = Path(report_path)
 path.parent.mkdir(parents=True, exist_ok=True)
 path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
+write_startup_attempt running
+STARTUP_ATTEMPT_RUNNING=1
 
 echo "[local-gamma] service mode: single-stack"
 echo "[local-gamma] mirror started"

@@ -10,6 +10,7 @@
     "releaseId": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
     "importRunId": {"type": "string", "minLength": 1},
+    "readinessPhase": {"enum": ["consumer", "commercial"]},
     "status": {"enum": ["completed", "dry_run", "prepared", "failed"]},
     "homepageVerificationCasesRef": {"type": "string"},
     "tagImportReportRef": {"type": "string"},

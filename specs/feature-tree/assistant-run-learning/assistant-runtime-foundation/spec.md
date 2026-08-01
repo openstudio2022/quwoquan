@@ -6,13 +6,13 @@
 
 ## 1. 能力目标
 
-承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
+承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- AssistantConversation/AssistantRun 对象 Store（state/receipt/outbox）与重启恢复语义
+- AssistantSession/AssistantRun 对象 Store（state/receipt/outbox）与重启恢复语义
 - SkillSubscription receipts/outbox 与 cron lease 领取
 - SkillConsent 版本化事实、执行点 fail-closed 门控与事件
 - 端侧对象级 Remote Facet、local_contract typed double 物理隔离、结构化错误单轨
@@ -26,28 +26,26 @@
 
 - [`JNY-007 / SCN-015`](../../spec.md#scn-015)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
+  - 本能力输出：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-017`](../../spec.md#scn-017)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
+  - 本能力输出：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-018`](../../spec.md#scn-018)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
+  - 本能力输出：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-019`](../../spec.md#scn-019)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
+  - 本能力输出：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 - [`JNY-009 / SCN-020`](../../spec.md#scn-020)
   - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
+  - 本能力输出：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
 
 ## 4. Story
-
-
 
 - [`assistant-object-runtime`](./assistant-object-runtime/spec.md)：服务重启后必须能按 owner 读取会话与运行；敏感操作在 consent 缺失、撤销或存储不可用时必须拒绝执行。
 
@@ -56,7 +54,7 @@
 <a id="req-001"></a>
 ### REQ-001 助手对象运行基座能力 SIT
 
-- conversation/run/turn 状态持久化于 MongoDB 对象 Store
+- `AssistantSession`/`AssistantRun`/`AssistantTurn` 状态持久化于 MongoDB 对象 Store
 - 服务重启后 run 可读、SSE resume 语义明确
 - 进程内业务状态 map 为零。
 - 创建类命令以稳定 intent + 唯一约束 + receipt 幂等
@@ -68,9 +66,10 @@
 - 对话/half sheet/技能中心/管理页消费真实 Facet；错误可见可恢复，任务/记忆具备 loading/empty/error/data 四态，无本地假开关、演示订阅载荷或悬空双写路径。
 
 <a id="req-002"></a>
-### REQ-002 conversation/turn 状态必须持久化于对象专属 Store（MongoDB `assistant_conversations`/`assistant_runs`），服务重启后 run 可读、SSE resume 语义明确
+### REQ-002 AssistantSession/AssistantTurn 状态必须持久化于对象专属 Store（MongoDB `assistant_sessions`/`assistant_runs`），服务重启后 run 可读、SSE resume 语义明确
 
-- conversation/turn 状态必须持久化于对象专属 Store（MongoDB `assistant_conversations`/`assistant_runs`），服务重启后 run 可读、SSE resume 语义明确；禁止进程内 map 承载业务状态。
+- `AssistantSession`/`AssistantTurn` 状态必须持久化于对象专属 Store（MongoDB `assistant_sessions`/`assistant_runs`），服务重启后 run 可读、SSE resume 语义明确；禁止进程内 map 承载业务状态。
+- Assistant 聚合 identity 只使用 `sessionId`；`X-Client-Session-Id` 代表 App 启动会话，只能归一化为内部审计字段 `clientSessionId`，不得与 `AssistantSession.sessionId` 混用。
 - 会话生命周期必须提供 owner 隔离的会话分页、终态轮次分页、Run 查询和取消命令；取消以 running → cancelled CAS 收口，重复取消对终态幂等。
 - 生产启动只能注入 MongoDB 会话/Run Store；内存 Store 仅允许在测试装配中使用。
 - cron/主动投递的领取必须用带 TTL 的 lease（`acquireDueLeases` 语义），禁止内存 claim；多实例可安全并发。
@@ -91,7 +90,7 @@
 
 - GIVEN 执行“助手对象运行基座能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“助手对象运行基座能力”对应动作。
-- THEN conversation/run/turn 状态持久化于 MongoDB 对象 Store
+- THEN `AssistantSession`/`AssistantRun`/`AssistantTurn` 状态持久化于 MongoDB 对象 Store
 - AND 服务重启后 run 可读、SSE resume 语义明确
 - AND 进程内业务状态 map 为零。
 - THEN 会话与终态轮次按 owner 隔离分页，Run 可查询与取消，重复取消不改写已有终态；新服务实例仍能从 MongoDB 读取取消结果。
@@ -117,11 +116,11 @@
 - 依赖：assistant metadata schema 与 app codegen。
 
 <a id="open-004"></a>
-### OPEN-004 assistant_run 聚合仍承载多类互不相关的能力，且已有 typed schema 的字段仍声明为裸 object
+### OPEN-004 assistant_run 聚合仍承载多类互不相关的能力
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：存在聚合归属错位与弱类型字段。`assistant/assistant_run/object.yaml` 的 description 正确判定"会话、订阅、授权与 AssistantLearningFact 均有独立生命周期，不属于 AssistantRun 聚合成员"，但操作面尚未全部跟上：现有 11 条路由仍横跨 run 生命周期、turn 列表、任务清单、入口个性化与页面上下文，其中 `ReportPageContext` 甚至在无 run 时调用。技能目录已由 `assistant.skill_catalog` 单轨拥有，`GetLearningOpsSummary`、`AssistantLearningOpsSummaryView` 及其 HTTP/application/model 已由 `assistant_learning_fact` 单轨拥有，二者均不再属于本 OPEN；仍错位的有 `AssistantConversationGrounding*`（属 conversation）与 `AssistantIntersectionEvidenceRef`（属 recommendation）。当前 `fields.yaml` 仍约 2600 行，主要花在 40 余个嵌套 view 上，而聚合核心执行状态反而无契约——根上仍有 14 个字段声明为裸 `object`/`[]object`（`subagentPlan`、`aggregationState`、`skillRuns`、`journey`、`contextSnapshot`、`decision` 等），同时 `assistant-service/contracts/_shared/` 存在对应 typed schema（`subagent_plan`、`aggregation_state`、`skill_run`、`assistant_journey`、`context_assembly_result`、`planner_contracts`）。`assistant_turn_view` 对象仍无 `operations.yaml`，端上取 turn 继续走 run 路由，而它的投影定义比 run 内嵌的 `AssistantTurnSummaryView` 更弱。
-- 完成判定：14 个裸 object 字段逐一改为引用已有 `_shared` schema，确无稳定结构者登记为 OPEN 而非留在契约里当 object；继续把 turn/task/入口态/检索门面拆出聚合，`assistant_turn_view` 补齐 operations 并成为 turn 的唯一读侧。`verify_metadata` 断言 `kind: aggregate_root` 的根字段不得为裸 `object`/`[]object`，存量 allowlist 只减不增。
+- 影响或价值：尚缺 task、page context、entry personalization、creation assistance 与 search facade 的独立对象、source/store 和三层验收归属，这些能力仍混在 `assistant_session` 编排服务，且 `ReportPageContext` 在无 run 时也会调用。`assistant_turn_view` 已拥有独立 operations、HTTP Route、QueryFacade、Mongo Reader 与响应 Slice，`AssistantSession` 聚合服务和 `SessionRunStore` 已删除 turn 列表能力，local_contract 与真实 Mongo/Redis/Postgres API integration 已通过，但候选绑定的四环境 Remote UAT、SLI/SLO 与回滚证据尚缺。聚合根裸对象硬门已经建立，旧 `assistant_run` 根上 14 个未进入真实 Mongo `AssistantTurn` 的万能 payload 字段已删除。技能目录已由 `assistant.skill_catalog` 单轨拥有，`GetLearningOpsSummary` 与 `AssistantLearningOpsSummaryView` 已由 `assistant_learning_fact` 单轨拥有。
+- 完成判定：把 task、入口态与检索门面拆出聚合。`assistant_turn_view` 持续作为 turn 唯一读侧，每个拆出对象都具有独立 contract、application facade、source/store 归属与三层证据。`verify_metadata` 持续断言 `kind: aggregate_root` 的根字段不得为裸 `object`/`[]object`，临时 Post allowlist 只减不增且清零后删除。
 - 依赖：`quwoquan_service/tools/verify_metadata`。

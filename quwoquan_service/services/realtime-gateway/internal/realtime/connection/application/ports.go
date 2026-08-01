@@ -96,6 +96,23 @@ type EventSource interface {
 	) (runtimemessaging.EphemeralSubscription, error)
 }
 
+type ResumableEvent struct {
+	Cursor  string
+	Payload []byte
+}
+
+// ResumableEventReader gives every authenticated account/device an independent
+// cursor over the short-lived realtime stream. It does not ACK globally.
+type ResumableEventReader interface {
+	ReadAfter(
+		ctx context.Context,
+		identity TrustedIdentity,
+		cursor string,
+		count int64,
+		block time.Duration,
+	) ([]ResumableEvent, error)
+}
+
 // AccountSecurityEvent 是 UserAccountClosed、UserSuspended、UserRestored 在
 // realtime-gateway 内部的最小安全终态投影。它不复制上游 payload；只携带会话
 // 清理、admission fencing 和跨节点踢出所需字段。

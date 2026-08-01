@@ -15,11 +15,13 @@ func TestFrameJankOutcomeAcceptsZeroJankyFramesAndRejectsNegativeValues(t *testi
 	occurredAt := time.Now().UTC().Add(-time.Minute)
 	event := validEvent("app_frame_jank_outcome", "event", occurredAt)
 	sampledFrames, jankyFrames := 120, 0
-	worstFrameMS, jankThresholdMS := 16, 50
+	worstFrameMS, worstBuildFrameMS, worstRasterFrameMS, jankThresholdMS := 16, 7, 5, 50
 	result := "ok"
 	event.SampledFrames = &sampledFrames
 	event.JankyFrames = &jankyFrames
 	event.WorstFrameMS = &worstFrameMS
+	event.WorstBuildFrameMS = &worstBuildFrameMS
+	event.WorstRasterFrameMS = &worstRasterFrameMS
 	event.JankThresholdMS = &jankThresholdMS
 	event.Result = &result
 

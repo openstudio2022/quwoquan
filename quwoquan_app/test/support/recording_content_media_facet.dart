@@ -212,7 +212,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       assetId: query.mediaId,
       version: 1,
       mediaType: upload.mediaType,
-      contentType: upload.contentType,
+      mimeType: upload.mimeType,
       fileSize: upload.fileSize,
       status: completedAssetStatus,
       accessPolicy: ContentMediaAccessPolicy.ownerOnly,
@@ -254,7 +254,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       version: assetId == null ? 1 : 2,
       assetId: assetId,
       mediaType: upload.mediaType,
-      contentType: upload.contentType,
+      mimeType: upload.mimeType,
       fileSize: upload.fileSize,
       status: _abortedSessions.contains(query.sessionId)
           ? ContentMediaUploadStatus.aborted

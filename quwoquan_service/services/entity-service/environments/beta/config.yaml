@@ -1,5 +1,6 @@
 overrides:
-  sys.entity-service.redis.rec.addr: 127.0.0.1:6379
+  sys.entity-service.redis.rec.addr: redis:6379
+  sys.entity-service.user_account_security_authority.base_url: http://user-service:18081
 secretRefs:
   sys.entity-service.mongo.uri: ENTITY_MONGO_URI
   sys.entity-service.redis.general.password: ENTITY_REDIS_PASSWORD

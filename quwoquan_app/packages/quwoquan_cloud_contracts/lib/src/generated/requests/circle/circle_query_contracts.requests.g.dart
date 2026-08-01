@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../circle/circle_query_contracts.dart';
 
@@ -9,6 +9,10 @@ final class CircleDetailQuery {
   }) : circleId = circleId;
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class CircleDiscoveryFeedQuery {
@@ -32,6 +36,15 @@ final class CircleDiscoveryFeedQuery {
   final String? cursor;
   final int limit;
   final String sort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.category != null) "category": this.category!,
+    if (this.subCategory != null) "subCategory": this.subCategory!,
+    "scope": switch (this.scope) { CircleDiscoveryFeedScope.recommended => "recommended", CircleDiscoveryFeedScope.mine => "mine", },
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    "sort": this.sort,
+  };
 }
 
 final class CircleFeedQuery {
@@ -55,6 +68,15 @@ final class CircleFeedQuery {
   final String? cursor;
   final int limit;
   final String sort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.identity != null) "identity": this.identity!,
+    if (this.type != null) "type": this.type!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    "sort": this.sort,
+  };
 }
 
 final class CircleImpactQuery {
@@ -63,6 +85,10 @@ final class CircleImpactQuery {
   }) : circleId = circleId;
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class CircleListQuery {
@@ -86,6 +112,15 @@ final class CircleListQuery {
   final String? cursor;
   final int limit;
   final String? sort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.category != null) "category": this.category!,
+    if (this.domainId != null) "domainId": this.domainId!,
+    if (this.recommendFor != null) "recommendFor": this.recommendFor!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    if (this.sort != null) "sort": this.sort!,
+  };
 }
 
 final class CircleSearchQuery {
@@ -106,6 +141,14 @@ final class CircleSearchQuery {
   final String? subCategory;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "query": this.query,
+    if (this.categoryId != null) "categoryId": this.categoryId!,
+    if (this.subCategory != null) "subCategory": this.subCategory!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class CircleStatsQuery {
@@ -114,6 +157,10 @@ final class CircleStatsQuery {
   }) : circleId = circleId;
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 CloudOperationRequestPayload encodeCircleCircleGetCircleGeneratedRequest(CircleDetailQuery request) {

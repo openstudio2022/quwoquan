@@ -1,5 +1,5 @@
 kind: projection
-description: PresenceView 的领域对象契约。
+description: 可信 Connection 生命周期事件构建的 persona-device 在线状态视图；只表达当前可达性，不拥有账号或会话事实。
 identity:
   fields:
   - personaId
@@ -39,3 +39,12 @@ relationships:
   on_delete: detach
 local_identity_reasons:
   nodeId: ephemeral realtime topology node key with no authoritative business-object lifecycle
+business_rules:
+- 只消费已认证 Connection opened、heartbeat 与 closed 事件，客户端 presence 消息不得直接写视图。
+- 同一 personaId 与 deviceId 仅保留最新 connection epoch，旧节点事件不得覆盖新连接。
+- 断开、TTL 超时或账号关闭必须删除在线状态并保留 projector checkpoint。
+lifecycle:
+  source_events: [ConnectionOpened, ConnectionHeartbeatObserved, ConnectionClosed, UserAccountClosed]
+  checkpoint: realtime_connection_event_sequence
+  rebuild: replay_connection_journal_with_current_ttl_boundary
+  tombstone: delete_presence_keep_checkpoint

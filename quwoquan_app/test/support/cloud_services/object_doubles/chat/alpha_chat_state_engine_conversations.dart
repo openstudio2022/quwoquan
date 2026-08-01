@@ -135,6 +135,7 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
       'maxGroupSize': resolvedMaxGroupSize,
       'receiptEnabled': true,
       'lastMessagePreview': '',
+      'lastMessageType': 'text',
       'lastMessageTime': now,
       'messageCount': 0,
       'status': 'active',
@@ -385,6 +386,10 @@ ChatFixtureObject _conversationWire(ChatFixtureObject conversation) {
     if (_text(conversation['lastMessageId']).isNotEmpty)
       'lastMessageId': _text(conversation['lastMessageId']),
     'lastMessagePreview': _text(conversation['lastMessagePreview']),
+    'lastMessageType': _firstText(<Object?>[
+      conversation['lastMessageType'],
+      'text',
+    ]),
     if (_text(conversation['lastMessageTime']).isNotEmpty)
       'lastMessageTime': _text(conversation['lastMessageTime']),
     'messageCount': _int(conversation['messageCount']),

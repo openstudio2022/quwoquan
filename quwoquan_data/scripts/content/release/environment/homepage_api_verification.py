@@ -155,11 +155,13 @@ def write_homepage_api_verification(
     case_manifest_path: Path,
     output_path: Path,
     api_base_url: str,
+    ssl_cafile: str = "",
 ) -> Path:
     """Call one environment homepage API and write schema-validated evidence."""
     try:
         client = PublicApiClient(
             base_url=api_base_url,
+            ssl_cafile=ssl_cafile,
         )
     except PublicApiClientError as exc:
         raise HomepageApiVerificationError(str(exc)) from exc

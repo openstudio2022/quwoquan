@@ -56,6 +56,10 @@ type Client interface {
 	// ── Streams ─────────────────────────────────────────────
 	XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) error
 	XAdd(ctx context.Context, stream string, values map[string]string) (string, error)
+	// XRead reads immutable stream entries strictly after each supplied cursor.
+	// It is the cursor/resume primitive; consumer-group ownership and ACK
+	// semantics remain isolated in XReadGroup.
+	XRead(ctx context.Context, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
 	XReadGroup(ctx context.Context, group string, consumer string, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
 	XAck(ctx context.Context, stream string, group string, ids ...string) error
 	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]StreamMessage, string, error)

@@ -13,6 +13,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	greetingapplication "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
+	greetingmodel "quwoquan_service/services/user-service/internal/relationship/greeting_request/domain/model"
 )
 
 type ChatServiceClient struct {
@@ -46,7 +47,7 @@ func NewAuthorizedChatServiceClient(
 }
 
 func (c *ChatServiceClient) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (string, error) {
-	return c.createDirect(ctx, creatorID, peerID, "", "")
+	return c.createDirect(ctx, creatorID, peerID, "", "", nil)
 }
 
 // PromoteGreetingToDirect 是打招呼被回复后的升级调用：除会话本身，还把破冰来源
@@ -63,12 +64,14 @@ func (c *ChatServiceClient) PromoteGreetingToDirect(
 		requesterID,
 		promotion.GreetingRequestID,
 		promotion.OpeningMessage,
+		promotion.Intersection,
 	)
 }
 
 func (c *ChatServiceClient) createDirect(
 	ctx context.Context,
 	creatorID, peerID, greetingRequestID, openingMessage string,
+	intersection *greetingmodel.GreetingIntersectionSnapshot,
 ) (string, error) {
 	if c == nil || c.baseURL == "" {
 		return "", fmt.Errorf("chat service client unavailable")
@@ -80,6 +83,9 @@ func (c *ChatServiceClient) createDirect(
 	if strings.TrimSpace(greetingRequestID) != "" {
 		payload["greetingRequestId"] = greetingRequestID
 		payload["openingMessage"] = openingMessage
+		if intersection != nil {
+			payload["intersectionSnapshot"] = intersection
+		}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

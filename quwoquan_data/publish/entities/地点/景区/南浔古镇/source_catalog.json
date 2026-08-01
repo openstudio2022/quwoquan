@@ -1,0 +1,52 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/南浔古镇__toutiao_baike__801a42df/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "南浔古镇__toutiao_baike__801a42df",
+    "entityName": "南浔古镇",
+    "sourceKind": "toutiao_baike",
+    "extractor": "toutiao_baike_html",
+    "canonicalUrl": "https://www.baike.com/wikiid/7235892285282533416",
+    "sourceUrl": "https://www.baike.com/wikiid/7235892285282533416",
+    "title": "南浔古镇",
+    "fetchedAt": "2026-07-31T02:03:33Z",
+    "snapshotHash": "sha256:9cecef3495db3ab78d0faa487dbdb313f459014910ab261c6203bc363021982e",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/南浔古镇__toutiao_baike__801a42df/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "南浔古镇__toutiao_baike__801a42df",
+      "entityName": "南浔古镇",
+      "sourceKind": "toutiao_baike",
+      "extractor": "toutiao_baike_html",
+      "canonicalUrl": "https://www.baike.com/wikiid/7235892285282533416",
+      "sourceUrl": "https://www.baike.com/wikiid/7235892285282533416",
+      "title": "南浔古镇",
+      "fetchedAt": "2026-07-31T02:03:33Z",
+      "snapshotHash": "sha256:9cecef3495db3ab78d0faa487dbdb313f459014910ab261c6203bc363021982e",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/南浔古镇__toutiao_baike__801a42df/meta.json"
+    },
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "南浔古镇__image_collection__4c8b5639",
+      "entityName": "南浔古镇",
+      "sourceKind": "image_collection",
+      "extractor": "",
+      "canonicalUrl": "https://commons.wikimedia.org/wiki/File:%E5%8D%97%E6%B5%94%E5%88%98%E6%B0%8F%E6%A2%AF%E5%8F%B7%E6%B8%85%E9%86%92%E4%B9%A6%E5%B1%8B,_2022-09-12.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%E5%8D%97%E6%B5%94%E5%88%98%E6%B0%8F%E6%A2%AF%E5%8F%B7%E6%B8%85%E9%86%92%E4%B9%A6%E5%B1%8B,_2022-09-12.jpg",
+      "title": "南浔古镇",
+      "fetchedAt": "2026-07-31T02:03:36Z",
+      "snapshotHash": "sha256:19a23760baef3b510d698119cf4c45d1ae380268d7530153be211262036041e2",
+      "policyRevision": "",
+      "sourceUseMode": "licensed_adaptation",
+      "evidenceRef": "evidence/sources/南浔古镇__image_collection__4c8b5639/meta.json"
+    }
+  ]
+}

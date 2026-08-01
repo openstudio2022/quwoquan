@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"

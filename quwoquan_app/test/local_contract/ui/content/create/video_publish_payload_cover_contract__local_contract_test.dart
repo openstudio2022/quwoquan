@@ -43,7 +43,7 @@ void main() {
               uri,
               bytes, {
               required contentLength,
-              required contentType,
+              required mimeType,
               required expectedSha256,
               abortTrigger,
             }) async {
@@ -51,7 +51,7 @@ void main() {
                   .expand((chunk) => chunk)
                   .toList();
               expect(uploadedBytes.length, contentLength);
-              uploads.add(_UploadCall(uri, uploadedBytes, contentType));
+              uploads.add(_UploadCall(uri, uploadedBytes, mimeType));
             },
       );
 
@@ -59,7 +59,7 @@ void main() {
         media.initCommands.map((command) => command.mediaType),
         <ContentMediaType>[ContentMediaType.video, ContentMediaType.image],
       );
-      expect(uploads.map((call) => call.contentType).toList(), <String>[
+      expect(uploads.map((call) => call.mimeType).toList(), <String>[
         'video/mp4',
         'image/jpeg',
       ]);
@@ -148,11 +148,11 @@ void main() {
                 uri,
                 bytes, {
                 required contentLength,
-                required contentType,
+                required mimeType,
                 required expectedSha256,
                 abortTrigger,
               }) async {
-                if (contentType == 'image/jpeg') {
+                if (mimeType == 'image/jpeg') {
                   throw StateError('cover upload failed');
                 }
                 await bytes.drain<void>();
@@ -168,11 +168,11 @@ void main() {
 }
 
 class _UploadCall {
-  const _UploadCall(this.uri, this.bytes, this.contentType);
+  const _UploadCall(this.uri, this.bytes, this.mimeType);
 
   final Uri uri;
   final List<int> bytes;
-  final String contentType;
+  final String mimeType;
 }
 
 class _MemoryContentMediaSourceReader implements ContentMediaSourceReader {

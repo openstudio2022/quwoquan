@@ -1,0 +1,5 @@
+description: RecommendationFeatureProfileView 仅通过对象 Reader 供排序与训练快照读取。
+api_routes: []
+consumers:
+- {name: recommendation-ranking, capabilities: [read_subject_features, read_candidate_features, read_intersection_features]}
+- {name: recommendation-model-training, capabilities: [read_training_feature_snapshots]}

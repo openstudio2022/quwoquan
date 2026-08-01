@@ -29,9 +29,9 @@
 - 小趣被移除后新 mention 不再发布事件；AssistantRemoved 生效。
 
 <a id="req-002"></a>
-### REQ-002 个人助手全屏会话（AssistantConversation）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation
+### REQ-002 个人助手全屏会话（AssistantSession）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation
 
-- 个人助手全屏会话（AssistantConversation）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation。
+- 个人助手全屏会话（AssistantSession）与会话内 @小趣 共享助手 runtime，不得把个人助手会话伪装成 chat Conversation。
 
 ## 4. 契约引用
 
@@ -54,12 +54,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 会话内 @小趣 事件链
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：小趣被移除后新 mention 不再发布事件；AssistantRemoved 生效。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 无。

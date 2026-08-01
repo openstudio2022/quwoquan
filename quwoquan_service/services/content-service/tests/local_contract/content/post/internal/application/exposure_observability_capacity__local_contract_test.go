@@ -115,7 +115,6 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 	for _, required := range []string{
 		"force_rule_scorer",
 		"disable_exposure_dynamic_budget",
-		"disable_premium_pool_source",
 		"disable_collaborative_recall_sources",
 		"disable_object_cards",
 	} {

@@ -500,10 +500,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       context,
       clearLocalCredential
           ? FoundationText.loginHardLogoutToast
-          : FoundationText.loginSoftLogoutToast.replaceFirst(
-              '{days}',
-              '$days',
-            ),
+          : FoundationText.loginSoftLogoutToast.replaceFirst('{days}', '$days'),
     );
     if (!navigateToLogin) {
       return;

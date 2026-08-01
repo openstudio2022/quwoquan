@@ -362,7 +362,6 @@ void main() {
                 actionKey: 'open_object',
                 label: '查看对象',
                 dispatch: 'navigate',
-                targetAvailability: 'available',
                 target: IntersectionTarget(
                   objectType: 'homepage',
                   objectId: 'entity_1',
@@ -387,89 +386,27 @@ void main() {
       expect(tapped?.actionKey, 'open_object');
     });
 
-    testWidgets(
-      'navigate+login 门行动显示为可执行入口（门交承接页）；deferred/connect 无真实 handler 不显示',
-      (tester) async {
-        final card = ObjectIntersectionCard.fromReasons(
-          title: ObjectHomepageText.objectMyIntersectionsTitle,
-          reasons: <IntersectionReason>[
-            _reason(
-              id: 'ix_dead_actions',
-              primaryText: '联系人林清越赞过《川西雪山和校园摄影路线》',
-              connectionSummary: '有可查看的共同证据',
-              actionHints: <IntersectionActionHint>[
-                IntersectionActionHint(
-                  actionKey: 'follow_person',
-                  label: '关注TA',
-                  dispatch: 'navigate',
-                  requiredGates: const <String>['login'],
-                  targetAvailability: 'available',
-                  target: IntersectionTarget(
-                    objectType: 'user',
-                    objectId: 'u1',
-                    objectKind: 'person',
-                    routeId: 'userProfile',
-                  ),
-                  isPrimary: true,
-                ),
-                IntersectionActionHint(
-                  actionKey: 'join_gathering',
-                  label: '加入同行',
-                  dispatch: 'gathering',
-                  targetAvailability: 'deferred',
-                  target: IntersectionTarget(
-                    objectId: 'trip_1',
-                    objectKind: 'gathering',
-                  ),
-                ),
-                IntersectionActionHint(
-                  actionKey: 'join_topic_room',
-                  label: '进语音房',
-                  dispatch: 'connect',
-                  targetAvailability: 'available',
-                ),
-              ],
-            ),
-          ],
-          isDark: false,
-        );
-
-        await tester.pumpWidget(CupertinoApp(home: card!));
-
-        // 关注带 login 门但 dispatch=navigate：登录门交承接页 + AuthContinuation 续接
-        // （§15），交集卡必须保留关注入口（不因 login 门隐藏，否则登录用户也看不到入口）；
-        // 行动优先取代安静副句（auxiliaryLine：行动 pill > 副句）。
-        expect(find.text('关注TA'), findsOneWidget);
-        // deferred（能力尚未上线）/ connect（无真实卡内 handler）保持诚实不渲染成死 pill。
-        expect(find.text('加入同行'), findsNothing);
-        expect(find.text('进语音房'), findsNothing);
-      },
-    );
-
-    testWidgets('无任何可执行行动（仅 deferred/connect）→ 回落安静共同证据副句', (tester) async {
+    testWidgets('navigate+login 门行动显示为可执行入口（门交承接页）', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
         title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
-            id: 'ix_summary_fallback',
+            id: 'ix_dead_actions',
             primaryText: '联系人林清越赞过《川西雪山和校园摄影路线》',
             connectionSummary: '有可查看的共同证据',
             actionHints: <IntersectionActionHint>[
               IntersectionActionHint(
-                actionKey: 'join_gathering',
-                label: '加入同行',
-                dispatch: 'gathering',
-                targetAvailability: 'deferred',
+                actionKey: 'follow_person',
+                label: '关注TA',
+                dispatch: 'navigate',
+                requiredGates: const <String>['login'],
                 target: IntersectionTarget(
-                  objectId: 'trip_1',
-                  objectKind: 'gathering',
+                  objectType: 'user',
+                  objectId: 'u1',
+                  objectKind: 'person',
+                  routeId: 'userProfile',
                 ),
-              ),
-              IntersectionActionHint(
-                actionKey: 'join_topic_room',
-                label: '进语音房',
-                dispatch: 'connect',
-                targetAvailability: 'available',
+                isPrimary: true,
               ),
             ],
           ),
@@ -479,8 +416,28 @@ void main() {
 
       await tester.pumpWidget(CupertinoApp(home: card!));
 
-      expect(find.text('加入同行'), findsNothing);
-      expect(find.text('进语音房'), findsNothing);
+      // 关注带 login 门但 dispatch=navigate：登录门交承接页 + AuthContinuation 续接
+      // （§15），交集卡必须保留关注入口（不因 login 门隐藏，否则登录用户也看不到入口）；
+      // 行动优先取代安静副句（auxiliaryLine：行动 pill > 副句）。
+      expect(find.text('关注TA'), findsOneWidget);
+    });
+
+    testWidgets('无行动 → 回落安静共同证据副句', (tester) async {
+      final card = ObjectIntersectionCard.fromReasons(
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
+        reasons: <IntersectionReason>[
+          _reason(
+            id: 'ix_summary_fallback',
+            primaryText: '联系人林清越赞过《川西雪山和校园摄影路线》',
+            connectionSummary: '有可查看的共同证据',
+            actionHints: const <IntersectionActionHint>[],
+          ),
+        ],
+        isDark: false,
+      );
+
+      await tester.pumpWidget(CupertinoApp(home: card!));
+
       // 无可执行行动 → auxiliaryLine 回落安静共同证据副句（不留空、不造死 pill）。
       expect(find.text('有可查看的共同证据'), findsOneWidget);
     });

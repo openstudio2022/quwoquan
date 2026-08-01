@@ -82,27 +82,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: []
-- key: sys.search-service.ranking.experiment.controlWeightPct
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 50
-- key: sys.search-service.ranking.experiment.enabled
-  type: bool
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: true
-- key: sys.search-service.ranking.experiment.termHeatWeightPct
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 50
 - key: sys.search-service.ranking.termHeatBoost
   type: float
   scope: workload

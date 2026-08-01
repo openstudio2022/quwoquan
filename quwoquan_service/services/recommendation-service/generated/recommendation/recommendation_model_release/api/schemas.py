@@ -3,6 +3,9 @@
 """Re-export request/response models for API use."""
 
 from ..models.request_response import (
+    StageRecommendationModelReleaseCommand,
+    ActivateRecommendationModelReleaseCommand,
+    RecommendationModelReleaseCommandResult,
     CandidateInput,
     CandidateScore,
     ModelScoreRequest,
@@ -12,6 +15,9 @@ from ..models.request_response import (
 )
 
 __all__ = [
+    "StageRecommendationModelReleaseCommand",
+    "ActivateRecommendationModelReleaseCommand",
+    "RecommendationModelReleaseCommandResult",
     "CandidateInput",
     "CandidateScore",
     "ModelScoreRequest",

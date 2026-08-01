@@ -1,7 +1,7 @@
 overrides:
   sys.realtime-gateway.redis.realtime.mode: memory
   sys.realtime-gateway.redis.realtime.addr: ''
-  sys.realtime-gateway.user_service.account_security.base_url: http://127.0.0.1:18081
+  sys.realtime-gateway.user_service.account_security.base_url: http://user-service:18081
   sys.realtime-gateway.user_service.account_security.timeout_ms: 500
 secretRefs: {}
 externalBindings:

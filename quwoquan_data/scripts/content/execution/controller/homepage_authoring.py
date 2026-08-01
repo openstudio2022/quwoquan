@@ -173,10 +173,16 @@ def _homepage_pending_entities(ctx: ExecutionContext) -> list[str]:
     Managed retries must not re-run already accepted homepage triplets; otherwise
     a single slow/failed Cursor job can multiply token cost and overwrite stable
     evidence. The validator remains the source of truth, not Agent self-report.
+
+    Homepage-only oversample absorption projects an auditable ready delivery
+    scope via ``homepage_runtime_spec``; pending author work must consume that
+    same scope so discarded ineligible tails never re-enter build_homepage.
     """
+    from content.homepage.homepage import homepage_runtime_spec
     from content.homepage.homepage_release_validation import validate_entity_page
+    runtime_spec = homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     pending: list[str] = []
-    for target in ((_active_spec(ctx).get("scope") or {}).get("coverageTargets") or []):
+    for target in ((runtime_spec.get("scope") or {}).get("coverageTargets") or []):
         name = str(target.get("name") or "").strip()
         if not name:
             continue
@@ -204,8 +210,13 @@ def _content_plan_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
         # 防止历史 agent 误写的 packet/briefs 把 post 车道当文章推进。
         _clean_content_plan_outputs(ctx)
         return True, []
+    from content.execution.source_ready_scope import source_ready_runtime_spec
+
     _prune_content_plan_extra_briefs(ctx)
-    issues = validate_content_plan(ctx.execution_id, _active_spec(ctx))
+    issues = validate_content_plan(
+        ctx.execution_id,
+        source_ready_runtime_spec(ctx.execution_id, _active_spec(ctx)),
+    )
     return (not issues), issues
 
 def _prune_content_plan_extra_briefs(ctx: ExecutionContext) -> list[str]:
@@ -278,7 +289,11 @@ def _drafts_authored(ctx: ExecutionContext) -> tuple[bool, list[str]]:
         state.last_object_queue_author_finalize_count = object_queue_finalized
         save_execution_state(state)
     pending: list[str] = []
+    from content.execution.controller.stage_post_compose import compose_brief_absorbed_path
+
     for ref in active_refs:
+        if compose_brief_absorbed_path(ctx.execution_id, ref).is_file():
+            continue
         try:
             pack = read_writing_pack(ctx.execution_id, ref) or {}
         except KeyError:

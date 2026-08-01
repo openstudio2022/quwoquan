@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../entity/homepage_commands.dart';
 
@@ -54,6 +54,16 @@ final class CreateHomepageClaimRequestCommand {
   final String? identityCardFrontUrl;
   final String? identityCardBackUrl;
   final String? note;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    "claimTier": this.claimTier,
+    if (this.businessLicenseUrl != null) "businessLicenseUrl": this.businessLicenseUrl!,
+    if (this.contactPhone != null) "contactPhone": this.contactPhone!,
+    if (this.identityCardFrontUrl != null) "identityCardFrontUrl": this.identityCardFrontUrl!,
+    if (this.identityCardBackUrl != null) "identityCardBackUrl": this.identityCardBackUrl!,
+    if (this.note != null) "note": this.note!,
+  };
 }
 
 final class CreateHomepageStatusReportCommand {
@@ -78,6 +88,13 @@ final class CreateHomepageStatusReportCommand {
   final String reason;
   final String? description;
   final List<String> evidenceUrls;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    "reason": this.reason,
+    if (this.description != null) "description": this.description!,
+    if (this.evidenceUrls.isNotEmpty) "evidenceUrls": this.evidenceUrls.map((value) => value).toList(growable: false),
+  };
 }
 
 final class SuggestHomepageCandidateCommand {
@@ -117,6 +134,18 @@ final class SuggestHomepageCandidateCommand {
   final String? city;
   final String? sourcePlaceId;
   final HomepageGeoPointInput? location;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "title": this.title,
+    "homepageType": this.homepageType,
+    if (this.subtitle != null) "subtitle": this.subtitle!,
+    if (this.categoryTags.isNotEmpty) "categoryTags": this.categoryTags.map((value) => value).toList(growable: false),
+    if (this.coverUrl != null) "coverUrl": this.coverUrl!,
+    if (this.address != null) "address": this.address!,
+    if (this.city != null) "city": this.city!,
+    if (this.sourcePlaceId != null) "sourcePlaceId": this.sourcePlaceId!,
+    if (this.location != null) "location": <String, Object?>{'lat': this.location!.lat, 'lng': this.location!.lng},
+  };
 }
 
 final class UpdateClaimedHomepageBasicsCommand {
@@ -150,6 +179,17 @@ final class UpdateClaimedHomepageBasicsCommand {
   final String? address;
   final String? city;
   final HomepageGeoPointInput? location;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    if (this.title != null) "title": this.title!,
+    if (this.subtitle != null) "subtitle": this.subtitle!,
+    if (this.categoryTags != null) "categoryTags": this.categoryTags!.map((value) => value).toList(growable: false),
+    if (this.coverUrl != null) "coverUrl": this.coverUrl!,
+    if (this.address != null) "address": this.address!,
+    if (this.city != null) "city": this.city!,
+    if (this.location != null) "location": <String, Object?>{'lat': this.location!.lat, 'lng': this.location!.lng},
+  };
 }
 
 CloudOperationRequestPayload encodeEntityHomepageSuggestHomepageCandidateGeneratedRequest(SuggestHomepageCandidateCommand request) {

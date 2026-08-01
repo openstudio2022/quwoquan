@@ -1,0 +1,20 @@
+read_model: ChatMessageCardObjectRefClient
+description: 可行动消息卡的 canonical 对象引用。
+client_projection:
+  dart_class: ChatMessageCardObjectRefDto
+  base_class: ''
+  output_path: cloud/runtime/generated/chat/chat_message_card_object_ref_dto.g.dart
+  strict: true
+  fields:
+  - name: objectTypeRef
+    dart_type: String
+    nullable: false
+    source: objectTypeRef
+  - name: objectId
+    dart_type: String
+    nullable: false
+    source: objectId
+  - name: routeId
+    dart_type: String
+    nullable: false
+    source: routeId

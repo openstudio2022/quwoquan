@@ -128,7 +128,7 @@ func TestLoadPostsFull(t *testing.T) {
 	if p.AuthorID != "builtin_travel_blogger" || p.CreatorProfileID != "qwq_creator_travel_blogger_001" {
 		t.Fatalf("creator projection not loaded: %+v", p)
 	}
-	if p.CreatorDisclosure["visible"] != true || p.ExperienceClaimMode != "editorial_synthesis" {
+	if !p.CreatorDisclosure.Visible || p.ExperienceClaimMode != "editorial_synthesis" {
 		t.Fatalf("creator boundary fields not loaded: %+v", p)
 	}
 	if p.CreatedAt.Year() != 2026 || p.CreatedAt.Month() != 5 || p.CreatedAt.Day() != 1 {
@@ -208,12 +208,9 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 	if len(posts) != 1 {
 		t.Fatalf("want one video post, got %d", len(posts))
 	}
-	attribution, ok := posts[0].SourceAttribution.(map[string]any)
-	if !ok {
-		t.Fatalf("sourceAttribution not preserved: %#v", posts[0].SourceAttribution)
-	}
-	if attribution["originalCreatorName"] != "Liuxingy" ||
-		attribution["publicationAdmission"] != "commercial_release" {
+	attribution := posts[0].SourceAttribution
+	if attribution.OriginalCreatorName != "Liuxingy" ||
+		attribution.PublicationAdmission != "commercial_release" {
 		t.Fatalf("sourceAttribution drifted: %#v", attribution)
 	}
 }
@@ -234,7 +231,10 @@ func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
 		if binding.PostRef == "" || binding.PostID == "" || binding.ContentType == "" || binding.AuthorID == "" {
 			t.Fatalf("binding %d is incomplete: %+v", index, binding)
 		}
-		if binding.PostID != RuntimePostID(binding.PostRef) {
+		if strings.HasPrefix(binding.PostRef, "posts/") {
+			t.Fatalf("binding %d must emit object-relative postRef without posts/ prefix: %+v", index, binding)
+		}
+		if binding.PostID != RuntimePostID("posts/"+binding.PostRef) {
 			t.Fatalf("binding %d runtime identity drift: %+v", index, binding)
 		}
 		if index > 0 && bindings[index-1].PostRef >= binding.PostRef {
@@ -987,6 +987,36 @@ func TestLoadPostsRejectsSystemCreatorWithoutDisclosure(t *testing.T) {
 	}`)
 	if _, err := LoadPosts(root, nil); err == nil {
 		t.Fatal("expected missing creatorDisclosure rejection")
+	}
+}
+
+func TestLoadPostsAcceptsCreatorProfileDigestAsVersionBinding(t *testing.T) {
+	root := t.TempDir()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	writeFile(t, filepath.Join(root, "posts/article/攻略/digest绑定/1/manifest.json"), `{
+		"contentType":"article",
+		"authorId":"builtin_travel_geo_editor",
+		"creatorProfileId":"qwq_creator_geo_editor_001",
+		"creatorArchetype":"geo_editor",
+		"creatorProfileDigest":"`+digest+`",
+		"creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},
+		"experienceClaimMode":"editorial_synthesis",
+		"entityRefs":[],
+		"tagRefs":[],
+		"publishTitle":"digest绑定",
+		"publishAngle":"攻略",
+		"publishSeq":1,
+		"publishedAt":"2026-07-31T00:00:00Z"
+	}`)
+	docs, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatalf("LoadPosts: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("docs=%d", len(docs))
+	}
+	if docs[0].CreatorProfileVersion != digest {
+		t.Fatalf("CreatorProfileVersion=%q want digest binding", docs[0].CreatorProfileVersion)
 	}
 }
 

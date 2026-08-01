@@ -247,7 +247,7 @@ func TestApplyOperationPaginationContractAddsOneCanonicalLimitBoundary(
 
 func TestApplyOperationPaginationContractOwnsNumericClientDefault(t *testing.T) {
 	model, err := applyOperationPaginationContract(
-		"search.search_query.ListHotQueries",
+		"search.search_request_fact.ListHotQueries",
 		requestModelSpec{
 			Name:   "ListHotQueriesQuery",
 			Fields: []fieldDef{{Name: "limit", Type: "int"}},
@@ -265,7 +265,7 @@ func TestApplyOperationPaginationContractOwnsNumericClientDefault(t *testing.T) 
 	}
 
 	_, err = applyOperationPaginationContract(
-		"search.search_query.ListHotQueries",
+		"search.search_request_fact.ListHotQueries",
 		requestModelSpec{
 			Name: "ListHotQueriesQuery",
 			Fields: []fieldDef{{
@@ -872,7 +872,7 @@ func TestAcceptedAppRequestTypedEnumsAreCanonicalSingleTrack(t *testing.T) {
 		if operation.ClientContract == nil {
 			continue
 		}
-		model, err := loadOperationRequestModel(
+		model, _, err := loadOperationRequestModel(
 			operation,
 			strings.TrimSpace(operation.RequestEntity),
 		)
@@ -922,7 +922,7 @@ func TestAcceptedAppRequestDefaultsAreConsistent(t *testing.T) {
 		if operation.ClientContract == nil {
 			continue
 		}
-		model, err := loadOperationRequestModel(
+		model, _, err := loadOperationRequestModel(
 			operation,
 			strings.TrimSpace(operation.RequestEntity),
 		)

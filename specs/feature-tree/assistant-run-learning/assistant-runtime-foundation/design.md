@@ -2,11 +2,11 @@
 
 > 对应规格：[L2 spec](./spec.md)
 
-> 设计触发原因：“承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询”需要 `assistant-object-runtime` 共享状态 owner、契约或质量边界。
+> 设计触发原因：“承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询”需要 `assistant-object-runtime` 共享状态 owner、契约或质量边界。
 
 ## 1. 背景、目标与非目标
 
-- 设计目标：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
+- 设计目标：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
 - 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
 ## 2. Story 协作与状态流
@@ -24,7 +24,7 @@
 <a id="dec-001"></a>
 ### DEC-001 对象状态、幂等回执与 outbox 原子提交
 - 决策：对象状态、幂等回执与 outbox 原子提交。
-- 理由：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
+- 理由：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`

@@ -12,6 +12,12 @@ class CircleApiMetadata {
     '/circles/discovery-feed',
     '/circles/search',
     '/circles/{circleId}',
+    '/gatherings/{gatheringId}',
+    '/gatherings/{gatheringId}:approve',
+    '/gatherings/{gatheringId}:cancel',
+    '/gatherings/{gatheringId}:complete',
+    '/gatherings/{gatheringId}:join',
+    '/gatherings/{gatheringId}:leave',
     '/internal/circle',
     '/personas/{personaId}',
   ];
@@ -20,11 +26,15 @@ class CircleApiMetadata {
     'ApplyJoinCircleGroup': '/circles/{circleId}/groups/{groupId}/memberships',
     'ApproveCircleGroupMember': '/circles/{circleId}/groups/{groupId}/memberships/{personaId}:approve',
     'ApproveCircleMember': '/circles/{circleId}/memberships/{personaId}:approve',
+    'ApproveGatheringParticipant': '/gatherings/{gatheringId}:approve',
     'ArchiveCircle': '/circles/{circleId}',
     'ArchiveCircleGroup': '/circles/{circleId}/groups/{groupId}',
+    'CancelGathering': '/gatherings/{gatheringId}:cancel',
+    'CompleteGathering': '/gatherings/{gatheringId}:complete',
     'CreateCircle': '/circles',
     'CreateCircleFile': '/circles/{circleId}/files',
     'CreateCircleGroup': '/circles/{circleId}/groups',
+    'CreateGathering': '/gatherings',
     'DeleteCircleFile': '/circles/{circleId}/files/{fileId}',
     'FeatureCirclePost': '/circles/{circleId}/post-placements/{placementId}/feature',
     'GetCircle': '/circles/{circleId}',
@@ -33,11 +43,14 @@ class CircleApiMetadata {
     'GetCircleGroup': '/circles/{circleId}/groups/{groupId}',
     'GetCircleImpact': '/circles/{circleId}/impact',
     'GetCircleStats': '/circles/{circleId}/stats',
+    'GetGathering': '/gatherings/{gatheringId}',
     'GetMyCircleGroupMembership': '/circles/{circleId}/groups/{groupId}/memberships/self',
     'GetMyCircleMembership': '/circles/{circleId}/memberships/self',
     'JoinCircle': '/circles/{circleId}/memberships',
+    'JoinGathering': '/gatherings/{gatheringId}:join',
     'LeaveCircle': '/circles/{circleId}/memberships/self',
     'LeaveCircleGroup': '/circles/{circleId}/groups/{groupId}/memberships/self',
+    'LeaveGathering': '/gatherings/{gatheringId}:leave',
     'ListCircleDiscoveryFeed': '/circles/discovery-feed',
     'ListCircleFiles': '/circles/{circleId}/files',
     'ListCircleGroupMemberships': '/circles/{circleId}/groups/{groupId}/memberships',
@@ -68,11 +81,15 @@ class CircleApiMetadata {
     'ApplyJoinCircleGroup': 'POST',
     'ApproveCircleGroupMember': 'POST',
     'ApproveCircleMember': 'POST',
+    'ApproveGatheringParticipant': 'POST',
     'ArchiveCircle': 'DELETE',
     'ArchiveCircleGroup': 'DELETE',
+    'CancelGathering': 'POST',
+    'CompleteGathering': 'POST',
     'CreateCircle': 'POST',
     'CreateCircleFile': 'POST',
     'CreateCircleGroup': 'POST',
+    'CreateGathering': 'POST',
     'DeleteCircleFile': 'DELETE',
     'FeatureCirclePost': 'PATCH',
     'GetCircle': 'GET',
@@ -81,11 +98,14 @@ class CircleApiMetadata {
     'GetCircleGroup': 'GET',
     'GetCircleImpact': 'GET',
     'GetCircleStats': 'GET',
+    'GetGathering': 'GET',
     'GetMyCircleGroupMembership': 'GET',
     'GetMyCircleMembership': 'GET',
     'JoinCircle': 'POST',
+    'JoinGathering': 'POST',
     'LeaveCircle': 'DELETE',
     'LeaveCircleGroup': 'DELETE',
+    'LeaveGathering': 'POST',
     'ListCircleDiscoveryFeed': 'GET',
     'ListCircleFiles': 'GET',
     'ListCircleGroupMemberships': 'GET',
@@ -117,11 +137,15 @@ class CircleApiMetadata {
     'ApplyJoinCircleGroup': 'required',
     'ApproveCircleGroupMember': 'required',
     'ApproveCircleMember': 'required',
+    'ApproveGatheringParticipant': 'required',
     'ArchiveCircle': 'required',
     'ArchiveCircleGroup': 'required',
+    'CancelGathering': 'required',
+    'CompleteGathering': 'required',
     'CreateCircle': 'required',
     'CreateCircleFile': 'required',
     'CreateCircleGroup': 'required',
+    'CreateGathering': 'required',
     'DeleteCircleFile': 'required',
     'FeatureCirclePost': 'required',
     'GetCircle': 'optional',
@@ -130,11 +154,14 @@ class CircleApiMetadata {
     'GetCircleGroup': 'required',
     'GetCircleImpact': 'required',
     'GetCircleStats': 'optional',
+    'GetGathering': 'required',
     'GetMyCircleGroupMembership': 'required',
     'GetMyCircleMembership': 'required',
     'JoinCircle': 'required',
+    'JoinGathering': 'required',
     'LeaveCircle': 'required',
     'LeaveCircleGroup': 'required',
+    'LeaveGathering': 'required',
     'ListCircleDiscoveryFeed': 'optional',
     'ListCircleFiles': 'required',
     'ListCircleGroupMemberships': 'required',
@@ -172,11 +199,15 @@ class CircleApiMetadata {
   static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
   static const String approveCircleGroupMemberOperation = 'ApproveCircleGroupMember';
   static const String approveCircleMemberOperation = 'ApproveCircleMember';
+  static const String approveGatheringParticipantOperation = 'ApproveGatheringParticipant';
   static const String archiveCircleOperation = 'ArchiveCircle';
   static const String archiveCircleGroupOperation = 'ArchiveCircleGroup';
+  static const String cancelGatheringOperation = 'CancelGathering';
+  static const String completeGatheringOperation = 'CompleteGathering';
   static const String createCircleOperation = 'CreateCircle';
   static const String createCircleFileOperation = 'CreateCircleFile';
   static const String createCircleGroupOperation = 'CreateCircleGroup';
+  static const String createGatheringOperation = 'CreateGathering';
   static const String deleteCircleFileOperation = 'DeleteCircleFile';
   static const String featureCirclePostOperation = 'FeatureCirclePost';
   static const String getCircleOperation = 'GetCircle';
@@ -185,11 +216,14 @@ class CircleApiMetadata {
   static const String getCircleGroupOperation = 'GetCircleGroup';
   static const String getCircleImpactOperation = 'GetCircleImpact';
   static const String getCircleStatsOperation = 'GetCircleStats';
+  static const String getGatheringOperation = 'GetGathering';
   static const String getMyCircleGroupMembershipOperation = 'GetMyCircleGroupMembership';
   static const String getMyCircleMembershipOperation = 'GetMyCircleMembership';
   static const String joinCircleOperation = 'JoinCircle';
+  static const String joinGatheringOperation = 'JoinGathering';
   static const String leaveCircleOperation = 'LeaveCircle';
   static const String leaveCircleGroupOperation = 'LeaveCircleGroup';
+  static const String leaveGatheringOperation = 'LeaveGathering';
   static const String listCircleDiscoveryFeedOperation = 'ListCircleDiscoveryFeed';
   static const String listCircleFilesOperation = 'ListCircleFiles';
   static const String listCircleGroupMembershipsOperation = 'ListCircleGroupMemberships';
@@ -237,6 +271,12 @@ class CircleApiMetadata {
       'personaId': personaId,
     });
   }
+  static const String approveGatheringParticipantPathTemplate = '/gatherings/{gatheringId}:approve';
+  static String approveGatheringParticipantPath({required String gatheringId}) {
+    return _fillPath(approveGatheringParticipantPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+    });
+  }
   static const String archiveCirclePathTemplate = '/circles/{circleId}';
   static String archiveCirclePath({required String circleId}) {
     return _fillPath(archiveCirclePathTemplate, <String, String>{
@@ -248,6 +288,18 @@ class CircleApiMetadata {
     return _fillPath(archiveCircleGroupPathTemplate, <String, String>{
       'circleId': circleId,
       'groupId': groupId,
+    });
+  }
+  static const String cancelGatheringPathTemplate = '/gatherings/{gatheringId}:cancel';
+  static String cancelGatheringPath({required String gatheringId}) {
+    return _fillPath(cancelGatheringPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+    });
+  }
+  static const String completeGatheringPathTemplate = '/gatherings/{gatheringId}:complete';
+  static String completeGatheringPath({required String gatheringId}) {
+    return _fillPath(completeGatheringPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
     });
   }
   static const String createCirclePath = '/circles';
@@ -263,6 +315,7 @@ class CircleApiMetadata {
       'circleId': circleId,
     });
   }
+  static const String createGatheringPath = '/gatherings';
   static const String deleteCircleFilePathTemplate = '/circles/{circleId}/files/{fileId}';
   static String deleteCircleFilePath({required String circleId, required String fileId}) {
     return _fillPath(deleteCircleFilePathTemplate, <String, String>{
@@ -315,6 +368,12 @@ class CircleApiMetadata {
       'circleId': circleId,
     });
   }
+  static const String getGatheringPathTemplate = '/gatherings/{gatheringId}';
+  static String getGatheringPath({required String gatheringId}) {
+    return _fillPath(getGatheringPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+    });
+  }
   static const String getMyCircleGroupMembershipPathTemplate = '/circles/{circleId}/groups/{groupId}/memberships/self';
   static String getMyCircleGroupMembershipPath({required String circleId, required String groupId}) {
     return _fillPath(getMyCircleGroupMembershipPathTemplate, <String, String>{
@@ -334,6 +393,12 @@ class CircleApiMetadata {
       'circleId': circleId,
     });
   }
+  static const String joinGatheringPathTemplate = '/gatherings/{gatheringId}:join';
+  static String joinGatheringPath({required String gatheringId}) {
+    return _fillPath(joinGatheringPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+    });
+  }
   static const String leaveCirclePathTemplate = '/circles/{circleId}/memberships/self';
   static String leaveCirclePath({required String circleId}) {
     return _fillPath(leaveCirclePathTemplate, <String, String>{
@@ -345,6 +410,12 @@ class CircleApiMetadata {
     return _fillPath(leaveCircleGroupPathTemplate, <String, String>{
       'circleId': circleId,
       'groupId': groupId,
+    });
+  }
+  static const String leaveGatheringPathTemplate = '/gatherings/{gatheringId}:leave';
+  static String leaveGatheringPath({required String gatheringId}) {
+    return _fillPath(leaveGatheringPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
     });
   }
   static const String listCircleDiscoveryFeedPath = '/circles/discovery-feed';

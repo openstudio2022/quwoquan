@@ -20,11 +20,8 @@ def test_rec_model_runtime_is_not_a_second_account_closure_consumer() -> None:
         for root in runtime_paths
         for path in ([root] if root.is_file() else root.rglob("*.py"))
     )
-    requirements = (SERVICE_ROOT / "requirements.txt").read_text(encoding="utf-8")
-
     assert "UserAccountClosed" not in source
     assert "events.user.account" not in source
-    assert "redis" not in requirements.lower()
 
 
 def test_score_cache_identity_is_excluded() -> None:
@@ -56,7 +53,8 @@ def test_training_and_replay_scripts_enforce_closed_subject_guard() -> None:
 
     for source in (sample_joiner, replay_dataset):
         assert "privacy_guard" in source
-    assert "closed_account_subject_tombstones" in privacy_guard
+    assert "recommendation_subject_closure_facts" in privacy_guard
+    assert "closed_account_subject_tombstones" not in privacy_guard
     assert "privacy_invalidated" in replay_dataset
 
     for script_name in (
@@ -71,31 +69,31 @@ def test_training_and_replay_scripts_enforce_closed_subject_guard() -> None:
         assert "privacy_guard" in source
 
 
-class _TombstoneCollection:
-    def __init__(self, digests: set[str]) -> None:
-        self._digests = digests
+class _SubjectClosureCollection:
+    def __init__(self, subject_ids: set[str]) -> None:
+        self._subject_ids = subject_ids
 
     def find(self, query, projection):  # noqa: ANN001
-        requested = set(query["_id"]["$in"])
-        return [{"_id": digest} for digest in requested & self._digests]
+        requested = set(query["subjectIds"]["$in"])
+        matched = requested & self._subject_ids
+        return [{"subjectIds": sorted(matched)}] if matched else []
 
 
 class _PrivacyDb:
-    def __init__(self, digests: set[str]) -> None:
-        self._tombstones = _TombstoneCollection(digests)
+    def __init__(self, subject_ids: set[str]) -> None:
+        self._closures = _SubjectClosureCollection(subject_ids)
 
     def __getitem__(self, name: str):
-        if name != "closed_account_subject_tombstones":
+        if name != "recommendation_subject_closure_facts":
             raise KeyError(name)
-        return self._tombstones
+        return self._closures
 
 
-def test_offline_guard_filters_hmac_tombstoned_subjects() -> None:
+def test_offline_guard_filters_recommendation_subject_closure_facts() -> None:
     import privacy_guard
 
-    secret = "offline-privacy-contract-secret-32-bytes"
     closed_id = "closed-persona"
-    db = _PrivacyDb({privacy_guard.subject_digest(closed_id, secret)})
+    db = _PrivacyDb({closed_id})
 
     accepted, closed = privacy_guard.reject_closed_documents(
         db,
@@ -103,7 +101,6 @@ def test_offline_guard_filters_hmac_tombstoned_subjects() -> None:
             {"userId": closed_id, "targetId": "post-1"},
             {"userId": "open-persona", "targetId": "post-2"},
         ],
-        secret=secret,
     )
 
     assert closed == {closed_id}

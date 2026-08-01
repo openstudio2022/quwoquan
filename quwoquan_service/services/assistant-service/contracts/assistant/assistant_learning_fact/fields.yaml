@@ -97,7 +97,7 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: append_only_fact
-  - name: sessionId
+  - name: clientSessionId
     type: string
     constraints:
       - NULLABLE

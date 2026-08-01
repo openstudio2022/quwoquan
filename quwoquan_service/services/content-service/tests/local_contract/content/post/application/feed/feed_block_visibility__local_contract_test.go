@@ -9,7 +9,8 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 )
 
 type staticFeedViewerBlockReader struct {
@@ -63,6 +64,7 @@ func TestListFeedUsesServerProjectedBlockFacts(t *testing.T) {
 		engine,
 		reader,
 		WithFeedViewerBlockReader(blocks),
+		WithFeedDeliveryPageStore(deliveryredis.NewStore(rtredis.NewMemoryClient())),
 	)
 
 	response, err := service.ListFeed(ctx, ListFeedRequest{

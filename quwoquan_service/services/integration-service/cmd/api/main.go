@@ -28,10 +28,13 @@ import (
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
+	streamadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/stream"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	interactionpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/persistence"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/providerbinding"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/resultrelay"
+	attemptpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/infrastructure/persistence"
 	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
 )
 
@@ -232,7 +235,7 @@ func run() error {
 			log.Printf("integration-service MongoDB disconnect failed: %v", err)
 		}
 	}()
-	reliableStore := reliabletaskmongo.New(mongoClient.Database(cfg.MongoDB.Database))
+	reliableStore := reliabletaskmongo.NewExternalInteraction(mongoClient.Database(cfg.MongoDB.Database))
 	otpCodeReferenceStore := provider.NewMongoOTPCodeReferenceStore(mongoClient.Database(cfg.MongoDB.Database))
 	indexCtx, cancelIndexes := context.WithTimeout(ctx, 30*time.Second)
 	indexErr := reliableStore.EnsureIndexes(indexCtx)
@@ -240,6 +243,48 @@ func run() error {
 	if indexErr != nil {
 		return fmt.Errorf("reliable-task EnsureIndexes failed: %w", indexErr)
 	}
+	attemptClosure, err := attemptpersistence.NewMongoSubjectClosure(
+		mongoClient.Database(cfg.MongoDB.Database),
+	)
+	if err != nil {
+		return fmt.Errorf("provider attempt account closure init failed: %w", err)
+	}
+	closureProjection, err := interactionpersistence.NewMongoUserAccountClosedProjection(
+		mongoClient.Database(cfg.MongoDB.Database),
+		attemptClosure,
+	)
+	if err != nil {
+		return fmt.Errorf("integration account closure projection init failed: %w", err)
+	}
+	closureIndexCtx, cancelClosureIndexes := context.WithTimeout(ctx, 30*time.Second)
+	if err := attemptClosure.EnsureIndexes(closureIndexCtx); err != nil {
+		cancelClosureIndexes()
+		return fmt.Errorf("provider attempt account closure indexes failed: %w", err)
+	}
+	if err := closureProjection.EnsureIndexes(closureIndexCtx); err != nil {
+		cancelClosureIndexes()
+		return fmt.Errorf("integration account closure indexes failed: %w", err)
+	}
+	cancelClosureIndexes()
+	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
+		messageTransport,
+		closureProjection,
+		closureProjection,
+		fmt.Sprintf("integration-service-%d", os.Getpid()),
+		slog.Default(),
+		streamadapter.DefaultUserAccountClosedConsumerConfig(),
+	)
+	if err != nil {
+		return fmt.Errorf("integration account closure consumer init failed: %w", err)
+	}
+	if _, err := accountClosureConsumer.ProcessOnce(ctx); err != nil {
+		return fmt.Errorf("integration account closure consumer preflight failed: %w", err)
+	}
+	accountClosureDone := make(chan struct{})
+	go func() {
+		defer close(accountClosureDone)
+		accountClosureConsumer.Run(ctx)
+	}()
 	externalResultRelay, err := resultrelay.New(
 		reliableStore,
 		messageTransport,
@@ -327,6 +372,12 @@ func run() error {
 		return redisRouter.PingAll(hctx)
 	})
 	healthChecker.Register(
+		"user_account_closed_consumer",
+		func(context.Context) error {
+			return accountClosureConsumer.Healthy(10 * time.Second)
+		},
+	)
+	healthChecker.Register(
 		"external_interaction_result_relay",
 		func(hctx context.Context) error {
 			return externalResultRelay.Healthy(hctx, 10*time.Second)
@@ -374,11 +425,13 @@ func run() error {
 		cancelRuntime()
 		waitForWorkerShutdown(externalLoopDone, "external interaction")
 		waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
+		waitForWorkerShutdown(accountClosureDone, "account closure consumer")
 		return err
 	}
 	cancelRuntime()
 	waitForWorkerShutdown(externalLoopDone, "external interaction")
 	waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
+	waitForWorkerShutdown(accountClosureDone, "account closure consumer")
 	return nil
 }
 

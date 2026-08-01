@@ -45,15 +45,15 @@ paths:
                 - bearerAuth: []
     /search:
         post:
-            operationId: SearchQuery
-            x-contract-operation-id: search.search_query.SearchQuery
-            x-object-id: search.search_query
+            operationId: Search
+            x-contract-operation-id: search.search_index_view.Search
+            x-object-id: search.search_index_view
             x-actor: none
             x-application:
                 kind: query
-                facet: SearchFacade
+                facet: SearchIndexFacade
                 method: search
-                reader: ObjectSearchReader
+                reader: SearchIndexReader
                 slice: SearchResponseView
             parameters:
                 - name: X-Session-Id
@@ -92,14 +92,14 @@ paths:
     /search/feedback:
         post:
             operationId: ReportSearchFeedback
-            x-contract-operation-id: search.feedback_fact.ReportSearchFeedback
-            x-object-id: search.feedback_fact
+            x-contract-operation-id: search.search_feedback_fact.ReportSearchFeedback
+            x-object-id: search.search_feedback_fact
             x-actor: persona_or_device
             x-application:
                 kind: command
                 facet: SearchFeedbackCommandFacade
                 method: reportFeedback
-                appendSink: FeedbackFact
+                appendSink: SearchFeedbackFact
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -128,8 +128,8 @@ paths:
     /search/hot-queries:
         get:
             operationId: ListHotQueries
-            x-contract-operation-id: search.search_query.ListHotQueries
-            x-object-id: search.search_query
+            x-contract-operation-id: search.search_request_fact.ListHotQueries
+            x-object-id: search.search_request_fact
             x-actor: none
             x-application:
                 kind: query
@@ -149,7 +149,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HotQueryView'
+                                $ref: '#/components/schemas/SearchTermHeatView'
                 default:
                     description: Runtime failure
                     content:
@@ -307,11 +307,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CanonicalSearchQuery
             x-contract-placeholder: true
-        HotQueryView:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: HotQueryView
-            x-contract-placeholder: true
         RecentSearchEntryView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -336,6 +331,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SearchResponseView
+            x-contract-placeholder: true
+        SearchTermHeatView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SearchTermHeatView
             x-contract-placeholder: true
         UpsertRecentSearchCommand:
             type: object

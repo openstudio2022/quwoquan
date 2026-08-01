@@ -9,7 +9,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
@@ -174,54 +173,6 @@ func (projection *MongoUserAccountClosedProjection) anonymizeDeliveryAudit(
 		}
 	}
 
-	if len(jobIDs) > 0 {
-		cursor, err := projection.providerAttempts.Find(
-			ctx,
-			bson.M{"taskId": bson.M{"$in": jobIDs}},
-		)
-		if err != nil {
-			return 0, fmt.Errorf(
-				"scan closed-account notification provider attempts: %w",
-				err,
-			)
-		}
-		var documents []reliabletask.ProviderAttemptRecord
-		if err := cursor.All(ctx, &documents); err != nil {
-			cursor.Close(ctx)
-			return 0, fmt.Errorf(
-				"decode closed-account notification provider attempts: %w",
-				err,
-			)
-		}
-		cursor.Close(ctx)
-		for _, document := range documents {
-			document.RequestID = closedNotificationAuditValue(
-				event.EventID,
-				document.RequestID,
-			)
-			document.TaskID = closedNotificationAuditValue(
-				event.EventID,
-				document.TaskID,
-			)
-			document.ProviderRequestID = closedNotificationAuditValue(
-				event.EventID,
-				document.ProviderRequestID,
-			)
-			document.MaskedRecipient = ""
-			document.Attributes = map[string]string{}
-			if _, err := projection.providerAttempts.ReplaceOne(
-				ctx,
-				bson.M{"_id": document.AttemptID},
-				document,
-			); err != nil {
-				return 0, fmt.Errorf(
-					"anonymize closed-account notification provider attempt: %w",
-					err,
-				)
-			}
-			anonymized++
-		}
-	}
 	return anonymized, nil
 }
 

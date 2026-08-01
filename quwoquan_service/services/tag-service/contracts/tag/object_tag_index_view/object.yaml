@@ -1,5 +1,5 @@
 kind: projection
-description: ObjectTagIndexView 的领域对象契约。
+description: TagTaxonomyRelease 与对象标签事实构建的对象到 canonical tagRef 倒排视图，供搜索、推荐与交集统一读取。
 identity:
   fields:
   - objectType
@@ -23,3 +23,12 @@ relationships:
   target_object: tag.TagTaxonomyRelease
 local_identity_reasons:
   sourceEventId: durable stream 事件相关键，仅用于幂等审计与故障诊断，不是 ObjectTagIndexView 对象身份
+business_rules:
+- 只接受已激活 taxonomy release 中存在的 tagRef，未知或退役 tag 不得进入在线索引。
+- objectType 与 objectId 的标签集合按 source event version 幂等替换，不做跨轴路径猜测。
+- 对象或 release tombstone 必须移除对应标签绑定并保留 checkpoint。
+lifecycle:
+  source_events: [TagTaxonomyReleaseActivated, ObjectTagsAssigned, ObjectTagsRemoved, TaggedObjectDeleted]
+  checkpoint: taxonomy_release_and_object_event_sequence
+  rebuild: load_active_taxonomy_then_replay_object_tag_events
+  tombstone: delete_object_tag_bindings_keep_checkpoint

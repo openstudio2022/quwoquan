@@ -10,8 +10,8 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: conversationId
-  source: conversationId
+- name: sessionId
+  source: sessionId
   type: string
   constraints:
   - NOT_NULL
@@ -131,3 +131,111 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+types:
+  AssistantTurnSummaryView:
+    description: 会话轮次摘要（transcript 与过程/引用恢复主体）
+    fields:
+    - name: turnId
+      source: turnId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: sessionId
+      source: sessionId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: status
+      source: status
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: completed/failed/cancelled 终态
+    - name: inputText
+      source: inputText
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: terminalSnapshot
+      source: terminalSnapshot
+      type: AssistantRunTerminalSnapshotView
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: skillId
+      source: skillId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: domainId
+      source: domainId
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: createdAt
+      source: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: completedAt
+      source: completedAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  AssistantTurnListView:
+    description: ListSessionTurns 响应体（createdAt desc keyset 分页切片）
+    fields:
+    - name: items
+      source: items
+      type: '[]AssistantTurnSummaryView'
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: nextCursor
+      source: nextCursor
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+      description: 不透明 keyset 游标；空表示无更多数据

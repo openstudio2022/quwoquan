@@ -29,6 +29,7 @@ import 'package:quwoquan_app/core/constants/create_page_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/media/local_video_file_readiness.dart';
+import 'package:quwoquan_app/core/media/media_capture_metadata_extractor.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';

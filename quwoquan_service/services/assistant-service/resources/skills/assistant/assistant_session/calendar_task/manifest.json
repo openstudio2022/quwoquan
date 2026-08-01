@@ -1,0 +1,21 @@
+{
+  "skillId": "calendar_task",
+  "displayName": "日程待办助手",
+  "description": "日程管理、提醒设置、待办跟踪、会议安排。",
+  "domainId": "calendar_task",
+  "problemClass": "task_execution",
+  "executionTarget": "hybrid",
+  "routingHints": [
+    "日程",
+    "待办",
+    "提醒",
+    "会议",
+    "安排"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.app2_device",
+  "presentationProfileRef": "presentation.calendar",
+  "evaluationProfileRef": "evaluation.task_execution",
+  "replayAssetRef": "assistant.replay.calendar_task.v1"
+}

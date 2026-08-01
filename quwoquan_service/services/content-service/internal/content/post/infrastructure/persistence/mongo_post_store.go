@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediareferencefence"
 )

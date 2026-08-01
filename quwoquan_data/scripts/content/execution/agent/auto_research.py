@@ -216,13 +216,22 @@ def _run_download_auto_research(
                 existing = read_json(path)
                 existing_wave_count = int(existing.get("waveCount") or 0)
                 if existing.get("partialRun"):
-                    remaining_ids = [
+                    interrupted_wave_remaining_ids = [
                         str(entity_id).strip()
                         for entity_id in (existing.get("remainingEntityIds") or [])
                         if str(entity_id or "").strip()
                     ]
-                    if remaining_ids:
-                        ids = remaining_ids
+                    # The writer checkpoints only the unfinished suffix of its
+                    # current wave. Continue from the first unresolved item in
+                    # the original frozen order so later, never-started waves
+                    # are not lost after a process interruption.
+                    pending_positions = [
+                        ids.index(entity_id)
+                        for entity_id in interrupted_wave_remaining_ids
+                        if entity_id in ids
+                    ]
+                    if pending_positions:
+                        ids = ids[min(pending_positions):]
             except (OSError, ValueError, TypeError):
                 existing_wave_count = 0
     latest: dict[str, Any] = {}

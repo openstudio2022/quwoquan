@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/public_profile_query_contracts.dart';
 
@@ -13,6 +13,10 @@ final class GetPersonaProfileQuery {
   }) : personaId = personaId;
 
   final String personaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+  };
 }
 
 final class GetProfileQrCardQuery {
@@ -28,6 +32,11 @@ final class ResolveProfileQrTokenQuery {
 
   final String qr;
   final String? handle;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "qr": this.qr,
+    if (this.handle?.isNotEmpty == true) "handle": this.handle!,
+  };
 }
 
 final class SearchSocialRelationsQuery {
@@ -42,6 +51,12 @@ final class SearchSocialRelationsQuery {
   final String query;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "query": this.query,
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 CloudOperationRequestPayload encodeUserUserAccountGetMeProfileGeneratedRequest(GetMeProfileQuery request) {

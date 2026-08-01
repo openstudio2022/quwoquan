@@ -23,7 +23,7 @@ func TestTagFeedbackConsumerProjectsExplicitPreferenceExactlyOnce(t *testing.T) 
 		t.Fatalf("clear tag feedback streams: %v", err)
 	}
 	for _, collection := range []string{
-		"rm_tag_feedback_inbox",
+		"rm_tag_feedback_fact_inbox",
 		"rm_recommend_feature",
 	} {
 		if _, err := mongoDB.Collection(collection).DeleteMany(ctx, bson.M{
@@ -32,7 +32,7 @@ func TestTagFeedbackConsumerProjectsExplicitPreferenceExactlyOnce(t *testing.T) 
 			t.Fatalf("clear %s: %v", collection, err)
 		}
 	}
-	if _, err := mongoDB.Collection("rm_tag_feedback_inbox").DeleteMany(ctx, bson.M{
+	if _, err := mongoDB.Collection("rm_tag_feedback_fact_inbox").DeleteMany(ctx, bson.M{
 		"actorId": "persona-tag-feedback",
 	}); err != nil {
 		t.Fatalf("clear tag feedback inbox: %v", err)
@@ -97,7 +97,7 @@ func TestTagFeedbackConsumerProjectsExplicitPreferenceExactlyOnce(t *testing.T) 
 	if processed, err := consumer.ProcessOnce(ctx); err != nil || processed != 1 {
 		t.Fatalf("consume replay processed=%d err=%v", processed, err)
 	}
-	receipts, err := mongoDB.Collection("rm_tag_feedback_inbox").CountDocuments(
+	receipts, err := mongoDB.Collection("rm_tag_feedback_fact_inbox").CountDocuments(
 		ctx,
 		bson.M{"_id": "tag-feedback-click"},
 	)

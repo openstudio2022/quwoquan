@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../tag/tag_catalog_contracts.dart';
 
@@ -31,6 +31,11 @@ final class ListTagChildrenQuery {
 
   final String parentTagRef;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "parentTagRef": this.parentTagRef,
+    "limit": this.limit,
+  };
 }
 
 final class ResolveTagQuery {
@@ -43,6 +48,10 @@ final class ResolveTagQuery {
   }
 
   final String tagRef;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "tagRef": this.tagRef,
+  };
 }
 
 final class ValidateTagRefsQuery {
@@ -61,6 +70,11 @@ final class ValidateTagRefsQuery {
 
   final String expectedTaxonomyReleaseId;
   final List<String> tagRefs;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "expectedTaxonomyReleaseId": this.expectedTaxonomyReleaseId,
+    "tagRefs": this.tagRefs.map((value) => value).toList(growable: false),
+  };
 }
 
 CloudOperationRequestPayload encodeTagTagNodeViewListTagChildrenGeneratedRequest(ListTagChildrenQuery request) {

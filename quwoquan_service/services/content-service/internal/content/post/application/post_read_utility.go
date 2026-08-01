@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 // generateArticleSummary 纯函数：标题 + 正文截断的兜底摘要。

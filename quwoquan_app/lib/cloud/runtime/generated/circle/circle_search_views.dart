@@ -62,8 +62,7 @@ class CircleSearchItemView {
       postCount: (map['postCount'] as num?)?.toInt() ?? 0,
       highlightText: map['highlightText']?.toString(),
       matchedField: map['matchedField']?.toString(),
-      circleName:
-          map['circleName']?.toString(),
+      circleName: map['circleName']?.toString(),
       linkedHomepageId: map['linkedHomepageId']?.toString(),
       linkedHomepageType: map['linkedHomepageType']?.toString(),
       linkedHomepageTitle: map['linkedHomepageTitle']?.toString(),

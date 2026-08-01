@@ -20,8 +20,13 @@ externalBindings:
     state: enabled
   content.embedding.generation:
     state: enabled
-    adapter: ext.embed.protocol_fixture
-    timeoutMs: 1000
+    adapter: ext.embed.openai_compatible
+    endpointRef: environment_binding:content.embedding
+    endpointEnvs:
+      endpoint: CONTENT_EMBEDDING_ENDPOINT
+    secretRefs:
+    - CONTENT_EMBEDDING_API_KEY
+    timeoutMs: 10000
   runtime.object.storage:
     state: enabled
     adapter: infra.minio.object_storage

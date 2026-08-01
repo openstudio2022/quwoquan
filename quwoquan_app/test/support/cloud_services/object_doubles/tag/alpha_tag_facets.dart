@@ -16,10 +16,7 @@ final class AlphaTagFacet implements TagCatalogQuery {
     );
   }
 
-  AlphaTagFacet._({
-    required this.taxonomyReleaseId,
-    required _TagCatalogFixture catalog,
-  }) : _catalog = catalog;
+  AlphaTagFacet._({required this.taxonomyReleaseId, required this._catalog});
 
   final String taxonomyReleaseId;
   final _TagCatalogFixture _catalog;
@@ -115,7 +112,7 @@ final class AlphaTagFacet implements TagCatalogQuery {
   }
 }
 
-/// Alpha TagFeedback 替身：进程内追加 + 同 key 幂等（与服务端唯一索引同构）。
+/// Alpha TagFeedbackFact 替身：进程内追加 + 同 key 幂等（与服务端唯一索引同构）。
 final class AlphaTagFeedbackWriter implements TagFeedbackCommandWriter {
   final Map<String, ReportTagFeedbackCommand> _byKey =
       <String, ReportTagFeedbackCommand>{};

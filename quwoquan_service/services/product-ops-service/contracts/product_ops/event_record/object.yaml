@@ -24,3 +24,7 @@ taggable: false
 vector_enabled: false
 lifecycle:
   immutable: true
+business_rules:
+- eventType 必须存在于 canonical event catalog，未知事件拒绝写入且不得降级为 generic payload。
+- 公共九字段信封由可信 runtime context 补齐，客户端不得覆盖身份、环境或 trace 归属。
+- 原始明细只写 SLS 并按声明保留期清理，推荐学习事实不得混入本对象。

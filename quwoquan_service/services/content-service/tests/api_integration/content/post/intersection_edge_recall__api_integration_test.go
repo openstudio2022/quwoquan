@@ -143,28 +143,6 @@ func TestIntersectionEdgeRecall_MaterializedEdgesDriveSupply(t *testing.T) {
 	}
 }
 
-// deferred kind 的历史快照不得成为召回种子：注册表标 deferred 表示可证数据源缺位，
-// 展示与排序都已拦住，召回同样不能借旧快照复活它。
-func TestIntersectionEdgeRecall_DeferredKindNeverSeedsRecall(t *testing.T) {
-	seedEdgeRecallFeed(t)
-	deferred := deferredIntersectionKindForRecall(t)
-	store := seedEdgeRecallSnapshot(t, []intersectionapp.IntersectionReasonView{
-		edgeRecallReason(deferred, edgeRecallPeerID, "person", 0.9),
-	})
-
-	source := recinfra.NewIntersectionEdgeRecallSource(requireMongoDB(t), store)
-	candidates, err := source.Recall(context.Background(), rtrec.RecallRequest{
-		UserID: edgeRecallViewerID,
-		Limit:  20,
-	})
-	if err != nil && !rtrec.IsRecallSkipped(err) {
-		t.Fatalf("intersection recall: %v", err)
-	}
-	if len(candidates) != 0 {
-		t.Fatalf("deferred kind must not seed recall, got %v", candidateIDs(candidates))
-	}
-}
-
 // 匿名 viewer 没有交集快照，通道必须结构化跳过而不是打无界查询。
 func TestIntersectionEdgeRecall_AnonymousViewerSkips(t *testing.T) {
 	store := recinfra.NewMongoViewerIntersectionStore(requireMongoDB(t), nil)
@@ -180,7 +158,6 @@ func TestFeatureStore_ExposesRealIntersectionEdgeWeights(t *testing.T) {
 	store := seedEdgeRecallSnapshot(t, []intersectionapp.IntersectionReasonView{
 		edgeRecallReason("commonFollower", edgeRecallPeerID, "person", 0.8),
 		edgeRecallReason("coWishlistedEntity", edgeRecallPlaceID, "place", 0.6),
-		edgeRecallReason(deferredIntersectionKindForRecall(t), "entity_deferred", "place", 0.95),
 	})
 	features := recinfra.NewFeatureStore(
 		requireMongoDB(t),
@@ -199,10 +176,6 @@ func TestFeatureStore_ExposesRealIntersectionEdgeWeights(t *testing.T) {
 	if got := vec.IntersectionEdges[edgeRecallPlaceID].Weight; got != 0.6 {
 		t.Fatalf("place edge weight must come from the materialized snapshot, got %.4f", got)
 	}
-	if _, ok := vec.IntersectionEdges["entity_deferred"]; ok {
-		t.Fatalf("deferred kind must not become an implicit ranking weight")
-	}
-
 	edge, ok := vec.StrongestIntersectionEdge(rtrec.ContentCandidate{
 		AuthorID:   edgeRecallStrangerID,
 		EntityRefs: []string{edgeRecallPlaceID},
@@ -215,20 +188,6 @@ func TestFeatureStore_ExposesRealIntersectionEdgeWeights(t *testing.T) {
 	}); ok {
 		t.Fatalf("candidate with no shared object must not match any edge")
 	}
-}
-
-func deferredIntersectionKindForRecall(t *testing.T) string {
-	t.Helper()
-	for _, kind := range []string{
-		"coPresentHere", "nearbyAffinity", "coPlannedTrip", "coCreatedContent",
-		"sameSchool", "sameCompany", "coMemberCircle", "commonContact",
-	} {
-		if recinfra.IsDeferredIntersectionKind(kind) {
-			return kind
-		}
-	}
-	t.Fatal("registry has no deferred kind left; remove or replace the obsolete edge-recall guard deliberately")
-	return ""
 }
 
 func candidateIDs(candidates []rtrec.ContentCandidate) []string {

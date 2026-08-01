@@ -20,7 +20,6 @@ class OpsApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
-    'AssignExperimentVariant': '/ops/experiments/{experimentId}/assignment',
     'GetAccountEnforcementCase': '/control-plane/product/account-enforcement-cases/{caseId}',
     'GetAppRecoveryVersion': '/ops/app-recovery/version',
     'GetConfigSnapshot': '/control-plane/platform/configs/snapshot',
@@ -52,7 +51,6 @@ class OpsApiMetadata {
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
-    'AssignExperimentVariant': 'POST',
     'GetAccountEnforcementCase': 'GET',
     'GetAppRecoveryVersion': 'GET',
     'GetConfigSnapshot': 'GET',
@@ -85,7 +83,6 @@ class OpsApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'AssignExperimentVariant': 'required',
     'GetAccountEnforcementCase': 'required',
     'GetAppRecoveryVersion': 'optional',
     'GetConfigSnapshot': 'required',
@@ -126,7 +123,6 @@ class OpsApiMetadata {
     'GetRtcMediaQoeSummary': 'object',
   };
 
-  static const String assignExperimentVariantOperation = 'AssignExperimentVariant';
   static const String getAccountEnforcementCaseOperation = 'GetAccountEnforcementCase';
   static const String getAppRecoveryVersionOperation = 'GetAppRecoveryVersion';
   static const String getConfigSnapshotOperation = 'GetConfigSnapshot';
@@ -156,12 +152,6 @@ class OpsApiMetadata {
   static const String reviewAccountEnforcementCaseOperation = 'ReviewAccountEnforcementCase';
   static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
 
-  static const String assignExperimentVariantPathTemplate = '/ops/experiments/{experimentId}/assignment';
-  static String assignExperimentVariantPath({required String experimentId}) {
-    return _fillPath(assignExperimentVariantPathTemplate, <String, String>{
-      'experimentId': experimentId,
-    });
-  }
   static const String getAccountEnforcementCasePathTemplate = '/control-plane/product/account-enforcement-cases/{caseId}';
   static String getAccountEnforcementCasePath({required String caseId}) {
     return _fillPath(getAccountEnforcementCasePathTemplate, <String, String>{

@@ -18,6 +18,11 @@ func (s *Store) RecordProviderAttemptWithResultOutbox(
 	ctx context.Context,
 	record reliabletask.ProviderAttemptRecord,
 ) (reliabletask.ProviderAttemptRecord, error) {
+	if s == nil || s.attempts == nil || s.resultOutboxes == nil {
+		return reliabletask.ProviderAttemptRecord{}, errors.New(
+			"external interaction audit store is available only to integration-service",
+		)
+	}
 	if strings.TrimSpace(record.AttemptID) == "" {
 		record.AttemptID = reliabletask.NewRecordID("attempt")
 	}
@@ -43,6 +48,7 @@ func (s *Store) RecordProviderAttemptWithResultOutbox(
 	outbox := reliabletask.ExternalInteractionResultOutboxRecord{
 		EventID:               record.AttemptID,
 		RequestID:             record.RequestID,
+		SubjectDigest:         record.SubjectDigest,
 		Operation:             record.Operation,
 		ResultStatus:          record.Status,
 		Provider:              record.Provider,
@@ -83,6 +89,7 @@ func (s *Store) insertProviderAttemptOnce(
 		return fmt.Errorf("read existing provider attempt: %w", err)
 	}
 	if existing.RequestID != record.RequestID ||
+		existing.SubjectDigest != record.SubjectDigest ||
 		existing.Operation != record.Operation ||
 		existing.Provider != record.Provider ||
 		existing.ProviderRequestDigest != record.ProviderRequestDigest ||
@@ -113,6 +120,7 @@ func (s *Store) insertResultOutboxOnce(
 		return fmt.Errorf("read existing provider result outbox: %w", err)
 	}
 	if existing.RequestID != record.RequestID ||
+		existing.SubjectDigest != record.SubjectDigest ||
 		existing.Operation != record.Operation ||
 		existing.ResultStatus != record.ResultStatus ||
 		existing.Provider != record.Provider ||
@@ -131,6 +139,10 @@ func (s *Store) LeaseNextExternalInteractionResultOutbox(
 	leaseOwner string,
 	leaseDuration time.Duration,
 ) (reliabletask.ExternalInteractionResultOutboxRecord, bool, error) {
+	if s == nil || s.resultOutboxes == nil {
+		return reliabletask.ExternalInteractionResultOutboxRecord{}, false,
+			errors.New("external interaction result outbox is unavailable")
+	}
 	now := time.Now().UTC()
 	var record reliabletask.ExternalInteractionResultOutboxRecord
 	err := s.resultOutboxes.FindOneAndUpdate(
@@ -173,6 +185,9 @@ func (s *Store) AcknowledgeExternalInteractionResultOutbox(
 	eventID string,
 	leaseOwner string,
 ) (bool, error) {
+	if s == nil || s.resultOutboxes == nil {
+		return false, errors.New("external interaction result outbox is unavailable")
+	}
 	now := time.Now().UTC()
 	result, err := s.resultOutboxes.UpdateOne(
 		ctx,
@@ -204,6 +219,9 @@ func (s *Store) ReleaseExternalInteractionResultOutboxLease(
 	eventID string,
 	leaseOwner string,
 ) error {
+	if s == nil || s.resultOutboxes == nil {
+		return errors.New("external interaction result outbox is unavailable")
+	}
 	_, err := s.resultOutboxes.UpdateOne(
 		ctx,
 		bson.M{

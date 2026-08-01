@@ -21,6 +21,14 @@ tables:
       type: TEXT
       constraints:
       - NULLABLE
+    - name: intersection_ref
+      type: JSONB
+      constraints:
+      - NULLABLE
+    - name: intersection_snapshot
+      type: JSONB
+      constraints:
+      - NULLABLE
     - name: status
       type: VARCHAR(20)
       constraints:

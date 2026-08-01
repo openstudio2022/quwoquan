@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 void main() {
@@ -15,7 +15,7 @@ void main() {
   testWidgets('找私助 beta 多轮继承上下文', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(home: PersonalAssistantConversationPage()),
+        child: MaterialApp(home: PersonalAssistantSessionPage()),
       ),
     );
     await _pumpFrames(tester, count: 8);
@@ -73,9 +73,7 @@ void main() {
 }
 
 PersonalAssistantStreamState _controllerState(WidgetTester tester) {
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
+  final context = tester.element(find.byType(PersonalAssistantSessionPage));
   return ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -96,9 +94,7 @@ Future<void> _send(WidgetTester tester, String text) async {
 }
 
 Future<void> _sendThroughController(WidgetTester tester, String text) async {
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
+  final context = tester.element(find.byType(PersonalAssistantSessionPage));
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(text);
@@ -127,7 +123,7 @@ Future<void> _pumpUntilSettled(WidgetTester tester) async {
   for (var i = 0; i < 700; i++) {
     await tester.pump(const Duration(milliseconds: 100));
     final state = _controllerState(tester);
-    if (!state.running && state.turnId.isNotEmpty) {
+    if (!state.running && state.runId.isNotEmpty) {
       return;
     }
   }

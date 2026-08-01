@@ -203,13 +203,13 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
       <String, AssistantEvalScenario>{};
 
   @override
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    return AssistantConversationWire(
-      conversationId: 'acv_eval_personal_assistant',
+    return AssistantSessionWire(
+      sessionId: 'asn_eval_personal_assistant',
       userId: 'eval-user',
       summary: summary,
       createdAt: now,
@@ -218,8 +218,8 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
     String turnType = 'user',
@@ -229,16 +229,12 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
         const <AssistantIntersectionEvidenceRef>[],
   }) async {
     final scenario = _scenarios[text.trim()] ?? _scenarios.values.first;
-    final turnId = 'atn_eval_${scenario.id}';
-    _turnScenarios[turnId] = scenario;
-    return AssistantTurnEnvelopeWire(
-      turnId: turnId,
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId.isEmpty ? scenario.skillId : skillId,
-      domainId: domainId.isEmpty ? scenario.domainId : domainId,
-      input: AssistantTurnInputWire(text: text),
-      trigger: const AssistantTurnTriggerWire(type: 'user_message'),
+    final runId = 'arn_eval_${scenario.id}';
+    _turnScenarios[runId] = scenario;
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: sessionId,
+      goal: text,
       traceId: 'trace_eval_${scenario.id}',
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
@@ -247,18 +243,18 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
   @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
+    String lastEventId = '',
   }) async* {
-    final turnId = runId;
-    final scenario = _turnScenarios[turnId] ?? _scenarios.values.first;
+    final scenario = _turnScenarios[runId] ?? _scenarios.values.first;
     final createdAt = DateTime.now().toUtc().toIso8601String();
     final toolName = scenario.alphaMockStream.toolName.isEmpty
         ? 'mock_search'
         : scenario.alphaMockStream.toolName;
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:run_started',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:run_started',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 1,
       eventType: AssistantStreamEventType.runStarted,
       payload: const <String, dynamic>{'status': 'running', 'restarted': false},
@@ -266,9 +262,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:process_replace',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:process_replace',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 2,
       eventType: AssistantStreamEventType.processReplace,
       payload: const <String, dynamic>{'processes': <Object?>[]},
@@ -276,9 +272,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:classifying',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:classifying',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 3,
       eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
@@ -297,9 +293,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:searching',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:searching',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 4,
       eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
@@ -319,9 +315,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:assessing',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:assessing',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 5,
       eventType: AssistantStreamEventType.processCommit,
       payload: <String, dynamic>{
@@ -362,9 +358,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:answering',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:answering',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 6,
       eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
@@ -380,9 +376,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:answer_delta',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:answer_delta',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 7,
       eventType: AssistantStreamEventType.answerDelta,
       payload: <String, dynamic>{'text': scenario.alphaMockStream.finalAnswer},
@@ -390,9 +386,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:answering_complete',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:answering_complete',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 8,
       eventType: AssistantStreamEventType.processCommit,
       payload: const <String, dynamic>{
@@ -408,9 +404,9 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:completed',
-      conversationId: 'acv_eval_personal_assistant',
-      turnId: turnId,
+      eventId: '$runId:completed',
+      sessionId: 'asn_eval_personal_assistant',
+      runId: runId,
       seq: 9,
       eventType: AssistantStreamEventType.completed,
       payload: <String, dynamic>{

@@ -26,6 +26,7 @@ type AssignmentStats struct {
 
 type AggregateStore interface {
 	Load(context.Context, string) (model.Experiment, error)
+	LoadRevision(context.Context, string, int64) (model.Experiment, error)
 	Replay(context.Context, string, string, string) (CommitReceipt, bool, error)
 	Commit(context.Context, int64, ChangeSet) (CommitReceipt, error)
 }

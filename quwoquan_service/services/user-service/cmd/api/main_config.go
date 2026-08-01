@@ -53,9 +53,6 @@ type config struct {
 	} `yaml:"redis"`
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
-		OTP                        struct {
-			Mode string `yaml:"mode"`
-		} `yaml:"otp"`
 	} `yaml:"integration"`
 }
 

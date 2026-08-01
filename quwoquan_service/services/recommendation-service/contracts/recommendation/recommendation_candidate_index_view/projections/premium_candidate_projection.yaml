@@ -1,0 +1,43 @@
+read_model: RecommendationPremiumCandidateProjection
+description: >-
+  Product Ops 的精选准入决定在 RecommendationCandidateIndexView 内形成的唯一
+  premium 候选投影。排序窗口只读取本服务候选及此投影，不同步调用 Product Ops、
+  Content、质量评分或训练任务。
+storage_backend: mongodb
+collection: rm_premium_pool
+source_entities:
+- PremiumPoolEntry
+source_events:
+- PremiumPoolEntryUpserted
+- PremiumPoolEntryRolledBack
+- PremiumPoolEntryTakedownEjected
+producers:
+- product-ops-service
+consumers:
+- ranked-recommendation-window
+- evaluation-and-flywheel
+- ops-portal
+checkpoint:
+  source: eventId_inbox_and_updatedAt
+  rebuild: replay_events_ops_premium_pool_entry
+  tombstone: retain_ineligible_projection_and_updatedAt
+fields:
+- {name: contentId, type: string, description: Post identity and unique premium admission key.}
+- {name: scope, type: string, description: Must be global.}
+- {name: status, type: string, description: active, rolled_back, takedown_ejected or expired.}
+- {name: eligibilityState, type: string, description: eligible or ineligible; ranked reads fail closed.}
+- {name: ineligibleReasons, type: '[]string', description: Deterministic rejection reasons for replay and audit.}
+- {name: qualityAdmission, type: string, description: Must be approved before premium eligibility.}
+- {name: qualityScore, type: float, description: Projected admission score; never computed by the read path.}
+- {name: supplySource, type: string, description: Supply attribution from the admission decision.}
+- {name: sourceTaskId, type: string, description: Canonical source task identity when present.}
+- {name: auditId, type: string, description: Product Ops audit identity.}
+- {name: rollbackToken, type: string, description: Product Ops rollback identity.}
+- {name: featuredAt, type: timestamp}
+- {name: expiresAt, type: timestamp}
+- {name: takedownEjected, type: bool}
+- {name: updatedAt, type: timestamp}
+indexes:
+- {name: uq_recommendation_premium_content, keys: {contentId: 1}, unique: true}
+- {name: idx_recommendation_premium_eligible, keys: {eligibilityState: 1, expiresAt: 1, qualityScore: -1, featuredAt: -1}}
+- {name: idx_recommendation_premium_audit, keys: {auditId: 1, updatedAt: -1}}

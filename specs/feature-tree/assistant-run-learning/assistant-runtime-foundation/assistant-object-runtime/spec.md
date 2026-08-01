@@ -14,8 +14,9 @@
 
 ### In Scope
 
-- 持久化 AssistantConversation、AssistantRun/Turn、SkillSubscription 与 SkillConsent 的 owner 状态。
+- 持久化 AssistantSession、AssistantRun/Turn、SkillSubscription 与 SkillConsent 的 owner 状态。
 - 创建命令幂等、运行终态互斥、主动投递 lease 和 consent fail-closed。
+- SkillConsent 由对象专属 domain、Store、Command/Query Facade 与 HTTP adapter 独立拥有；AssistantSession 只能通过 Reader 读取当前授权 Slice。
 
 ### Out of Scope
 
@@ -27,6 +28,8 @@
 
 - 服务重启后必须能按 owner 读取会话与运行；敏感操作在 consent 缺失、撤销或存储不可用时必须拒绝执行。
 - 同一 intent 的重复创建不得产生第二个运行；completed、failed、cancelled 终态不得互相迁移。
+- Grant/Revoke 必须消费 Idempotency-Key，并将授权事实、命令回执与审计事件在同一 PostgreSQL 事务提交；同键不同命令或 payload 必须返回 canonical conflict。
+- SkillConsent owner 只使用可信 `accountId`；生效性只由 `revokedAt` 是否为空裁决，`granted` 仅是由此推导的 API projection。
 
 ## 4. 契约引用
 
@@ -42,6 +45,7 @@
 - WHEN assistant-service 重启后读取运行并尝试执行敏感操作。
 - THEN 原运行仍通过 metadata-owned `AssistantTurnEnvelope` 可读取；即使有限保留期的 SSE journal 已过期，completed 的 `answerText`，或 failed/cancelled 的 canonical terminal failure，以及状态、trace 与恢复状态仍来自 Run Store 的 canonical snapshot。
 - AND 敏感操作返回 canonical 授权失败，且不产生工具调用或成功事实。
+- AND Grant/Revoke 的首次提交、同键重放、同键冲突、撤权即时拒绝及事实/回执/事件原子性均有真实 PostgreSQL API integration 证据。
 
 ## 6. 依赖
 

@@ -1,0 +1,42 @@
+events: []
+consumption:
+- source_event: PostPublished
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 以 aggregateVersion 为单调 sourceSequence，事务内写候选、实体标签索引与 eventId inbox。
+- source_event: PostUpdated
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 仅更新 Post 生命周期字段，保留 Recommendation 自有计数、质量、premium 与特征状态。
+- source_event: PostSettingsUpdated
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: public/published/approved 时重建候选，否则按同一 sequence 移除候选并写 tombstone。
+- source_event: PostPromotedToWork
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 幂等更新候选内容类型与当前公开字段，不跨库回读 Post。
+- source_event: PostDeleted
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 事务内删除候选、premium 与实体标签索引，保留单调 tombstone 与 inbox。
+- source_event: PostPrivacyRedacted
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 与删除相同地清除所有可识别候选字段，不允许旧事件复活。
+- source_event: PostPurged
+  source_service: content-service
+  channel: events.content.post_lifecycle
+  behavior: 确认最终清除候选与辅助索引，保留不可逆 sourceSequence 水位。
+- source_event: PremiumPoolEntryUpserted
+  source_service: product-ops-service
+  channel: events.ops.premium_pool_entry
+  behavior: 以 eventId inbox 与 updatedAt 水位幂等更新 Recommendation 自有 premium 投影；只有 active、approved、未过期条目可标记候选 eligible。
+- source_event: PremiumPoolEntryRolledBack
+  source_service: product-ops-service
+  channel: events.ops.premium_pool_entry
+  behavior: 原子撤销 premium eligibility 并保留运营审计投影，不修改 Content 生命周期字段。
+- source_event: PremiumPoolEntryTakedownEjected
+  source_service: product-ops-service
+  channel: events.ops.premium_pool_entry
+  behavior: 原子写入不可用状态并清除候选 premium eligibility；重复或旧 updatedAt 事件不得恢复资格。

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../circle/membership_contracts.dart';
 
@@ -24,6 +24,12 @@ final class CircleMembershipListQuery {
   final String circleId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class DecideCircleMembershipCommand {
@@ -42,6 +48,11 @@ final class DecideCircleMembershipCommand {
 
   final String circleId;
   final String personaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "personaId": this.personaId,
+  };
 }
 
 final class JoinCircleMembershipCommand {
@@ -54,6 +65,10 @@ final class JoinCircleMembershipCommand {
   }
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class LeaveCircleMembershipCommand {
@@ -66,6 +81,10 @@ final class LeaveCircleMembershipCommand {
   }
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class MyCircleMembershipQuery {
@@ -78,6 +97,10 @@ final class MyCircleMembershipQuery {
   }
 
   final String circleId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+  };
 }
 
 final class PendingCircleMembershipListQuery {
@@ -96,6 +119,12 @@ final class PendingCircleMembershipListQuery {
   final String circleId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class PersonaCircleListQuery {
@@ -117,6 +146,13 @@ final class PersonaCircleListQuery {
   final String? query;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    if (this.query != null) "query": this.query!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class UpdateCircleMembershipRoleCommand {
@@ -138,6 +174,12 @@ final class UpdateCircleMembershipRoleCommand {
   final String circleId;
   final String personaId;
   final CircleMembershipRole role;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "personaId": this.personaId,
+    "role": switch (this.role) { CircleMembershipRole.owner => "owner", CircleMembershipRole.admin => "admin", CircleMembershipRole.member => "member", },
+  };
 }
 
 CloudOperationRequestPayload encodeCircleCircleMembershipApproveCircleMemberGeneratedRequest(DecideCircleMembershipCommand request) {

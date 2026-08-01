@@ -74,7 +74,7 @@ func seedIntersectionSourceFixtures(t *testing.T) {
 	// coCommented：双方评论过同一篇内容；sharedEntityAttention：双方都浏览过 ixEntity；
 	// followeeViewedObject：visitor_c 浏览过 ixEntity。
 	// entity_page_view 只证明浏览，不证明到访；到访类 kind（coVisitedEntity /
-	// followeeVisited）在注册表中为 deferred，不得由本数据源产出。
+	// followeeVisited）只允许由可证到访生产者产出，不得由本数据源产出。
 	eventDocs := []any{
 		bson.M{"userId": ixViewer, "clientEventId": "ixsrc-event-comment-viewer", "occurredAt": time.Now(), "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
 		bson.M{"userId": ixObject, "clientEventId": "ixsrc-event-comment-object", "occurredAt": time.Now(), "action": "comment", "contentId": "ixsrc_post_1", "createdAt": time.Now()},
@@ -220,9 +220,9 @@ func TestIntersectionSource_PersonObjectProducesStandardFactKinds(t *testing.T) 
 	}
 
 	// P0 诚实红线：entity_page_view 只能证明浏览，禁止产出到访类事实。
-	for _, deferredVisitKind := range []string{"coVisitedEntity", "followeeVisited"} {
-		if _, exists := kinds[deferredVisitKind]; exists {
-			t.Fatalf("deferred visit kind %q must not be produced from entity_page_view", deferredVisitKind)
+	for _, visitKind := range []string{"coVisitedEntity", "followeeVisited"} {
+		if _, exists := kinds[visitKind]; exists {
+			t.Fatalf("physical visit kind %q must not be produced from entity_page_view", visitKind)
 		}
 	}
 	for _, r := range reasons {
@@ -232,7 +232,7 @@ func TestIntersectionSource_PersonObjectProducesStandardFactKinds(t *testing.T) 
 	}
 }
 
-// TestIntersectionSource_SharedCircleDoesNotUsePersonNameAsCircleName（V3）：
+// TestIntersectionSource_SharedCircleDoesNotUsePersonNameAsCircleName：
 // 人↔人的 sharedCircle reason 只有共同圈子数量，没有圈子对象 target；此时必须按
 // 「具名样本 → 纯计数 → 隐藏」降级为可证计数句，禁止把对方人名冒充圈子名。
 func TestIntersectionSource_SharedCircleDoesNotUsePersonNameAsCircleName(t *testing.T) {
@@ -402,7 +402,7 @@ func TestIntersectionSource_HomepageAndCircleObjectsUseConcreteActionSemantics(t
 			"clientEventId": "ixsrc-event-circle-friend",
 			"occurredAt":    time.Now(),
 			"action":        "entity_page_view",
-			"entityRefs":    []string{"fixture_circle_photo"},
+			"entityRefs":    []string{"circle_photo"},
 			"displayName":   "契约摄影社",
 			"createdAt":     time.Now(),
 		},
@@ -447,7 +447,7 @@ func TestIntersectionSource_HomepageAndCircleObjectsUseConcreteActionSemantics(t
 	}
 
 	assertFolloweeVisitedReason("homepage_sight_west_lake", "homepage", "西湖景区", "place")
-	assertFolloweeVisitedReason("fixture_circle_photo", "circle", "契约摄影社", "circle")
+	assertFolloweeVisitedReason("circle_photo", "circle", "契约摄影社", "circle")
 }
 
 // stubSharedTagReader 是共享标签能力的对象级 typed double：

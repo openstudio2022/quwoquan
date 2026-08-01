@@ -48,11 +48,20 @@
 - 错误：统一消费 metadata 生成的 GreetingRequest 与 Conversation 错误语义。
 - pending 唯一性、幂等重放、拉黑级联、频控与状态迁移不可绕过。
 
+<a id="req-005"></a>
+### REQ-005 交集问候只接受 typed 引用并由服务端冻结事实
+
+- `GreetingRequest` 可携带最小 `intersectionRef`，只含 intersectionId、evidenceId、sourceRef 与 canonical object type/id，不含展示文案。
+- user-service 必须以发起方身份通过 content 公开 Reader 重新解析；成功后写入不可变 `intersectionSnapshot`，引用失效或依赖不可用时降级为普通问候并记录受控结果，不阻止发送。
+- 回复升级为 1v1 conversation 时复制该快照；App 请求箱与 1v1 头部只展示服务端快照，不从客户端引用、资料字段或 raw id 拼接文案。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/errors.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/fields.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml`
 
 ## 5. 验收场景
 
@@ -63,6 +72,7 @@
 - WHEN 参与者执行“打招呼请求收件箱与升级”对应的公开行为。
 - THEN 会话升级、幂等与关注状态不变均有 API 集成证据。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+- AND 携带有效交集引用时展示服务端冻结的交集摘要；引用失效时仍产生普通问候且不信任客户端展示事实。
 
 ## 6. 依赖
 

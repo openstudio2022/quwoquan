@@ -37,6 +37,7 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	activityDocumentID := "acct-close-activity-document"
 	readFactID := "acct-close-read-fact"
 	shareFactID := "acct-close-share-fact"
+	keptShareFactID := "acct-close-share-fact-kept"
 	mediaSessionID := "acct-close-media-session"
 	mediaAssetID := "acct-close-media-asset"
 	replayDatasetID := "acct-close-replay-dataset"
@@ -61,6 +62,7 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 		bson.M{
 			"_id": keptPostID, "authorId": "acct-close-other-persona",
 			"status": "published", "commentCount": int64(3), "likeCount": int64(2),
+			"shareCount": int64(2),
 		},
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("comments"), []any{
@@ -133,6 +135,10 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 		bson.M{
 			"_id": shareFactID, "postId": keptPostID,
 			"actorId": event.Payload.PersonaIDs[0],
+		},
+		bson.M{
+			"_id": keptShareFactID, "postId": keptPostID,
+			"actorId": "acct-close-other-persona",
 		},
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("rm_behavior_events"), []any{
@@ -402,6 +408,7 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 		"_id": bson.M{"$in": []string{ownedReactionID, ownedTargetReactionID}},
 	}, 0)
 	assertAccountClosureCount(t, db, "content_reaction_aggregates", bson.M{"_id": keptReactionID}, 1)
+	assertAccountClosureCount(t, db, "outbound_share_facts", bson.M{"_id": keptShareFactID}, 1)
 	for _, assertion := range []struct {
 		collection string
 		filter     bson.M
@@ -537,12 +544,13 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	var keptPost struct {
 		CommentCount int64 `bson:"commentCount"`
 		LikeCount    int64 `bson:"likeCount"`
+		ShareCount   int64 `bson:"shareCount"`
 	}
 	if err := db.Collection("posts").FindOne(ctx, bson.M{"_id": keptPostID}).Decode(&keptPost); err != nil {
 		t.Fatal(err)
 	}
-	if keptPost.CommentCount != 2 || keptPost.LikeCount != 1 {
-		t.Fatalf("kept Post counters=%+v, want comment=2 like=1", keptPost)
+	if keptPost.CommentCount != 2 || keptPost.LikeCount != 1 || keptPost.ShareCount != 1 {
+		t.Fatalf("kept Post counters=%+v, want comment=2 like=1 share=1", keptPost)
 	}
 	var tombstone struct {
 		AuthorID string `bson:"authorId"`
@@ -1171,6 +1179,7 @@ func cleanupAccountClosureIntegrationData(
 		{"profile_interaction_activity_views", bson.M{"ownerPersonaId": bson.M{"$in": subjects}}},
 		{"profile_interaction_read_facts", bson.M{"ownerPersonaId": bson.M{"$in": subjects}}},
 		{"outbound_share_facts", bson.M{"actorId": bson.M{"$in": subjects}}},
+		{"outbound_share_facts", bson.M{"postId": bson.M{"$in": postIDs}}},
 		{"rm_behavior_events", bson.M{"userId": bson.M{"$in": subjects}}},
 		{"entity_wishlist_events", bson.M{"userId": bson.M{"$in": subjects}}},
 		{"rec_learning_events", bson.M{"userId": bson.M{"$in": subjects}}},

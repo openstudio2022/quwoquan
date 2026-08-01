@@ -1,0 +1,19 @@
+commercial_defaults: {status: blocked, block_reason: AssistantEntryView 对象源与投影测试尚待本治理波次闭环, gap_id: ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+description: AssistantEntryView 的无版本单一入口。
+api_routes:
+- method: GET
+  path: /assistant/entry
+  operation: GetAssistantEntry
+  actor: persona
+  commercial: {status: blocked, block_reason: AssistantEntryView 对象源与投影测试尚待闭环, gap_id: ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  application: {kind: query, facet: AssistantEntryViewQueryFacade, method: getEntry, reader: AssistantEntryViewReader, slice: AssistantEntryResponse}
+  request_bindings:
+    query: [{name: pageType, field: pageType, required: false}, {name: objectId, field: objectId, required: false}]
+  response_entity: AssistantEntryResponse
+  reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_entry_view_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.5}
+  authorization: {principal: persona, ownership_policy: requester_self}
+  security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}

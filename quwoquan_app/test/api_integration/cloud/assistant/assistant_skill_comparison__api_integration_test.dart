@@ -12,7 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_eval_scenario_fixtures.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
@@ -40,7 +40,7 @@ void main() {
                 ScenarioEvalMockAssistantRepository(pack: scenarioPack),
               ),
           ],
-          child: const MaterialApp(home: PersonalAssistantConversationPage()),
+          child: const MaterialApp(home: PersonalAssistantSessionPage()),
         ),
       );
       await _pumpFrames(tester);
@@ -49,7 +49,7 @@ void main() {
       expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
       final container = ProviderScope.containerOf(
-        tester.element(find.byType(PersonalAssistantConversationPage)),
+        tester.element(find.byType(PersonalAssistantSessionPage)),
       );
 
       for (final scenario in scenarios) {
@@ -60,7 +60,7 @@ void main() {
         await _pumpUntilStreamSettled(tester);
 
         final context = tester.element(
-          find.byType(PersonalAssistantConversationPage),
+          find.byType(PersonalAssistantSessionPage),
         );
         final state = ProviderScope.containerOf(
           context,
@@ -147,8 +147,8 @@ void main() {
             'finalAnswerReady': state.processSummary.finalAnswerReady,
           },
           'transcript': transcript,
-          'turnId': state.turnId,
-          'conversationId': state.conversationId,
+          'runId': state.runId,
+          'sessionId': state.sessionId,
         });
       }
     },
@@ -264,9 +264,7 @@ const _forbiddenAnswerFragments = <String>[
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
   for (var i = 0; i < 240; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

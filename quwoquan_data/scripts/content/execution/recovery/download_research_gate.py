@@ -69,6 +69,7 @@ def _download_research_lane_issues(
     from content.source.gate import download_requirements
     from content.source.source_inputs import (
         curated_images_for_entity,
+        curated_sourced_videos_for_entity,
         curated_sources_for_entity,
     )
     from core.image_rules import relevance_issue
@@ -352,6 +353,63 @@ def _download_research_lane_issues(
                 add(
                     DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
                     f"image[{index}]: {px_issue}",
+                    stage=DataIssueStage.IMAGE_RIGHTS,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
+                )
+        return issues
+    if lane == "video":
+        videos = curated_sourced_videos_for_entity(
+            ctx.execution_id,
+            eid,
+            etype,
+        )
+        frames = [
+            image
+            for image in curated_images_for_entity(ctx.execution_id, eid, etype)
+            if str(image.get("researchLane") or "") == "video"
+        ]
+        if not videos and len(frames) < requirements.min_video_frames:
+            add(
+                DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                "video research needs an admitted direct-video candidate or "
+                f"{requirements.min_video_frames} rights-cleared frame(s) "
+                f"({len(frames)} retained)",
+                stage=DataIssueStage.IMAGE_RIGHTS,
+                recovery=DataRecoveryAction.REPLACE_MEDIA,
+            )
+        for index, frame in enumerate(frames, start=1):
+            if enforce_rights:
+                for issue in validate_image_rights(
+                    frame,
+                    vertical=ctx.spec.vertical,
+                ):
+                    add(
+                        DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                        f"video frame[{index}] {frame.get('url') or '?'}: {issue}",
+                        stage=DataIssueStage.IMAGE_RIGHTS,
+                        recovery=DataRecoveryAction.REPLACE_MEDIA,
+                    )
+            relevance = str(frame.get("relevance") or frame.get("caption") or "")
+            rel_issue = relevance_issue(
+                relevance,
+                entity_id=eid,
+                asset_id=f"{eid}#video#{index}",
+            )
+            if rel_issue:
+                add(
+                    DataIssueCode.SOURCE_ENTITY_MISMATCH,
+                    f"video frame[{index}]: {rel_issue}",
+                    stage=DataIssueStage.IMAGE_RIGHTS,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
+                )
+            px_issue = _planned_pixel_issue(
+                frame,
+                asset_id=f"{eid}#video#{index}",
+            )
+            if px_issue:
+                add(
+                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                    f"video frame[{index}]: {px_issue}",
                     stage=DataIssueStage.IMAGE_RIGHTS,
                     recovery=DataRecoveryAction.REPLACE_MEDIA,
                 )

@@ -11,6 +11,9 @@ collections:
       keys:
         startAt: 1
         status: 1
+    - name: idx_reliable_task_outbox_subject_cleanup
+      keys:
+        payload.subjectDigest: 1
   reliable_async_task:
     entity: ExternalInteractionRequest
     indexes:
@@ -22,6 +25,9 @@ collections:
       keys:
         nextAttemptAt: 1
         status: 1
+    - name: idx_reliable_async_task_subject_cleanup
+      keys:
+        payload.subjectDigest: 1
   external_interaction_result_outbox:
     entity: ExternalInteractionResultOutbox
     role: authoritative
@@ -31,6 +37,9 @@ collections:
         deliveryStatus: 1
         leaseExpiresAt: 1
         createdAt: 1
+    - name: idx_ext_result_outbox_subject_cleanup
+      keys:
+        subjectDigest: 1
   reliable_task_recovery_receipts:
     entity: ExternalInteractionRecoveryReceipt
     role: authoritative
@@ -42,6 +51,24 @@ collections:
     - name: idx_reliable_task_recovery_receipt_expiry
       keys:
         expiresAt: 1
+      ttl_seconds: 0
+  integration_user_account_closed_inbox:
+    entity: ExternalInteractionAccountClosureReceipt
+    role: authoritative
+    indexes:
+    - name: idx_integration_account_closed_applied
+      keys:
+        appliedAt: -1
+  integration_user_account_closed_failures:
+    entity: ExternalInteractionAccountClosureFailure
+    role: operational
+    indexes:
+    - name: idx_integration_account_closed_failure_event
+      keys:
+        eventDigest: 1
+    - name: ttl_integration_account_closed_failures
+      keys:
+        expireAt: 1
       ttl_seconds: 0
 redis_cache:
 - key: ready:integration:external_interaction:{taskType}

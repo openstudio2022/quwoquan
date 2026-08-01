@@ -60,7 +60,7 @@ class AccountClosureObservabilityContractTest(unittest.TestCase):
             "notification": ROOT
             / "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream/user_account_closed_metrics.go",
             "search": ROOT
-            / "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/mq/user_account_closed_metrics.go",
+            / "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/mq/user_account_closed_metrics.go",
         }
         for domain, path in metric_files.items():
             source = path.read_text(encoding="utf-8")

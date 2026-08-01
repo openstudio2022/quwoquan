@@ -21,7 +21,7 @@ func TestBaiduClientMapsVendorFailureToStructuredRecovery(t *testing.T) {
 	t.Cleanup(upstream.Close)
 
 	client := NewBaiduClient(upstream.URL, "test-ak", upstream.Client())
-	_, err := client.Search(context.Background(), model.SearchQuery{Query: "cafe"})
+	_, err := client.Search(context.Background(), model.SearchRequestFact{Query: "cafe"})
 	if err == nil {
 		t.Fatal("provider failure must not succeed")
 	}

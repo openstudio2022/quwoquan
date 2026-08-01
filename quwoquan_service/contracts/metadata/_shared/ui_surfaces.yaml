@@ -147,8 +147,7 @@ surfaces:
     description: 私助半弹层入口
     operation_ids:
       - ReportPageContext
-      - GetEntryPersonalization
-      - GetSuggestedActions
+      - GetAssistantEntry
 
   - id: personalAssistantDialog
     owner: assistant
@@ -156,10 +155,10 @@ surfaces:
     path_template: /assistant/personal
     description: 找私助云端优先对话入口
     operation_ids:
-      - CreateAssistantConversation
-      - ListAssistantConversations
-      - GetAssistantConversation
-      - ListConversationTurns
+      - CreateAssistantSession
+      - ListAssistantSessions
+      - GetAssistantSession
+      - ListSessionTurns
       - StartAssistantRun
       - GetAssistantRun
       - CancelAssistantRun
@@ -172,8 +171,7 @@ surfaces:
       - GetAppMessageUnreadCount
       - AppendAssistantLearningFact
       - ReportPageContext
-      - GetEntryPersonalization
-      - GetSuggestedActions
+      - GetAssistantEntry
       - ListSkills
       - ListAssistantTasks
       - SetAssistantPreference
@@ -206,12 +204,12 @@ surfaces:
 
   - id: assistantHistory
     owner: assistant
-    route_id: chatDetail
-    path_template: /chat/{id}
+    route_id: assistantPersonal
+    path_template: /assistant/personal
     description: 私助记录抽屉与分页
     operation_ids:
-      - ListAssistantConversations
-      - ListConversationTurns
+      - ListAssistantSessions
+      - ListSessionTurns
 
   - id: assistantFeedback
     owner: assistant
@@ -251,8 +249,8 @@ surfaces:
     path_template: /search/network
     description: 网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）
     operation_ids:
-      - SearchQuery
-      - SearchXiaoquResults
+      - Search
+      - StartAssistantRun
       - UpsertRecentSearch
       - ReportSearchFeedback
 
@@ -722,14 +720,7 @@ surfaces:
     path_template: /assistant/skills
     description: 私助技能中心
     operation_ids:
-      - ListAssistantConversations
-
-  - id: personalAssistantChatAlias
-    owner: assistant
-    route_id: chatDetail
-    path_template: /chat/{id}
-    description: assistant 会话 ID 经聊天详情路由进入私助对话
-    operation_ids: []
+      - ListAssistantSessions
 
   - id: settingsHome
     owner: settings

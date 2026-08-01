@@ -86,10 +86,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 交集摘要目前由资料字段伪装
+### OPEN-001 真实交集摘要尚缺环境消费证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前用户行的交集摘要由相识来源与简介两个资料字段拼接产生，圈子行恒为空，群组行拼接内部标识且内容与副标题重复因而永不渲染。联系首页因此没有任何真实交集信息。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺 alpha/beta/gamma 真实身份、真实交集数据和页面 UAT readback；Chat 已通过 delegated persona 调用 content 的公开对象交集 Reader，并投影最多两个 typed summary，App 用户行只消费该摘要，圈子与群组行不再拼 raw id，本地契约已覆盖数量上限与 typed object identity。
+- 完成判定：`GWT-001` 与 `GWT-002` 除本地契约外，取得至少一个非生产 Remote composition 的真实对象交集响应与 App 页面证据

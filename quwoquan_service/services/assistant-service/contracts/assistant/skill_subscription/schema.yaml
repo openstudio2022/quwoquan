@@ -85,9 +85,11 @@ subcontracts:
     class_name: SkillSubscriptionDestinationWire
     fields:
     - name: destinationType
-      type: string
+      type: enum
+      enum_ref: SkillSubscriptionDestinationType
       default: user
-      description: user | conversation | group
+      strict: true
+      description: user | chat_conversation
     - name: destinationId
       type: string
       default: ''

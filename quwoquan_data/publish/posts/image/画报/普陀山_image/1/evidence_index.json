@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "普陀山_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:1303d2d9ebbadd2cd59c4e8f49f54bd0592fa1af0e5f4d4c6ab1c938d24d892c"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:afeefb50925b20fb7138885a3e0d3b7901f2e87904b83541862fb6d1cb61c79b"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:8f2c8a43f7ff738f17d17d70a338cbe6cbe86a9ed28e4e6ce346dd75530975db"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:0c2bdedc2aa33e0aae56c3f3dec9b38324b79f83095a96d4d7774c404c322b98"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:2a785239a8010ff60b1c42a14ba7dd0c1edc73e0e63e729102f584c8bff5984e"
+    }
+  ]
+}

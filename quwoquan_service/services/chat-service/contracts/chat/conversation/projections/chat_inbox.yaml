@@ -91,6 +91,8 @@ client_projection:
   base_class: ''
   output_path: cloud/runtime/generated/chat/chat_inbox_dto.g.dart
   strict: true
+  dart_imports:
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
   computed_getters:
   - name: hasMention
     source: hasMention
@@ -140,10 +142,11 @@ client_projection:
     source: lastMessagePreview
     default: ''''''
   - name: lastMessageType
-    dart_type: String
+    type: enum
+    dart_type: MessageType
+    enum_ref: MessageType
     nullable: false
     source: lastMessageType
-    default: '''text'''
   - name: lastMessageTime
     dart_type: DateTime
     nullable: true

@@ -19,8 +19,7 @@ class _SearchHomeTabBar extends StatelessWidget {
     final tabs = <_SearchHomeTab, String>{
       _SearchHomeTab.guess: SearchText.searchHomeGuessTitle,
       _SearchHomeTab.circles: SearchText.searchHomeDiscoverCirclesTitle,
-      _SearchHomeTab.locations:
-          SearchText.searchHomeDiscoverLocationsTitle,
+      _SearchHomeTab.locations: SearchText.searchHomeDiscoverLocationsTitle,
     };
     return Row(
       children: [
@@ -123,9 +122,7 @@ class _GuessKeywordSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showHeader) ...[
-          const _SearchSectionHeader(
-            title: SearchText.searchHomeGuessTitle,
-          ),
+          const _SearchSectionHeader(title: SearchText.searchHomeGuessTitle),
           SizedBox(height: _SearchTokens.headerContentGap),
         ],
         GridView.builder(

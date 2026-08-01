@@ -2,7 +2,7 @@
 
 > 所属能力：[`system-architecture-and-engineering-guide`](../spec.md)
 
-> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+> Journey / Scenario：AppRoot 当前全部 Journey；统一准出锚点为 [`REQ-009`](../../../spec.md#req-009)、[`REQ-010`](../../../spec.md#req-010) 与 [`UAT-009`](../../../spec.md#uat-009)。
 
 > 设计归属：[L2 DEC-001](../design.md#dec-001)
 
@@ -16,13 +16,15 @@
 
 ### In Scope
 
-- “App Cloud 业务对象商用闭环”的输入、可观察主路径、失败语义以及与父能力的交接。
-- 通用 CRUD、事件溯源、分布式事务或通用 Saga。
-- 推荐、内容生产和 edge-media 内部算法。
+- 服务本地 contracts 到 ContractGraph、服务端安全描述符、App typed client 与 generated manifest 的单一生成链。
+- App Remote composition、服务端 operation/object guard、Cloud runtime 单轨和 test-only double 物理隔离。
+- 当前全部 AppRoot Journey 的三层 CaseResult、四环境制品、Provider、SLO、灰度与回滚证据闭环。
 
 ### Out of Scope
 
-- 父能力中由其他 Story 独立拥有的行为、能力级架构决定和实现任务。
+- 通用 CRUD 框架、通用事件溯源、分布式事务或通用 Saga。
+- 推荐、内容生产和 edge-media 内部算法。
+- 父能力中由其他 Story 独立拥有的产品行为与领域事实。
 
 ## 3. 行为要求
 
@@ -41,6 +43,7 @@
 ### REQ-003 服务端从可信 principal 执行 operation 与对象授权
 
 - required operation 服务端 guard 覆盖率为 100%。
+- 每个对象的身份拒绝错误由本对象 `errors.yaml` 唯一拥有并生成；禁止从兄弟对象借用通用错误码。
 - RTC/Realtime、Chat/Content Media、Assistant consent、Behavior/Ops 的跨 actor 拒绝语义必须有直接负向测试证据。
 - production 缺 JWT key/issuer/audience 时启动失败且不存在默认 secret。
 
@@ -57,11 +60,11 @@
 - Runtime import DAG、generated-client-only 与 `RuntimeFailure` 零旁路必须由可执行门禁直接证明。
 
 <a id="req-006"></a>
-### REQ-006 十条真实 Remote Scenario 完成商业准出
+### REQ-006 当前全部真实 Remote Scenario 完成商业准出
 
 - local_contract、api_integration、user_acceptance 均有真实 CaseResult。
 - retired/Mock/fixture/empty Remote/reverse import/dynamic skip/path-UAT 全部为 0。
-- production AOT/SBOM、Web release、OHOS HAP、SLO、灰度和回滚证据绑定同一候选版本。
+- production AOT/SBOM、Web release、OHOS HAP、SLO、灰度和回滚证据绑定同一不可变候选。
 
 <a id="req-007"></a>
 ### REQ-007 L3 Story 与 AppRoot 十条 Scenario 双向可追踪
@@ -92,7 +95,9 @@
 - canonical：本文件 `REQ-004`、`GWT-004` 与 `OPEN-004`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts`
 - canonical：`quwoquan_app/lib/cloud/runtime`
-- canonical：[`AppRoot UAT`](../../../spec.md#uat-001)
+- canonical：[`AppRoot REQ-009`](../../../spec.md#req-009)
+- canonical：[`AppRoot REQ-010`](../../../spec.md#req-010)
+- canonical：[`AppRoot UAT-009`](../../../spec.md#uat-009)
 - canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
 
 ## 5. 验收场景
@@ -134,11 +139,11 @@
 - THEN 运行时只使用一条可追踪执行链，并按 canonical failure 和恢复语义结束。
 
 <a id="gwt-006"></a>
-### GWT-006 十条真实 Remote Scenario 完成商业准出
+### GWT-006 当前全部真实 Remote Scenario 完成商业准出
 
-- GIVEN 候选版本已部署到声明环境。
-- WHEN 十条 Remote Scenario 分别执行 local_contract、api_integration 与 user_acceptance。
-- THEN 三层结果、制品摘要、SLO、灰度与回滚证据可关联到同一候选版本。
+- GIVEN 同一不可变候选已部署到声明环境。
+- WHEN 当前全部 AppRoot Remote Scenario 分别执行 local_contract、api_integration 与 user_acceptance。
+- THEN 三层结果、制品摘要、SLO、灰度与回滚证据可关联到该唯一不可变候选。
 
 ## 6. 依赖
 
@@ -154,17 +159,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Account/Persona/Relationship、Content/Media/TrustSafety、Circle、Chat、Assistant、Notification、Search、Tag、Recommendation、Ops、RTC/Realtime/Integration 的对象与强/最终一致性有唯一裁决。
+- 影响或价值：尚缺的实现或验收证据：AssistantRun、AssistantTask、PageContext 与部分 read model 的独立物理归属；这些对象仍混入 AssistantSession 编排，其强/最终一致性尚无完整唯一裁决。SkillConsent 已完成对象专属 domain/Store/Command/Query/HTTP 硬切、单轨 accountId 与真实 PostgreSQL 事务证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 App 只消费业务对象类型化 ContractGraph
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>
 ### OPEN-003 服务端从可信 principal 执行 operation 与对象授权
@@ -172,7 +168,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：required operation 服务端 guard 覆盖率为 100%。
+- 影响或价值：仍缺每个服务 production composition root 对 required operation 的 100% 挂载覆盖报告与同一候选环境拒绝回执；ContractGraph 已为全部 operation 生成 fail-closed descriptor，runtime guard 与重点跨 actor 负向测试已通过。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-004"></a>
@@ -181,23 +177,14 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺四环境 dependency/kernel/AOT/SBOM 与 UAT transitive import 证据；目标：App/runner/UAT 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
+- 影响或价值：仍缺同一候选的 alpha/beta/gamma/prod dependency/kernel/AOT/SBOM、双端安装包与 UAT transitive import 回执；静态纯度、包依赖与 Remote 单轨门已通过。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-005"></a>
-### OPEN-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Cloud 只有一条 context/config/transport/error/telemetry 执行链。
-- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
-
 <a id="open-006"></a>
-### OPEN-006 十条真实 Remote Scenario 完成商业准出
+### OPEN-006 当前全部真实 Remote Scenario 完成商业准出
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：local_contract、api_integration、user_acceptance 均有真实 CaseResult。
+- 影响或价值：仍缺当前全部 AppRoot Journey 在同一候选上的 alpha/beta/gamma/prod 真实 user_acceptance、Provider、SLO、灰度与回滚 CaseResult；局部 local_contract 与 api_integration 已有直接证据，但 ContractGraph 仍有 blocked operation。
 - 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。

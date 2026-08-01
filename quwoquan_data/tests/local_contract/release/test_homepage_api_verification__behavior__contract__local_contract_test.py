@@ -37,8 +37,9 @@ def _cases(root: Path, release_id: str, *, environment: DeploymentEnvironment) -
 
 
 class _PublicApiClientDouble:
-    def __init__(self, *, base_url: str) -> None:
+    def __init__(self, *, base_url: str, ssl_cafile: str = "") -> None:
         assert base_url.startswith("https://")
+        assert ssl_cafile.endswith("root.crt")
 
     def get_json(self, path: str, *, page_id: str) -> SimpleNamespace:
         if path == "homepages/homepage-putuo":
@@ -84,6 +85,7 @@ def test_homepage_api_verification__reads_dynamic_cases__local_contract(
         case_manifest_path=cases,
         output_path=tmp_path / f"env/{environment.value}/runs/data-release" / release_id / "api-001/homepage-api-verification.json",
         api_base_url="https://api.example.invalid",
+        ssl_cafile=str(tmp_path / "root.crt"),
     )
 
     payload = json.loads(report.read_text(encoding="utf-8"))
@@ -111,6 +113,7 @@ def test_homepage_api_verification__rejects_title_drift__local_contract(
             case_manifest_path=cases,
             output_path=tmp_path / "env/gamma/runs/data-release" / release_id / "api-002/homepage-api-verification.json",
             api_base_url="https://api.example.invalid",
+            ssl_cafile=str(tmp_path / "root.crt"),
         )
 
 

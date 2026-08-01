@@ -1,3 +1,4 @@
+import '../generated/chat_contract_enums.g.dart';
 import '../operation_request_payload.dart';
 
 export 'conversation_contracts.dart'
@@ -126,7 +127,7 @@ final class ChatInboxItem {
   final String avatarUrl;
   final int groupAvatarVersion;
   final String lastMessagePreview;
-  final String lastMessageType;
+  final MessageType lastMessageType;
   final DateTime? lastMessageTime;
   final int lastSeq;
   final int unreadCount;
@@ -425,7 +426,7 @@ ChatInboxItem _decodeInboxItem(Object? value) {
       item['lastMessagePreview'],
       'lastMessagePreview',
     ),
-    lastMessageType: _requiredText(item['lastMessageType'], 'lastMessageType'),
+    lastMessageType: MessageType.fromWire(item['lastMessageType']),
     lastMessageTime: _optionalTimestamp(
       item['lastMessageTime'],
       'lastMessageTime',

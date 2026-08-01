@@ -33,6 +33,8 @@ type FeedService struct {
 	activeSupply     ActiveSupplyReader
 	cursorCodec      *FeedCursorCodec
 	deliveryPages    deliveryapp.Store
+	rankedWindows    deliveryapp.RankedRecommendationGateway
+	deliveryEvents   deliveryapp.FeedPageDeliveredPublisher
 }
 
 func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
@@ -397,7 +399,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		requiresPremiumVideo := route.Surface == "premium_stream" || releaseBoundVideoBook
 		if (!requiresPremiumVideo && !activeSupply.DiscoveryReady()) ||
-			(requiresPremiumVideo && !activeSupply.PremiumVideoReady()) {
+			(requiresPremiumVideo && !activeSupply.PlayableVideoReady()) {
 			if requestedCursor != "" {
 				terminalStage = rtrec.FailureStageActiveSupplyMissing
 				return nil, requiredDependencyFailure(
@@ -571,99 +573,173 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	deliveryBatches := make([]deliveryBatch, 0, 4)
 	hydrationRequested := 0
 	hydrationFound := 0
-	for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
-		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-			UserID:                  req.UserID,
-			PersonaID:               req.ViewerPersonaID,
-			SessionID:               req.SessionID,
-			RankedWindowSubjectID:   identity.RankedFeedWindowSubjectID(req.UserID, req.SessionID),
-			FeedType:                route.FeedType,
-			Sort:                    normalizeFeedSort(req.Sort),
-			Continuation:            recommendationContinuation,
-			Limit:                   limit - len(views),
-			Surface:                 route.Surface,
-			ChannelID:               route.ChannelID,
-			Vertical:                route.Vertical,
-			FeedRequestID:           feedRequestID,
-			ActiveReleaseID:         activeSupply.ActiveReleaseID,
-			ActiveManifestDigest:    activeSupply.ManifestDigest,
-			FeedbackExclusions:      &feedbackExclusions,
-			DeferDeliveryAccounting: true,
-		})
-		if err != nil {
-			if errors.Is(err, rtrec.ErrInvalidFeedCursor) {
-				return nil, contentgenerated.AppErrorFromInvalidArgument(err.Error())
-			}
-			stage := rtrec.FailureStageOf(err)
-			if stage != rtrec.FailureStageNone {
-				terminalStage = stage
-				return nil, requiredDependencyFailure(stage, err)
-			}
-			return nil, err
-		}
-		if recResp.TerminalOutcome == rtrec.FeedTerminalDegraded &&
-			terminalOutcome == rtrec.FeedTerminalSuccess {
-			terminalOutcome = rtrec.FeedTerminalDegraded
-			terminalStage = recResp.FailureStage
-		}
-		nextRecommendationContinuation = recResp.NextContinuation
-		responsePolicyDigest := strings.TrimSpace(recResp.PolicyDigest)
-		if responsePolicyDigest == "" ||
-			(policyDigest != "" && policyDigest != responsePolicyDigest) {
-			terminalStage = rtrec.FailureStageRankedWindowUnavailable
-			return nil, requiredDependencyFailure(
-				terminalStage,
-				fmt.Errorf("recommendation policy digest changed within one feed response"),
+	var rankedDelivery *rankedRecommendationDelivery
+	if releaseBoundRecommend {
+		rankedDelivery = &rankedRecommendationDelivery{}
+		for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
+			page, rankedErr := s.rankedRecommendationPage(
+				ctx,
+				req,
+				route,
+				feedRequestID,
+				recommendationContinuation,
+				limit-len(views),
 			)
-		}
-		policyDigest = responsePolicyDigest
-		// N3-1：单次 $in 批量取回本轮召回条目（消除逐条 FindPublishedFeedPost
-		// 的 N+1 往返），装配顺序仍严格跟随引擎排序。
-		recallIDs := make([]postports.PostID, 0, len(recResp.Items))
-		for _, item := range recResp.Items {
-			recallIDs = append(recallIDs, postports.NewPostID(item.ContentID))
-		}
-		hydrationRequested += len(recallIDs)
-		postsByID, readErr := s.postReader.FindPublishedFeedPosts(
-			ctx,
-			postports.NewPostFeedHydrationRequest(
-				recallIDs,
-				activeSupply.ActiveReleaseID,
-				activeSupply.ManifestDigest,
-			),
-		)
-		if readErr != nil {
-			return nil, storageReadFailure("hydrate recommended feed posts", readErr)
-		}
-		attemptDelivery := make([]rtrec.FeedItem, 0, len(recResp.Items))
-		for _, item := range recResp.Items {
-			post, ok := postsByID[postports.NewPostID(item.ContentID)]
-			if !ok || !releaseBoundHydrationMatches(
-				&post,
-				&item,
-				activeSupply.ActiveReleaseID,
-				activeSupply.ManifestDigest,
-			) {
-				continue
+			if rankedErr != nil {
+				terminalStage = rtrec.FailureStageRankedWindowUnavailable
+				return nil, requiredDependencyFailure(terminalStage, rankedErr)
 			}
-			hydrationFound++
-			if appendPost(&post, &item) {
-				attemptDelivery = append(attemptDelivery, item)
+			if bindErr := rankedDelivery.bindPage(page); bindErr != nil {
+				terminalStage = rtrec.FailureStageRankedWindowUnavailable
+				return nil, requiredDependencyFailure(terminalStage, bindErr)
 			}
-			if len(views) >= limit {
+			if policyDigest != "" && policyDigest != page.PolicyDigest {
+				terminalStage = rtrec.FailureStageRankedWindowUnavailable
+				return nil, requiredDependencyFailure(
+					terminalStage,
+					fmt.Errorf("recommendation policy digest changed within one feed response"),
+				)
+			}
+			policyDigest = page.PolicyDigest
+			nextRecommendationContinuation = rankedContinuation(page)
+			recallIDs := make([]postports.PostID, 0, len(page.Items))
+			for _, item := range page.Items {
+				recallIDs = append(recallIDs, postports.NewPostID(item.ContentId))
+			}
+			hydrationRequested += len(recallIDs)
+			postsByID, readErr := s.postReader.FindPublishedFeedPosts(
+				ctx,
+				postports.NewPostFeedHydrationRequest(
+					recallIDs,
+					activeSupply.ActiveReleaseID,
+					activeSupply.ManifestDigest,
+				),
+			)
+			if readErr != nil {
+				return nil, storageReadFailure("hydrate recommended feed posts", readErr)
+			}
+			for _, item := range page.Items {
+				post, ok := postsByID[postports.NewPostID(item.ContentId)]
+				if !ok || (strings.TrimSpace(post.SourceOwner) == "qwq_data" &&
+					!feedDeliveryReleaseMatches(
+						&post,
+						activeSupply.ActiveReleaseID,
+						activeSupply.ManifestDigest,
+					)) {
+					continue
+				}
+				hydrationFound++
+				recommendationItem := rankedFeedItem(item)
+				if appendPost(&post, &recommendationItem) {
+					rankedDelivery.delivered = append(
+						rankedDelivery.delivered,
+						deliveredRecommendationItem(item, views[len(views)-1]),
+					)
+				}
+				if len(views) >= limit {
+					break
+				}
+			}
+			if nextRecommendationContinuation == nil {
 				break
 			}
+			recommendationContinuation = nextRecommendationContinuation
 		}
-		if len(attemptDelivery) > 0 {
-			deliveryBatches = append(deliveryBatches, deliveryBatch{
-				attribution: recResp.Attribution,
-				items:       attemptDelivery,
+	} else {
+		for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
+			recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
+				UserID:                  req.UserID,
+				PersonaID:               req.ViewerPersonaID,
+				SessionID:               req.SessionID,
+				RankedWindowSubjectID:   identity.RankedFeedWindowSubjectID(req.UserID, req.SessionID),
+				FeedType:                route.FeedType,
+				Sort:                    normalizeFeedSort(req.Sort),
+				Continuation:            recommendationContinuation,
+				Limit:                   limit - len(views),
+				Surface:                 route.Surface,
+				ChannelID:               route.ChannelID,
+				Vertical:                route.Vertical,
+				FeedRequestID:           feedRequestID,
+				ActiveReleaseID:         activeSupply.ActiveReleaseID,
+				ActiveManifestDigest:    activeSupply.ManifestDigest,
+				FeedbackExclusions:      &feedbackExclusions,
+				DeferDeliveryAccounting: true,
 			})
+			if err != nil {
+				if errors.Is(err, rtrec.ErrInvalidFeedCursor) {
+					return nil, contentgenerated.AppErrorFromInvalidArgument(err.Error())
+				}
+				stage := rtrec.FailureStageOf(err)
+				if stage != rtrec.FailureStageNone {
+					terminalStage = stage
+					return nil, requiredDependencyFailure(stage, err)
+				}
+				return nil, err
+			}
+			if recResp.TerminalOutcome == rtrec.FeedTerminalDegraded &&
+				terminalOutcome == rtrec.FeedTerminalSuccess {
+				terminalOutcome = rtrec.FeedTerminalDegraded
+				terminalStage = recResp.FailureStage
+			}
+			nextRecommendationContinuation = recResp.NextContinuation
+			responsePolicyDigest := strings.TrimSpace(recResp.PolicyDigest)
+			if responsePolicyDigest == "" ||
+				(policyDigest != "" && policyDigest != responsePolicyDigest) {
+				terminalStage = rtrec.FailureStageRankedWindowUnavailable
+				return nil, requiredDependencyFailure(
+					terminalStage,
+					fmt.Errorf("recommendation policy digest changed within one feed response"),
+				)
+			}
+			policyDigest = responsePolicyDigest
+			// N3-1：单次 $in 批量取回本轮召回条目（消除逐条 FindPublishedFeedPost
+			// 的 N+1 往返），装配顺序仍严格跟随引擎排序。
+			recallIDs := make([]postports.PostID, 0, len(recResp.Items))
+			for _, item := range recResp.Items {
+				recallIDs = append(recallIDs, postports.NewPostID(item.ContentID))
+			}
+			hydrationRequested += len(recallIDs)
+			postsByID, readErr := s.postReader.FindPublishedFeedPosts(
+				ctx,
+				postports.NewPostFeedHydrationRequest(
+					recallIDs,
+					activeSupply.ActiveReleaseID,
+					activeSupply.ManifestDigest,
+				),
+			)
+			if readErr != nil {
+				return nil, storageReadFailure("hydrate recommended feed posts", readErr)
+			}
+			attemptDelivery := make([]rtrec.FeedItem, 0, len(recResp.Items))
+			for _, item := range recResp.Items {
+				post, ok := postsByID[postports.NewPostID(item.ContentID)]
+				if !ok || !releaseBoundHydrationMatches(
+					&post,
+					&item,
+					activeSupply.ActiveReleaseID,
+					activeSupply.ManifestDigest,
+				) {
+					continue
+				}
+				hydrationFound++
+				if appendPost(&post, &item) {
+					attemptDelivery = append(attemptDelivery, item)
+				}
+				if len(views) >= limit {
+					break
+				}
+			}
+			if len(attemptDelivery) > 0 {
+				deliveryBatches = append(deliveryBatches, deliveryBatch{
+					attribution: recResp.Attribution,
+					items:       attemptDelivery,
+				})
+			}
+			if nextRecommendationContinuation == nil {
+				break
+			}
+			recommendationContinuation = nextRecommendationContinuation
 		}
-		if nextRecommendationContinuation == nil {
-			break
-		}
-		recommendationContinuation = nextRecommendationContinuation
 	}
 	if !usePostReaderQuery && hydrationRequested > 0 && hydrationFound == 0 {
 		terminalStage = rtrec.FailureStageHydrationFullMiss
@@ -675,6 +751,9 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	if initialRecommend && !canonicalReleaseDelivered {
 		views = nil
 		deliveryBatches = nil
+		if rankedDelivery != nil {
+			rankedDelivery.delivered = nil
+		}
 		nextCursor = ""
 		nextRecommendationContinuation = nil
 	}
@@ -755,7 +834,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	pageCreatedAt := s.cursorCodec.now().UTC()
 	deliveryPageID := ""
 	deliveryPageExpiresAt := time.Time{}
-	if len(views) > 0 && (nextCursor != "" || nextRecommendationContinuation != nil) {
+	if len(views) > 0 {
 		if s.deliveryPages == nil {
 			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
 			return nil, requiredDependencyFailure(
@@ -812,7 +891,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			nextCursorExpiry = time.UnixMilli(cursorEnvelope.ExpiresAt).UTC()
 		}
 	}
-	if deliveryPageID != "" && nextCursor != "" {
+	if deliveryPageID != "" {
 		if appendErr := s.appendFeedDeliveryPage(ctx, feedDeliveryPageAppendInput{
 			scope:          scope,
 			deliveryPageID: deliveryPageID,
@@ -837,6 +916,28 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}); appendErr != nil {
 			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
 			return nil, requiredDependencyFailure(terminalStage, appendErr)
+		}
+	}
+	if rankedDelivery != nil && len(rankedDelivery.delivered) > 0 {
+		if s.deliveryEvents == nil {
+			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
+			return nil, requiredDependencyFailure(
+				terminalStage,
+				fmt.Errorf("FeedPageDelivered publisher is not configured"),
+			)
+		}
+		if publishErr := s.deliveryEvents.Publish(
+			ctx,
+			rankedDelivery.event(
+				deliveryPageID,
+				feedRequestID,
+				rankedRecommendationSubject(req),
+				req.ViewerPersonaID,
+				s.cursorCodec.now().UTC(),
+			),
+		); publishErr != nil {
+			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
+			return nil, requiredDependencyFailure(terminalStage, publishErr)
 		}
 	}
 	for _, batch := range deliveryBatches {

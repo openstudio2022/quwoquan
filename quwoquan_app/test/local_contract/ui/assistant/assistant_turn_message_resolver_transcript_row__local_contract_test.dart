@@ -26,7 +26,7 @@ void main() {
       ).toJson();
       final row = AssistantAnswerTranscriptRow(
         id: 'm1',
-        conversationId: 'c1',
+        sessionId: 'c1',
         content: 'hello',
         senderId: 'assistant',
         senderName: 'Assistant',
@@ -56,7 +56,7 @@ void main() {
     test('非助手行 FromTranscriptRow 给出空 journey / timeline', () {
       final row = UserTranscriptTimelineRow(
         id: 'u1',
-        conversationId: 'c1',
+        sessionId: 'c1',
         content: 'hi',
         senderId: 'user1',
         senderName: 'Me',

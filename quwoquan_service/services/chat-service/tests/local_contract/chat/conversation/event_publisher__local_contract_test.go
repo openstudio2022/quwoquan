@@ -88,3 +88,62 @@ func TestAssistantMentionDurableStreamUsesDedicatedGeneralTransport(t *testing.T
 		t.Fatalf("realtime transport must not contain durable assistant mentions: %#v", realtimeMessages)
 	}
 }
+
+func TestRecordedChatEventWritesIndependentRecipientResumeStreams(t *testing.T) {
+	ctx := context.Background()
+	realtime := rtredis.NewMemoryClient()
+	general := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		realtime,
+		general,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumeTransport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api-resume",
+		runtimemessaging.RedisMessageTransportAdapter,
+		realtime,
+		realtime,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := NewEventPublisherWithTransports(
+		transport,
+		resumeTransport,
+		NewMemberRecipientResolver(func(context.Context, string) ([]string, error) {
+			return []string{"user-a", "user-b"}, nil
+		}),
+	)
+
+	if err := publisher.PublishRecordedDomainEvent(
+		ctx,
+		"event-1",
+		messageevent.MessageSent,
+		"conversation-1",
+		"user-a",
+		map[string]any{"messageId": "message-1", "seq": int64(7)},
+	); err != nil {
+		t.Fatalf("PublishRecordedDomainEvent() error = %v", err)
+	}
+	for _, userID := range []string{"user-a", "user-b"} {
+		messages, readErr := realtime.XRead(
+			ctx,
+			map[string]string{RealtimeResumeStream(userID): "0-0"},
+			10,
+			0,
+		)
+		if readErr != nil {
+			t.Fatalf("read %s resume stream: %v", userID, readErr)
+		}
+		if len(messages) != 1 ||
+			messages[0].Values["eventId"] != "event-1" ||
+			messages[0].Values["messageId"] != "message-1" ||
+			messages[0].Values["seq"] != "7" {
+			t.Fatalf("%s resume stream = %#v", userID, messages)
+		}
+	}
+}

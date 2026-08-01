@@ -1,0 +1,1 @@
+"""RankedRecommendationWindow application facade."""

@@ -73,8 +73,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.updateRollout(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
 		h.getAssignment(w, r)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/assignment"):
-		h.assign(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/stats"):
 		h.getStats(w, r)
 	default:
@@ -99,33 +97,6 @@ func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
-}
-
-func (h *Handler) assign(w http.ResponseWriter, r *http.Request) {
-	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/assignment")
-	if experimentID == "" {
-		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument("experimentId is required"))
-		return
-	}
-	if err := requireEmptyBody(r); err != nil {
-		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument(err.Error()))
-		return
-	}
-	subjectKey, err := trustedSubjectKey(r)
-	if err != nil {
-		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentUnauthorized(err.Error()))
-		return
-	}
-	result, inserted, err := h.assignments.Assign(r.Context(), experimentID, subjectKey)
-	if err != nil {
-		writeAssignmentError(w, r, err, true)
-		return
-	}
-	status := http.StatusOK
-	if inserted {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, result)
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {

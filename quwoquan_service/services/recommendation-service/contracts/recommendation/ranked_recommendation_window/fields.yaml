@@ -1,0 +1,47 @@
+description: 推荐排序窗口及其稳定条目。
+fields:
+- {name: windowId, source: windowId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: policyDigest, source: policyDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: requestDigest, source: requestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: rankingSnapshotDigest, source: rankingSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: items, source: items, type: '[]RankedRecommendationItem', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+types:
+  RankedRecommendationItem:
+    description: 排序窗口中不可变序位的一项候选。
+    fields:
+    - {name: ordinal, source: ordinal, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: contentId, source: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: score, source: score, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: featureSnapshotDigest, source: featureSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: itemFeatureSnapshot, source: itemFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  CreateRankedRecommendationWindowCommand:
+    description: 创建稳定推荐窗口的内部强类型命令。
+    fields:
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: limit, source: limit, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RankedRecommendationPage:
+    description: 稳定窗口的一页排序结果。
+    fields:
+    - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: policyDigest, source: policyDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: rankingSnapshotDigest, source: rankingSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: items, source: items, type: '[]RankedRecommendationItem', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: nextOrdinal, source: nextOrdinal, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}

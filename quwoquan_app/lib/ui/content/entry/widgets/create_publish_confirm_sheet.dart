@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
+import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -132,6 +133,18 @@ class _CreatePublishConfirmSheetState
               borderRadius: BorderRadius.zero,
             ),
           ],
+          if (_settings.captureMetadata.isNotEmpty) ...<Widget>[
+            const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+            PublishConfirmSettingRow(
+              key: const ValueKey<String>(
+                'publish-confirm-capture-disclosure-row',
+              ),
+              title: CreationText.captureDisclosureLabel,
+              value: _captureDisclosureSummary(_settings),
+              onTap: _pickCaptureDisclosure,
+              borderRadius: BorderRadius.zero,
+            ),
+          ],
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
             title: CreationText.attachHomepageTitle,
@@ -239,10 +252,17 @@ class _CreatePublishConfirmSheetState
   Future<void> _pickVisitedAt() async {
     final today = _startOfDay(DateTime.now());
     final selected = _settings.visitedAt;
+    final capturedAt = _settings.captureMetadata.capturedAt;
+    final suggested = capturedAt == null
+        ? today
+        : _startOfDay(capturedAt.toLocal());
+    final initialDate = selected == null
+        ? (suggested.isAfter(today) ? today : suggested)
+        : _startOfDay(selected);
     final selection = await showCupertinoModalPopup<_VisitedAtSelection>(
       context: context,
       builder: (sheetContext) => _VisitedAtPickerSheet(
-        initialDate: selected == null ? today : _startOfDay(selected),
+        initialDate: initialDate,
         latestDate: today,
         canClear: selected != null,
       ),
@@ -252,6 +272,21 @@ class _CreatePublishConfirmSheetState
       _settings = selection.date == null
           ? _settings.copyWith(clearVisitedAt: true)
           : _settings.copyWith(visitedAt: selection.date);
+    });
+  }
+
+  Future<void> _pickCaptureDisclosure() async {
+    final selected =
+        await showCupertinoModalPopup<Set<MediaCaptureDisclosureGroup>>(
+          context: context,
+          builder: (sheetContext) => _CaptureDisclosureSheet(
+            available: _settings.captureMetadata.availableGroups,
+            selected: _settings.captureDisclosure,
+          ),
+        );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _settings = _settings.copyWith(captureDisclosure: selected);
     });
   }
 
@@ -315,6 +350,14 @@ String _formatVisitedDate(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-'
     '${value.month.toString().padLeft(2, '0')}-'
     '${value.day.toString().padLeft(2, '0')}';
+
+String _captureDisclosureSummary(PublishSettings settings) {
+  final selected = settings.captureDisclosure.intersection(
+    settings.captureMetadata.availableGroups,
+  );
+  if (selected.isEmpty) return CreationText.captureDisclosureNone;
+  return '${selected.length}/${settings.captureMetadata.availableGroups.length} 项已开启';
+}
 
 /// 到访时间选择结果。[date] 为 null 表示创作者选择不填写。
 class _VisitedAtSelection {
@@ -387,3 +430,69 @@ class _VisitedAtPickerSheetState extends State<_VisitedAtPickerSheet> {
     );
   }
 }
+
+class _CaptureDisclosureSheet extends StatefulWidget {
+  const _CaptureDisclosureSheet({
+    required this.available,
+    required this.selected,
+  });
+
+  final Set<MediaCaptureDisclosureGroup> available;
+  final Set<MediaCaptureDisclosureGroup> selected;
+
+  @override
+  State<_CaptureDisclosureSheet> createState() =>
+      _CaptureDisclosureSheetState();
+}
+
+class _CaptureDisclosureSheetState extends State<_CaptureDisclosureSheet> {
+  late final Set<MediaCaptureDisclosureGroup> _selected = widget.selected
+      .intersection(widget.available);
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoActionSheet(
+      key: const ValueKey<String>('publish-confirm-capture-disclosure-sheet'),
+      title: const Text(CreationText.captureDisclosureSheetTitle),
+      message: const Text(CreationText.captureDisclosureSheetHint),
+      actions: <Widget>[
+        for (final group in MediaCaptureDisclosureGroup.values)
+          if (widget.available.contains(group))
+            CupertinoActionSheetAction(
+              key: ValueKey<String>('capture-disclosure-${group.wire}'),
+              onPressed: () {
+                setState(() {
+                  if (!_selected.remove(group)) _selected.add(group);
+                });
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(_captureDisclosureGroupLabel(group)),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Icon(
+                    _selected.contains(group)
+                        ? CupertinoIcons.check_mark_circled_solid
+                        : CupertinoIcons.circle,
+                    size: AppSpacing.iconSmall,
+                  ),
+                ],
+              ),
+            ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(context).pop(_selected),
+        child: const Text(CreationText.visitedAtConfirm),
+      ),
+    );
+  }
+}
+
+String _captureDisclosureGroupLabel(MediaCaptureDisclosureGroup group) =>
+    switch (group) {
+      MediaCaptureDisclosureGroup.gear => CreationText.captureDisclosureGear,
+      MediaCaptureDisclosureGroup.parameters =>
+        CreationText.captureDisclosureParameters,
+      MediaCaptureDisclosureGroup.place => CreationText.captureDisclosurePlace,
+      MediaCaptureDisclosureGroup.time => CreationText.captureDisclosureTime,
+    };

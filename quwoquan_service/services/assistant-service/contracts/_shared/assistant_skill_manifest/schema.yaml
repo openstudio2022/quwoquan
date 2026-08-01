@@ -12,15 +12,11 @@ fields:
   - { name: tagRefs, type: list<string>, default: [] }
   - { name: executionTarget, type: string, default: cloud }
   - { name: routingHints, type: list<string>, default: [] }
+  - { name: activationProfileRef, type: string, required: true }
+  - { name: contextProfileRef, type: string, required: true }
+  - { name: capabilityProfileRef, type: string, required: true }
+  - { name: presentationProfileRef, type: string, required: true }
+  - { name: evaluationProfileRef, type: string, required: true }
+  - { name: replayAssetRef, type: string, required: true }
   - { name: promptAssets, type: list<string>, default: [] }
-  - { name: toolPolicy, type: object, ref: tool_policy, default: {} }
   - { name: examples, type: list<string>, default: [] }
-subcontracts:
-  tool_policy:
-    class_name: AssistantSkillToolPolicyWire
-    fields:
-      - { name: allowedTools, type: list<string>, default: [] }
-      - { name: preferredTools, type: list<string>, default: [] }
-      - { name: maxToolCalls, type: int, default: 4 }
-      - { name: allowDeviceContext, type: bool, default: false }
-      - { name: allowDeviceActionProposal, type: bool, default: false }

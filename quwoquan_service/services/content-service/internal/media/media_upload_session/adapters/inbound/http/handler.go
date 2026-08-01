@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 	sessionapp "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 )
 
@@ -33,7 +35,7 @@ func (h *Handler) Init(w http.ResponseWriter, r *http.Request) {
 		FileSize       int64  `json:"fileSize"`
 		ExpectedSHA256 string `json:"expectedSha256"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONBody(r.Body, &body, false); err != nil {
 		writeError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
@@ -50,9 +52,10 @@ func (h *Handler) Init(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Complete(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		AccessPolicy string `json:"accessPolicy"`
+		AccessPolicy    string                     `json:"accessPolicy"`
+		CaptureMetadata mediamodel.CaptureMetadata `json:"captureMetadata"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+	if err := decodeJSONBody(r.Body, &body, true); err != nil {
 		writeError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
@@ -61,12 +64,32 @@ func (h *Handler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.useCases.Complete(r.Context(), sessionapp.CompleteCommand{
 		SessionID: pathValue(r, "sessionId"), OwnerID: actorID(r), AccessPolicy: body.AccessPolicy,
+		CaptureMetadata: body.CaptureMetadata,
 	})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, responseFromResult(result))
+}
+
+func decodeJSONBody(body io.Reader, target any, allowEmpty bool) error {
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		if allowEmpty && errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) Abort(w http.ResponseWriter, r *http.Request) {

@@ -171,12 +171,16 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default="quwoquan_recommendation")
     p.add_argument("--out-dir", default=os.environ.get("MODEL_OUT_DIR", "/tmp/rec_models"))
+    p.add_argument(
+        "--local-evaluation-only",
+        action="store_true",
+        help="Evaluate an ephemeral local artifact without upload, Stage or activation",
+    )
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--embed-dim", type=int, default=EMBEDDING_DIM)
-    p.add_argument("--production", action="store_true")
     p.add_argument(
         "--max-feature-lag-seconds",
         type=float,
@@ -272,32 +276,60 @@ def main():
 
     print(f"Embedding metrics: {json.dumps(metrics)}", file=sys.stderr)
 
-    import model_registry as mr
-    artifact_uri = ""
+    if args.local_evaluation_only:
+        import evaluate_gate
+        status, reason, _ = evaluate_gate.evaluate_metrics(
+            scenario=f"{args.scenario}_embedding",
+            candidate_metrics=metrics,
+            dry_run=True,
+        )
+        print(
+            f"[train_embedding] local evaluation {status}: {reason}",
+            file=sys.stderr,
+        )
+        return 0 if status == "pass" else 1
+
+    import model_release_client
     try:
         import artifact_store
         artifact_uri = artifact_store.upload(str(model_path), args.scenario, version)
     except Exception as e:
-        print(f"[train_embedding] artifact upload skipped: {e}", file=sys.stderr)
-    if args.production and not artifact_uri:
+        print(f"[train_embedding] artifact upload failed: {e}", file=sys.stderr)
+        return 1
+    release_scenario = f"{args.scenario}_embedding"
+    model_digest = model_release_client.file_digest(model_path)
+    feature_contract_digest = model_release_client.required_feature_contract_digest()
+    import evaluate_gate
+    evidence = evaluate_gate.verification_evidence(
+        release_id=version,
+        scenario=release_scenario,
+        model_digest=model_digest,
+        artifact_uri=artifact_uri,
+        feature_contract_digest=feature_contract_digest,
+        candidate_metrics=metrics,
+    )
+    if evidence["status"] != "pass":
         print(
-            f"[train_embedding] production registry write requires artifact upload "
-            f"for scenario={args.scenario}",
+            f"[train_embedding] quality gate blocked: {evidence['reason']}",
             file=sys.stderr,
         )
         return 1
-
-    mr.write_registry(
-        db,
-        scenario=f"{args.scenario}_embedding",
-        version=version,
-        metrics=metrics,
-        artifact_path=str(model_path),
-        artifact_uri=artifact_uri,
-        model_type="dual_tower",
-        production=args.production,
+    verification_digest = model_release_client.canonical_digest(
+        {key: value for key, value in evidence.items() if key != "evaluatedAt"}
     )
-    print(f"Saved embedding model to {model_path}", file=sys.stderr)
+    result = model_release_client.stage_release(
+        release_id=version,
+        scenario=release_scenario,
+        artifact_uri=artifact_uri,
+        model_digest=model_digest,
+        feature_contract_digest=feature_contract_digest,
+        verification_digest=verification_digest,
+        evaluation_metrics=metrics,
+    )
+    print(
+        f"Saved embedding model to {model_path}; staged release={result['releaseId']}",
+        file=sys.stderr,
+    )
     return 0
 
 

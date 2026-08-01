@@ -105,7 +105,11 @@ void main() {
           completed.complete();
         }
         return http.Response(
-          jsonEncode({'events': []}),
+          jsonEncode({
+            'events': [],
+            'nextCursor': '0-0',
+            'transportResumed': false,
+          }),
           200,
           headers: {'content-type': 'application/json'},
         );
@@ -118,6 +122,7 @@ void main() {
         ),
         authTokenProvider: const _TokenProvider('jwt-token'),
         onEvents: (_) {},
+        cursorStore: _MemoryLongPollCursorStore(),
         client: client,
       );
 
@@ -159,6 +164,8 @@ void main() {
               'events': [
                 {'type': 'message', 'conversationId': 'c1'},
               ],
+              'nextCursor': '100-0',
+              'transportResumed': false,
             }),
             200,
             headers: {'content-type': 'application/json'},
@@ -178,6 +185,7 @@ void main() {
               completed.complete();
             }
           },
+          cursorStore: _MemoryLongPollCursorStore(),
           client: client,
         );
 
@@ -202,6 +210,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider(null),
           onEvents: (_) {},
+          cursorStore: _MemoryLongPollCursorStore(),
           client: MockClient((_) async {
             requestCount++;
             return http.Response('', 204);
@@ -226,6 +235,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider('jwt-token'),
           onEvents: (_) {},
+          cursorStore: _MemoryLongPollCursorStore(),
           client: MockClient((request) async {
             requestCount++;
             throw http.ClientException('offline', request.url);
@@ -243,7 +253,81 @@ void main() {
         transport.dispose();
       });
     });
+
+    test('long poll persists cursor and emits one resume recovery', () async {
+      final cursorStore = _MemoryLongPollCursorStore();
+      final requests = <http.Request>[];
+      final delivered = <Map<String, dynamic>>[];
+      final completed = Completer<void>();
+      var attempts = 0;
+      late LongPollTransport transport;
+      final client = MockClient((request) async {
+        requests.add(request);
+        attempts++;
+        if (attempts == 1) {
+          return http.Response(
+            jsonEncode({
+              'events': [],
+              'nextCursor': '100-0',
+              'transportResumed': false,
+            }),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'events': [
+              {'eventId': 'event-2', 'type': 'MessageSent'},
+            ],
+            'nextCursor': '101-0',
+            'transportResumed': true,
+          }),
+          200,
+        );
+      });
+      transport = LongPollTransport(
+        config: const RealtimeConfig(
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+          longPollHoldSec: 1,
+        ),
+        authTokenProvider: const _TokenProvider('jwt-token'),
+        onEvents: (events) {
+          delivered.addAll(events);
+          if (delivered.any((event) => event['eventId'] == 'event-2')) {
+            transport.stop();
+            if (!completed.isCompleted) completed.complete();
+          }
+        },
+        cursorStore: cursorStore,
+        client: client,
+      );
+
+      transport.start();
+      await completed.future.timeout(const Duration(seconds: 2));
+      transport.dispose();
+
+      expect(requests, hasLength(2));
+      expect(requests.first.url.queryParameters.containsKey('cursor'), isFalse);
+      expect(requests.last.url.queryParameters['cursor'], '100-0');
+      expect(
+        delivered.where((event) => event['type'] == 'Reconnected'),
+        hasLength(1),
+      );
+      expect(cursorStore.values.values.single, '101-0');
+    });
   });
+}
+
+final class _MemoryLongPollCursorStore implements LongPollCursorStore {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<String?> read(String partition) async => values[partition];
+
+  @override
+  Future<void> write(String partition, String cursor) async {
+    values[partition] = cursor;
+  }
 }
 
 class _TokenProvider implements CloudAuthTokenProvider {

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ChatListItemViewModel {
   const ChatListItemViewModel({
@@ -76,7 +77,7 @@ class ChatListItemViewModel {
     MessageHomeRowDto dto, {
     MediaEndpointConfig? mediaEndpointConfig,
   }) {
-    final preview = _resolvePreview('text', dto.summary);
+    final preview = _resolvePreview(MessageType.text, dto.summary);
     final id = dto.conversationId.trim().isNotEmpty
         ? dto.conversationId.trim()
         : 'notification:${dto.notificationId.trim()}';
@@ -103,56 +104,58 @@ class ChatListItemViewModel {
     );
   }
 
-  static _ResolvedPreview _resolvePreview(String type, String preview) {
-    final normalized = type.trim().toLowerCase();
-    switch (normalized) {
-      case 'image':
-      case 'photo':
+  static _ResolvedPreview _resolvePreview(MessageType type, String preview) {
+    switch (type) {
+      case MessageType.image:
         return _ResolvedPreview(
           icon: CupertinoIcons.photo_fill_on_rectangle_fill,
           text: preview.trim().isEmpty
               ? ChatText.chatPreviewImage
               : preview.trim(),
         );
-      case 'video':
+      case MessageType.video:
         return _ResolvedPreview(
           icon: CupertinoIcons.videocam_fill,
           text: preview.trim().isEmpty
               ? ChatText.chatPreviewVideo
               : preview.trim(),
         );
-      case 'voice':
-      case 'audio':
+      case MessageType.audio:
         return _ResolvedPreview(
           icon: CupertinoIcons.mic_fill,
           text: preview.trim().isEmpty
               ? ChatText.chatPreviewVoice
               : preview.trim(),
         );
-      case 'call':
-      case 'phone':
-      case 'system_call_log':
+      case MessageType.file:
+        return _ResolvedPreview(
+          icon: CupertinoIcons.paperclip,
+          text: preview.trim().isEmpty
+              ? ChatText.chatPreviewFile
+              : preview.trim(),
+        );
+      case MessageType.systemCallLog:
         return _ResolvedPreview(
           icon: CupertinoIcons.phone_fill,
           text: preview.trim().isEmpty
               ? ChatText.chatPreviewCall
               : preview.trim(),
         );
-      case 'card':
+      case MessageType.card:
         return _ResolvedPreview(
           icon: CupertinoIcons.person_crop_rectangle_fill,
           text: preview.trim().isEmpty
               ? ChatText.chatPreviewCard
               : preview.trim(),
         );
-      case 'recalled':
-      case 'recall':
-        return const _ResolvedPreview(
-          icon: null,
-          text: ChatText.chatPreviewRecalled,
+      case MessageType.systemAnnouncement:
+        return _ResolvedPreview(
+          icon: CupertinoIcons.speaker_2_fill,
+          text: preview.trim().isEmpty
+              ? ChatText.groupAnnouncement
+              : preview.trim(),
         );
-      case 'text':
-      default:
+      case MessageType.text:
         return _ResolvedPreview(icon: null, text: preview.trim());
     }
   }

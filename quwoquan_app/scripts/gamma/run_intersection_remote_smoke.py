@@ -3,9 +3,8 @@
 
 content-service 强制 verified principal（JWT），smoke 测试自身不签发凭证。
 本脚本从 canonical Data readiness/import receipt 选择 release-bound author，
-再经 canonical 本地签发通道（`quwoquan_ops.cli.lib.local_environment_auth`，
-user-service acceptance-session 本地 go run，token 只存于签发进程内存与
-测试子进程环境，不落 argv/报告/日志文件）签出 acceptance token，最后运行
+再经 candidate-bound 非生产身份池和公开 OTP/LoginWithPhone 恢复真实测试账号，
+token 只存于测试进程环境，不落 argv/报告/日志文件，最后运行
 `test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart`。
 
 前置：gamma-local 栈 content-service healthy，并显式传入 topology
@@ -47,7 +46,7 @@ def main() -> int:
 
     sys.path.insert(0, str(REPO_ROOT))
     from quwoquan_ops.cli.lib.local_environment_auth import (
-        open_local_acceptance_session,
+        open_reference_acceptance_session,
     )
     from quwoquan_ops.cli.lib.output_paths import env_run_dir
     from quwoquan_ops.cli.lib.release_video_delivery import (
@@ -86,7 +85,6 @@ def main() -> int:
             raise ReleaseVideoDeliveryError(
                 "canonical Data readiness/import receipt has no release-bound discovery author"
             )
-        viewer_id = release_authors[0]
     except (ReleaseVideoDeliveryError, ValueError) as exc:
         print(f"[intersection-smoke] GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
@@ -103,11 +101,10 @@ def main() -> int:
     )
     report_root.mkdir(parents=True, exist_ok=True)
 
-    session = open_local_acceptance_session(
+    session = open_reference_acceptance_session(
         args.base_url,
         environment="gamma",
         target_name="gamma-local",
-        subject=viewer_id,
     )
     print(
         f"[intersection-smoke] acceptance session ready: "

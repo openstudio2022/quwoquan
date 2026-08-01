@@ -78,7 +78,7 @@ func TestGateFollowFeedSourceComposesWithPremiumGate(t *testing.T) {
 	author := &stubFollowCandidateSource{
 		items: []rtrec.ContentCandidate{{ContentID: "followed_2", RecallPath: "author_recall"}},
 	}
-	gated := GateFollowFeedSource(GatePremiumStreamSource(author), true)
+	gated := GateFollowFeedSource(author, true)
 
 	followItems, err := gated.Recall(context.Background(), rtrec.RecallRequest{
 		FeedType: rtrec.FeedFollow,

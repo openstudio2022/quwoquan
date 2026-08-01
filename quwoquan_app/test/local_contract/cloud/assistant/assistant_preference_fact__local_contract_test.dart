@@ -16,13 +16,13 @@ void main() {
     final repository = RemoteAssistantRepository(
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
-      consentActorScope: 'assistant-preference-test',
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
+      consentAccountId: 'assistant-preference-test',
     );
 
     final created = await repository.setAssistantPreference(
       scope: AssistantPreferenceScope.session,
-      conversationId: 'acv_preference',
+      sessionId: 'asn_preference',
       kind: AssistantPreferenceKind.replyLength,
       value: 'concise',
       sourceType: AssistantPreferenceSourceType.explicitRewrite,
@@ -31,7 +31,7 @@ void main() {
 
     final listed = await repository.listAssistantPreferences(
       scope: AssistantPreferenceScope.session,
-      conversationId: 'acv_preference',
+      sessionId: 'asn_preference',
     );
     expect(listed.single.value, 'concise');
 
@@ -50,7 +50,7 @@ void main() {
     expect(transport.requests[0].url.path, '/assistant/preferences');
     expect(
       jsonDecode(transport.requestBodies[0]),
-      containsPair('conversationId', 'acv_preference'),
+      containsPair('sessionId', 'asn_preference'),
     );
     expect(
       transport.requests[1].url.queryParameters,
@@ -73,8 +73,8 @@ void main() {
     final repository = RemoteAssistantRepository(
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
-      consentActorScope: 'assistant-preference-test',
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
+      consentAccountId: 'assistant-preference-test',
     );
 
     await expectLater(
@@ -88,6 +88,35 @@ void main() {
               'ASSISTANT.USER.preference_not_found',
             ),
       ),
+    );
+  });
+
+  test('Remote 偏好 Facet 提交会话确认事实的来源与确认标记', () async {
+    final transport = _PreferenceClient();
+    final httpClient = CloudHttpClient(client: transport);
+    final repository = RemoteAssistantRepository(
+      httpClient: httpClient,
+      operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
+      consentAccountId: 'assistant-preference-test',
+    );
+
+    await repository.setAssistantPreference(
+      scope: AssistantPreferenceScope.longTerm,
+      kind: AssistantPreferenceKind.frequentLocations,
+      value: '杭州',
+      sourceType: AssistantPreferenceSourceType.sessionConfirmed,
+      sourceSessionId: 'asn_memory_source',
+      confirmed: true,
+    );
+
+    expect(
+      jsonDecode(transport.requestBodies.single),
+      containsPair('sourceSessionId', 'asn_memory_source'),
+    );
+    expect(
+      jsonDecode(transport.requestBodies.single),
+      containsPair('confirmed', true),
     );
   });
 }
@@ -128,7 +157,7 @@ Map<String, Object?> _fact({required String status}) => <String, Object?>{
   'preferenceId': 'apf_preference',
   'userId': 'persona_owner',
   'scope': 'session',
-  'conversationId': 'acv_preference',
+  'sessionId': 'asn_preference',
   'kind': 'reply_length',
   'value': 'concise',
   'sourceType': 'explicit_rewrite',

@@ -564,7 +564,12 @@ def write_source_unit(
         manifest["entityFocusVerdict"] = focus_verdict
     if asset_funnel:
         manifest["assetFunnel"] = dict(asset_funnel)
-    if research_lane == "video":
+    # A video lane has two distinct admissible material types: direct-video
+    # source units and rights-cleared still-frame collections.  The strict
+    # direct-video contract applies only to the former.  Applying it to a
+    # frame collection makes an otherwise valid fallback impossible before
+    # the media gate can assemble its image sequence.
+    if research_lane == "video" and has_video:
         from content.source.video_source_unit_contract import (
             assert_video_source_unit_invariants,
         )

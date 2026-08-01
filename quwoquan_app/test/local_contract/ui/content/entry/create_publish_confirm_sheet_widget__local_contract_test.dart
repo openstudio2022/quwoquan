@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
@@ -97,10 +98,7 @@ void main() {
     expect(find.text(CreationText.whoCanSeeLabel), findsOneWidget);
     expect(find.text(CreationText.locationLabel), findsOneWidget);
     expect(find.text(CreationText.attachHomepageTitle), findsOneWidget);
-    expect(
-      find.text(CreationText.selectPublishCirclesLabel),
-      findsOneWidget,
-    );
+    expect(find.text(CreationText.selectPublishCirclesLabel), findsOneWidget);
   });
 
   testWidgets('已移除内容摘要/标签/关联地点和事物/小趣推荐/小趣使用/圈子内形式/内容概览', (tester) async {
@@ -272,6 +270,46 @@ void main() {
     expect(confirmed, isNotNull);
     expect(confirmed!.visitedAt, isNull);
     expect(confirmed!.toPayloadFields().containsKey('visitedAt'), isFalse);
+  });
+
+  testWidgets('只展示实际解析到的拍摄信息分组，关闭后不再进入披露闭集', (tester) async {
+    PublishSettings? confirmed;
+    await tester.pumpWidget(
+      _buildApp(
+        initialSettings: const PublishSettings(
+          captureMetadata: MediaCaptureMetadata(
+            cameraModel: 'ILCE-7M4',
+            isoSensitivity: 800,
+          ),
+          captureDisclosure: <MediaCaptureDisclosureGroup>{
+            MediaCaptureDisclosureGroup.gear,
+            MediaCaptureDisclosureGroup.parameters,
+          },
+        ),
+        onConfirm: (settings) => confirmed = settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开发布确认'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(CreationText.captureDisclosureLabel), findsOneWidget);
+    expect(find.text('2/2 项已开启'), findsOneWidget);
+    await tester.tap(find.text(CreationText.captureDisclosureLabel));
+    await tester.pumpAndSettle();
+    expect(find.text(CreationText.captureDisclosurePlace), findsNothing);
+    expect(find.text(CreationText.captureDisclosureTime), findsNothing);
+    await tester.tap(find.text(CreationText.captureDisclosureGear));
+    await tester.pump();
+    await tester.tap(find.text(CreationText.visitedAtConfirm));
+    await tester.pumpAndSettle();
+    expect(find.text('1/2 项已开启'), findsOneWidget);
+
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+    expect(confirmed?.captureDisclosure, <MediaCaptureDisclosureGroup>{
+      MediaCaptureDisclosureGroup.parameters,
+    });
   });
 }
 

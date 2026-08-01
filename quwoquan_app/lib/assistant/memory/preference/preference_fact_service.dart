@@ -14,7 +14,9 @@ class PreferenceFactService {
     final seen = <String>{};
     for (final message in messages) {
       if ((message['role'] ?? '').toString() != 'assistant') continue;
-      final turn = _tryParseAssistantTurn((message['content'] as String?) ?? '');
+      final turn = _tryParseAssistantTurn(
+        (message['content'] as String?) ?? '',
+      );
       if (turn == null) continue;
       for (final fact in selector(turn)) {
         final key = fact.factId.isNotEmpty
@@ -90,30 +92,30 @@ class PreferenceFactService {
     }
     final now = DateTime.now().toIso8601String();
     return <PreferenceFact>[
-      ...seedFacts,
-      ...emergedTagMaps.map(
-        (item) => PreferenceFact(
-          factId: 'long_term_${item['key'] ?? now}_$now',
-          scope: 'long_term',
-          key: (item['key'] ?? '').toString(),
-          value: (item['value'] ?? '').toString(),
-          source: 'diagnostics.emergedTags',
-          createdAt: now,
-        ),
-      ),
-      ...sessionFacts
-          .where((item) => item.key == 'feedbackHint')
-          .map(
+          ...seedFacts,
+          ...emergedTagMaps.map(
             (item) => PreferenceFact(
-              factId: 'long_term_feedback_${item.factId}',
+              factId: 'long_term_${item['key'] ?? now}_$now',
               scope: 'long_term',
-              key: item.key,
-              value: item.value,
-              source: item.source,
-              createdAt: item.createdAt,
+              key: (item['key'] ?? '').toString(),
+              value: (item['value'] ?? '').toString(),
+              source: 'diagnostics.emergedTags',
+              createdAt: now,
             ),
           ),
-    ]
+          ...sessionFacts
+              .where((item) => item.key == 'feedbackHint')
+              .map(
+                (item) => PreferenceFact(
+                  factId: 'long_term_feedback_${item.factId}',
+                  scope: 'long_term',
+                  key: item.key,
+                  value: item.value,
+                  source: item.source,
+                  createdAt: item.createdAt,
+                ),
+              ),
+        ]
         .where((item) => item.key.isNotEmpty && item.value.isNotEmpty)
         .toList(growable: false);
   }

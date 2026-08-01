@@ -4,7 +4,7 @@ import (
 	"context"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/content-service/generated/content/post"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"strings"
 	"time"
@@ -66,19 +66,10 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	}
 	now := time.Now().UTC()
 	post.UpdatedAt = now
-	eventPayload := map[string]any{
-		"postId":             post.ID,
-		"authorId":           post.AuthorId,
-		"contentType":        post.ContentType,
-		"contentIdentity":    post.ContentIdentity,
-		"status":             post.Status,
-		"visibility":         post.Visibility,
-		"assistantUsePolicy": post.AssistantUsePolicy,
-		"publishedAt":        formatTimePtr(post.PublishedAt),
-		"title":              post.Title,
-		"tagRefs":            asStringSlice(post.TagRefs),
-		"coverUrl":           post.CoverUrl,
-	}
+	// 所有会改变候选资格或索引字段的 Post 生命周期事实都携带同一份完整
+	// canonical projection snapshot。消费者不得把缺失字段解释成空值，否则一次
+	// visibility/assistant setting 更新会静默抹掉 entity/tag 等推荐与搜索索引。
+	eventPayload := projectionPayloadForPost(post)
 	post, err := s.commitPostCommand(
 		ctx,
 		post,
@@ -140,7 +131,15 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		post.VideoUrl = strings.TrimSpace(asString(videoURL))
 	}
 	if mediaItems, exists := payload["mediaItems"]; exists {
-		post.MediaItems = mediaItems
+		decoded, err := decodePostMediaItems(mediaItems)
+		if err != nil {
+			return nil, rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"媒体列表格式不合法",
+				err.Error(),
+			)
+		}
+		post.MediaItems = decoded
 	}
 	if coverStrategy, exists := payload["coverStrategy"]; exists {
 		post.CoverStrategy = strings.TrimSpace(asString(coverStrategy))
@@ -158,12 +157,30 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		)
 	}
 	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
-		post.ArticleAssetManifest = asMap(articleAssetManifest)
+		decoded, err := decodePostArticleAssetManifest(articleAssetManifest)
+		if err != nil {
+			return nil, rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"文章素材清单格式不合法",
+				err.Error(),
+			)
+		}
+		post.ArticleAssetManifest = decoded
 	}
 	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
-		post.ArticleRenderProfile = asMap(articleRenderProfile)
+		decoded, err := decodePostArticleRenderProfile(articleRenderProfile)
+		if err != nil {
+			return nil, rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"文章渲染配置格式不合法",
+				err.Error(),
+			)
+		}
+		post.ArticleRenderProfile = decoded
 	}
-	NormalizePostObjectAnchors(post, payload)
+	if err := NormalizePostObjectAnchors(post, payload); err != nil {
+		return nil, err
+	}
 	if err := applySemanticMentionPayload(post, payload); err != nil {
 		return nil, err
 	}

@@ -32,13 +32,12 @@ from quwoquan_ops.cli.lib.local_alpha_object_storage import (
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (
     prepare_local_environment_auth,
-    write_local_report_account_backfill,
 )
 from quwoquan_ops.cli.lib.immutable_image_composition import (
     bind_packaged_image_composition,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import (
-    prepare_local_provider_credentials,
+    load_protected_provider_environment,
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     assert_local_runtime_available,
@@ -186,12 +185,6 @@ def _prepare_config_root(paths: RuntimePaths) -> dict[str, str]:
         target = paths.config_root / f"{service}.yaml"
         target.write_bytes(config.read_bytes())
         versions[service] = version
-    write_local_report_account_backfill(
-        ENVIRONMENT,
-        TARGET,
-        paths.config_root / "report-account-backfill.json",
-        include_acceptance_principal=False,
-    )
     return versions
 
 
@@ -226,7 +219,10 @@ def _compose_build_environment() -> dict[str, str]:
 def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[str, str]:
     ports = profile_ports(load_port_manifest(), TARGET)
     auth = prepare_local_environment_auth(ENVIRONMENT, TARGET)
-    provider = prepare_local_provider_credentials(environment=ENVIRONMENT, target_name=TARGET)
+    provider = load_protected_provider_environment(
+        environment=ENVIRONMENT,
+        target_name=TARGET,
+    )
     storage = prepare_local_alpha_object_storage(edge_port=ports["object-storage-edge"])
     env = os.environ.copy()
     env.update(auth.environment)
@@ -263,8 +259,8 @@ def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[
             "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_ID"],
             "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_SECRET"],
             "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY": env["ALPHA_OBJECT_STORAGE_CDN_SIGN_KEY"],
-            "QWQ_COMPOSE_EMBEDDING_ENDPOINT": env["CONTENT_EMBEDDING_FIXTURE_ENDPOINT"],
-            "QWQ_COMPOSE_EMBEDDING_API_KEY": env["CONTENT_EMBEDDING_FIXTURE_API_KEY"],
+            "QWQ_COMPOSE_EMBEDDING_ENDPOINT": env["CONTENT_EMBEDDING_ENDPOINT"],
+            "QWQ_COMPOSE_EMBEDDING_API_KEY": env["CONTENT_EMBEDDING_API_KEY"],
             "QWQ_COMPOSE_REC_POLICY_SOURCE": str(
                 ROOT / "quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
             ),
@@ -452,7 +448,7 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
                 "    Access-Control-Allow-Methods \"GET, HEAD, OPTIONS\"",
                 "    Access-Control-Allow-Headers \"*\"",
                 "    Cross-Origin-Resource-Policy \"cross-origin\"",
-                "    Cache-Control \"no-store\"",
+                "    ?Cache-Control \"no-store\"",
                 "  }",
                 "  @immutable_public_media {",
                 "    path_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$",

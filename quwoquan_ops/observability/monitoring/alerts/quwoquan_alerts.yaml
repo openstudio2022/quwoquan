@@ -89,7 +89,7 @@ groups:
           (
             sum(rate(ops_login_operation_events_total{result="failure"}[10m])) by (operation)
             / clamp_min(sum(rate(ops_login_operation_events_total[10m])) by (operation), 0.001)
-          ) > 0.05
+          ) > 0.01
           and sum(increase(ops_login_operation_events_total[10m])) by (operation) >= 20
         for: 10m
         labels:
@@ -375,8 +375,8 @@ groups:
           layer: l1
           domain: app-experience
         annotations:
-          summary: "首页或视频书卡顿帧率超过 5%"
-          description: "告警直接使用 jankyFrames/sampledFrames；从产品体验页按 pageName、appVersion、networkClass 下钻 worstFrameMs。"
+          summary: "首页或视频书卡顿帧率达到 1%"
+          description: "告警直接使用 jankyFrames/sampledFrames；从产品体验页按 pageName、surfaceId、channelId、appVersion、networkClass 下钻 worstFrameMs、worstBuildFrameMs 与 worstRasterFrameMs。"
 
       - alert: AppFrameSampleDenominatorMissing
         expr: absent(ops_app_frame_samples_total)
@@ -953,7 +953,7 @@ groups:
       - alert: TagFeedbackConsumerLagHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(content_tag_feedback_consumer_lag_seconds_bucket[10m])) by (le)
+            sum(rate(content_tag_feedback_fact_consumer_lag_seconds_bucket[10m])) by (le)
           ) > 30
         for: 10m
         labels:
@@ -964,7 +964,7 @@ groups:
           description: "TagFeedbackRecorded 从 tag-service 到 content-service 特征提交的 P95 时延为 {{ $value | humanizeDuration }}；检查 Redis PEL、Mongo inbox 与消费者健康。"
 
       - alert: TagFeedbackConsumerFailuresSustained
-        expr: sum(rate(content_tag_feedback_consumer_total{result="failed"}[5m])) > 0
+        expr: sum(rate(content_tag_feedback_fact_consumer_total{result="failed"}[5m])) > 0
         for: 10m
         labels:
           severity: critical
@@ -1519,21 +1519,21 @@ groups:
     rules:
       - alert: AssistantRunCommandErrorRateHigh
         expr: |
-          sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/conversations.*|/assistant/runs.*", status=~"5.."}[5m]))
-          / (sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/conversations.*|/assistant/runs.*"}[5m])) + 0.001) > 0.005
+          sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/sessions.*|/assistant/runs.*", status=~"5.."}[5m]))
+          / (sum(rate(http_server_requests_total{service="assistant-service", route=~"/assistant/sessions.*|/assistant/runs.*"}[5m])) + 0.001) > 0.005
         for: 10m
         labels:
           severity: critical
           layer: l2
           domain: assistant
         annotations:
-          summary: "助手 conversation/run 路由 5xx 错误率 > 0.5%"
-          description: "低于 availability SLO 99.9%；优先检查 assistant_runs/assistant_conversations Mongo store 与 agent loop provider。"
+          summary: "助手 session/run 路由 5xx 错误率 > 0.5%"
+          description: "低于 availability SLO 99.9%；优先检查 assistant_runs/assistant_sessions Mongo store 与 agent loop provider。"
 
       - alert: AssistantRunStartLatencyHigh
         expr: |
           histogram_quantile(0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="assistant-service", route=~"/assistant/conversations/[^/]+/runs"}[5m])) by (le)
+            sum(rate(http_server_duration_seconds_bucket{service="assistant-service", route=~"/assistant/sessions/[^/]+/runs"}[5m])) by (le)
           ) > 1.5
         for: 10m
         labels:
@@ -1620,6 +1620,156 @@ groups:
         annotations:
           summary: "小趣首个可见响应 P95 > 3s"
           description: "@小趣/私助提问到首个可见回答超商用 SLO（p95≤3s）；检查模型网关时延、技能选择阶段与 SSE 转发。"
+
+      - alert: AssistantRunWorkerRecoveryFailed
+        expr: |
+          sum(increase(assistant_run_worker_claim_total{outcome="failed"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣持久 Run Worker 接管失败"
+          description: "检查 assistant_run_work_queue claim/heartbeat、fencing token、Mongo CAS 与 checkpoint；不得把未验证恢复的 Run 标记完成。"
+
+      - alert: AssistantRunCheckpointStale
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(assistant_run_checkpoint_age_seconds_bucket[15m])) by (le)
+          ) > 30
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣恢复 Checkpoint P95 年龄 > 30s"
+          description: "检查 Worker 心跳、过期 claim 扫描、队列积压与 checkpoint 提交；目标为失联后 30 秒内接管。"
+
+      - alert: AssistantRunCancelP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome="succeeded"}[15m])) by (le)
+          ) > 10
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Run 取消收敛 P95 > 10s"
+          description: "检查 AgentLoop 上下文取消、Tool/Subagent AwaitStopped 与 terminal active-item 不变量。"
+
+      - alert: AssistantPublicWebAvailabilityLow
+        expr: |
+          sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome="succeeded"}[15m]))
+          / clamp_min(sum(rate(assistant_public_web_tool_total{tool=~"web_open|web_find",outcome=~"succeeded|fetch_unavailable|budget_unavailable|evidence_unavailable|failed"}[15m])), 0.001) < 0.99
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣公开网页读取可用率低于 99%"
+          description: "安全拒绝与预算耗尽已排除；检查 Public Web Fetch Runtime、DNS/TLS、上游站点和 assistant_run_web_evidence。"
+
+      - alert: AssistantPublicWebEvidenceUnavailable
+        expr: |
+          sum(increase(assistant_public_web_policy_boundary_total{reason="web_evidence_unavailable"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣网页证据账本不可用"
+          description: "已抓取证据无法安全提交或读取；检查 Mongo assistant_run_web_evidence 索引、容量与写关注，在恢复前不得声称该证据已留存。"
+
+      - alert: AssistantPublicWebSafetyRejectionSpike
+        expr: |
+          sum(rate(assistant_public_web_policy_boundary_total{reason="web_target_rejected"}[10m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣公开网页安全拒绝持续升高"
+          description: "检查是否出现内网探测、重定向逃逸、危险端口或错误 Skill 链接；指标不包含 URL、Host、IP 等敏感标签。"
+
+      - alert: AssistantRunLeaseContentionHigh
+        expr: |
+          sum(rate(assistant_run_lease_contention_total[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Run lease 竞争持续升高"
+          description: "claim、heartbeat、complete 或 fencing 冲突超过阈值；检查 Worker 实例时钟、租约和 Mongo CAS。"
+
+      - alert: AssistantRunCompletionRejectedHigh
+        expr: |
+          sum(rate(assistant_run_completion_rejected_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Run 完成校验拒绝持续升高"
+          description: "Verifier、TaskGraph 或 active item 不变量阻止完成；不得绕过校验强制写 completed。"
+
+      - alert: AssistantPresentationProjectionFailed
+        expr: |
+          sum(increase(assistant_presentation_projection_total{outcome="failed"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Adaptive Presentation 投影失败"
+          description: "presentation snapshot 或 commit 未进入 canonical Run journal；检查 CAS、document schema 与终态顺序。"
+
+      - alert: AssistantPresentationFallbackRateHigh
+        expr: |
+          sum(rate(ops_app_experience_events_total{event_type="assistant_turn_quality",result="presentation_fallback"}[15m]))
+          / clamp_min(sum(rate(assistant_presentation_projection_total{phase="commit",outcome="succeeded"}[15m])), 0.001) > 0.01
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Adaptive Presentation fallback 超过 1%"
+          description: "App 因未知节点、非法文档、action 不可达或渲染失败频繁降级；fallback 仍须非空且不得执行未知动作。"
+
+      - alert: AssistantContextDependencyUnavailable
+        expr: |
+          sum(rate(assistant_context_resolution_total{outcome=~"resolver_unavailable|dependency_unavailable"}[10m])) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Skill Context 依赖不可用"
+          description: "Context Resolver 或权威 Reader 依赖不可用率升高；检查 source ref、预算和服务连接。"
+
+      - alert: AssistantContextConsentFailClosed
+        expr: |
+          sum(increase(assistant_context_privacy_rejection_total{reason="consent_unavailable"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: assistant
+        annotations:
+          summary: "小趣 Skill Context Consent 不可用"
+          description: "Consent 检查不可用且已 fail-closed；检查授权存储，恢复前不得放宽敏感 Context。"
 
       - alert: AssistantWrongDestinationIncident
         expr: |

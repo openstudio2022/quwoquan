@@ -7,7 +7,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	bindingdescriptor "quwoquan_service/services/search-service/generated/search/search_query"
+	bindingdescriptor "quwoquan_service/services/search-service/generated/search/search_request_fact"
 )
 
 const searchAPIMessageTransportRoot = "search-service-api"

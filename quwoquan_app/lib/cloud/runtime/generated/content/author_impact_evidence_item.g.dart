@@ -20,16 +20,16 @@ class AuthorImpactEvidenceItem {
   final IntersectionTarget? contentTarget;
 
   AuthorImpactEvidenceItem({
-    required this.evidenceId,
-    required this.impactId,
-    required this.helpType,
-    required this.action,
-    required this.intersectionDimension,
-    required this.occurredAt,
-    required this.summaryText,
+    this.evidenceId = '',
+    this.impactId = '',
+    this.helpType = '',
+    this.action = '',
+    this.intersectionDimension = '',
+    this.occurredAt = '',
+    this.summaryText = '',
     this.sampleVisual,
     this.representativeActor,
-    required this.actionHints,
+    this.actionHints = const <IntersectionActionHint>[],
     this.contentTarget,
   });
 

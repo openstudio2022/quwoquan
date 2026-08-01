@@ -29,6 +29,7 @@ from quwoquan_ops.cli.lib.public_domain_tls import (
 
 POLICY_PATH = ROOT / "quwoquan_ops" / "environments" / "domain_governance.yaml"
 LOCAL_TARGETS = ("alpha-local", "beta-local", "gamma-local", "prod-sim")
+PUBLIC_DNS_TARGETS = ("prod-sim",)
 
 
 class DomainGovernanceError(RuntimeError):
@@ -57,10 +58,10 @@ def desired_dns_records() -> list[dict[str, Any]]:
         profile
         for profile in (policy.get("tlsProfiles") or {}).values()
         if isinstance(profile, dict)
+        and profile.get("kind") == "dns-01-public-ca"
     ]
     records: list[dict[str, Any]] = []
     for profile in profiles:
-        target = str(profile["target"])
         address, ipv6_address = _nonprod_addresses(policy)
         for name in (str(profile["apex"]), str(profile["wildcard"])):
             records.extend(
@@ -273,12 +274,12 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
     policy = _policy()
     expected_by_target = {
         target: _nonprod_addresses(policy)
-        for target in LOCAL_TARGETS
+        for target in PUBLIC_DNS_TARGETS
     }
     issues: list[str] = []
     topology = load_environment_topology()
     host_expectations: dict[str, tuple[str, str]] = {}
-    for target_name in LOCAL_TARGETS:
+    for target_name in PUBLIC_DNS_TARGETS:
         for raw_url in (get_target(topology, target_name).get("publicBases") or {}).values():
             host = urllib.parse.urlsplit(str(raw_url)).hostname
             if host:
@@ -311,6 +312,7 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
                 str(profile["apex"])
                 for profile in (policy.get("tlsProfiles") or {}).values()
                 if isinstance(profile, dict)
+                and profile.get("kind") == "dns-01-public-ca"
             ),
         }
     ):
@@ -326,7 +328,10 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
     mail_evidence: dict[str, dict[str, list[str]]] = {}
     mail_guard = policy.get("nonProdMailGuard") or {}
     for profile in (policy.get("tlsProfiles") or {}).values():
-        if not isinstance(profile, dict):
+        if (
+            not isinstance(profile, dict)
+            or profile.get("kind") != "dns-01-public-ca"
+        ):
             continue
         name = str(profile["apex"])
         by_type: dict[str, list[str]] = {}

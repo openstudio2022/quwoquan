@@ -90,6 +90,12 @@ def _report(
             "qoeReadbackPath": ".qwq_output/env/gamma/runs/qoe.json",
             "perfettoTracePath": ".qwq_output/env/gamma/runs/perfetto.trace",
             "perfettoSummaryPath": ".qwq_output/env/gamma/runs/perfetto-summary.json",
+            "iosPerformanceTracePath": (
+                ".qwq_output/env/gamma/runs/ios-performance.trace"
+            ),
+            "iosPerformanceSummaryPath": (
+                ".qwq_output/env/gamma/runs/ios-performance-summary.json"
+            ),
         },
     }
 
@@ -239,17 +245,69 @@ def _materialize_valid_artifacts(
     resolve(ui["recordingPath"]).write_bytes(b"mp4")
     trace = resolve(ui["perfettoTracePath"])
     trace.write_bytes(b"perfetto-trace")
+    performance_summary = {
+        "schema": "homepage-content-performance-evidence",
+        "scenario": "homepage_long_scroll_video",
+        "status": "passed",
+        "skipped": False,
+        "commitSha": evidence["environment"]["commitSha"],
+        "releaseId": evidence["release"]["releaseId"],
+        "samplesFromProductionReporter": True,
+        "scrollPages": 8,
+        "retainedBoundaryCrossed": True,
+        "prependVerified": True,
+        "channelSwitchVerified": True,
+        "viewerRoundTripVerified": True,
+        "memoryPressureVerified": True,
+        "mainThreadStallMaxMs": 120,
+        "bufferOwnershipErrorCount": 0,
+        "sampledFrames": 1000,
+        "jankyFrames": 2,
+        "worstFrameMs": 28,
+        "worstBuildFrameMs": 11,
+        "worstRasterFrameMs": 13,
+        "peakResidentMemoryBytes": 180_000_000,
+        "memoryBudgetBytes": 256_000_000,
+        "activeVideoControllerMax": 2,
+        "activeVideoControllerLimit": 2,
+        "mediaDownloadActiveMax": 2,
+        "mediaDownloadActiveLimit": 2,
+        "mediaDownloadQueuedMax": 3,
+        "mediaDownloadInflightMax": 2,
+        "cacheSizeBytesMax": 80_000_000,
+        "cacheSizeBytesLimit": 96_000_000,
+    }
+    android_summary = dict(performance_summary)
+    android_summary.update(
+        {
+            "device": {
+                "id": "physical-android-1",
+                "platform": "android",
+                "physical": True,
+            },
+            "sourceTraceSha256": hashlib.sha256(trace.read_bytes()).hexdigest(),
+        }
+    )
     resolve(ui["perfettoSummaryPath"]).write_text(
-        json.dumps(
-            {
-                "sourceTraceSha256": hashlib.sha256(trace.read_bytes()).hexdigest(),
-                "mainThreadStallMaxMs": 120,
-                "bufferOwnershipErrorCount": 0,
-                "sampledFrames": 1000,
-                "jankyFrames": 2,
-            }
-        ),
-        encoding="utf-8",
+        json.dumps(android_summary), encoding="utf-8"
+    )
+    ios_trace = resolve(ui["iosPerformanceTracePath"])
+    ios_trace.write_bytes(b"ios-instruments-trace")
+    ios_summary = dict(performance_summary)
+    ios_summary.update(
+        {
+            "device": {
+                "id": "physical-ios-1",
+                "platform": "ios",
+                "physical": True,
+            },
+            "sourceTraceSha256": hashlib.sha256(
+                ios_trace.read_bytes()
+            ).hexdigest(),
+        }
+    )
+    resolve(ui["iosPerformanceSummaryPath"]).write_text(
+        json.dumps(ios_summary), encoding="utf-8"
     )
     resolve(ui["qoeReadbackPath"]).write_text(
         json.dumps(
@@ -381,6 +439,33 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
 
         self.assertTrue(any("缺少物理 iOS 成功 run" in issue for issue in issues), issues)
 
+    def test_artifact_validation_requires_physical_ios_performance_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            artifact_root = Path(temporary_dir)
+            evidence = _report()
+            _materialize_valid_artifacts(artifact_root, evidence)
+            ui = evidence["uiEvidence"]
+            assert isinstance(ui, dict)
+            summary_path = artifact_root / str(ui["iosPerformanceSummaryPath"])
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary["device"] = {
+                "id": "ios-simulator",
+                "platform": "ios",
+                "physical": False,
+            }
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            issues = validate_evidence_document(
+                evidence,
+                check_artifacts=True,
+                artifact_root=artifact_root,
+            )
+
+        self.assertTrue(
+            any("iOS performance summary.device 必须绑定物理 ios 设备" in issue for issue in issues),
+            issues,
+        )
+
     def test_artifact_validation_recomputes_perfetto_hash_and_thresholds(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             artifact_root = Path(temporary_dir)
@@ -406,6 +491,32 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
         self.assertTrue(any("mainThreadStallMaxMs" in issue for issue in issues), issues)
         self.assertTrue(any("bufferOwnershipErrorCount" in issue for issue in issues), issues)
         self.assertTrue(any("jankyFrames/sampledFrames" in issue for issue in issues), issues)
+
+    def test_artifact_validation_rejects_incomplete_or_skipped_performance_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            artifact_root = Path(temporary_dir)
+            evidence = _report()
+            _materialize_valid_artifacts(artifact_root, evidence)
+            ui = evidence["uiEvidence"]
+            assert isinstance(ui, dict)
+            summary_path = artifact_root / str(ui["perfettoSummaryPath"])
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary["skipped"] = True
+            summary.pop("worstBuildFrameMs")
+            summary["activeVideoControllerMax"] = 3
+            summary["peakResidentMemoryBytes"] = 300_000_000
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            issues = validate_evidence_document(
+                evidence,
+                check_artifacts=True,
+                artifact_root=artifact_root,
+            )
+
+        self.assertTrue(any("非 skip" in issue for issue in issues), issues)
+        self.assertTrue(any("worstBuildFrameMs" in issue for issue in issues), issues)
+        self.assertTrue(any("activeVideoControllerMax" in issue for issue in issues), issues)
+        self.assertTrue(any("peakResidentMemoryBytes" in issue for issue in issues), issues)
 
     def test_artifact_validation_recomputes_sls_qoe_rates_and_thresholds(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

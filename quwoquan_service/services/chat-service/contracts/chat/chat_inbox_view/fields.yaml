@@ -53,17 +53,6 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: avatarCompositeUrls
-  source: avatarCompositeUrls
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 'DEPRECATED: 旧端侧九宫格拼图源；客户端不得用于会话头像主渲染'
-  role: projection
 - name: lastMessagePreview
   source: lastMessagePreview
   type: string

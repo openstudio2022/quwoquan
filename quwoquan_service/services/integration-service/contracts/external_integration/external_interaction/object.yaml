@@ -23,7 +23,7 @@ taggable: false
 vector_enabled: false
 business_rules:
 - interaction type、destination digest 与 payload digest 创建后不可变
-- provider attempt 只能由 ExternalInteractionAttemptFact typed append sink 追加，不能更新或删除
+- provider attempt 只能由 ExternalInteractionAttemptFact typed append sink 追加；除 UserAccountClosed 隐私删除外不得更新或删除
 - 同一 idempotency key 与 payload digest 只产生一个 interaction
 - provider callback 必须验证签名、时效和 interaction identity
 - 超过重试预算后只能进入 dead_letter，人工恢复产生新 attempt
@@ -40,3 +40,6 @@ lifecycle:
   - dead_letter
   optimistic_concurrency: version
   idempotency: command_receipt
+  terminal_events:
+  - UserAccountClosed
+  terminal_behavior: 删除已关闭 subject 关联的待处理请求、死信、恢复凭据与结果 outbox，并以对象自有 inbox 幂等提交

@@ -1,6 +1,5 @@
-/// Assistant 技能授权的本地缓存（SharedPreferences，按 actor 物理分区）。
-///
-/// 从旧 `assistant_repository.dart` 逐字迁出；行为不变。
+/// Assistant 技能授权的本地缓存（SharedPreferences，按 accountId 物理分区）。
+/// 缓存只保存当前 canonical item 列表，不携带版本信封，也不参与授权裁决。
 library;
 
 import 'dart:convert';
@@ -11,16 +10,15 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AssistantConsentStore {
-  AssistantConsentStore({required String actorScope})
-    : _actorScope = actorScope.trim().isEmpty
+  AssistantConsentStore({required String accountId})
+    : _accountId = accountId.trim().isEmpty
           ? 'unauthenticated'
-          : actorScope.trim();
+          : accountId.trim();
 
-  final String _actorScope;
-  static const int schema = 1;
+  final String _accountId;
 
   String get _key {
-    final digest = sha256.convert(utf8.encode(_actorScope)).toString();
+    final digest = sha256.convert(utf8.encode(_accountId)).toString();
     return 'assistant_skill_consents:${digest.substring(0, 24)}';
   }
 
@@ -32,13 +30,11 @@ class AssistantConsentStore {
     }
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic> ||
-          decoded['schema'] != schema ||
-          decoded['items'] is! List) {
+      if (decoded is! List) {
         await prefs.remove(_key);
         return const <AssistantSkillConsent>[];
       }
-      return (decoded['items'] as List)
+      return decoded
           .whereType<Map>()
           .map(
             (item) =>
@@ -62,10 +58,7 @@ class AssistantConsentStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _key,
-      jsonEncode(<String, dynamic>{
-        'schema': schema,
-        'items': items.map((item) => item.toJson()).toList(growable: false),
-      }),
+      jsonEncode(items.map((item) => item.toJson()).toList(growable: false)),
     );
   }
 

@@ -44,12 +44,18 @@ final class PostSearchItemView {
   final String connectionState;
   final IntersectionReason? intersectionReason;
 
-  factory PostSearchItemView.fromCanonical(CanonicalSearchContentHit hit) {
-    final reason = hit.intersectionReason;
+  factory PostSearchItemView.fromCanonical(
+    CanonicalSearchContentHit hit, {
+    String? highlightText,
+    String? matchedField,
+    String? connectionState,
+    CanonicalSearchIntersectionReason? intersectionReason,
+  }) {
+    final reason = intersectionReason;
     return PostSearchItemView(
       postId: hit.postId,
-      contentType: hit.contentType,
-      contentIdentity: hit.contentIdentity,
+      contentType: hit.contentType.wireValue,
+      contentIdentity: hit.contentIdentity?.wireValue,
       title: hit.title,
       summary: hit.summary,
       coverUrl: hit.coverUrl,
@@ -59,19 +65,19 @@ final class PostSearchItemView {
       categoryId: hit.categoryId,
       subCategory: hit.subCategory,
       likeCount: hit.likeCount,
-      highlightText: hit.highlightText,
-      matchedField: hit.matchedField,
+      highlightText: highlightText,
+      matchedField: matchedField,
       publishedAt: hit.publishedAt,
-      connectionState: hit.connectionState,
+      connectionState: connectionState ?? 'unconnected',
       intersectionReason: reason == null
           ? null
           : IntersectionReason(
-              kind: reason.intersectionClass,
-              primaryText: reason.primaryText,
-              dimension: reason.dimension,
-              source: reason.sourceRef,
-              intersectionId: reason.intersectionId,
-              intersectionClass: reason.intersectionClass,
+              kind: reason.intersectionClass ?? '',
+              primaryText: reason.primaryText ?? '',
+              dimension: reason.dimension ?? '',
+              source: reason.sourceRef ?? '',
+              intersectionId: reason.intersectionId ?? '',
+              intersectionClass: reason.intersectionClass ?? '',
             ),
     );
   }

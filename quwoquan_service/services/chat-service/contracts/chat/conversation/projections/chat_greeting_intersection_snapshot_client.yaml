@@ -1,0 +1,40 @@
+read_model: ChatGreetingIntersectionSnapshotClient
+description: Greeting 升级为 1v1 会话后冻结的交集摘要客户端投影；只承载服务端已授权并解析的展示事实。
+client_projection:
+  dart_class: ChatGreetingIntersectionSnapshotDto
+  base_class: ''
+  output_path: cloud/runtime/generated/chat/chat_greeting_intersection_snapshot_dto.g.dart
+  strict: true
+  fields:
+  - name: intersectionId
+    dart_type: String
+    nullable: false
+    source: intersectionId
+  - name: evidenceId
+    dart_type: String
+    nullable: false
+    source: evidenceId
+  - name: sourceRef
+    dart_type: String
+    nullable: false
+    source: sourceRef
+  - name: objectTypeRef
+    dart_type: String
+    nullable: false
+    source: objectTypeRef
+  - name: objectId
+    dart_type: String
+    nullable: false
+    source: objectId
+  - name: primaryText
+    dart_type: String
+    nullable: false
+    source: primaryText
+  - name: dimension
+    dart_type: String
+    nullable: true
+    source: dimension
+  - name: resolvedAt
+    dart_type: DateTime
+    nullable: false
+    source: resolvedAt

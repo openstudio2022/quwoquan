@@ -116,18 +116,29 @@ def test_package_root_switches_atomically_to_activated_candidate(
     baseline_id = f"sha256:{'a' * 64}"
     candidate = output_paths.deployment_candidate_dir("alpha-local", baseline_id)
     (candidate / "packages/app").mkdir(parents=True)
-    (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (candidate / "manifest.json").write_text(
+        json.dumps(
+            {
+                "candidateType": "runtime-full",
+                "target": "alpha-local",
+                "baselineId": baseline_id,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     pointer = output_paths.activate_deployment_candidate(
         "alpha-local",
         baseline_id,
     )
 
-    assert pointer == deploy_root / "alpha-local/active-candidate.json"
+    assert pointer == deploy_root / "alpha-local/active-runtime-candidate.json"
     assert output_paths.deployment_package_root("alpha") == candidate / "packages"
     assert output_paths.app_deployment_package_dir("alpha") == candidate / "packages/app"
     assert output_paths.active_deployment_candidate("alpha-local") == {
         "schema": output_paths.ACTIVE_CANDIDATE_SCHEMA,
+        "candidateType": "runtime-full",
         "target": "alpha-local",
         "baselineId": baseline_id,
         "candidateDir": str(candidate),
@@ -362,11 +373,16 @@ def test_stackctl_inspect_captures_configuration_without_deployment_writes(
         )
     )
 
-    assert result["exitCode"] == 0
+    assert result["exitCode"] == 1
+    assert result["details"] == [
+        "candidate workspace: no active immutable candidate for gamma-local"
+    ]
     assert not (report_dir / "config.json").exists()
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
-    assert report["inspection"]["config"]["target"]["env"] == "gamma"
-    assert report["inspection"]["config"]["portProfile"] == "gamma-local"
+    assert report["findings"] == result["details"]
+    assert report["inspection"]["config"]["candidateWorkspace"]["status"] == (
+        "no_active_candidate"
+    )
     assert not (deploy / "gamma-local/inspection").exists()
     assert output_layout_issues(output) == []
 

@@ -50,6 +50,7 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
         initialBackgroundImageUrl: extra?.safeBackgroundImage,
         referralSource: ReferralSource.authorProfile,
         openMessageComposerOnOpen: extra?.openMessageComposer ?? false,
+        greetingIntersectionRef: extra?.greetingIntersectionRef,
         onBack: onBack,
       ),
     );

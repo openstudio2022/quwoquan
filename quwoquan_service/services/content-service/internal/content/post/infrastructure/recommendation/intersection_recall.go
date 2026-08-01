@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	generated "quwoquan_service/services/content-service/generated/content/post"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 )
@@ -31,21 +30,12 @@ const maxIntersectionRecallSeeds = 40
 //
 // 边界：
 //   - 匿名 viewer 跳过（无交集快照，也不该把陌生人关系带进公共 feed）。
-//   - deferred kind 的边不做种子：注册表标 deferred 表示可证数据源缺位，
-//     展示与排序都已拦住，召回同样不得借历史快照复活。
 //   - 强度不在这里注入。候选的事实交集强度统一由 UserFeatureVector.IntersectionEdges
 //     在排序期匹配，保证「同一条边只有一个真相源」，也让其他通道召回的同对象内容
 //     拿到同样的强度。
 type IntersectionEdgeRecallSource struct {
 	feedColl *mongo.Collection
 	edges    ViewerIntersectionReadModel
-}
-
-// IsDeferredIntersectionKind 是 deferred 判定的唯一入口，召回、排序特征与测试
-// 共用同一口径，避免各处自行拼注册表查询。
-func IsDeferredIntersectionKind(kind string) bool {
-	_, deferred := generated.IntersectionDeferredKinds[strings.TrimSpace(kind)]
-	return deferred
 }
 
 func NewIntersectionEdgeRecallSource(
@@ -129,7 +119,7 @@ func (s *IntersectionEdgeRecallSource) Recall(
 
 // IntersectionRecallSeeds 是本通道的准入策略：从 viewer 快照里挑出可用种子，
 // 按边权降序截断，返回人对象（走 authorId 连接）与非人对象（走 entityRefs 连接）两组。
-// 导出是为了让合约测试直接锁住准入口径（deferred 过滤、零权丢弃、按边权截断），
+// 导出是为了让合约测试直接锁住准入口径（零权丢弃、按边权截断），
 // 而不是靠一次 Mongo 查询间接推断。
 func IntersectionRecallSeeds(
 	reasons []intersectionapp.IntersectionReasonView,
@@ -145,9 +135,6 @@ func IntersectionRecallSeeds(
 		kind := strings.TrimSpace(reason.Kind)
 		if kind == "" {
 			kind = strings.TrimSpace(reason.Source)
-		}
-		if IsDeferredIntersectionKind(kind) {
-			continue
 		}
 		if reason.EdgeWeight <= 0 {
 			continue

@@ -1,0 +1,35 @@
+service: assistant-service
+domain: assistant
+capability: skill-context-proactive-runtime
+
+metrics:
+  context_resolution_total: assistant_context_resolution_total
+  context_privacy_rejection_total: assistant_context_privacy_rejection_total
+  delivery_attempt_total: assistant_subscription_delivery_attempt_total
+  delivery_suppressed_total: assistant_subscription_delivery_suppressed_total
+  scheduler_tick_total: assistant_subscription_cron_tick_total
+
+privacy:
+  permitted_labels: [outcome, visibility, reason, attempt_kind]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, subscription_id, slot_id, source_ref, context_value]
+
+slis:
+  - id: assistant_context_resolution_availability
+    description: 已授权且符合渠道隐私上限的 Context Requirement 成功解析比例。
+    sli: sum(rate(assistant_context_resolution_total{outcome="resolved"}[10m])) / clamp_min(sum(rate(assistant_context_resolution_total{outcome=~"resolved|resolver_unavailable|dependency_unavailable"}[10m])), 0.001)
+    objective: 0.999
+  - id: assistant_proactive_delivery_availability
+    description: 已通过静默、频控、授权和目的地校验后的主动投递成功率。
+    sli: sum(rate(assistant_subscription_delivery_attempt_total{outcome="delivered"}[15m])) / clamp_min(sum(rate(assistant_subscription_delivery_attempt_total[15m])), 0.001)
+    objective: 0.99
+alerts:
+  context_dependency_unavailable:
+    condition: sum(rate(assistant_context_resolution_total{outcome=~"resolver_unavailable|dependency_unavailable"}[10m])) > 0.01
+    severity: warning
+  consent_fail_closed:
+    condition: sum(increase(assistant_context_privacy_rejection_total{reason="consent_unavailable"}[10m])) > 0
+    severity: critical
+  proactive_delivery_failure_rate:
+    condition: sum(rate(assistant_subscription_delivery_attempt_total{outcome="failed"}[15m])) / clamp_min(sum(rate(assistant_subscription_delivery_attempt_total[15m])), 0.001) > 0.05
+    severity: warning

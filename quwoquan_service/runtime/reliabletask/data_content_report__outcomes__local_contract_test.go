@@ -138,6 +138,37 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 	}
 }
 
+func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *testing.T) {
+	started := time.Now().UTC().Add(-time.Hour)
+	completed := time.Now().UTC()
+
+	// Resume after objects already sit in canonical publish: jobs may be dead
+	// while finalizedObjectCount still meets the commercial quota.
+	report := BuildDataContentFleetReport(
+		dataQuotaPublishTasks(5, 0, completed),
+		started,
+		started,
+		completed,
+		0,
+		0,
+		3,
+		5,
+	)
+
+	if !report.Passed {
+		t.Fatalf("idempotent finalized objects must meet publish quota: %#v", report)
+	}
+	if report.AcceptedContentThroughputStatus != "MEASURED" {
+		t.Fatalf(
+			"accepted throughput status=%q want=MEASURED",
+			report.AcceptedContentThroughputStatus,
+		)
+	}
+	if report.CommercialAcceptedCount != 0 || report.FinalizedObjectCount != 5 {
+		t.Fatalf("idempotent quota report drift: %#v", report)
+	}
+}
+
 func TestDataContentFleetReportGatesPublishQuotaOnDuplicateAndMissingObjects(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()

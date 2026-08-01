@@ -1,6 +1,19 @@
 entity: RecentSearchState
 domain: SEARCH
 errors:
+- code: SEARCH.USER.recent_invalid_argument
+  kind: USER
+  reason: recent_invalid_argument
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [UpsertRecentSearch, RecoverSearchAccountClosureDeadLetter]
+  recovery_action: surface
+  dart_const: searchRecentInvalidArgument
+  go_const: ErrSearchRecentInvalidArgument
+  user_message:
+    zh: 最近搜索请求格式不正确
+    en: Invalid recent search request
 - code: SEARCH.SYSTEM.internal_error
   kind: SYSTEM
   reason: internal_error

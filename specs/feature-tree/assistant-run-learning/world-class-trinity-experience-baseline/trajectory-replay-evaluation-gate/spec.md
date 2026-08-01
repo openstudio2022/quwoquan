@@ -80,3 +80,12 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 全量真实路由与 package 激活评测收据尚未闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺全部 reactive Case 经 production routing、proactive Case 经受信 trigger identity，以及 SkillPackageRelease 激活对 package/corpus exact digest 评测收据的校验；当前 Runner 执行只读取独立 request 与 production manifest 工具策略，poison expectation 不改变 transcript，每个 Skill manifest 已显式绑定版本化 replay asset 且 asset digest 已进入 Skill release digest。
+- 完成判定：全部 reactive Case 经 production routing、proactive Case 经受信 trigger identity，且 release 激活校验 exact package/corpus digest 的评测 receipt；补齐恢复、审批、超时与重试轨迹。

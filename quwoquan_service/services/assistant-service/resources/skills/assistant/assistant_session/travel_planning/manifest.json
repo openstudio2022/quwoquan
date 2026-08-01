@@ -1,0 +1,27 @@
+{
+  "skillId": "travel_planning",
+  "displayName": "出行管家",
+  "description": "旅行攻略、景点推荐、酒店机票、行程规划。",
+  "domainId": "travel_planning",
+  "problemClass": "complex_reasoning",
+  "executionTarget": "hybrid",
+  "routingHints": [
+    "旅游",
+    "旅行",
+    "行程",
+    "景点",
+    "酒店",
+    "攻略",
+    "拥堵"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.travel_planning",
+  "capabilityProfileRef": "capability.web_app3",
+  "presentationProfileRef": "presentation.airplane",
+  "evaluationProfileRef": "evaluation.complex_reasoning",
+  "replayAssetRef": "assistant.replay.travel_planning.v1",
+  "promptAssets": [
+    "travel_planning.reactive",
+    "assistant.evidence_discipline"
+  ]
+}

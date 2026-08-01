@@ -6,9 +6,9 @@ import (
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	behavior "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
 

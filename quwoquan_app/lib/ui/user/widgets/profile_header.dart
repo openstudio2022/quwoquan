@@ -209,8 +209,7 @@ class ProfileHeader extends StatelessWidget {
       subtitleOverride: subtitleOverride,
       trailing: trailing,
       avatarOuterExtent: avatarOuterDiameter,
-      avatarOverlapRatio:
-          UserProfileUIConfig.headerLayout.avatarOverlapRatio,
+      avatarOverlapRatio: UserProfileUIConfig.headerLayout.avatarOverlapRatio,
     );
   }
 }

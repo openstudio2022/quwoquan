@@ -75,6 +75,7 @@ import (
 	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
 	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
+	greetingintegration "quwoquan_service/services/user-service/internal/relationship/greeting_request/infrastructure/integration"
 	greetingpersistence "quwoquan_service/services/user-service/internal/relationship/greeting_request/infrastructure/persistence"
 	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
 	reltelemetry "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/telemetry"
@@ -404,6 +405,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("user-service chat client init failed: %v", err)
 	}
+	contentServiceBaseURL := strings.TrimSpace(getenvOrDefault("CONTENT_SERVICE_BASE_URL", ""))
+	if contentServiceBaseURL == "" {
+		log.Fatal("user-service startup failed: CONTENT_SERVICE_BASE_URL is required")
+	}
+	intersectionCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"user-service",
+		[]string{"content.my_intersections.read"},
+	)
+	if err != nil {
+		log.Fatalf("user-service content credential init failed: %v", err)
+	}
+	intersectionResolver, err := greetingintegration.NewIntersectionResolver(
+		contentServiceBaseURL,
+		nil,
+		intersectionCredentials,
+	)
+	if err != nil {
+		log.Fatalf("user-service greeting intersection resolver init failed: %v", err)
+	}
 	greetingService := greetingapp.NewGreetingService(
 		greetingStore,
 		greetingStore,
@@ -415,6 +436,7 @@ func main() {
 			userSettingsStore,
 			personaStore,
 		),
+		intersectionResolver,
 	)
 	greetingOutboxRelay := greetingapp.NewGreetingOutboxRelay(
 		greetingStore,
@@ -536,27 +558,27 @@ func main() {
 		}
 	}()
 	carrierPhoneResolver, err := newCarrierPhoneResolver()
-	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+	if err != nil &&
+		!errors.Is(err, ErrAuthRuntimeCapabilityBlocked) &&
+		!errors.Is(err, ErrAuthRuntimeCapabilityUnavailable) {
 		log.Fatalf("carrier identity adapter init failed: %v", err)
 	}
 	otpCodeSealer, err := otpseal.LoadFromEnvironment()
 	if err != nil {
 		log.Fatalf("otp code reference sealer invalid: %v", err)
 	}
-	otpMode := configuredOTPMode(appEnv, cfg.Integration.OTP.Mode)
-	otpCodeGenerator, err := otpCodeGeneratorForMode(appEnv, otpMode)
-	if err != nil {
-		log.Fatalf("otp mode invalid: %v", err)
-	}
-	externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
-	externalInteractionClient, err := otpExternalInteractionClientForEnvironment(
-		appEnv,
-		otpMode,
-		externalInteractionBaseURL,
-		accessSigner,
-	)
-	if err != nil {
-		log.Fatalf("external interaction client init failed: %v", err)
+	otpCodeGenerator := application.GenerateSecureOTPCode
+	var externalInteractionClient application.ExternalInteractionClient
+	if strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")) != "content-release" {
+		externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
+		externalInteractionClient, err = newRemoteOTPExternalInteractionClient(
+			externalInteractionBaseURL,
+			appEnv,
+			accessSigner,
+		)
+		if err != nil {
+			log.Fatalf("external interaction client init failed: %v", err)
+		}
 	}
 	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
 	if err != nil {
@@ -590,7 +612,9 @@ func main() {
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 	)
 	federatedLogins, err := newFederatedLoginBindings(authService)
-	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
+	if err != nil &&
+		!errors.Is(err, ErrAuthRuntimeCapabilityBlocked) &&
+		!errors.Is(err, ErrAuthRuntimeCapabilityUnavailable) {
 		log.Fatalf("federated identity adapter init failed: %v", err)
 	}
 	personaService := application.NewPersonaService(

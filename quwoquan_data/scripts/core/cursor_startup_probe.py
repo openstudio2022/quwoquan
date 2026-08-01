@@ -42,7 +42,8 @@ def cursor_startup_probe(
         from core.cursor_credentials import resolve_cursor_api_key
     except Exception:  # noqa: BLE001
         from cursor_credentials import resolve_cursor_api_key  # type: ignore
-    # reload 最新 key（key 文件优先）并回写 os.environ，子进程探针继承轮换后的 key。
+    # Pass the key only through stdin to this short-lived probe. Its environment
+    # and argv remain credential-free, including for any bridge it spawns.
     key = resolve_cursor_api_key()
     if not key:
         return {
@@ -92,7 +93,7 @@ except Exception as exc:
     print(json.dumps({"ready": False, "started": False, "error": f"cursor_sdk unavailable: {exc}"}, ensure_ascii=False))
     raise SystemExit(0)
 
-api_key = os.environ.get("CURSOR_API_KEY", "")
+api_key = sys.stdin.readline().strip()
 model = ModelSelection.from_json(json.loads(sys.argv[1]))
 runtime = sys.argv[2]
 cwd = sys.argv[3]
@@ -102,7 +103,7 @@ try:
         workspace=cwd,
         timeout=bridge_timeout,
         local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
-        allow_api_key_env_fallback=True,
+        allow_api_key_env_fallback=False,
     ) as client:
         bridge = getattr(client, "_owned_bridge", None)
         endpoint = getattr(bridge, "endpoint", None)
@@ -197,7 +198,12 @@ except Exception as exc:
                 text=True,
                 check=False,
                 timeout=remaining,
-                env=os.environ.copy(),
+                env={
+                    name: value
+                    for name, value in os.environ.items()
+                    if name != "CURSOR_API_KEY"
+                },
+                input=f"{key}\n",
                 cwd=probe_cwd,
             )
         except subprocess.TimeoutExpired:
@@ -267,13 +273,22 @@ except Exception as exc:
                     "startedAt": attempt_started_at,
                 "ready": bool(payload.get("ready")),
                 "status": payload.get("status"),
-                "errorClass": _redact_secret_value(payload.get("errorClass")),
-                "error": _redact_secret_value(payload.get("error")),
+                "errorClass": _redact_secret_value(
+                    payload.get("errorClass"),
+                    secrets=(key,),
+                ),
+                "error": _redact_secret_value(
+                    payload.get("error"),
+                    secrets=(key,),
+                ),
                 "httpStatus": payload.get("httpStatus"),
                 "errorCode": payload.get("errorCode"),
                 "requestId": payload.get("requestId"),
                 "retryable": bool(payload.get("retryable", False)),
-                "retryAfter": _redact_secret_value(payload.get("retryAfter")),
+                "retryAfter": _redact_secret_value(
+                    payload.get("retryAfter"),
+                    secrets=(key,),
+                ),
                 "agentId": payload.get("agentId"),
                 "runId": payload.get("runId"),
             }
@@ -302,7 +317,16 @@ except Exception as exc:
         time.sleep(sleep_seconds)
     issues = []
     if not payload.get("ready"):
-        issues.append(_redact_secret_text(str(payload.get("error") or payload.get("status") or "cursor startup probe failed")))
+        issues.append(
+            _redact_secret_text(
+                str(
+                    payload.get("error")
+                    or payload.get("status")
+                    or "cursor startup probe failed"
+                ),
+                secrets=(key,),
+            )
+        )
     return {
         "checked": True,
         "ready": bool(payload.get("ready")),
@@ -313,16 +337,28 @@ except Exception as exc:
         "modelParameters": selection.parameters_document(),
         "probePython": str(probe_python),
         "status": payload.get("status"),
-        "error": _redact_secret_value(payload.get("error")),
-        "errorClass": _redact_secret_value(payload.get("errorClass")),
+        "error": _redact_secret_value(payload.get("error"), secrets=(key,)),
+        "errorClass": _redact_secret_value(
+            payload.get("errorClass"),
+            secrets=(key,),
+        ),
         "retryable": bool(payload.get("retryable", False)),
         "errorCode": payload.get("errorCode"),
         "httpStatus": payload.get("httpStatus"),
         "protoErrorCode": payload.get("protoErrorCode"),
         "requestId": payload.get("requestId"),
-        "details": _redact_secret_value(payload.get("details") or []),
-        "headers": _redact_secret_value(payload.get("headers") or {}),
-        "retryAfter": _redact_secret_value(payload.get("retryAfter")),
+        "details": _redact_secret_value(
+            payload.get("details") or [],
+            secrets=(key,),
+        ),
+        "headers": _redact_secret_value(
+            payload.get("headers") or {},
+            secrets=(key,),
+        ),
+        "retryAfter": _redact_secret_value(
+            payload.get("retryAfter"),
+            secrets=(key,),
+        ),
         "attemptCount": len(attempts),
         "attempts": attempts,
         "issues": issues,

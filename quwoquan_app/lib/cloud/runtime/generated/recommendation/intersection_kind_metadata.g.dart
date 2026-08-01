@@ -9,7 +9,7 @@ const List<String> intersectionDimensionKeys = <String>["identity", "location", 
 const List<String> intersectionLifecycleStateKeys = <String>["new", "strengthened", "stable", "weakened", "reactivated", "archived", "expired"];
 
 /// 垂类闭集（registry.verticals，§23.4 三元组正交标注）。
-const List<String> intersectionVerticalKeys = <String>["general", "travel_photography", "campus"];
+const List<String> intersectionVerticalKeys = <String>["general", "travel_photography"];
 
 /// 意图时态闭集（registry.moments，§24 M0.2；retrospective|current|prospective，与 lifecycleState 正交）。
 const List<String> intersectionMomentKeys = <String>["retrospective", "current", "prospective"];
@@ -26,40 +26,36 @@ const String intersectionFeedbackKindDismiss = "dismiss";
 const String intersectionFeedbackKindRejectGreeting = "rejectGreeting";
 const String intersectionFeedbackKindLeaveCircle = "leaveCircle";
 
-/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|gathering|connect|commerce）。
+/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|gathering）。
 /// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。
-const List<String> intersectionActionDispatchKeys = <String>["assistant", "navigate", "message", "gathering", "connect", "commerce"];
+const List<String> intersectionActionDispatchKeys = <String>["assistant", "navigate", "message", "gathering"];
 
 /// 行动建议 actionKey 闭集（registry.actionHintLegend，端只读分发，不按 kind 猜测）。
-const List<String> intersectionActionKeys = <String>["ask_assistant", "book_hotel", "book_ticket", "create_followup", "express_interest", "follow_object", "follow_person", "greet_person", "join_circle", "join_gathering", "join_topic_room", "meet_nearby", "message_person", "open_content", "open_discussion", "open_object", "open_route", "start_gathering", "view_official_deals", "view_shared_people"];
+const List<String> intersectionActionKeys = <String>["ask_assistant", "create_followup", "follow_object", "follow_person", "greet_person", "join_circle", "message_person", "open_content", "open_discussion", "open_object", "open_route", "start_gathering", "view_shared_people"];
 
 /// 单个 actionKey 的行动阶梯元数据（registry.actionKeyMeta，§24 M0.1/M0.3/M0.7）。
 /// 端据 requiredGates 判断「可执行 / 优雅降级」；tier 区分轻查看/重社交；
-/// targetAvailability=deferred 表示承接页/数据源未就绪，端不得伪造成行（§24.10 诚实红线）；
-/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|gathering|connect|commerce），
+/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|gathering），
 /// 端 navigator/徽标/助手分发读本字段，禁止端手写「哪些 actionKey 属助手/约伴」第二份枚举（M0.7）。
 class IntersectionActionKeyMeta {
   const IntersectionActionKeyMeta({
     required this.tier,
     required this.requiredGates,
-    required this.targetAvailability,
     required this.dispatch,
   });
 
   final String tier;
   final List<String> requiredGates;
-  final String targetAvailability;
   final String dispatch;
 
   bool get isHeavy => tier == 'heavy';
-  bool get isDeferred => targetAvailability == 'deferred';
   /// 助手类：点击打开小艺解释/追问/续写，而非导航到对象页。
   bool get isAssistant => dispatch == 'assistant';
   /// 同行/线下约伴类：唯一驱动「有人同行」徽标与约伴专属落点。
   bool get isGathering => dispatch == 'gathering';
-  /// 重社交连接类（私信/约伴/房间/心动，需破冰阶梯/请求/建群），非简单对象下钻。
+  /// 重社交连接类（私信/约伴，需破冰阶梯/请求/建群），非简单对象下钻。
   bool get isSocialConnect =>
-      dispatch == 'message' || dispatch == 'gathering' || dispatch == 'connect';
+      dispatch == 'message' || dispatch == 'gathering';
 
   /// 由 actionKey 查行动阶梯元数据；未知 key 返回 null（端据此安全降级）。
   static IntersectionActionKeyMeta? of(String? actionKey) {
@@ -73,121 +69,66 @@ const Map<String, IntersectionActionKeyMeta> intersectionActionKeyMeta = <String
   "ask_assistant": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>[],
-    targetAvailability: "available",
     dispatch: "assistant",
-  ),
-  "book_hotel": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login"],
-    targetAvailability: "deferred",
-    dispatch: "commerce",
-  ),
-  "book_ticket": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login"],
-    targetAvailability: "deferred",
-    dispatch: "commerce",
   ),
   "create_followup": IntersectionActionKeyMeta(
     tier: "heavy",
     requiredGates: <String>["login", "realName"],
-    targetAvailability: "available",
     dispatch: "assistant",
-  ),
-  "express_interest": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login", "greetPreference", "blocked", "rateLimit"],
-    targetAvailability: "available",
-    dispatch: "message",
   ),
   "follow_object": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login"],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "follow_person": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login"],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "greet_person": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login", "greetPreference", "blocked"],
-    targetAvailability: "available",
     dispatch: "message",
   ),
   "join_circle": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login"],
-    targetAvailability: "available",
     dispatch: "navigate",
-  ),
-  "join_gathering": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login", "realName", "minorMode"],
-    targetAvailability: "deferred",
-    dispatch: "gathering",
-  ),
-  "join_topic_room": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login", "minorMode"],
-    targetAvailability: "deferred",
-    dispatch: "connect",
-  ),
-  "meet_nearby": IntersectionActionKeyMeta(
-    tier: "heavy",
-    requiredGates: <String>["login", "realName", "minorMode", "mutualConsent", "fuzzyLocation", "rateLimit"],
-    targetAvailability: "deferred",
-    dispatch: "gathering",
   ),
   "message_person": IntersectionActionKeyMeta(
     tier: "heavy",
     requiredGates: <String>["login", "mutualConsent", "blocked", "rateLimit"],
-    targetAvailability: "available",
     dispatch: "message",
   ),
   "open_content": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>[],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "open_discussion": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login"],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "open_object": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>[],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "open_route": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>[],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
   "start_gathering": IntersectionActionKeyMeta(
     tier: "heavy",
     requiredGates: <String>["login", "realName", "minorMode", "blocked", "rateLimit"],
-    targetAvailability: "available",
     dispatch: "gathering",
-  ),
-  "view_official_deals": IntersectionActionKeyMeta(
-    tier: "light",
-    requiredGates: <String>[],
-    targetAvailability: "deferred",
-    dispatch: "commerce",
   ),
   "view_shared_people": IntersectionActionKeyMeta(
     tier: "light",
     requiredGates: <String>["login"],
-    targetAvailability: "available",
     dispatch: "navigate",
   ),
 };
@@ -197,7 +138,6 @@ const Map<String, String> intersectionVisualToneByIconKey = <String, String>{
     'alumni': 'mist',
     'attention': 'stone',
     'circle': 'sage',
-    'contact': 'sage',
     'discussion': 'clay',
     'followHere': 'sage',
     'interest': 'stone',
@@ -405,46 +345,6 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     iconKey: "people",
     tone: "sage",
   ),
-  "commonContact": IntersectionKindMetadata(
-    kind: "commonContact",
-    iconKey: "contact",
-    tone: "sage",
-  ),
-  "sameSchool": IntersectionKindMetadata(
-    kind: "sameSchool",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "sameDepartment": IntersectionKindMetadata(
-    kind: "sameDepartment",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "sameMajor": IntersectionKindMetadata(
-    kind: "sameMajor",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "sameCohort": IntersectionKindMetadata(
-    kind: "sameCohort",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "alumni": IntersectionKindMetadata(
-    kind: "alumni",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "sameCompany": IntersectionKindMetadata(
-    kind: "sameCompany",
-    iconKey: "work",
-    tone: "mist",
-  ),
-  "sameTeam": IntersectionKindMetadata(
-    kind: "sameTeam",
-    iconKey: "work",
-    tone: "mist",
-  ),
   "sameIndustry": IntersectionKindMetadata(
     kind: "sameIndustry",
     iconKey: "work",
@@ -452,16 +352,6 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
   ),
   "sharedCircle": IntersectionKindMetadata(
     kind: "sharedCircle",
-    iconKey: "circle",
-    tone: "sage",
-  ),
-  "sharedDiscussion": IntersectionKindMetadata(
-    kind: "sharedDiscussion",
-    iconKey: "discussion",
-    tone: "clay",
-  ),
-  "coMemberCircle": IntersectionKindMetadata(
-    kind: "coMemberCircle",
     iconKey: "circle",
     tone: "sage",
   ),
@@ -474,11 +364,6 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     kind: "coSharedContent",
     iconKey: "share",
     tone: "clay",
-  ),
-  "coCreatedContent": IntersectionKindMetadata(
-    kind: "coCreatedContent",
-    iconKey: "work",
-    tone: "mist",
   ),
   "coLiked": IntersectionKindMetadata(
     kind: "coLiked",
@@ -525,39 +410,9 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     iconKey: "viewing",
     tone: "sage",
   ),
-  "alumniHere": IntersectionKindMetadata(
-    kind: "alumniHere",
-    iconKey: "alumni",
-    tone: "mist",
-  ),
-  "colleagueHere": IntersectionKindMetadata(
-    kind: "colleagueHere",
-    iconKey: "work",
-    tone: "mist",
-  ),
   "followeeDiscussedThis": IntersectionKindMetadata(
     kind: "followeeDiscussedThis",
     iconKey: "discussion",
     tone: "clay",
-  ),
-  "coPresentHere": IntersectionKindMetadata(
-    kind: "coPresentHere",
-    iconKey: "placeHere",
-    tone: "tea",
-  ),
-  "nearbyAffinity": IntersectionKindMetadata(
-    kind: "nearbyAffinity",
-    iconKey: "place",
-    tone: "tea",
-  ),
-  "coPlannedTrip": IntersectionKindMetadata(
-    kind: "coPlannedTrip",
-    iconKey: "place",
-    tone: "tea",
-  ),
-  "wantToMeetSameInterest": IntersectionKindMetadata(
-    kind: "wantToMeetSameInterest",
-    iconKey: "interest",
-    tone: "stone",
   ),
 };

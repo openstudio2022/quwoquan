@@ -10,12 +10,11 @@ import (
 func TestExperimentLifecycleUsesDomainAggregateContract(t *testing.T) {
 	now := time.Date(2026, time.July, 14, 10, 0, 0, 0, time.UTC)
 	experiment := model.Experiment{
-		ID:             "exp-1",
-		Key:            "exp-1",
-		Version:        1,
-		Status:         "draft",
-		AllocationSeed: "seed-1",
-		AudienceRule:   model.AudienceRule{Kind: "all"},
+		ID:           "exp-1",
+		Key:          "exp-1",
+		Version:      1,
+		Status:       "draft",
+		AudienceRule: model.AudienceRule{Kind: "all"},
 		Variants: []model.Variant{
 			{Key: "control", AllocationBasisPoints: 5000},
 			{Key: "treatment", AllocationBasisPoints: 5000},

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../chat/conversation_user_state_contracts.dart';
 
@@ -19,6 +19,11 @@ final class ChatMarkConversationMessageReadCommand {
 
   final String conversationId;
   final String messageId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "messageId": this.messageId,
+  };
 }
 
 final class ChatUpdateConversationSettingsCommand {
@@ -37,6 +42,12 @@ final class ChatUpdateConversationSettingsCommand {
   final String conversationId;
   final bool? muted;
   final bool? pinned;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    if (this.muted != null) "muted": this.muted!,
+    if (this.pinned != null) "pinned": this.pinned!,
+  };
 }
 
 CloudOperationRequestPayload encodeChatConversationUserStateMarkAsReadGeneratedRequest(ChatMarkConversationMessageReadCommand request) {

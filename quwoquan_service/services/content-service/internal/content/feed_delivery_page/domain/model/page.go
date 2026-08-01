@@ -125,7 +125,7 @@ func (p Page) Validate(now time.Time) error {
 		return ErrInvalid
 	}
 	if (p.Depth == 0) != (strings.TrimSpace(p.PreviousPageID) == "") ||
-		!validBoundedText(p.OutboundCursor, MaximumCursorBytes, true) ||
+		!validBoundedText(p.OutboundCursor, MaximumCursorBytes, false) ||
 		!validBoundedText(p.ReleaseID, MaximumReleaseIDBytes, false) ||
 		!validBoundedText(p.ManifestDigest, MaximumDigestBytes, false) ||
 		!validBoundedText(p.PolicyDigest, MaximumDigestBytes, false) ||

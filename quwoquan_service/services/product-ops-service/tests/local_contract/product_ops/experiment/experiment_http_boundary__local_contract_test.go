@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
@@ -16,9 +17,10 @@ import (
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	experimentports "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
+	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
 )
 
-func TestExperimentAssignmentHTTPBoundaryUsesOnlyTrustedActorAndImmutableReplay(t *testing.T) {
+func TestExperimentAssignmentHTTPBoundaryRejectsPublicWriteAndReadsObservedFact(t *testing.T) {
 	store := newLocalExperimentStore()
 	facade, err := experimentapp.NewFacade(store, store, store, store)
 	if err != nil {
@@ -28,38 +30,48 @@ func TestExperimentAssignmentHTTPBoundaryUsesOnlyTrustedActorAndImmutableReplay(
 	if err != nil {
 		t.Fatalf("build experiment handler: %v", err)
 	}
-	path := "/ops/experiments/discovery_feed_v3/assignment"
+	path := "/ops/experiments/discovery_feed/assignment"
 
 	spoofed := requestWithPersona(http.MethodPost, path, []byte(`{"subjectKey":"persona:attacker"}`))
 	spoofedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(spoofedResponse, spoofed)
 	if spoofedResponse.Code != http.StatusBadRequest {
-		t.Fatalf("spoofed assignment status=%d body=%s", spoofedResponse.Code, spoofedResponse.Body.String())
+		t.Fatalf("public assignment write status=%d body=%s", spoofedResponse.Code, spoofedResponse.Body.String())
+	}
+	if got := store.assignmentCount(); got != 0 {
+		t.Fatalf("public assignment write stored %d facts, want 0", got)
 	}
 
-	firstResponse := httptest.NewRecorder()
-	handler.ServeHTTP(firstResponse, requestWithPersona(http.MethodPost, path, nil))
-	if firstResponse.Code != http.StatusCreated {
-		t.Fatalf("first assignment status=%d body=%s", firstResponse.Code, firstResponse.Body.String())
+	observedAt := time.Date(2026, time.July, 14, 10, 0, 0, 0, time.UTC)
+	expected, err := store.experiment.Assign("persona:persona-local-contract", observedAt)
+	if err != nil {
+		t.Fatalf("derive canonical assignment: %v", err)
 	}
-	var first experimentmodel.AssignmentFact
-	decodeLocalResponse(t, firstResponse, &first)
-	if first.SubjectKey != "persona:persona-local-contract" {
-		t.Fatalf("assignment subject=%q, want trusted persona", first.SubjectKey)
+	observation := assignmentapp.AssignmentObservation{
+		ExperimentID: store.experiment.ID, ExperimentRevision: store.experiment.Version,
+		SubjectKey: expected.SubjectKey, Variant: expected.Variant, ObservedAt: observedAt,
 	}
-
-	replayResponse := httptest.NewRecorder()
-	handler.ServeHTTP(replayResponse, requestWithPersona(http.MethodPost, path, nil))
-	if replayResponse.Code != http.StatusOK {
-		t.Fatalf("replayed assignment status=%d body=%s", replayResponse.Code, replayResponse.Body.String())
+	first, inserted, err := facade.AssignmentFacts().AppendObserved(context.Background(), observation)
+	if err != nil || !inserted {
+		t.Fatalf("append observed assignment: inserted=%v fact=%+v err=%v", inserted, first, err)
 	}
-	var replayed experimentmodel.AssignmentFact
-	decodeLocalResponse(t, replayResponse, &replayed)
-	if replayed != first {
-		t.Fatalf("immutable replay changed fact: first=%+v replay=%+v", first, replayed)
+	replayed, inserted, err := facade.AssignmentFacts().AppendObserved(context.Background(), observation)
+	if err != nil || inserted || replayed != first {
+		t.Fatalf("replay observed assignment: inserted=%v first=%+v replay=%+v err=%v", inserted, first, replayed, err)
 	}
 	if got := store.assignmentCount(); got != 1 {
-		t.Fatalf("assignment replay stored %d facts, want 1", got)
+		t.Fatalf("observed assignment replay stored %d facts, want 1", got)
+	}
+
+	readResponse := httptest.NewRecorder()
+	handler.ServeHTTP(readResponse, requestWithPersona(http.MethodGet, path, nil))
+	if readResponse.Code != http.StatusOK {
+		t.Fatalf("read observed assignment status=%d body=%s", readResponse.Code, readResponse.Body.String())
+	}
+	var read experimentmodel.AssignmentFact
+	decodeLocalResponse(t, readResponse, &read)
+	if read != first {
+		t.Fatalf("read observed assignment=%+v, want %+v", read, first)
 	}
 
 	unauthorizedResponse := httptest.NewRecorder()
@@ -93,8 +105,8 @@ type localExperimentStore struct {
 func newLocalExperimentStore() *localExperimentStore {
 	return &localExperimentStore{
 		experiment: experimentmodel.Experiment{
-			ID: "discovery_feed_v3", Key: "discovery_feed_v3", Version: 1,
-			Status: "running", AllocationSeed: "local-contract-seed",
+			ID: "discovery_feed", Key: "discovery_feed", Version: 1,
+			Status:       "running",
 			AudienceRule: experimentmodel.AudienceRule{Kind: "all"},
 			Variants: []experimentmodel.Variant{
 				{Key: "control", AllocationBasisPoints: 5000},
@@ -113,6 +125,18 @@ func (s *localExperimentStore) Load(_ context.Context, id string) (experimentmod
 		return experimentmodel.Experiment{}, experimentmodel.ErrNotFound
 	}
 	return s.experiment, nil
+}
+
+func (s *localExperimentStore) LoadRevision(
+	ctx context.Context,
+	id string,
+	revision int64,
+) (experimentmodel.Experiment, error) {
+	experiment, err := s.Load(ctx, id)
+	if err != nil || experiment.Version != revision {
+		return experimentmodel.Experiment{}, experimentmodel.ErrNotFound
+	}
+	return experiment, nil
 }
 
 func (s *localExperimentStore) Replay(context.Context, string, string, string) (experimentports.CommitReceipt, bool, error) {

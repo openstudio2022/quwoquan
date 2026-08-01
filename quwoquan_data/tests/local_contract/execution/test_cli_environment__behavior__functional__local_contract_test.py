@@ -193,7 +193,7 @@ def test_environment_preflight_requires_restricted_key_file(monkeypatch, tmp_pat
     assert any("permissions" in issue for issue in permissive["issues"])
 
 
-def test_environment_preflight_reads_fresh_key_for_each_probe(monkeypatch, tmp_path):
+def test_environment_preflight_never_exports_key_to_parent_environment(monkeypatch, tmp_path):
     key_file = _key_file(tmp_path, monkeypatch, "crsr_" + "a" * 32)
     monkeypatch.setattr(python_runtime, "runtime_report", lambda: {"ready": True})
     monkeypatch.setattr(
@@ -213,7 +213,8 @@ def test_environment_preflight_reads_fresh_key_for_each_probe(monkeypatch, tmp_p
     second = python_runtime.environment_preflight(check_network=True, check_cursor_startup=True)
 
     assert first["ready"] is True and second["ready"] is True
-    assert seen == ["crsr_" + "a" * 32, "crsr_" + "b" * 32]
+    assert seen == ["", ""]
+    assert "CURSOR_API_KEY" not in os.environ
     assert second["cursorApiKey"] == {
         "source": "key_file",
         "present": True,
@@ -254,9 +255,11 @@ def test_cursor_startup_probe_preserves_redacted_diagnostics(monkeypatch, tmp_pa
         )
 
     calls: list[int] = []
+    launch: dict = {}
 
-    def run(*_args, **_kwargs):
+    def run(*args, **kwargs):
         calls.append(1)
+        launch.update({"args": args, "kwargs": kwargs})
         return Completed()
 
     monkeypatch.setattr(cursor_startup_probe.subprocess, "run", run)
@@ -269,6 +272,10 @@ def test_cursor_startup_probe_preserves_redacted_diagnostics(monkeypatch, tmp_pa
     assert report["attemptCount"] == len(calls)
     assert len(calls) > 1
     assert key not in json.dumps(report)
+    assert launch["kwargs"]["input"] == f"{key}\n"
+    assert "CURSOR_API_KEY" not in launch["kwargs"]["env"]
+    assert key not in "\n".join(launch["args"][0])
+    assert "allow_api_key_env_fallback=False" in launch["args"][0][2]
 
 
 def test_network_probe_falls_back_from_head_to_get(monkeypatch):

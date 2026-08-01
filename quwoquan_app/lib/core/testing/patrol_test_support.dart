@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
-import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
@@ -68,15 +67,15 @@ Completer<void> _runtimeAnonymousSessionGate() =>
 /// 仅认证会话控制器允许测试装配；业务 Query/Command 始终使用 production
 /// Remote composition，调用方不能注入业务 Provider double。
 Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
-  await _launchPatrolAppOnce(
-    $,
+  _patrolAppLaunch ??= runQuwoquanApp(
+    autoCompleteStartupWelcomeForTest: true,
     providerScopeOverrides: [
       authSessionControllerProvider.overrideWith(
         _PatrolAuthSessionController.new,
       ),
     ],
-    startRuntimeAnonymousSession: true,
   );
+  await _completePatrolAppLaunch($, startRuntimeAnonymousSession: true);
 }
 
 /// Starts the production Remote App without replacing its authentication
@@ -86,22 +85,17 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
 Future<void> launchPatrolAppWithPersistedSessionOnce(
   PatrolIntegrationTester $,
 ) async {
-  await _launchPatrolAppOnce(
-    $,
-    providerScopeOverrides: const <Override>[],
-    startRuntimeAnonymousSession: false,
-  );
-}
-
-Future<void> _launchPatrolAppOnce(
-  PatrolIntegrationTester $, {
-  required List<Override> providerScopeOverrides,
-  required bool startRuntimeAnonymousSession,
-}) async {
   _patrolAppLaunch ??= runQuwoquanApp(
     autoCompleteStartupWelcomeForTest: true,
-    providerScopeOverrides: providerScopeOverrides,
+    providerScopeOverrides: const [],
   );
+  await _completePatrolAppLaunch($, startRuntimeAnonymousSession: false);
+}
+
+Future<void> _completePatrolAppLaunch(
+  PatrolIntegrationTester $, {
+  required bool startRuntimeAnonymousSession,
+}) async {
   await _patrolAppLaunch!;
   // 本地 Remote 冷启动会带来持续中的初始化任务，直接等待全局 settle
   // 容易把 Patrol user_acceptance 卡死在启动阶段。这里仅给首帧和首轮路由足够时间，

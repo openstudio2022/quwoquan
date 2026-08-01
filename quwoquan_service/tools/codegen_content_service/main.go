@@ -52,6 +52,7 @@ func main() {
 		source,
 		filepath.Clean(postOutputDir),
 		contractcodegen.WithObjectFirstRoot(),
+		contractcodegen.WithSliceEntityRefs(),
 	)
 	if err := generator.GenerateDomainModel(aggregate); err != nil {
 		exitErr(fmt.Errorf("generate model %s: %w", aggregate, err))

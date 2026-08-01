@@ -469,7 +469,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	total := 0
 	totalNew := 0
 	for _, raw := range reasons {
-		// 红点计数与 List 可见条目共用同一 kind 闸门：deferred kind 与供给不足的点
+		// 红点计数与 List 可见条目共用同一 kind 闸门：供给不足的点
 		// 在两侧同时消失，否则会出现「有红点、点进去空列表」的计数漂移。
 		gated, ok := kindGate.apply(ctx, raw)
 		if !ok {
@@ -481,7 +481,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 			s.metrics.ObserveInboxFiltered("stale")
 			continue
 		}
-		// V2 收口：Explain 证据不足被 hideDisplayStatement 清空的 reason 不计入
+		// Explain 证据不足被 hideDisplayStatement 清空的 reason 不计入
 		// 红点/维度计数——summary 数字必须与 List 可见条目同源，避免「有红点、
 		// 点进去空列表」的计数漂移。
 		if normalizedDisplayBinding(r.DisplayBinding) == DisplayBindingHidden {
@@ -558,7 +558,7 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 			s.metrics.ObserveInboxFiltered("stale")
 			continue
 		}
-		// V2 收口：展示语言不完备（hidden）的 reason 在云侧淘汰，不下发给 App
+		// 展示语言不完备（hidden）的 reason 在云侧淘汰，不下发给 App
 		// 再靠端侧过滤——与 Feed（isSpotlightDisplayComplete）/ObjectIntersections
 		// （ValidateDisplayStatementWithContext）同一 fail-closed 合同。
 		if normalizedDisplayBinding(r.DisplayBinding) == DisplayBindingHidden {
@@ -788,7 +788,7 @@ func reasonHasSourceRef(r IntersectionReasonView, sourceRef string) bool {
 
 // reasonHasDimension 与 Summary 的维度计数同源：Summary 按可见 point 的维度分桶
 // （point.Dimension 缺省回落 reason.Dimension），List 的维度下钻必须用同一谓词，
-// 否则「地点 1」红点下钻到空列表（V2 计数-可见一致合同）。
+// 否则「地点 1」红点下钻到空列表（计数-可见一致合同）。
 func reasonHasDimension(r IntersectionReasonView, dimension string) bool {
 	if r.Dimension == dimension {
 		return true
@@ -901,11 +901,8 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	return merged, nil
 }
 
-// intersectionKindGate 在下发前按 kind 判定「这条交集能不能出现」，承担两件事：
-//
-//   - deferred 闸门：注册表把 kind 标为 deferred 表示可证数据源缺位，登记占位但禁止
-//     产出。这里整条丢弃，不依赖「恰好没有 producer」的隐式保证。
-//   - 冷启动供给闸门：候选池太小时整类交集没有区分度（人人都命中等于没信息）。
+// intersectionKindGate 在下发前执行冷启动供给闸门：候选池太小时整类交集
+// 没有区分度（人人都命中等于没信息）。
 //
 // 判定结果在单次 Feed / List / ObjectIntersections 调用内缓存：同一 supplyKey 会被
 // 多条 reason 反复问到，缓存保证探针每个 key 最多查一次，且同一响应内判定一致
@@ -926,19 +923,14 @@ func (s *IntersectionService) newIntersectionKindGate(surface string) *intersect
 	}
 }
 
-// allowsKind 判断某 kind 是否可下发：先看注册表 status，再看语料供给。
+// allowsKind 判断某 kind 的语料供给是否达到下发阈值。
 //
 // 未注册 supplyKey 的 kind 不受供给闸门约束；探针缺失或失败时供给判定 fail-open：
 // 观测能力不可用不应误杀真实交集，但会计入 supply_probe_unavailable 指标。
-// deferred 判定不 fail-open —— 诚实红线不因探针可用性变化。
 func (g *intersectionKindGate) allowsKind(ctx context.Context, kind string) bool {
 	kind = strings.TrimSpace(kind)
 	if kind == "" || g == nil {
 		return true
-	}
-	if _, deferred := generated.IntersectionDeferredKinds[kind]; deferred {
-		g.metrics.ObserveFeedFiltered(g.surface, "deferred_kind")
-		return false
 	}
 	if g.probe == nil {
 		return true
@@ -968,7 +960,7 @@ func (g *intersectionKindGate) allowsKind(ctx context.Context, kind string) bool
 	return supply >= minDistinct
 }
 
-// apply 剔除 deferred kind 与候选池过小的交集点；无可展示点时整条 reason 不下发。
+// apply 剔除候选池过小的交集点；无可展示点时整条 reason 不下发。
 //
 // 在 HydratePointSummary 之前执行，保证摘要、锚点与结论句都只由通过闸门的点派生，
 // 不会出现「句子来自被闸掉的 kind、计数来自另一批点」的错配。

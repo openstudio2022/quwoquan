@@ -1,0 +1,46 @@
+{
+  "assetId": "creator-avatar-qwq_creator_travel_blogger_001-00feedc2acfb1d25",
+  "commercialRights": {
+    "asset": {
+      "bytes": 290766,
+      "height": 1280,
+      "mimeType": "image/webp",
+      "ref": "cas/00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f.webp",
+      "sha256": "sha256:00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f",
+      "width": 1280
+    },
+    "assetId": "creator-avatar-qwq_creator_travel_blogger_001-00feedc2acfb1d25",
+    "attribution": "Wanderingchina / CC BY 4.0",
+    "author": "Wanderingchina",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+    "canonicalFilePage": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+    "caption": "Aerial panorama of Wuzhen 乌镇 Water Town. December 2023.",
+    "captionSource": "entities/地点/景区/乌镇/rights_snapshots/83051e37a1001ee95340.json",
+    "fetchedAt": "2026-07-31T02:00:29Z",
+    "licenseName": "CC BY 4.0",
+    "licenseShortName": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+    "modelReleaseStatus": "not_required",
+    "modifications": "deterministic center-square crop [2475, 0, 5717, 3242] from 8192x3242; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; derivative_policy_version=1",
+    "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+    "pageRevision": "sha256:2f0e6ea07d138ac5071fbbf912029bce62eacb52f65171c4811a4f5be66eef9b",
+    "rightsAuditIssues": [],
+    "rightsAuditStatus": "verified",
+    "snapshot": {
+      "bytes": 3121,
+      "ref": "entities/地点/景区/乌镇/rights_snapshots/83051e37a1001ee95340.json",
+      "sha256": "sha256:2f0e6ea07d138ac5071fbbf912029bce62eacb52f65171c4811a4f5be66eef9b"
+    },
+    "snapshotUrl": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+    "sourceKind": "creator_avatar_derivative",
+    "sourceUseMode": "licensed_adaptation",
+    "usageScope": "app_publish"
+  },
+  "depictsIdentifiablePerson": false,
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_travel_blogger_001-00feedc2acfb1d25",
+    "sha256": "sha256:00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f"
+  },
+  "schema": "quwoquan_data.creator_avatar_rights_snapshot"
+}

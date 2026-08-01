@@ -258,3 +258,112 @@ def test_acceptance_gate_outranks_queue_ledger__functional__local_contract(
     assert result.completed_count == 4
     assert result.issues == ()
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def _build_publish(quota: int):
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(
+        EXECUTION_ID,
+        targets=tuple({"name": name, "entityType": "地点/景区"} for name in _NAMES),
+        approved_quota=quota,
+    )
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=_NAMES,
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    jobs = []
+    for index, name in enumerate(_NAMES):
+        ref = f"/entity/地点/景区/{name}"
+        jobs.append(
+            enqueue_ref_job(
+                EXECUTION_ID,
+                ref,
+                "publish",
+                mutex_key=ref,
+                queue_backend=QueueBackend.RELIABLE_TASK,
+                meta={
+                    "contentType": ContentType.HOMEPAGE.value,
+                    "carrier": ContentType.HOMEPAGE.value,
+                    "entityRef": ref,
+                    "sourceRevision": "sha256:" + (str(index) * 64),
+                    "contentObjectDir": f"entities/地点/景区/{name}",
+                },
+            )
+        )
+    return ctx, jobs
+
+
+def _settle_publish(
+    jobs,
+    *,
+    succeeded: int,
+    passed: bool,
+    finalized_object_count: int,
+):
+    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+        outcomes = []
+        for index, job in enumerate(jobs):
+            if index < succeeded:
+                _write_job(
+                    _read_job(EXECUTION_ID, job.job_id).with_timing(
+                        QueueTimelineEvent.SUCCEEDED,
+                        at="2026-07-27T00:00:00Z",
+                        state=QueueJobState.SUCCEEDED,
+                        lease=QueueLease(),
+                    )
+                )
+                outcomes.append(
+                    ReliableTaskFleetOutcome(
+                        job_id=job.job_id, status="succeeded", attempts=1
+                    )
+                )
+                continue
+            outcomes.append(
+                ReliableTaskFleetOutcome(
+                    job_id=job.job_id,
+                    status="dead",
+                    attempts=job.max_attempts,
+                    failure_code="RELIABLETASK.WORKER.handler_failed",
+                )
+            )
+        return ReliableTaskFleetReport(
+            total=len(jobs),
+            succeeded=succeeded,
+            outcomes=tuple(outcomes),
+            passed=passed,
+            finalized_object_count=finalized_object_count,
+        )
+
+    return run_fleet
+
+
+def test_publish_finalized_quota_outranks_dead_jobs__functional__local_contract(
+    monkeypatch,
+) -> None:
+    """Publish 幂等重放：作业全死但 finalizedObjectCount≥配额且 fleet.passed 时必须收工。"""
+    ctx, jobs = _build_publish(quota=3)
+    from content.execution import reliabletask_fleet
+
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle_publish(
+            jobs,
+            succeeded=0,
+            passed=True,
+            finalized_object_count=5,
+        ),
+    )
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx, ExecutionStage.PUBLISH
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 5
+    assert result.issues == ()
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)

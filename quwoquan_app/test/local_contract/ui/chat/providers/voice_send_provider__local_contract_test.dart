@@ -275,7 +275,7 @@ class _ImmediateUploadManager extends MediaUploadManager {
                _,
                _, {
                required contentLength,
-               required contentType,
+               required mimeType,
                required expectedSha256,
                Future<void>? abortTrigger,
              }) async {},

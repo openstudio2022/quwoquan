@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../circle/file_contracts.dart';
 
@@ -30,6 +30,14 @@ final class CircleFileListQuery {
   final String? parentFolderId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.groupId != null) "groupId": this.groupId!,
+    if (this.parentFolderId != null) "parentFolderId": this.parentFolderId!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class CircleFileQuery {
@@ -48,6 +56,11 @@ final class CircleFileQuery {
 
   final String circleId;
   final String fileId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "fileId": this.fileId,
+  };
 }
 
 final class CreateCircleFileCommand {
@@ -84,6 +97,15 @@ final class CreateCircleFileCommand {
   final String name;
   final CircleFileType fileType;
   final String? assetId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.groupId != null) "groupId": this.groupId!,
+    if (this.parentFolderId != null) "parentFolderId": this.parentFolderId!,
+    "name": this.name,
+    "fileType": switch (this.fileType) { CircleFileType.file => "file", CircleFileType.folder => "folder", },
+    if (this.assetId != null) "assetId": this.assetId!,
+  };
 }
 
 final class DeleteCircleFileCommand {
@@ -102,6 +124,11 @@ final class DeleteCircleFileCommand {
 
   final String circleId;
   final String fileId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "fileId": this.fileId,
+  };
 }
 
 final class UpdateCircleFileCommand {
@@ -132,6 +159,14 @@ final class UpdateCircleFileCommand {
   final int expectedVersion;
   final String? parentFolderId;
   final String? name;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "fileId": this.fileId,
+    "expectedVersion": '"${this.expectedVersion}"',
+    if (this.parentFolderId != null) "parentFolderId": this.parentFolderId!,
+    if (this.name != null) "name": this.name!,
+  };
 }
 
 CloudOperationRequestPayload encodeCircleCircleFileCreateCircleFileGeneratedRequest(CreateCircleFileCommand request) {

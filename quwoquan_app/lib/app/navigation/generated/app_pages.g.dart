@@ -213,8 +213,8 @@ abstract final class AppPages {
     'page_internal_global_circle_edit_create': 'circle_edit_create',
     'page_internal_publish_location_search': 'publish_location_search',
     'page_internal_chat_input_expanded_draft': 'chat_input_expanded_draft',
-    'page_internal_assistant_conversation_chat_settings': 'assistant_chat_settings_modal',
-    'page_internal_assistant_conversation_reference_web': 'assistant_reference_webview_modal',
+    'page_internal_assistant_session_chat_settings': 'assistant_chat_settings_modal',
+    'page_internal_assistant_session_reference_web': 'assistant_reference_webview_modal',
     'page_internal_assistant_chat_settings_history': 'assistant_chat_history',
   };
   static const Set<String> fallbackContexts = <String>{'app_bootstrap', 'app_background'};

@@ -125,11 +125,12 @@ func generatedSplitPath(raw string) []string {
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 	"CompleteMediaUpload": {
-		"accessPolicy": {},
+		"accessPolicy":    {},
+		"captureMetadata": {},
 	},
 	"InitMediaUpload": {
 		"mediaType":      {},
-		"contentType":    {},
+		"mimeType":       {},
 		"fileSize":       {},
 		"expectedSha256": {},
 	},

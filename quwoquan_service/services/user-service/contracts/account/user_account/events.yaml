@@ -102,8 +102,8 @@ events:
   - decisionRef
   - occurredAt
 - name: UserAccountClosed
-  description: '账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。 有状态 recommendation-engine 由 content-service
-    内 accountclosure 子步骤负责； 无账号私有持久状态的 recommendation-service 不建立重复 consumer。
+  description: '账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。 recommendation-service
+    独立形成 RecommendationSubjectClosureFact 并据此阻止推荐窗口、曝光、反馈与特征复活，不得再由 content-service 代管推荐隐私状态。
 
     '
   producer: user-service
@@ -113,6 +113,7 @@ events:
   - circle-service
   - notification-service
   - search-service
+  - recommendation-service
   - realtime-gateway
   - rtc-service
   channel: events.user.account
@@ -122,6 +123,3 @@ events:
   - personaIds
   - accountState
   - updatedAt
-  responsibility_bindings:
-    recommendation-engine: content-service
-    recommendation-service: stateless_excluded

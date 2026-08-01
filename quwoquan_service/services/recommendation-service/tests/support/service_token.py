@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
 import time
 import uuid
 from typing import Any
@@ -24,6 +25,51 @@ def configure_test_auth_environment() -> None:
     os.environ["AUTH_JWT_ISSUER"] = TEST_ISSUER
     os.environ["AUTH_JWT_AUDIENCE"] = TEST_AUDIENCE
     os.environ["AUTH_JWT_TOKEN_VERSION"] = str(TEST_VERSION)
+    config_version = "sha256:recommendation-local-contract"
+    repo_root = Path(__file__).resolve().parents[5]
+    config_root = (
+        repo_root
+        / ".qwq_output"
+        / "env"
+        / "repo"
+        / "local"
+        / "tests"
+        / "recommendation-runtime-config"
+    )
+    config_root.mkdir(parents=True, exist_ok=True)
+    (config_root / "recommendation-service.yaml").write_text(
+        json.dumps(
+            {
+                "config": {"version": config_version},
+                "service": {"http": {"addr": ":8080"}},
+                "redis": {
+                    "general": {
+                        "mode": "standalone",
+                        "addr": "127.0.0.1:6379",
+                        "db": 0,
+                        "tls": False,
+                        "pool": {},
+                    },
+                    "rec": {
+                        "mode": "standalone",
+                        "addr": "127.0.0.1:6379",
+                        "db": 0,
+                        "tls": False,
+                        "pool": {},
+                    },
+                },
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    os.environ["APP_ENV"] = "alpha"
+    os.environ["SERVICE_NAME"] = "recommendation-service"
+    os.environ["CONFIG_ROOT"] = str(config_root)
+    os.environ["CONFIG_VERSION"] = config_version
+    os.environ["IMAGE_VERSION"] = "recommendation-local-contract"
 
 
 def _segment(value: dict[str, Any]) -> str:

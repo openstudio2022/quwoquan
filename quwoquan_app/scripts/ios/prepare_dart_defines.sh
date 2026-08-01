@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Xcode phase 只验证 canonical launcher 传入的同一份 handoff。
-# 裸 `flutter run` 无法保证 resident compiler 在 Hot Restart 时保留 defines，
-# 因此必须在安装前失败，禁止 Xcode 临时合成第二份配置。
+# Xcode phase 优先验证 canonical launcher 传入的同一份 handoff。
+# 裸 `flutter run` 的 Debug 构建没有 shell wrapper，因此只允许在完全没有显式
+# identity 时从 metadata 生成 canonical Alpha handoff；Hot Restart 由 native manifest
+# 回灌同一 runtime package，禁止在 App 代码中复制 endpoint。
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXISTING_RUNTIME_ENV="$(
@@ -38,6 +39,84 @@ PY
 )"
 ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
 LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-${EXISTING_LAUNCH_MODE:-}}"
+DIRECT_RUNTIME_DEFINES_JSON=""
+
+if [[ -z "$ENV_NAME" \
+   && -z "$LAUNCH_MODE" \
+   && "${CONFIGURATION:-}" == Debug* \
+   && ("${PLATFORM_NAME:-}" == "iphonesimulator" || "${PLATFORM_NAME:-}" == "iphoneos") \
+   && -z "${QWQ_LAUNCH_TARGET:-}" \
+   && -z "${QWQ_DART_DEFINES_DIGEST:-}" \
+   && -z "${QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST:-}" \
+   && -z "${QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST:-}" ]]; then
+  if ! DIRECT_HANDOFF_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+      --env alpha \
+      --target alpha-local \
+      --launch-mode direct_flutter_run \
+      --app-instance-id direct-flutter-run \
+      --app-instance-namespace direct-flutter-run
+  )"; then
+    echo "[ios-dart-defines] GATE_BLOCK: canonical direct Debug handoff could not be built." >&2
+    exit 2
+  fi
+  DIRECT_HANDOFF_EXPORTS="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 - "$DIRECT_HANDOFF_JSON" <<'PY'
+import json
+import shlex
+import sys
+
+handoff = json.loads(sys.argv[1])
+values = {
+    "QWQ_APP_RUNTIME_ENV": handoff["environment"],
+    "QWQ_APP_LAUNCH_MODE": handoff["launchMode"],
+    "QWQ_LAUNCH_TARGET": handoff["target"],
+    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
+    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
+        "effectiveLaunchManifestDigest"
+    ],
+    "DIRECT_RUNTIME_DEFINES_JSON": json.dumps(
+        handoff["dartDefines"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ),
+}
+for key, value in values.items():
+    print(f"export {key}={shlex.quote(str(value))}")
+PY
+  )" || {
+    echo "[ios-dart-defines] GATE_BLOCK: canonical direct Debug handoff is invalid." >&2
+    exit 2
+  }
+  eval "$DIRECT_HANDOFF_EXPORTS"
+  ENV_NAME="$QWQ_APP_RUNTIME_ENV"
+  LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
+  echo "[ios-dart-defines] direct Debug uses canonical alpha-local handoff." >&2
+  if [[ "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; then
+    DIRECT_SIMULATOR_UDID="$(
+      PYTHONPATH="$APP_DIR/.." PYTHONDONTWRITEBYTECODE=1 python3 - \
+        "${QWQ_IOS_SIMULATOR_UDID:-${TARGET_DEVICE_IDENTIFIER:-}}" <<'PY'
+import sys
+from quwoquan_ops.cli.lib.local_device_trust import resolve_managed_device
+
+print(resolve_managed_device("ios-simulator", sys.argv[1]))
+PY
+    )" || {
+      echo "[ios-dart-defines] GATE_BLOCK: direct Debug requires one explicit booted Simulator." >&2
+      exit 2
+    }
+    if ! PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$APP_DIR/../quwoquan_ops/cli/stackctl.py" --output-format json \
+      device-trust --target alpha-local --platform ios-simulator \
+      --action install --device "$DIRECT_SIMULATOR_UDID" \
+      --lease-id "direct-flutter-run:${DIRECT_SIMULATOR_UDID}" >/dev/null; then
+      echo "[ios-dart-defines] GATE_BLOCK: alpha-local CA is not trusted by the selected Simulator." >&2
+      exit 2
+    fi
+  fi
+fi
 
 if [[ -z "$ENV_NAME" ]]; then
   echo "[ios-dart-defines] GATE_BLOCK: canonical runtime handoff is required; use ./run.sh -d <device>." >&2
@@ -64,12 +143,17 @@ if [[ -z "$LAUNCH_MODE" ]]; then
   exit 2
 fi
 
-RUNTIME_DEFINES_JSON="$(
-  python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
-    --env "$ENV_NAME" \
-    --format json \
-    --launch-mode "$LAUNCH_MODE"
-)"
+if [[ -n "$DIRECT_RUNTIME_DEFINES_JSON" ]]; then
+  RUNTIME_DEFINES_JSON="$DIRECT_RUNTIME_DEFINES_JSON"
+else
+  RUNTIME_DEFINES_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
+      --env "$ENV_NAME" \
+      --format json \
+      --launch-mode "$LAUNCH_MODE"
+  )"
+fi
 
 python3 - \
   "$RUNTIME_DEFINES_JSON" \
@@ -123,6 +207,7 @@ required_keys = {
     "MEDIA_UPLOAD_BASE_URL",
     "RTC_MEDIA_CONNECTION_URL",
 }
+native_runtime_keys = required_keys | {"QWQ_APP_LAUNCH_MODE"}
 
 merged = {}
 for encoded in filter(None, existing.split(",")):
@@ -175,6 +260,11 @@ if target_build_dir and resources_folder:
                 "launchTarget": launch_target,
                 "entrypoint": "lib/main_prod.dart",
                 "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
+                "runtimeDefines": {
+                    key: merged[key]
+                    for key in sorted(native_runtime_keys)
+                    if merged.get(key, "").strip()
+                },
                 "recoveryBaseURL": merged["CLOUD_GATEWAY_BASE_URL"],
                 "publicWebURL": merged["PUBLIC_WEB_BASE_URL"],
                 "appDownloadBaseURL": merged["APP_DOWNLOAD_BASE_URL"],

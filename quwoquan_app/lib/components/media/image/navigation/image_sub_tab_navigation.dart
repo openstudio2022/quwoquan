@@ -37,10 +37,16 @@ class ImageSubTabNavigation extends ConsumerWidget {
     return Container(
       height: AppSpacing.subTabNavigationHeight.h,
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         border: Border(
           bottom: BorderSide(
-            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.3),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundTertiary,
+            ).withValues(alpha: 0.3),
             width: AppSpacing.hairline,
           ),
         ),
@@ -53,7 +59,7 @@ class ImageSubTabNavigation extends ConsumerWidget {
         child: Row(
           children: categories.map((category) {
             final isActive = category['id'] == activeCategory;
-            
+
             return GestureDetector(
               onTap: () => onCategoryChange(category['id']!),
               child: Container(
@@ -63,13 +69,21 @@ class ImageSubTabNavigation extends ConsumerWidget {
                   vertical: AppSpacing.xs.h,
                 ),
                 decoration: BoxDecoration(
-                  color: isActive 
-                      ? AppColorsFunctional.getColor(isDark, ColorType.selectionBackground)
+                  color: isActive
+                      ? AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.selectionBackground,
+                        )
                       : AppColors.transparent,
-                  borderRadius: BorderRadius.circular(12.r), // 比fullBorderRadius小一号
-                  border: isActive 
+                  borderRadius: BorderRadius.circular(
+                    12.r,
+                  ), // 比fullBorderRadius小一号
+                  border: isActive
                       ? Border.all(
-                          color: AppColorsFunctional.getColor(isDark, ColorType.selectionBorder),
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.selectionBorder,
+                          ),
                           width: AppSpacing.one,
                         )
                       : null,
@@ -79,10 +93,18 @@ class ImageSubTabNavigation extends ConsumerWidget {
                     category['label']!,
                     style: TextStyle(
                       fontSize: AppTypography.primaryTabLabel.sp, // 与一级tab保持一致
-                      fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
-                      color: isActive 
-                          ? AppColorsFunctional.getColor(isDark, ColorType.selectionForeground)
-                          : AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                      fontWeight: isActive
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                      color: isActive
+                          ? AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.selectionForeground,
+                            )
+                          : AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundPrimary,
+                            ),
                     ),
                   ),
                 ),

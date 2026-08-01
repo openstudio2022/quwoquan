@@ -135,6 +135,7 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'nameEditableByAdminOnly': true,
   'lastMessageId': 'message-8',
   'lastMessagePreview': '最后一条消息',
+  'lastMessageType': 'text',
   'lastMessageTime': '2026-07-21T06:00:00Z',
   'messageCount': 8,
   'status': 'active',

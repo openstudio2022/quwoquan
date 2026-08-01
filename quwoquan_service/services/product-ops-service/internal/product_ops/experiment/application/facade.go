@@ -15,8 +15,6 @@ import (
 type Facade struct {
 	store           ports.AggregateStore
 	catalog         ports.CatalogReader
-	assignments     ports.AssignmentSink
-	reader          ports.AssignmentReader
 	assignmentFacts *assignmentapplication.Facade
 	now             func() time.Time
 }
@@ -34,7 +32,7 @@ func NewFacade(
 	if err != nil {
 		return nil, err
 	}
-	return &Facade{store: store, catalog: catalog, assignments: assignments, reader: reader, assignmentFacts: assignmentFacts, now: time.Now}, nil
+	return &Facade{store: store, catalog: catalog, assignmentFacts: assignmentFacts, now: time.Now}, nil
 }
 
 func (f *Facade) AssignmentFacts() *assignmentapplication.Facade { return f.assignmentFacts }
@@ -80,17 +78,19 @@ func (f *Facade) UpdateRollout(
 		return ports.CommitReceipt{}, err
 	}
 	payload, err := json.Marshal(struct {
-		ID        string          `json:"id"`
-		Key       string          `json:"key"`
-		Version   int64           `json:"version"`
-		Status    string          `json:"status"`
-		Variants  []model.Variant `json:"variants"`
-		StartsAt  string          `json:"startsAt,omitempty"`
-		EndsAt    string          `json:"endsAt,omitempty"`
-		UpdatedAt string          `json:"updatedAt"`
+		ID           string             `json:"id"`
+		Key          string             `json:"key"`
+		Version      int64              `json:"version"`
+		Status       string             `json:"status"`
+		Variants     []model.Variant    `json:"variants"`
+		AudienceRule model.AudienceRule `json:"audienceRule"`
+		StartsAt     string             `json:"startsAt,omitempty"`
+		EndsAt       string             `json:"endsAt,omitempty"`
+		UpdatedAt    string             `json:"updatedAt"`
 	}{
 		ID: next.ID, Key: next.Key, Version: next.Version, Status: next.Status,
-		Variants: next.Variants, StartsAt: next.StartsAt, EndsAt: next.EndsAt,
+		Variants: next.Variants, AudienceRule: next.AudienceRule,
+		StartsAt: next.StartsAt, EndsAt: next.EndsAt,
 		UpdatedAt: next.UpdatedAt,
 	})
 	if err != nil {
@@ -102,14 +102,10 @@ func (f *Facade) UpdateRollout(
 		IdempotencyKey: idempotencyKey,
 		CommandDigest:  commandDigest,
 		Events: []model.Event{{
-			ID: "experiment-rollout-" + fmt.Sprintf("%x", eventDigest[:16]), Type: "ExperimentRolloutUpdated",
+			ID: "experiment-policy-" + fmt.Sprintf("%x", eventDigest[:16]), Type: "ExperimentPolicyActivated",
 			AggregateID: id, AggregateType: "Experiment", Payload: payload, OccurredAt: now,
 		}},
 	})
-}
-
-func (f *Facade) Assign(ctx context.Context, experimentID, subjectKey string) (model.AssignmentFact, bool, error) {
-	return f.assignmentFacts.Assign(ctx, experimentID, subjectKey)
 }
 
 func (f *Facade) GetAssignment(ctx context.Context, experimentID, subjectKey string) (model.AssignmentFact, error) {

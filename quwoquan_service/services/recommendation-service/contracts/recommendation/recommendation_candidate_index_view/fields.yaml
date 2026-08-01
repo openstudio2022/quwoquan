@@ -1,0 +1,23 @@
+description: 推荐候选与附属索引的统一投影视图。
+fields:
+- {name: scenario, source: scenario, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: contentId, source: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, tag_ref: true}
+- {name: entityRefs, source: entityRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection}
+- {name: publishedAt, source: publishedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: viewCount, source: viewCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: likeCount, source: likeCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: commentCount, source: commentCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: shareCount, source: shareCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: qualityScore, source: qualityScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: contentVertical, source: contentVertical, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: supplySource, source: supplySource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: intersectionFeatures, source: intersectionFeatures, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: premiumEligible, source: premiumEligible, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: premiumExpiresAt, source: premiumExpiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: premiumAdmissionUpdatedAt, source: premiumAdmissionUpdatedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: entityTagIds, source: entityTagIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: sourceSequence, source: sourceSequence, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}

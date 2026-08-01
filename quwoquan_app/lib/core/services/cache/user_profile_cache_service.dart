@@ -22,7 +22,7 @@ class UserProfileCacheService {
   final int _maxMemory;
   final bool _persistToPreferences;
   final LinkedHashMap<String, _ProfileEntry> _memory = LinkedHashMap();
-  final Map<String, _ProfileEntry> _disk = {};
+  final Map<String, _ProfileEntry> _entries = {};
   Future<void> _hydrationFuture = Future<void>.value();
   Future<void> _persistenceTail = Future<void>.value();
 
@@ -32,8 +32,8 @@ class UserProfileCacheService {
       _memory[userId] = entry;
       return entry.data;
     }
-    if (_disk.containsKey(userId)) {
-      final entry = _disk[userId]!;
+    if (_entries.containsKey(userId)) {
+      final entry = _entries[userId]!;
       _putMemory(userId, entry);
       return entry.data;
     }
@@ -41,7 +41,7 @@ class UserProfileCacheService {
   }
 
   String? getTimestamp(String userId) {
-    return (_memory[userId] ?? _disk[userId])?.updatedAt;
+    return (_memory[userId] ?? _entries[userId])?.updatedAt;
   }
 
   void put(String userId, Map<String, dynamic> data, {String? updatedAt}) {
@@ -50,7 +50,7 @@ class UserProfileCacheService {
       updatedAt: updatedAt ?? data['updatedAt'] as String? ?? '',
     );
     _putMemory(userId, entry);
-    _disk[userId] = entry;
+    _entries[userId] = entry;
     _schedulePersist();
   }
 
@@ -88,11 +88,11 @@ class UserProfileCacheService {
   }
 
   int clearRebuildable({Set<String> protectedUserIds = const <String>{}}) {
-    final ids = _disk.keys
+    final ids = _entries.keys
         .where((id) => !protectedUserIds.contains(id))
         .toList(growable: false);
     for (final id in ids) {
-      _disk.remove(id);
+      _entries.remove(id);
       _memory.remove(id);
     }
     _schedulePersist();
@@ -103,7 +103,7 @@ class UserProfileCacheService {
   Future<void> clearAllForTerminalAccountClosure() async {
     await _hydrationFuture;
     _memory.clear();
-    _disk.clear();
+    _entries.clear();
     if (!_persistToPreferences) {
       return;
     }
@@ -116,7 +116,7 @@ class UserProfileCacheService {
     });
   }
 
-  int get diskCount => _disk.length;
+  int get entryCount => _entries.length;
 
   int get memoryCount => _memory.length;
 
@@ -152,7 +152,7 @@ class UserProfileCacheService {
           data: Map<String, dynamic>.from(data),
           updatedAt: value['updatedAt']?.toString() ?? '',
         );
-        _disk[entry.key] = profileEntry;
+        _entries[entry.key] = profileEntry;
         _putMemory(entry.key, profileEntry);
       }
     } catch (_) {
@@ -182,7 +182,7 @@ class UserProfileCacheService {
   Future<void> _persistToPreferencesStore() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final payload = _disk.map(
+      final payload = _entries.map(
         (id, entry) => MapEntry(id, <String, dynamic>{
           'data': entry.data,
           'updatedAt': entry.updatedAt,

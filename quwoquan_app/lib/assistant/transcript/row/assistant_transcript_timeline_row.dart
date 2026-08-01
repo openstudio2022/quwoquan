@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
 /// 受 Codec 管理的非持久化键（其余进入 [extra] 以保证 round-trip）。
 const Set<String> kTranscriptEnvelopeKeys = {
   'id',
-  'conversationId',
+  'sessionId',
   'type',
   'content',
   'senderId',
@@ -54,7 +54,7 @@ sealed class AssistantTranscriptTimelineRow {
 final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
   UserTranscriptTimelineRow({
     required this.id,
-    required this.conversationId,
+    required this.sessionId,
     this.type = 'text',
     required this.content,
     required this.senderId,
@@ -74,7 +74,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
 
   @override
   final TranscriptLineId id;
-  final String conversationId;
+  final String sessionId;
   final String type;
   final String content;
   final String senderId;
@@ -98,7 +98,7 @@ final class AssistantAnswerTranscriptRow
     extends AssistantTranscriptTimelineRow {
   AssistantAnswerTranscriptRow({
     required this.id,
-    required this.conversationId,
+    required this.sessionId,
     this.type = 'text',
     required this.content,
     required this.senderId,
@@ -120,7 +120,7 @@ final class AssistantAnswerTranscriptRow
 
   @override
   final TranscriptLineId id;
-  final String conversationId;
+  final String sessionId;
   final String type;
   final String content;
   final String senderId;
@@ -143,7 +143,7 @@ final class AssistantAnswerTranscriptRow
 
   AssistantAnswerTranscriptRow copyWith({
     String? id,
-    String? conversationId,
+    String? sessionId,
     String? type,
     String? content,
     String? senderId,
@@ -164,7 +164,7 @@ final class AssistantAnswerTranscriptRow
   }) {
     return AssistantAnswerTranscriptRow(
       id: id ?? this.id,
-      conversationId: conversationId ?? this.conversationId,
+      sessionId: sessionId ?? this.sessionId,
       type: type ?? this.type,
       content: content ?? this.content,
       senderId: senderId ?? this.senderId,
@@ -189,7 +189,7 @@ final class AssistantAnswerTranscriptRow
 final class ErrorTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
   ErrorTranscriptTimelineRow({
     required this.id,
-    required this.conversationId,
+    required this.sessionId,
     required this.content,
     required this.senderId,
     required this.senderName,
@@ -200,7 +200,7 @@ final class ErrorTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
 
   @override
   final TranscriptLineId id;
-  final String conversationId;
+  final String sessionId;
   final String content;
   final String senderId;
   final String senderName;

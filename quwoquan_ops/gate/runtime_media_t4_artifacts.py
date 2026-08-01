@@ -9,11 +9,19 @@ import re
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from quwoquan_ops.gate.runtime_media_t4_qoe import validate_qoe_payload
 
 
 NATIVE_EVIDENCE_PREFIX = "QWQ_VIDEO_PLAYBACK_EVIDENCE "
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+GOLDEN_METRIC_CATALOG = (
+    REPO_ROOT
+    / "quwoquan_service/services/product-ops-service/contracts/product_ops/"
+    "event_record/golden_metric_catalog.yaml"
+)
 
 
 def _resolve_artifact_path(artifact_root: Path, raw_value: object) -> Path:
@@ -360,59 +368,195 @@ def _integer(value: object) -> int | None:
     return value
 
 
-def _validate_perfetto_artifacts(
+def _homepage_jank_ratio_target() -> float:
+    catalog = yaml.safe_load(GOLDEN_METRIC_CATALOG.read_text(encoding="utf-8"))
+    metrics = catalog.get("metrics") if isinstance(catalog, dict) else None
+    if not isinstance(metrics, list):
+        raise ValueError("golden metric catalog missing metrics")
+    for metric in metrics:
+        if isinstance(metric, dict) and metric.get("metric_id") == "app_jank_frame_rate":
+            target = metric.get("target")
+            value = target.get("value") if isinstance(target, dict) else None
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < 1:
+                return float(value)
+    raise ValueError("golden metric catalog missing app_jank_frame_rate target")
+
+
+def _validate_homepage_performance_artifacts(
     report: dict[str, Any],
     artifact_root: Path,
     issues: list[str],
     prefix: str,
+    *,
+    trace_field: str,
+    summary_field: str,
+    label: str,
+    platform: str,
 ) -> None:
     ui = report.get("uiEvidence")
     ui = ui if isinstance(ui, dict) else {}
     trace = _require_artifact(
         artifact_root,
-        ui.get("perfettoTracePath"),
-        f"{prefix}.uiEvidence.perfettoTracePath",
+        ui.get(trace_field),
+        f"{prefix}.uiEvidence.{trace_field}",
         issues,
     )
     summary_path = _require_artifact(
         artifact_root,
-        ui.get("perfettoSummaryPath"),
-        f"{prefix}.uiEvidence.perfettoSummaryPath",
+        ui.get(summary_field),
+        f"{prefix}.uiEvidence.{summary_field}",
         issues,
     )
     if trace is None or summary_path is None:
         return
     if trace.stat().st_size <= 0:
-        issues.append(f"{prefix}.Perfetto trace 不能为空")
+        issues.append(f"{prefix}.{label} trace 不能为空")
         return
-    summary = _load_json_object(summary_path, f"{prefix}.Perfetto summary", issues)
+    summary = _load_json_object(summary_path, f"{prefix}.{label} summary", issues)
     if summary is None:
         return
     actual_hash = hashlib.sha256(trace.read_bytes()).hexdigest()
     declared_hash = _normalized_sha256(summary.get("sourceTraceSha256"))
     if not SHA256_RE.fullmatch(declared_hash) or declared_hash != actual_hash:
-        issues.append(f"{prefix}.Perfetto summary.sourceTraceSha256 与 trace 不一致")
+        issues.append(f"{prefix}.{label} summary.sourceTraceSha256 与 trace 不一致")
+
+    if summary.get("schema") != "homepage-content-performance-evidence":
+        issues.append(
+            f"{prefix}.{label} summary.schema 必须为 "
+            "homepage-content-performance-evidence"
+        )
+    if summary.get("scenario") != "homepage_long_scroll_video":
+        issues.append(
+            f"{prefix}.{label} summary.scenario 必须为 homepage_long_scroll_video"
+        )
+    if summary.get("status") != "passed" or summary.get("skipped") is not False:
+        issues.append(f"{prefix}.{label} summary 必须为非 skip 的 passed 场景")
+
+    environment = report.get("environment")
+    environment = environment if isinstance(environment, dict) else {}
+    release = report.get("release")
+    release = release if isinstance(release, dict) else {}
+    if summary.get("commitSha") != environment.get("commitSha"):
+        issues.append(f"{prefix}.{label} summary.commitSha 与候选报告不一致")
+    if summary.get("releaseId") != release.get("releaseId"):
+        issues.append(f"{prefix}.{label} summary.releaseId 与候选报告不一致")
+    device = summary.get("device")
+    device = device if isinstance(device, dict) else {}
+    if not str(device.get("id") or "").strip():
+        issues.append(f"{prefix}.{label} summary.device.id 必须非空")
+    if device.get("platform") != platform or device.get("physical") is not True:
+        issues.append(
+            f"{prefix}.{label} summary.device 必须绑定物理 {platform} 设备"
+        )
+    if summary.get("samplesFromProductionReporter") is not True:
+        issues.append(
+            f"{prefix}.{label} summary 必须证明样本来自生产 typed reporter"
+        )
+
+    required_scenarios = {
+        "scrollPages": 8,
+        "retainedBoundaryCrossed": True,
+        "prependVerified": True,
+        "channelSwitchVerified": True,
+        "viewerRoundTripVerified": True,
+        "memoryPressureVerified": True,
+    }
+    for field, expected in required_scenarios.items():
+        value = summary.get(field)
+        if isinstance(expected, int) and not isinstance(expected, bool):
+            if _integer(value) is None or int(value) < expected:
+                issues.append(f"{prefix}.{label} summary.{field} 必须 >= {expected}")
+        elif value is not expected:
+            issues.append(f"{prefix}.{label} summary.{field} 必须为 true")
 
     stall_ms = _number(summary.get("mainThreadStallMaxMs"))
     ownership_errors = _integer(summary.get("bufferOwnershipErrorCount"))
     sampled_frames = _integer(summary.get("sampledFrames"))
     janky_frames = _integer(summary.get("jankyFrames"))
+    worst_frame_ms = _number(summary.get("worstFrameMs"))
+    worst_build_ms = _number(summary.get("worstBuildFrameMs"))
+    worst_raster_ms = _number(summary.get("worstRasterFrameMs"))
     if stall_ms is None or stall_ms < 0 or stall_ms >= 1000:
-        issues.append(f"{prefix}.Perfetto mainThreadStallMaxMs 必须在 [0,1000) 内")
+        issues.append(f"{prefix}.{label} mainThreadStallMaxMs 必须在 [0,1000) 内")
     if ownership_errors != 0:
-        issues.append(f"{prefix}.Perfetto bufferOwnershipErrorCount 必须为 0")
+        issues.append(f"{prefix}.{label} bufferOwnershipErrorCount 必须为 0")
     if sampled_frames is None or sampled_frames <= 0:
-        issues.append(f"{prefix}.Perfetto sampledFrames 必须为正整数")
+        issues.append(f"{prefix}.{label} sampledFrames 必须为正整数")
     if janky_frames is None or janky_frames < 0:
-        issues.append(f"{prefix}.Perfetto jankyFrames 必须为非负整数")
+        issues.append(f"{prefix}.{label} jankyFrames 必须为非负整数")
+    for field, value in (
+        ("worstFrameMs", worst_frame_ms),
+        ("worstBuildFrameMs", worst_build_ms),
+        ("worstRasterFrameMs", worst_raster_ms),
+    ):
+        if value is None or value < 0:
+            issues.append(f"{prefix}.{label} {field} 必须为非负数值")
+    if (
+        worst_frame_ms is not None
+        and worst_build_ms is not None
+        and worst_raster_ms is not None
+        and worst_frame_ms < max(worst_build_ms, worst_raster_ms)
+    ):
+        issues.append(f"{prefix}.{label} worstFrameMs 不得小于 build/raster 分项")
     if (
         sampled_frames is not None
         and sampled_frames > 0
         and janky_frames is not None
         and janky_frames >= 0
-        and janky_frames / sampled_frames >= 0.01
+        and janky_frames / sampled_frames >= _homepage_jank_ratio_target()
     ):
-        issues.append(f"{prefix}.Perfetto jankyFrames/sampledFrames 必须小于 1%")
+        target = _homepage_jank_ratio_target()
+        issues.append(
+            f"{prefix}.{label} jankyFrames/sampledFrames 必须小于 "
+            f"canonical target {target:.2%}",
+        )
+
+    for current_field, limit_field in (
+        ("peakResidentMemoryBytes", "memoryBudgetBytes"),
+        ("activeVideoControllerMax", "activeVideoControllerLimit"),
+        ("mediaDownloadActiveMax", "mediaDownloadActiveLimit"),
+        ("cacheSizeBytesMax", "cacheSizeBytesLimit"),
+    ):
+        current = _integer(summary.get(current_field))
+        limit = _integer(summary.get(limit_field))
+        if current is None or current < 0:
+            issues.append(f"{prefix}.{label} {current_field} 必须为非负整数")
+        if limit is None or limit <= 0:
+            issues.append(f"{prefix}.{label} {limit_field} 必须为正整数")
+        if current is not None and limit is not None and limit > 0 and current > limit:
+            issues.append(f"{prefix}.{label} {current_field} 超过 {limit_field}")
+    for field in ("mediaDownloadQueuedMax", "mediaDownloadInflightMax"):
+        value = _integer(summary.get(field))
+        if value is None or value < 0:
+            issues.append(f"{prefix}.{label} {field} 必须为非负整数")
+
+
+def _validate_performance_artifacts(
+    report: dict[str, Any],
+    artifact_root: Path,
+    issues: list[str],
+    prefix: str,
+) -> None:
+    _validate_homepage_performance_artifacts(
+        report,
+        artifact_root,
+        issues,
+        prefix,
+        trace_field="perfettoTracePath",
+        summary_field="perfettoSummaryPath",
+        label="Perfetto",
+        platform="android",
+    )
+    _validate_homepage_performance_artifacts(
+        report,
+        artifact_root,
+        issues,
+        prefix,
+        trace_field="iosPerformanceTracePath",
+        summary_field="iosPerformanceSummaryPath",
+        label="iOS performance",
+        platform="ios",
+    )
 
 
 def _validate_qoe_readback(
@@ -445,7 +589,7 @@ def validate_report_artifacts(
 ) -> None:
     _validate_range_artifact(report, artifact_root, issues, prefix)
     _validate_patrol_artifact(report, artifact_root, issues, prefix)
-    _validate_perfetto_artifacts(report, artifact_root, issues, prefix)
+    _validate_performance_artifacts(report, artifact_root, issues, prefix)
     _validate_qoe_readback(report, artifact_root, issues, prefix)
     ui = report.get("uiEvidence")
     ui = ui if isinstance(ui, dict) else {}

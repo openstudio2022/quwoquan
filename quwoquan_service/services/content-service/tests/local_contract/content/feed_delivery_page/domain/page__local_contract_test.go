@@ -52,6 +52,15 @@ func TestScopeCapacityMatchesMaximumCursorDepth(t *testing.T) {
 	}
 }
 
+func TestTerminalPageAllowsAnEmptyOutboundCursor(t *testing.T) {
+	now := time.Date(2026, 7, 29, 8, 0, 0, 0, time.UTC)
+	page := validPageForTest(t, now)
+	page.OutboundCursor = ""
+	if err := page.Validate(now); err != nil {
+		t.Fatalf("terminal delivery page rejected: %v", err)
+	}
+}
+
 func validPageForTest(t *testing.T, now time.Time) deliverymodel.Page {
 	t.Helper()
 	pageID, err := deliverymodel.NewID()

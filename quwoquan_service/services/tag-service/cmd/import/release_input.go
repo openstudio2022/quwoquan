@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 )
 
 const tagImportReportSchema = "quwoquan.tag_import_report"
@@ -103,21 +105,34 @@ func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomy
 				ancestors = append(ancestors, strings.Join(segments[:index], "/"))
 			}
 		}
+		lifecycleStatus, heatWindow, lifecycleErr := lifecycle.ResolveDeclaration(
+			def.LifecycleStatus,
+			def.HeatWindow,
+		)
+		if lifecycleErr != nil {
+			return "", "", nil, fmt.Errorf(
+				"release tag snapshot %s: %w",
+				tagRef,
+				lifecycleErr,
+			)
+		}
 		nodes = append(nodes, taxonomyNode{
-			tagRef:       tagRef,
-			group:        segments[0],
-			nodeKind:     "definition",
-			label:        firstNonEmpty(def.Label, def.DisplayName, segments[len(segments)-1]),
-			labelEn:      def.LabelEn,
-			description:  firstNonEmpty(def.Description, def.Semantics),
-			aliases:      normalizedStrings(def.Aliases),
-			axisRole:     strings.TrimSpace(def.AxisRole),
-			sameAsRefs:   normalizedStrings(def.SameAsRefs),
-			parentTagRef: parentTagRef,
-			ancestors:    ancestors,
-			depth:        len(segments) - 1,
-			maxDepth:     def.MaxDepth,
-			pathPolicy:   strings.TrimSpace(def.PathPolicy),
+			tagRef:          tagRef,
+			group:           segments[0],
+			nodeKind:        "definition",
+			label:           firstNonEmpty(def.Label, def.DisplayName, segments[len(segments)-1]),
+			labelEn:         def.LabelEn,
+			description:     firstNonEmpty(def.Description, def.Semantics),
+			aliases:         normalizedStrings(def.Aliases),
+			axisRole:        strings.TrimSpace(def.AxisRole),
+			sameAsRefs:      normalizedStrings(def.SameAsRefs),
+			parentTagRef:    parentTagRef,
+			ancestors:       ancestors,
+			depth:           len(segments) - 1,
+			maxDepth:        def.MaxDepth,
+			pathPolicy:      strings.TrimSpace(def.PathPolicy),
+			lifecycleStatus: string(lifecycleStatus),
+			heatWindow:      heatWindow,
 		})
 	}
 	var actual []string

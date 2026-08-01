@@ -1,15 +1,17 @@
 part of 'assistant_repository.dart';
 
 /// Assistant preference fact command and query transport.
-mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
-    implements AssistantPreferenceFactFacet {
+mixin _RemoteAssistantPreference on _RemoteAssistantRepositoryBase
+    implements AssistantPreferenceFacet {
   @override
-  Future<AssistantPreferenceFact> setAssistantPreference({
+  Future<AssistantPreference> setAssistantPreference({
     required AssistantPreferenceScope scope,
-    String conversationId = '',
+    String sessionId = '',
     required AssistantPreferenceKind kind,
     required String value,
     required AssistantPreferenceSourceType sourceType,
+    String sourceSessionId = '',
+    bool confirmed = false,
   }) {
     const path = AssistantApiMetadata.setAssistantPreferencePath;
     return _postAssistantPreference(
@@ -18,27 +20,28 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
       clientPageId: AssistantRequestPageIds.setAssistantPreference,
       body: <String, dynamic>{
         'scope': scope.wireName,
-        if (conversationId.trim().isNotEmpty)
-          'conversationId': conversationId.trim(),
+        if (sessionId.trim().isNotEmpty) 'sessionId': sessionId.trim(),
         'kind': kind.wireName,
         'value': value.trim(),
         'sourceType': sourceType.wireName,
+        if (sourceSessionId.trim().isNotEmpty)
+          'sourceSessionId': sourceSessionId.trim(),
+        'confirmed': confirmed,
       },
     );
   }
 
   @override
-  Future<List<AssistantPreferenceFact>> listAssistantPreferences({
+  Future<List<AssistantPreference>> listAssistantPreferences({
     AssistantPreferenceScope? scope,
-    String conversationId = '',
+    String sessionId = '',
     AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
   }) async {
     const path = AssistantApiMetadata.listAssistantPreferencesPath;
     try {
       final uri = _assistantGetUri(path, <String, String>{
         if (scope != null) 'scope': scope.wireName,
-        if (conversationId.trim().isNotEmpty)
-          'conversationId': conversationId.trim(),
+        if (sessionId.trim().isNotEmpty) 'sessionId': sessionId.trim(),
         'status': status.wireName,
       });
       final response = await _httpClient.get(
@@ -64,7 +67,7 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
                     AssistantApiMetadata.listAssistantPreferencesOperation,
               ),
             );
-      return AssistantPreferenceFactListView.fromJson(decoded).items
+      return AssistantPreferenceListView.fromJson(decoded).items
           .where((fact) => fact.preferenceId.trim().isNotEmpty)
           .toList(growable: false);
     } on CloudException {
@@ -75,7 +78,7 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
   }
 
   @override
-  Future<AssistantPreferenceFact> revokeAssistantPreference({
+  Future<AssistantPreference> revokeAssistantPreference({
     required String preferenceId,
   }) {
     final path = AssistantApiMetadata.revokeAssistantPreferencePath(
@@ -89,7 +92,7 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
   }
 
   @override
-  Future<AssistantPreferenceFact> restoreAssistantPreference({
+  Future<AssistantPreference> restoreAssistantPreference({
     required String preferenceId,
   }) {
     final path = AssistantApiMetadata.restoreAssistantPreferencePath(
@@ -102,7 +105,7 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
     );
   }
 
-  Future<AssistantPreferenceFact> _postAssistantPreference({
+  Future<AssistantPreference> _postAssistantPreference({
     required String path,
     required String operationId,
     required String clientPageId,
@@ -131,7 +134,7 @@ mixin _RemoteAssistantPreferenceFact on _RemoteAssistantRepositoryBase
         jsonDecode(response.body),
         context: _personalAssistantDialogContext(operationId: operationId),
       );
-      final fact = AssistantPreferenceFact.fromJson(decoded);
+      final fact = AssistantPreference.fromJson(decoded);
       if (fact.preferenceId.trim().isEmpty) {
         throw const FormatException(
           'assistant preference response is missing preferenceId',

@@ -18,7 +18,7 @@
 
 - Gathering 的发起与其目标对象引用。
 - 起始时间与可空结束时间构成的时间区间。
-- 开放、已关闭、已取消与已结束之间的状态流转。
+- draft、open、full、cancelled 与 completed 之间的状态流转。
 
 ### Out of Scope
 
@@ -44,9 +44,10 @@
 - 时间区间过期后状态必须自动流转为已结束，不得停留在开放态，也不得继续接受加入。
 
 <a id="req-004"></a>
-### REQ-004 状态终态可区分
+### REQ-004 草稿、开放、满员与终态可区分
 
-- 已关闭、已取消与已结束必须是可区分终态，分别对应发起方主动停止招募、发起方撤销与时间过期。
+- 会话绑定完成前保持 draft；绑定完成且有容量时进入 open，容量用尽进入 full，名额重新释放后回到 open。
+- cancelled 与 completed 必须是可区分终态，分别对应发起方撤销与主动完成或时间过期。
 
 <a id="req-005"></a>
 ### REQ-005 服务本地契约引用边界
@@ -55,7 +56,9 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/operations.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/fields.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/operations.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/errors.yaml`
 - canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
 - 父能力公开契约：[`L2 spec`](../spec.md)
 
@@ -86,10 +89,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 聚合与其承接页尚不存在
+### OPEN-001 聚合尚未进入运行时且承接页尚不存在
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前没有 Gathering 聚合，也没有对应的详情承接页，发起类行动只能落到裸建群，用户看不到目标、时间与参与者。
+- 影响或价值：尚缺 Circle API 生产 composition 与唯一 gatheringDetail 承接页，正式 App 仍不能完成发起与查看；Gathering metadata、生成模型、领域五态裁决和本地契约测试已存在。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

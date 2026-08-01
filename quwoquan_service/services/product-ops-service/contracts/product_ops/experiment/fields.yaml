@@ -57,15 +57,6 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
-- name: allocationSeed
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: SECRET
-  log_policy: drop
-  api_exposure: drop
-  ops_exposure: drop
-  role: authoritative_state
 - name: startsAt
   type: timestamp
   constraints:

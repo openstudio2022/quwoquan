@@ -41,61 +41,29 @@ OBJECTIVES = {
 }
 
 
-def _resolve_cached_artifact_path(artifact_path: str) -> Path | None:
-    if not artifact_path:
-        return None
-    candidate = Path(artifact_path)
-    cache_dir = Path(os.environ.get("MODEL_CACHE_DIR", "/app/cache"))
-    candidates = [candidate, cache_dir / candidate.name]
-    if not candidate.is_absolute():
-        candidates.append(cache_dir / candidate)
-    for path in candidates:
-        if path.exists():
-            return path
-    return None
-
-
 def _load_multiobjective_models(
 ) -> tuple[dict[str, Any] | None, dict[str, float] | None, str | None]:
     """Load multi-objective models and optional fusion weights from registry."""
     if lgb is None or MongoClient is None:
         return None, None, None
     uri = os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true")
-    db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_content")
+    db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_recommendation")
     try:
         with MongoClient(uri, serverSelectionTimeoutMS=3000) as client:
             db = client[db_name]
             doc = db["rec_model_registry"].find_one(
-                {"scenario": "content_feed_multiobjective", "modelType": "lgb_multiobjective", "production": True},
-                sort=[("createdAt", -1)],
+                {"scenario": "content_feed_multiobjective", "status": "active"},
             )
-            if not doc:
-                doc = db["rec_model_registry"].find_one(
-                    {"scenario": "content_feed_multiobjective"},
-                    sort=[("createdAt", -1)],
-                )
         if not doc:
             return None, None, None
         model_release_id = str(doc.get("_id") or "").strip() or None
 
-        artifact_uri = doc.get("artifactUri", "")
-        artifact_path = doc.get("artifactPath", "")
-
-        load_path = None
-        if artifact_uri:
-            try:
-                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-                import artifact_store
-                load_path = artifact_store.download(artifact_uri)
-            except Exception:
-                pass
-        if not load_path:
-            resolved_path = _resolve_cached_artifact_path(artifact_path)
-            if resolved_path:
-                load_path = str(resolved_path)
-
-        if not load_path:
+        artifact_uri = str(doc.get("artifactUri") or "").strip()
+        if not artifact_uri:
             return None, None, None
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import artifact_store
+        load_path = artifact_store.download(artifact_uri)
 
         load_path = Path(load_path)
         load_dir = load_path.parent if load_path.is_file() else load_path

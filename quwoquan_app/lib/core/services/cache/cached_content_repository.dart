@@ -458,6 +458,7 @@ class CachedContentRepository
       'key': key,
       'source': result.source.name,
       'freshness': result.freshness.name,
+      'cacheClass': result.cacheClass.name,
       'hitLayer': result.diagnostics.hitLayer,
     });
   }

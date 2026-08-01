@@ -1,0 +1,39 @@
+commercial_defaults: {status: blocked, block_reason: RankedRecommendationWindow 对象源、Redis adapter 与集成测试尚待本治理波次闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+description: 排序窗口创建与稳定续页的唯一内部接口。
+api_routes:
+- method: POST
+  path: /internal/recommendation/ranked-pages
+  operation: CreateRankedRecommendationWindow
+  actor: none
+  commercial: {status: blocked, block_reason: 对象源与集成测试尚待闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  application: {kind: session, facet: RankedRecommendationWindowSessionFacade, method: create, session_owner: RankedRecommendationWindow}
+  request_entity: CreateRankedRecommendationWindowCommand
+  request_body_kind: object
+  request_bindings:
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: RankedRecommendationPage
+  reliability: {timeout_ms: 800, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_conflict, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_ranked_window_create, trace: true, attributes: [scenario, outcome, replayed]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+- method: GET
+  path: /internal/recommendation/ranked-pages/{windowId}
+  operation: GetRankedRecommendationPage
+  actor: none
+  commercial: {status: blocked, block_reason: 对象源与集成测试尚待闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
+  application: {kind: query, facet: RankedRecommendationWindowQueryFacade, method: getPage, reader: RankedRecommendationWindowReader, slice: RankedRecommendationPage}
+  request_bindings:
+    path: [{name: windowId, field: windowId}]
+    query: [{name: fromOrdinal, field: fromOrdinal, required: false}, {name: limit, field: limit, required: false}]
+  response_entity: RankedRecommendationPage
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_not_found, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_ranked_window_read, trace: true, attributes: [scenario, outcome]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.ranked_page], ownership_policy: recommendation_internal_page}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}

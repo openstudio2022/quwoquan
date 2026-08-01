@@ -1,0 +1,26 @@
+{
+  "skillId": "local_life",
+  "displayName": "本地生活助手",
+  "description": "餐厅美食推荐、本地服务、周边好去处、团购优惠。",
+  "domainId": "local_life",
+  "problemClass": "realtime_info",
+  "executionTarget": "hybrid",
+  "routingHints": [
+    "吃饭",
+    "餐厅",
+    "美食",
+    "团购",
+    "附近",
+    "本地"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.local_life",
+  "capabilityProfileRef": "capability.web_app3_device",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.realtime_info",
+  "replayAssetRef": "assistant.replay.local_life.v1",
+  "promptAssets": [
+    "local_life.reactive",
+    "assistant.evidence_discipline"
+  ]
+}

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/account_session_contracts.dart';
 
@@ -31,6 +31,13 @@ final class LoginAnonymousCommand {
   final String deviceFingerprintHash;
   final String platform;
   final String appVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "installId": this.installId,
+    "deviceFingerprintHash": this.deviceFingerprintHash,
+    "platform": this.platform,
+    "appVersion": this.appVersion,
+  };
 }
 
 final class LoginOneTapCommand {
@@ -76,6 +83,16 @@ final class LoginOneTapCommand {
   final String? appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "vendor": this.vendor,
+    "carrierToken": this.carrierToken,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class LoginWithAlipayCommand {
@@ -115,6 +132,15 @@ final class LoginWithAlipayCommand {
   final String? appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "alipayAuthCode": this.alipayAuthCode,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class LoginWithPhoneCommand {
@@ -163,6 +189,16 @@ final class LoginWithPhoneCommand {
   final String appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "phone": this.phone,
+    "otpCode": this.otpCode,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    "appVersion": this.appVersion,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class LoginWithQqCommand {
@@ -202,6 +238,15 @@ final class LoginWithQqCommand {
   final String? appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "qqAuthCode": this.qqAuthCode,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class LoginWithWechatCommand {
@@ -241,6 +286,15 @@ final class LoginWithWechatCommand {
   final String? appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "wechatCode": this.wechatCode,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class LogoutCommand {
@@ -252,6 +306,11 @@ final class LogoutCommand {
 
   final String? refreshToken;
   final String? deviceId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.refreshToken != null) "refreshToken": this.refreshToken!,
+    if (this.deviceId != null) "deviceId": this.deviceId!,
+  };
 }
 
 final class RefreshTokenCommand {
@@ -264,6 +323,10 @@ final class RefreshTokenCommand {
   }
 
   final String refreshToken;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "refreshToken": this.refreshToken,
+  };
 }
 
 CloudOperationRequestPayload encodeUserAccountSessionLoginAnonymousGeneratedRequest(LoginAnonymousCommand request) {

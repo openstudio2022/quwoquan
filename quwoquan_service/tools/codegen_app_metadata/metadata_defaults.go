@@ -20,6 +20,33 @@ func buildPostDefaults(fields []fieldDef) map[string]string {
 	return defaults
 }
 
+func buildPostSnapshotFieldByteLimits(
+	fields []fieldDef,
+	projectionFields []projectionFieldDef,
+) map[string]int {
+	limitsByCanonicalName := map[string]int{}
+	for _, field := range fields {
+		if field.MaxUTF8Bytes <= 0 {
+			continue
+		}
+		limitsByCanonicalName[field.Name] = field.MaxUTF8Bytes
+		if field.Source != "" {
+			limitsByCanonicalName[field.Source] = field.MaxUTF8Bytes
+		}
+	}
+	limits := map[string]int{}
+	for _, field := range projectionFields {
+		canonicalName := field.Source
+		if canonicalName == "" {
+			canonicalName = field.Name
+		}
+		if limit := limitsByCanonicalName[canonicalName]; limit > 0 {
+			limits[field.Name] = limit
+		}
+	}
+	return limits
+}
+
 func dartEmptyListExpr(t string) string {
 	switch t {
 	case "[]float32", "[]float64":

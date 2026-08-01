@@ -128,24 +128,27 @@ func (h *ChatHandler) messageHomeRowToWire(ctx context.Context, item application
 	}
 }
 
-func contactHomeUserRowToWire(contact map[string]any) map[string]any {
+func contactHomeUserRowToWire(
+	contact map[string]any,
+	intersections []application.ContactIntersectionSummary,
+) map[string]any {
 	userID := stringFromMap(contact, "userId")
 	displayName := stringFromMap(contact, "displayName")
-	metFrom := stringFromMap(contact, "metFrom")
-	bio := stringFromMap(contact, "bio")
 	lastInteraction := stringFromMap(contact, "lastInteraction")
 	return map[string]any{
-		"id":                   userID,
-		"kind":                 "user",
-		"objectId":             userID,
-		"userId":               userID,
-		"userHandle":           stringFromMap(contact, "userHandle"),
-		"conversationId":       stringFromMap(contact, "conversationId"),
-		"title":                displayName,
-		"subtitle":             stringFromMap(contact, "subtitle"),
+		"id":             userID,
+		"kind":           "user",
+		"objectId":       userID,
+		"userId":         userID,
+		"userHandle":     stringFromMap(contact, "userHandle"),
+		"conversationId": stringFromMap(contact, "conversationId"),
+		"title":          displayName,
+		// 用户行的解释只来自服务端 typed intersection summary。个人简介、
+		// metFrom 或最近互动时间都不是可证明的交集，不能作为替代文案。
+		"subtitle":             "",
 		"avatarUrl":            stringFromMap(contact, "avatarUrl"),
 		"relationState":        stringFromMap(contact, "relationState"),
-		"summaryIntersections": firstTwoNonEmpty(metFrom, bio),
+		"summaryIntersections": application.ContactIntersectionTexts(intersections),
 		"lastActiveAt":         parseOptionalRFC3339(lastInteraction),
 		"sortKey":              lastInteraction,
 		"isStarred":            boolFromMap(contact, "isStarred"),
@@ -169,7 +172,6 @@ func contactHomeCircleRowToWire(hit application.ContactHomeCircleHit) map[string
 }
 
 func (h *ChatHandler) contactHomeGroupRowToWire(ctx context.Context, conv model.Conversation) map[string]any {
-	sourceSummary := joinNonEmpty(" · ", conv.CircleId, conv.EntityId)
 	return map[string]any{
 		"id":                   conv.ID,
 		"kind":                 "group",
@@ -180,11 +182,11 @@ func (h *ChatHandler) contactHomeGroupRowToWire(ctx context.Context, conv model.
 		"circleGroupId":        conv.CircleGroupId,
 		"entityId":             conv.EntityId,
 		"title":                conv.Title,
-		"subtitle":             sourceSummary,
+		"subtitle":             "",
 		"avatarUrl":            h.resolveConversationAvatarURL(ctx, conv),
-		"summaryIntersections": firstTwoNonEmpty(conv.CircleId, conv.EntityId),
-		"sourceEntityTitle":    conv.EntityId,
-		"sourceCircleTitle":    conv.CircleId,
+		"summaryIntersections": []string{},
+		"sourceEntityTitle":    "",
+		"sourceCircleTitle":    "",
 		"memberCount":          conv.MemberCount,
 		"lastActiveAt":         conv.LastMessageTime,
 		"sortKey":              conv.LastMessageTime.UTC().Format(time.RFC3339),
@@ -317,33 +319,39 @@ func parseOptionalRFC3339(value string) *time.Time {
 
 func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Conversation) map[string]any {
 	avatarURL := h.resolveConversationAvatarURL(ctx, conv)
+	lastMessageType := strings.TrimSpace(conv.LastMessageType)
+	if lastMessageType == "" {
+		lastMessageType = "text"
+	}
 	wire := map[string]any{
-		"id":                      conv.ID,
-		"conversationId":          conv.ID,
-		"type":                    conv.Type,
-		"title":                   conv.Title,
-		"avatarUrl":               avatarURL,
-		"groupAvatarVersion":      conv.GroupAvatarVersion,
-		"creatorId":               conv.CreatorId,
-		"circleId":                conv.CircleId,
-		"circleGroupId":           conv.CircleGroupId,
-		"entityId":                conv.EntityId,
-		"originType":              conv.OriginType,
-		"maxSeq":                  conv.MaxSeq,
-		"memberCount":             conv.MemberCount,
-		"membersRosterRevision":   conv.MembersRosterRevision,
-		"maxGroupSize":            conv.MaxGroupSize,
-		"receiptEnabled":          conv.ReceiptEnabled,
-		"announcement":            conv.Announcement,
-		"announcementUpdatedBy":   conv.AnnouncementUpdatedBy,
-		"nameEditableByAdminOnly": conv.NameEditableByAdminOnly,
-		"lastMessageId":           conv.LastMessageId,
-		"lastMessagePreview":      conv.LastMessagePreview,
-		"lastMessageTime":         conv.LastMessageTime,
-		"messageCount":            conv.MessageCount,
-		"status":                  conv.Status,
-		"createdAt":               conv.CreatedAt,
-		"updatedAt":               conv.UpdatedAt,
+		"id":                         conv.ID,
+		"conversationId":             conv.ID,
+		"type":                       conv.Type,
+		"title":                      conv.Title,
+		"avatarUrl":                  avatarURL,
+		"groupAvatarVersion":         conv.GroupAvatarVersion,
+		"creatorId":                  conv.CreatorId,
+		"circleId":                   conv.CircleId,
+		"circleGroupId":              conv.CircleGroupId,
+		"entityId":                   conv.EntityId,
+		"originType":                 conv.OriginType,
+		"originIntersectionSnapshot": conv.OriginIntersectionSnapshot,
+		"maxSeq":                     conv.MaxSeq,
+		"memberCount":                conv.MemberCount,
+		"membersRosterRevision":      conv.MembersRosterRevision,
+		"maxGroupSize":               conv.MaxGroupSize,
+		"receiptEnabled":             conv.ReceiptEnabled,
+		"announcement":               conv.Announcement,
+		"announcementUpdatedBy":      conv.AnnouncementUpdatedBy,
+		"nameEditableByAdminOnly":    conv.NameEditableByAdminOnly,
+		"lastMessageId":              conv.LastMessageId,
+		"lastMessagePreview":         conv.LastMessagePreview,
+		"lastMessageType":            lastMessageType,
+		"lastMessageTime":            conv.LastMessageTime,
+		"messageCount":               conv.MessageCount,
+		"status":                     conv.Status,
+		"createdAt":                  conv.CreatedAt,
+		"updatedAt":                  conv.UpdatedAt,
 	}
 	if conv.AnnouncementUpdatedAt != nil {
 		wire["announcementUpdatedAt"] = conv.AnnouncementUpdatedAt.UTC().Format(time.RFC3339Nano)

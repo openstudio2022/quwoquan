@@ -463,7 +463,7 @@ func objectTypeForTarget(kind, objectID, routeID string) string {
 	switch {
 	case strings.HasPrefix(id, "homepage_"):
 		return "homepage"
-	case strings.HasPrefix(id, "fixture_circle_"), strings.HasPrefix(id, "circle_"):
+	case strings.HasPrefix(id, "circle_"):
 		return "circle"
 	}
 	return ""

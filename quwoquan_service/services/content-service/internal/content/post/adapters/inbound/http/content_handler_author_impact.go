@@ -7,8 +7,8 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/authorimpact"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Request) {

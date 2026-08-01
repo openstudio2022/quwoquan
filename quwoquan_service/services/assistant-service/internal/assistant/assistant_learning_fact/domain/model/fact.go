@@ -49,7 +49,7 @@ type TrustedContext struct {
 	UserID           string
 	PersonaID        string
 	TraceID          string
-	SessionID        string
+	ClientSessionID  string
 	PageVisitID      string
 	PageID           string
 	SurfaceID        string
@@ -71,7 +71,7 @@ type Fact struct {
 	TriggerMessageID  string    `bson:"triggerMessageId,omitempty" json:"triggerMessageId,omitempty"`
 	ReferralSource    string    `bson:"referralSource" json:"referralSource"`
 	TraceID           string    `bson:"traceId,omitempty" json:"traceId,omitempty"`
-	SessionID         string    `bson:"sessionId,omitempty" json:"sessionId,omitempty"`
+	ClientSessionID   string    `bson:"clientSessionId,omitempty" json:"clientSessionId,omitempty"`
 	PageVisitID       string    `bson:"pageVisitId,omitempty" json:"pageVisitId,omitempty"`
 	PageID            string    `bson:"pageId,omitempty" json:"pageId,omitempty"`
 	SurfaceID         string    `bson:"surfaceId,omitempty" json:"surfaceId,omitempty"`
@@ -119,7 +119,7 @@ type RedactedPayload struct {
 	TriggerMessageID  string    `bson:"triggerMessageId,omitempty" json:"triggerMessageId,omitempty"`
 	ReferralSource    string    `bson:"referralSource" json:"referralSource"`
 	TraceID           string    `bson:"traceId,omitempty" json:"traceId,omitempty"`
-	SessionID         string    `bson:"sessionId,omitempty" json:"sessionId,omitempty"`
+	ClientSessionID   string    `bson:"clientSessionId,omitempty" json:"clientSessionId,omitempty"`
 	PageVisitID       string    `bson:"pageVisitId,omitempty" json:"pageVisitId,omitempty"`
 	PageID            string    `bson:"pageId,omitempty" json:"pageId,omitempty"`
 	SurfaceID         string    `bson:"surfaceId,omitempty" json:"surfaceId,omitempty"`
@@ -190,7 +190,7 @@ func Build(
 		TriggerMessageID:  command.TriggerMessageID,
 		ReferralSource:    command.ReferralSource,
 		TraceID:           strings.TrimSpace(trusted.TraceID),
-		SessionID:         strings.TrimSpace(trusted.SessionID),
+		ClientSessionID:   strings.TrimSpace(trusted.ClientSessionID),
 		PageVisitID:       strings.TrimSpace(trusted.PageVisitID),
 		PageID:            strings.TrimSpace(trusted.PageID),
 		SurfaceID:         strings.TrimSpace(trusted.SurfaceID),
@@ -291,7 +291,7 @@ func Digest(fact Fact) string {
 	material.AppendSequence = 0
 	material.RecordedAt = time.Time{}
 	material.TraceID = ""
-	material.SessionID = ""
+	material.ClientSessionID = ""
 	material.PageVisitID = ""
 	material.PageID = ""
 	material.SurfaceID = ""
@@ -315,7 +315,7 @@ func (fact Fact) RedactedPayload() RedactedPayload {
 		TriggerMessageID:  fact.TriggerMessageID,
 		ReferralSource:    fact.ReferralSource,
 		TraceID:           fact.TraceID,
-		SessionID:         fact.SessionID,
+		ClientSessionID:   fact.ClientSessionID,
 		PageVisitID:       fact.PageVisitID,
 		PageID:            fact.PageID,
 		SurfaceID:         fact.SurfaceID,

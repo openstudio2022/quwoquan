@@ -129,7 +129,7 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	lat, _ := parseOptionalFloat(r.URL.Query().Get(locationgenerated.QueryParamLat))
 	lng, _ := parseOptionalFloat(r.URL.Query().Get(locationgenerated.QueryParamLng))
 	limit := parsePositiveInt(r.URL.Query().Get(locationgenerated.QueryParamLimit), h.defaultSearchLimit)
-	items, serviceErr := h.service.Search(r.Context(), model.SearchQuery{
+	items, serviceErr := h.service.Search(r.Context(), model.SearchRequestFact{
 		Query:    query,
 		CityCode: strings.TrimSpace(r.URL.Query().Get(locationgenerated.QueryParamCityCode)),
 		Lat:      lat,

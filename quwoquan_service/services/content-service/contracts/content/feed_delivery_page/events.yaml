@@ -1,0 +1,8 @@
+events:
+- name: FeedPageDelivered
+  description: Content 确认 FeedDeliveryPage 已持久化且完成当前权限 hydration 后发布；Recommendation 只据此形成曝光事实。
+  producer: content-service
+  consumers: [recommendation-service]
+  channel: events.content.feed_page_delivered
+  payload_entity: FeedPageDelivered
+  payload_fields: [deliveryPageId, feedRequestId, subjectId, personaId, scenario, windowId, modelBucket, modelChannel, modelReleaseId, rankingSnapshotDigest, featureSnapshotAt, userFeatureSnapshot, items, occurredAt]

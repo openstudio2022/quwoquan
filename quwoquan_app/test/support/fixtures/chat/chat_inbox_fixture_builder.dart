@@ -1,9 +1,10 @@
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String _defaultConversationAvatarUrl = '';
 const int _defaultGroupAvatarVersion = 0;
 const String _defaultLastMessagePreview = '';
-const String _defaultLastMessageType = 'text';
+const MessageType _defaultLastMessageType = MessageType.text;
 const int _defaultLastSequence = 0;
 const int _defaultUnreadCount = 0;
 const int _defaultMentionUnreadCount = 0;
@@ -18,7 +19,7 @@ ChatInboxDto chatInboxFixture({
   String avatarUrl = _defaultConversationAvatarUrl,
   int groupAvatarVersion = _defaultGroupAvatarVersion,
   String lastMessagePreview = _defaultLastMessagePreview,
-  String lastMessageType = _defaultLastMessageType,
+  MessageType lastMessageType = _defaultLastMessageType,
   DateTime? lastMessageTime,
   int lastSeq = _defaultLastSequence,
   int unreadCount = _defaultUnreadCount,

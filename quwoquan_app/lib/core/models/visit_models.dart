@@ -2,31 +2,23 @@
 // 用于小趣基线：本地存储与 experienceLevel 派生，见 assistant-baseline spec。
 
 /// 访问对象类型：页面型（如发现某 tab）或实体型（作者/圈子）。
-enum VisitTargetType {
-  page,
-  entity,
-}
+enum VisitTargetType { page, entity }
 
 /// 实体型访问对象的子类型。
-enum VisitEntityKind {
-  author,
-  circle,
-}
+enum VisitEntityKind { author, circle }
 
 /// 被访问对象。支持页面型与实体型，具有唯一 [targetKey]。
 class VisitTarget {
   const VisitTarget.page(String this.pageId)
-      : type = VisitTargetType.page,
-        entityKind = null,
-        entityId = null;
+    : type = VisitTargetType.page,
+      entityKind = null,
+      entityId = null;
 
-  const VisitTarget.entity({
-    required VisitEntityKind kind,
-    required String id,
-  })  : type = VisitTargetType.entity,
-        pageId = null,
-        entityKind = kind,
-        entityId = id;
+  const VisitTarget.entity({required VisitEntityKind kind, required String id})
+    : type = VisitTargetType.entity,
+      pageId = null,
+      entityKind = kind,
+      entityId = id;
 
   final VisitTargetType type;
   final String? pageId;
@@ -42,7 +34,9 @@ class VisitTarget {
         entityKind != null &&
         entityId != null &&
         entityId!.isNotEmpty) {
-      final kindStr = entityKind == VisitEntityKind.author ? 'author' : 'circle';
+      final kindStr = entityKind == VisitEntityKind.author
+          ? 'author'
+          : 'circle';
       return 'entity_${kindStr}_$entityId';
     }
     throw StateError('VisitTarget: missing pageId or entityKind/entityId');
@@ -51,7 +45,9 @@ class VisitTarget {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VisitTarget && runtimeType == other.runtimeType && targetKey == other.targetKey;
+      other is VisitTarget &&
+          runtimeType == other.runtimeType &&
+          targetKey == other.targetKey;
 
   @override
   int get hashCode => targetKey.hashCode;
@@ -73,10 +69,13 @@ class VisitRecord {
   final DateTime firstSeenAt;
   final DateTime lastSeenAt;
   final int visitCount;
+
   /// 最近 7 天内访问次数（由写入时从 lastSeenTimestamps 维护）。
   final int count7d;
+
   /// 最近 30 天内访问次数。
   final int count30d;
+
   /// 最近若干次访问时间（ISO8601），用于派生 count7d/count30d，最多保留 [kMaxTimestamps] 条。
   final List<String> lastSeenTimestamps;
 
@@ -103,14 +102,14 @@ class VisitRecord {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'targetKey': targetKey,
-        'firstSeenAt': firstSeenAt.toIso8601String(),
-        'lastSeenAt': lastSeenAt.toIso8601String(),
-        'visitCount': visitCount,
-        'count7d': count7d,
-        'count30d': count30d,
-        'lastSeenTimestamps': lastSeenTimestamps,
-      };
+    'targetKey': targetKey,
+    'firstSeenAt': firstSeenAt.toIso8601String(),
+    'lastSeenAt': lastSeenAt.toIso8601String(),
+    'visitCount': visitCount,
+    'count7d': count7d,
+    'count30d': count30d,
+    'lastSeenTimestamps': lastSeenTimestamps,
+  };
 
   factory VisitRecord.fromJson(Map<String, dynamic> json) {
     final list = json['lastSeenTimestamps'];
@@ -129,8 +128,4 @@ class VisitRecord {
 }
 
 /// 体验等级：首次、再次、常用。由 VisitRecord 的 visitCount / count7d / count30d 派生。
-enum ExperienceLevel {
-  firstTime,
-  returning,
-  frequent,
-}
+enum ExperienceLevel { firstTime, returning, frequent }

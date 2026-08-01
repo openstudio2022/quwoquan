@@ -1,0 +1,21 @@
+kind: append_only_fact
+description: Recommendation 消费 UserAccountClosed 后形成的不可逆主体关闭事实，是阻止曝光、反馈与特征复活的本域隐私栅栏。
+identity:
+  fields: [accountId]
+  version_source: immutable
+access:
+  commands: append_only_sink
+  queries: named_reader
+  cross_context: event_only
+relationships:
+- {name: accountClosure, target_object: user.UserAccount, reference_fields: [accountId], kind: event_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: retain}
+local_identity_reasons:
+  subjectIds: 账号关闭事件固化的本域运行主体集合，包含 accountId 与 personaIds，用于隐私阻断，不是新的业务对象引用。
+  sourceEventId: UserAccountClosed 消息的不可变幂等与审计身份，不是业务对象引用。
+business_rules:
+- 仅接受 user-service durable outbox 发布的 UserAccountClosed typed event；sourceEventId 必须等于 UserAccountClosed 与 accountId 的确定性摘要，payload userId、accountState 与时间必须一致。
+- subjectIds 固化 accountId 与事件携带的全部 personaIds；一旦记录永不撤销或删除，重复事件按 sourceEventId 幂等，任何恢复事件不得重开任一主体。
+- 关闭事实存在时禁止追加新曝光、反馈或重建可识别特征，不得跨库读取 Content tombstone 替代本事实。
+- 消费者必须在关闭事实持久化后依次删除本域反馈、曝光、长期特征与活动窗口；任一清理失败不得 ACK，重放必须继续执行幂等清理。
+lifecycle:
+  immutable: true

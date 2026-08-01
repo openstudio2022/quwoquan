@@ -169,8 +169,14 @@ def terminate_workspace_cursor_bridges(workspace: Path) -> None:
         _terminate_pid_tree_if_alive(pid)
 
 
-def redact_managed_secret(text: str) -> str:
-    text = re.sub(r"crsr_[A-Za-z0-9_-]+", "<redacted-cursor-key>", str(text or ""))
+def redact_managed_secret(text: str, *, api_key: str | None = None) -> str:
+    """Redact the active key even when its provider format lacks a stable prefix."""
+    try:
+        from core.cursor_credentials import redact_cursor_api_key
+    except Exception:  # noqa: BLE001
+        from cursor_credentials import redact_cursor_api_key  # type: ignore
+    text = redact_cursor_api_key(text, api_key=api_key)
+    text = re.sub(r"crsr_[A-Za-z0-9_-]+", "<redacted-cursor-key>", text)
     return re.sub(
         r"(--tool-callback-auth-token\s+)[^\s]+",
         r"\1<redacted-token>",

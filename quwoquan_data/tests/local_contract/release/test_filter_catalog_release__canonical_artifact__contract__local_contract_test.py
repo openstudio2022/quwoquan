@@ -52,7 +52,7 @@ def test_environment_import_exposes_only_the_bound_stage_payload():
         environment="gamma",
     )
 
-    assert environment_input.manifest_ref.endswith("/gamma.seed.json")
+    assert environment_input.manifest_ref.endswith("/gamma.import.json")
     assert environment_input.canonical_artifact_ref.endswith(
         "/filter_catalog_release.json"
     )

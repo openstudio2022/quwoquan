@@ -139,7 +139,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       final uploaded = await coordinator.uploadPreparedSource(
         source: source,
         mediaType: ContentMediaType.file,
-        contentType: 'application/octet-stream',
+        mimeType: 'application/octet-stream',
         uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
       );
       await ref

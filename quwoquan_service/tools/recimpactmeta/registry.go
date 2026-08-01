@@ -25,7 +25,6 @@ type HelpTypeDef struct {
 	SummaryAction   Action   `yaml:"summaryAction"`
 	EvidenceAction  Action   `yaml:"evidenceAction"`
 	BehaviorActions []string `yaml:"behaviorActions"`
-	Status          string   `yaml:"status"`
 }
 
 // Defaults 未登记 helpType 的防御默认。
@@ -89,9 +88,6 @@ func Validate(r *Registry) error {
 		}
 		if strings.TrimSpace(h.EvidenceAction.Key) == "" || strings.TrimSpace(h.EvidenceAction.Label) == "" {
 			return fmt.Errorf("helpType %q evidenceAction must have key+label", h.HelpType)
-		}
-		if strings.TrimSpace(h.Status) == "" {
-			return fmt.Errorf("helpType %q missing status", h.HelpType)
 		}
 	}
 	if strings.TrimSpace(r.Defaults.IconKey) == "" {

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/user_settings_contracts.dart';
 
@@ -42,6 +42,12 @@ final class UpdateAppearanceSettingsCommand {
   final ThemeModeSetting themeMode;
   final FontSizePreset fontSizePreset;
   final AppearanceApplyScope applyScope;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "themeMode": switch (this.themeMode) { ThemeModeSetting.system => "system", ThemeModeSetting.light => "light", ThemeModeSetting.dark => "dark", },
+    "fontSizePreset": switch (this.fontSizePreset) { FontSizePreset.xs => "xs", FontSizePreset.sm => "sm", FontSizePreset.md => "md", FontSizePreset.lg => "lg", FontSizePreset.xl => "xl", },
+    "applyScope": switch (this.applyScope) { AppearanceApplyScope.allAccounts => "all_accounts", AppearanceApplyScope.currentPersona => "current_persona", AppearanceApplyScope.inheritOwnerDefault => "inherit_owner_default", },
+  };
 }
 
 final class UpdateCallSettingsCommand {
@@ -59,6 +65,13 @@ final class UpdateCallSettingsCommand {
   final bool? allowCallerRingtoneOverride;
   final bool? enableCallVibration;
   final bool? enableGroupCallRing;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.defaultIncomingCallRingtoneId != null) "defaultIncomingCallRingtoneId": _encodeGeneratedNullableMutation(this.defaultIncomingCallRingtoneId!, (value) => value.wireValue),
+    if (this.allowCallerRingtoneOverride != null) "allowCallerRingtoneOverride": this.allowCallerRingtoneOverride!,
+    if (this.enableCallVibration != null) "enableCallVibration": this.enableCallVibration!,
+    if (this.enableGroupCallRing != null) "enableGroupCallRing": this.enableGroupCallRing!,
+  };
 }
 
 final class UpdateNotificationSettingsCommand {
@@ -76,6 +89,13 @@ final class UpdateNotificationSettingsCommand {
   final bool? enableMarketing;
   final NullableSettingMutation<QuietHoursTime>? quietHoursStart;
   final NullableSettingMutation<QuietHoursTime>? quietHoursEnd;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.enablePush != null) "enablePush": this.enablePush!,
+    if (this.enableMarketing != null) "enableMarketing": this.enableMarketing!,
+    if (this.quietHoursStart != null) "quietHoursStart": _encodeGeneratedNullableMutation(this.quietHoursStart!, (value) => value.wireValue),
+    if (this.quietHoursEnd != null) "quietHoursEnd": _encodeGeneratedNullableMutation(this.quietHoursEnd!, (value) => value.wireValue),
+  };
 }
 
 final class UpdatePrivacySettingsCommand {
@@ -94,6 +114,13 @@ final class UpdatePrivacySettingsCommand {
   final ProfileVisibility? profileVisibility;
   final List<String>? blockedKeywords;
   final bool? assistantEnabled;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.allowStrangerMsg != null) "allowStrangerMsg": this.allowStrangerMsg!,
+    if (this.profileVisibility != null) "profileVisibility": switch (this.profileVisibility!) { ProfileVisibility.public => "public", ProfileVisibility.friends => "friends", ProfileVisibility.privateProfile => "private", },
+    if (this.blockedKeywords != null) "blockedKeywords": this.blockedKeywords!.map((value) => value).toList(growable: false),
+    if (this.assistantEnabled != null) "assistantEnabled": this.assistantEnabled!,
+  };
 }
 
 final class UserSettingsQuery {

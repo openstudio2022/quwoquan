@@ -19,7 +19,7 @@ def test_resolve_reads_only_restricted_key_file(tmp_path, monkeypatch):
     monkeypatch.setenv(cc.CURSOR_API_KEY_ENV, "crsr_stale_transient_value")
 
     assert cc.resolve_cursor_api_key() == "crsr_rotated_key_value"
-    assert os.environ[cc.CURSOR_API_KEY_ENV] == "crsr_rotated_key_value"
+    assert cc.CURSOR_API_KEY_ENV not in os.environ
 
 
 def test_environment_value_is_never_a_credential_source(monkeypatch):
@@ -60,7 +60,7 @@ def test_rotated_file_keeps_only_the_first_active_key_line(tmp_path, monkeypatch
 
     assert cc.cursor_key_file_issues() == []
     assert cc.resolve_cursor_api_key() == "crsr_rotated_new"
-    assert os.environ[cc.CURSOR_API_KEY_ENV] == "crsr_rotated_new"
+    assert cc.CURSOR_API_KEY_ENV not in os.environ
 
 
 def test_surrounding_whitespace_and_leading_blank_lines_are_stripped(tmp_path, monkeypatch):
@@ -98,11 +98,20 @@ def test_parse_cursor_api_key_is_a_pure_function():
     assert cc.parse_cursor_api_key("   # only a comment") is None
 
 
-def test_refresh_false_uses_only_transient_value_after_valid_file_contract(tmp_path, monkeypatch):
+def test_refresh_false_still_reads_the_key_file_without_environment_fallback(tmp_path, monkeypatch):
     key_file = _key_file(tmp_path)
     monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
     monkeypatch.setenv(cc.CURSOR_API_KEY_ENV, "crsr_transient")
-    assert cc.resolve_cursor_api_key(refresh=False) == "crsr_transient"
+    assert cc.resolve_cursor_api_key(refresh=False) == "crsr_test_key"
+    assert cc.CURSOR_API_KEY_ENV not in os.environ
+
+
+def test_redactor_masks_the_actual_key_even_without_cursor_prefix():
+    secret = "nonstandard-provider-secret-123"
+    assert cc.redact_cursor_api_key(
+        f"provider rejected {secret}",
+        api_key=secret,
+    ) == "provider rejected <redacted-cursor-key>"
 
 
 def test_auth_error_classification_excludes_bridge_noise():

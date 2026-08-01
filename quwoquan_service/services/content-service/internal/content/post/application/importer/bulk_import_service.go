@@ -9,27 +9,28 @@ import (
 	"strings"
 	"time"
 
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 )
 
 // BulkImportItem represents a single item from a release manifest NDJSON line.
 type BulkImportItem struct {
-	PostID                string         `json:"postId"`
-	Title                 string         `json:"title"`
-	ContentType           string         `json:"contentType"`
-	AuthorID              string         `json:"authorId"`
-	CreatorProfileID      string         `json:"creatorProfileId"`
-	CreatorArchetype      string         `json:"creatorArchetype"`
-	CreatorProfileVersion string         `json:"creatorProfileVersion"`
-	CreatorDisclosure     map[string]any `json:"creatorDisclosure"`
-	ExperienceClaimMode   string         `json:"experienceClaimMode"`
-	AuthorQualitySignals  map[string]any `json:"authorQualitySignals"`
-	Tags                  []string       `json:"tags"`
-	EntityRefs            []string       `json:"entityRefs"`
-	SemanticMentions      any            `json:"semanticMentions"`
-	PublishedAt           string         `json:"publishedAt"`
-	CoverURL              string         `json:"coverUrl"`
-	BodyLength            int            `json:"bodyLength"`
+	PostID                string                             `json:"postId"`
+	Title                 string                             `json:"title"`
+	ContentType           string                             `json:"contentType"`
+	AuthorID              string                             `json:"authorId"`
+	CreatorProfileID      string                             `json:"creatorProfileId"`
+	CreatorArchetype      string                             `json:"creatorArchetype"`
+	CreatorProfileVersion string                             `json:"creatorProfileVersion"`
+	CreatorDisclosure     postmodel.PostCreatorDisclosure    `json:"creatorDisclosure"`
+	ExperienceClaimMode   string                             `json:"experienceClaimMode"`
+	AuthorQualitySignals  postmodel.PostAuthorQualitySignals `json:"authorQualitySignals"`
+	Tags                  []string                           `json:"tags"`
+	EntityRefs            []string                           `json:"entityRefs"`
+	SemanticMentions      []postmodel.PostSemanticMention    `json:"semanticMentions"`
+	PublishedAt           string                             `json:"publishedAt"`
+	CoverURL              string                             `json:"coverUrl"`
+	BodyLength            int                                `json:"bodyLength"`
 	// SourceTaskID 内容溯源任务 id；ConditionProfile 条件画像 {regions/seasons/altitudeMeters}（从主实体冗余）。
 	SourceTaskID     string         `json:"sourceTaskId"`
 	ConditionProfile map[string]any `json:"conditionProfile"`
@@ -61,16 +62,16 @@ func validateCreatorProjection(item BulkImportItem) error {
 	if strings.TrimSpace(item.ExperienceClaimMode) == "" {
 		return fmt.Errorf("system creator content missing experienceClaimMode")
 	}
-	if item.CreatorDisclosure == nil {
+	if strings.TrimSpace(item.CreatorDisclosure.Type) == "" {
 		return fmt.Errorf("system creator content missing creatorDisclosure")
 	}
-	if item.CreatorDisclosure["type"] != "platform_virtual_creator" {
+	if item.CreatorDisclosure.Type != "platform_virtual_creator" {
 		return fmt.Errorf("system creator content creatorDisclosure.type must be platform_virtual_creator")
 	}
-	if item.CreatorDisclosure["visible"] != true {
+	if !item.CreatorDisclosure.Visible {
 		return fmt.Errorf("system creator content creatorDisclosure.visible must be true")
 	}
-	if strings.TrimSpace(fmt.Sprint(item.CreatorDisclosure["displayText"])) == "" {
+	if strings.TrimSpace(item.CreatorDisclosure.DisplayText) == "" {
 		return fmt.Errorf("system creator content creatorDisclosure.displayText is required")
 	}
 	return nil

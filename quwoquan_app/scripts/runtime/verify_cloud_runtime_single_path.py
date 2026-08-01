@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-005
 """Gate the generated-operation runtime path and Cloud dependency direction."""
 
 from __future__ import annotations

@@ -32,6 +32,16 @@ abstract final class AppTelemetryValueCacheAgeBucket {
   static const Set<String> values = <String>{notApplicable, under1h, oneTo24h, over24h};
 }
 
+abstract final class AppTelemetryValueCacheSource {
+  static const String memory = "memory";
+  static const String disk = "disk";
+  static const String remote = "remote";
+  static const String seed = "seed";
+  static const String optimisticOverlay = "optimistic_overlay";
+  static const String unknown = "unknown";
+  static const Set<String> values = <String>{memory, disk, remote, seed, optimisticOverlay, unknown};
+}
+
 abstract final class AppTelemetryValueCallType {
   static const String audio = "audio";
   static const String video = "video";
@@ -184,6 +194,20 @@ abstract final class AppTelemetryValueRendererMode {
   static const Set<String> values = <String>{platformView, textureView};
 }
 
+abstract final class AppTelemetryValueResourceKind {
+  static const String imageCacheBytes = "image_cache_bytes";
+  static const String activeVideoControllers = "active_video_controllers";
+  static const String mediaDownloads = "media_downloads";
+  static const Set<String> values = <String>{imageCacheBytes, activeVideoControllers, mediaDownloads};
+}
+
+abstract final class AppTelemetryValueResourceProfile {
+  static const String compact = "compact";
+  static const String regular = "regular";
+  static const String expanded = "expanded";
+  static const Set<String> values = <String>{compact, regular, expanded};
+}
+
 abstract final class AppTelemetryValueSeekEvidenceSource {
   static const String controllerCommandCompletion = "controller_command_completion";
   static const String nativeSettled = "native_settled";
@@ -284,13 +308,42 @@ class AppTelemetryPayload {
     });
   }
 
-  factory AppTelemetryPayload.appFrameJankOutcome({required int sampledFrames, required int jankyFrames, required int worstFrameMs, required int jankThresholdMs, required String result}) {
+  factory AppTelemetryPayload.appFrameJankOutcome({required int sampledFrames, required int jankyFrames, required int worstFrameMs, required int worstBuildFrameMs, required int worstRasterFrameMs, required int jankThresholdMs, required String result, String? surfaceId, String? channelId}) {
     return AppTelemetryPayload._('app_frame_jank_outcome', 'event', <String, Object?>{
       'sampledFrames': sampledFrames,
       'jankyFrames': jankyFrames,
       'worstFrameMs': worstFrameMs,
+      'worstBuildFrameMs': worstBuildFrameMs,
+      'worstRasterFrameMs': worstRasterFrameMs,
       'jankThresholdMs': jankThresholdMs,
       'result': result,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (channelId != null) 'channelId': channelId,
+    });
+  }
+
+  factory AppTelemetryPayload.homeFeedResourceSnapshot({required String resourceKind, required int currentValue, required String result, String? resourceProfile, int? limitValue, int? queuedValue, int? inflightValue, int? cacheSizeBytes, String? surfaceId, String? channelId}) {
+    return AppTelemetryPayload._('home_feed_resource_snapshot', 'event', <String, Object?>{
+      'resourceKind': resourceKind,
+      'currentValue': currentValue,
+      'result': result,
+      if (resourceProfile != null) 'resourceProfile': resourceProfile,
+      if (limitValue != null) 'limitValue': limitValue,
+      if (queuedValue != null) 'queuedValue': queuedValue,
+      if (inflightValue != null) 'inflightValue': inflightValue,
+      if (cacheSizeBytes != null) 'cacheSizeBytes': cacheSizeBytes,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (channelId != null) 'channelId': channelId,
+    });
+  }
+
+  factory AppTelemetryPayload.homeFeedCacheReadOutcome({required String cacheSource, required String cacheClass, required String result, String? surfaceId, String? channelId}) {
+    return AppTelemetryPayload._('home_feed_cache_read_outcome', 'event', <String, Object?>{
+      'cacheSource': cacheSource,
+      'cacheClass': cacheClass,
+      'result': result,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (channelId != null) 'channelId': channelId,
     });
   }
 
@@ -641,7 +694,9 @@ abstract final class AppTelemetryCatalog {
     'page_first_usable': AppTelemetryEventDefinition(eventType: 'page_first_usable', logType: 'event', requiredExtensions: <String>{'durationMs', 'terminalState'}, optionalExtensions: <String>{'surfaceId', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'page_error_outcome': AppTelemetryEventDefinition(eventType: 'page_error_outcome', logType: 'event', requiredExtensions: <String>{'surfaceId', 'errorCode', 'recoveryAction', 'result'}, optionalExtensions: <String>{'action', 'durationMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'app_anr_outcome': AppTelemetryEventDefinition(eventType: 'app_anr_outcome', logType: 'event', requiredExtensions: <String>{'detectionSource', 'result'}, optionalExtensions: <String>{'durationMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
-    'app_frame_jank_outcome': AppTelemetryEventDefinition(eventType: 'app_frame_jank_outcome', logType: 'event', requiredExtensions: <String>{'sampledFrames', 'jankyFrames', 'worstFrameMs', 'jankThresholdMs', 'result'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'app_frame_jank_outcome': AppTelemetryEventDefinition(eventType: 'app_frame_jank_outcome', logType: 'event', requiredExtensions: <String>{'sampledFrames', 'jankyFrames', 'worstFrameMs', 'worstBuildFrameMs', 'worstRasterFrameMs', 'jankThresholdMs', 'result'}, optionalExtensions: <String>{'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'home_feed_resource_snapshot': AppTelemetryEventDefinition(eventType: 'home_feed_resource_snapshot', logType: 'event', requiredExtensions: <String>{'resourceKind', 'currentValue', 'result'}, optionalExtensions: <String>{'resourceProfile', 'limitValue', 'queuedValue', 'inflightValue', 'cacheSizeBytes', 'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'home_feed_cache_read_outcome': AppTelemetryEventDefinition(eventType: 'home_feed_cache_read_outcome', logType: 'event', requiredExtensions: <String>{'cacheSource', 'cacheClass', 'result'}, optionalExtensions: <String>{'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'app_startup': AppTelemetryEventDefinition(eventType: 'app_startup', logType: 'event', requiredExtensions: <String>{'tClickToFirstFrameMs', 'tFirstFrameToShellMs', 'tShellToContentMs', 'tClickToContentMs', 'hasError'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 3000, internalPriority: 'critical'),
     'runtime_exception': AppTelemetryEventDefinition(eventType: 'runtime_exception', logType: 'error', requiredExtensions: <String>{'errorCode'}, optionalExtensions: <String>{'operationId', 'httpStatus', 'callStack'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'error'),
     'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'reasonId', 'targetType', 'targetId', 'environment', 'durationMs', 'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
@@ -674,6 +729,7 @@ abstract final class AppTelemetryCatalog {
   static const Map<String, Set<String>> extensionEnumValues = <String, Set<String>>{
     "backgroundRetryTerminal": AppTelemetryValueBackgroundRetryTerminal.values,
     "cacheAgeBucket": AppTelemetryValueCacheAgeBucket.values,
+    "cacheSource": AppTelemetryValueCacheSource.values,
     "callType": AppTelemetryValueCallType.values,
     "catalogSource": AppTelemetryValueCatalogSource.values,
     "chatAction": AppTelemetryValueChatAction.values,
@@ -691,6 +747,8 @@ abstract final class AppTelemetryCatalog {
     "objectState": AppTelemetryValueObjectState.values,
     "publicationStage": AppTelemetryValuePublicationStage.values,
     "rendererMode": AppTelemetryValueRendererMode.values,
+    "resourceKind": AppTelemetryValueResourceKind.values,
+    "resourceProfile": AppTelemetryValueResourceProfile.values,
     "seekEvidenceSource": AppTelemetryValueSeekEvidenceSource.values,
     "terminalState": AppTelemetryValueTerminalState.values,
     "transport": AppTelemetryValueTransport.values,

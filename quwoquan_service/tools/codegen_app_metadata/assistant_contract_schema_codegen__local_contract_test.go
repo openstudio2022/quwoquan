@@ -28,11 +28,12 @@ func TestAssistantRequiredObjectDecoderFailsClosedWhenMissing(t *testing.T) {
 
 func TestAssistantRequiredEnumDecoderUsesStrictParser(t *testing.T) {
 	field := assistantContractField{
-		Name:    "status",
-		Type:    "enum",
-		EnumRef: "SkillSubscriptionStatus",
-		Default: "active",
-		Strict:  true,
+		Name:     "status",
+		Type:     "enum",
+		EnumRef:  "SkillSubscriptionStatus",
+		Default:  "active",
+		Required: true,
+		Strict:   true,
 	}
 
 	got := assistantRenderFromJsonValue(field, &assistantContractSchema{}, nil)

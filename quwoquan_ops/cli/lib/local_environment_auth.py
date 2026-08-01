@@ -10,14 +10,17 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
 
 from .output_paths import (
+    active_deployment_candidate,
     deployment_target_path,
     deployment_target_path_in_work_root,
+    env_runs_root,
 )
 
 
@@ -35,7 +38,10 @@ _LOCAL_TARGETS = {
     # prod-sim 使用 production 配置投影，但其认证材料仍限定在本机部署目录。
     "prod": "prod-sim",
 }
-_REPORT_ACCOUNT_BACKFILL_KIND = "content.reporter_account_backfill"
+_NONPROD_IDENTITY_POOL_SCHEMA = "qwq.nonprod_acceptance_identity_pool"
+_NONPROD_IDENTITY_POOL_PATH_ENV = "QWQ_NONPROD_ACCEPTANCE_IDENTITY_POOL"
+_NONPROD_OTP_CODE_ENV = "QWQ_NONPROD_ACCEPTANCE_OTP_CODE"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
@@ -57,6 +63,17 @@ class LocalAcceptanceSession:
 
 
 @dataclass(frozen=True)
+class LocalAcceptanceActor:
+    """Canonical non-production account created through public auth commands."""
+
+    role: str
+    session: LocalAcceptanceSession
+    challenge_id: str
+    account_state: str
+    identity_origin: str
+
+
+@dataclass(frozen=True)
 class LocalEnvironmentHTTPError(RuntimeError):
     """Redacted local-environment HTTP failure with a machine-readable status."""
 
@@ -66,78 +83,6 @@ class LocalEnvironmentHTTPError(RuntimeError):
 
     def __str__(self) -> str:
         return f"local environment request {self.method} {self.path} failed with HTTP {self.status}"
-
-
-def resolve_running_local_deployment_work_root(target_name: str) -> Path | None:
-    """Resolve the non-secret workspace mounted by a running local user service.
-
-    A local stack may intentionally use a workspace other than the caller's
-    default ``QWQ_DEPLOY_WORK_ROOT``. The mounted config root is the runtime
-    truth for the JWT material used by that stack. This helper returns only the
-    validated parent workspace and never reads or exposes a secret value.
-    """
-
-    normalized_target = str(target_name).strip()
-    if normalized_target not in set(_LOCAL_TARGETS.values()):
-        raise ValueError(f"unsupported local environment target: {target_name}")
-
-    for engine in ("docker", "podman"):
-        for container_name in (
-            "quwoquan_service-user-service-1",
-            "quwoquan_service_user-service_1",
-        ):
-            try:
-                result = subprocess.run(
-                    [engine, "inspect", container_name],
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    timeout=3.0,
-                    check=False,
-                )
-            except (OSError, subprocess.TimeoutExpired):
-                continue
-            if result.returncode != 0:
-                continue
-            try:
-                inspected = json.loads(result.stdout)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(inspected, list) or not inspected:
-                continue
-            container = inspected[0]
-            if not isinstance(container, dict):
-                continue
-            mounts = container.get("Mounts")
-            if not isinstance(mounts, list):
-                continue
-            for mount in mounts:
-                if not isinstance(mount, dict):
-                    continue
-                if mount.get("Destination") != "/etc/qwq-config":
-                    continue
-                source = mount.get("Source")
-                if not isinstance(source, str) or not source.strip():
-                    continue
-                config_root = Path(source).expanduser().resolve()
-                if (
-                    config_root.name != "config-root"
-                    or config_root.parent.name != "rendered"
-                    or config_root.parent.parent.name != normalized_target
-                ):
-                    continue
-                work_root = config_root.parents[2]
-                try:
-                    deployment_target_path_in_work_root(
-                        work_root,
-                        normalized_target,
-                        "secrets",
-                        "auth.env",
-                    )
-                except ValueError:
-                    continue
-                return work_root
-    return None
 
 
 def prepare_local_environment_auth(
@@ -186,86 +131,76 @@ def prepare_local_environment_auth(
     )
 
 
-def open_local_acceptance_session(
-    base_url: str,
-    *,
+def mint_local_filter_catalog_service_token(
     environment: str,
     target_name: str,
-    profile: str = "",
-    subject: str | None = None,
-    timeout_seconds: float = 30.0,
+    *,
     deployment_work_root: str | Path | None = None,
-) -> LocalAcceptanceSession:
-    """Issue a local-only session with the user-service canonical JWT signer.
+) -> str:
+    """Mint one 30-minute qwq-data token through the canonical Go signer."""
 
-    The seeded acceptance identity is declared by the shared acceptance fixture. The
-    signing secret and resulting bearer token stay in subprocess memory and are
-    never placed in argv, reports, or logs.
-    """
-
-    _require_local_environment(environment, target_name)
-    normalized_base = base_url.rstrip("/") + "/"
-    parsed = urlparse(normalized_base)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("local environment auth base URL must be an absolute HTTPS URL")
-    if subject is None:
-        owner_id, persona_id = _local_acceptance_principal(
-            environment,
-            target_name,
-        )
-    else:
-        canonical_subject = subject.strip()
-        allowed = frozenset(
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-        )
-        if (
-            not canonical_subject
-            or len(canonical_subject) > 128
-            or any(character not in allowed for character in canonical_subject)
-        ):
-            raise ValueError("local environment acceptance subject is invalid")
-        owner_id = canonical_subject
-        persona_id = canonical_subject
-    profile_value = _canonical_acceptance_profile(profile)
     auth = prepare_local_environment_auth(
         environment,
         target_name,
         deployment_work_root=deployment_work_root,
     )
-    process_env = os.environ.copy()
-    process_env.update(auth.environment)
-    process_env.update(
-        {
-            "APP_ENV": environment,
-            "QWQ_LOCAL_ACCEPTANCE_TARGET": target_name,
-            "QWQ_ACCEPTANCE_OWNER_ID": owner_id,
-            "QWQ_ACCEPTANCE_PERSONA_ID": persona_id,
-            "QWQ_ACCEPTANCE_PROFILE": profile_value,
-        }
-    )
+    process_environment = {
+        **os.environ,
+        **auth.environment,
+        "GOCACHE": str(
+            _REPO_ROOT
+            / ".qwq_output/env/repo/local/go-build/local-service-credential"
+        ),
+        "GOTMPDIR": str(
+            _REPO_ROOT
+            / ".qwq_output/env/repo/local/go-tmp/local-service-credential"
+        ),
+    }
+    Path(process_environment["GOCACHE"]).mkdir(parents=True, exist_ok=True)
+    Path(process_environment["GOTMPDIR"]).mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
-        ["go", "run", "./services/user-service/cmd/acceptance-session"],
-        cwd=Path(__file__).resolve().parents[3] / "quwoquan_service",
-        env=process_env,
+        ["go", "run", "./cmd/local-filter-catalog-credential"],
+        cwd=_REPO_ROOT / "quwoquan_service",
+        env=process_environment,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=max(1.0, timeout_seconds),
         check=False,
     )
-    if result.returncode != 0:
-        raise RuntimeError("local environment acceptance token issuer failed")
+    token = result.stdout.strip()
+    if result.returncode != 0 or not token or "\n" in token:
+        raise RuntimeError(
+            "local FilterCatalog service credential mint failed"
+            + (f" (exit={result.returncode})" if result.returncode else "")
+        )
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise RuntimeError("local FilterCatalog service credential is not a JWT")
     try:
-        body = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("local environment acceptance token issuer returned invalid JSON") from exc
-    if not isinstance(body, dict):
-        raise RuntimeError("local environment acceptance token issuer returned non-object JSON")
-    return LocalAcceptanceSession(
-        owner_id=_required_string(body, "ownerId", "acceptance token response"),
-        persona_id=_required_string(body, "personaId", "acceptance token response"),
-        access_token=_required_string(body, "accessToken", "acceptance token response"),
-    )
+        encoded = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(
+            base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
+        )
+    except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "local FilterCatalog service credential claims are invalid"
+        ) from exc
+    if (
+        not isinstance(claims, dict)
+        or claims.get("sub") != "service:qwq-data"
+        or claims.get("roles") != ["service"]
+        or "content.filter_catalog.manage"
+        not in str(claims.get("scope") or "").split()
+        or claims.get("iss") != auth.environment["AUTH_JWT_ISSUER"]
+        or claims.get("aud") != auth.environment["AUTH_JWT_AUDIENCE"]
+        or not isinstance(claims.get("iat"), int)
+        or not isinstance(claims.get("exp"), int)
+        or claims["exp"] - claims["iat"] != 30 * 60
+    ):
+        raise RuntimeError(
+            "local FilterCatalog service credential claims mismatch"
+        )
+    return token
 
 
 def request_local_environment_json(
@@ -304,6 +239,297 @@ def request_local_environment_json(
     )
     if status < 200 or status >= 300:
         raise LocalEnvironmentHTTPError(method=method, path=normalized_path, status=status)
+    return response
+
+
+def open_local_phone_acceptance_session(
+    base_url: str,
+    *,
+    environment: str,
+    target_name: str,
+    dataset_epoch: str,
+    dataset_id: str,
+    actor_role: str,
+    actor_index: int,
+    timeout_seconds: float = 30.0,
+) -> LocalAcceptanceActor:
+    """Create or restore a real nonprod account via OTP and phone login.
+
+    Phone numbers come from a target-scoped protected identity pool and the OTP
+    comes from protected runtime injection. Neither value is returned in receipts.
+    Prod is rejected by ``_require_nonprod_target``.
+    """
+
+    _require_nonprod_target(environment, target_name)
+    canonical_epoch = _canonical_dataset_epoch(dataset_epoch)
+    canonical_dataset_id = _canonical_actor_role(dataset_id)
+    canonical_role = _canonical_actor_role(actor_role)
+    if actor_index < 0 or actor_index > 999:
+        raise ValueError("local acceptance actor index must be between 0 and 999")
+
+    actor_digest = hashlib.sha256(
+        f"{target_name}\0{canonical_epoch}\0{canonical_role}\0{actor_index}".encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    phone = _nonprod_acceptance_phone(
+        target_name=target_name,
+        dataset_id=canonical_dataset_id,
+        actor_index=actor_index,
+    )
+    otp_code = _protected_nonprod_otp_code()
+    device_id = f"acceptance-{environment}-{actor_digest[:16]}"
+    common = {
+        "deviceId": device_id,
+        "platform": "acceptance",
+        "appVersion": "1.0.0",
+    }
+    otp = request_local_environment_public_json(
+        base_url,
+        path="/auth/otp/send",
+        method="POST",
+        body={
+            "phone": phone,
+            **common,
+            "sourceOperation": "NonprodAcceptanceProvision",
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    challenge_id = _required_string(otp, "challengeId", "OTP response")
+    login = request_local_environment_public_json(
+        base_url,
+        path="/auth/login/phone",
+        method="POST",
+        body={
+            "phone": phone,
+            "otpCode": otp_code,
+            **common,
+            "agreementVersion": "2026-06",
+            "privacyVersion": "2026-06",
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    active_persona = login.get("activePersona")
+    if not isinstance(active_persona, dict):
+        raise RuntimeError("phone login response missing activePersona")
+    session = LocalAcceptanceSession(
+        owner_id=_required_string(login, "ownerId", "phone login response"),
+        persona_id=_required_string(
+            active_persona, "personaId", "phone login activePersona"
+        ),
+        access_token=_required_string(login, "accessToken", "phone login response"),
+    )
+    me = request_local_environment_json(
+        base_url,
+        path="/me",
+        session=session,
+        timeout_seconds=timeout_seconds,
+    )
+    me_owner = str(me.get("ownerId") or me.get("id") or "").strip()
+    if me_owner and me_owner != session.owner_id:
+        raise RuntimeError("authenticated /me owner does not match phone login")
+    return LocalAcceptanceActor(
+        role=canonical_role,
+        session=session,
+        challenge_id=challenge_id,
+        account_state=str(login.get("accountState") or "").strip(),
+        identity_origin=str(login.get("identityOrigin") or "").strip(),
+    )
+
+
+def open_reference_acceptance_session(
+    base_url: str,
+    *,
+    environment: str,
+    target_name: str,
+    actor_index: int = 0,
+    timeout_seconds: float = 30.0,
+) -> LocalAcceptanceSession:
+    """Restore an active candidate-bound acceptance account via public auth.
+
+    This is the only supported business-UAT session source. It fails closed
+    when no active candidate or matching identity receipt exists.
+    """
+
+    _require_nonprod_target(environment, target_name)
+    active = active_deployment_candidate(target_name)
+    if not isinstance(active, dict):
+        raise RuntimeError("GATE_BLOCK: active immutable candidate is required")
+    baseline_id = str(active.get("baselineId") or "").strip()
+    candidate_manifest_path = Path(str(active.get("candidateDir") or "")) / "manifest.json"
+    try:
+        candidate_manifest = json.loads(
+            candidate_manifest_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("active candidate manifest is unreadable") from exc
+    if (
+        not isinstance(candidate_manifest, dict)
+        or candidate_manifest.get("baselineId") != baseline_id
+    ):
+        raise RuntimeError("active candidate manifest identity mismatch")
+    package_digest = str(candidate_manifest.get("packageDigest") or "").strip()
+    if not package_digest:
+        raise RuntimeError("active candidate manifest packageDigest is missing")
+    receipt_root = env_runs_root(environment) / "nonprod-data"
+    matches: list[dict[str, Any]] = []
+    for path in sorted(receipt_root.glob("*/nonprod_reference_identity.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (
+            isinstance(payload, dict)
+            and payload.get("schema") == "qwq.nonprod_acceptance_dataset_receipt"
+            and payload.get("target") == target_name
+            and payload.get("baselineId") == baseline_id
+            and payload.get("packageDigest") == package_digest
+            and payload.get("datasetId") == "nonprod_reference_identity"
+            and payload.get("status") == "passed"
+            and payload.get("cleanupState") == "retained"
+        ):
+            matches.append(payload)
+    if len(matches) != 1:
+        raise RuntimeError(
+            "GATE_BLOCK: exactly one active candidate-bound identity receipt is required"
+        )
+    receipt = matches[0]
+    expires_at_raw = str(receipt.get("expiresAt") or "").strip()
+    try:
+        expires_at = datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise RuntimeError("active identity receipt expiresAt is invalid") from exc
+    if expires_at.tzinfo is None or expires_at <= datetime.now(timezone.utc):
+        raise RuntimeError("GATE_BLOCK: active identity receipt is expired")
+    epoch = str(receipt.get("datasetEpoch") or "").strip()
+    actors = receipt.get("actorReceiptRefs")
+    if not isinstance(actors, list) or actor_index < 0 or actor_index >= len(actors):
+        raise RuntimeError("active identity receipt actor closure is incomplete")
+    row = actors[actor_index]
+    if not isinstance(row, dict):
+        raise RuntimeError("active identity receipt actor row is invalid")
+    actor = open_local_phone_acceptance_session(
+        base_url,
+        environment=environment,
+        target_name=target_name,
+        dataset_epoch=epoch,
+        dataset_id="nonprod_reference_identity",
+        actor_role=str(row.get("role") or ""),
+        actor_index=actor_index,
+        timeout_seconds=timeout_seconds,
+    )
+    if (
+        actor.session.owner_id != row.get("ownerId")
+        or actor.account_state != row.get("accountState")
+        or actor.identity_origin != row.get("identityOrigin")
+    ):
+        raise RuntimeError("active identity receipt live account drift")
+    return actor.session
+
+
+def _nonprod_acceptance_phone(
+    *,
+    target_name: str,
+    dataset_id: str,
+    actor_index: int,
+) -> str:
+    raw_path = os.environ.get(_NONPROD_IDENTITY_POOL_PATH_ENV, "").strip()
+    if not raw_path:
+        raise RuntimeError(
+            f"GATE_BLOCK: {_NONPROD_IDENTITY_POOL_PATH_ENV} is required"
+        )
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        raise RuntimeError("nonprod acceptance identity pool path must be absolute")
+    path = path.resolve()
+    secret_root = deployment_target_path(target_name, "secrets").resolve()
+    try:
+        path.relative_to(secret_root)
+    except ValueError as exc:
+        raise RuntimeError(
+            "nonprod acceptance identity pool must be target-scoped under the deploy secret root"
+        ) from exc
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError("nonprod acceptance identity pool must be a regular file")
+    _require_mode(path, 0o600)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("nonprod acceptance identity pool is invalid JSON") from exc
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != _NONPROD_IDENTITY_POOL_SCHEMA
+        or payload.get("target") != target_name
+        or set(payload) != {"schema", "target", "datasetPhones"}
+    ):
+        raise RuntimeError("nonprod acceptance identity pool identity mismatch")
+    datasets = payload.get("datasetPhones")
+    phones = datasets.get(dataset_id) if isinstance(datasets, dict) else None
+    if not isinstance(phones, list) or actor_index >= len(phones):
+        raise RuntimeError(
+            f"nonprod acceptance identity pool is incomplete for {dataset_id}"
+        )
+    phone = str(phones[actor_index]).strip()
+    if (
+        not phone.startswith("+")
+        or len(phone) < 8
+        or len(phone) > 18
+        or not phone[1:].isdigit()
+    ):
+        raise RuntimeError("nonprod acceptance identity pool contains invalid E.164 phone")
+    all_phones = [
+        str(value).strip()
+        for values in datasets.values()
+        if isinstance(values, list)
+        for value in values
+    ]
+    if len(all_phones) != len(set(all_phones)):
+        raise RuntimeError("nonprod acceptance identity pool contains duplicate phones")
+    return phone
+
+
+def _protected_nonprod_otp_code() -> str:
+    value = os.environ.get(_NONPROD_OTP_CODE_ENV, "").strip()
+    if not value:
+        raise RuntimeError(f"GATE_BLOCK: {_NONPROD_OTP_CODE_ENV} is required")
+    if len(value) < 4 or len(value) > 8 or not value.isdigit():
+        raise RuntimeError("protected nonprod OTP code must contain 4 to 8 digits")
+    return value
+
+
+def request_local_environment_public_json(
+    base_url: str,
+    *,
+    path: str,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout_seconds: float = 12.0,
+) -> dict[str, Any]:
+    """Call a public local-environment JSON endpoint without forged identity."""
+
+    normalized_path = path if path.startswith("/") else "/" + path
+    payload = (
+        json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
+    )
+    request_headers = {"Accept": "application/json"}
+    for name, value in (headers or {}).items():
+        if name.lower() in {"authorization", "x-client-user-id"}:
+            raise ValueError("public local environment request cannot inject identity")
+        request_headers[name] = value
+    if payload is not None:
+        request_headers["Content-Type"] = "application/json"
+    status, response = _trusted_json_request(
+        method=method,
+        url=base_url.rstrip("/") + normalized_path,
+        body=payload,
+        headers=request_headers,
+        timeout_seconds=timeout_seconds,
+    )
+    if status < 200 or status >= 300:
+        raise LocalEnvironmentHTTPError(
+            method=method, path=normalized_path, status=status
+        )
     return response
 
 
@@ -351,34 +577,32 @@ def _require_local_environment(environment: str, target_name: str) -> None:
         )
 
 
+def _require_nonprod_target(environment: str, target_name: str) -> None:
+    _require_local_environment(environment, target_name)
+    if environment not in {"alpha", "beta", "gamma"}:
+        raise ValueError("nonprod acceptance identity is forbidden for Prod")
+
+
+def _canonical_dataset_epoch(value: str) -> str:
+    epoch = value.strip()
+    if len(epoch) != 64 or any(character not in "0123456789abcdef" for character in epoch):
+        raise ValueError("dataset epoch must be a lowercase sha256 hex digest")
+    return epoch
+
+
+def _canonical_actor_role(value: str) -> str:
+    role = value.strip()
+    allowed = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-_")
+    if not role or len(role) > 64 or any(character not in allowed for character in role):
+        raise ValueError("local acceptance actor role is invalid")
+    return role
+
+
 def _required_string(payload: dict[str, Any], field: str, context: str) -> str:
     value = payload.get(field)
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"{context} missing required {field}")
     return value.strip()
-
-
-def _local_acceptance_principal(
-    environment: str,
-    target_name: str,
-) -> tuple[str, str]:
-    """Return a technical UAT identity independent of business release data."""
-
-    digest = hashlib.sha256(
-        f"{environment}\0{target_name}".encode("utf-8")
-    ).hexdigest()[:16]
-    prefix = f"uat_{environment}_{digest}"
-    return f"{prefix}_owner", f"{prefix}_persona"
-
-
-def _canonical_acceptance_profile(value: str) -> str:
-    profile = value.strip()
-    allowed = frozenset(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
-    )
-    if any(character not in allowed for character in profile):
-        raise ValueError("local environment acceptance profile is invalid")
-    return profile
 
 
 def _load_or_create_secrets(path: Path) -> dict[str, str]:
@@ -457,71 +681,11 @@ def _print_shell_environment(environment: str, target_name: str) -> None:
         print(f"export {key}={shlex.quote(value)}")
 
 
-def write_local_report_account_backfill(
-    environment: str,
-    target_name: str,
-    output_path: Path,
-    *,
-    include_acceptance_principal: bool = True,
-) -> dict[str, object]:
-    """Create a target-local, reviewed Report ownership mapping.
-
-    The only populated local mapping is derived from the canonical acceptance
-    fixture. Production deployment never synthesizes a mapping: unresolved
-    ownerless rows stay fail-closed until an operator provides a verified export.
-    """
-
-    _require_local_environment(environment, target_name)
-    entries: list[dict[str, str]] = []
-    if include_acceptance_principal:
-        owner_id, persona_id = _local_acceptance_principal(
-            environment,
-            target_name,
-        )
-        entries.append({"reporterId": persona_id, "accountId": owner_id})
-    payload: dict[str, object] = {
-        "kind": _REPORT_ACCOUNT_BACKFILL_KIND,
-        "entries": entries,
-    }
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = output_path.with_name(output_path.name + ".tmp")
-    temporary_path.write_text(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
-    os.chmod(temporary_path, 0o600)
-    temporary_path.replace(output_path)
-    return payload
-
-
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "--shell":
         _print_shell_environment(sys.argv[2], sys.argv[3])
-    elif (
-        len(sys.argv) in {5, 6}
-        and sys.argv[1] == "--write-report-account-backfill"
-        and (len(sys.argv) == 5 or sys.argv[5] == "--empty")
-    ):
-        result = write_local_report_account_backfill(
-            sys.argv[2],
-            sys.argv[3],
-            Path(sys.argv[4]),
-            include_acceptance_principal=len(sys.argv) == 5,
-        )
-        print(
-            json.dumps(
-                {
-                    "status": "ok",
-                    "entryCount": len(result["entries"]),
-                },
-                ensure_ascii=False,
-            )
-        )
     else:
         raise SystemExit(
             "usage: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--shell <alpha|beta|gamma> <alpha-local|beta-local|gamma-local>\n"
-            "   or: python -m quwoquan_ops.cli.lib.local_environment_auth "
-            "--write-report-account-backfill <alpha|beta|gamma> "
-            "<alpha-local|beta-local|gamma-local> <output-path> [--empty]"
+            "--shell <alpha|beta|gamma> <alpha-local|beta-local|gamma-local>"
         )

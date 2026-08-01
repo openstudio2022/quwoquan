@@ -77,6 +77,22 @@ def test_copy_ready_allows_zero_typed_discards(tmp_path: Path) -> None:
                 ),
             )
 
+    unclean = {
+        carrier: {**row, "cleanupStatus": "pending"} for carrier, row in lanes.items()
+    }
+    assert (
+        maybe_write_copy_ready_receipt(
+            root_execution_id=root_id,
+            plan=plan,
+            submissions=submissions,
+            lanes=unclean,
+            campaigns_root=campaigns,
+            output_root=output,
+            assessed_at="2026-07-30T00:00:00+00:00",
+        )
+        is None
+    ), "COPY_READY must wait until lane cleanupStatus is cleaned"
+
     path = maybe_write_copy_ready_receipt(
         root_execution_id=root_id,
         plan=plan,

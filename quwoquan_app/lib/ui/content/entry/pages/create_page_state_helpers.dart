@@ -431,10 +431,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
     if (state.editorKind == CreateEditorKind.text) {
       if (result.type == CreateMediaType.video) {
-        AppToast.show(
-          context,
-          CreationText.createTextEditorVideoNotSupported,
-        );
+        AppToast.show(context, CreationText.createTextEditorVideoNotSupported);
         return;
       }
       ref

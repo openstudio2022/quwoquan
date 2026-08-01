@@ -54,8 +54,11 @@ func (publisher *PostLifecycleStreamPublisher) Publish(ctx context.Context, even
 	if err != nil {
 		return fmt.Errorf("append post lifecycle stream: %w", err)
 	}
+	if err := publisher.redis.XTrimOlderThan(ctx, PostLifecycleStream, PostLifecycleStreamRetention); err != nil {
+		return fmt.Errorf("trim post lifecycle stream retention: %w", err)
+	}
 	if err := publisher.redis.Expire(ctx, PostLifecycleStream, PostLifecycleStreamRetention); err != nil {
-		return fmt.Errorf("refresh post lifecycle stream retention: %w", err)
+		return fmt.Errorf("bound inactive post lifecycle stream retention: %w", err)
 	}
 	return nil
 }

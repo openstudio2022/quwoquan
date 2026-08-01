@@ -8,7 +8,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dar
 class AssistantTraceEventWire {
   const AssistantTraceEventWire({
     required this.traceEventId,
-    required this.conversationId,
+    required this.sessionId,
     required this.turnId,
     this.traceId = "",
     this.phaseId = "",
@@ -23,7 +23,7 @@ class AssistantTraceEventWire {
   });
 
   final String traceEventId;
-  final String conversationId;
+  final String sessionId;
   final String turnId;
   final String traceId;
   final String phaseId;
@@ -38,7 +38,7 @@ class AssistantTraceEventWire {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'traceEventId': traceEventId,
-        'conversationId': conversationId,
+        'sessionId': sessionId,
         'turnId': turnId,
         'traceId': traceId,
         'phaseId': phaseId,
@@ -55,14 +55,14 @@ class AssistantTraceEventWire {
   factory AssistantTraceEventWire.fromJson(Map<String, dynamic> json) {
     return AssistantTraceEventWire(
       traceEventId: (json['traceEventId'] as String?)?.trim() ?? "",
-      conversationId: (json['conversationId'] as String?)?.trim() ?? "",
+      sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       phaseId: (json['phaseId'] as String?)?.trim() ?? "",
       eventType: (json['eventType'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String?)?.trim() ?? "",
-      visibility: parseTraceVisibility((json['visibility'] as String?)?.trim() ?? "user_visible"),
+      visibility: parseTraceVisibilityStrict((json['visibility'] as String?)?.trim() ?? "user_visible"),
       summary: (json['summary'] as String?)?.trim() ?? "",
       payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,
@@ -74,7 +74,7 @@ class AssistantTraceEventWire {
 
 class AssistantTraceEventWireFields {
   static const String traceEventId = 'traceEventId';
-  static const String conversationId = 'conversationId';
+  static const String sessionId = 'sessionId';
   static const String turnId = 'turnId';
   static const String traceId = 'traceId';
   static const String phaseId = 'phaseId';

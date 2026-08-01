@@ -91,8 +91,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
         title: hit.title,
         badge: SearchText.searchEntityHomepage,
         subtitle: hit.subtitle ?? SearchText.searchCategoryLocation,
-        description:
-            hit.snippet ?? SearchText.searchOpenHomepageDescription,
+        description: hit.snippet ?? SearchText.searchOpenHomepageDescription,
         meta: _SearchNetworkResultsPageState._entityMetaFromHit(hit),
       );
     }
@@ -258,7 +257,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
   }
 
   Future<void> _openAssistantCitation(
-    AssistantSearchCitationView citation,
+    AssistantRunVisibleReferenceView citation,
   ) async {
     final destination = CitationDestinationResolver.resolve(
       citation.destination,

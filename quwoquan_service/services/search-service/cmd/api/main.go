@@ -31,23 +31,31 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 	searchruntimees "quwoquan_service/runtime/search/es"
-	feedbackhttp "quwoquan_service/services/search-service/internal/search/feedback_fact/adapters/inbound/http"
-	feedbackapplication "quwoquan_service/services/search-service/internal/search/feedback_fact/application"
-	"quwoquan_service/services/search-service/internal/search/feedback_fact/infrastructure/feedbackstore"
 	recenthttp "quwoquan_service/services/search-service/internal/search/recent_search_state/adapters/inbound/http"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/application"
+	recentmetrics "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/metrics"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/persistence"
 	"quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/infrastructure/searchsignals"
-	httpadapter "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/http"
-	mqadapter "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/mq"
-	"quwoquan_service/services/search-service/internal/search/search_query/application"
-	"quwoquan_service/services/search-service/internal/search/search_query/application/queryheat"
-	accountclosureinfra "quwoquan_service/services/search-service/internal/search/search_query/infrastructure/accountclosure"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/intersectionclient"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/queryheatstore"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/querylogstore"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/searchbackend"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/searchmetrics"
+	feedbackhttp "quwoquan_service/services/search-service/internal/search/search_feedback_fact/adapters/inbound/http"
+	feedbackapplication "quwoquan_service/services/search-service/internal/search/search_feedback_fact/application"
+	"quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
+	feedbackmetrics "quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/metrics"
+	httpadapter "quwoquan_service/services/search-service/internal/search/search_index_view/adapters/inbound/http"
+	experimentpolicymq "quwoquan_service/services/search-service/internal/search/search_index_view/adapters/inbound/mq"
+	searchapplication "quwoquan_service/services/search-service/internal/search/search_index_view/application"
+	accountrestrictioninfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/accountrestriction"
+	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/experimentassignment"
+	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/experimentpolicy"
+	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/intersectionclient"
+	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/searchbackend"
+	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/searchmetrics"
+	requesthttp "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/http"
+	mqadapter "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/mq"
+	requestapplication "quwoquan_service/services/search-service/internal/search/search_request_fact/application"
+	"quwoquan_service/services/search-service/internal/search/search_request_fact/application/queryheat"
+	accountclosureinfra "quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/accountclosure"
+	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/queryheatstore"
+	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/querylogstore"
 )
 
 const serviceName = "search-service"
@@ -84,14 +92,10 @@ type config struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 	} `yaml:"redis"`
 
-	// Ranking carries the search-term heat boost weight and the AB rollout.
+	// Ranking only owns the search-specific score transform. Experiment policy is
+	// projected from Product Ops and never originates in service config.
 	Ranking struct {
 		TermHeatBoost float64 `yaml:"termHeatBoost"`
-		Experiment    struct {
-			Enabled           bool `yaml:"enabled"`
-			ControlWeightPct  int  `yaml:"controlWeightPct"`
-			TermHeatWeightPct int  `yaml:"termHeatWeightPct"`
-		} `yaml:"experiment"`
 	} `yaml:"ranking"`
 
 	ContentService struct {
@@ -174,6 +178,8 @@ func main() {
 
 	logger := slog.Default()
 	metricsRecorder := searchmetrics.NewRecorder()
+	feedbackMetrics := feedbackmetrics.NewRecorder()
+	recentMetrics := recentmetrics.NewRecorder()
 	redisRouter, messageTransportSceneModes := buildRedisRouter(cfg)
 	defer redisRouter.Close()
 	messageTransport, err := requireSearchAPIMessageTransport(
@@ -192,17 +198,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
 	}
+	experimentAssignmentPublisher, err := experimentassignment.NewPublisher(messageTransport)
+	if err != nil {
+		log.Fatalf("%s experiment assignment publisher init failed: %v", serviceName, err)
+	}
+	experiments, err := searchapplication.NewExperiments(experimentAssignmentPublisher)
+	if err != nil {
+		log.Fatalf("%s experiment resolver init failed: %v", serviceName, err)
+	}
 
 	// Mongo is authoritative for query logs, feedback facts, term heat,
 	// RecentSearchState, and privacy cleanup checkpoints. Every environment uses
 	// the same complete production composition.
 	var feedbackSink feedbackapplication.Sink
-	var termHeat application.TermHeatProvider
-	var queryLogSink application.QueryLogSink
+	var termHeat searchapplication.TermHeatProvider
+	var queryLogSink requestapplication.QueryLogSink
 	var recentFacade *recentsearch.Facade
 	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
-	var accountRestrictionProjection *accountclosureinfra.MongoAccountRestrictionProjection
+	var accountRestrictionProjection *accountrestrictioninfra.MongoAccountRestrictionProjection
 	var feedbackSignalRelay *feedbackstore.SignalRelay
+	var experimentPolicyConsumer *experimentpolicymq.ExperimentPolicyConsumer
 	if strings.TrimSpace(cfg.Mongo.URI) == "" {
 		log.Fatalf("%s mongo.uri is required", serviceName)
 	}
@@ -211,6 +226,34 @@ func main() {
 			URI: cfg.Mongo.URI, Database: cfg.Mongo.Database,
 		}, serviceName)
 		db := client.Database(cfg.Mongo.Database)
+		experimentPolicyStore, err := experimentpolicy.NewMongoStore(db)
+		if err != nil {
+			log.Fatalf("%s Experiment policy store init failed: %v", serviceName, err)
+		}
+		if err := experimentPolicyStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("%s Experiment policy index initialization failed: %v", serviceName, err)
+		}
+		if policy, found, err := experimentPolicyStore.Load(ctx, searchapplication.SearchRankingExperimentID); err != nil {
+			log.Fatalf("%s Experiment policy restore failed: %v", serviceName, err)
+		} else if found {
+			if err := experiments.ApplyPolicy(policy); err != nil {
+				log.Fatalf("%s stored Experiment policy invalid: %v", serviceName, err)
+			}
+		}
+		experimentPolicyConsumer, err = experimentpolicymq.NewExperimentPolicyConsumer(
+			messageTransport,
+			experimentPolicyStore,
+			experiments,
+			serviceName+"-"+hostname(),
+			logger,
+		)
+		if err != nil {
+			log.Fatalf("%s Experiment policy consumer init failed: %v", serviceName, err)
+		}
+		if _, err := experimentPolicyConsumer.ProcessOnce(ctx); err != nil {
+			log.Fatalf("%s Experiment policy initial projection failed: %v", serviceName, err)
+		}
+		go experimentPolicyConsumer.Run(ctx)
 		feedbackStore := feedbackstore.NewStore(db)
 		queryStore := querylogstore.NewStore(db)
 		indexCtx, indexCancel := context.WithTimeout(ctx, 30*time.Second)
@@ -227,7 +270,7 @@ func main() {
 		feedbackSignalRelay, err = feedbackstore.NewSignalRelay(
 			feedbackStore,
 			searchSignalPublisher,
-			metricsRecorder,
+			feedbackMetrics,
 			logger,
 		)
 		if err != nil {
@@ -243,7 +286,7 @@ func main() {
 		// Hot-query related-terms cache: collapses the per-search Mongo read for
 		// repeated hot queries into one read per key per TTL window (backpressure
 		// on the Mongo side under concurrency). Best-effort, read-through.
-		termHeat = application.NewCachedTermHeat(heatStore,
+		termHeat = searchapplication.NewCachedTermHeat(heatStore,
 			time.Duration(getenvInt("SEARCH_RELATED_TERMS_CACHE_TTL_MS", 2000))*time.Millisecond,
 			getenvInt("SEARCH_RELATED_TERMS_CACHE_MAX", 1024),
 			metricsRecorder)
@@ -260,7 +303,19 @@ func main() {
 		if err != nil {
 			log.Fatalf("%s recent search facade init failed: %v", serviceName, err)
 		}
-		accountClosureProjection, err := accountclosureinfra.NewMongoProjection(db)
+		accountRestrictionProjection, err =
+			accountrestrictioninfra.NewMongoAccountRestrictionProjection(db)
+		if err != nil {
+			log.Fatalf(
+				"%s user account restriction projection init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		accountClosureProjection, err := accountclosureinfra.NewMongoProjection(
+			db,
+			accountRestrictionProjection,
+		)
 		if err != nil {
 			log.Fatalf(
 				"%s UserAccountClosed projection init failed: %v",
@@ -271,15 +326,6 @@ func main() {
 		if err := accountClosureProjection.EnsureIndexes(ctx); err != nil {
 			log.Fatalf(
 				"%s UserAccountClosed projection indexes failed: %v",
-				serviceName,
-				err,
-			)
-		}
-		accountRestrictionProjection, err =
-			accountclosureinfra.NewMongoAccountRestrictionProjection(db)
-		if err != nil {
-			log.Fatalf(
-				"%s user account restriction projection init failed: %v",
 				serviceName,
 				err,
 			)
@@ -320,23 +366,21 @@ func main() {
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	}
 
-	accountRestrictedBackend, err := application.NewAccountRestrictionBackend(
+	accountRestrictedBackend, err := searchapplication.NewAccountRestrictionBackend(
 		built.Backend,
 		accountRestrictionProjection,
 	)
 	if err != nil {
 		log.Fatalf("%s account restriction backend init failed: %v", serviceName, err)
 	}
-	searchSvc := application.NewSearchService(accountRestrictedBackend,
-		application.WithQueryLogSink(queryLogSink),
-		application.WithSearchSignalPublisher(searchSignalPublisher),
-		application.WithLogger(logger))
+	searchSvc := searchapplication.NewSearchService(accountRestrictedBackend)
+	requestFactRecorder := requestapplication.NewRecorder(
+		queryLogSink,
+		searchSignalPublisher,
+		logger,
+	)
 	feedbackSvc := feedbackapplication.NewService(feedbackSink)
-	experiments, err := application.NewExperiments(experimentConfig(cfg))
-	if err != nil {
-		log.Fatalf("%s ranking experiment init failed: %v", serviceName, err)
-	}
-	decorator := application.NewRankingDecorator(
+	decorator := searchapplication.NewRankingDecorator(
 		termHeat,
 		experiments,
 		cfg.Ranking.TermHeatBoost,
@@ -361,9 +405,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("%s content intersection reader init failed: %v", serviceName, err)
 	}
-	intersectionAttacher := application.NewIntersectionAttacher(
+	intersectionAttacher := searchapplication.NewIntersectionAttacher(
 		intersectionReader,
-		application.IntersectionAttacherConfig{
+		searchapplication.IntersectionAttacherConfig{
 			Timeout:       300 * time.Millisecond,
 			MaxHits:       8,
 			MaxConcurrent: 4,
@@ -404,13 +448,14 @@ func main() {
 		decorator,
 		metricsRecorder,
 		httpadapter.HandlerConfig{
-			HotQueries:    termHeat,
 			Intersections: intersectionAttacher,
+			RequestFacts:  requestFactRecorder,
 		},
 	).Register(routesMux)
-	feedbackhttp.NewHandler(feedbackSvc, metricsRecorder).Register(routesMux)
+	requesthttp.NewHandler(termHeat).Register(routesMux)
+	feedbackhttp.NewHandler(feedbackSvc, feedbackMetrics).Register(routesMux)
 	if recentFacade != nil {
-		recenthttp.NewRecentSearchHandler(recentFacade, metricsRecorder).Register(routesMux)
+		recenthttp.NewRecentSearchHandler(recentFacade, recentMetrics).Register(routesMux)
 	}
 	var handler http.Handler = routesMux
 	// Backpressure: cap concurrent in-flight searches so a slow ES sheds load
@@ -451,6 +496,14 @@ func main() {
 			},
 		)
 	}
+	if experimentPolicyConsumer != nil {
+		healthChecker.Register("experiment-policy-consumer", func(context.Context) error {
+			return experimentPolicyConsumer.Healthy(15 * time.Second)
+		})
+	}
+	healthChecker.Register("experiment-policy", func(context.Context) error {
+		return experiments.Healthy()
+	})
 	if accountClosureConsumer != nil {
 		healthChecker.Register(
 			"user-account-closed-consumer",
@@ -673,23 +726,6 @@ func toSceneConfig(cfg redisSceneCfg) rtredis.SceneConfig {
 		ReadTimeoutMs:  cfg.Pool.ReadTimeoutMs,
 		WriteTimeoutMs: cfg.Pool.WriteTimeoutMs,
 		DialTimeoutMs:  cfg.Pool.DialTimeoutMs,
-	}
-}
-
-// experimentConfig maps the service config AB block into the application config.
-func experimentConfig(cfg config) application.ExperimentConfig {
-	return application.ExperimentConfig{
-		Enabled: cfg.Ranking.Experiment.Enabled,
-		Buckets: []application.ExperimentBucket{
-			{
-				Name:      application.BucketControl,
-				WeightPct: cfg.Ranking.Experiment.ControlWeightPct,
-			},
-			{
-				Name:      application.BucketTermHeat,
-				WeightPct: cfg.Ranking.Experiment.TermHeatWeightPct,
-			},
-		},
 	}
 }
 

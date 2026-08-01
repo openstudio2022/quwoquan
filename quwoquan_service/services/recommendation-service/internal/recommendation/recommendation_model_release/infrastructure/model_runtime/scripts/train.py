@@ -3,7 +3,7 @@
 LightGBM train: read samples from rec_training_samples, train with 15+ features,
 time-split validation, compute AUC/GAUC/NDCG, write model + ModelRegistry.
 
-Usage: python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train.py --scenario content_feed [--production]
+Usage: python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train.py --scenario content_feed
 """
 import argparse
 import json
@@ -157,9 +157,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_recommendation"))
     p.add_argument("--out-dir", default=os.environ.get("MODEL_OUT_DIR", "/tmp/rec_models"))
-    p.add_argument("--production", action="store_true", help="Mark this version as production")
+    p.add_argument(
+        "--local-evaluation-only",
+        action="store_true",
+        help="Evaluate an ephemeral local artifact without upload, Stage or activation",
+    )
     p.add_argument("--num-boost-round", type=int, default=100)
     p.add_argument("--min-samples", type=int, default=100, help="Minimum samples required to train")
     p.add_argument(
@@ -289,31 +293,53 @@ def main():
 
     print(f"Test metrics: {json.dumps(metrics)}", file=sys.stderr)
 
-    import model_registry as mr
-    artifact_uri = ""
+    if args.local_evaluation_only:
+        import evaluate_gate
+        status, reason, _ = evaluate_gate.evaluate_metrics(
+            scenario=args.scenario,
+            candidate_metrics=metrics,
+            dry_run=True,
+        )
+        print(f"[train] local evaluation {status}: {reason}", file=sys.stderr)
+        return 0 if status == "pass" else 1
+
+    import model_release_client
     try:
         import artifact_store
         artifact_uri = artifact_store.upload(str(model_path), args.scenario, version)
     except Exception as e:
-        print(f"[train] artifact upload skipped: {e}", file=sys.stderr)
-    if args.production and not artifact_uri:
-        print(
-            f"[train] production registry write requires artifact upload for scenario={args.scenario}",
-            file=sys.stderr,
-        )
+        print(f"[train] artifact upload failed: {e}", file=sys.stderr)
         return 1
-
-    mr.write_registry(
-        db,
+    model_digest = model_release_client.file_digest(model_path)
+    feature_contract_digest = model_release_client.required_feature_contract_digest()
+    import evaluate_gate
+    evidence = evaluate_gate.verification_evidence(
+        release_id=version,
         scenario=args.scenario,
-        version=version,
-        metrics=metrics,
-        artifact_path=str(model_path),
+        model_digest=model_digest,
         artifact_uri=artifact_uri,
-        model_type="lgb",
-        production=args.production,
+        feature_contract_digest=feature_contract_digest,
+        candidate_metrics=metrics,
     )
-    print(f"Saved model to {model_path}; registered for scenario={args.scenario}", file=sys.stderr)
+    if evidence["status"] != "pass":
+        print(f"[train] quality gate blocked: {evidence['reason']}", file=sys.stderr)
+        return 1
+    verification_digest = model_release_client.canonical_digest(
+        {key: value for key, value in evidence.items() if key != "evaluatedAt"}
+    )
+    result = model_release_client.stage_release(
+        release_id=version,
+        scenario=args.scenario,
+        artifact_uri=artifact_uri,
+        model_digest=model_digest,
+        feature_contract_digest=feature_contract_digest,
+        verification_digest=verification_digest,
+        evaluation_metrics=metrics,
+    )
+    print(
+        f"Saved model to {model_path}; staged release={result['releaseId']}",
+        file=sys.stderr,
+    )
     return 0
 
 

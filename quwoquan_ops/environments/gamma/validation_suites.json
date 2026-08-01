@@ -182,7 +182,7 @@
       "longTailType": "environment_coupling",
       "currentRole": "PR 环境协议级助手主链抽样验证",
       "currentPain": "之前 PR 使用 Flutter UI + 真实 stream 收敛，长尾来自冷启动、工具链和等待窗口。",
-      "optimizationPlan": "改为 conversation -> turn -> SSE 协议探针，仅校验 turn_started / assistant.model.interaction / final_answer 与非空答案。"
+      "optimizationPlan": "改为 AssistantSession -> turn -> SSE 协议探针，仅校验 turn_started / assistant.model.interaction / final_answer 与非空答案。"
     },
     "assistant_ui_semantic_smoke": {
       "path": "quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart",

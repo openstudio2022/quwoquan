@@ -91,7 +91,7 @@ func (c *MongoCatalogClient) Nearby(
 
 func (c *MongoCatalogClient) Search(
 	ctx context.Context,
-	query model.SearchQuery,
+	query model.SearchRequestFact,
 ) ([]model.POI, error) {
 	normalized := strings.TrimSpace(query.Query)
 	if normalized == "" {

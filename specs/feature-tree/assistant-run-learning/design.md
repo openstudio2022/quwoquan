@@ -8,7 +8,7 @@
 
 ## 2. 领域模型与所有权
 
-- authoritative ownership：拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略发布和助手学习事实的生命周期与写入决定权。
+- authoritative ownership：拥有 `AssistantSession`、`AssistantRun`、流式事件、助手策略发布和助手学习事实的生命周期与写入决定权。
 - write boundary：只能通过本领域公开 command 修改其拥有事实。
 - cross-domain proposal boundary：`ProfileUpdateProposal`、`Persona`、应用审计与回滚事实归 user-service 的用户身份画像领域所有；助手只通过该聚合的公开 command/event 提交可审核来源，不复制状态机、receipt、outbox 或存储。
 - 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
@@ -16,15 +16,15 @@
 
 ## 3. 上下文边界与协作
 
-- [`JNY-007 / SCN-015`](../spec.md#scn-015) — 在“小趣作为会话成员参与消息”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
-- [`JNY-009 / SCN-017`](../spec.md#scn-017) — 在“内容与页面上下文感知问答”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
-- [`JNY-009 / SCN-018`](../spec.md#scn-018) — 在“群聊话题理解与会话内回复”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
-- [`JNY-009 / SCN-019`](../spec.md#scn-019) — 在“搜索 handoff 与统一 grounding”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
-- [`JNY-009 / SCN-020`](../spec.md#scn-020) — 在“小趣主动订阅与用户/会话投递”中，消费页面或会话上下文，创建或续接 AssistantConversation、Run 与 Turn，并执行授权、策略和订阅门禁。
+- [`JNY-007 / SCN-015`](../spec.md#scn-015) — 在“小趣作为会话成员参与消息”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
+- [`JNY-009 / SCN-017`](../spec.md#scn-017) — 在“内容与页面上下文感知问答”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
+- [`JNY-009 / SCN-018`](../spec.md#scn-018) — 在“群聊话题理解与会话内回复”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
+- [`JNY-009 / SCN-019`](../spec.md#scn-019) — 在“搜索 handoff 与统一 grounding”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
+- [`JNY-009 / SCN-020`](../spec.md#scn-020) — 在“小趣主动订阅与用户/会话投递”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
 
 ## 4. 架构与数据流
 
-- [`assistant-runtime-foundation`](./assistant-runtime-foundation/spec.md)：承载助手域业务对象运行基座：`AssistantConversation`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
+- [`assistant-runtime-foundation`](./assistant-runtime-foundation/spec.md)：承载助手域业务对象运行基座：`AssistantSession`/`AssistantTurn` 会话与轮次持久化、`SkillSubscription` 主动订阅、`SkillConsent` 敏感能力授权门控、入口个性化与个人数据查询。
 - [`learning-event-feedback-injection`](./learning-event-feedback-injection/spec.md)：统一学习事件上报、反馈聚合与运行时上下文注入链路。
 - [`profile-proposal-apply-loop`](./profile-proposal-apply-loop/spec.md)：定义画像提案从生成、确认/拒绝到应用落档的完整闭环。
 - [`run-stream-policy`](./run-stream-policy/spec.md)：规范助手 Run/Stream 主链路的协议、策略模板与域路由行为。

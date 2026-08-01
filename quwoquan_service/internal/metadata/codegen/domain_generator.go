@@ -124,6 +124,12 @@ type fieldsDocument struct {
 	Entities     map[string]domainEntityDocument `yaml:"entities"`
 	Members      map[string]domainEntityDocument `yaml:"members"`
 	ValueObjects map[string]domainEntityDocument `yaml:"value_objects"`
+	Types        map[string]domainEntityDocument `yaml:"types"`
+	Enums        map[string]localEnumDocument    `yaml:"enums"`
+}
+
+type localEnumDocument struct {
+	Values []string `yaml:"values"`
 }
 
 type domainEntityDocument struct {
@@ -133,6 +139,7 @@ type domainEntityDocument struct {
 type domainField struct {
 	Name        string   `yaml:"name"`
 	Type        string   `yaml:"type"`
+	ObjectRef   string   `yaml:"object_ref"`
 	EnumRef     string   `yaml:"enum_ref"`
 	Constraints []string `yaml:"constraints"`
 }
@@ -219,7 +226,7 @@ func (generator *DomainGenerator) buildTemplateData(
 	for name, member := range fields.Members {
 		fields.Entities[name] = member
 	}
-	referencedValueObjects := includeReferencedValueObjects(&fields)
+	referencedValueObjects := includeReferencedOwnedTypes(&fields)
 
 	data := domainTemplateData{
 		PackageName:     strings.ToLower(aggregateName),
@@ -308,20 +315,28 @@ func (generator *DomainGenerator) buildTemplateData(
 	return data, nil
 }
 
-// includeReferencedValueObjects promotes only value objects that are reachable
-// from the generated aggregate/member graph. This keeps transport projections
-// out of domain packages while ensuring named owned values never decay to any.
-func includeReferencedValueObjects(fields *fieldsDocument) map[string]struct{} {
+// includeReferencedOwnedTypes promotes only named owned values reachable from
+// the generated aggregate/member graph. `types` is the canonical fields.yaml
+// vocabulary used by transport codegen; object_ref identifies the named type
+// when the wire shape is `object`. Unreachable request/response DTOs stay out of
+// domain packages.
+func includeReferencedOwnedTypes(fields *fieldsDocument) map[string]struct{} {
 	result := make(map[string]struct{})
 	for {
 		changed := false
 		for _, entity := range fields.Entities {
 			for _, field := range entity.Fields {
-				candidate := strings.TrimSpace(field.Type)
+				candidate := strings.TrimSpace(field.ObjectRef)
+				if candidate == "" {
+					candidate = strings.TrimSpace(field.Type)
+				}
 				if strings.HasPrefix(candidate, "[]") {
 					candidate = strings.TrimSpace(strings.TrimPrefix(candidate, "[]"))
 				}
 				valueObject, exists := fields.ValueObjects[candidate]
+				if !exists {
+					valueObject, exists = fields.Types[candidate]
+				}
 				if !exists {
 					continue
 				}
@@ -370,13 +385,7 @@ func (generator *DomainGenerator) domainModelOutputPath(object ast.Object) strin
 	if generator.config.objectFirstRoot {
 		return path.Join("contract", "model")
 	}
-	configured := path.Clean(strings.TrimSpace(object.DDDLayer.DomainModel))
-	if configured == "." || configured == "" {
-		return path.Join("domain", strings.ToLower(object.Name), "model")
-	}
-	configured = strings.TrimPrefix(configured, "./")
-	configured = strings.TrimPrefix(configured, "internal/")
-	return configured
+	return path.Join("domain", strings.ToLower(object.Name), "model")
 }
 
 func (generator *DomainGenerator) findObject(name string) (ast.Object, error) {
@@ -392,10 +401,6 @@ func (generator *DomainGenerator) collectEnumTypes(
 	fields fieldsDocument,
 	entityNames []string,
 ) ([]domainEnumTypeData, error) {
-	var shared sharedTypesDocument
-	if err := generator.source.Decode("_shared/types.yaml", &shared); err != nil {
-		return nil, err
-	}
 	references := map[string]struct{}{}
 	for _, entityName := range entityNames {
 		for _, field := range fields.Entities[entityName].Fields {
@@ -409,11 +414,27 @@ func (generator *DomainGenerator) collectEnumTypes(
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	var shared sharedTypesDocument
+	for _, name := range names {
+		if _, local := fields.Enums[name]; local {
+			continue
+		}
+		if generator.source == nil {
+			return nil, fmt.Errorf("enum %q requires a metadata source for shared type resolution", name)
+		}
+		if err := generator.source.Decode("_shared/types.yaml", &shared); err != nil {
+			return nil, err
+		}
+		break
+	}
 	result := make([]domainEnumTypeData, 0, len(names))
 	for _, name := range names {
 		values, exists := shared.Enums[name]
+		if local, localExists := fields.Enums[name]; localExists {
+			values, exists = local.Values, true
+		}
 		if !exists {
-			return nil, fmt.Errorf("enum %q is not declared in _shared/types.yaml", name)
+			return nil, fmt.Errorf("enum %q is not declared in fields.yaml enums or _shared/types.yaml", name)
 		}
 		enumType := domainEnumTypeData{Name: name}
 		for _, value := range values {
@@ -444,6 +465,11 @@ func (generator *DomainGenerator) fieldGoType(
 	entityNames map[string]struct{},
 ) (string, error) {
 	fieldType := strings.TrimSpace(field.Type)
+	if objectRef := strings.TrimSpace(field.ObjectRef); objectRef != "" {
+		if _, exists := entityNames[objectRef]; exists {
+			return objectRef, nil
+		}
+	}
 	if strings.HasPrefix(fieldType, "[]") {
 		inner := strings.TrimSpace(strings.TrimPrefix(fieldType, "[]"))
 		if inner == "" {

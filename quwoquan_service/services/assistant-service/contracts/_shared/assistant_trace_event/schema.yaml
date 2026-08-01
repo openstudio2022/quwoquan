@@ -7,7 +7,7 @@ imports:
   - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
 fields:
   - { name: traceEventId, type: string, required: true }
-  - { name: conversationId, type: string, required: true }
+  - { name: sessionId, type: string, required: true }
   - { name: turnId, type: string, required: true }
   - { name: traceId, type: string, default: '' }
   - { name: phaseId, type: string, default: '' }

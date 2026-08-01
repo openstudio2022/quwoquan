@@ -348,36 +348,25 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 		t.Fatalf("provider result inbox count=%d err=%v", receiptCount, err)
 	}
 	jobCollection := notificationMongoDB.Collection("notification_delivery_jobs")
-	legacyProviderState := bson.M{
-		"provider":                          "apns_voip",
-		"providerRequestDigest":             "sha256:legacy-ring",
-		"providerResultStatus":              "sent_unconfirmed",
-		"providerResultAt":                  now.UTC(),
-		"cancellationProvider":              "apns_voip",
-		"cancellationProviderRequestDigest": "sha256:legacy-cancel",
-		"cancellationProviderResultStatus":  "sent_unconfirmed",
-		"cancellationProviderResultAt":      now.UTC(),
-	}
-	if _, err := jobCollection.UpdateOne(
-		context.Background(),
-		bson.M{"callId": callID, "deviceId": "device-offline"},
-		bson.M{"$set": legacyProviderState},
-	); err != nil {
-		t.Fatalf("seed legacy provider state: %v", err)
-	}
-	if err := notificationReliableStore.EnsureIndexes(context.Background()); err != nil {
-		t.Fatalf("migrate legacy provider state: %v", err)
-	}
-	var migratedJob bson.M
+	var canonicalJob bson.M
 	if err := jobCollection.FindOne(
 		context.Background(),
 		bson.M{"callId": callID, "deviceId": "device-offline"},
-	).Decode(&migratedJob); err != nil {
-		t.Fatalf("read migrated incoming call job: %v", err)
+	).Decode(&canonicalJob); err != nil {
+		t.Fatalf("read canonical incoming call job: %v", err)
 	}
-	for field := range legacyProviderState {
-		if _, exists := migratedJob[field]; exists {
-			t.Fatalf("legacy provider authority %s still exists: %v", field, migratedJob)
+	for _, field := range []string{
+		"provider",
+		"providerRequestDigest",
+		"providerResultStatus",
+		"providerResultAt",
+		"cancellationProvider",
+		"cancellationProviderRequestDigest",
+		"cancellationProviderResultStatus",
+		"cancellationProviderResultAt",
+	} {
+		if _, exists := canonicalJob[field]; exists {
+			t.Fatalf("provider attempt authority %s leaked into delivery job: %v", field, canonicalJob)
 		}
 	}
 	timeline, err := notificationReliableStore.ReadIncomingCallDeliveryTimeline(

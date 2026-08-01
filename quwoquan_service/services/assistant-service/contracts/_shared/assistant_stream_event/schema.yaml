@@ -8,8 +8,8 @@ imports:
 fields:
   - { name: schema, type: string, required: true }
   - { name: eventId, type: string, required: true }
-  - { name: conversationId, type: string, required: true }
-  - { name: turnId, type: string, required: true }
+  - { name: sessionId, type: string, required: true }
+  - { name: runId, type: string, required: true }
   - { name: seq, type: int, required: true }
   - { name: eventType, type: enum, enum_ref: AssistantStreamEventType, required: true }
   - { name: traceId, type: string, default: '' }

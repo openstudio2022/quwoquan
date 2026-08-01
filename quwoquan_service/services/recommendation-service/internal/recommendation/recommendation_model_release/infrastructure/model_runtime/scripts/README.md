@@ -1,7 +1,7 @@
 # ML scripts (rec-model-training)
 
-Training pipeline: events → samples → dataset → train / multiobjective → evaluate → gate → ModelRegistry.
-Fields and collections follow `contracts/metadata/_projections/` (learning_events, training_samples, model_registry).
+Training pipeline: events → samples → dataset → train / multiobjective → quality evidence → Stage → CAS Activate.
+Fields and collections follow the object-local `recommendation_model_release` contracts.
 
 ## Run order
 
@@ -12,15 +12,16 @@ From `quwoquan_service`, run the training lane through the service-owned scripts
 2. **DatasetManager**: time-split samples into train/val/test.
 3. **train.py**:
    `python3 services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train.py --scenario content_feed [--datasetId ...]`
-4. **evaluate.py**: offline metrics.
-5. **ModelRegistry**: write version + artifact path to `rec_model_registry`.
+4. **evaluate.py / evaluate_gate.py**: evaluate an explicit immutable artifact and produce verification evidence.
+5. **Stage**: training uploads the artifact and calls the generated RecommendationModelRelease HTTP facade; activation is a separate CAS command after approval.
 
 ## Env
 
 - **Python venv**: `python3 -m venv .venv && .venv/bin/pip install -r services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/requirements.txt`。macOS 上 lightgbm 需 OpenMP：`brew install libomp`。若无 lightgbm，`train.py` / `train_multiobjective.py` 会直接退出 1，且不会写入 ModelRegistry。
 - 依赖边界：服务根 `services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt` 只负责 FastAPI 推理镜像；本目录 `scripts/requirements.txt` 只负责训练、评估和样本处理。CI 与训练镜像必须引用后者，不能把两条运行面重新合并成一个隐式依赖集。
-- `MONGODB_URI`: for rec_learning_events, rec_training_samples, rec_model_registry. Local Docker Compose runs use `mongodb://127.0.0.1:27017/?directConnection=true`.
-- `OSS_*` or local path for model artifact (optional)
+- `MONGODB_URI`: Recommendation-owned learning, training and replay collections. Local Docker Compose runs use `mongodb://127.0.0.1:27017/?directConnection=true`.
+- `RECOMMENDATION_SERVICE_INTERNAL_URL`, `RECOMMENDATION_MODEL_MANAGE_TOKEN`, `RECOMMENDATION_FEATURE_CONTRACT_DIGEST`: required Stage/Activate facade inputs.
+- `MODEL_ARTIFACT_*`: required immutable S3-compatible artifact storage configuration.
 
 ## Docker
 

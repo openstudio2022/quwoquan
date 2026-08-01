@@ -4,7 +4,6 @@ Loads LightGBM model from ModelRegistry; falls back to rule-based scoring.
 """
 from __future__ import annotations
 
-import math
 import os
 import sys
 from pathlib import Path
@@ -18,6 +17,7 @@ from generated.recommendation.recommendation_model_release.models.request_respon
 from api.metrics import observe_score_value
 from features.transformer import build_candidate_features
 from features.intersection_feature_encoder import append_intersection_features
+from internal.recommendation.recommendation_model_release.application.rule_scoring import rule_score
 
 try:
     import lightgbm as lgb
@@ -100,71 +100,29 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
     return features
 
 
-def rule_score(features: dict[str, Any]) -> tuple[float, dict[str, float]]:
-    like = float(features.get("likeCount") or 0)
-    comment = float(features.get("commentCount") or 0)
-    share = float(features.get("shareCount") or 0)
-    view = float(features.get("viewCount") or 0)
-    age_hours = float(features.get("ageHours") or 0)
-    if age_hours < 0:
-        age_hours = 0
-    popularity = math.log1p(view * 0.1 + like * 1.0 + comment * 1.5 + share * 2.0)
-    freshness = math.exp(-age_hours / 24.0)
-    total = popularity * 0.6 + freshness * 0.4
-    return total, {"popularity": popularity, "freshness": freshness, "total": total}
-
-
-def _resolve_cached_artifact_path(artifact_path: str) -> str | None:
-    if not artifact_path:
-        return None
-    candidate = Path(artifact_path)
-    cache_dir = Path(os.environ.get("MODEL_CACHE_DIR", "/app/cache"))
-    candidates = [candidate, cache_dir / candidate.name]
-    if not candidate.is_absolute():
-        candidates.append(cache_dir / candidate)
-    for path in candidates:
-        if path.exists():
-            return str(path)
-    return None
-
-
 def _load_model_from_registry() -> tuple[Any | None, str | None]:
-    """Load production LightGBM model from MongoDB registry.
-
-    Resolution order:
-    1. artifactUri (S3/OSS) → download to local cache
-    2. artifactPath (local filesystem) → direct load
-    3. None → rule fallback
-    """
+    """Load the single active LightGBM artifact from ModelRegistry."""
     if lgb is None or MongoClient is None:
         return None, None
     uri = os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true")
-    db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_content")
+    db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_recommendation")
     try:
         with MongoClient(uri, serverSelectionTimeoutMS=3000) as client:
             db = client[db_name]
             doc = db["rec_model_registry"].find_one(
-                {"scenario": "content_feed", "production": True},
-                sort=[("createdAt", -1)],
+                {"scenario": "content_feed", "status": "active"},
             )
         if not doc:
             return None, None
         model_release_id = str(doc.get("_id") or "").strip() or None
 
-        artifact_uri = doc.get("artifactUri", "")
-        if artifact_uri:
-            try:
-                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-                import artifact_store
-                local_path = artifact_store.download(artifact_uri)
-                return lgb.Booster(model_file=local_path), model_release_id
-            except Exception:
-                pass
-
-        artifact_path = doc.get("artifactPath", "")
-        resolved_path = _resolve_cached_artifact_path(artifact_path)
-        if resolved_path:
-            return lgb.Booster(model_file=resolved_path), model_release_id
+        artifact_uri = str(doc.get("artifactUri") or "").strip()
+        if not artifact_uri:
+            return None, None
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import artifact_store
+        local_path = artifact_store.download(artifact_uri)
+        return lgb.Booster(model_file=local_path), model_release_id
     except Exception:
         pass
     return None, None

@@ -9,10 +9,7 @@ import 'package:quwoquan_app/core/services/active_call_service.dart';
 /// Top blue bar shown when navigating away from an active call.
 /// Tap to return to the call page.
 class ActiveCallBar extends ConsumerWidget {
-  const ActiveCallBar({
-    super.key,
-    required this.onTap,
-  });
+  const ActiveCallBar({super.key, required this.onTap});
 
   final VoidCallback onTap;
 

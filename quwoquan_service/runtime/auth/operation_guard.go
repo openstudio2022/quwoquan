@@ -52,6 +52,29 @@ func OperationDescriptorFromContext(
 	return descriptor, ok
 }
 
+// NewOperationPathTemplateResolver returns the bounded canonical route label
+// for observability middleware. Unknown paths collapse to one sentinel instead
+// of leaking object IDs, query targets, or other unbounded URL segments.
+func NewOperationPathTemplateResolver(
+	descriptors []OperationSecurityDescriptor,
+) func(*http.Request) string {
+	compiled := mustCompileOperationDescriptors(descriptors)
+	return func(request *http.Request) string {
+		if request == nil {
+			return "/_unmatched"
+		}
+		descriptor, ok := matchOperation(
+			compiled,
+			request.Method,
+			request.URL.Path,
+		)
+		if !ok {
+			return "/_unmatched"
+		}
+		return descriptor.PathTemplate
+	}
+}
+
 // RequireGeneratedOperationAuthorization applies a generated, default-deny
 // route table. Unknown, blocked, or malformed operations never reach handlers.
 func RequireGeneratedOperationAuthorization(

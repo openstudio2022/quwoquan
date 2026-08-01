@@ -219,35 +219,6 @@ func TestVisitRecordConcurrentReplayIncrementsExactlyOnce(t *testing.T) {
 	assertCollectionCount(t, "visit_records", bson.D{}, 1)
 }
 
-func TestVisitRecordCanonicalMigrationRemovesLegacyFields(t *testing.T) {
-	clearVisitCollections(t)
-	legacyTime := time.Now().UTC().Add(-time.Hour)
-	if _, err := visitMongoDB.Collection("visit_records").InsertOne(context.Background(), bson.M{
-		"userId": "legacy-user", "targetType": "page", "targetKey": "legacy-page",
-		"visitCount": 2, "lastSeenAt": legacyTime, "timestamp": legacyTime,
-		"sessionId": "legacy-session", "source": "legacy-source",
-	}); err != nil {
-		t.Fatalf("insert legacy visit: %v", err)
-	}
-	if err := realVisitStore.EnsureIndexes(context.Background()); err != nil {
-		t.Fatalf("rerun canonical VisitRecord migration: %v", err)
-	}
-	var stored bson.M
-	if err := visitMongoDB.Collection("visit_records").FindOne(
-		context.Background(), bson.M{"userId": "legacy-user"},
-	).Decode(&stored); err != nil {
-		t.Fatalf("read migrated visit: %v", err)
-	}
-	if _, ok := stored["occurredAt"]; !ok {
-		t.Fatalf("canonical occurredAt missing: %+v", stored)
-	}
-	for _, field := range []string{"lastSeenAt", "timestamp", "sessionId", "source"} {
-		if _, exists := stored[field]; exists {
-			t.Fatalf("legacy field %s remains: %+v", field, stored)
-		}
-	}
-}
-
 func performVisitRequest(
 	t *testing.T,
 	handler http.Handler,

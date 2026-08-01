@@ -7,7 +7,7 @@ void main() {
   test('task_card: envelope matches codec map for tasks', () {
     final row = UserTranscriptTimelineRow(
       id: 'r1',
-      conversationId: 'c1',
+      sessionId: 'c1',
       type: 'task_card',
       content: '',
       senderId: 'u1',
@@ -27,7 +27,7 @@ void main() {
   test('image: thumbnailUrl and imageUrl fallbacks', () {
     final row = UserTranscriptTimelineRow(
       id: 'r2',
-      conversationId: 'c1',
+      sessionId: 'c1',
       type: 'image',
       content: '',
       senderId: 'u1',
@@ -42,7 +42,7 @@ void main() {
   test('audio: media map and current fields', () {
     final row = UserTranscriptTimelineRow(
       id: 'r3',
-      conversationId: 'c1',
+      sessionId: 'c1',
       type: 'audio',
       content: '',
       senderId: 'u1',

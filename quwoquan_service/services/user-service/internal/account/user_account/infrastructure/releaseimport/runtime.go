@@ -92,7 +92,7 @@ type CreatorPersonaState struct {
 }
 
 type CreatorPersonaMaterializer interface {
-	UpsertAndProject(context.Context, CreatorPersonaState) error
+	UpsertAndProject(context.Context, CreatorPersonaState, string) error
 }
 
 type CreatorPersonaMaterializerFactory func(
@@ -127,12 +127,21 @@ func Run(personaFactory CreatorPersonaMaterializerFactory) {
 	mongoURI := flag.String("mongo-uri", "", "user-service MongoDB URI (required)")
 	mediaAvatarBaseURL := flag.String("media-avatar-base-url", "", "avatar media public base URL")
 	environment := flag.String("env", "", "environment label (required)")
+	runID := flag.String("run-id", "", "environment import run identity (required)")
 	mode := flag.String("mode", modeUpsert, "apply mode: upsert|sync")
 	reportPath := flag.String("report", "", "machine-readable report path (required)")
 	dryRun := flag.Bool("dry-run", false, "validate release without writes")
 	flag.Parse()
 
-	if err := requireArguments(*releaseRoot, *postgresDSN, *mongoURI, *environment, *reportPath, *mode); err != nil {
+	if err := requireArguments(
+		*releaseRoot,
+		*postgresDSN,
+		*mongoURI,
+		*environment,
+		*reportPath,
+		*runID,
+		*mode,
+	); err != nil {
 		fatal(err)
 	}
 	state, creators, err := LoadCreatorsForRelease(
@@ -184,6 +193,7 @@ func Run(personaFactory CreatorPersonaMaterializerFactory) {
 		personaMaterializer,
 		creators,
 		state.ReleaseID,
+		*runID,
 	)
 	if err != nil {
 		fatal(err)
@@ -221,12 +231,12 @@ func Run(personaFactory CreatorPersonaMaterializerFactory) {
 }
 
 func requireArguments(values ...string) error {
-	for _, value := range values[:5] {
+	for _, value := range values[:6] {
 		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("release importer requires release root, postgres DSN, mongo URI, environment and report path")
+			return fmt.Errorf("release importer requires release root, postgres DSN, mongo URI, environment, report path and run ID")
 		}
 	}
-	if values[5] != modeUpsert && values[5] != modeSync {
+	if values[6] != modeUpsert && values[6] != modeSync {
 		return fmt.Errorf("release importer mode must be %q or %q", modeUpsert, modeSync)
 	}
 	return nil
@@ -379,6 +389,7 @@ func upsertUsers(
 	personaMaterializer CreatorPersonaMaterializer,
 	creators []creatorRecord,
 	releaseID string,
+	runID string,
 ) (int, error) {
 	const query = `INSERT INTO user_profiles (
 		user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
@@ -416,7 +427,7 @@ func upsertUsers(
 			AvatarMediaAssetID: avatarAssetID,
 			AvatarURL:          profile.AvatarURL,
 			AvatarVersion:      int(profile.AvatarVersion),
-		}); err != nil {
+		}, runID); err != nil {
 			return 0, fmt.Errorf("upsert creator Persona %s: %w", profile.PersonaID, err)
 		}
 		count++

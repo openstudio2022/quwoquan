@@ -59,6 +59,8 @@ def test_importers_read_release_payload_without_publish_root(
         env="gamma",
         run=run,
         mongo_uri="mongodb://gamma",
+        redis_addr="127.0.0.1:19420",
+        redis_database=1,
         media_image_base_url="https://cdn.example.invalid",
         media_video_base_url="https://cdn.example.invalid",
         dry_run=True,
@@ -86,6 +88,8 @@ def test_importers_read_release_payload_without_publish_root(
 
     assert len(commands) == 4
     assert "--creator-receipt" in commands[1]
+    assert commands[1][commands[1].index("--redis-addr") + 1] == "127.0.0.1:19420"
+    assert commands[1][commands[1].index("--redis-db") + 1] == "1"
     assert commands[3][commands[3].index("--run-id") + 1] == "apply-a"
     for command in commands:
         assert "--publish-root" not in command
@@ -102,6 +106,7 @@ def test_importers_read_release_payload_without_publish_root(
     assert commands[2][commands[2].index("--media-avatar-base-url") + 1] == (
         "https://cdn.example.invalid"
     )
+    assert commands[2][commands[2].index("--run-id") + 1] == "apply-a"
     assert commands[3][commands[3].index("--media-image-base-url") + 1] == (
         "https://cdn.example.invalid"
     )

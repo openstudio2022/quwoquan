@@ -687,6 +687,63 @@ func (m *memoryClient) XAdd(_ context.Context, stream string, values map[string]
 	return id, nil
 }
 
+func (m *memoryClient) XRead(
+	ctx context.Context,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]StreamMessage, error) {
+	deadline := time.Now().Add(block)
+	for {
+		m.mu.RLock()
+		out := make([]StreamMessage, 0)
+		streamNames := make([]string, 0, len(streams))
+		for stream := range streams {
+			streamNames = append(streamNames, stream)
+		}
+		sort.Strings(streamNames)
+		for _, stream := range streamNames {
+			cursorMS, cursorSequence, err := parseMemoryStreamID(streams[stream])
+			if err != nil {
+				m.mu.RUnlock()
+				return nil, err
+			}
+			ms := m.streams[stream]
+			if ms == nil {
+				continue
+			}
+			for _, message := range ms.entries {
+				messageMS, messageSequence, parseErr := parseMemoryStreamID(message.ID)
+				if parseErr != nil {
+					m.mu.RUnlock()
+					return nil, parseErr
+				}
+				if messageMS < cursorMS ||
+					(messageMS == cursorMS && messageSequence <= cursorSequence) {
+					continue
+				}
+				message.Values = cloneStreamValues(message.Values)
+				out = append(out, message)
+				if count > 0 && int64(len(out)) >= count {
+					break
+				}
+			}
+			if count > 0 && int64(len(out)) >= count {
+				break
+			}
+		}
+		m.mu.RUnlock()
+		if len(out) > 0 || block <= 0 || time.Now().After(deadline) {
+			return out, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 func (m *memoryClient) XReadGroup(
 	_ context.Context,
 	group string,

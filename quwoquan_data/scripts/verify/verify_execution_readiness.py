@@ -24,6 +24,19 @@ from verify.verify_homepage_media_completeness import homepage_media_completenes
 _STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 
 
+def _normalize_model_id(model: object) -> str:
+    """Normalize provider-prefixed model ids so readiness aliases compare equal.
+
+    Cursor Agent may persist `cursor-grok-4-5` while execution readiness records
+    `grok-4.5`; those name the same commercial model family binding.
+    """
+    text = str(model or "").strip().lower().replace("_", "-")
+    if text.startswith("cursor-"):
+        text = text[len("cursor-") :]
+    text = text.replace("grok-4-5", "grok-4.5")
+    return text
+
+
 def _read_valid_json(path: Path, schema_group: str, schema_name: str, issues: list[str]) -> dict:
     if not path.is_file():
         issues.append(f"{path}: required evidence is missing")
@@ -120,7 +133,9 @@ def _reviewed_object_issues(
         if not str(draft_meta.get("agentRunId") or "").strip():
             issues.append(f"{rel}/4.draft: agentRunId is missing")
         author = model_readiness.get("author") if isinstance(model_readiness.get("author"), dict) else {}
-        if author and draft_meta.get("model") != author.get("model"):
+        if author and _normalize_model_id(draft_meta.get("model")) != _normalize_model_id(
+            author.get("model")
+        ):
             issues.append(f"{rel}/4.draft: author model drift from execution readiness")
         if content_type is ContentType.IMAGE:
             if not str(draft_meta.get("draftSha256") or "").startswith("sha256:"):

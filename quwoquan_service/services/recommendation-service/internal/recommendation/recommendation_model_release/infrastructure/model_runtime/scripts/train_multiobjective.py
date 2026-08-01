@@ -3,7 +3,7 @@
 Multi-objective ranking: train separate LightGBM models for click, dwell, like,
 share, comment, follow — then combine with weighted fusion.
 
-Usage: python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train_multiobjective.py --scenario content_feed [--production]
+Usage: python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train_multiobjective.py --scenario content_feed
 """
 import argparse
 import json
@@ -138,9 +138,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_recommendation"))
     p.add_argument("--out-dir", default=os.environ.get("MODEL_OUT_DIR", "/tmp/rec_models"))
-    p.add_argument("--production", action="store_true")
+    p.add_argument(
+        "--local-evaluation-only",
+        action="store_true",
+        help="Evaluate ephemeral local artifacts without upload, Stage or activation",
+    )
     p.add_argument("--num-boost-round", type=int, default=100)
     p.add_argument("--min-samples", type=int, default=100, help="Minimum samples required to train")
     p.add_argument(
@@ -309,7 +313,20 @@ def main():
     print(f"\nFused AUC (engaged): {fused_auc:.4f}", file=sys.stderr)
     print(f"All metrics: {json.dumps(all_metrics, indent=2)}", file=sys.stderr)
 
-    import model_registry as mr
+    if args.local_evaluation_only:
+        import evaluate_gate
+        status, reason, _ = evaluate_gate.evaluate_metrics(
+            scenario=f"{args.scenario}_multiobjective",
+            candidate_metrics=all_metrics,
+            dry_run=True,
+        )
+        print(
+            f"[train_multiobjective] local evaluation {status}: {reason}",
+            file=sys.stderr,
+        )
+        return 0 if status == "pass" else 1
+
+    import model_release_client
     # N0-5：子模型 .txt 必须与 fusion config 一起上传——serving 侧按 config 的
     # model_files 拉子模型；只传 config 会导致远端拉不到子模型恒回退。
     artifact_uri = ""
@@ -328,24 +345,43 @@ def main():
         artifact_uri = artifact_store.upload(str(config_path), args.scenario, version)
     except Exception as e:
         print(f"[train_multiobjective] artifact upload skipped: {e}", file=sys.stderr)
-    if args.production and (not artifact_uri or len(sub_model_uris) != len(models)):
+    if not artifact_uri or len(sub_model_uris) != len(models):
         print(
-            f"[train_multiobjective] production registry write requires fusion config + all sub-model artifacts uploaded for scenario={args.scenario}",
+            f"[train_multiobjective] staging requires fusion config + all sub-model artifacts for scenario={args.scenario}",
             file=sys.stderr,
         )
         return 1
-
-    mr.write_registry(
-        db,
-        scenario=f"{args.scenario}_multiobjective",
-        version=version,
-        metrics=all_metrics,
-        artifact_path=str(config_path),
+    release_scenario = f"{args.scenario}_multiobjective"
+    model_digest = model_release_client.file_digest(config_path)
+    feature_contract_digest = model_release_client.required_feature_contract_digest()
+    import evaluate_gate
+    evidence = evaluate_gate.verification_evidence(
+        release_id=version,
+        scenario=release_scenario,
+        model_digest=model_digest,
         artifact_uri=artifact_uri,
-        model_type="lgb_multiobjective",
-        production=args.production,
+        feature_contract_digest=feature_contract_digest,
+        candidate_metrics=all_metrics,
     )
-    print(f"Registered multi-objective model version={version}", file=sys.stderr)
+    if evidence["status"] != "pass":
+        print(
+            f"[train_multiobjective] quality gate blocked: {evidence['reason']}",
+            file=sys.stderr,
+        )
+        return 1
+    verification_digest = model_release_client.canonical_digest(
+        {key: value for key, value in evidence.items() if key != "evaluatedAt"}
+    )
+    result = model_release_client.stage_release(
+        release_id=version,
+        scenario=release_scenario,
+        artifact_uri=artifact_uri,
+        model_digest=model_digest,
+        feature_contract_digest=feature_contract_digest,
+        verification_digest=verification_digest,
+        evaluation_metrics=all_metrics,
+    )
+    print(f"Staged multi-objective release={result['releaseId']}", file=sys.stderr)
     return 0
 
 

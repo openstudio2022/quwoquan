@@ -12,7 +12,7 @@ fields:
     role: authoritative_state
   - name: owner
     source: owner
-    type: object
+    type: SkillSubscriptionOwner
     constraints:
       - NOT_NULL
     classification: PUBLIC
@@ -40,7 +40,7 @@ fields:
     log_policy: metadata_only
     api_exposure: read
     ops_exposure: read
-    description: 创建订阅时的 Persona；conversation/group 投递必须持久化并在每次投递前复核成员资格。
+    description: 创建订阅时的 Persona；chat_conversation 投递必须持久化并在每次投递前复核成员资格。
     role: authoritative_state
     reference: true
   - name: skillId
@@ -86,7 +86,7 @@ fields:
     role: authoritative_state
   - name: searchQueryPlan
     source: searchQueryPlan
-    type: object
+    type: SkillSubscriptionSearchQueryPlan
     constraints:
       - NOT_NULL
     classification: PUBLIC
@@ -96,7 +96,7 @@ fields:
     role: authoritative_state
   - name: trigger
     source: trigger
-    type: object
+    type: SkillSubscriptionTrigger
     constraints:
       - NOT_NULL
     classification: PUBLIC
@@ -106,7 +106,7 @@ fields:
     role: authoritative_state
   - name: destination
     source: destination
-    type: object
+    type: SkillSubscriptionDestination
     constraints:
       - NOT_NULL
     classification: PUBLIC
@@ -145,6 +145,29 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  SkillSubscriptionOwner:
+    description: 订阅归属主体；当前只允许 ownerType=user 且 ownerId 来自认证主体。
+    fields:
+      - {name: ownerType, source: ownerType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: ownerId, source: ownerId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  SkillSubscriptionSearchQueryPlan:
+    description: 主动订阅保存的规范化检索计划。
+    fields:
+      - {name: rawText, source: rawText, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read_write, ops_exposure: none}
+      - {name: queries, source: queries, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read_write, ops_exposure: none}
+  SkillSubscriptionTrigger:
+    description: 主动订阅的唯一触发计划。
+    fields:
+      - {name: type, source: type, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: cron, source: cron, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read_write, ops_exposure: read}
+  SkillSubscriptionDestination:
+    description: 主动订阅的投递目标与频控策略。
+    fields:
+      - {name: destinationType, source: destinationType, type: enum, enum_ref: SkillSubscriptionDestinationType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: destinationId, source: destinationId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read_write, ops_exposure: none}
+      - {name: maxPerDay, source: maxPerDay, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: cooldownMinutes, source: cooldownMinutes, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: quietHoursPolicy, source: quietHoursPolicy, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
   CreateSkillSubscriptionRequest:
     description: 创建主动式 Skill 订阅的请求体；owner 与 createdByPersonaId 只从已验证主体注入。
     fields:
@@ -174,7 +197,7 @@ types:
         ops_exposure: none
       - name: searchQueryPlan
         source: searchQueryPlan
-        type: object
+        type: SkillSubscriptionSearchQueryPlan
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: metadata_only
@@ -182,7 +205,7 @@ types:
         ops_exposure: none
       - name: trigger
         source: trigger
-        type: object
+        type: SkillSubscriptionTrigger
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: metadata_only
@@ -190,7 +213,7 @@ types:
         ops_exposure: none
       - name: destination
         source: destination
-        type: object
+        type: SkillSubscriptionDestination
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: metadata_only
@@ -377,15 +400,15 @@ types:
         client_default: const <String>[]
         client_normalization: trim_dedupe_drop_empty
       - name: searchQueryPlan
-        type: object
+        type: SkillSubscriptionSearchQueryPlan
         client_dart_type: AssistantSkillSubscriptionSearchPlan
         client_wire: toJson
       - name: trigger
-        type: object
+        type: SkillSubscriptionTrigger
         client_dart_type: AssistantSkillSubscriptionTrigger
         client_wire: toJson
       - name: destination
-        type: object
+        type: SkillSubscriptionDestination
         client_dart_type: AssistantSkillSubscriptionDestination
         client_wire: toJson
       - name: clientRequestId

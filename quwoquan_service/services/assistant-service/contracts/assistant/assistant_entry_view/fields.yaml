@@ -1,0 +1,28 @@
+description: 助手入口合并投影视图。
+fields:
+- {name: accountId, source: accountId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: preferenceId, source: preferenceId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+types:
+  AssistantEntryChip:
+    description: 助手入口的一项可执行 chip。
+    fields:
+    - {name: chipId, source: chipId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: label, source: label, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: actionType, source: actionType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: value, source: value, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantEntryAction:
+    description: 助手入口针对当前页面的一项结构化动作。
+    fields:
+    - {name: actionId, source: actionId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: actionType, source: actionType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: label, source: label, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: payload, source: payload, type: object, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantEntryResponse:
+    description: 欢迎语、chips 与页面动作的一体化助手入口响应。
+    fields:
+    - {name: welcomeMessage, source: welcomeMessage, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: suggestionLines, source: suggestionLines, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: chips, source: chips, type: '[]AssistantEntryChip', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: actions, source: actions, type: '[]AssistantEntryAction', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: personalized, source: personalized, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}

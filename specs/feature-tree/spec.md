@@ -12,14 +12,14 @@
 
 同类产品各自只覆盖其中一段。出行预订类应用拥有完整地点与行程数据，但不保留照片的拍摄元数据，用户之间的共同经历也没有被表达为社交图谱。摄影社区拥有完整拍摄参数，但没有实体主页网络，作品只按题材聚合而不按现实对象连接。泛内容社区拥有社交关系，但内容不绑定结构化实体，拍摄事实无法参与推荐与解释。
 
-趣我圈的可防御能力是三者的交集：把“现实对象或机位”“拍摄时间窗口”“器材与拍摄参数”组合成同一条可解释事实，再与实体主页网络连接。这三类事实都能从用户本就会产生的照片中直接获得，不额外要求用户操作，也难以凭空伪造；任何单独一段都不构成壁垒，组合后才形成其他产品无法在短期内补齐的资产。
+趣我圈的可防御能力是把“现实对象或机位”“拍摄时间窗口”“可披露的拍摄事实”归入同一条可验证内容事实链，再与实体主页网络连接。地点、时间与画面语义参与发现、搜索、推荐和连接；器材与参数只用于作者自愿披露、推荐解释和内容理解，不成为面向用户的筛选轴或交集结论。组合后的事实链而非某个孤立字段，才形成其他产品难以短期补齐的资产。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
 - 覆盖用户从进入、发现、创作、互动、关系、消息、助手到持续运营的完整应用体验。
-- 以旅行摄影为第一垂类建立标签纵深：地理、机位、器材、拍摄参数与时间窗口构成可相互交叉筛选的独立轴，使地理不再是唯一具备厚度的维度。
+- 以旅行摄影为第一垂类建立标签纵深：地理、机位、画面主体、季节与光线构成可组合计算和解释的语义轴；器材与拍摄参数保留为作者可控披露事实，不进入搜索筛选、Creator chip 或可见交集。
 - 境外目的地覆盖到主流出境目的地的一级行政区与主要城市两层，使境外内容与境内内容获得同等的定位精度。
 
 ### Out of Scope
@@ -97,7 +97,7 @@
 - 用户可从共享主页的相关群组卡片进入真实 Circle/CircleGroup 绑定的群会话，主页本身不拥有 conversation。
 - 用户可在 1v1 或群会话中邀请小趣并 @小趣，收到 assistant_reply，且消息进入同一同步和审计链路。
 - 合法关系或会话中的用户可发起、接听、拒绝、取消和结束音视频通话；在线事件与离线 ring/cancel 可靠送达，结束后回到原会话并产生 system_call_log。
-- Provider 不可用、权限拒绝、弱网重连和超时均有结构化终态；Gamma 以 Port 对等本地替身验证完整第一方链路且不使用 UI Mock，Prod 独立验证真实 APNs/FCM/LiveKit。
+- Provider 不可用、权限拒绝、弱网重连和超时均有结构化终态；Alpha/Beta/Gamma required 验收使用受管非生产租户的非内存 Provider 并绑定 conformance receipt，Prod 独立验证正式 APNs/FCM/LiveKit。
 
 <a id="req-008"></a>
 ### REQ-008 无处不在的小趣私人助理商用主线
@@ -115,8 +115,8 @@
 - command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- alpha/beta/gamma/prod 均使用同一个 production Remote composition，第一方 App 可见业务数据只来自对应环境已激活的 canonical immutable release。
-- 非 Prod 外部 Provider 可绑定 Port 对等 sandbox/local substitute，Prod 完成真实 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
+- alpha/beta/gamma/prod 均使用同一个 production Remote composition；内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可创建候选绑定的真实非生产验收数据，Prod 只接受真实用户或正式运营行为。
+- Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
 <a id="req-010"></a>
@@ -127,7 +127,8 @@
 - App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
-- alpha/beta/gamma/prod 的 App 可见业务对象均绑定 release/import receipt，测试 double 只存在于 local_contract 测试树；四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
+- alpha/beta/gamma/prod 的内容对象均绑定 release/import receipt，非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
+- 测试 double 只存在于 local_contract 测试树，四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
 
 <a id="req-011"></a>
 ### REQ-011 标签准入必须同时满足可采集、可消费、可反馈、可解释
@@ -596,7 +597,7 @@
 - THEN 用户可从共享主页的相关群组卡片进入真实 Circle/CircleGroup 绑定的群会话，主页本身不拥有 conversation。
 - THEN 用户可在 1v1 或群会话中邀请小趣并 @小趣，收到 assistant_reply，且消息进入同一同步和审计链路。
 - THEN 合法关系或会话中的用户可发起、接听、拒绝、取消和结束音视频通话；在线事件与离线 ring/cancel 可靠送达，结束后回到原会话并产生 system_call_log。
-- THEN Provider 不可用、权限拒绝、弱网重连和超时均有结构化终态；Gamma 以 Port 对等本地替身验证完整第一方链路且不使用 UI Mock，Prod 独立验证真实 APNs/FCM/LiveKit。
+- THEN Provider 不可用、权限拒绝、弱网重连和超时均有结构化终态；Alpha/Beta/Gamma required 验收使用受管非生产租户的非内存 Provider 并绑定 conformance receipt，Prod 独立验证正式 APNs/FCM/LiveKit。
 
 <a id="uat-008"></a>
 ### UAT-008 无处不在的小趣私人助理商用主线
@@ -618,8 +619,9 @@
 - THEN command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，第一方 App 可见业务数据只来自对应环境已激活的 canonical immutable release。
-- AND 非 Prod 外部 Provider 可绑定 Port 对等 sandbox/local substitute，Prod 完成真实 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
+- THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release。
+- AND 用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效，Alpha/Beta/Gamma 验收数据绑定候选并可受控清理，Prod 不创建测试业务对象。
+- AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
 <a id="uat-010"></a>
@@ -721,7 +723,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：尚缺 AppRoot Remote UAT；需要证明五入口跨入口会话续接、内容/搜索 grounding、群聊结构化 mention、stream/cancel/resume、consent、工具失败、引用打开、订阅投递及赞踩/采纳/撤销学习回流。
-- 完成判定：AssistantConversation/Run/Turn、InteractionEvent、LearningFact、PolicyRelease/Rollout 各自 local/API 合同全部通过。Alpha、Beta、Gamma 在五入口执行同一会话与失败矩阵，Behavior/Recommendation/Product Ops 可回读反馈，CaseResult 直接引用 `UAT-008`。正式模型 Provider receipt 由 Prod 单独关闭。
+- 完成判定：AssistantSession/Run/Turn、InteractionEvent、LearningFact、PolicyRelease/Rollout 各自 local/API 合同全部通过。Alpha、Beta、Gamma 在五入口执行同一会话与失败矩阵，Behavior/Recommendation/Product Ops 可回读反馈，CaseResult 直接引用 `UAT-008`。正式模型 Provider receipt 由 Prod 单独关闭。
 - 依赖：[`assistant-run-learning`](./assistant-run-learning/spec.md)、[`recommendation-platform`](./recommendation-platform/spec.md) 与 14 类 Provider conformance。
 
 <a id="open-008"></a>

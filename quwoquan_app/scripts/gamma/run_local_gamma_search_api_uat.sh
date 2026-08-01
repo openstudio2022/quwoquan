@@ -88,19 +88,15 @@ import sys
 from pathlib import Path
 
 from quwoquan_ops.cli.lib.local_environment_auth import (
-    open_local_acceptance_session,
-    resolve_running_local_deployment_work_root,
+    open_reference_acceptance_session,
 )
 
 gateway, output = sys.argv[1:3]
-session_kwargs = {
-    "environment": "gamma",
-    "target_name": "gamma-local",
-}
-deployment_work_root = resolve_running_local_deployment_work_root("gamma-local")
-if deployment_work_root is not None:
-    session_kwargs["deployment_work_root"] = deployment_work_root
-session = open_local_acceptance_session(gateway, **session_kwargs)
+session = open_reference_acceptance_session(
+    gateway,
+    environment="gamma",
+    target_name="gamma-local",
+)
 path = Path(output)
 path.write_text(
     json.dumps({"TEST_AUTH_TOKEN": session.access_token}, ensure_ascii=False) + "\n",

@@ -299,46 +299,10 @@ class DevUpTest(unittest.TestCase):
                 "beta",
             )
 
-    def test_local_media_origin_resolves_conversation_avatar_alias(self) -> None:
+    def test_local_media_origin_does_not_own_business_avatar_aliases(self) -> None:
         handler = LocalMediaOriginHandler.__new__(LocalMediaOriginHandler)
-        # alpha / prod-sim 启用 alias 时才会解析占位会话头像。
-        handler.conversation_avatar_alias_enabled = True
-        self.assertEqual(
-            handler._resolve_alias("/media/avatar/conversation/conv_002/v1/mock.png"),
-            "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
-        )
-        self.assertEqual(
-            handler._resolve_alias("/media/avatar/conversation/conv_006/v1/mock.png"),
-            "media/avatar/s/archived-avatar/group/fixture_conv_photo_group/v1/composite.png",
-        )
-        self.assertIsNone(
-            handler._resolve_alias(
-                "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png"
-            ),
-        )
-        self.assertIsNone(
-            handler._resolve_alias(
-                "/media/avatar/s/archived-avatar/conversation/conv_grid_11/v1/mock.png"
-            ),
-        )
-        self.assertIsNone(
-            handler._resolve_alias(
-                "/media/avatar/s/archived-avatar/conversation/conv_grid_12/v1/mock.png"
-            ),
-        )
-        self.assertIsNone(handler._resolve_alias("/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"))
-
-    def test_local_media_origin_alias_disabled_by_default(self) -> None:
-        handler = LocalMediaOriginHandler.__new__(LocalMediaOriginHandler)
-        # gamma-local 默认关闭 alias：会话占位路径不再被改写。
-        self.assertIsNone(
-            handler._resolve_alias("/media/avatar/conversation/conv_002/v1/mock.png")
-        )
-        self.assertIsNone(
-            handler._resolve_alias(
-                "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png"
-            )
-        )
+        self.assertFalse(hasattr(handler, "_resolve_alias"))
+        self.assertFalse(hasattr(handler, "conversation_avatar_alias_enabled"))
 
     def test_local_media_origin_supports_byte_range_probe(self) -> None:
         self.assertEqual(
@@ -518,7 +482,7 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("--legal-base-url", script)
         self.assertIn("APP_LEGAL_BASE_URL", script)
 
-    def test_app_env_defines_reject_noncanonical_gateway_override(self) -> None:
+    def test_app_env_defines_require_active_immutable_candidate_first(self) -> None:
         script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
         result = subprocess.run(
             [
@@ -537,7 +501,7 @@ class DevUpTest(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("must equal canonical topology projection", result.stderr)
+        self.assertIn("packaged app runtime config not found", result.stderr)
 
     def test_prod_app_env_defines_reject_noncanonical_gateway_override(self) -> None:
         script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
@@ -560,7 +524,7 @@ class DevUpTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must equal canonical topology projection", result.stderr)
 
-    def test_plain_ios_flutter_run_uses_public_ca_without_trust_injection(self) -> None:
+    def test_plain_ios_flutter_run_uses_system_store_without_app_trust_injection(self) -> None:
         project = (
             ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
         ).read_text(encoding="utf-8")
@@ -574,7 +538,9 @@ class DevUpTest(unittest.TestCase):
         )
         self.assertIn("build_launcher_handoff.py", prepare_defines)
         self.assertIn("--target alpha-local", prepare_defines)
-        self.assertIn("--launch-mode canonical_launcher", prepare_defines)
+        self.assertIn("--launch-mode direct_flutter_run", prepare_defines)
+        self.assertIn("device-trust --target alpha-local", prepare_defines)
+        self.assertIn("--platform ios-simulator", prepare_defines)
         self.assertIn('${CONFIGURATION:-}" == "Debug"', prepare_defines)
         self.assertIn("export FLUTTER_TARGET=", prepare_defines)
         self.assertIn("lib/main_prod.dart", prepare_defines)

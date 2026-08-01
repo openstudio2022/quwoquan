@@ -30,16 +30,17 @@ class ImageEditorFilterRepository {
 
   Future<List<ImageEditorFilterPreset>> loadCameraPhotoPresets() async {
     final config = await loadConfig();
-    final presets = config.presets
-        .where(
-          (preset) =>
-              preset.enabled && preset.categoryId == cameraPhotoCategoryId,
-        )
-        .toList(growable: false)
-      ..sort((left, right) {
-        final bySort = left.sort.compareTo(right.sort);
-        return bySort != 0 ? bySort : left.id.compareTo(right.id);
-      });
+    final presets =
+        config.presets
+            .where(
+              (preset) =>
+                  preset.enabled && preset.categoryId == cameraPhotoCategoryId,
+            )
+            .toList(growable: false)
+          ..sort((left, right) {
+            final bySort = left.sort.compareTo(right.sort);
+            return bySort != 0 ? bySort : left.id.compareTo(right.id);
+          });
     return presets;
   }
 

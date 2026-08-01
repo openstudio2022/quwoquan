@@ -99,6 +99,17 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: authoritative_state
+  - name: captureMetadata
+    source: captureMetadata
+    type: MediaCaptureMetadata
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: read
+    description: 创作者在上传完成时明确披露的受控 EXIF 快照；GPS 与拍摄时间由值对象字段单独标记为 PII/mask，未披露分组不进入该快照。
+    role: authoritative_state
   - name: accessPolicy
     source: accessPolicy
     type: enum

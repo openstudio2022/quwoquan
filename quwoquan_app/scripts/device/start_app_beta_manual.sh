@@ -90,7 +90,6 @@ BETA_POSTGRES_DSN="postgres://quwoquan:quwoquan@127.0.0.1:${BETA_POSTGRES_PORT}/
 export CONTENT_PORT USER_PORT
 export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT
 BETA_SERVICE_CONFIG_ROOT="$RUNTIME_CONFIG_DIR/config-root"
-BETA_REPORT_ACCOUNT_BACKFILL_FILE="$BETA_SERVICE_CONFIG_ROOT/report-account-backfill.json"
 BETA_MODEL_CACHE_ROOT="$CACHE_DIR/model"
 eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_beta_object_storage --shell "$BETA_OBJECT_STORAGE_EDGE_PORT")"
 export BETA_OBJECT_STORAGE_EDGE_PORT BETA_REC_MODEL_PORT \
@@ -387,12 +386,6 @@ PY
     esac
   done
   mkdir -p "$BETA_MODEL_CACHE_ROOT"
-  PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 \
-    python3 -m quwoquan_ops.cli.lib.local_environment_auth \
-      --write-report-account-backfill \
-      beta \
-      beta-local \
-      "$BETA_REPORT_ACCOUNT_BACKFILL_FILE" >/dev/null
 }
 
 beta_manual_export_service_compose_environment() {
@@ -487,52 +480,12 @@ beta_manual_stop_content_runtime() {
 }
 
 beta_manual_require_content_embedding_binding() {
-  # Non-prod uses protocol_fixture; credentials are auto-materialized under
-  # QWQ_DEPLOY_WORK_ROOT and exposed through compatibility aliases.
-  if [[ -n "${CONTENT_EMBEDDING_ENDPOINT:-}" && -n "${CONTENT_EMBEDDING_API_KEY:-}" ]]; then
-    return 0
-  fi
-  if [[ -n "${CONTENT_EMBEDDING_FIXTURE_ENDPOINT:-}" && -n "${CONTENT_EMBEDDING_FIXTURE_API_KEY:-}" ]]; then
-    export CONTENT_EMBEDDING_ENDPOINT="${CONTENT_EMBEDDING_ENDPOINT:-$CONTENT_EMBEDDING_FIXTURE_ENDPOINT}"
-    export CONTENT_EMBEDDING_API_KEY="${CONTENT_EMBEDDING_API_KEY:-$CONTENT_EMBEDDING_FIXTURE_API_KEY}"
-    export QWQ_COMPOSE_EMBEDDING_ENDPOINT="${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-$CONTENT_EMBEDDING_ENDPOINT}"
-    export QWQ_COMPOSE_EMBEDDING_API_KEY="${QWQ_COMPOSE_EMBEDDING_API_KEY:-$CONTENT_EMBEDDING_API_KEY}"
-    return 0
-  fi
-
-  local materializer_output
-  if ! materializer_output="$(
-    PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
-from quwoquan_ops.cli.lib.local_provider_credentials import prepare_local_provider_credentials
-
-values = prepare_local_provider_credentials(environment="beta", target_name="beta-local")
-for key in (
-    "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
-    "CONTENT_EMBEDDING_FIXTURE_API_KEY",
-):
-    value = values.get(key, "")
-    if value:
-        print(f"{key}={value}")
-PY
-  )"; then
-    echo "GATE_BLOCK: beta content embedding provider materialization failed" >&2
+  if [[ -z "${CONTENT_EMBEDDING_ENDPOINT:-}" || -z "${CONTENT_EMBEDDING_API_KEY:-}" ]]; then
+    echo "GATE_BLOCK: stackctl did not inject protected Beta content embedding Provider material" >&2
     return 1
   fi
-  local line key value
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    key="${line%%=*}"
-    value="${line#*=}"
-    export "$key=$value"
-  done <<<"$materializer_output"
-  export CONTENT_EMBEDDING_ENDPOINT="${CONTENT_EMBEDDING_FIXTURE_ENDPOINT:-}"
-  export CONTENT_EMBEDDING_API_KEY="${CONTENT_EMBEDDING_FIXTURE_API_KEY:-}"
   export QWQ_COMPOSE_EMBEDDING_ENDPOINT="${CONTENT_EMBEDDING_ENDPOINT}"
   export QWQ_COMPOSE_EMBEDDING_API_KEY="${CONTENT_EMBEDDING_API_KEY}"
-  if [[ -z "${CONTENT_EMBEDDING_ENDPOINT:-}" || -z "${CONTENT_EMBEDDING_API_KEY:-}" ]]; then
-    echo "GATE_BLOCK: beta content embedding provider prerequisite is missing: CONTENT_EMBEDDING_ENDPOINT, CONTENT_EMBEDDING_API_KEY" >&2
-    return 1
-  fi
 }
 
 beta_manual_ensure_docker_daemon() {

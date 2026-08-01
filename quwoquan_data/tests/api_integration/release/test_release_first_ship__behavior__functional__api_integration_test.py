@@ -12,7 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.environment import handler
+from content.release.environment import _ship_operations, handler
 from content.release.environment.release_contract import (
     build_release_contract,
     write_release_contract,
@@ -219,6 +219,7 @@ def test_apply_import_enforces_release_desired_state(
     assert len(calls) == 4
     assert calls[0]["kind"] == "tag"
     assert calls[1]["kind"] == "creator"
+    assert calls[1]["postgres_dsn"] == "postgres://topology.test/quwoquan"
     assert calls[2]["kind"] == "content"
     assert calls[2]["mode"] == "sync"
     assert calls[2]["delete_policy"] == "tombstone"
@@ -295,13 +296,25 @@ def test_rollback_writes_resolvable_release_ref(
     assert result["status"] == "dry_run"
 
 
-def test_rollback_import_applies_all_release_owners(
+def test_rollback_import_applies_all_release_owners_and_binds_homepage_cases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _release(tmp_path)
+    release = _release(tmp_path)
     _patch_roots(monkeypatch, tmp_path)
     calls: list[str] = []
+    contract = read_json(release / "payload" / "desired_state.json")
+    contract["desiredRefs"]["entities"] = ["地点/景区/甲"]
+    monkeypatch.setattr(
+        handler,
+        "_load_release",
+        lambda _release_id: (release, contract),
+    )
+    monkeypatch.setattr(
+        _ship_operations,
+        "scan_release_contract",
+        lambda *_args, **_kwargs: {"status": "passed"},
+    )
     monkeypatch.setattr(
         handler,
         "_run_tag_importer",
@@ -320,7 +333,20 @@ def test_rollback_import_applies_all_release_owners(
     monkeypatch.setattr(
         handler,
         "_run_homepage_importer",
-        lambda **_kwargs: calls.append("homepage"),
+        lambda **_kwargs: calls.append("homepage") or {"entities": 1},
+    )
+
+    def _write_homepage_cases(**kwargs: object) -> Path:
+        calls.append("homepage-cases")
+        assert kwargs["importer_report"] == {"entities": 1}
+        output = Path(str(kwargs["run_root"])) / "homepage_verification_cases.json"
+        write_json(output, {"schema": "test.homepage_cases"})
+        return output
+
+    monkeypatch.setattr(
+        handler,
+        "write_homepage_verification_case_manifest",
+        _write_homepage_cases,
     )
 
     handler._rollback_release(
@@ -340,7 +366,15 @@ def test_rollback_import_applies_all_release_owners(
         "creator",
         "content",
         "homepage",
+        "homepage-cases",
     ]
+    result = read_json(
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/rollback-reload/result.json"
+    )
+    assert result["homepageVerificationCasesRef"].endswith(
+        "/rollback-reload/homepage_verification_cases.json"
+    )
 
 
 def test_release_contract_is_environment_neutral_and_create_once(

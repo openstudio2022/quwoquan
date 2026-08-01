@@ -1,0 +1,14 @@
+dart_class: AssistantSurfaceCapabilitiesWire
+library_path: assistant/generated/contracts/assistant_surface_capabilities.g.dart
+output_path: assistant/generated/contracts/assistant_surface_capabilities.g.dart
+contract: assistant_surface_capabilities
+kind: shared_wire_contract
+fields:
+  - { name: surfaceId, type: string, required: true }
+  - { name: supportedNodeKinds, type: list<string>, default: [] }
+  - { name: viewportClass, type: string, default: compact }
+  - { name: platform, type: string, required: true }
+  - { name: theme, type: string, default: system }
+  - { name: textScale, type: double, default: 1.0 }
+  - { name: reducedMotion, type: bool, default: false }
+  - { name: offline, type: bool, default: false }

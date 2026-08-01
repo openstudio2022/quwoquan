@@ -67,8 +67,12 @@ extension _SearchNetworkResultsPageStateLoading
           return;
         }
         final result = await ref
-            .read(assistantXiaoquSearchFacetProvider)
-            .searchXiaoquResults(query: trimmedQuery);
+            .read(assistantSearchRunFacetProvider)
+            .executeAssistantSearch(
+              query: trimmedQuery,
+              sessionClientRequestId: const Uuid().v4(),
+              runClientRequestId: const Uuid().v4(),
+            );
         if (!_isCurrentRequest(token, generation, activeTabId)) {
           return;
         }
@@ -86,7 +90,10 @@ extension _SearchNetworkResultsPageStateLoading
               surface: _activeTabId,
               phase: 'onlineSuccess',
               durationMs: stopwatch.elapsedMilliseconds,
-              itemCount: result.citations?.length ?? 0,
+              itemCount: result.processes.fold<int>(
+                0,
+                (count, process) => count + process.acceptedReferences.length,
+              ),
             );
         return;
       }

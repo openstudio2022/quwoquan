@@ -10,9 +10,6 @@ class AppConceptConstants {
   static const String coreIdea = '以兴趣为半径，画出我们的交集。';
 
   // ==================== 私人助理（Personal Assistant） ====================
-  /// 助理会话/发送者固定 ID，逻辑判断用，不做展示
-  static const String assistantConversationId = 'assistant';
-
   /// 助理发送者 ID，消息气泡/头像判断用
   static const String assistantSenderId = 'assistant';
 

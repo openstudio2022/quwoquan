@@ -129,6 +129,7 @@ func completePublicationFixturePrerequisites(
 		}
 		if body["articleAssetManifest"] == nil {
 			body["articleAssetManifest"] = map[string]any{
+				"schema": "article-asset-manifest",
 				"assets": []any{},
 			}
 		}
@@ -143,10 +144,6 @@ func completePublicationFixturePrerequisites(
 		len(asTestStringSlice(body["mediaAssetIds"])) == 0 {
 		assetID := createReadyPublicationMediaAsset(t, authorID, contentType)
 		body["mediaAssetIds"] = []string{assetID}
-		body["mediaItems"] = []map[string]any{{
-			"kind":    contentType,
-			"mediaId": assetID,
-		}}
 	}
 	normalized, err := json.Marshal(body)
 	if err != nil {

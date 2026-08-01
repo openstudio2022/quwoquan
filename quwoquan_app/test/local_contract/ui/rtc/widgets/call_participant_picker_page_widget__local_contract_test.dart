@@ -9,6 +9,7 @@ import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
@@ -19,7 +20,7 @@ class _PickerChatRepository extends MockChatRepository {
     title: '当前群聊',
     avatarUrl: '',
     lastMessagePreview: '',
-    lastMessageType: 'text',
+    lastMessageType: MessageType.text,
     lastSeq: 0,
     unreadCount: 0,
     mentionUnreadCount: 0,
@@ -33,7 +34,7 @@ class _PickerChatRepository extends MockChatRepository {
     title: '摄影群',
     avatarUrl: '',
     lastMessagePreview: '',
-    lastMessageType: 'text',
+    lastMessageType: MessageType.text,
     lastSeq: 0,
     unreadCount: 0,
     mentionUnreadCount: 0,

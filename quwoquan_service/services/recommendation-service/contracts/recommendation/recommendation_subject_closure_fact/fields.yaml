@@ -1,0 +1,8 @@
+description: 推荐主体关闭的不可逆隐私事实。
+fields:
+- {name: accountId, source: accountId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: append_only_fact, reference: true}
+- {name: subjectIds, source: subjectIds, type: '[]string', constraints: [NOT_NULL, MIN_ITEMS_1], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: append_only_fact}
+- {name: sourceEventId, source: eventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: append_only_fact}
+- {name: sourceDigest, source: sourceDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: append_only_fact}
+- {name: closedAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: append_only_fact}
+- {name: recordedAt, source: recordedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: append_only_fact}

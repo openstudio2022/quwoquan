@@ -67,7 +67,7 @@
 - canonical：`specs/feature-tree/global-search-experience/spec.md`
 - canonical：`quwoquan_service/contracts/metadata/_shared/search_contract.yaml`
 - canonical：`quwoquan_service/contracts/metadata/_shared/search_objects.yaml`
-- canonical：`quwoquan_service/services/search-service/contracts/search/search_query/operations.yaml`
+- canonical：`quwoquan_service/services/search-service/contracts/search/search_request_fact/operations.yaml`
 - canonical：`quwoquan_service/services/entity-service/contracts/entity_homepage/homepage/operations.yaml`
 - canonical：[`xiaoqu-entry-handoff` GWT](../xiaoqu-entry-handoff/spec.md#gwt-001)
 

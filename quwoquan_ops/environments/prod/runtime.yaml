@@ -99,6 +99,8 @@
       "dataRelease": {
         "mode": "hosted-import",
         "mongoUriEnv": "QWQ_PROD_DATA_RELEASE_MONGO_URI",
+        "redisAddrEnv": "QWQ_PROD_DATA_RELEASE_REDIS_ADDR",
+        "redisDatabase": 1,
         "userPostgresDsnEnv": "QWQ_PROD_DATA_RELEASE_USER_POSTGRES_DSN",
         "mediaRootEnv": "QWQ_PROD_DATA_RELEASE_MEDIA_ROOT"
       }

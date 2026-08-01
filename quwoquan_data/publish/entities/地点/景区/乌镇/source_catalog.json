@@ -1,0 +1,52 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/乌镇__toutiao_baike__8bf9bb15/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "乌镇__toutiao_baike__8bf9bb15",
+    "entityName": "乌镇",
+    "sourceKind": "toutiao_baike",
+    "extractor": "toutiao_baike_html",
+    "canonicalUrl": "https://www.baike.com/wikiid/7231531716141514804",
+    "sourceUrl": "https://www.baike.com/wikiid/7231531716141514804",
+    "title": "乌镇古镇",
+    "fetchedAt": "2026-07-31T02:00:28Z",
+    "snapshotHash": "sha256:bee4b15f5fc5d6b6cf7b072a236e07fbc069f9e095e6d1f477bb260f7db8a167",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/乌镇__toutiao_baike__8bf9bb15/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "乌镇__toutiao_baike__8bf9bb15",
+      "entityName": "乌镇",
+      "sourceKind": "toutiao_baike",
+      "extractor": "toutiao_baike_html",
+      "canonicalUrl": "https://www.baike.com/wikiid/7231531716141514804",
+      "sourceUrl": "https://www.baike.com/wikiid/7231531716141514804",
+      "title": "乌镇古镇",
+      "fetchedAt": "2026-07-31T02:00:28Z",
+      "snapshotHash": "sha256:bee4b15f5fc5d6b6cf7b072a236e07fbc069f9e095e6d1f477bb260f7db8a167",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/乌镇__toutiao_baike__8bf9bb15/meta.json"
+    },
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "乌镇__image_collection__457d67fb",
+      "entityName": "乌镇",
+      "sourceKind": "image_collection",
+      "extractor": "",
+      "canonicalUrl": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aerial_panorama_of_Wuzhen_%E4%B9%8C%E9%95%87_Water_Town._December_2023.jpg",
+      "title": "乌镇",
+      "fetchedAt": "2026-07-31T02:00:29Z",
+      "snapshotHash": "sha256:6906cdde40ea56500f0b8ac35a07e5d770a65179493ee7352401409a653ae26b",
+      "policyRevision": "",
+      "sourceUseMode": "licensed_adaptation",
+      "evidenceRef": "evidence/sources/乌镇__image_collection__457d67fb/meta.json"
+    }
+  ]
+}

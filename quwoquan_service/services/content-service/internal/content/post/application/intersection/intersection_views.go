@@ -51,7 +51,7 @@ type IntersectionReasonView struct {
 	DedupeKey                 string                               `json:"dedupeKey"`
 	AnchorUserWeight          float64                              `json:"anchorUserWeight"`
 	MutualCount               int                                  `json:"mutualCount"`
-	// 架构基线 v2（§21，对齐 recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml）：
+	// 当前交集图契约（对齐 recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml）：
 	// 边生命周期 / Graph 边权 / 类型图标 / 尾部对象视觉。
 	// lifecycleState/edgeWeight/previousStrength/strengthDelta 由异步投影真算填充（读路径零计算消费）；
 	// iconKey/objectVisual 由 Explain 管线确定性产出（缺省端有回退）。
@@ -104,15 +104,14 @@ type IntersectionActorEvidenceView struct {
 
 // IntersectionActionHintView 是交集/影响力的下一步行动建议。
 type IntersectionActionHintView struct {
-	ActionKey          string                  `json:"actionKey"`
-	Label              string                  `json:"label"`
-	Target             *IntersectionTargetView `json:"target,omitempty"`
-	IsPrimary          bool                    `json:"isPrimary"`
-	Priority           int                     `json:"priority"`
-	ActionTier         string                  `json:"actionTier"`
-	RequiredGates      []string                `json:"requiredGates"`
-	TargetAvailability string                  `json:"targetAvailability"`
-	Dispatch           string                  `json:"dispatch"`
+	ActionKey     string                  `json:"actionKey"`
+	Label         string                  `json:"label"`
+	Target        *IntersectionTargetView `json:"target,omitempty"`
+	IsPrimary     bool                    `json:"isPrimary"`
+	Priority      int                     `json:"priority"`
+	ActionTier    string                  `json:"actionTier"`
+	RequiredGates []string                `json:"requiredGates"`
+	Dispatch      string                  `json:"dispatch"`
 }
 
 // IntersectionPointView 是用户可见交集点列表；摘要数字只能由同一批点派生。

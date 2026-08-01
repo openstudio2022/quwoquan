@@ -17,9 +17,79 @@ from core.entity_focus import (
     coverage_targets_mentioned as _coverage_targets_mentioned,
 )
 
+def _persist_video_content_plan_absorb(
+    execution_id: str,
+    *,
+    successful_names: list[str],
+    failed_names: list[str],
+) -> None:
+    """Persist ready/ineligible repartition after video oversample absorb."""
+    from core.paths import now_iso
+
+    availability_path = (
+        execution_root(execution_id) / "_shared" / "source_unavailable_targets.json"
+    )
+    existing = read_json(availability_path) if availability_path.is_file() else {}
+    if not isinstance(existing, dict):
+        existing = {}
+    ineligible = [
+        row
+        for row in (existing.get("ineligibleTargets") or [])
+        if isinstance(row, dict)
+        and str(row.get("entityId") or "").strip() not in set(successful_names)
+    ]
+    known_inel = {
+        str(row.get("entityId") or "").strip()
+        for row in ineligible
+        if str(row.get("entityId") or "").strip()
+    }
+    for name in failed_names:
+        if name in known_inel:
+            continue
+        ineligible.append(
+            {
+                "entityId": name,
+                "lanes": ["video"],
+                "issues": [
+                    f"{name}: [DATA.MEDIA.PUBLISHABLE_SHORTFALL] content_plan "
+                    "oversample absorb; retained rights-cleared frames below minimum"
+                ],
+                "blockers": [
+                    {
+                        "code": "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
+                        "stage": "content_plan",
+                        "ref": name,
+                        "lane": "video",
+                        "recovery": "retry_source_discovery",
+                        "message": (
+                            f"{name}: video oversample absorb after frame shortfall"
+                        ),
+                        "attrs": {"carrier": "video", "absorbed": "true"},
+                    }
+                ],
+                "recoveries": ["retry_source_discovery"],
+            }
+        )
+    write_json(
+        availability_path,
+        {
+            "schema": existing.get("schema")
+            or "quwoquan_data.source_unavailable_targets",
+            "executionId": execution_id,
+            "source": "content_plan_video_oversample_absorb",
+            "updatedAt": now_iso(),
+            "readyTargets": list(successful_names),
+            "readyTargetCount": len(successful_names),
+            "ineligibleTargets": ineligible,
+            "ineligibleTargetCount": len(ineligible),
+        },
+    )
+
+
 def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
     from content.execution.controller.content_plan_prep import _article_source_quality_sort_key, _assess_content_plan_publish_image, _clean_content_plan_outputs
+    from content.execution.source_ready_scope import source_ready_runtime_spec
     from content.post.article.base_draft import load_base_draft_text
     from content.post.article.base_draft_source import extract_source_title
     from core.quality_gates import derive_writing_intent
@@ -32,6 +102,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
     from content.execution.controller.content_plan_contract import (
         resolve_content_plan_contract,
     )
+    active_spec = source_ready_runtime_spec(ctx.execution_id, active_spec)
     contract, contract_issues = resolve_content_plan_contract(ctx, active_spec)
     if contract is None:
         return list(contract_issues)
@@ -478,8 +549,61 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         )
     write_content_plan_diagnostics(ctx.execution_id, source_diagnostics=source_diagnostics)
     if issues:
-        _clean_content_plan_outputs(ctx)
-        return issues
+        # Video oversample absorb: when frame/source shortfalls leave enough
+        # planned videos to meet approvedQuota, demote the shortfall tail and
+        # continue. Rights gates stay strict — only the oversample discard
+        # pool is absorbed, matching download_fetch absorb semantics.
+        absorbed = False
+        if video_lane_enabled:
+            from content.execution.spec_contract import approved_quota
+
+            quota = approved_quota(ctx.execution_id)
+            absorbable_codes = {
+                DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                DataIssueCode.SOURCE_MISSING,
+                DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+            }
+            if (
+                len(items) >= quota
+                and bool(issues)
+                and all(issue.code in absorbable_codes for issue in issues)
+            ):
+                successful_names: list[str] = []
+                seen: set[str] = set()
+                for item in items:
+                    tags = item.get("entityTags") or []
+                    name = str(tags[0] if tags else "").strip()
+                    if name and name not in seen:
+                        seen.add(name)
+                        successful_names.append(name)
+                if len(successful_names) >= quota:
+                    failed_names = {
+                        str(issue.ref or "").strip()
+                        for issue in issues
+                        if str(issue.ref or "").strip()
+                    }
+                    scope = active_spec.setdefault("scope", {})
+                    coverage = list(scope.get("coverageTargets") or [])
+                    scope["coverageTargets"] = [
+                        row
+                        for row in coverage
+                        if str((row or {}).get("name") or "").strip() in seen
+                    ]
+                    _persist_video_content_plan_absorb(
+                        ctx.execution_id,
+                        successful_names=successful_names,
+                        failed_names=sorted(failed_names),
+                    )
+                    print(
+                        "[content_plan] absorbed video oversample shortfall "
+                        f"planned={len(successful_names)}/quota={quota} "
+                        f"discarded={len(failed_names)}"
+                    )
+                    issues = []
+                    absorbed = True
+        if not absorbed:
+            _clean_content_plan_outputs(ctx)
+            return issues
     if not items:
         _clean_content_plan_outputs(ctx)
         return [data_issue(

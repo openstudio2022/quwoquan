@@ -1,21 +1,28 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/tool"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/assets"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/finance"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/modelprovider"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/providerbinding"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/publicsearch"
-	serviceruntimeconfig "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/weather"
+	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
+	skillcontextapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
+	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/assets"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/finance"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/modelprovider"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/providerbinding"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/publicsearch"
+	serviceruntimeconfig "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/searchclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/weather"
+	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
 )
 
 func buildAgentLoop(
@@ -24,6 +31,12 @@ func buildAgentLoop(
 	modelConfig serviceruntimeconfig.ModelConfig,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
+	publicWebEvidence *publicwebpersistence.MongoEvidenceStore,
+	publicWebBudget *publicwebpersistence.MongoRunBudgetGate,
+	runs ports.SessionRunStore,
+	subscriptions ports.SkillSubscriptionStore,
+	interests ports.ProactiveInterestReader,
+	consents consentports.Reader,
 ) (*orchestration.AgentLoop, error) {
 	model, err := buildModelProvider(
 		appEnv,
@@ -34,11 +47,13 @@ func buildAgentLoop(
 	if err != nil {
 		return nil, fmt.Errorf("model provider binding invalid: %w", err)
 	}
-	registry, err := buildSearchRegistry(
+	registry, err := buildToolRegistry(
 		internalSearch,
 		appEnv,
 		configProvider,
 		newEgressClient,
+		publicWebEvidence,
+		publicWebBudget,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search provider binding invalid: %w", err)
@@ -57,6 +72,43 @@ func buildAgentLoop(
 	}, nil)
 	loop.PromptAssets = promptAssets
 	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model}
+	contextResolvers, err := skillcontextinfra.NewRuntimeRegistry(
+		runs,
+		subscriptions,
+		interests,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("skill context resolver registry unavailable: %w", err)
+	}
+	loop.SkillContexts = skillcontextapplication.NewAssembler(
+		contextResolvers,
+		skillcontextapplication.ConsentReaderFunc(func(
+			ctx context.Context,
+			ownerID string,
+			skillID string,
+			requiredScopes []string,
+		) (bool, error) {
+			if consents == nil {
+				return false, skillcontextapplication.ErrConsentUnavailable
+			}
+			active, readErr := consents.ListActiveConsents(ctx, ownerID)
+			if readErr != nil {
+				return false, readErr
+			}
+			granted := map[string]struct{}{}
+			for _, consent := range active {
+				if consent.SkillID == skillID && consent.IsGranted() {
+					granted[strings.TrimSpace(consent.GrantedScope)] = struct{}{}
+				}
+			}
+			for _, scope := range requiredScopes {
+				if _, ok := granted[strings.TrimSpace(scope)]; !ok {
+					return false, nil
+				}
+			}
+			return true, nil
+		}),
+	)
 	return loop, nil
 }
 
@@ -104,11 +156,13 @@ func buildModelProvider(
 	}, nil
 }
 
-func buildSearchRegistry(
+func buildToolRegistry(
 	internalSearch *searchclient.Client,
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
+	publicWebEvidence *publicwebpersistence.MongoEvidenceStore,
+	publicWebBudget *publicwebpersistence.MongoRunBudgetGate,
 ) (tool.Registry, error) {
 	registry := tool.BaseRegistry()
 	if internalSearch == nil {
@@ -121,15 +175,22 @@ func buildSearchRegistry(
 		"app_search": internalSearch.Handler(),
 		"web_search": orchestration.NewExternalWebSearchHandler(public, weatherProvider, financeProvider),
 	}
-	for _, meta := range tool.CanonicalMetadata() {
-		handler, ok := handlers[meta.ToolName]
-		if !ok {
-			return tool.Registry{}, fmt.Errorf(
-				"canonical tool %q has no registered handler",
-				meta.ToolName,
-			)
-		}
-		registry.Register(meta, handler)
+	publicWebHandlers, err := buildPublicWebToolHandlers(
+		publicWebEvidence,
+		publicWebBudget,
+	)
+	if err != nil {
+		return tool.Registry{}, err
+	}
+	for name, handler := range publicWebHandlers {
+		handlers[name] = handler
+	}
+	handlers["web_search"] = publicwebtool.SearchHandler(
+		handlers["web_search"],
+		publicWebEvidence,
+	)
+	if err := tool.RegisterCanonical(&registry, handlers); err != nil {
+		return tool.Registry{}, err
 	}
 	return registry, nil
 }

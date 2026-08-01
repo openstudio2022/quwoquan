@@ -286,7 +286,7 @@ func (c *SearchSignalConsumer) processMessage(ctx context.Context, msg rtredis.S
 	return c.projector.Project(ctx, ProjectorEvent{
 		ID:            signalID,
 		Type:          "SearchRecommendationSignalPublished",
-		AggregateType: "SearchQuery",
+		AggregateType: "SearchRequestFact",
 		AggregateID:   requestID,
 		Payload:       payload,
 		OccurredAt:    occurredAt,

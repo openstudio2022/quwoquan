@@ -63,6 +63,7 @@ def write_baseline_api_verification(
     importer_report_path: Path,
     output_path: Path,
     api_base_url: str,
+    ssl_cafile: str = "",
 ) -> Path:
     try:
         importer_ref = importer_report_path.relative_to(OUTPUT_ROOT).as_posix()
@@ -77,6 +78,7 @@ def write_baseline_api_verification(
     try:
         client = PublicApiClient(
             base_url=api_base_url,
+            ssl_cafile=ssl_cafile,
         )
         offlined = []
         for homepage_id in offlined_ids:

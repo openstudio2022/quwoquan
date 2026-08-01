@@ -8,6 +8,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
+	"quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
 
 func (h *ChatHandler) registerInternalRoutes(mux *http.ServeMux) {
@@ -21,8 +22,9 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 		PeerID    string `json:"peerId"`
 		// greetingRequestId 非空表示这条会话是打招呼被回复后升级出来的；
 		// openingMessage 是发起者当时写下的那句话，由 peer（发起者）署名落成首条消息。
-		GreetingRequestID string `json:"greetingRequestId"`
-		OpeningMessage    string `json:"openingMessage"`
+		GreetingRequestID string                              `json:"greetingRequestId"`
+		OpeningMessage    string                              `json:"openingMessage"`
+		Intersection      *model.GreetingIntersectionSnapshot `json:"intersectionSnapshot"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "请求格式错误", err.Error()))
@@ -53,7 +55,10 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 		r.Context(),
 		creatorID,
 		peerID,
-		application.DirectConversationPromotion{GreetingRequestID: greetingID},
+		application.DirectConversationPromotion{
+			GreetingRequestID: greetingID,
+			Intersection:      body.Intersection,
+		},
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

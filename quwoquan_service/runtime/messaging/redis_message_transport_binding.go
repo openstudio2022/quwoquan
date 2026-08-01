@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,31 @@ const (
 	RedisMessageTransportAdapter      = "infra.redis.message_transport"
 	RedisMessageTransportFixture      = "infra.redis.message_transport_fixture"
 )
+
+const realtimeChatResumeStreamPrefix = "rt:resume:chat:user:"
+
+// RealtimeChatResumeStream returns the stream coordinate declared by the
+// shared Redis keyspace contract. Callers must supply only a trusted account
+// identity; HTTP input must never select an arbitrary stream.
+func RealtimeChatResumeStream(accountID string) string {
+	return realtimeChatResumeStreamPrefix + strings.TrimSpace(accountID)
+}
+
+// IsCanonicalStreamCursor rejects provider aliases such as "$" or ">" at
+// the public HTTP boundary. Only an immutable Redis stream coordinate can be
+// persisted and replayed safely by a client device.
+func IsCanonicalStreamCursor(value string) bool {
+	parts := strings.Split(strings.TrimSpace(value), "-")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	for _, part := range parts {
+		if _, err := strconv.ParseUint(part, 10, 64); err != nil {
+			return false
+		}
+	}
+	return true
+}
 
 var (
 	messageTransportOperations = promauto.NewCounterVec(
@@ -116,6 +142,16 @@ type StreamReadRequest struct {
 	Block    time.Duration
 }
 
+// CursorReadRequest reads immutable records strictly after Cursor without
+// assigning them to a consumer group. It is intended for per-principal
+// resumable delivery where every device owns its own persisted cursor.
+type CursorReadRequest struct {
+	Stream string
+	Cursor string
+	Count  int64
+	Block  time.Duration
+}
+
 // StreamDelivery is a transport projection of one durable record.
 type StreamDelivery struct {
 	Stream string
@@ -160,6 +196,16 @@ type DurableDeliveryTransport interface {
 	) (bool, error)
 	ReleaseDurableDelivery(ctx context.Context, key string) error
 	SetDurableRetention(ctx context.Context, stream string, ttl time.Duration) error
+}
+
+// CursorDeliveryTransport is deliberately separate from consumer-group
+// delivery: cursor reads do not ACK globally and therefore cannot make one
+// device hide events from another device of the same principal.
+type CursorDeliveryTransport interface {
+	ReadDurableAfter(
+		ctx context.Context,
+		request CursorReadRequest,
+	) ([]StreamDelivery, error)
 }
 
 // MessageTransportBinding 是由各服务 generated descriptor 映射出的脱敏运行时绑定。
@@ -432,6 +478,34 @@ func (t *RedisMessageTransport) ReadDurable(
 	}
 	t.recordOperation("durable_consume", started, nil)
 	t.observePending(ctx, stream, group)
+	return streamDeliveries(records), nil
+}
+
+func (t *RedisMessageTransport) ReadDurableAfter(
+	ctx context.Context,
+	request CursorReadRequest,
+) ([]StreamDelivery, error) {
+	if t == nil || t.durable == nil {
+		return nil, fmt.Errorf("Redis durable transport is unavailable")
+	}
+	stream := strings.TrimSpace(request.Stream)
+	cursor := strings.TrimSpace(request.Cursor)
+	if stream == "" || cursor == "" || request.Count <= 0 || request.Block < 0 {
+		return nil, fmt.Errorf(
+			"Redis cursor read requires stream, cursor, positive count and non-negative block",
+		)
+	}
+	started := time.Now()
+	records, err := t.durable.XRead(
+		ctx,
+		map[string]string{stream: cursor},
+		request.Count,
+		request.Block,
+	)
+	t.recordOperation("durable_cursor_read", started, err)
+	if err != nil {
+		return nil, err
+	}
 	return streamDeliveries(records), nil
 }
 

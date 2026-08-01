@@ -172,13 +172,20 @@ api_routes:
     method: longPoll
     reader: ConnectionEventReader
     slice: ConnectionEventBatchSlice
-  description: Long-polling 兜底端点（标准 Bearer 鉴权，无需 ticket；hold ≤ timeout 秒，有消息立即返回，超时 204）
+  description: Long-polling 兜底端点（标准 Bearer 鉴权；按可信 accountId 派生 durable stream，cursor 为空从保留窗口起点读取；返回 nextCursor 与 transportResumed，Chat seq gap 由消息同步接口修复）
+  response_entity: LongPollResponse
+  response_body: LongPollResponse
+  response_body_kind: object
   request_bindings:
     query:
     - name: timeout
       field: timeout
       required: false
+    - name: cursor
+      field: cursor
+      required: false
   error_codes:
+  - REALTIME.USER.invalid_argument
   - REALTIME.USER.unauthorized
   - REALTIME.SYSTEM.account_security_authority_unavailable
   - REALTIME.SYSTEM.internal_error

@@ -52,3 +52,186 @@ fields:
   constraints:
   - NOT_NULL
   role: projection
+types:
+  SearchAccountRestrictionView:
+    description: SearchIndexView 的主体可见性阻断投影。
+    fields:
+      - {name: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: subjects, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none}
+      - {name: restricted, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: authEpoch, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: decisionRef, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  SearchAccountRestrictionInbox:
+    description: 可逆主体限制事件的幂等应用凭据。
+    fields:
+      - {name: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: accountDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: stale, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: affected, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: appliedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  SearchAccountRestrictionWatermark:
+    description: 主体限制投影的单调账号版本与关闭终态水位。
+    fields:
+      - {name: _id, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: accountVersion, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: eventDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+      - {name: terminal, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  CanonicalSearchEvidence:
+    description: 命中证据，不包含原始私有 query。
+    fields:
+      - name: field
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: snippet
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  CanonicalSearchRankReason:
+    description: 服务端排序理由与权重。
+    fields:
+      - name: code
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: weight
+        type: float64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  CanonicalSearchGeoPoint:
+    description: 搜索命中的 WGS84 坐标。
+    fields:
+      - name: lat
+        type: float64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lng
+        type: float64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  CanonicalSearchIntersectionReason:
+    description: 由统一交集真相源附加的只读理由。
+    fields:
+      - {name: primaryText, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: intersectionId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: dimension, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: class, type: string, client_dart_name: intersectionClass, client_wire_name: class, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sourceRef, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchContentHit:
+    description: content.post 命中的强类型展示切片；不得再从 payload 二次组装 Post。
+    fields:
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentIdentity, type: enum, enum_ref: ContentIdentity, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: title, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: summary, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorDisplayName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorAvatarUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: categoryId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: subCategory, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: likeCount, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: publishedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchCitation:
+    description: 搜索结果引用证据，字段与 runtime/search.Citation 的公开 wire 完全一致。
+    fields:
+      - {name: citationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: url, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: deepLink, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: badgeLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sourceDomain, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: score, type: float64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchFacet:
+    description: 搜索聚合分面。
+    fields:
+      - {name: key, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: label, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: count, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchDegradeSignal:
+    description: 搜索降级信号；只表达失败边界，不承载替代召回轨。
+    fields:
+      - {name: code, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: message, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: objectType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchProvenance:
+    description: 本次搜索结果的唯一召回提供者及生成时间。
+    fields:
+      - {name: provider, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CanonicalSearchQuery:
+    fields:
+      - name: sessionId
+        type: string
+        constraints: [NULLABLE]
+        description: 匿名搜索的稳定会话身份；通过 X-Session-Id header 传入，登录态使用可信 principal，禁止用逐请求 requestId 重分桶
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: query
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+      - name: mode
+        type: string
+        enum_ref: CanonicalSearchMode
+        client_dart_type: CanonicalSearchMode
+        client_default: CanonicalSearchMode.result
+        client_wire: canonicalEnum
+      - name: objectTypes
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim_drop_empty
+      - name: ids
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim_drop_empty
+        client_omit_empty: true
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+enums:
+  CanonicalSearchMode:
+    values: [suggest, result]

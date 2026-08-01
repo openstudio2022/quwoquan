@@ -2,26 +2,22 @@ import 'dart:convert';
 
 final class ContentAddressedUploadHeaders {
   ContentAddressedUploadHeaders({
-    required String contentType,
+    required String mimeType,
     required String expectedSha256,
-  }) : contentType = contentType.trim(),
+  }) : mimeType = mimeType.trim(),
        expectedSha256 = _normalizeSha256(expectedSha256),
        checksumBase64 = base64Encode(_decodeSha256(expectedSha256)) {
-    if (this.contentType.isEmpty) {
-      throw ArgumentError.value(
-        contentType,
-        'contentType',
-        'must not be empty',
-      );
+    if (this.mimeType.isEmpty) {
+      throw ArgumentError.value(mimeType, 'mimeType', 'must not be empty');
     }
   }
 
-  final String contentType;
+  final String mimeType;
   final String expectedSha256;
   final String checksumBase64;
 
   Map<String, String> toHttpHeaders() => <String, String>{
-    'Content-Type': contentType,
+    'Content-Type': mimeType,
     'X-Amz-Checksum-Sha256': checksumBase64,
     'X-Amz-Meta-Sha256': expectedSha256,
   };

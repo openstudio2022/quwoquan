@@ -19,7 +19,24 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 		primitives[primitive] = struct{}{}
 	}
 	issues := validateTypeOwnership(contractGraph)
+	aggregateRootNames := make(map[string]string, len(contractGraph.Objects))
+	for _, object := range contractGraph.Objects {
+		if object.Kind == ast.ObjectKindAggregateRoot {
+			aggregateRootNames[object.ID] = object.Name
+		}
+	}
 	for _, field := range contractGraph.Governance.Fields {
+		if rootName, ok := aggregateRootNames[field.ObjectID]; ok &&
+			field.Entity == rootName && isBareObjectType(field.Type) {
+			issues = append(issues, issue(
+				"CONTRACT.FIELD.AGGREGATE_ROOT_BARE_OBJECT",
+				field.SourcePath,
+				"aggregate root field %s.%s type %q must reference a named value type",
+				field.Entity,
+				field.Name,
+				field.Type,
+			))
+		}
 		issues = append(issues, validateCanonicalCollectionType(field)...)
 		baseTypes := baseFieldTypes(field.Type)
 		if field.Type == "enum" {
@@ -49,6 +66,11 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 		issues = append(issues, validateSemanticField(field, baseTypes)...)
 	}
 	return issues
+}
+
+func isBareObjectType(raw string) bool {
+	raw = strings.TrimSpace(strings.TrimSuffix(raw, "?"))
+	return raw == "object" || raw == "[]object"
 }
 
 func validateCanonicalCollectionType(field ast.FieldDefinition) []Issue {

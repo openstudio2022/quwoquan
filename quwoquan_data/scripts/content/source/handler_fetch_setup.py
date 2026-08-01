@@ -24,6 +24,7 @@ class EntityFetchPlan:
     image_specs: list[dict[str, Any]]
     sourced_video_candidates: list[dict[str, Any]]
     sourced_video_evidence: list[Path]
+    sourced_video_failure: str
     image_lane_selected: bool
     homepage_media_selected: bool
     video_lane_selected: bool
@@ -46,16 +47,22 @@ def prepare_entity_fetch_plan(
         if video_selected
         else []
     )
-    video_evidence = (
-        fetch_admitted_sourced_videos(
-            execution_id=execution_id,
-            entity_id=entity_id,
-            entity_type=entity_type,
-            candidates=video_candidates,
-        )
-        if video_candidates
-        else []
-    )
+    video_evidence: list[Path] = []
+    sourced_video_failure = ""
+    if video_candidates:
+        try:
+            video_evidence = fetch_admitted_sourced_videos(
+                execution_id=execution_id,
+                entity_id=entity_id,
+                entity_type=entity_type,
+                candidates=video_candidates,
+            )
+        except (OSError, TimeoutError, ValueError) as exc:
+            # Candidate direct video admission is intentionally non-terminal:
+            # the same frozen plan retains independently rights-cleared frames.
+            # The caller records this diagnostic and continues through the
+            # ordinary image gate, which remains the publication authority.
+            sourced_video_failure = f"{type(exc).__name__}: {exc}"
     homepage_specs = (
         curated_homepage_media_for_entity(execution_id, entity_id, entity_type)
         if homepage_selected
@@ -97,6 +104,7 @@ def prepare_entity_fetch_plan(
         image_specs=[*homepage_specs, *image_specs, *video_specs],
         sourced_video_candidates=video_candidates,
         sourced_video_evidence=video_evidence,
+        sourced_video_failure=sourced_video_failure,
         image_lane_selected=image_selected,
         homepage_media_selected=homepage_selected,
         video_lane_selected=video_selected,

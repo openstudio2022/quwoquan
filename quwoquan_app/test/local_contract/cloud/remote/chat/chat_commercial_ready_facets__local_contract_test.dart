@@ -428,6 +428,7 @@ const Map<String, Object?> _conversation = <String, Object?>{
   'nameEditableByAdminOnly': false,
   'lastMessageId': 'message-1',
   'lastMessagePreview': '你好',
+  'lastMessageType': 'text',
   'lastMessageTime': '2026-07-21T08:00:00Z',
   'messageCount': 9,
   'status': 'active',

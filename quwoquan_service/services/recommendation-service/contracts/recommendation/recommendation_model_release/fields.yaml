@@ -38,8 +38,39 @@ fields:
   ops_exposure: read
   role: authoritative_state
   description: canonical feature contract payload 的小写十六进制 SHA-256 内容身份
-- name: status
+- name: artifactUri
   type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  description: 由 modelDigest 寻址且已完成可访问性校验的不可变模型 artifact URI
+- name: verificationDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  description: Stage 前质量门与 artifact 校验结果的 canonical payload 小写十六进制 SHA-256 内容身份
+- name: evaluationMetrics
+  type: json
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  description: verificationDigest 所覆盖的场景化评估指标快照
+- name: status
+  type: enum
+  enum_ref: RecommendationModelReleaseStatus
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -47,11 +78,11 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: rolloutPercent
-  type: int
+- name: version
+  type: int64
   constraints:
   - NOT_NULL
-  classification: PUBLIC
+  classification: INTERNAL
   log_policy: allow
   api_exposure: read
   ops_exposure: read
@@ -74,7 +105,71 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
+- name: retiredAt
+  type: timestamp
+  constraints:
+  - NULLABLE
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
 types:
+  StageRecommendationModelReleaseCommand:
+    description: 固化一份尚未激活的模型发布；releaseId 与摘要共同形成不可变身份。
+    fields:
+    - {name: releaseId, type: string, constraints: [NOT_BLANK]}
+    - {name: scenario, type: string, constraints: [NOT_BLANK]}
+    - {name: modelDigest, type: string, constraints: [NOT_BLANK, SHA256]}
+    - {name: featureContractDigest, type: string, constraints: [NOT_BLANK, SHA256]}
+    - {name: artifactUri, type: string, constraints: [NOT_BLANK]}
+    - {name: verificationDigest, type: string, constraints: [NOT_BLANK, SHA256]}
+    - {name: evaluationMetrics, type: json, constraints: [NOT_NULL]}
+    - {name: idempotencyKey, type: string, constraints: [NOT_BLANK]}
+  ActivateRecommendationModelReleaseCommand:
+    description: 对场景当前发布执行 compare-and-swap；回滚使用同一命令激活先前已验证发布。
+    fields:
+    - {name: releaseId, type: string, constraints: [NOT_BLANK]}
+    - {name: scenario, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedActiveReleaseId, type: string, constraints: [NULLABLE]}
+    - {name: idempotencyKey, type: string, constraints: [NOT_BLANK]}
+  RecommendationModelReleaseCommandResult:
+    description: Stage 或 Activate 的聚合提交结果。
+    fields:
+    - {name: releaseId, type: string, constraints: [NOT_NULL]}
+    - {name: scenario, type: string, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: RecommendationModelReleaseStatus, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: activeReleaseId, type: string, constraints: [NULLABLE]}
+    - {name: idempotentReplay, type: bool, constraints: [NOT_NULL]}
+  RecommendationModelReleaseCommandReceipt:
+    description: 模型发布命令的事务内幂等回执。
+    fields:
+    - {name: id, type: string, constraints: [PK, NOT_NULL]}
+    - {name: commandDigest, type: string, constraints: [NOT_NULL]}
+    - {name: releaseId, type: string, constraints: [NOT_NULL]}
+    - {name: scenario, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: result, type: object, object_ref: RecommendationModelReleaseCommandResult, constraints: [NOT_NULL]}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL]}
+  RecommendationModelReleaseOutbox:
+    description: Stage/Activate 与聚合状态同事务追加的事件记录。
+    fields:
+    - {name: id, type: string, constraints: [PK, NOT_NULL]}
+    - {name: eventType, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateId, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: payloadJson, type: json, constraints: [NOT_NULL]}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL]}
   ModelScoreRequest:
     description: 已激活 RecommendationModelRelease 的多场景评分 transport DTO，不是业务对象。
     fields:
@@ -209,3 +304,6 @@ types:
       type: object
       constraints:
       - NULLABLE
+enums:
+  RecommendationModelReleaseStatus:
+    values: [staged, active, retired]

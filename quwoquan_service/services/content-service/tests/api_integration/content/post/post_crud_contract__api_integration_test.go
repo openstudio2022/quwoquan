@@ -53,7 +53,7 @@ func TestSubmitPostPublicationAllTypes(t *testing.T) {
 		{"image", `"body":"image publication"`},
 		{"video", `"body":"video publication"`},
 		{"micro", `"body":"quick thought"`},
-		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","markdownDialect":"qwq-rich-md","articleAssetManifest":{"assets":[]}`},
+		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","markdownDialect":"qwq-rich-md","articleAssetManifest":{"schema":"article-asset-manifest","assets":[]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.contentType, func(t *testing.T) {
@@ -71,10 +71,6 @@ func TestSubmitPostPublicationAllTypes(t *testing.T) {
 					tc.contentType,
 				)
 				payload["mediaAssetIds"] = []string{assetID}
-				payload["mediaItems"] = []map[string]any{{
-					"kind":    tc.contentType,
-					"mediaId": assetID,
-				}}
 			}
 			encoded, err := json.Marshal(payload)
 			if err != nil {

@@ -15,13 +15,13 @@ final class RemoteCanonicalSearchQuery implements CanonicalSearchQueryFacet {
   final SearchQueryInvocationContextFactory invocationContext;
 
   @override
-  Future<CanonicalSearchResult> search(
+  Future<SearchResponseView> search(
     CanonicalSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) {
-    final base = invocationContext(SearchRequestPageIds.searchQuery);
-    return client.searchSearchQuerySearchQuery(
+    final base = invocationContext(SearchRequestPageIds.search);
+    return client.searchSearchIndexViewSearch(
       query,
       context: CloudOperationInvocationContext(
         surfaceId: base.surfaceId,

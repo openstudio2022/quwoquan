@@ -237,9 +237,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   bool get _canSwipePrimaryTabs =>
       widget.showTopNavigation &&
-      (widget.onSwitchToFollowing != null ||
-          widget.onSwitchToCircles != null ||
-          widget.onSwitchToMoment != null);
+      (widget.onSwitchToFollowing != null || widget.onSwitchToCircles != null);
 
   bool get _canDismissViewerWithEdgeGesture =>
       widget.onDismissed != null || widget.onTapBack != null;
@@ -344,9 +342,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   void _switchToPreviousPrimaryTab() {
     if (widget.onSwitchToFollowing != null) {
       widget.onSwitchToFollowing!();
-      return;
     }
-    widget.onSwitchToMoment?.call();
   }
 
   void _switchToNextPrimaryTab() {

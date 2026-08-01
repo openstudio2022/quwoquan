@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/greeting_request_contracts.dart';
 
@@ -18,6 +18,10 @@ final class CancelGreetingCommand {
   }
 
   final String requestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "requestId": this.requestId,
+  };
 }
 
 final class IgnoreGreetingCommand {
@@ -30,6 +34,10 @@ final class IgnoreGreetingCommand {
   }
 
   final String requestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "requestId": this.requestId,
+  };
 }
 
 final class ListGreetingRequestsQuery {
@@ -44,6 +52,12 @@ final class ListGreetingRequestsQuery {
   final String status;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.status.isNotEmpty) "status": this.status,
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class ReplyGreetingCommand {
@@ -56,6 +70,10 @@ final class ReplyGreetingCommand {
   }
 
   final String requestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "requestId": this.requestId,
+  };
 }
 
 final class SendGreetingCommand {
@@ -63,9 +81,11 @@ final class SendGreetingCommand {
     required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
+    GreetingIntersectionRef? intersectionRef,
   }) : targetPersonaId = targetPersonaId.trim(),
        requestMessage = _normalizeGeneratedOptionalText(requestMessage),
-       source = source.trim() {
+       source = source.trim(),
+       intersectionRef = intersectionRef {
     if (this.targetPersonaId.isEmpty) {
       throw ArgumentError.value(this.targetPersonaId, "targetPersonaId", 'must not be blank');
     }
@@ -77,6 +97,14 @@ final class SendGreetingCommand {
   final String targetPersonaId;
   final String? requestMessage;
   final String source;
+  final GreetingIntersectionRef? intersectionRef;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+    if (this.requestMessage?.isNotEmpty == true) "requestMessage": this.requestMessage!,
+    "source": this.source,
+    if (this.intersectionRef?.isNotEmpty == true) "intersectionRef": this.intersectionRef!.toWire(),
+  };
 }
 
 CloudOperationRequestPayload encodeUserGreetingRequestCancelGreetingRequestGeneratedRequest(CancelGreetingCommand request) {
@@ -129,6 +157,7 @@ CloudOperationRequestPayload encodeUserGreetingRequestSendGreetingRequestGenerat
       "targetPersonaId": request.targetPersonaId,
       if (request.requestMessage?.isNotEmpty == true) "requestMessage": request.requestMessage!,
       "source": request.source,
+      if (request.intersectionRef?.isNotEmpty == true) "intersectionRef": request.intersectionRef!.toWire(),
     },
   );
 }

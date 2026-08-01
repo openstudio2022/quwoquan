@@ -1,6 +1,6 @@
 registry: IntersectionKindRegistry
 description: |
-  交集 kind 机器可读唯一注册表（Phase 0 漂移收口 §20d；架构基线 v2 §21）。
+  交集 kind 机器可读唯一注册表。
 
   这是全仓交集 kind（IntersectionPoint.sourceRef / 证据组 kind）的唯一真相源，
   取代此前「specs markdown 表 + Go switch」双源。规则：
@@ -22,7 +22,7 @@ description: |
     objectKind       主对象品牌角标闭集：person | circle | school | place | enterprise。
     countObjectKind  被计数对象类型（数字下钻列表对象）：person | circle | content | place | entity | tag。
     valueTier        产品价值层级 T1(最高) > T2 > T3 > T4，用于选择得分 valueWeight。
-    computability    可计算性 R1(最易/最可靠) → R4(暂不可算/概率)，用于实现排期与门槛。
+    computability    可计算性 R1(最易/最可靠) → R3(身份/标签事实)，只登记已有生产链。
     confidenceThreshold affinity 入选最低置信；fact 恒为 0（达数量门槛即可产出）。
     privacyScope     public | contactVisible | mutualVisible（commonContact 必须先过可见性）。
     dedupeKey        去重主键模板（同 viewer 同窗口内同主键只保留一条最强证据）。
@@ -37,23 +37,22 @@ description: |
                      静态身份(同校/同司/校友在此)为 false，动态连接/行为/关注为 true。
     vertical         §23.4 垂类正交标注（缺省 general）；闭集见顶层 `verticals`。垂类扩展只改本字段 +
                      必要的 objectKind，禁止新增 travel.* 独立 kind（三元组 kind+vertical+objectKind 正交）。
-    moment           §24 v3 意图时态（缺省 current）：retrospective 回溯 / current 当下 / prospective 前瞻；
+    moment           意图时态（缺省 current）：retrospective 回溯 / current 当下 / prospective 前瞻；
                      与 lifecycleState 正交（lifecycleState 表边强弱变化，moment 表交集指向过去/当下/未来）。
-    status           active | deferred（deferred = 已登记但当前无数据源，不得产出）。
 
   顶层闭集（§23.3 去桥接：端枚举 / 文案表键 / verify 校验唯一真相源，codegen 下发，禁端硬编码第二份）：
     dimensions       五维闭集：identity | location | content | interest | relationship。
     lifecycleStates  Lifecycle 状态机闭集（§21.3 五态 + §22.3 archived/expired 历史/不展示两态）。
-    verticals        垂类闭集：general（缺省）| travel_photography | campus（结构预留，本轮不铺数据）。
+    verticals        垂类闭集：general（缺省）| travel_photography。
     moments          §24 意图时态闭集：retrospective | current | prospective（每 kind moment ∈ 本集，缺省 current）。
     gateKeys         §24.6 安全门闭集（M0.1）：login | realName | minorMode | blocked | greetPreference |
                      mutualConsent | fuzzyLocation | rateLimit；actionKeyMeta.requiredGates ⊆ 本集。
     feedbackKinds    §24.4 负反馈闭集（M0.4）：notInterested | dismiss | rejectGreeting | leaveCircle（驱动降权/冷却）。
-    actionDispatch   §24 行动路由类别闭集（M0.7）：assistant | navigate | message | gathering | connect | commerce；
+    actionDispatch   §24 行动路由类别闭集（M0.7）：assistant | navigate | message | gathering；
                      端交互 handler 路由维度（区别于 tier 权限成本维度），端据此分发落点，
                      禁止端手写「哪些 actionKey 属助手/聚集」的第二份枚举。
-    actionKeyMeta    §24 行动阶梯元数据（M0.1/M0.3/M0.7）：actionKey → {tier(light|heavy) / requiredGates(⊆gateKeys) /
-                     targetAvailability(available|deferred) / dispatch(∈actionDispatch)}；键集 == actionHintLegend。
+    actionKeyMeta    §24 行动阶梯元数据（M0.1/M0.3/M0.7）：actionKey → {tier(light|heavy) /
+                     requiredGates(⊆gateKeys) / dispatch(∈actionDispatch)}；键集 == actionHintLegend。
     objectKinds      统一对象类型闭集（§23.3 B：objectKind 与 countObjectKind 合并为同一闭集 + 可计数子集标注）。
                      每项：kind / roles(object 主对象品牌角标 / count 被计数对象) / routeId(端路由逻辑名，空=不可导航)
                      / assetKind(对象视觉资产类型，roles 含 object 时必填)。kind 的 objectKind 取 roles 含 object 的子集，
@@ -94,10 +93,9 @@ lifecycleStates:
   - expired
 
 verticals:
-  # §23.4 垂类正交闭集。每 kind 的 vertical 缺省 general；旅行摄影先行，校园仅结构预留。
+  # §23.4 垂类正交闭集。每 kind 的 vertical 缺省 general。
   - general
   - travel_photography
-  - campus
 
 verticalExtensionContract:
   # §23.4 垂类扩展契约（新增垂类的唯一合法路径，verify_intersection_kind_registry.py 强制）。
@@ -112,7 +110,7 @@ verticalExtensionContract:
   # 明令禁止：新增 kind、新增 dimension、新增 actionKey、在端侧引入任何垂类分支。
   # 理由：kind + vertical + objectKind 是正交三元组。垂类的差异化只体现在「事实的丰富度」，
   #   不体现在结构分叉；端侧因此完全垂类无关（IntersectionTargetNavigator 只按
-  #   actionKeyMeta.dispatch / targetAvailability 分发，消息域只消费通用 intersection_reason）。
+  #   actionKeyMeta.dispatch 分发，消息域只消费通用 intersection_reason）。
   #   一旦为垂类开 kind，同一件事就会有 general 与 travel.* 两套句子与两套排序权重，
   #   即第二真相源；同时端侧不得不按 vertical 分叉渲染，垂类数量与端侧分支数线性绑定。
   #
@@ -128,18 +126,16 @@ verticalExtensionContract:
     travel_photography:
       objectKinds: [route, photo_spot, gear]
       taxonomyRoots: ["Topic/摄影"]
-      # 事实生产者：把 EXIF 与到访声明转成 tagRef 与对象引用，喂给既有通用 kind。
+      # 只引用本文件 factProducerShapes；禁止用自然语言字符串另写生产者合同。
       factProducers:
-        - "post.visitedAt + post.geoTagRef → coVisitedEntity / followeeVisited（同地到访）"
-        - "media_asset.captureMetadata（器材组）→ gear homepage 对象引用 → sharedEntityAttention（同器材）"
-        - "media_asset.captureMetadata（参数/光线组）→ Topic/摄影/** tagRef → sharedTagSample"
+        - post_declared_visit
+        - entity_wishlist
       # 本垂类实例化的既有通用 kind（零新 kind）。
       instantiatedKinds:
         - coVisitedEntity
         - followeeVisited
         - sharedEntityAttention
         - coWishlistedEntity
-        - sharedTagSample
       # 只进推荐特征与内容标签、明确不产出交集句的事实（不可导航主对象）。
       recommendationOnlyFacts:
         - "Topic/摄影/拍摄参数/焦段"
@@ -148,24 +144,23 @@ verticalExtensionContract:
         - "Topic/摄影/拍摄参数/感光度"
         - "Topic/摄影/光线条件"
       newKinds: []
-    campus:
-      objectKinds: [school]
-      taxonomyRoots: ["Audience/用户/教育"]
-      # 校园本轮只结构预留：学校实例事实缺位（见 kinds.sameSchool.deferredReason），
-      # 生产者未建，因此下列 kind 仍全部 deferred。
-      factProducers: []
-      instantiatedKinds:
-        - sameSchool
-        - sameDepartment
-        - sameMajor
-        - sameCohort
-        - alumni
-        - alumniHere
-      recommendationOnlyFacts: []
-      newKinds: []
-
+# 垂类事实生产者的唯一 shape 合同。这里只登记已有生产链；outputKinds 只允许引用下方既有通用 kind，
+# recommendation_only 不得输出交集 kind，object_derivation 不得直接伪造交集事实。
+factProducerShapes:
+  post_declared_visit:
+    visibility: intersection
+    inputRefs: [content.post.visitedAt, content.post.geoTagRef]
+    outputKinds: [coVisitedEntity, followeeVisited]
+    outputObjectKinds: [place]
+    outputTaxonomyRoots: []
+  entity_wishlist:
+    visibility: intersection
+    inputRefs: [entity.entity_wishlist]
+    outputKinds: [coWishlistedEntity]
+    outputObjectKinds: [place]
+    outputTaxonomyRoots: []
 moments:
-  # §24 v3 意图时态闭集（M0.2）。moment 表达交集的「时态意图」，与 lifecycleState（边生命周期强弱）正交：
+  # 意图时态闭集。moment 表达交集的「时态意图」，与 lifecycleState（边生命周期强弱）正交：
   #   lifecycleState 回答「这条边现在多强/是否新」；moment 回答「这条交集指向过去/当下/未来」。
   #   端据 moment 决定语气与可行动性（回溯=已发生可回看，当下=此刻可连接，前瞻=想去可约伴）。
   #   每个 kind 必须标注 moment ∈ 本闭集（verify 校验）。
@@ -215,12 +210,6 @@ actionDispatch:
   # gathering（原名 companion）：结伴 / 线下相聚 / 实时附近的唯一落点类别，驱动「有人同行」徽标。
   #   改名是概念收敛的一部分：承接对象只有一个 Gathering，路由类别不再用只覆盖「约伴」的旧词。
   - gathering   # 聚集邀约落点（发起 / 加入 Gathering、附近碰头）
-  # connect 目前是空承接类别：话题房没有落地页，成员 targetAvailability=deferred。
-  #   语音房已从闭集删除：群会话内已有群通话入口（rtc/call_session 支持 ≤32 人 SFU），
-  #   「进入同趣语音房」= 加入 Gathering 后在其绑定会话里发起群通话，不需要独立 actionKey。
-  #   心动表达归回 message（复用打招呼请求状态机）。
-  - connect     # 线上同频房间专属落点（话题房）
-  - commerce    # 官方导购 / 预订 / CPS 转化落点；真实渠道未接入时必须 deferred 或 featureDisabled
 
 objectKinds:
   # §23.3 B 统一对象类型闭集（合并 objectKind + countObjectKind，可计数子集靠 roles 标注，不再两套集合）。
@@ -297,12 +286,9 @@ objectKinds:
     routeId: ""
     dimension: interest
     label: 同好
-  # §交集行动深化：聚集对象。trip（出行意图）与 meetup（线下局）已收敛为单一 gathering：
-  # 两者的差别只有时间确定性，用 startAt + 可空 endAt 一个时间区间即可同时表达
+  # 聚集对象用 startAt + 可空 endAt 一个时间区间同时表达
   # 「这周末想去 XX 有人一起吗」（跨天窗口）与「周六 14:00 XX 集合」（精确时间点），
-  # 不需要两个对象类型，也不需要形态枚举。routeId 由 circle-community/gathering-coordination
-  # 落地为唯一的 gatheringDetail；在此之前引用它的 kind（coPlannedTrip）保持 deferred，
-  # 因此不会有不可导航的主对象下发到端。
+  # routeId 指向 Gathering 的唯一详情入口。
   - kind: gathering
     roles: [object, count]
     routeId: gatheringDetail
@@ -387,12 +373,6 @@ computabilityLegend:
   R1: 关系投影与成员集合直接求交（persona_follow_projection / circle_memberships），最易、最可靠、可请求期算。
   R2: 行为边集合求交（rm_behavior_events 行为边真相源），需扫描+求交，请求期或预投影。
   R3: 身份/通讯录/标签维度（需 profile / contact 映射 / 实体标签），成本与隐私约束更高。
-  R4: >-
-    当前无稳定数据源或为概率推断，暂不产出 fact。五个 R4 kind
-    （coPresentHere / nearbyAffinity / coPlannedTrip / wantToMeetSameInterest / coCreatedContent）
-    的阻断不是「producer 还没写」，而是缺前置能力：在场上报（前两个）、行程对象（coPlannedTrip）、
-    显式结识意向（wantToMeetSameInterest）、多作者署名（coCreatedContent）。
-    每个 kind 的 deferredReason 写明了可核对的解除条件，未满足前不得用邻近语义借壳产出。
 
 iconKeyLegend:
   # §21.5.2 交集 iconKey 语义闭集（端 IntersectionIconResolver 真相源）。
@@ -400,14 +380,13 @@ iconKeyLegend:
   # 但 tone 仍按维度族收敛（relationship→sage、location→tea、identity/work→mist、content→clay、interest→stone）。
   place: 共同地点（coVisitedEntity / coWishlistedEntity）
   placeHere: 关注的人来过此地（followeeVisited，桥接）
-  circle: 共同圈子 / 同圈成员（sharedCircle / coMemberCircle）
+  circle: 共同圈子（sharedCircle）
   people: 共同关注的人 / 共同被关注（sharedFollowees / commonFollower）
-  contact: 共同联系人（commonContact，contactVisible 隐私门）
   followHere: 关注的人在此对象内（followeeInObject，桥接）
   viewing: 关注的人正在看此内容（followeeViewing，桥接）
-  alumni: 校友 / 同校 / 同专业（sameSchool / sameMajor / sameCohort / alumni / alumniHere）
-  work: 同公司 / 同团队 / 同行业 / 同事在此 / 共创（sameCompany / sameTeam / sameIndustry / colleagueHere / coCreatedContent）
-  discussion: 共同讨论 / 都评论过 / 关注的人讨论（sharedDiscussion / coCommented / followeeDiscussedThis）
+  alumni: 身份维度兜底图标
+  work: 同行业（sameIndustry）
+  discussion: 都评论过 / 关注的人讨论（coCommented / followeeDiscussedThis）
   share: 共同传播（coSharedContent）
   like: 共同点赞（coLiked，T4 最低权重，§21.9 恢复）
   interest: 共同兴趣标签（sharedTagSample）
@@ -419,7 +398,6 @@ visualToneByIconKey:
   placeHere: tea
   circle: sage
   people: sage
-  contact: sage
   followHere: sage
   viewing: sage
   alumni: mist
@@ -469,7 +447,6 @@ coldStartSupply:
     followeeVisited: post_declared_visit
     coWishlistedEntity: entity_wishlist
     sharedCircle: circle_membership
-    coMemberCircle: circle_membership
   minDistinctObjectsByKind:
     # 地点/实体类：语料只有个位数 POI 时「都看过同一个地方」没有区分度，阈值最高。
     sharedEntityAttention: 8
@@ -481,7 +458,6 @@ coldStartSupply:
     coWishlistedEntity: 5
     # 圈子类：圈子总量本身就少，阈值低于实体类但仍需要多于 2 个才有区分度。
     sharedCircle: 3
-    coMemberCircle: 3
 
 actionHintLegend:
   # §21.5.3 行动建议闭集。服务端按 kind 查 actionKey，下发 IntersectionActionHint；
@@ -498,19 +474,8 @@ actionHintLegend:
   open_route: 查看路线 / 地点内容
   create_followup: 写续篇 / 发布跟进
   ask_assistant: 让助手解释这条交集
-  # §交集行动深化：同趣 / 聚集 / 实时 / 意图 行动阶梯（端只读渲染，不按 kind 猜测）。
-  join_topic_room: 进入同趣话题群
-  # 聚集只有两个动作：发起与加入，对应单一 Gathering 对象的两侧。
-  # start_gathering 在 Gathering 对象落地前的承接是发起群聊页（带交集对象与归因上下文），
-  # 因此文案只承诺「拉一个群谈同行」，不承诺行程、日期或成行。
+  # start_gathering 绑定真实 Gathering 创建入口与 coWishlistedEntity 证据。
   start_gathering: 发起聚集（把想去同一地点的人拉进同一个群谈同行）
-  join_gathering: 加入聚集（结伴同行或报名线下相聚）
-  meet_nearby: 附近碰头（默认模糊位置 + 双向同意）
-  express_interest: 心动打招呼（带意图的打招呼变体，复用打招呼请求，不新增关系等级）
-  # §交集商用闭环：commerce 契约位。真实渠道、返佣披露和商业化条款未完成前保持 deferred。
-  view_official_deals: 查看官方优惠 / 导购入口
-  book_ticket: 预订门票 / 活动票
-  book_hotel: 预订住宿
 
 # actionLabelByKey 各条的 l10nKey 前缀，约定同 presentationText：
 # l10nKey = prefix + "." + snake(actionKey)。运营态覆盖
@@ -533,108 +498,57 @@ actionLabelByKey:
   open_route: 查看路线
   create_followup: 发布跟进
   ask_assistant: 解释这条交集
-  join_topic_room: 进话题群
-  # 按钮文案与承接一致：点下去是「拉个群」，不是「加入一次已成立的行程」。
   start_gathering: 发起聚集
-  join_gathering: 加入聚集
-  meet_nearby: 附近碰头
-  express_interest: 打个招呼
-  view_official_deals: 看官方优惠
-  book_ticket: 订门票
-  book_hotel: 订住宿
 
 actionKeyMeta:
-  # §24 行动阶梯元数据（M0.1 requiredGates + M0.3 tier/targetAvailability + M0.7 dispatch 的统一真相源）。
+  # §24 行动阶梯元数据（M0.1 requiredGates + M0.3 tier + M0.7 dispatch 的统一真相源）。
   # 键集必须 == actionHintLegend（verify 校验）。端下发 IntersectionActionHint 时按本表填充
-  #   actionTier / requiredGates / targetAvailability / dispatch，端只读渲染并据此决定「可执行 / 优雅降级 / 落点」。
+  #   actionTier / requiredGates / dispatch，端只读渲染并据此决定「可执行 / 优雅降级 / 落点」。
   #   tier:               light（轻查看/关注，即时可做）| heavy（重社交，需破冰阶梯/请求/建群/报名）。
   #   requiredGates:      ⊆ gateKeys，重行动必须声明；空=无门（轻查看类）。
-  #   targetAvailability: available（有真实承接页可执行）| deferred（承接页/数据源未就绪，端不得伪造成行，
-  #                       只展示不可执行规划口径或跳真实替代面，对应 §24.10 诚实红线 + UAT-8）。
-  #   dispatch:           ∈ actionDispatch 闭集（assistant|navigate|message|companion|connect|commerce），端交互 handler 路由；
+  #   dispatch:           ∈ actionDispatch 闭集（assistant|navigate|message|gathering），端交互 handler 路由；
   #                       与 tier 正交（tier=heavy 的 message vs companion 落点不同）。端 navigator / 徽标 / 助手分发
   #                       一律读本字段，禁止端手写「助手 / 约伴 / 重社交」分类的第二份枚举（M0.7 收敛）。
-  follow_person:      { tier: light, requiredGates: [login], targetAvailability: available, dispatch: navigate }
+  follow_person:      { tier: light, requiredGates: [login], dispatch: navigate }
   # 打招呼落点是对方主页的 greeting 破冰状态机（POST /user/greeting-request，
   # 对方回复后才升级为正式会话），不是普通主页下钻，因此 dispatch 必须是 message：
   # 端按 dispatch 路由，navigate 会让「打招呼」按钮只跳主页、不兑现承诺（UAT-001）。
-  greet_person:       { tier: light, requiredGates: [login, greetPreference, blocked], targetAvailability: available, dispatch: message }
-  message_person:     { tier: heavy, requiredGates: [login, mutualConsent, blocked, rateLimit], targetAvailability: available, dispatch: message }
-  view_shared_people: { tier: light, requiredGates: [login], targetAvailability: available, dispatch: navigate }
-  join_circle:        { tier: light, requiredGates: [login], targetAvailability: available, dispatch: navigate }
-  open_discussion:    { tier: light, requiredGates: [login], targetAvailability: available, dispatch: navigate }
-  open_content:       { tier: light, requiredGates: [], targetAvailability: available, dispatch: navigate }
-  open_object:        { tier: light, requiredGates: [], targetAvailability: available, dispatch: navigate }
-  follow_object:      { tier: light, requiredGates: [login], targetAvailability: available, dispatch: navigate }
-  open_route:         { tier: light, requiredGates: [], targetAvailability: available, dispatch: navigate }
-  create_followup:    { tier: heavy, requiredGates: [login, realName], targetAvailability: available, dispatch: assistant }
-  ask_assistant:      { tier: light, requiredGates: [], targetAvailability: available, dispatch: assistant }
-  # 话题群没有承接对象：仓内只有圈子（circleDetail），没有按兴趣自动成群的话题房，
-  # 端把它路由到圈子会变成「点进话题群 → 落到无关圈子」。承接就位前保持 deferred。
-  join_topic_room:    { tier: heavy, requiredGates: [login, minorMode], targetAvailability: deferred, dispatch: connect }
+  greet_person:       { tier: light, requiredGates: [login, greetPreference, blocked], dispatch: message }
+  message_person:     { tier: heavy, requiredGates: [login, mutualConsent, blocked, rateLimit], dispatch: message }
+  view_shared_people: { tier: light, requiredGates: [login], dispatch: navigate }
+  join_circle:        { tier: light, requiredGates: [login], dispatch: navigate }
+  open_discussion:    { tier: light, requiredGates: [login], dispatch: navigate }
+  open_content:       { tier: light, requiredGates: [], dispatch: navigate }
+  open_object:        { tier: light, requiredGates: [], dispatch: navigate }
+  follow_object:      { tier: light, requiredGates: [login], dispatch: navigate }
+  open_route:         { tier: light, requiredGates: [], dispatch: navigate }
+  create_followup:    { tier: heavy, requiredGates: [login, realName], dispatch: assistant }
+  ask_assistant:      { tier: light, requiredGates: [], dispatch: assistant }
   # start_gathering = 公开聚集邀约：发起是「开放邀约」，任何人可响应，故发起环节不需事先双向同意；
   #   mutualConsent（双向同意）属「响应后建立联系」阶段，由群聊/私信自身 gate 承接，不入发起 requiredGates
   #   （对照 meet_nearby 线下面基是点对点碰头，保留 mutualConsent+fuzzyLocation 才正确）。
   #   承接页复用既有建群落点（available）；来源 kind coWishlistedEntity 的数据源门由 kinds.coWishlistedEntity.status
   #   表达，与发起环节安全门正交（无稳定 wishlist 源时按 kind status GATE_BLOCK）。
-  start_gathering:    { tier: heavy, requiredGates: [login, realName, minorMode, blocked, rateLimit], targetAvailability: available, dispatch: gathering }
-  # 心动打招呼按 legend 的定义就是「复用打招呼请求」，承接与 greet_person 同一条状态机
-  # （POST /user/greeting-request → reply → 正式会话），因此 dispatch 必须是 message：
-  # connect 表达的是话题房/语音房这类同频房间落点，仓内没有该落点，用 connect 会让
-  # 这个按钮永远无处可去（端对无落点的 dispatch 一律 fail-closed 不渲染）。
-  express_interest:   { tier: heavy, requiredGates: [login, greetPreference, blocked, rateLimit], targetAvailability: available, dispatch: message }
-  # 以下重行动承接仍 deferred（§24.10 诚实红线）。
-  # join_gathering 的阻断是对象缺位而非页面未接线：objectKinds 里 gathering 声明的 routeId
-  #   （gatheringDetail）与 Gathering 领域模型、参与者名单、写入口都要由
-  #   circle-community/gathering-coordination 一次落地。解除条件是发起人 + 目标对象引用 +
-  #   startAt/endAt 时间区间 + capacity + joinPolicy + 参与者名单 + conversationId 绑定全部就位，
-  #   在此之前「结伴」只能走 start_gathering 的群聊承接。
-  join_gathering:     { tier: heavy, requiredGates: [login, realName, minorMode], targetAvailability: deferred, dispatch: gathering }
-  # meet_nearby 的阻断是数据源缺位：需要持续实时模糊位置上报（耗电 + 最高隐私成本），
-  #   且它的价值本身取决于同城活跃用户密度（附近没人时「附近同趣」零信息量，与 coldStartSupply
-  #   的稀释逻辑同理）。解除条件写在 kinds.coPresentHere / nearbyAffinity 的 deferredReason。
-  meet_nearby:        { tier: heavy, requiredGates: [login, realName, minorMode, mutualConsent, fuzzyLocation, rateLimit], targetAvailability: deferred, dispatch: gathering }
-  # commerce actionKey 仅冻结契约位：真实官方渠道/CPS/法务条款未就绪前不得展示可交易入口。
-  view_official_deals: { tier: light, requiredGates: [], targetAvailability: deferred, dispatch: commerce }
-  book_ticket:        { tier: heavy, requiredGates: [login], targetAvailability: deferred, dispatch: commerce }
-  book_hotel:         { tier: heavy, requiredGates: [login], targetAvailability: deferred, dispatch: commerce }
+  start_gathering:    { tier: heavy, requiredGates: [login, realName, minorMode, blocked, rateLimit], dispatch: gathering }
 
 actionHintsByKind:
   sharedFollowees: [follow_person, greet_person, view_shared_people]
   commonFollower: [follow_person, message_person, view_shared_people]
-  commonContact: [greet_person, message_person, view_shared_people]
-  sameSchool: [greet_person, open_object]
-  sameDepartment: [greet_person, open_object]
-  sameMajor: [greet_person, open_object]
-  sameCohort: [greet_person, open_object]
-  alumni: [greet_person, open_object]
-  sameCompany: [message_person, open_object]
-  sameTeam: [message_person, open_object]
   # sameIndustry 的对象是人本身，没有可打开的组织对象，行动阶梯只到人。
   sameIndustry: [message_person, follow_person]
   sharedCircle: [join_circle, open_discussion]
-  sharedDiscussion: [open_discussion, follow_person]
-  coMemberCircle: [join_circle, open_discussion]
   coCommented: [open_content, open_discussion]
   coSharedContent: [open_content, create_followup]
-  coCreatedContent: [open_content, message_person]
   coLiked: [open_content, follow_person]
   coVisitedEntity: [open_object, open_route]
   sharedEntityAttention: [open_object, follow_object]
-  coWishlistedEntity: [start_gathering, view_official_deals, open_route, follow_object]
+  coWishlistedEntity: [start_gathering, open_route, follow_object]
   sharedTagSample: [open_object, join_circle]
   followeeInObject: [join_circle, view_shared_people]
   followeeVisited: [open_object, open_route]
   followeeViewedObject: [open_object, view_shared_people]
   followeeViewing: [open_content, view_shared_people]
-  alumniHere: [open_object, join_circle]
-  colleagueHere: [open_object, message_person]
   followeeDiscussedThis: [open_discussion, open_content]
-  # §交集行动深化：实时 / 附近 / 计划 / 意图 态新 kind 的行动阶梯（kind 暂 deferred，先登记契约）。
-  coPresentHere: [meet_nearby, join_gathering, greet_person]
-  nearbyAffinity: [meet_nearby, greet_person, follow_person]
-  coPlannedTrip: [join_gathering, start_gathering]
-  wantToMeetSameInterest: [express_interest, join_topic_room, greet_person, follow_person]
 
 statementTemplates:
   # §17.1 结论句模板的唯一真相源。此前每个 kind 的谓语在 Go 里写了两遍
@@ -660,7 +574,6 @@ statementTemplates:
   #   没有 counted 的 kind 表示不可降级，缺名时整条隐藏（不造名）。
   # variants：
   #   personPlace  对象位是对方本人、地点在点级证据里（对象页宿主是人）
-  #   noObject     没有可证第三方对象名，但句子本身仍成立（commonContact）
   #   circleTag    圈子标签样本（sharedTagSample 的 source == circleTag）
   slots: [subject, countedSubject, object, count, occupation, place, action]
   byKind:
@@ -670,24 +583,11 @@ statementTemplates:
     commonFollower:
       l10nKey: intersection.statement.common_follower
       template: "{subject}也关注了{object}"
-    commonContact:
-      l10nKey: intersection.statement.common_contact
-      template: "{subject}都是你和{object}的共同联系人"
-      variants:
-        noObject:
-          l10nKey: intersection.statement.common_contact.no_object
-          template: "{subject}都是你们的共同联系人"
     sharedCircle:
       l10nKey: intersection.statement.shared_circle
       template: "{subject}都加入了{object}"
       counted:
         l10nKey: intersection.statement.shared_circle.counted
-        template: "{subject}和你都加入了{count}个共同圈子"
-    coMemberCircle:
-      l10nKey: intersection.statement.co_member_circle
-      template: "{subject}都加入了{object}"
-      counted:
-        l10nKey: intersection.statement.co_member_circle.counted
         template: "{subject}和你都加入了{count}个共同圈子"
     coCommented:
       l10nKey: intersection.statement.co_commented
@@ -695,13 +595,6 @@ statementTemplates:
       actionFallback: 都讨论过
       counted:
         l10nKey: intersection.statement.co_commented.counted
-        template: "{subject}和你都讨论过{count}条相同内容"
-    sharedDiscussion:
-      l10nKey: intersection.statement.shared_discussion
-      template: "{subject}{action}{object}"
-      actionFallback: 都讨论过
-      counted:
-        l10nKey: intersection.statement.shared_discussion.counted
         template: "{subject}和你都讨论过{count}条相同内容"
     coSharedContent:
       l10nKey: intersection.statement.co_shared_content
@@ -716,10 +609,6 @@ statementTemplates:
       counted:
         l10nKey: intersection.statement.co_liked.counted
         template: "{subject}和你都点赞过{count}条相同内容"
-    # 共创没有计数降级：说不出共创的是哪件作品，「共创」这个断言本身就不成立。
-    coCreatedContent:
-      l10nKey: intersection.statement.co_created_content
-      template: "{subject}都共创过{object}"
     coVisitedEntity:
       l10nKey: intersection.statement.co_visited_entity
       template: "{subject}都去过{object}"
@@ -762,7 +651,7 @@ statementTemplates:
       l10nKey: intersection.statement.followee_discussed_this
       template: "{subject}正在讨论{object}"
     # 共享职业标签只能证明「同行」：宾语是对方本人，谓语补足语是双方都声明的职业标签，
-    # 不得升级为同公司/同团队（那需要组织实例，见 sameCompany 的 deferredReason）。
+    # 不得升级为不存在可证组织实例的同公司/同团队语义。
     sameIndustry:
       l10nKey: intersection.statement.same_industry
       template: "你和{object}都是{occupation}"
@@ -1015,7 +904,6 @@ kinds:
     iconKey: people
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
   - kind: commonFollower
     vertical: general
@@ -1036,209 +924,7 @@ kinds:
     iconKey: people
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
-  - kind: commonContact
-    vertical: general
-    entry: A3
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [relationship]
-    objectKind: person
-    countObjectKind: person
-    valueTier: T1
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: contactVisible
-    dedupeKey: "commonContact:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 5
-    sampleVisualsRequired: true
-    iconKey: contact
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      共同联系人缺可证事实源，且隐私前置未满足。展示合同（结论句 / 关系限定 / 计数下钻）
-      已实现并有测试覆盖，缺的是 producer 能读到的真实联系人交集：
-      联系人图谱在 chat-service（contacts / ContactListReader），content-service 无联系人
-      读模型，且不得直读他服务库；现有 GET /chat/contacts 是 principal=persona +
-      active_persona_inbox，只能读调用者本人的联系人，无法求交第三人。
-      用关注 / 互关冒充「共同联系人」属关系类型造假：联系人是双向确认，关注是单向订阅。
-      privacyScope=contactVisible 还要求双向可见性前置（design.md §6）：任一侧关闭可见即
-      不得下发，且不得通过计数反推对方联系人列表。
-      解除条件：chat-service 新增 principal=service 的共同联系人内部查询（入参
-      viewerId + otherId，只返回双方都已确认且双方都允许可见的计数与样本），
-      content-service 经该契约读取后才可解除 deferred。
-
-  - kind: sameSchool
-    vertical: general
-    entry: A4
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameSchool:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: false
-    iconKey: alumni
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同校」需要学校实例事实。当前三处都缺：taxonomy 的 Entity/机构/学校/** 只有学校
-      类型节点（大学/高中/985 等），没有具体学校实例；user_account 契约只有
-      occupationTagRef / interestTagRefs / regionTagRef，没有 schoolTagRef；
-      tag-service normalizeProfileTagRefs 只放行 Audience/用户/职业/ 与
-      Audience/用户/兴趣偏好/ 两个前缀，学校 tagRef 进不了 object_tag_index。
-      三者补齐后再转 active，禁止用兴趣标签「校园」冒充同校事实。
-  - kind: sameDepartment
-    vertical: general
-    entry: A4
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameDepartment:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: false
-    iconKey: alumni
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同院系」比 sameSchool 更细，除学校实例外还需要院系维度；taxonomy 与
-      user_account 契约都没有院系轴。随 sameSchool 一起解锁。
-  - kind: sameMajor
-    vertical: general
-    entry: A4
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameMajor:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: false
-    iconKey: alumni
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同专业」需要专业维度事实；taxonomy 的 Audience/用户/教育 只有学历与教育经历，
-      没有专业轴，user_account 也没有 majorTagRef。随 sameSchool 一起解锁。
-  - kind: sameCohort
-    vertical: general
-    entry: A4
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameCohort:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: false
-    iconKey: alumni
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同届」需要入学/毕业年份事实，user_account 没有 cohort 字段，taxonomy 也没有
-      届别轴；用注册时间或年龄推断都属于把概率当事实。随 sameSchool 一起解锁。
-  - kind: alumni
-    vertical: general
-    entry: A4
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "alumni:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: false
-    iconKey: alumni
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「校友」是 sameSchool 的弱化表述，同样依赖学校实例事实，当前无来源。
-      随 sameSchool 一起解锁。
-
-  - kind: sameCompany
-    vertical: general
-    entry: A5
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: enterprise
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameCompany:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 20
-    sampleVisualsRequired: false
-    iconKey: work
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同公司」需要公司实例事实。taxonomy 的 Entity/机构/公司 没有子节点（只有「公司」
-      这个类型），user_account 没有 companyTagRef，tag-service 也只放行职业/兴趣两个
-      前缀。职业分类（如「互联网」）是行业不是雇主，不得用来冒充同公司。
-      补齐公司实例与雇主字段后再转 active。
-  - kind: sameTeam
-    vertical: general
-    entry: A5
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: enterprise
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sameTeam:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 20
-    sampleVisualsRequired: false
-    iconKey: work
-    propagationRole: none
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同团队」比 sameCompany 更细，需要公司实例 + 部门/团队维度，两者都不存在。
-      随 sameCompany 一起解锁。
   - kind: sameIndustry
     vertical: general
     entry: A5
@@ -1247,8 +933,7 @@ kinds:
     dimensions: [identity]
     # 可证事实只有「双方都声明了同一职业标签」，句式落在「你和<对方>都是<职业>」：
     # 宾语是对方本人（可导航），职业标签是分类树节点（不可导航，纯文本）。
-    # 不写 enterprise —— 职业标签没有企业实例，写成企业会把行业相似说成组织归属
-    # （同公司/同团队因此 deferred）。
+    # 不写 enterprise —— 职业标签没有企业实例，写成企业会把行业相似说成组织归属。
     objectKind: person
     countObjectKind: person
     valueTier: T3
@@ -1262,7 +947,6 @@ kinds:
     iconKey: work
     propagationRole: none
     lifecycleApplicable: false
-    status: active
 
   # ---- B. 人与圈子 / 讨论：共同参与事实 ----
   - kind: sharedCircle
@@ -1284,69 +968,7 @@ kinds:
     iconKey: circle
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
-  - kind: sharedDiscussion
-    vertical: general
-    entry: B2
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [relationship, content]
-    objectKind: circle
-    countObjectKind: content
-    valueTier: T2
-    computability: R2
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "sharedDiscussion:{objectId}"
-    timeWindowDays: 7
-    evidenceRank: 40
-    sampleVisualsRequired: false
-    iconKey: discussion
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: |
-      「在这个圈子里都讨论过 N 条内容」需要 content ↔ circle 归属链路，当前不可证：
-      rm_behavior_events{action:comment} 只有 contentId，没有所属 circleId；
-      content/post 契约也没有 circleId 字段（join_circle 行为把 circleId 复用在
-      contentId 键上，反向不成立）。用 coCommented 的内容交集冒充圈内讨论，会把
-      「都评论过同一篇文章」说成「都在这个圈子里讨论过」，是对象归属造假。
-      纯内容维度的「都讨论过同一内容」已由 coCommented（C1，active）承载，不缺表达。
-      解除条件：post 落 circleId（或圈子讨论对象独立成 content 类型）并进入
-      rm_behavior_events 投影，届时 objectKind=circle 的讨论交集才有真相源。
-
-  - kind: coMemberCircle
-    vertical: general
-    entry: B3
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [interest]
-    objectKind: circle
-    countObjectKind: circle
-    valueTier: T3
-    computability: R1
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "coMemberCircle:{objectId}"
-    timeWindowDays: 7
-    evidenceRank: 20
-    sampleVisualsRequired: false
-    iconKey: circle
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: |
-      与 sharedCircle 的可证事实完全同源：两者都只能由 circle_members 的
-      「双方都在同一圈子」求交产出，文案模板也同为「都加入了 X」
-      （intersection_hydration_explain.go / intersection_hydration.go 共用同一 case）。
-      同时产出会把同一个圈子重叠事实在 relationship 与 interest 两个维度各计一次，
-      造成红点重复计数与「同一句话出现两遍」；这属于第二真相源，不属于广度。
-      解除条件：给出与 sharedCircle 可区分的可证口径（例如「近 7 天共同新加入」
-      需要 circle_members.joinedAt 落库并可读），或改为 interest 维度的标签同类
-      圈子（那是 affinity 通道，需带「推荐」标注而非 fact）。
-
-  # ---- C. 人与内容：连接型内容行为事实 ----
   - kind: coCommented
     vertical: general
     entry: C1
@@ -1367,7 +989,6 @@ kinds:
     iconKey: discussion
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
   - kind: coSharedContent
     vertical: general
@@ -1389,35 +1010,6 @@ kinds:
     iconKey: share
     propagationRole: none
     lifecycleApplicable: true
-    status: active
-
-  - kind: coCreatedContent
-    vertical: general
-    entry: C3
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [content]
-    objectKind: person
-    countObjectKind: content
-    valueTier: T4
-    computability: R4
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "coCreatedContent:{objectId}"
-    moment: retrospective
-    timeWindowDays: 7
-    evidenceRank: 40
-    sampleVisualsRequired: false
-    iconKey: work
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      共创需要一条内容上有多个已确认作者，产品上不存在：post 只有单一 authorId，
-      contracts 里无 coAuthors / collaborators 字段，也无协作邀请与确认流程。
-      「都在同一条内容下评论」是 coCommented，「都赞过同一条」是 coLiked，
-      两者都不是共同创作，不得借壳。
-      解除条件：内容侧先支持多作者署名（作者列表 + 被邀请方确认），再由作者列表求交产出。
 
   - kind: coLiked
     vertical: general
@@ -1439,7 +1031,6 @@ kinds:
     iconKey: like
     propagationRole: none
     lifecycleApplicable: true
-    status: active
     note: §21.9 赞红线恢复（2026-06-18）；T4 最低权重、evidenceRank 最末；§21.7 禁请求期全量求交，云侧预投影/采样/上限就位后产出（本期端 Mock 原型先行）。
 
   # ---- D. 人与地点 / 对象：共同对象事实 ----
@@ -1467,7 +1058,6 @@ kinds:
     # 只有行政区时地点同一性降级到区域级）。浏览语义归 sharedEntityAttention，
     # 意图语义归 coWishlistedEntity，三者不得互相替代。
     # 结论句只说「都去过」，不说「同期」：同期需要双方到访时间落在同一窗口才能断言。
-    status: active
 
   - kind: sharedEntityAttention
     vertical: general
@@ -1488,7 +1078,6 @@ kinds:
     iconKey: attention
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
   - kind: coWishlistedEntity
     vertical: general
@@ -1510,7 +1099,6 @@ kinds:
     iconKey: place
     propagationRole: none
     lifecycleApplicable: true
-    status: active
     source: entity_wishlist_events
 
   - kind: sharedTagSample
@@ -1532,7 +1120,6 @@ kinds:
     iconKey: interest
     propagationRole: none
     lifecycleApplicable: true
-    status: active
 
   # ---- E. 桥接型交集（第三方桥接） ----
   - kind: followeeInObject
@@ -1554,7 +1141,6 @@ kinds:
     iconKey: followHere
     propagationRole: bridge
     lifecycleApplicable: true
-    status: active
 
   - kind: followeeVisited
     vertical: general
@@ -1578,7 +1164,6 @@ kinds:
     lifecycleApplicable: true
     # 事实口径：关注的人在 posts 上声明过到访本对象（visitedAt + 地点绑定）。
     # 「来过」只能由声明到访支撑；只看过对象页的走 followeeViewedObject（「也看过」）。
-    status: active
 
   - kind: followeeViewedObject
     vertical: general
@@ -1600,7 +1185,6 @@ kinds:
     iconKey: viewing
     propagationRole: bridge
     lifecycleApplicable: true
-    status: active
     source: rm_behavior_events{action:entity_page_view}
 
   - kind: followeeViewing
@@ -1622,54 +1206,6 @@ kinds:
     iconKey: viewing
     propagationRole: bridge
     lifecycleApplicable: true
-    status: active
-
-  - kind: alumniHere
-    vertical: general
-    entry: E3
-    level: bridgeFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: school
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "alumniHere:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: true
-    iconKey: alumni
-    propagationRole: bridge
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「校友也在这里」是 sameSchool 的对象内桥接版，依赖同一份缺失的学校实例事实。
-      随 sameSchool 一起解锁。
-  - kind: colleagueHere
-    vertical: general
-    entry: E3
-    level: bridgeFact
-    intersectionClass: fact
-    dimensions: [identity]
-    objectKind: enterprise
-    countObjectKind: person
-    valueTier: T2
-    computability: R3
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "colleagueHere:{objectId}"
-    timeWindowDays: 30
-    evidenceRank: 50
-    sampleVisualsRequired: true
-    iconKey: work
-    propagationRole: bridge
-    lifecycleApplicable: false
-    status: deferred
-    deferredReason: >-
-      「同事也在这里」是 sameCompany 的对象内桥接版，依赖同一份缺失的公司实例事实。
-      随 sameCompany 一起解锁。
 
   - kind: followeeDiscussedThis
     vertical: general
@@ -1691,162 +1227,3 @@ kinds:
     iconKey: discussion
     propagationRole: bridge
     lifecycleApplicable: true
-    status: active
-
-  # ---- F. 交集行动深化：实时态 / 未来态 / 意图态（先登记后产出，全部 deferred 占位） ----
-  - kind: coPresentHere
-    vertical: general
-    entry: F1
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [location]
-    objectKind: place
-    countObjectKind: person
-    valueTier: T2
-    computability: R4
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "coPresentHere:{objectId}"
-    timeWindowDays: 1
-    evidenceRank: 35
-    sampleVisualsRequired: false
-    iconKey: placeHere
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      「此刻同地」缺实时在场数据源与同意前置。端侧有 LocationGateway（geolocator）
-      但唯一消费方是发布流程的地点选择（create_location_coordinator），没有任何
-      在场上报接口：服务侧无 presence/heartbeat operation，无 TTL 在场读模型。
-      不得用「最近发布过带该地点的内容」冒充此刻在场：那是过去到访事实（coVisitedEntity），
-      时态不同，误报会把陌生人引到用户当前物理位置。
-      解除条件：先落地在场上报契约（显式开关 + 短 TTL + 模糊到 POI 粒度 + 双向同意，
-      两侧都开启才可下发），再补 producer；在场语义必须能被用户单向关闭且立即失效。
-
-  - kind: nearbyAffinity
-    vertical: general
-    entry: F2
-    level: affinity
-    intersectionClass: affinity
-    dimensions: [location, interest]
-    objectKind: person
-    countObjectKind: person
-    valueTier: T3
-    computability: R4
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "nearbyAffinity:{objectId}"
-    timeWindowDays: 1
-    evidenceRank: 80
-    sampleVisualsRequired: false
-    iconKey: place
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      「附近同趣」依赖 coPresentHere 同一条在场供给线，且是 affinity（概率）而非 fact。
-      P1 已给实体主页补上 GeoJSON location，「地点之间的距离」可算，但「人此刻在哪」
-      仍无数据源，因此附近无法计算。用最近到访地点反推「附近」会把跨月的行程说成当下邻近。
-      解除条件：coPresentHere 的在场契约先落地，再叠加兴趣相似度；下发前必须先过
-      affinity 的 confidenceThreshold 与 intersectionClass=affinity 的弱化措辞，
-      不得进入 fact 句式。
-
-  - kind: coPlannedTrip
-    vertical: general
-    entry: F3
-    level: sharedFact
-    intersectionClass: fact
-    dimensions: [location]
-    objectKind: gathering
-    countObjectKind: person
-    valueTier: T3
-    computability: R4
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "coPlannedTrip:{objectId}"
-    moment: prospective
-    timeWindowDays: 30
-    evidenceRank: 25
-    sampleVisualsRequired: false
-    iconKey: place
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      「计划同期出行」既缺意图数据源，也缺承接对象。objectKind=gathering 的 routeId
-      （gatheringDetail）在仓内还不存在：无 Gathering 领域模型与写入口，也无对应页面，
-      因此即使算出交集也无处可去（违反本注册表「诚实红线：端不得伪造成行」）。
-      P1 落地的 visitedAt 是回溯到访（moment=retrospective），不能当 prospective 计划用。
-      解除条件：先有 Gathering 对象（发起人 + 目标对象引用 + startAt/endAt 时间区间 +
-      参与者名单 + gatheringDetail 路由），再由「同一地点 + 时间区间重叠」产出；
-      只有 wishlist 而无时间区间时只能说 coWishlistedEntity「都想去」，不得升级成「计划同期」。
-
-  - kind: wantToMeetSameInterest
-    vertical: general
-    entry: F4
-    level: affinity
-    intersectionClass: affinity
-    dimensions: [interest]
-    objectKind: person
-    countObjectKind: person
-    valueTier: T3
-    computability: R4
-    confidenceThreshold: 0.0
-    privacyScope: public
-    dedupeKey: "wantToMeetSameInterest:{objectId}"
-    moment: prospective
-    timeWindowDays: 7
-    evidenceRank: 85
-    sampleVisualsRequired: false
-    iconKey: interest
-    propagationRole: none
-    lifecycleApplicable: true
-    status: deferred
-    deferredReason: >-
-      「想认识同趣」需要用户显式表达的结识意向，仓内无该信号：既无「想认识」写入口，
-      也无对应事件（rm_behavior_events / rec_learning_events 的 action 集合里没有意向类）。
-      兴趣标签相似度已由 sharedInterest 承载，把它改写成「想认识」是替用户表态。
-      解除条件：先有显式意向动作（express_interest 落库为可撤回的意向记录）与双向
-      可见规则，再由「双方都表达过意向 + 兴趣重叠」产出；单侧意向只能对表达方本人可见。
-
-# 一次性迁移映射（旧名 → 标准名，迁移后旧名零残留；与 §5.4 对齐）。
-migrations:
-  mutualFriend: sharedFollowees
-  commonFollow: sharedFollowees
-  friendInCircle: followeeInObject
-  contactInCircle: followeeInObject
-  friendActiveHere: followeeInObject
-  friendVisited: followeeVisited
-  contactVisited: followeeVisited
-  friendJoinedRelatedCircle: followeeInObject
-  coCollectedEntity: coWishlistedEntity
-  coCity: coVisitedEntity
-  coCohort: sameCohort
-  sameOrg: sameCompany
-  sameBrand: sharedEntityAttention
-  # coLiked 已于 §21.9（2026-06-18）恢复为 T4 轻量交集，移出废弃迁移；见 kinds.coLiked。
-  coFavorited: ""    # 废弃：内容无长期动作（收藏退场 §14A 不翻转）
-  coFollowedContent: ""
-  followeeFollowedContent: ""
-  friendFavorited: ""
-  coEra: ""
-  youInteracted: ""
-
-# 概念收敛迁移（旧名 → 标准名）。与 migrations 同为一次性映射：迁移完成后旧名在
-# registry / codegen 产物 / 端侧常量 / 服务端实现里零残留，禁止保留别名或双读。
-# 收敛依据：承接对象只有一个 Gathering（发起人 + 目标对象引用 + startAt/endAt 时间区间 +
-#   capacity + joinPolicy + 参与者名单 + conversationId 绑定），trip 与 meetup 的差别只有
-#   时间确定性，语音房复用绑定会话内既有群通话，因此四个 actionKey 收敛为两个、
-#   两个 objectKind 收敛为一个、dispatch 类别改用覆盖全部聚集形态的名字。
-actionKeyMigrations:
-  start_companion: start_gathering
-  join_trip: join_gathering
-  join_meetup: join_gathering
-  start_voice_room: ""    # 删除：群会话内已有群通话入口，不需要独立 actionKey
-
-objectKindMigrations:
-  trip: gathering
-  meetup: gathering
-
-actionDispatchMigrations:
-  companion: gathering

@@ -339,6 +339,17 @@ fields:
     ops_exposure: read
     description: 升级来源的 GreetingRequest.id（originType=greeting_reply 时有值）
     role: authoritative_state
+  - name: originIntersectionSnapshot
+    source: originIntersectionSnapshot
+    type: GreetingIntersectionSnapshot
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: mask
+    description: GreetingRequest 升级时复制的服务端交集依据快照；1v1 头部只读该值
+    role: owned_value
   - name: createdAt
     source: createdAt
     type: timestamp
@@ -360,6 +371,33 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  GreetingIntersectionSnapshot:
+    description: user-service 重解析并在 Greeting 升级时冻结的破冰交集依据
+    fields:
+      - name: intersectionId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: evidenceId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: sourceRef
+        type: string
+        constraints: [NOT_BLANK]
+      - name: objectTypeRef
+        type: string
+        constraints: [NOT_BLANK]
+      - name: objectId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: primaryText
+        type: string
+        constraints: [NOT_BLANK]
+      - name: dimension
+        type: string
+        constraints: [NULLABLE]
+      - name: resolvedAt
+        type: timestamp
+        constraints: [NOT_NULL]
   ChatAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Chat 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

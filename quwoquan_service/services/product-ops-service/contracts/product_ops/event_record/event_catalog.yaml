@@ -306,9 +306,57 @@ extension_fields:
   worstFrameMs:
     type: int
     minimum: 0
+  worstBuildFrameMs:
+    type: int
+    minimum: 0
+  worstRasterFrameMs:
+    type: int
+    minimum: 0
   jankThresholdMs:
     type: int
     minimum: 1
+  channelId:
+    type: string
+    max_length: 64
+  resourceKind:
+    type: string
+    enum:
+    - image_cache_bytes
+    - active_video_controllers
+    - media_downloads
+  resourceProfile:
+    type: string
+    enum:
+    - compact
+    - regular
+    - expanded
+  currentValue:
+    type: int
+    minimum: 0
+  limitValue:
+    type: int
+    minimum: 0
+  queuedValue:
+    type: int
+    minimum: 0
+  inflightValue:
+    type: int
+    minimum: 0
+  cacheSizeBytes:
+    type: int
+    minimum: 0
+  cacheSource:
+    type: string
+    enum:
+    - memory
+    - disk
+    - remote
+    - seed
+    - optimistic_overlay
+    - unknown
+  cacheClass:
+    type: string
+    max_length: 32
   terminalState:
     type: string
     enum:
@@ -485,9 +533,40 @@ events:
   - sampledFrames
   - jankyFrames
   - worstFrameMs
+  - worstBuildFrameMs
+  - worstRasterFrameMs
   - jankThresholdMs
   - result
-  optional_extensions: []
+  optional_extensions:
+  - surfaceId
+  - channelId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: home_feed_resource_snapshot
+  log_type: event
+  required_extensions:
+  - resourceKind
+  - currentValue
+  - result
+  optional_extensions:
+  - resourceProfile
+  - limitValue
+  - queuedValue
+  - inflightValue
+  - cacheSizeBytes
+  - surfaceId
+  - channelId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: home_feed_cache_read_outcome
+  log_type: event
+  required_extensions:
+  - cacheSource
+  - cacheClass
+  - result
+  optional_extensions:
+  - surfaceId
+  - channelId
   normal_sample_rate: 1.0
   internal_priority: critical
 - event_type: app_startup

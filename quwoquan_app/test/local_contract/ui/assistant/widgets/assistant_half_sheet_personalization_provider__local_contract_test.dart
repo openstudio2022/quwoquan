@@ -14,7 +14,7 @@ class _TrackingAssistantRepository extends AlphaAssistantFacets {
   AssistantContextSnapshot? lastContextSnapshot;
 
   @override
-  Future<PageContextAck> reportPageContext({
+  Future<PageContextReceipt> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
   }) async {
@@ -23,42 +23,37 @@ class _TrackingAssistantRepository extends AlphaAssistantFacets {
       context,
       userAction: userAction,
     );
-    return const PageContextAck(accepted: true, contextKey: 'ctx_test');
+    return const PageContextReceipt(
+      accepted: true,
+      contextKey: 'ctx_test',
+      expiresAt: null,
+    );
   }
 
   @override
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+  Future<AssistantEntryResponse> getAssistantEntry({
     required AssistantOpenContext context,
   }) async {
-    calls.add('getEntryPersonalization');
-    return const AssistantEntryPersonalizationView(
+    calls.add('getAssistantEntry');
+    return const AssistantEntryResponse(
       welcomeMessage: '服务端欢迎语',
       suggestionLines: <String>['服务端建议'],
-      chips: <AssistantEntryPersonalizationChipView>[
-        AssistantEntryPersonalizationChipView(
+      chips: <AssistantEntryChip>[
+        AssistantEntryChip(
           chipId: 'server_find',
           label: '服务端找资料',
           actionType: 'command',
           value: 'find',
         ),
       ],
-      personalized: true,
-    );
-  }
-
-  @override
-  Future<SuggestedActionListView> getSuggestedActions({
-    required AssistantOpenContext context,
-  }) async {
-    calls.add('getSuggestedActions');
-    return const SuggestedActionListView(
-      items: <SuggestedAction>[
-        SuggestedAction(
+      actions: <AssistantEntryAction>[
+        AssistantEntryAction(
           actionId: 'server_action',
-          type: 'command',
+          actionType: 'command',
           label: '服务端动作',
         ),
       ],
+      personalized: true,
     );
   }
 }
@@ -97,8 +92,7 @@ void main() {
 
       expect(repo.calls, <String>[
         'reportPageContext:open_assistant_entry',
-        'getEntryPersonalization',
-        'getSuggestedActions',
+        'getAssistantEntry',
       ]);
       expect(value.welcomeMessage, '服务端欢迎语');
       expect(value.chips.single.label, '服务端找资料');

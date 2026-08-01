@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 enum MemberListDividerInsetKind {
   /// 头像 + 与列表内边距对齐。
   navigate,
+
   /// 多选图标 + 头像。
   multiSelect,
 }

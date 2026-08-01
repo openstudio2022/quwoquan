@@ -2,7 +2,9 @@
   "replayCaseId": "replay_tool_search_min",
   "title": "Search tool observation before final answer",
   "request": {
-    "conversationId": "acv_replay_tool",
+    "skillId": "news_briefing",
+    "domainId": "content",
+    "sessionId": "asn_replay_tool",
     "turnId": "atn_replay_tool",
     "userId": "u_replay",
     "inputText": "Summarize the latest AI chip news.",
@@ -63,14 +65,14 @@
   ],
   "expectations": {
     "selectedSkillId": "news_briefing",
-    "selectedDomainId": "news",
+    "selectedDomainId": "content",
     "expectedToolNames": ["web_search"],
     "expectedClarificationSlotIds": [],
     "expectedReferenceUrls": [],
     "finalAnswerMode": "full"
   },
   "expectedRunResponse": {
-    "conversationId": "acv_replay_tool",
+    "sessionId": "asn_replay_tool",
     "turnId": "atn_replay_tool",
     "status": "completed",
     "finalText": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost.",

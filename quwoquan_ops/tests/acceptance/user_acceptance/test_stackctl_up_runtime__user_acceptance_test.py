@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-004
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-003
 
 from __future__ import annotations
 
@@ -7,7 +8,6 @@ import builtins
 import io
 import json
 import os
-import runpy
 import subprocess
 import tempfile
 import unittest
@@ -181,7 +181,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertNotIn(retired, script)
         self.assertIn("respond 404", content_release_caddy)
 
-    def test_gamma_content_release_routes_and_activates_filter_catalog(self) -> None:
+    def test_gamma_runtime_does_not_mutate_or_gate_on_filter_catalog_release(self) -> None:
         root = Path(__file__).resolve().parents[4]
         caddyfile = (
             root / "quwoquan_ops/environments/gamma/local/Caddyfile"
@@ -193,17 +193,14 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("@api_content_filter_catalog_release", caddyfile)
         self.assertIn("generated-operation api-edge", caddyfile)
         self.assertIn("reverse_proxy api-edge:18079", caddyfile)
+        self.assertIn("wait_local_gamma_host_ready", startup_script)
         self.assertIn(
-            "ensure_gamma_filter_catalog_release()",
+            "FilterCatalog release is an explicit post-start release gate",
             startup_script,
         )
-        self.assertIn(
+        self.assertNotIn("filter-catalog --target", startup_script)
+        self.assertNotIn(
             'filter-catalog --target "$QWQ_LOCAL_RELEASE_TARGET" --action stage-and-activate',
-            startup_script,
-        )
-        self.assertIn(
-            "wait_local_gamma_host_ready\n"
-            "ensure_gamma_filter_catalog_release",
             startup_script,
         )
 
@@ -442,6 +439,37 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertTrue(
                 any("QWQ_DEPLOY_WORK_ROOT" in item for item in repair_plan["actions"])
             )
+
+    def test_repair_restart_stack_never_starts_after_down_failure(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value={"env": "gamma"}),
+            mock.patch.object(
+                stackctl,
+                "resolve_report_dir",
+                return_value=Path(tmp_dir),
+            ),
+            mock.patch.object(stackctl, "load_product_telemetry_log_sink"),
+            mock.patch.object(
+                stackctl,
+                "command_down",
+                return_value={"exitCode": 2, "summary": "down failed"},
+            ),
+            mock.patch.object(stackctl, "command_up") as command_up,
+        ):
+            result = stackctl.command_repair(
+                argparse.Namespace(
+                    command="repair",
+                    target="gamma-local",
+                    fix="restart-stack",
+                    report_dir="",
+                )
+            )
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertIn("down failure", result["summary"])
+        command_up.assert_not_called()
 
     def test_format_stage_header(self) -> None:
         self.assertEqual(stackctl._format_stage_header(2, 3, "app-launch"), "[step 2/3] app-launch")
@@ -1135,7 +1163,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertIn("run_compose_up_with_timeout", script)
         self.assertIn("LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", script)
-        self.assertIn("preserving the partial runtime for inspection", script)
+        self.assertIn(
+            "transactional teardown will preserve the receipt",
+            script,
+        )
+        self.assertIn("write_startup_attempt partial", script)
+        self.assertIn("write_startup_attempt running", script)
         self.assertNotIn('LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:-900', script)
         self.assertIn("compose_up_timed_out=1", script)
         self.assertIn("run stackctl inspect before an explicit restart", script)
@@ -1191,10 +1224,38 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             script,
         )
         self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', script)
+        self.assertIn("content_release_services=(", script)
+        for service_name in (
+            "api-edge",
+            "recommendation-service",
+            "content-service",
+            "user-service",
+            "entity-service",
+        ):
+            self.assertIn(service_name, script)
+        self.assertIn(
+            'COMPOSE_FILES+=("$service_compose_file")',
+            script,
+        )
+        self.assertIn(
+            'COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")',
+            script,
+        )
         self.assertIn(
             '[[ "$service_name" == "assistant-service" ]] ||',
             script,
         )
+        self.assertIn(
+            "compose_up_args+=(\n"
+            "    recommendation-service\n"
+            "    content-service\n"
+            "    user-service\n"
+            "    entity-service\n"
+            "    api-edge\n"
+            "    gamma-proxy",
+            script,
+        )
+        self.assertIn("gamma_full_workload_dependencies_ready", script)
         self.assertIn('"workload": workload', script)
         self.assertIn("prepare_down_compose_environment()", script)
         self.assertIn("prepare_down_compose_environment\n  docker compose", script)
@@ -1400,7 +1461,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         ):
             self.assertNotIn(retired, source)
 
-    def test_local_gamma_social_graph_seed_binds_authenticated_persona(self) -> None:
+    def test_local_gamma_social_graph_seed_and_fixture_are_retired(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script_path = (
             root
@@ -1410,14 +1471,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             root
             / "quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_social_graph.gamma_seed.json"
         )
-        module = runpy.run_path(str(script_path))
-        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
-        mongo_script = module["build_mongo_script"](fixture, "persona-runtime")
-
-        self.assertIn('sourcePersonaId:"persona-runtime"', mongo_script)
-        self.assertIn('userId:"persona-runtime"', mongo_script)
-        self.assertNotIn('followerId:"fixture_user_current"', mongo_script)
-        self.assertNotIn('userId:"fixture_user_current"', mongo_script)
+        self.assertFalse(script_path.exists())
+        self.assertFalse(fixture_path.exists())
 
     def test_environment_probe_does_not_forge_actor_headers(self) -> None:
         anonymous_headers = integration_probe._common_headers("")
@@ -1427,7 +1482,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("X-Test-Auth-Token", authenticated_headers)
         self.assertEqual(authenticated_headers["Authorization"], "Bearer local-test-bearer")
 
-    def test_run_environment_integration_probe_passes_token_via_env(self) -> None:
+    def test_run_environment_integration_probe_passes_token_and_release_ca_via_env(
+        self,
+    ) -> None:
         topology = {"targets": []}
         target = {
             "env": "gamma",
@@ -1448,14 +1505,27 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "quwoquan_ops.cli.stackctl._run_script_probe",
                 return_value=({}, "", []),
             ) as run_probe,
+            mock.patch(
+                "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
+                return_value=Path("/tmp/gamma-local-root.crt"),
+            ),
         ):
-            stackctl._run_environment_integration_probe(topology, "gamma-local", Path("/tmp/report"))
+            stackctl._run_environment_integration_probe(
+                topology,
+                "gamma-local",
+                Path("/tmp/report"),
+                release_readiness_path=Path("/tmp/release-readiness.json"),
+            )
 
         kwargs = run_probe.call_args.kwargs
         self.assertNotIn("--test-auth-token", kwargs["argv"])
         self.assertNotIn("--resolve-host", kwargs["argv"])
         self.assertEqual(kwargs["env"]["TEST_AUTH_TOKEN"], "-starts-with-dash")
         self.assertEqual(kwargs["env"]["GAMMA_TEST_AUTH_TOKEN"], "-starts-with-dash")
+        self.assertEqual(
+            kwargs["env"]["SSL_CERT_FILE"],
+            "/tmp/gamma-local-root.crt",
+        )
 
     def test_run_environment_integration_probe_uses_canonical_dns_target(self) -> None:
         topology = {"targets": []}
@@ -1478,6 +1548,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "quwoquan_ops.cli.stackctl._run_script_probe",
                 return_value=({}, "", []),
             ) as run_probe,
+            mock.patch(
+                "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
+                return_value=Path("/tmp/beta-local-root.crt"),
+            ),
         ):
             stackctl._run_environment_integration_probe(
                 topology,
@@ -1920,17 +1994,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value="",
             ),
             mock.patch(
-                "quwoquan_ops.cli.stackctl.open_local_acceptance_session",
+                "quwoquan_ops.cli.stackctl.open_reference_acceptance_session",
                 return_value=session,
             ) as login,
-            mock.patch(
-                "quwoquan_ops.cli.stackctl.resolve_running_local_deployment_work_root",
-                return_value=Path("/tmp/gamma-deploy-work"),
-            ),
             mock.patch(
                 "quwoquan_ops.cli.stackctl._run_script_probe",
                 return_value=({}, "", []),
             ) as run_probe,
+            mock.patch(
+                "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
+                return_value=Path("/tmp/gamma-local-root.crt"),
+            ),
         ):
             stackctl._run_environment_integration_probe(
                 topology,
@@ -1942,7 +2016,6 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
-            deployment_work_root=Path("/tmp/gamma-deploy-work"),
         )
         kwargs = run_probe.call_args.kwargs
         self.assertNotIn("--test-auth-token", kwargs["argv"])

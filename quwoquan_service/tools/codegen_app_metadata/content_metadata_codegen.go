@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
 func renderContentMetadataDart(
 	postDefaults map[string]string,
+	postSnapshotFieldByteLimits map[string]int,
 	feedDefaults map[string]string,
 	contentTypeMapping map[string]string,
 	feedCategoryToType map[string]string,
@@ -26,6 +28,11 @@ func renderContentMetadataDart(
 	b.WriteString("  // Field defaults derived from post/fields.yaml constraints.\n")
 	b.WriteString("  static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{\n")
 	writeSortedMap(&b, postDefaults)
+	b.WriteString("  };\n\n")
+
+	b.WriteString("  // Canonical max_utf8_bytes projected onto persisted Post DTO fields.\n")
+	b.WriteString("  static const Map<String, int> postSnapshotFieldByteLimits = <String, int>{\n")
+	writeSortedIntMap(&b, postSnapshotFieldByteLimits)
 	b.WriteString("  };\n\n")
 
 	b.WriteString("  // Current feed projection defaults (use FeedItemDto for new code).\n")
@@ -65,6 +72,17 @@ func renderContentMetadataDart(
 
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func writeSortedIntMap(b *strings.Builder, values map[string]int) {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		b.WriteString(fmt.Sprintf("    '%s': %d,\n", key, values[key]))
+	}
 }
 
 // renderStandaloneDtoDart generates a standalone DTO (no base class) from client_projection.

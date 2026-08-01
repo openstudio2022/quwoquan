@@ -40,7 +40,7 @@ class _AssistantManagementPageState
     extends ConsumerState<AssistantManagementPage> {
   Object? _preferenceMutationError;
   bool _preferenceMutationInFlight = false;
-  AssistantPreferenceFact? _revokedPreferenceForUndo;
+  AssistantPreference? _revokedPreferenceForUndo;
 
   @override
   void initState() {
@@ -197,7 +197,7 @@ class _AssistantManagementPageState
   }
 
   Widget _buildPreferencesSection(
-    AsyncValue<List<AssistantPreferenceFact>> preferencesAsync, {
+    AsyncValue<List<AssistantPreference>> preferencesAsync, {
     required Color fgPrimary,
     required Color fgSecondary,
   }) {
@@ -289,7 +289,16 @@ class _AssistantManagementPageState
                       preference.status == AssistantPreferenceStatus.active,
                 )
                 .toList(growable: false);
-            if (active.isEmpty && !_hasRevocationUndo) {
+            final revocableByID = <String, AssistantPreference>{
+              for (final preference in preferences)
+                if (_isRevocablePreference(preference))
+                  preference.preferenceId: preference,
+              if (_hasRevocationUndo)
+                _revokedPreferenceForUndo!.preferenceId:
+                    _revokedPreferenceForUndo!,
+            };
+            final revocable = revocableByID.values.toList(growable: false);
+            if (active.isEmpty && revocable.isEmpty) {
               return Padding(
                 padding: EdgeInsets.all(AppSpacing.md),
                 child: Text(
@@ -303,12 +312,13 @@ class _AssistantManagementPageState
             }
             return Column(
               children: <Widget>[
-                if (_hasRevocationUndo)
-                  _buildRevocationUndo(
-                    _revokedPreferenceForUndo!,
+                ...revocable.map(
+                  (preference) => _buildRevocationUndo(
+                    preference,
                     fgPrimary: fgPrimary,
                     fgSecondary: fgSecondary,
                   ),
+                ),
                 ...active.map(
                   (preference) => _preferenceRow(
                     preference,
@@ -340,10 +350,11 @@ class _AssistantManagementPageState
 
   bool get _hasRevocationUndo {
     final preference = _revokedPreferenceForUndo;
-    if (preference == null ||
-        preference.status != AssistantPreferenceStatus.revoked) {
-      return false;
-    }
+    return preference != null && _isRevocablePreference(preference);
+  }
+
+  bool _isRevocablePreference(AssistantPreference preference) {
+    if (preference.status != AssistantPreferenceStatus.revoked) return false;
     final deadline = DateTime.tryParse(
       preference.revocationDeadline?.trim() ?? '',
     );
@@ -351,7 +362,7 @@ class _AssistantManagementPageState
   }
 
   Widget _buildRevocationUndo(
-    AssistantPreferenceFact preference, {
+    AssistantPreference preference, {
     required Color fgPrimary,
     required Color fgSecondary,
   }) {
@@ -385,7 +396,7 @@ class _AssistantManagementPageState
   }
 
   Widget _preferenceRow(
-    AssistantPreferenceFact preference, {
+    AssistantPreference preference, {
     required Color fgPrimary,
     required Color fgSecondary,
     required String statusLabel,
@@ -456,7 +467,11 @@ class _AssistantManagementPageState
     );
   }
 
-  String _preferenceTitle(AssistantPreferenceFact preference) {
+  String _preferenceTitle(AssistantPreference preference) {
+    if (_isFactualMemory(preference.kind) &&
+        preference.value.trim().isNotEmpty) {
+      return preference.value.trim();
+    }
     return switch (preference.value.trim()) {
       'concise' => AssistantText.assistantPreferenceConcise,
       'detailed' => AssistantText.assistantPreferenceDetailed,
@@ -468,16 +483,56 @@ class _AssistantManagementPageState
     };
   }
 
-  String _preferenceDetail(AssistantPreferenceFact preference) {
+  String _preferenceDetail(AssistantPreference preference) {
     final scope = preference.scope == AssistantPreferenceScope.session
         ? AssistantText.assistantPreferenceSessionScope
         : AssistantText.assistantPreferenceLongTermScope;
     final updatedAt = _formattedPreferenceUpdatedAt(preference.updatedAt);
     return <String>[
+      if (_isFactualMemory(preference.kind))
+        _factualMemoryKindLabel(preference.kind),
       scope,
+      _preferenceSourceLabel(preference.sourceType),
       if (updatedAt.isNotEmpty)
         context.l10n.assistantMemoryUpdatedAt(updatedAt),
     ].join(' · ');
+  }
+
+  bool _isFactualMemory(AssistantPreferenceKind kind) {
+    return switch (kind) {
+      AssistantPreferenceKind.frequentLocations ||
+      AssistantPreferenceKind.familyTerms ||
+      AssistantPreferenceKind.dietaryRestrictions ||
+      AssistantPreferenceKind.travelPreferences => true,
+      _ => false,
+    };
+  }
+
+  String _factualMemoryKindLabel(AssistantPreferenceKind kind) {
+    return switch (kind) {
+      AssistantPreferenceKind.frequentLocations =>
+        AssistantText.assistantMemoryFrequentLocations,
+      AssistantPreferenceKind.familyTerms =>
+        AssistantText.assistantMemoryFamilyTerms,
+      AssistantPreferenceKind.dietaryRestrictions =>
+        AssistantText.assistantMemoryDietaryRestrictions,
+      AssistantPreferenceKind.travelPreferences =>
+        AssistantText.assistantMemoryTravelPreferences,
+      _ => AssistantText.assistantMemoryUntitled,
+    };
+  }
+
+  String _preferenceSourceLabel(AssistantPreferenceSourceType sourceType) {
+    return switch (sourceType) {
+      AssistantPreferenceSourceType.sessionConfirmed =>
+        AssistantText.assistantMemorySourceConfirmedSession,
+      AssistantPreferenceSourceType.management =>
+        AssistantText.assistantMemorySourceManagement,
+      AssistantPreferenceSourceType.explicitRewrite =>
+        AssistantText.assistantMemorySourceExplicitRewrite,
+      AssistantPreferenceSourceType.unknown =>
+        AssistantText.assistantMemoryUntitled,
+    };
   }
 
   String _formattedPreferenceUpdatedAt(String? raw) {
@@ -509,7 +564,7 @@ class _AssistantManagementPageState
     );
   }
 
-  Future<void> _revokePreference(AssistantPreferenceFact preference) async {
+  Future<void> _revokePreference(AssistantPreference preference) async {
     final revoked = await _runPreferenceMutation(
       () => ref
           .read(assistantPreferenceFactFacetProvider)
@@ -520,7 +575,7 @@ class _AssistantManagementPageState
     }
   }
 
-  Future<void> _restorePreference(AssistantPreferenceFact preference) async {
+  Future<void> _restorePreference(AssistantPreference preference) async {
     final restored = await _runPreferenceMutation(
       () => ref
           .read(assistantPreferenceFactFacetProvider)

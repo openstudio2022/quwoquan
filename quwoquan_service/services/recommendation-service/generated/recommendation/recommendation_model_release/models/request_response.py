@@ -2,10 +2,47 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+
+
+class StageRecommendationModelReleaseCommand(BaseModel):
+    """固化一份尚未激活的模型发布；releaseId 与摘要共同形成不可变身份。"""
+    releaseId: str
+    scenario: str
+    modelDigest: str
+    featureContractDigest: str
+    artifactUri: str
+    verificationDigest: str
+    evaluationMetrics: dict[str, Any]
+    idempotencyKey: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ActivateRecommendationModelReleaseCommand(BaseModel):
+    """对场景当前发布执行 compare-and-swap；回滚使用同一命令激活先前已验证发布。"""
+    releaseId: str
+    scenario: str
+    expectedActiveReleaseId: str | None = None
+    idempotencyKey: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecommendationModelReleaseCommandResult(BaseModel):
+    """Stage 或 Activate 的聚合提交结果。"""
+    releaseId: str
+    scenario: str
+    status: str
+    version: int
+    activeReleaseId: str | None = None
+    idempotentReplay: bool
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class CandidateInput(BaseModel):
@@ -35,12 +72,16 @@ class CandidateInput(BaseModel):
     intersectionConfidenceLabel: str | None = None
     intersectionClass: str | None = None
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class CandidateScore(BaseModel):
     """单条候选评分 transport 结果。"""
     contentId: str | None = None
     score: float | None = None
     detail: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ModelScoreRequest(BaseModel):
@@ -54,18 +95,26 @@ class ModelScoreRequest(BaseModel):
     candidates: list[CandidateInput]
     context: dict[str, Any] | None = None
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class ModelScoreResponse(BaseModel):
     """单次评分 Reader 的 transport 结果；模型命中时必须返回具体发布身份供曝光事实审计。"""
     scores: list[CandidateScore]
     modelReleaseId: str | None = None
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class BatchModelScoreRequest(BaseModel):
     """同一调用上下文中的强类型批量评分请求。"""
     requests: list[ModelScoreRequest]
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class BatchModelScoreResponse(BaseModel):
     """与批量评分请求顺序一一对应的强类型结果。"""
     results: list[ModelScoreResponse]
+
+    model_config = ConfigDict(extra="forbid")

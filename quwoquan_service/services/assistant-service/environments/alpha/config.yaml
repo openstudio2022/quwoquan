@@ -1,15 +1,10 @@
 overrides:
-  sys.assistant-service.account_security_authority.base_url: http://127.0.0.1:18081
+  sys.assistant-service.account_security_authority.base_url: http://user-service:18081
   sys.assistant-service.account_security_authority.timeout_ms: 300
-  sys.assistant-service.chat_service.base_url: http://127.0.0.1:18082
-  sys.assistant-service.content_service.base_url: http://127.0.0.1:18080
-  sys.assistant-service.entity_service.base_url: http://127.0.0.1:18084
-  sys.assistant-service.notification_service.base_url: http://127.0.0.1:18088
-  sys.assistant-service.redis.general.addr: 127.0.0.1:6379
-  sys.assistant-service.redis.rec.addr: 127.0.0.1:6379
-  sys.assistant-service.search_service.base_url: http://127.0.0.1:18095
-  sys.assistant-service.user_profile.base_url: http://127.0.0.1:18081
-  sys.assistant-service.user_service.base_url: http://127.0.0.1:18081
+  sys.assistant-service.notification_service.base_url: http://notification-service:18087
+  sys.assistant-service.redis.general.addr: redis:6379
+  sys.assistant-service.redis.rec.addr: redis:6379
+  sys.assistant-service.user_profile.base_url: http://user-service:18081
 secretRefs:
   sys.assistant-service.mongodb.uri: MONGODB_URI
   sys.assistant-service.postgres.dsn: POSTGRES_DSN
@@ -20,35 +15,35 @@ externalBindings:
     state: enabled
   assistant.model.generation:
     state: enabled
-    adapter: ext.llm.protocol_fixture
-    endpointRef: environment_binding:assistant.model_fixture
+    adapter: ext.llm.xiaomi_mimo
+    endpointRef: environment_binding:assistant.model
     endpointEnvs:
-      completion: ASSISTANT_MODEL_FIXTURE_ENDPOINT
+      completion: ASSISTANT_MODEL_COMPLETION_URL
     secretRefs:
     - ASSISTANT_MODEL_API_KEY
-    timeoutMs: 1000
+    timeoutMs: 60000
   assistant.public.search:
     state: enabled
-    adapter: ext.search.protocol_fixture
-    endpointRef: environment_binding:assistant.search_fixture
+    adapter: ext.search.duckduckgo_html
+    endpointRef: environment_binding:assistant.search
     endpointEnvs:
-      search: ASSISTANT_PUBLIC_SEARCH_FIXTURE_URL
+      search: ASSISTANT_PUBLIC_SEARCH_URL
     secretRefs: []
-    timeoutMs: 1000
+    timeoutMs: 10000
   assistant.weather.forecast:
     state: enabled
-    adapter: ext.weather.protocol_fixture
-    endpointRef: environment_binding:assistant.weather_fixture
+    adapter: ext.weather.open_meteo
+    endpointRef: environment_binding:assistant.weather
     endpointEnvs:
-      geocoding: ASSISTANT_WEATHER_FIXTURE_GEOCODING_URL
-      forecast: ASSISTANT_WEATHER_FIXTURE_FORECAST_URL
+      geocoding: ASSISTANT_WEATHER_GEOCODING_URL
+      forecast: ASSISTANT_WEATHER_FORECAST_URL
     secretRefs: []
-    timeoutMs: 1000
+    timeoutMs: 10000
   assistant.finance.quote:
     state: enabled
-    adapter: ext.finance.protocol_fixture
-    endpointRef: environment_binding:assistant.finance_fixture
+    adapter: ext.finance.yahoo_chart
+    endpointRef: environment_binding:assistant.finance
     endpointEnvs:
-      chart: ASSISTANT_FINANCE_FIXTURE_CHART_URL
+      chart: ASSISTANT_FINANCE_CHART_URL
     secretRefs: []
-    timeoutMs: 1000
+    timeoutMs: 10000

@@ -19,3 +19,9 @@ business_rules:
 - Android updateUrl 只能是趣我圈官网 HTTPS 下载端点，APK URL 只能属于官方 CDN 白名单
 - Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换
 - 发布配置没有在线写路径；版本变更仅由新的环境发布包原子替换，回滚即切回经验证的上一发布包
+lifecycle:
+  refresh_semantics: replace_only_with_verified_environment_release_package
+  tombstone: retain_last_verified_release_until_replaced
+external_authority:
+  owner: environment_release_package
+  identity_contract: platform_build_and_artifact_digest

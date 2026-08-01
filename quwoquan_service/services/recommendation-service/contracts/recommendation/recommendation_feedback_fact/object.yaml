@@ -1,7 +1,8 @@
 kind: append_only_fact
 lifecycle:
   immutable: true
-description: RecommendationFeedbackFact 的领域对象契约。
+  subject_closure: hard_delete_identifying_fact_after_terminal_closure_is_persisted
+description: Recommendation 对 ContentBehaviorFact 归因到已交付曝光后追加的不可变反馈事实，作为学习与评测唯一在线输入。
 identity:
   fields:
   - id
@@ -18,7 +19,7 @@ relationships:
   name: exposure
   on_delete: retain
   reference_fields:
-  - targetId
+  - exposureId
   target_object: recommendation.RecommendationExposureFact
 - access: event
   cardinality: N:1
@@ -29,8 +30,21 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: target
+  on_delete: tombstone
+  reference_fields: [targetType, targetId]
+  target_objects: [user.Persona, entity.Homepage, circle.Circle, content.Post, tag.TagNodeView]
 local_identity_reasons:
+  sourceEventId: ContentBehaviorFact 的不可变消费幂等身份，不是 Recommendation 业务对象引用。
   requestId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
   userId: recommendation actor key; persona is preferred but device/anonymous actors have no canonical
     Persona aggregate reference
+business_rules:
+- 每条推荐反馈必须引用 Recommendation 已持久化的 exposure；无 feedRequestId 或无法匹配曝光的 ContentBehaviorFact 不进入推荐反馈事实。
+- source behavior eventId 幂等，重复投递不得产生第二条学习事实。
+- 账号关闭后拒绝新反馈；关闭事实先持久化，再硬删除历史可识别反馈，closure checkpoint 阻止旧事件重建。

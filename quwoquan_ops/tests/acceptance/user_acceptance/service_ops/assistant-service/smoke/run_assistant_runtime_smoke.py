@@ -561,14 +561,14 @@ def report_template(args: argparse.Namespace, scenario: Dict[str, Any]) -> Dict[
             "skillId": scenario.get("skillId", ""),
             "domainId": scenario.get("domainId", ""),
             "question": scenario.get("question", ""),
-            "conversationId": "",
+            "sessionId": "",
             "turnId": "",
             "answer": "",
             "eventTypes": [],
         },
         "timings": {
             "healthzMs": 0,
-            "createConversationMs": 0,
+            "createSessionMs": 0,
             "createTurnMs": 0,
             "streamMs": 0,
             "totalMs": 0,
@@ -595,39 +595,39 @@ def main() -> int:
         report["timings"]["healthzMs"] = int((time.monotonic() - health_started) * 1000)
         add_step(report, "healthz", "passed")
 
-        add_step(report, "create_conversation", "running")
-        conversation_started = time.monotonic()
-        conversation = request_json(
+        add_step(report, "create_session", "running")
+        session_started = time.monotonic()
+        session = request_json(
             args.base_url,
-            "/assistant/conversations",
+            "/assistant/sessions",
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,
-            operation_id="CreateAssistantConversation",
-            client_page_id="assistant.create.assistant.conversation",
+            operation_id="CreateAssistantSession",
+            client_page_id="assistant.create.assistant.session",
             body={"summary": "assistant protocol smoke {0}".format(args.scenario_id)},
             timeout_seconds=args.request_timeout_seconds,
         )
-        report["timings"]["createConversationMs"] = int(
-            (time.monotonic() - conversation_started) * 1000
+        report["timings"]["createSessionMs"] = int(
+            (time.monotonic() - session_started) * 1000
         )
-        conversation_id = str(conversation.get("conversationId", "")).strip()
-        if not conversation_id:
+        session_id = str(session.get("sessionId", "")).strip()
+        if not session_id:
             raise ProbeFailure(
                 "env_not_ready",
-                "assistant create conversation missing conversationId: {0}".format(
-                    json.dumps(conversation, ensure_ascii=False)[:400]
+                "assistant create session missing sessionId: {0}".format(
+                    json.dumps(session, ensure_ascii=False)[:400]
                 ),
                 retryable=True,
             )
-        report["assistant"]["conversationId"] = conversation_id
-        add_step(report, "create_conversation", "passed", conversationId=conversation_id)
+        report["assistant"]["sessionId"] = session_id
+        add_step(report, "create_session", "passed", sessionId=session_id)
 
         add_step(report, "create_turn", "running")
         turn_started = time.monotonic()
         turn = request_json(
             args.base_url,
-            "/assistant/conversations/{0}/turns".format(conversation_id),
+            "/assistant/sessions/{0}/turns".format(session_id),
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,

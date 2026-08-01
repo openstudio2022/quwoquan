@@ -57,15 +57,17 @@ class MarkdownSeoHtmlRenderer {
     QwqMarkdownParser? parser,
     AssetUrlResolver? assetUrlResolver,
   }) : _parser = parser ?? const QwqMarkdownParser(),
-       _assetUrlResolver =
-           assetUrlResolver ??
-           const AssetUrlResolver(
-             imageCdnBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-             videoCdnBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-           );
+       _configuredAssetUrlResolver = assetUrlResolver;
 
   final QwqMarkdownParser _parser;
-  final AssetUrlResolver _assetUrlResolver;
+  final AssetUrlResolver? _configuredAssetUrlResolver;
+
+  AssetUrlResolver get _assetUrlResolver =>
+      _configuredAssetUrlResolver ??
+      AssetUrlResolver(
+        imageCdnBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+        videoCdnBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+      );
 
   SeoHtmlDocument render(MarkdownSeoRenderInput input) {
     final canonicalUrl = AppPublicContentLinks.postWebUrl(input.postId);

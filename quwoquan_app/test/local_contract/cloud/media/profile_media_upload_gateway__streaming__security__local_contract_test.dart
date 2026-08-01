@@ -25,13 +25,13 @@ void main() {
           uploadUri,
           bytes, {
           required contentLength,
-          required contentType,
+          required mimeType,
           required expectedSha256,
           abortTrigger,
         }) async {
           expect(uploadUri.scheme, 'https');
           expect(contentLength, 4);
-          expect(contentType, 'image/jpeg');
+          expect(mimeType, 'image/jpeg');
           expect(
             expectedSha256,
             '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
@@ -74,7 +74,7 @@ void main() {
           _,
           _, {
           required contentLength,
-          required contentType,
+          required mimeType,
           required expectedSha256,
           abortTrigger,
         }) async {

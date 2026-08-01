@@ -1943,6 +1943,274 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /gatherings:
+        post:
+            operationId: CreateGathering
+            x-contract-operation-id: circle.gathering.CreateGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: createGathering
+                aggregateOwner: Gathering
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateGatheringCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:
+        get:
+            operationId: GetGathering
+            x-contract-operation-id: circle.gathering.GetGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: GatheringQueryFacet
+                method: getGathering
+                reader: GatheringReader
+                slice: GatheringSlice
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:approve:
+        post:
+            operationId: ApproveGatheringParticipant
+            x-contract-operation-id: circle.gathering.ApproveGatheringParticipant
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: approveGatheringParticipant
+                aggregateOwner: Gathering
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ApproveGatheringParticipantCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:cancel:
+        post:
+            operationId: CancelGathering
+            x-contract-operation-id: circle.gathering.CancelGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: cancelGathering
+                aggregateOwner: Gathering
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:complete:
+        post:
+            operationId: CompleteGathering
+            x-contract-operation-id: circle.gathering.CompleteGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: completeGathering
+                aggregateOwner: Gathering
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:join:
+        post:
+            operationId: JoinGathering
+            x-contract-operation-id: circle.gathering.JoinGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: joinGathering
+                aggregateOwner: Gathering
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /gatherings/{gatheringId}:leave:
+        post:
+            operationId: LeaveGathering
+            x-contract-operation-id: circle.gathering.LeaveGathering
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: GatheringCommandFacet
+                method: leaveGathering
+                aggregateOwner: Gathering
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringCommandResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/circle/account-closure/dead-letters:recover:
         post:
             operationId: RecoverCircleAccountClosureDeadLetter
@@ -2040,6 +2308,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AppendCircleBehaviorFactCommand
+            x-contract-placeholder: true
+        ApproveGatheringParticipantCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ApproveGatheringParticipantCommand
             x-contract-placeholder: true
         Circle:
             type: object
@@ -2151,10 +2424,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateCircleGroupCommand
             x-contract-placeholder: true
+        CreateGatheringCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateGatheringCommand
+            x-contract-placeholder: true
         FeatureCirclePostCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FeatureCirclePostCommand
+            x-contract-placeholder: true
+        GatheringCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringCommandResult
+            x-contract-placeholder: true
+        GatheringSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringSlice
             x-contract-placeholder: true
         PersonaCircleSlice:
             type: object

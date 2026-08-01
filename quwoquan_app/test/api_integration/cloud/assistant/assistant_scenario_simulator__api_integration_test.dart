@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
@@ -30,7 +30,7 @@ void main() {
                 ScenarioMockAssistantRepository(pack: scenarioPack),
               ),
           ],
-          child: const MaterialApp(home: PersonalAssistantConversationPage()),
+          child: const MaterialApp(home: PersonalAssistantSessionPage()),
         ),
       );
       await _pumpFrames(tester);
@@ -114,9 +114,7 @@ Future<void> _sendAndExpect(
   await tester.tap(find.byKey(TestKeys.assistantSendButton));
   await _pumpUntilStreamSettled(tester);
 
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
+  final context = tester.element(find.byType(PersonalAssistantSessionPage));
   final streamState = ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -173,9 +171,7 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
   var idleTicks = 0;
   for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     final streamState = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

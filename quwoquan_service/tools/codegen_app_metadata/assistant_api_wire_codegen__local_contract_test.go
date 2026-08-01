@@ -50,14 +50,24 @@ func TestAssistantPreferenceMetadataGeneratesTypedWire(t *testing.T) {
 	output := string(payload)
 	for _, required := range []string{
 		"import 'assistant_runtime_enums.g.dart';",
-		"class AssistantPreferenceFact {",
-		"class AssistantPreferenceFactListView {",
-		"final List<AssistantPreferenceFact> items;",
+		"class AssistantPreference {",
+		"final String? sourceSessionId;",
+		"final String? confirmedAt;",
+		"class AssistantPreferenceListView {",
+		"final List<AssistantPreference> items;",
+		"class SetAssistantPreferenceRequest {",
+		"final bool confirmed;",
 		"class AssistantStartRunRequest {",
-		"final AssistantRunTextInput input;",
-		"final AssistantRunTrigger trigger;",
-		"class AssistantCreateConversationRequest {",
+		"final AssistantRunIntent intent;",
+		"class AssistantAnswerRunIntent {",
+		"class AssistantSearchRunIntent {",
+		"class AssistantCreationRunIntent {",
+		"class AssistantCreateSessionRequest {",
 		"final String clientRequestId;",
+		"class AssistantRunTerminalSnapshotView {",
+		"class AssistantTurnSummaryView {",
+		"class AssistantTurnListView {",
+		"final List<AssistantTurnSummaryView> items;",
 	} {
 		if !strings.Contains(output, required) {
 			t.Fatalf("generated assistant wire missing %q", required)

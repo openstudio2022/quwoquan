@@ -9,8 +9,8 @@ source_entities:
 fields:
 - {name: schema}
 - {name: eventId}
-- {name: conversationId}
-- {name: turnId}
+- {name: sessionId}
+- {name: runId}
 - {name: seq}
 - {name: eventType}
 - {name: traceId}

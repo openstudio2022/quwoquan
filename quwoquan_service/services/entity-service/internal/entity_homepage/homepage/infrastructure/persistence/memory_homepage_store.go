@@ -150,7 +150,7 @@ func (s *MemoryHomepageStore) FindExact(
 
 func (s *MemoryHomepageStore) Search(
 	_ context.Context,
-	query homepageports.SearchQuery,
+	query homepageports.SearchRequestFact,
 ) (homepageports.Page, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

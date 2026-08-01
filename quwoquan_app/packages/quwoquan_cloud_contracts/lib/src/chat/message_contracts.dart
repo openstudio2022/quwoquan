@@ -28,10 +28,31 @@ final class ChatMessageCardAttribute {
   final String value;
 }
 
+final class ChatMessageCardObjectRef {
+  ChatMessageCardObjectRef({
+    required String objectTypeRef,
+    required String objectId,
+    required String routeId,
+  }) : objectTypeRef = _requiredText(objectTypeRef, 'objectRef.objectTypeRef'),
+       objectId = _requiredText(objectId, 'objectRef.objectId'),
+       routeId = _requiredText(routeId, 'objectRef.routeId');
+
+  final String objectTypeRef;
+  final String objectId;
+  final String routeId;
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    'objectTypeRef': objectTypeRef,
+    'objectId': objectId,
+    'routeId': routeId,
+  };
+}
+
 final class ChatMessageCardCommand {
   ChatMessageCardCommand({
     required String kind,
     required String title,
+    ChatMessageCardObjectRef? objectRef,
     String? subtitle,
     String? thumbnailUrl,
     String? deeplink,
@@ -42,16 +63,20 @@ final class ChatMessageCardCommand {
         const <ChatMessageCardAttribute>[],
   }) : kind = _requiredText(kind, 'card.kind'),
        title = _requiredText(title, 'card.title'),
+       objectRef = objectRef,
        subtitle = _optionalText(subtitle),
        thumbnailUrl = _optionalText(thumbnailUrl),
        deeplink = _optionalText(deeplink),
        landingUrl = _optionalText(landingUrl),
        shareText = _optionalText(shareText),
        message = _optionalText(message),
-       attributes = List<ChatMessageCardAttribute>.unmodifiable(attributes);
+       attributes = List<ChatMessageCardAttribute>.unmodifiable(attributes) {
+    _validateMessageCardObjectRef(this.kind, this.objectRef);
+  }
 
   final String kind;
   final String title;
+  final ChatMessageCardObjectRef? objectRef;
   final String? subtitle;
   final String? thumbnailUrl;
   final String? deeplink;
@@ -59,6 +84,43 @@ final class ChatMessageCardCommand {
   final String? shareText;
   final String? message;
   final List<ChatMessageCardAttribute> attributes;
+}
+
+void _validateMessageCardObjectRef(
+  String kind,
+  ChatMessageCardObjectRef? objectRef,
+) {
+  const actionable = <String, (String, String)>{
+    'content_post': ('post', 'contentDetail'),
+    'user_profile': ('user', 'userProfile'),
+    'entity_profile': ('homepage', 'homepageDetail'),
+    'circle': ('circle', 'circleDetail'),
+    'gathering': ('gathering', 'gatheringDetail'),
+  };
+  const nonActionable = <String>{'profile_qr', 'rtc_call_log'};
+  final expected = actionable[kind];
+  if (expected == null && !nonActionable.contains(kind)) {
+    throw ArgumentError.value(kind, 'card.kind', 'is not canonical');
+  }
+  if (expected == null) {
+    if (objectRef != null) {
+      throw ArgumentError.value(
+        objectRef,
+        'card.objectRef',
+        'must be absent for non-actionable cards',
+      );
+    }
+    return;
+  }
+  if (objectRef == null ||
+      objectRef.objectTypeRef != expected.$1 ||
+      objectRef.routeId != expected.$2) {
+    throw ArgumentError.value(
+      objectRef,
+      'card.objectRef',
+      'must match the canonical object type and route for $kind',
+    );
+  }
 }
 
 final class ChatSendMessageResult {

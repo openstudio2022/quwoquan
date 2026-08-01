@@ -147,7 +147,7 @@ func TestPushDeliveryWorkerDispatchesIdempotentlyExactlyOnce(t *testing.T) {
 		t.Fatalf("outbox leaked endpoint token: %+v", outbox)
 	}
 
-	reopenedStore := reliabletaskmongo.New(integrationMongoDB)
+	reopenedStore := reliabletaskmongo.NewExternalInteraction(integrationMongoDB)
 	reopened, err := application.NewExternalInteractionService(
 		reopenedStore,
 		map[string]reliabletask.ExternalProvider{"push_dispatch": dispatchProvider},

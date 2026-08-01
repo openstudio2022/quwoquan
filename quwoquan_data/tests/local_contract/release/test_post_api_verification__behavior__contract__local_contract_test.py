@@ -352,21 +352,28 @@ def _get_json(
 
 def _write_pagination_contract(path: Path) -> None:
     path.write_text(
-        "types:\n  Pagination:\n    fields:\n      - name: limit\n        max: 2\n",
+        "api_routes:\n"
+        "  - method: GET\n"
+        "    path: /content/feed\n"
+        "    operation: GetFeed\n"
+        "    pagination:\n"
+        "      maximum_items: 2\n",
         encoding="utf-8",
     )
 
 
 @pytest.mark.parametrize(
-    "environment",
+    ("environment", "readiness_phase"),
     [
-        DeploymentEnvironment.ALPHA,
-        DeploymentEnvironment.BETA,
-        DeploymentEnvironment.GAMMA,
+        (DeploymentEnvironment.ALPHA, "commercial"),
+        (DeploymentEnvironment.BETA, "commercial"),
+        (DeploymentEnvironment.GAMMA, "commercial"),
+        (DeploymentEnvironment.GAMMA, "consumer"),
     ],
 )
 def test_post_api_verification__binds_releaseimport_posts__contract__local_contract(
     environment: DeploymentEnvironment,
+    readiness_phase: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -376,7 +383,7 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "SERVICE_PAGINATION_CONTRACT_PATH", pagination)
+    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     def _get_bytes(_client, url: str, **kwargs):
         if url.endswith(".mp4"):
@@ -416,6 +423,7 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
         / "consumer-api-001/post-api-verification.json",
         api_base_url="https://api.test",
         media_delivery_base_url="https://media.test",
+        readiness_phase=readiness_phase,
     )
 
     payload = json.loads(report.read_text(encoding="utf-8"))
@@ -446,9 +454,13 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     assert len(image_probes) == 2
     assert {probe["hashVerified"] for probe in image_probes} == {True}
     queries = {row["name"]: row for row in payload["feedQueries"]}
+    assert payload["readinessPhase"] == readiness_phase
     assert queries["typed_video"]["query"] == "identity=work&type=video&limit=2"
     assert queries["typed_video"]["matchedPostIds"] == ["post-video-a"]
-    assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+    if readiness_phase == "commercial":
+        assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+    else:
+        assert "premium_stream" not in queries
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {
@@ -472,7 +484,7 @@ def test_post_api_verification__rejects_incomplete_releaseimport_binding__contra
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "SERVICE_PAGINATION_CONTRACT_PATH", pagination)
+    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     with pytest.raises(subject.PostApiVerificationError, match="do not exactly match"):
         subject.write_post_api_verification(

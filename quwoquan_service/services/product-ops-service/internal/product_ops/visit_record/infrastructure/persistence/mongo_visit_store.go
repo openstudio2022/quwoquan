@@ -31,18 +31,6 @@ func NewMongoVisitStore(db *mongo.Database) *MongoVisitStore {
 }
 
 func (s *MongoVisitStore) EnsureIndexes(ctx context.Context) error {
-	if err := s.migrateCanonicalVisitTime(ctx); err != nil {
-		return err
-	}
-	for _, legacyIndex := range []string{
-		"idx_visit_target",
-		"idx_visit_session",
-		"ttl_visit_timestamp",
-	} {
-		if err := dropVisitIndexIfExists(ctx, s.visits, legacyIndex); err != nil {
-			return fmt.Errorf("drop legacy visit index %s: %w", legacyIndex, err)
-		}
-	}
 	if _, err := s.visits.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
@@ -72,51 +60,6 @@ func (s *MongoVisitStore) EnsureIndexes(ctx context.Context) error {
 		Options: options.Index().SetName("idx_visit_receipts_expire").SetExpireAfterSeconds(0),
 	}); err != nil {
 		return fmt.Errorf("create visit receipt indexes: %w", err)
-	}
-	return nil
-}
-
-// migrateCanonicalVisitTime performs the one-time cutover before legacy TTL
-// indexes are removed. Runtime reads never fall back to retired fields.
-func (s *MongoVisitStore) migrateCanonicalVisitTime(ctx context.Context) error {
-	_, err := s.visits.UpdateMany(
-		ctx,
-		bson.D{{Key: "occurredAt", Value: bson.D{{Key: "$exists", Value: false}}}},
-		mongo.Pipeline{bson.D{{Key: "$set", Value: bson.D{{
-			Key: "occurredAt",
-			Value: bson.D{{
-				Key:   "$ifNull",
-				Value: bson.A{"$timestamp", "$$NOW"},
-			}},
-		}}}}},
-	)
-	if err != nil {
-		return fmt.Errorf("migrate canonical visit time: %w", err)
-	}
-	_, err = s.visits.UpdateMany(ctx, bson.D{}, bson.D{{Key: "$unset", Value: bson.D{
-		{Key: "lastSeenAt", Value: ""},
-		{Key: "timestamp", Value: ""},
-		{Key: "sessionId", Value: ""},
-		{Key: "source", Value: ""},
-	}}})
-	if err != nil {
-		return fmt.Errorf("remove legacy visit fields: %w", err)
-	}
-	return nil
-}
-
-func dropVisitIndexIfExists(
-	ctx context.Context,
-	collection *mongo.Collection,
-	name string,
-) error {
-	if err := collection.Indexes().DropOne(ctx, name); err != nil {
-		var commandError mongo.CommandError
-		if errors.As(err, &commandError) &&
-			(commandError.Code == 26 || commandError.Code == 27) {
-			return nil
-		}
-		return err
 	}
 	return nil
 }
@@ -165,12 +108,6 @@ func (s *MongoVisitStore) CommitVisit(
 		update := bson.D{
 			{Key: "$inc", Value: bson.D{{Key: "visitCount", Value: 1}}},
 			{Key: "$set", Value: bson.D{{Key: "occurredAt", Value: now}}},
-			{Key: "$unset", Value: bson.D{
-				{Key: "lastSeenAt", Value: ""},
-				{Key: "timestamp", Value: ""},
-				{Key: "sessionId", Value: ""},
-				{Key: "source", Value: ""},
-			}},
 			{Key: "$setOnInsert", Value: bson.D{
 				{Key: "userId", Value: command.Input.UserID},
 				{Key: "targetType", Value: command.Input.TargetType},

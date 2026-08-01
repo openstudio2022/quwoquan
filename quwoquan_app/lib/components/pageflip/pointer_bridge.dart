@@ -6,10 +6,7 @@ import 'package:quwoquan_app/components/pageflip/types.dart';
 
 @immutable
 class StPageFlipSwipeResult {
-  const StPageFlipSwipeResult({
-    required this.corner,
-    required this.direction,
-  });
+  const StPageFlipSwipeResult({required this.corner, required this.direction});
 
   final StPageFlipCorner corner;
   final StPageFlipDirection direction;

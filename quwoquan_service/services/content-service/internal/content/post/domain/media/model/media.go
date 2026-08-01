@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -83,6 +84,7 @@ type MediaAssetSnapshot struct {
 	MediaType                     MediaType
 	MimeType                      string
 	FileSize                      int64
+	CaptureMetadata               CaptureMetadata
 	AccessPolicy                  AccessPolicy
 	ProcessingStatus              ProcessingStatus
 	ProcessingVersion             int64
@@ -196,9 +198,36 @@ type CreateMediaAssetParams struct {
 	MediaType          MediaType
 	MimeType           string
 	FileSize           int64
+	CaptureMetadata    CaptureMetadata
 	AccessPolicy       AccessPolicy
 	ProcessingRequired bool
 	Now                time.Time
+}
+
+// CaptureMetadata is the creator-disclosed EXIF snapshot owned by MediaAsset.
+// Pointer scalars preserve the difference between an absent value and a valid
+// zero coordinate. The type deliberately has no String method because GPS and
+// CapturedAt are PII and must not enter logs.
+type CaptureMetadata struct {
+	CameraMake          string     `bson:"cameraMake,omitempty" json:"cameraMake,omitempty"`
+	CameraModel         string     `bson:"cameraModel,omitempty" json:"cameraModel,omitempty"`
+	LensModel           string     `bson:"lensModel,omitempty" json:"lensModel,omitempty"`
+	FocalLengthMM       *float64   `bson:"focalLengthMm,omitempty" json:"focalLengthMm,omitempty"`
+	ApertureFNumber     *float64   `bson:"apertureFNumber,omitempty" json:"apertureFNumber,omitempty"`
+	ShutterSpeedSeconds *float64   `bson:"shutterSpeedSeconds,omitempty" json:"shutterSpeedSeconds,omitempty"`
+	ISOSensitivity      *int       `bson:"isoSensitivity,omitempty" json:"isoSensitivity,omitempty"`
+	CapturedAt          *time.Time `bson:"capturedAt,omitempty" json:"capturedAt,omitempty"`
+	GPSLatitude         *float64   `bson:"gpsLatitude,omitempty" json:"gpsLatitude,omitempty"`
+	GPSLongitude        *float64   `bson:"gpsLongitude,omitempty" json:"gpsLongitude,omitempty"`
+}
+
+func (m CaptureMetadata) IsEmpty() bool {
+	return strings.TrimSpace(m.CameraMake) == "" &&
+		strings.TrimSpace(m.CameraModel) == "" &&
+		strings.TrimSpace(m.LensModel) == "" &&
+		m.FocalLengthMM == nil && m.ApertureFNumber == nil &&
+		m.ShutterSpeedSeconds == nil && m.ISOSensitivity == nil &&
+		m.CapturedAt == nil && m.GPSLatitude == nil && m.GPSLongitude == nil
 }
 
 // MediaAsset is a durable, independently authorized media object. It never
@@ -213,6 +242,7 @@ type MediaAsset struct {
 	mediaType                     MediaType
 	mimeType                      string
 	fileSize                      int64
+	captureMetadata               CaptureMetadata
 	accessPolicy                  AccessPolicy
 	processingStatus              ProcessingStatus
 	processingVersion             int64
@@ -265,6 +295,7 @@ func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
 		mediaType:        MediaType(strings.ToLower(strings.TrimSpace(string(params.MediaType)))),
 		mimeType:         strings.TrimSpace(params.MimeType),
 		fileSize:         params.FileSize,
+		captureMetadata:  normalizeCaptureMetadata(params.CaptureMetadata),
 		accessPolicy:     params.AccessPolicy,
 		processingStatus: ProcessingStatusReady,
 		coverStrategy:    CoverStrategyFirstFrame,
@@ -294,6 +325,7 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 		mediaType:                     MediaType(strings.ToLower(strings.TrimSpace(string(snapshot.MediaType)))),
 		mimeType:                      strings.TrimSpace(snapshot.MimeType),
 		fileSize:                      snapshot.FileSize,
+		captureMetadata:               normalizeCaptureMetadata(snapshot.CaptureMetadata),
 		accessPolicy:                  snapshot.AccessPolicy,
 		processingStatus:              snapshot.ProcessingStatus,
 		processingVersion:             snapshot.ProcessingVersion,
@@ -848,6 +880,7 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		MediaType:                     a.mediaType,
 		MimeType:                      a.mimeType,
 		FileSize:                      a.fileSize,
+		CaptureMetadata:               normalizeCaptureMetadata(a.captureMetadata),
 		AccessPolicy:                  a.accessPolicy,
 		ProcessingStatus:              a.processingStatus,
 		ProcessingVersion:             a.processingVersion,
@@ -924,6 +957,9 @@ func (a *MediaAsset) validate() error {
 		a.updatedAt.Before(a.createdAt) {
 		return fmt.Errorf("%w: required state is missing", ErrInvalidMediaAsset)
 	}
+	if err := validateCaptureMetadata(a.captureMetadata, a.mediaType, a.createdAt); err != nil {
+		return err
+	}
 	switch a.processingStatus {
 	case ProcessingStatusProcessing:
 		if a.processedAt != nil || a.processingVersion != 0 || a.processingFailureReason != "" {
@@ -964,6 +1000,80 @@ func (a *MediaAsset) validate() error {
 		}
 	}
 	return nil
+}
+
+func normalizeCaptureMetadata(value CaptureMetadata) CaptureMetadata {
+	value.CameraMake = strings.TrimSpace(value.CameraMake)
+	value.CameraModel = strings.TrimSpace(value.CameraModel)
+	value.LensModel = strings.TrimSpace(value.LensModel)
+	value.FocalLengthMM = cloneFloat64(value.FocalLengthMM)
+	value.ApertureFNumber = cloneFloat64(value.ApertureFNumber)
+	value.ShutterSpeedSeconds = cloneFloat64(value.ShutterSpeedSeconds)
+	value.ISOSensitivity = cloneInt(value.ISOSensitivity)
+	value.CapturedAt = cloneTime(value.CapturedAt)
+	value.GPSLatitude = cloneFloat64(value.GPSLatitude)
+	value.GPSLongitude = cloneFloat64(value.GPSLongitude)
+	return value
+}
+
+func validateCaptureMetadata(value CaptureMetadata, mediaType MediaType, now time.Time) error {
+	if value.IsEmpty() {
+		return nil
+	}
+	if mediaType != MediaTypeImage {
+		return fmt.Errorf("%w: capture metadata is only valid for images", ErrInvalidMediaAsset)
+	}
+	if len(value.CameraMake) > 128 || len(value.CameraModel) > 128 || len(value.LensModel) > 192 {
+		return fmt.Errorf("%w: capture metadata text is too long", ErrInvalidMediaAsset)
+	}
+	if !validPositiveCaptureNumber(value.FocalLengthMM, 2000) ||
+		!validPositiveCaptureNumber(value.ApertureFNumber, 128) ||
+		!validPositiveCaptureNumber(value.ShutterSpeedSeconds, 86400) {
+		return fmt.Errorf("%w: capture exposure parameter is out of range", ErrInvalidMediaAsset)
+	}
+	if value.ISOSensitivity != nil && (*value.ISOSensitivity <= 0 || *value.ISOSensitivity > 6553600) {
+		return fmt.Errorf("%w: capture ISO is out of range", ErrInvalidMediaAsset)
+	}
+	if (value.GPSLatitude == nil) != (value.GPSLongitude == nil) {
+		return fmt.Errorf("%w: capture GPS requires latitude and longitude", ErrInvalidMediaAsset)
+	}
+	if value.GPSLatitude != nil &&
+		(!validFiniteCaptureNumber(*value.GPSLatitude) || math.Abs(*value.GPSLatitude) > 90 ||
+			!validFiniteCaptureNumber(*value.GPSLongitude) || math.Abs(*value.GPSLongitude) > 180) {
+		return fmt.Errorf("%w: capture GPS is out of range", ErrInvalidMediaAsset)
+	}
+	if value.CapturedAt != nil {
+		capturedAt := value.CapturedAt.UTC()
+		earliest := time.Date(1826, time.January, 1, 0, 0, 0, 0, time.UTC)
+		if capturedAt.Before(earliest) || capturedAt.After(now.UTC().Add(24*time.Hour)) {
+			return fmt.Errorf("%w: capture time is out of range", ErrInvalidMediaAsset)
+		}
+	}
+	return nil
+}
+
+func validPositiveCaptureNumber(value *float64, maximum float64) bool {
+	return value == nil || (validFiniteCaptureNumber(*value) && *value > 0 && *value <= maximum)
+}
+
+func validFiniteCaptureNumber(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func cloneFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func validMediaType(value MediaType) bool {

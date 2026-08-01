@@ -140,6 +140,7 @@ type MediaAssetSlice struct {
 	MediaType                     string                      `json:"mediaType"`
 	MimeType                      string                      `json:"mimeType"`
 	FileSize                      int64                       `json:"fileSize"`
+	CaptureMetadata               mediamodel.CaptureMetadata  `json:"-"`
 	AccessPolicy                  mediamodel.AccessPolicy     `json:"accessPolicy"`
 	ProcessingStatus              mediamodel.ProcessingStatus `json:"status"`
 	CreatedAt                     time.Time                   `json:"createdAt"`

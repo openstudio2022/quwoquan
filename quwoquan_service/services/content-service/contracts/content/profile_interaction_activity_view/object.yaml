@@ -115,3 +115,12 @@ local_identity_reasons:
   previewRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
   sourceEventId: immutable source outbox identity used only for projector dedupe and replay traceability
+business_rules:
+- received 与 sent 方向由源事件参与者语义确定，查询参数不得重解释方向。
+- 同一 sourceEventId 只物化一次活动行，稳定分页使用 occurredAt 与 activityId 复合游标。
+- 源内容 tombstone 后必须清除正文预览，但保留用户可理解的互动历史与审计水位。
+lifecycle:
+  source_events: [ContentReactionChanged, CommentCreated, CommentDeleted, OutboundShareRecorded]
+  checkpoint: content_outbox_sequence
+  rebuild: replay_content_interaction_outbox
+  tombstone: redact_deleted_preview_and_retain_activity_identity

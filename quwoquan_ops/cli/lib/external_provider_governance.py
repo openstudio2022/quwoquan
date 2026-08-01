@@ -24,7 +24,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 SERVICES_ROOT = ROOT / "quwoquan_service" / "services"
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-SUBSTITUTE_ENVIRONMENTS = ("alpha", "beta", "gamma")
+NONPROD_ENVIRONMENTS = ("alpha", "beta", "gamma")
 RELEASE_ADAPTER_ENVIRONMENTS = ("prod",)
 STATES = {"enabled", "blocked", "not_required"}
 READY_IMPLEMENTATION_STATUSES = frozenset({"production"})
@@ -84,6 +84,15 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _service_roots() -> list[Path]:
+    """Return checked-in service roots, excluding generated output directories."""
+    return sorted(
+        path
+        for path in SERVICES_ROOT.iterdir()
+        if path.is_dir() and not path.name.startswith(".")
+    )
+
+
 @lru_cache(maxsize=1)
 def load_bindings(path: Path | None = None) -> dict[str, Any]:
     if path is not None:
@@ -91,7 +100,7 @@ def load_bindings(path: Path | None = None) -> dict[str, Any]:
     environments: dict[str, dict[str, dict[str, Any]]] = {
         env: {} for env in ENVIRONMENTS
     }
-    for service_root in sorted(path for path in SERVICES_ROOT.iterdir() if path.is_dir()):
+    for service_root in _service_roots():
         for env in ENVIRONMENTS:
             config_path = service_root / "environments" / env / "config.yaml"
             config = _load_yaml(config_path)
@@ -109,7 +118,7 @@ def load_bindings(path: Path | None = None) -> dict[str, Any]:
 
 def _operation_sources() -> list[tuple[Path, str, str, str, dict[str, Any]]]:
     sources: list[tuple[Path, str, str, str, dict[str, Any]]] = []
-    for service_root in sorted(path for path in SERVICES_ROOT.iterdir() if path.is_dir()):
+    for service_root in _service_roots():
         domain_path = service_root / "contracts" / "domain.yaml"
         domain = str(_load_yaml(domain_path).get("domain") or "").strip()
         for path in sorted((service_root / "contracts").glob("*/*/operations.yaml")):
@@ -540,8 +549,7 @@ def binding_issues(
             continue
         if set(scope) != {
             service_root.name
-            for service_root in SERVICES_ROOT.iterdir()
-            if service_root.is_dir()
+            for service_root in _service_roots()
         }:
             issues.append(
                 ProviderGovernanceIssue(
@@ -628,20 +636,13 @@ def binding_issues(
                             f"{env} forbids mock, fixture, recorder or local-substitute adapters",
                         )
                     )
-                if env in SUBSTITUTE_ENVIRONMENTS and state != "not_required":
+                if env in NONPROD_ENVIRONMENTS and state != "not_required":
                     if state != "enabled":
                         issues.append(
                             ProviderGovernanceIssue(
                                 item_location,
-                                "alpha/beta/gamma must enable local_substitute adapters; "
-                                "blocked is not release evidence",
-                            )
-                        )
-                    elif not is_local_substitute_adapter(adapter_id):
-                        issues.append(
-                            ProviderGovernanceIssue(
-                                item_location,
-                                "alpha/beta/gamma must select a local_substitute adapter",
+                                "alpha/beta/gamma required Provider bindings must be enabled; "
+                                "missing protected sandbox material fails during deployment preflight",
                             )
                         )
                 if env in RELEASE_ADAPTER_ENVIRONMENTS and state != "not_required":
@@ -729,8 +730,6 @@ def compile_governance(
             state = str(binding.get("state") or "")
             required = state != "not_required"
             ready = state == "enabled" and bool(adapter_id) and source_path.exists()
-            if env in SUBSTITUTE_ENVIRONMENTS and required:
-                ready = ready and is_local_substitute_adapter(adapter_id)
             if env in RELEASE_ADAPTER_ENVIRONMENTS and required and adapter_id:
                 ready = ready and not is_prod_forbidden_adapter(adapter_id)
             readiness[env][capability_id] = {

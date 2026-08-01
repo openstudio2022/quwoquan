@@ -88,8 +88,8 @@
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
 
-- alpha App 使用 Remote user-service，固定码 123456 只由服务端登记的认证 sandbox adapter 实现；四环境 App package graph 均不可达该 adapter 实现或端侧登录 mock。
-- beta/gamma 固定使用 Port 对等本地认证 Provider，不允许在同一环境切换官方沙箱或真实 Provider。
+- alpha App 使用 Remote user-service，并通过受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 均不可达固定码实现或端侧登录 mock。
+- beta/gamma 固定使用各自受管 sandbox/nonprod tenant，不允许在同一候选运行时切换 Provider 或回退本地认证实现。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
 - 配置纯度门禁阻断已退休认证旁路。
@@ -100,8 +100,8 @@
 - 运营商一键：`OneTapPhoneResolver` 使用部署注入的运营商能力；未接入时返回结构化不可用。
 - 端侧 capability 必须区分 `available / notConfigured / clientNotInstalled / probeTimeout / sdkUnavailable / unsupportedPlatform`。未安装客户端或瞬时探测失败时入口保持可发现并就近解释。
 - 明确不支持的平台隐藏。
-- beta/gamma 本地 Provider 配置缺失、或 prod 真实 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
-- 固定测试 OTP 只允许产生确定性的非生产账号会话；非生产 provider 与固定码不得进入 prod 构建图、SBOM 或运行配置。
+- alpha/beta/gamma 受管非生产 Provider 配置缺失、或 prod 正式 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
+- 非生产 OTP 只允许通过受管 Provider 与保护身份池产生确定性的非生产账号会话；OTP 和非生产 Provider 材料不得进入仓库、receipt、prod 构建图、SBOM 或运行配置。
 - provider 模式的内部短信提交仅允许 service principal + operation scope + HTTPS/mTLS；`INTEGRATION_SERVICE_MTLS_CA_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE` 由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
 - 端侧文案统一走云端 userMessage 优先 → `UserErrorCode` baseline → 通用兜底；不直接读取原始异常字符串。
 - user-service 客户端响应和日志必须脱敏 OAuth URL、authCode、token、secret 与 provider 原始 body；客户端默认不接收 debugMessage。
@@ -187,5 +187,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：alpha App 通过 Remote user-service 使用服务端认证 sandbox 固定码 123456；四环境 App package graph 不可达该 adapter 实现或端侧登录 mock。
+- 目标：alpha App 通过 Remote user-service 与受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 不可达固定码实现或端侧登录 mock。
 - 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。

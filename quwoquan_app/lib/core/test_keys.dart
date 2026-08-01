@@ -232,6 +232,12 @@ class TestKeys {
   static const assistantStopGeneratingButton = ValueKey<String>(
     'assistant_stop_generating_button',
   );
+  static const assistantPauseRunButton = ValueKey<String>(
+    'assistant_pause_run_button',
+  );
+  static const assistantResumeRunButton = ValueKey<String>(
+    'assistant_resume_run_button',
+  );
   static const chatInputVoiceToggleButton = ValueKey<String>(
     'chat_input_voice_toggle_button',
   );

@@ -16,9 +16,31 @@ access:
   commands: none
   cross_context: public_contract_only
   queries: named_reader
-relationships: []
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: followedSubject
+  on_delete: tombstone
+  reference_fields:
+  - subjectId
+  target_objects:
+  - user.Persona
+  - entity.Homepage
+  - circle.Circle
+  - integration.Location
 local_identity_reasons:
   targetObjectId: navigation projection identifier derived from the typed subject reference and never
     used for aggregate access
   targetRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
+business_rules:
+- 关注状态只由 PersonaRelationship、SubjectFollow 与 CircleMembership 等 owner 的 typed event 投影。
+- viewerPersonaId、subjectType、subjectId 唯一确定一行，访问水位不得覆盖 owner 的关注事实。
+- subject tombstone 或 viewer 账号关闭必须删除可见行并保留 projector checkpoint。
+lifecycle:
+  source_events: [PersonaRelationshipChanged, SubjectFollowChanged, CircleMembershipChanged, HomepageFollowChanged, SubjectDeleted, UserAccountClosed]
+  checkpoint: per_owner_event_sequence
+  rebuild: replay_all_typed_follow_subject_events
+  tombstone: delete_following_subject_keep_checkpoint

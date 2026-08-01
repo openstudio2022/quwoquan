@@ -41,8 +41,9 @@ coverImage: asset://%s
 		"markdownDialect": "qwq-rich-md",
 		"mediaAssetIds":   []string{mediaID},
 		"articleAssetManifest": map[string]any{
+			"schema": "article-asset-manifest",
 			"assets": []map[string]any{
-				{"assetId": mediaID, "kind": "image", "role": "cover"},
+				{"assetId": mediaID, "role": "cover"},
 			},
 		},
 		"articleRenderProfile": map[string]any{"template": "journal", "fontPreset": "clean"},
@@ -91,7 +92,7 @@ func TestSubmitMarkdownArticleRejectsStorageAuthorityInManifest(t *testing.T) {
 		"title":"禁止客户端对象键",
 		"articleMarkdown":"# 标题\n\n![图](asset://%s)",
 		"mediaAssetIds":["%s"],
-		"articleAssetManifest":{"assets":[{
+		"articleAssetManifest":{"schema":"article-asset-manifest","assets":[{
 			"assetId":"%s",
 			"role":"figure",
 			"objectKey":"media/objects/private.jpg"
@@ -119,7 +120,7 @@ func TestSubmitMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
 	payload := `{
 		"contentType": "article",
 		"articleMarkdown": "# 标题\n\n![封面](asset://cover)",
-		"articleAssetManifest": {"assets": []},
+		"articleAssetManifest": {"schema":"article-asset-manifest","assets": []},
 		"visibility": "public"
 	}`
 	req := newPostPublicationRequestForTest(
@@ -167,7 +168,7 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 	publishReq := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		strings.NewReader(`{"publishIntentId":"`+publishIntentID+`","localDraftId":"media-publication-draft","contentType":"image","body":"原子发布素材测试","visibility":"public","mediaAssetIds":["`+mediaID+`"],"mediaItems":[{"kind":"image","mediaId":"`+mediaID+`"}]}`),
+		strings.NewReader(`{"publishIntentId":"`+publishIntentID+`","localDraftId":"media-publication-draft","contentType":"image","body":"原子发布素材测试","visibility":"public","mediaAssetIds":["`+mediaID+`"]}`),
 	)
 	publishReq.Header.Set("Content-Type", "application/json")
 	publishReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
@@ -276,8 +277,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		t,
 		identity.AnonymousFallbackPersonaID,
 		fmt.Sprintf(
-			`{"contentType":"image","body":"原图授权可见性测试","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
-			mediaID,
+			`{"contentType":"image","body":"原图授权可见性测试","visibility":"public","mediaAssetIds":["%s"]}`,
 			mediaID,
 		),
 	)

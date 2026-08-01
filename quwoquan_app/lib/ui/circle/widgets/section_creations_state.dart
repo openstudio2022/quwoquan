@@ -505,10 +505,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (entry.featured) CommunityText.circlePostFeaturedBadge,
   ];
 
-  String _presentationEyebrow(
-    CircleHubFeedPostEntry entry,
-    String fallback,
-  ) {
+  String _presentationEyebrow(CircleHubFeedPostEntry entry, String fallback) {
     final labels = _presentationLabels(entry);
     if (labels.isEmpty) {
       return fallback;
@@ -571,8 +568,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         : child;
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
-      onLongPress:
-          _isAdminOrOwner && entry.placementId.trim().isNotEmpty
+      onLongPress: _isAdminOrOwner && entry.placementId.trim().isNotEmpty
           ? () => _showPostManagement(entry)
           : null,
       child: surface,

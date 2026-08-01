@@ -96,7 +96,7 @@ AssistantLearningFactAppendCommand _fact({double feedbackScore = 1}) =>
       eventId: 'feedback:turn-1:useful',
       factType: AssistantLearningFactType.userFeedback.wireName,
       assistantTurnId: 'turn-1',
-      referralSource: AssistantReferralSource.assistantConversation.wireName,
+      referralSource: AssistantReferralSource.assistantSession.wireName,
       domainId: 'assistant',
       feedbackType: FeedbackType.useful.wireName,
       feedbackScore: feedbackScore,

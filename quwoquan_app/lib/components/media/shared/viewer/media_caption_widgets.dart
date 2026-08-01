@@ -55,7 +55,9 @@ class MediaCaptionBlock extends StatelessWidget {
           children: [
             if (header != null) ...[
               Align(alignment: Alignment.center, child: header!),
-              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              SizedBox(
+                height: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
             ],
             if (title.isNotEmpty)
               Padding(
@@ -84,7 +86,9 @@ class MediaCaptionBlock extends StatelessWidget {
               ),
             if (title.isEmpty && preCaption != null) ...[
               preCaption!,
-              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              SizedBox(
+                height: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
             ],
             if (caption.isNotEmpty)
               _buildExpandableCaption(
@@ -95,7 +99,9 @@ class MediaCaptionBlock extends StatelessWidget {
                 captionStyle: captionStyle,
               ),
             if (footer != null) ...[
-              SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              SizedBox(
+                height: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
               footer!,
             ],
           ],

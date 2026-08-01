@@ -16,25 +16,28 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('consent wire without explicit granted=true fails closed', () {
-    final missingGranted = AssistantSkillConsent.fromJson(<String, dynamic>{
-      'skillId': kPersonalContentAccessSkillId,
-      'grantedScope': kPersonalContentAccessSkillId,
-      'revokedAt': '',
-    });
+  test('consent wire requires the complete current shape and fails closed', () {
+    expect(
+      () => AssistantSkillConsent.fromJson(<String, dynamic>{
+        'skillId': kPersonalContentAccessSkillId,
+        'grantedScope': kPersonalContentAccessSkillId,
+        'grantedAt': '2026-07-13T00:00:00Z',
+      }),
+      throwsFormatException,
+    );
     final revoked = AssistantSkillConsent.fromJson(<String, dynamic>{
       'skillId': kPersonalContentAccessSkillId,
       'grantedScope': kPersonalContentAccessSkillId,
       'granted': true,
+      'grantedAt': '2026-07-13T00:00:00Z',
       'revokedAt': '2026-07-13T00:00:00Z',
     });
 
-    expect(missingGranted.granted, isFalse);
     expect(revoked.granted, isFalse);
   });
 
   test('remote list failure never returns a locally cached grant', () async {
-    final store = AssistantConsentStore(actorScope: 'account-a/persona-a');
+    final store = AssistantConsentStore(accountId: 'account-a');
     await store.upsert(
       AssistantSkillConsent(
         skillId: kPersonalContentAccessSkillId,
@@ -47,11 +50,11 @@ void main() {
       client: MockClient((_) async => http.Response('unavailable', 503)),
     );
     final repository = RemoteAssistantRepository(
-      consentActorScope: 'account-a/persona-a',
+      consentAccountId: 'account-a',
       store: store,
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
     );
 
     await expectLater(repository.listConsents(), throwsA(isNotNull));
@@ -59,8 +62,9 @@ void main() {
 
   test('remote grant requires an authoritative granted response', () async {
     final httpClient = CloudHttpClient(
-      client: MockClient(
-        (_) async => http.Response(
+      client: MockClient((request) async {
+        expect(request.headers['Idempotency-Key'], 'consent-fail-closed');
+        return http.Response(
           jsonEncode(<String, dynamic>{
             'consent': <String, dynamic>{
               'skillId': kPersonalContentAccessSkillId,
@@ -70,25 +74,28 @@ void main() {
           }),
           200,
           headers: const <String, String>{'content-type': 'application/json'},
-        ),
-      ),
+        );
+      }),
     );
     final repository = RemoteAssistantRepository(
-      consentActorScope: 'account-a/persona-a',
+      consentAccountId: 'account-a',
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
     );
 
     await expectLater(
-      repository.grantSkillConsent(skillId: kPersonalContentAccessSkillId),
+      repository.grantSkillConsent(
+        skillId: kPersonalContentAccessSkillId,
+        clientRequestId: 'consent-fail-closed',
+      ),
       throwsA(isNotNull),
     );
   });
 
-  test('local consent cache is physically partitioned by actor', () async {
-    final actorA = AssistantConsentStore(actorScope: 'account-a/persona-a');
-    final actorB = AssistantConsentStore(actorScope: 'account-b/persona-b');
+  test('local consent cache is physically partitioned by accountId', () async {
+    final actorA = AssistantConsentStore(accountId: 'account-a');
+    final actorB = AssistantConsentStore(accountId: 'account-b');
     await actorA.upsert(
       AssistantSkillConsent(
         skillId: kPersonalContentAccessSkillId,
@@ -100,5 +107,9 @@ void main() {
 
     expect(await actorA.load(), hasLength(1));
     expect(await actorB.load(), isEmpty);
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(preferences.getKeys().single);
+    expect(jsonDecode(raw!), isA<List<dynamic>>());
+    expect(raw, isNot(contains('schema')));
   });
 }

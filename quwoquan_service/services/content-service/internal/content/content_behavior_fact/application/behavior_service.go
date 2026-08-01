@@ -11,9 +11,9 @@ import (
 	rtimpact "quwoquan_service/runtime/impact"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 

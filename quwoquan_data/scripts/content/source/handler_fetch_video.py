@@ -13,6 +13,7 @@ from typing import Any
 from content.source.sourced_video_admission import probe_audio_stream
 from content.source.sourced_video_unit import write_admitted_sourced_video_unit
 from core.content_source_registry import load_content_source_registry
+from core.io import write_json
 from core.paths import execution_shared_dir
 from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
 from core.video_source_admission import assert_video_source_admitted
@@ -22,7 +23,42 @@ _MAX_SOURCE_VIDEO_BYTES = 512 * 1024 * 1024
 _SOURCE_VIDEO_DOWNLOAD_ATTEMPTS = 4
 
 
-def _download_sourced_video(url: str, destination: Path) -> None:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+class _RecordingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Record only public HTTPS redirects; never attach a cookie jar or credentials."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.redirects: list[dict[str, object]] = []
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        source = str(req.full_url)
+        target = str(newurl)
+        if (
+            urllib.parse.urlparse(source).scheme != "https"
+            or urllib.parse.urlparse(target).scheme != "https"
+        ):
+            raise ValueError("sourced video redirect must remain on HTTPS")
+        self.redirects.append(
+            {
+                "status": int(code),
+                "fromUrl": source,
+                "toUrl": target,
+            }
+        )
+        return super().redirect_request(req, fp, code, msg, headers, target)
+
+
+def _download_sourced_video(url: str, destination: Path) -> dict[str, object]:
+    """Download a public video and return credential-free access evidence."""
+
     read_timeout_seconds = load_runtime_policy(
         DEFAULT_RUNTIME_PROFILE_ID
     ).source_video_read_timeout_seconds
@@ -30,6 +66,10 @@ def _download_sourced_video(url: str, destination: Path) -> None:
     partial = destination.with_suffix(destination.suffix + ".part")
     partial.unlink(missing_ok=True)
     last_error: BaseException | None = None
+    redirects = _RecordingRedirectHandler()
+    # Deliberately omit HTTPCookieProcessor, HTTPBasicAuthHandler and proxy
+    # credential handlers: this downloader only accesses anonymous public media.
+    opener = urllib.request.build_opener(redirects)
     try:
         for attempt in range(1, _SOURCE_VIDEO_DOWNLOAD_ATTEMPTS + 1):
             written = partial.stat().st_size if partial.is_file() else 0
@@ -38,7 +78,7 @@ def _download_sourced_video(url: str, destination: Path) -> None:
                 headers["Range"] = f"bytes={written}-"
             request = urllib.request.Request(url, headers=headers)
             try:
-                with urllib.request.urlopen(
+                with opener.open(
                     request,
                     timeout=read_timeout_seconds,
                 ) as response:
@@ -59,6 +99,11 @@ def _download_sourced_video(url: str, destination: Path) -> None:
                     content_length = int(
                         response.headers.get("Content-Length") or 0
                     )
+                    response_headers = {
+                        name: str(response.headers.get(name) or "")
+                        for name in ("Content-Type", "Content-Length", "ETag", "Last-Modified")
+                        if response.headers.get(name)
+                    }
                     if written + content_length > _MAX_SOURCE_VIDEO_BYTES:
                         raise ValueError(
                             "sourced video exceeds maximum download size"
@@ -77,7 +122,19 @@ def _download_sourced_video(url: str, destination: Path) -> None:
                 if written <= 0:
                     raise ValueError("sourced video download is empty")
                 partial.replace(destination)
-                return
+                return {
+                    "schema": "quwoquan_data.anonymous_video_download",
+                    "anonymousAccess": True,
+                    "credentialAssertion": "no_cookie_no_api_key_no_account_session",
+                    "requestedUrl": url,
+                    "finalUrl": str(response.geturl()),
+                    "redirectChain": redirects.redirects,
+                    "httpStatus": status,
+                    "contentType": content_type,
+                    "contentLength": written,
+                    "responseHeaders": response_headers,
+                    "sha256": _file_sha256(destination),
+                }
             except (TimeoutError, OSError, urllib.error.URLError) as exc:
                 last_error = exc
                 if attempt >= _SOURCE_VIDEO_DOWNLOAD_ATTEMPTS:
@@ -117,7 +174,30 @@ def fetch_admitted_sourced_videos(
             / "source_video_downloads"
             / f"{digest}{suffix}"
         )
-        _download_sourced_video(asset_url, download_path)
+        try:
+            download_evidence = _download_sourced_video(asset_url, download_path)
+        except (OSError, TimeoutError, ValueError, urllib.error.URLError) as exc:
+            write_json(
+                execution_shared_dir(execution_id)
+                / "anonymous_video_downloads"
+                / f"{digest}.json",
+                {
+                    "schema": "quwoquan_data.anonymous_video_download",
+                    "anonymousAccess": True,
+                    "credentialAssertion": "no_cookie_no_api_key_no_account_session",
+                    "executionId": execution_id,
+                    "entityId": entity_id,
+                    "sourceId": str(candidate.get("sourceId") or ""),
+                    "sourcePostUrl": str(candidate.get("sourcePostUrl") or ""),
+                    "requestedUrl": asset_url,
+                    "downloadOutcome": "rejected",
+                    "rightsStatusBeforeAdmission": str(
+                        candidate.get("rightsStatus") or "unverified"
+                    ),
+                    "rejection": f"{type(exc).__name__}: {exc}",
+                },
+            )
+            raise
         try:
             audio_probe = probe_audio_stream(download_path)
             has_audio = audio_probe.get("hasAudio") is True
@@ -162,6 +242,23 @@ def fetch_admitted_sourced_videos(
                     ),
                     entity_type=entity_type,
                 )
+            )
+            write_json(
+                execution_shared_dir(execution_id)
+                / "anonymous_video_downloads"
+                / f"{digest}.json",
+                {
+                    **download_evidence,
+                    "executionId": execution_id,
+                    "entityId": entity_id,
+                    "sourceId": str(candidate.get("sourceId") or ""),
+                    "sourcePostUrl": str(candidate.get("sourcePostUrl") or ""),
+                    "downloadOutcome": "admitted",
+                    "rightsStatusBeforeAdmission": str(
+                        candidate.get("rightsStatus") or "unverified"
+                    ),
+                    "rightsStatusAfterAdmission": "verified",
+                },
             )
         finally:
             download_path.unlink(missing_ok=True)

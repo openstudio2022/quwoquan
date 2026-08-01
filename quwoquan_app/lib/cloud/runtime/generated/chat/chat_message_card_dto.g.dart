@@ -2,10 +2,12 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 import 'chat_message_card_attribute_dto.g.dart';
+import 'chat_message_card_object_ref_dto.g.dart';
 
 class ChatMessageCardDto {
   final String kind;
   final String title;
+  final ChatMessageCardObjectRefDto? objectRef;
   final String? subtitle;
   final String? thumbnailUrl;
   final String? deeplink;
@@ -17,13 +19,14 @@ class ChatMessageCardDto {
   ChatMessageCardDto({
     required this.kind,
     required this.title,
+    this.objectRef,
     this.subtitle,
     this.thumbnailUrl,
     this.deeplink,
     this.landingUrl,
     this.shareText,
     this.message,
-    required this.attributes,
+    this.attributes = const <ChatMessageCardAttributeDto>[],
   });
 
   factory ChatMessageCardDto.fromMap(Map<String, dynamic> m) {
@@ -31,6 +34,7 @@ class ChatMessageCardDto {
     return ChatMessageCardDto(
       kind: m['kind'] as String,
       title: m['title'] as String,
+      objectRef: m['objectRef'] == null ? null : ChatMessageCardObjectRefDto.fromMap(_parseStringKeyMap(m['objectRef'])!),
       subtitle: m['subtitle'] as String?,
       thumbnailUrl: m['thumbnailUrl'] as String?,
       deeplink: m['deeplink'] as String?,
@@ -45,6 +49,7 @@ class ChatMessageCardDto {
     return <String, dynamic>{
       'kind': kind,
       'title': title,
+      'objectRef': objectRef?.toMap(),
       'subtitle': subtitle,
       'thumbnailUrl': thumbnailUrl,
       'deeplink': deeplink,
@@ -58,6 +63,7 @@ class ChatMessageCardDto {
   ChatMessageCardDto copyWith({
     String? kind,
     String? title,
+    ChatMessageCardObjectRefDto? objectRef,
     String? subtitle,
     String? thumbnailUrl,
     String? deeplink,
@@ -69,6 +75,7 @@ class ChatMessageCardDto {
     return ChatMessageCardDto(
       kind: kind ?? this.kind,
       title: title ?? this.title,
+      objectRef: objectRef ?? this.objectRef,
       subtitle: subtitle ?? this.subtitle,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       deeplink: deeplink ?? this.deeplink,
@@ -84,6 +91,7 @@ void _validateChatMessageCardDtoWire(Map<String, dynamic> m) {
   const allowed = <String>{
     'kind',
     'title',
+    'objectRef',
     'subtitle',
     'thumbnailUrl',
     'deeplink',
@@ -101,6 +109,9 @@ void _validateChatMessageCardDtoWire(Map<String, dynamic> m) {
   }
   if (!m.containsKey('title') || m['title'] == null || (m['title'] is! String)) {
     throw FormatException('ChatMessageCardDto.title has an invalid wire value');
+  }
+  if (m.containsKey('objectRef') && m['objectRef'] != null && (m['objectRef'] is! Map || (m['objectRef'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException('ChatMessageCardDto.objectRef has an invalid wire value');
   }
   if (m.containsKey('subtitle') && m['subtitle'] != null && (m['subtitle'] is! String)) {
     throw FormatException('ChatMessageCardDto.subtitle has an invalid wire value');
@@ -140,4 +151,16 @@ List<T> _parseProjectionDtoList<T>(
     }
   }
   return out;
+}
+
+
+Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) {
+    return Map<String, dynamic>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
+  return null;
 }

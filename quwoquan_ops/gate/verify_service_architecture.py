@@ -169,6 +169,8 @@ class Verification:
         self.source_owners: dict[tuple[str, str, str], set[str]] = defaultdict(set)
         self.routed_objects: set[tuple[str, str, str]] = set()
         self.application_sources: dict[tuple[str, str, str], set[Path]] = defaultdict(set)
+        self.local_contract_objects: set[tuple[str, str, str]] = set()
+        self.api_integration_objects: set[tuple[str, str, str]] = set()
         self.object_kinds: Counter[str] = Counter()
         self.aggregate_members = 0
 
@@ -487,17 +489,84 @@ class Verification:
                     parts = path.relative_to(test_root).parts
                     if len(parts) < 3 or tuple(parts[:2]) not in objects:
                         self.error(f"{relative(path)}: expected <context>/<object>/file")
+                        continue
+                    key = (domain, parts[0], parts[1])
+                    if layer == "local_contract":
+                        self.local_contract_objects.add(key)
+                    else:
+                        self.api_integration_objects.add(key)
+        platform = SERVICE_ROOT / "control-plane/platform-ops"
+        if platform.is_dir():
+            domain, objects = self.service_identity(platform)
+            internal = platform / "internal"
+            for path in internal.rglob("*"):
+                if not path.is_file():
+                    continue
+                parts = path.relative_to(internal).parts
+                if len(parts) < 4:
+                    self.error(f"{relative(path)}: expected <context>/<object>/<layer>/file")
+                    continue
+                context, object_name, layer = parts[:3]
+                if (context, object_name) not in objects:
+                    self.error(f"{relative(path)}: has no platform-ops object contract")
+                    continue
+                if layer not in LAYERS:
+                    self.error(f"{relative(path)}: unknown DDD layer {layer!r}")
+                    continue
+                key = (domain, context, object_name)
+                self.source_owners[key].add("platform-ops")
+                if (
+                    layer == "application"
+                    and path.suffix in {".go", ".py"}
+                    and not path.name.endswith("_test.go")
+                ):
+                    self.application_sources[key].add(path)
+            for layer in ("local_contract", "api_integration"):
+                test_root = platform / "tests" / layer
+                for path in test_root.rglob("*") if test_root.is_dir() else []:
+                    if not path.is_file():
+                        continue
+                    parts = path.relative_to(test_root).parts
+                    if len(parts) < 3 or tuple(parts[:2]) not in objects:
+                        self.error(f"{relative(path)}: expected <context>/<object>/file")
+                        continue
+                    key = (domain, parts[0], parts[1])
+                    if layer == "local_contract":
+                        self.local_contract_objects.add(key)
+                    else:
+                        self.api_integration_objects.add(key)
         for key, owners in self.source_owners.items():
             if len(owners) != 1:
                 self.error(f"{'.'.join(key)} has multiple source owners: {sorted(owners)}")
+        for key, (owner, object_path, _) in sorted(self.objects.items()):
+            if owner not in domain_service_names() and owner != "platform-ops":
+                continue
+            if not self.source_owners.get(key):
+                self.error(
+                    f"{relative(object_path.parent)}: canonical object requires "
+                    "object-local non-generated source"
+                )
         for key in sorted(self.routed_objects):
             owner, object_path, _ = self.objects[key]
-            if owner not in domain_service_names():
+            if owner not in domain_service_names() and owner != "platform-ops":
                 continue
             if not self.application_sources.get(key):
                 self.error(
                     f"{relative(object_path.parent)}: api_routes require a non-test "
                     "application source in the same object"
+                )
+        for key, (_, object_path, _) in sorted(self.objects.items()):
+            if key not in self.local_contract_objects:
+                self.error(
+                    f"{relative(object_path.parent)}: canonical object requires "
+                    "object-local local_contract evidence"
+                )
+        for key in sorted(self.routed_objects):
+            _, object_path, _ = self.objects[key]
+            if key not in self.api_integration_objects:
+                self.error(
+                    f"{relative(object_path.parent)}: routed object requires "
+                    "object-local api_integration evidence"
                 )
 
     def verify_generated_paths(self) -> None:
@@ -818,7 +887,37 @@ class Verification:
         for source in sorted(required):
             if not (ROOT / source).is_file():
                 self.error(f"required external/static/control-plane asset is missing: {source}")
-        if any(path.name == "seed-box" for path in ROOT.rglob("seed-box")):
+        repository_roots = (
+            SERVICE_ROOT,
+            OPS_ROOT,
+            ROOT / "quwoquan_app",
+            ROOT / "quwoquan_data",
+            ROOT / "specs",
+        )
+        ignored_directories = {
+            ".git",
+            ".qwq_output",
+            ".dart_tool",
+            ".pytest_cache",
+            "__pycache__",
+            "node_modules",
+        }
+        retired_seed_box_found = False
+        for repository_root in repository_roots:
+            if not repository_root.is_dir():
+                continue
+            for _, directories, _ in os.walk(repository_root):
+                if "seed-box" in directories:
+                    retired_seed_box_found = True
+                    break
+                directories[:] = [
+                    directory
+                    for directory in directories
+                    if directory not in ignored_directories
+                ]
+            if retired_seed_box_found:
+                break
+        if retired_seed_box_found:
             self.error("retired seed-box physical directory returned")
         for workload in ("coturn", "livekit"):
             environment_root = OPS_ROOT / "external" / workload / "environments"

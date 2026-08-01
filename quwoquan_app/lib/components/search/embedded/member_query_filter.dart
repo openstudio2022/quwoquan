@@ -19,16 +19,18 @@ List<Map<String, dynamic>> filterMemberMapsByQuery(
     return t.contains(q);
   }
 
-  return source.where((m) {
-    final display = '${m['displayName'] ?? ''}';
-    final name = '${m['name'] ?? ''}';
-    final nickname = '${m['nickname'] ?? ''}';
-    final userId = '${m['userId'] ?? ''}';
-    return containsQuery(display) ||
-        containsQuery(name) ||
-        containsQuery(nickname) ||
-        containsQuery(userId);
-  }).toList(growable: false);
+  return source
+      .where((m) {
+        final display = '${m['displayName'] ?? ''}';
+        final name = '${m['name'] ?? ''}';
+        final nickname = '${m['nickname'] ?? ''}';
+        final userId = '${m['userId'] ?? ''}';
+        return containsQuery(display) ||
+            containsQuery(name) ||
+            containsQuery(nickname) ||
+            containsQuery(userId);
+      })
+      .toList(growable: false);
 }
 
 bool _isMostlyAscii(String s) {
@@ -57,7 +59,9 @@ List<ChatConversationMemberDto> filterMemberDtosByQuery(
     return t.contains(q);
   }
 
-  return source.where((m) {
-    return containsQuery(m.displayName) || containsQuery(m.userId);
-  }).toList(growable: false);
+  return source
+      .where((m) {
+        return containsQuery(m.displayName) || containsQuery(m.userId);
+      })
+      .toList(growable: false);
 }

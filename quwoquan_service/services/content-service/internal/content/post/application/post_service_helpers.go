@@ -3,7 +3,7 @@ package post
 import (
 	"net/url"
 	rterr "quwoquan_service/runtime/errors"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +116,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"tagRefs":            asStringSlice(post.TagRefs),
 		"entityRefs":         asStringSlice(post.EntityRefs),
 		"primaryHomepageId":  strings.TrimSpace(post.PrimaryHomepageId),
+		"captureDisclosure":  asStringSlice(post.CaptureDisclosure),
 	}
 }
 
@@ -126,8 +127,14 @@ func durationMsFromPost(post *postmodel.Post) int64 {
 	if post.DurationMs > 0 {
 		return post.DurationMs
 	}
-	if duration := int64FromMaps("durationMs", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot); duration > 0 {
-		return duration
+	for _, duration := range []int64{
+		post.DeviceInfo.DurationMs,
+		post.ArticleRenderProfile.DurationMs,
+		post.PrimaryHomepageSnapshot.DurationMs,
+	} {
+		if duration > 0 {
+			return duration
+		}
 	}
 	return 0
 }
@@ -139,7 +146,16 @@ func widthFromPost(post *postmodel.Post) int64 {
 	if post.Width > 0 {
 		return post.Width
 	}
-	return int64FromMaps("width", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot)
+	for _, width := range []int64{
+		post.DeviceInfo.Width,
+		post.ArticleRenderProfile.Width,
+		post.PrimaryHomepageSnapshot.Width,
+	} {
+		if width > 0 {
+			return width
+		}
+	}
+	return 0
 }
 
 func heightFromPost(post *postmodel.Post) int64 {
@@ -149,16 +165,13 @@ func heightFromPost(post *postmodel.Post) int64 {
 	if post.Height > 0 {
 		return post.Height
 	}
-	return int64FromMaps("height", post.DeviceInfo, post.ArticleRenderProfile, post.PrimaryHomepageSnapshot)
-}
-
-func int64FromMaps(key string, sources ...map[string]any) int64 {
-	for _, source := range sources {
-		if len(source) == 0 {
-			continue
-		}
-		if value := asInt64Flexible(source[key]); value > 0 {
-			return value
+	for _, height := range []int64{
+		post.DeviceInfo.Height,
+		post.ArticleRenderProfile.Height,
+		post.PrimaryHomepageSnapshot.Height,
+	} {
+		if height > 0 {
+			return height
 		}
 	}
 	return 0
@@ -198,9 +211,9 @@ func behaviorTagsFromPost(p *postmodel.Post) []string {
 	return tags
 }
 
-func NormalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) {
+func NormalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) error {
 	if post == nil {
-		return
+		return nil
 	}
 	if primaryHomepageID, exists := payload["primaryHomepageId"]; exists {
 		post.PrimaryHomepageId = strings.TrimSpace(asString(primaryHomepageID))
@@ -209,13 +222,22 @@ func NormalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) {
 		post.PrimaryHomepageType = strings.TrimSpace(asString(primaryHomepageType))
 	}
 	if primaryHomepageSnapshot, exists := payload["primaryHomepageSnapshot"]; exists {
-		post.PrimaryHomepageSnapshot = asMap(primaryHomepageSnapshot)
+		decoded, err := decodePostHomepageSnapshot(primaryHomepageSnapshot)
+		if err != nil {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"主页快照格式不合法",
+				err.Error(),
+			)
+		}
+		post.PrimaryHomepageSnapshot = decoded
 	}
 	if entityRefs, exists := payload["entityRefs"]; exists {
 		post.EntityRefs = normalizeRuntimeEntityRefs(asStringSlice(entityRefs))
 	} else {
 		post.EntityRefs = normalizeRuntimeEntityRefs(post.EntityRefs)
 	}
+	return nil
 }
 
 func normalizeRuntimeEntityRefs(refs []string) []string {
@@ -367,7 +389,9 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 			strings.TrimSpace(asString(assistantUsePolicy)),
 		)
 	}
-	NormalizePostObjectAnchors(post, payload)
+	if err := NormalizePostObjectAnchors(post, payload); err != nil {
+		return err
+	}
 	if post.ContentIdentity == "" {
 		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
 	}
@@ -566,10 +590,10 @@ func markdownAssetIDs(markdown string) []string {
 	return result
 }
 
-func articleManifestAssetIDs(manifest map[string]any) map[string]bool {
+func articleManifestAssetIDs(manifest postmodel.PostArticleAssetManifest) map[string]bool {
 	result := map[string]bool{}
-	for _, row := range articleManifestRows(manifest) {
-		id := strings.TrimSpace(asString(row["assetId"]))
+	for _, row := range manifest.Assets {
+		id := strings.TrimSpace(row.AssetId)
 		if id != "" {
 			result[id] = true
 		}

@@ -171,7 +171,7 @@ Widget _buildApp(
           uploadUri,
           bytes, {
           required contentLength,
-          required contentType,
+          required mimeType,
           required expectedSha256,
           abortTrigger,
         }) async {},

@@ -260,14 +260,14 @@ class _AssistantSkillCenterPageState
     };
   }
 
-  bool _isOngoingTask(AssistantUserTaskView task) {
+  bool _isOngoingTask(AssistantTaskItemView task) {
     return switch (task.status.trim().toLowerCase()) {
       'done' || 'completed' || 'cancelled' || 'canceled' => false,
       _ => true,
     };
   }
 
-  String _taskDetailLabel(AssistantUserTaskView task) {
+  String _taskDetailLabel(AssistantTaskItemView task) {
     final description = task.description?.trim() ?? '';
     final dueAt = _formattedTaskDueAt(task.dueAt);
     return <String>[

@@ -248,6 +248,30 @@ type PostCreatorDisclosureSlice struct {
 	Visible     bool   `json:"visible" bson:"visible"`
 }
 
+// PostSourceAttributionSlice 是外部来源视频的用户可见权利披露白名单。
+type PostSourceAttributionSlice struct {
+	IsOriginal                    bool      `json:"isOriginal" bson:"isOriginal"`
+	OriginalCreatorID             string    `json:"originalCreatorId,omitempty" bson:"originalCreatorId,omitempty"`
+	OriginalCreatorName           string    `json:"originalCreatorName,omitempty" bson:"originalCreatorName,omitempty"`
+	OriginalCreatorProfileURL     string    `json:"originalCreatorProfileUrl,omitempty" bson:"originalCreatorProfileUrl,omitempty"`
+	Platform                      string    `json:"platform,omitempty" bson:"platform,omitempty"`
+	SourcePostURL                 string    `json:"sourcePostUrl,omitempty" bson:"sourcePostUrl,omitempty"`
+	OriginalAssetURL              string    `json:"originalAssetUrl,omitempty" bson:"originalAssetUrl,omitempty"`
+	AttributionText               string    `json:"attributionText,omitempty" bson:"attributionText,omitempty"`
+	RightsBasis                   string    `json:"rightsBasis,omitempty" bson:"rightsBasis,omitempty"`
+	CommercialAuthorizationStatus string    `json:"commercialAuthorizationStatus,omitempty" bson:"commercialAuthorizationStatus,omitempty"`
+	PublicationAdmission          string    `json:"publicationAdmission,omitempty" bson:"publicationAdmission,omitempty"`
+	AuthorizationProofURL         string    `json:"authorizationProofUrl,omitempty" bson:"authorizationProofUrl,omitempty"`
+	TermsURL                      string    `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
+	RiskAcceptanceID              string    `json:"riskAcceptanceId,omitempty" bson:"riskAcceptanceId,omitempty"`
+	WatermarkStatus               string    `json:"watermarkStatus,omitempty" bson:"watermarkStatus,omitempty"`
+	AudioRightsStatus             string    `json:"audioRightsStatus,omitempty" bson:"audioRightsStatus,omitempty"`
+	ModelReleaseStatus            string    `json:"modelReleaseStatus,omitempty" bson:"modelReleaseStatus,omitempty"`
+	PropertyReleaseStatus         string    `json:"propertyReleaseStatus,omitempty" bson:"propertyReleaseStatus,omitempty"`
+	CollectedAt                   time.Time `json:"collectedAt,omitempty" bson:"collectedAt,omitempty"`
+	TakedownPolicy                string    `json:"takedownPolicy,omitempty" bson:"takedownPolicy,omitempty"`
+}
+
 // PostSemanticMentionSlice 是语义标注的可读白名单。候选或审核扩展字段不
 // 会越过这个 Slice。
 type PostSemanticMentionSlice struct {
@@ -381,6 +405,7 @@ type PostDetailSlice struct {
 	ArticleTemplate         string                         `json:"articleTemplate,omitempty" bson:"articleTemplate,omitempty"`
 	ArticleFontPreset       string                         `json:"articleFontPreset,omitempty" bson:"articleFontPreset,omitempty"`
 	VideoURL                string                         `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
+	SourceAttribution       *PostSourceAttributionSlice    `json:"sourceAttribution,omitempty" bson:"sourceAttribution,omitempty"`
 	CoverStrategy           string                         `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
 	CoverFrameTimeMS        int64                          `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
 	Location                *PostLocationSlice             `json:"location,omitempty" bson:"location,omitempty"`

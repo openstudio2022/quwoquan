@@ -154,6 +154,14 @@ enum AssistantStreamEventType {
   processAppend,
   processCommit,
   answerDelta,
+  runStateChanged,
+  taskGraphPatch,
+  checkpointCommitted,
+  presentationSnapshot,
+  presentationPatch,
+  presentationCommit,
+  waitingInput,
+  waitingApproval,
   completed,
   failed,
   cancelled,
@@ -173,6 +181,22 @@ AssistantStreamEventType parseAssistantStreamEventTypeStrict(String raw) {
       return AssistantStreamEventType.processCommit;
     case "answer_delta":
       return AssistantStreamEventType.answerDelta;
+    case "run_state_changed":
+      return AssistantStreamEventType.runStateChanged;
+    case "task_graph_patch":
+      return AssistantStreamEventType.taskGraphPatch;
+    case "checkpoint_committed":
+      return AssistantStreamEventType.checkpointCommitted;
+    case "presentation_snapshot":
+      return AssistantStreamEventType.presentationSnapshot;
+    case "presentation_patch":
+      return AssistantStreamEventType.presentationPatch;
+    case "presentation_commit":
+      return AssistantStreamEventType.presentationCommit;
+    case "waiting_input":
+      return AssistantStreamEventType.waitingInput;
+    case "waiting_approval":
+      return AssistantStreamEventType.waitingApproval;
     case "completed":
       return AssistantStreamEventType.completed;
     case "failed":
@@ -196,6 +220,22 @@ AssistantStreamEventType parseAssistantStreamEventType(String raw) {
       return AssistantStreamEventType.processCommit;
     case "answer_delta":
       return AssistantStreamEventType.answerDelta;
+    case "run_state_changed":
+      return AssistantStreamEventType.runStateChanged;
+    case "task_graph_patch":
+      return AssistantStreamEventType.taskGraphPatch;
+    case "checkpoint_committed":
+      return AssistantStreamEventType.checkpointCommitted;
+    case "presentation_snapshot":
+      return AssistantStreamEventType.presentationSnapshot;
+    case "presentation_patch":
+      return AssistantStreamEventType.presentationPatch;
+    case "presentation_commit":
+      return AssistantStreamEventType.presentationCommit;
+    case "waiting_input":
+      return AssistantStreamEventType.waitingInput;
+    case "waiting_approval":
+      return AssistantStreamEventType.waitingApproval;
     case "completed":
       return AssistantStreamEventType.completed;
     case "failed":
@@ -222,12 +262,816 @@ extension AssistantStreamEventTypeX on AssistantStreamEventType {
         return "process_commit";
       case AssistantStreamEventType.answerDelta:
         return "answer_delta";
+      case AssistantStreamEventType.runStateChanged:
+        return "run_state_changed";
+      case AssistantStreamEventType.taskGraphPatch:
+        return "task_graph_patch";
+      case AssistantStreamEventType.checkpointCommitted:
+        return "checkpoint_committed";
+      case AssistantStreamEventType.presentationSnapshot:
+        return "presentation_snapshot";
+      case AssistantStreamEventType.presentationPatch:
+        return "presentation_patch";
+      case AssistantStreamEventType.presentationCommit:
+        return "presentation_commit";
+      case AssistantStreamEventType.waitingInput:
+        return "waiting_input";
+      case AssistantStreamEventType.waitingApproval:
+        return "waiting_approval";
       case AssistantStreamEventType.completed:
         return "completed";
       case AssistantStreamEventType.failed:
         return "failed";
       case AssistantStreamEventType.cancelled:
         return "cancelled";
+    }
+  }
+}
+
+enum AssistantWebTargetKind {
+  unknown,
+  url,
+  source,
+  documentLink,
+}
+
+AssistantWebTargetKind parseAssistantWebTargetKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantWebTargetKind.unknown;
+    case "url":
+      return AssistantWebTargetKind.url;
+    case "source":
+      return AssistantWebTargetKind.source;
+    case "document_link":
+      return AssistantWebTargetKind.documentLink;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantWebTargetKind", raw.trim());
+  }
+}
+
+AssistantWebTargetKind parseAssistantWebTargetKind(String raw) {
+  switch (raw.trim()) {
+    case "url":
+      return AssistantWebTargetKind.url;
+    case "source":
+      return AssistantWebTargetKind.source;
+    case "document_link":
+      return AssistantWebTargetKind.documentLink;
+    default:
+      return AssistantWebTargetKind.unknown;
+  }
+}
+
+extension AssistantWebTargetKindX on AssistantWebTargetKind {
+  String get wireName {
+    switch (this) {
+      case AssistantWebTargetKind.unknown:
+        return "";
+      case AssistantWebTargetKind.url:
+        return "url";
+      case AssistantWebTargetKind.source:
+        return "source";
+      case AssistantWebTargetKind.documentLink:
+        return "document_link";
+    }
+  }
+}
+
+enum AssistantContextAuthority {
+  unknown,
+  userDeclared,
+  domainCanonical,
+  deviceObserved,
+  externalEvidence,
+}
+
+AssistantContextAuthority parseAssistantContextAuthorityStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantContextAuthority.unknown;
+    case "user_declared":
+      return AssistantContextAuthority.userDeclared;
+    case "domain_canonical":
+      return AssistantContextAuthority.domainCanonical;
+    case "device_observed":
+      return AssistantContextAuthority.deviceObserved;
+    case "external_evidence":
+      return AssistantContextAuthority.externalEvidence;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantContextAuthority", raw.trim());
+  }
+}
+
+AssistantContextAuthority parseAssistantContextAuthority(String raw) {
+  switch (raw.trim()) {
+    case "user_declared":
+      return AssistantContextAuthority.userDeclared;
+    case "domain_canonical":
+      return AssistantContextAuthority.domainCanonical;
+    case "device_observed":
+      return AssistantContextAuthority.deviceObserved;
+    case "external_evidence":
+      return AssistantContextAuthority.externalEvidence;
+    default:
+      return AssistantContextAuthority.unknown;
+  }
+}
+
+extension AssistantContextAuthorityX on AssistantContextAuthority {
+  String get wireName {
+    switch (this) {
+      case AssistantContextAuthority.unknown:
+        return "";
+      case AssistantContextAuthority.userDeclared:
+        return "user_declared";
+      case AssistantContextAuthority.domainCanonical:
+        return "domain_canonical";
+      case AssistantContextAuthority.deviceObserved:
+        return "device_observed";
+      case AssistantContextAuthority.externalEvidence:
+        return "external_evidence";
+    }
+  }
+}
+
+enum AssistantContextSensitivity {
+  public,
+  internal,
+  private,
+  restricted,
+}
+
+AssistantContextSensitivity parseAssistantContextSensitivityStrict(String raw) {
+  switch (raw.trim()) {
+    case "public":
+      return AssistantContextSensitivity.public;
+    case "internal":
+      return AssistantContextSensitivity.internal;
+    case "private":
+      return AssistantContextSensitivity.private;
+    case "restricted":
+      return AssistantContextSensitivity.restricted;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantContextSensitivity", raw.trim());
+  }
+}
+
+extension AssistantContextSensitivityX on AssistantContextSensitivity {
+  String get wireName {
+    switch (this) {
+      case AssistantContextSensitivity.public:
+        return "public";
+      case AssistantContextSensitivity.internal:
+        return "internal";
+      case AssistantContextSensitivity.private:
+        return "private";
+      case AssistantContextSensitivity.restricted:
+        return "restricted";
+    }
+  }
+}
+
+enum AssistantTriggerKind {
+  schedule,
+  event,
+  contextChange,
+  followUp,
+}
+
+AssistantTriggerKind parseAssistantTriggerKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "schedule":
+      return AssistantTriggerKind.schedule;
+    case "event":
+      return AssistantTriggerKind.event;
+    case "context_change":
+      return AssistantTriggerKind.contextChange;
+    case "follow_up":
+      return AssistantTriggerKind.followUp;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantTriggerKind", raw.trim());
+  }
+}
+
+extension AssistantTriggerKindX on AssistantTriggerKind {
+  String get wireName {
+    switch (this) {
+      case AssistantTriggerKind.schedule:
+        return "schedule";
+      case AssistantTriggerKind.event:
+        return "event";
+      case AssistantTriggerKind.contextChange:
+        return "context_change";
+      case AssistantTriggerKind.followUp:
+        return "follow_up";
+    }
+  }
+}
+
+enum AssistantPresentationNodeKind {
+  unknown,
+  card,
+  column,
+  row,
+  grid,
+  list,
+  carousel,
+  markdown,
+  text,
+  icon,
+  media,
+  badge,
+  divider,
+  stat,
+  keyValue,
+  entityReference,
+  sourceReference,
+  timeline,
+  comparisonTable,
+  sourceList,
+  mediaGallery,
+  callout,
+  actionGroup,
+  choiceChips,
+  dateTimeInput,
+  confirmationCard,
+}
+
+AssistantPresentationNodeKind parseAssistantPresentationNodeKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantPresentationNodeKind.unknown;
+    case "card":
+      return AssistantPresentationNodeKind.card;
+    case "column":
+      return AssistantPresentationNodeKind.column;
+    case "row":
+      return AssistantPresentationNodeKind.row;
+    case "grid":
+      return AssistantPresentationNodeKind.grid;
+    case "list":
+      return AssistantPresentationNodeKind.list;
+    case "carousel":
+      return AssistantPresentationNodeKind.carousel;
+    case "markdown":
+      return AssistantPresentationNodeKind.markdown;
+    case "text":
+      return AssistantPresentationNodeKind.text;
+    case "icon":
+      return AssistantPresentationNodeKind.icon;
+    case "media":
+      return AssistantPresentationNodeKind.media;
+    case "badge":
+      return AssistantPresentationNodeKind.badge;
+    case "divider":
+      return AssistantPresentationNodeKind.divider;
+    case "stat":
+      return AssistantPresentationNodeKind.stat;
+    case "key_value":
+      return AssistantPresentationNodeKind.keyValue;
+    case "entity_reference":
+      return AssistantPresentationNodeKind.entityReference;
+    case "source_reference":
+      return AssistantPresentationNodeKind.sourceReference;
+    case "timeline":
+      return AssistantPresentationNodeKind.timeline;
+    case "comparison_table":
+      return AssistantPresentationNodeKind.comparisonTable;
+    case "source_list":
+      return AssistantPresentationNodeKind.sourceList;
+    case "media_gallery":
+      return AssistantPresentationNodeKind.mediaGallery;
+    case "callout":
+      return AssistantPresentationNodeKind.callout;
+    case "action_group":
+      return AssistantPresentationNodeKind.actionGroup;
+    case "choice_chips":
+      return AssistantPresentationNodeKind.choiceChips;
+    case "date_time_input":
+      return AssistantPresentationNodeKind.dateTimeInput;
+    case "confirmation_card":
+      return AssistantPresentationNodeKind.confirmationCard;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantPresentationNodeKind", raw.trim());
+  }
+}
+
+AssistantPresentationNodeKind parseAssistantPresentationNodeKind(String raw) {
+  switch (raw.trim()) {
+    case "card":
+      return AssistantPresentationNodeKind.card;
+    case "column":
+      return AssistantPresentationNodeKind.column;
+    case "row":
+      return AssistantPresentationNodeKind.row;
+    case "grid":
+      return AssistantPresentationNodeKind.grid;
+    case "list":
+      return AssistantPresentationNodeKind.list;
+    case "carousel":
+      return AssistantPresentationNodeKind.carousel;
+    case "markdown":
+      return AssistantPresentationNodeKind.markdown;
+    case "text":
+      return AssistantPresentationNodeKind.text;
+    case "icon":
+      return AssistantPresentationNodeKind.icon;
+    case "media":
+      return AssistantPresentationNodeKind.media;
+    case "badge":
+      return AssistantPresentationNodeKind.badge;
+    case "divider":
+      return AssistantPresentationNodeKind.divider;
+    case "stat":
+      return AssistantPresentationNodeKind.stat;
+    case "key_value":
+      return AssistantPresentationNodeKind.keyValue;
+    case "entity_reference":
+      return AssistantPresentationNodeKind.entityReference;
+    case "source_reference":
+      return AssistantPresentationNodeKind.sourceReference;
+    case "timeline":
+      return AssistantPresentationNodeKind.timeline;
+    case "comparison_table":
+      return AssistantPresentationNodeKind.comparisonTable;
+    case "source_list":
+      return AssistantPresentationNodeKind.sourceList;
+    case "media_gallery":
+      return AssistantPresentationNodeKind.mediaGallery;
+    case "callout":
+      return AssistantPresentationNodeKind.callout;
+    case "action_group":
+      return AssistantPresentationNodeKind.actionGroup;
+    case "choice_chips":
+      return AssistantPresentationNodeKind.choiceChips;
+    case "date_time_input":
+      return AssistantPresentationNodeKind.dateTimeInput;
+    case "confirmation_card":
+      return AssistantPresentationNodeKind.confirmationCard;
+    default:
+      return AssistantPresentationNodeKind.unknown;
+  }
+}
+
+extension AssistantPresentationNodeKindX on AssistantPresentationNodeKind {
+  String get wireName {
+    switch (this) {
+      case AssistantPresentationNodeKind.unknown:
+        return "";
+      case AssistantPresentationNodeKind.card:
+        return "card";
+      case AssistantPresentationNodeKind.column:
+        return "column";
+      case AssistantPresentationNodeKind.row:
+        return "row";
+      case AssistantPresentationNodeKind.grid:
+        return "grid";
+      case AssistantPresentationNodeKind.list:
+        return "list";
+      case AssistantPresentationNodeKind.carousel:
+        return "carousel";
+      case AssistantPresentationNodeKind.markdown:
+        return "markdown";
+      case AssistantPresentationNodeKind.text:
+        return "text";
+      case AssistantPresentationNodeKind.icon:
+        return "icon";
+      case AssistantPresentationNodeKind.media:
+        return "media";
+      case AssistantPresentationNodeKind.badge:
+        return "badge";
+      case AssistantPresentationNodeKind.divider:
+        return "divider";
+      case AssistantPresentationNodeKind.stat:
+        return "stat";
+      case AssistantPresentationNodeKind.keyValue:
+        return "key_value";
+      case AssistantPresentationNodeKind.entityReference:
+        return "entity_reference";
+      case AssistantPresentationNodeKind.sourceReference:
+        return "source_reference";
+      case AssistantPresentationNodeKind.timeline:
+        return "timeline";
+      case AssistantPresentationNodeKind.comparisonTable:
+        return "comparison_table";
+      case AssistantPresentationNodeKind.sourceList:
+        return "source_list";
+      case AssistantPresentationNodeKind.mediaGallery:
+        return "media_gallery";
+      case AssistantPresentationNodeKind.callout:
+        return "callout";
+      case AssistantPresentationNodeKind.actionGroup:
+        return "action_group";
+      case AssistantPresentationNodeKind.choiceChips:
+        return "choice_chips";
+      case AssistantPresentationNodeKind.dateTimeInput:
+        return "date_time_input";
+      case AssistantPresentationNodeKind.confirmationCard:
+        return "confirmation_card";
+    }
+  }
+}
+
+enum AssistantPresentationTone {
+  neutral,
+  informative,
+  positive,
+  caution,
+  critical,
+}
+
+AssistantPresentationTone parseAssistantPresentationToneStrict(String raw) {
+  switch (raw.trim()) {
+    case "neutral":
+      return AssistantPresentationTone.neutral;
+    case "informative":
+      return AssistantPresentationTone.informative;
+    case "positive":
+      return AssistantPresentationTone.positive;
+    case "caution":
+      return AssistantPresentationTone.caution;
+    case "critical":
+      return AssistantPresentationTone.critical;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantPresentationTone", raw.trim());
+  }
+}
+
+extension AssistantPresentationToneX on AssistantPresentationTone {
+  String get wireName {
+    switch (this) {
+      case AssistantPresentationTone.neutral:
+        return "neutral";
+      case AssistantPresentationTone.informative:
+        return "informative";
+      case AssistantPresentationTone.positive:
+        return "positive";
+      case AssistantPresentationTone.caution:
+        return "caution";
+      case AssistantPresentationTone.critical:
+        return "critical";
+    }
+  }
+}
+
+enum AssistantPresentationDensity {
+  compact,
+  standard,
+  immersive,
+}
+
+AssistantPresentationDensity parseAssistantPresentationDensityStrict(String raw) {
+  switch (raw.trim()) {
+    case "compact":
+      return AssistantPresentationDensity.compact;
+    case "standard":
+      return AssistantPresentationDensity.standard;
+    case "immersive":
+      return AssistantPresentationDensity.immersive;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantPresentationDensity", raw.trim());
+  }
+}
+
+extension AssistantPresentationDensityX on AssistantPresentationDensity {
+  String get wireName {
+    switch (this) {
+      case AssistantPresentationDensity.compact:
+        return "compact";
+      case AssistantPresentationDensity.standard:
+        return "standard";
+      case AssistantPresentationDensity.immersive:
+        return "immersive";
+    }
+  }
+}
+
+enum AssistantRunState {
+  accepted,
+  orienting,
+  planning,
+  executing,
+  observing,
+  reflecting,
+  checkpointing,
+  waitingUser,
+  waitingApproval,
+  waitingExternal,
+  paused,
+  synthesizing,
+  verifying,
+  completed,
+  failed,
+  cancelled,
+}
+
+AssistantRunState parseAssistantRunStateStrict(String raw) {
+  switch (raw.trim()) {
+    case "accepted":
+      return AssistantRunState.accepted;
+    case "orienting":
+      return AssistantRunState.orienting;
+    case "planning":
+      return AssistantRunState.planning;
+    case "executing":
+      return AssistantRunState.executing;
+    case "observing":
+      return AssistantRunState.observing;
+    case "reflecting":
+      return AssistantRunState.reflecting;
+    case "checkpointing":
+      return AssistantRunState.checkpointing;
+    case "waiting_user":
+      return AssistantRunState.waitingUser;
+    case "waiting_approval":
+      return AssistantRunState.waitingApproval;
+    case "waiting_external":
+      return AssistantRunState.waitingExternal;
+    case "paused":
+      return AssistantRunState.paused;
+    case "synthesizing":
+      return AssistantRunState.synthesizing;
+    case "verifying":
+      return AssistantRunState.verifying;
+    case "completed":
+      return AssistantRunState.completed;
+    case "failed":
+      return AssistantRunState.failed;
+    case "cancelled":
+      return AssistantRunState.cancelled;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantRunState", raw.trim());
+  }
+}
+
+extension AssistantRunStateX on AssistantRunState {
+  String get wireName {
+    switch (this) {
+      case AssistantRunState.accepted:
+        return "accepted";
+      case AssistantRunState.orienting:
+        return "orienting";
+      case AssistantRunState.planning:
+        return "planning";
+      case AssistantRunState.executing:
+        return "executing";
+      case AssistantRunState.observing:
+        return "observing";
+      case AssistantRunState.reflecting:
+        return "reflecting";
+      case AssistantRunState.checkpointing:
+        return "checkpointing";
+      case AssistantRunState.waitingUser:
+        return "waiting_user";
+      case AssistantRunState.waitingApproval:
+        return "waiting_approval";
+      case AssistantRunState.waitingExternal:
+        return "waiting_external";
+      case AssistantRunState.paused:
+        return "paused";
+      case AssistantRunState.synthesizing:
+        return "synthesizing";
+      case AssistantRunState.verifying:
+        return "verifying";
+      case AssistantRunState.completed:
+        return "completed";
+      case AssistantRunState.failed:
+        return "failed";
+      case AssistantRunState.cancelled:
+        return "cancelled";
+    }
+  }
+}
+
+enum AssistantRunItemKind {
+  unknown,
+  userInput,
+  plan,
+  task,
+  decisionSummary,
+  toolUse,
+  subagent,
+  evidence,
+  presentation,
+  approval,
+  checkpoint,
+  finalAnswer,
+}
+
+AssistantRunItemKind parseAssistantRunItemKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return AssistantRunItemKind.unknown;
+    case "user_input":
+      return AssistantRunItemKind.userInput;
+    case "plan":
+      return AssistantRunItemKind.plan;
+    case "task":
+      return AssistantRunItemKind.task;
+    case "decision_summary":
+      return AssistantRunItemKind.decisionSummary;
+    case "tool_use":
+      return AssistantRunItemKind.toolUse;
+    case "subagent":
+      return AssistantRunItemKind.subagent;
+    case "evidence":
+      return AssistantRunItemKind.evidence;
+    case "presentation":
+      return AssistantRunItemKind.presentation;
+    case "approval":
+      return AssistantRunItemKind.approval;
+    case "checkpoint":
+      return AssistantRunItemKind.checkpoint;
+    case "final_answer":
+      return AssistantRunItemKind.finalAnswer;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantRunItemKind", raw.trim());
+  }
+}
+
+AssistantRunItemKind parseAssistantRunItemKind(String raw) {
+  switch (raw.trim()) {
+    case "user_input":
+      return AssistantRunItemKind.userInput;
+    case "plan":
+      return AssistantRunItemKind.plan;
+    case "task":
+      return AssistantRunItemKind.task;
+    case "decision_summary":
+      return AssistantRunItemKind.decisionSummary;
+    case "tool_use":
+      return AssistantRunItemKind.toolUse;
+    case "subagent":
+      return AssistantRunItemKind.subagent;
+    case "evidence":
+      return AssistantRunItemKind.evidence;
+    case "presentation":
+      return AssistantRunItemKind.presentation;
+    case "approval":
+      return AssistantRunItemKind.approval;
+    case "checkpoint":
+      return AssistantRunItemKind.checkpoint;
+    case "final_answer":
+      return AssistantRunItemKind.finalAnswer;
+    default:
+      return AssistantRunItemKind.unknown;
+  }
+}
+
+extension AssistantRunItemKindX on AssistantRunItemKind {
+  String get wireName {
+    switch (this) {
+      case AssistantRunItemKind.unknown:
+        return "";
+      case AssistantRunItemKind.userInput:
+        return "user_input";
+      case AssistantRunItemKind.plan:
+        return "plan";
+      case AssistantRunItemKind.task:
+        return "task";
+      case AssistantRunItemKind.decisionSummary:
+        return "decision_summary";
+      case AssistantRunItemKind.toolUse:
+        return "tool_use";
+      case AssistantRunItemKind.subagent:
+        return "subagent";
+      case AssistantRunItemKind.evidence:
+        return "evidence";
+      case AssistantRunItemKind.presentation:
+        return "presentation";
+      case AssistantRunItemKind.approval:
+        return "approval";
+      case AssistantRunItemKind.checkpoint:
+        return "checkpoint";
+      case AssistantRunItemKind.finalAnswer:
+        return "final_answer";
+    }
+  }
+}
+
+enum AssistantRunItemStatus {
+  started,
+  completed,
+  failed,
+  cancelled,
+}
+
+AssistantRunItemStatus parseAssistantRunItemStatusStrict(String raw) {
+  switch (raw.trim()) {
+    case "started":
+      return AssistantRunItemStatus.started;
+    case "completed":
+      return AssistantRunItemStatus.completed;
+    case "failed":
+      return AssistantRunItemStatus.failed;
+    case "cancelled":
+      return AssistantRunItemStatus.cancelled;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantRunItemStatus", raw.trim());
+  }
+}
+
+extension AssistantRunItemStatusX on AssistantRunItemStatus {
+  String get wireName {
+    switch (this) {
+      case AssistantRunItemStatus.started:
+        return "started";
+      case AssistantRunItemStatus.completed:
+        return "completed";
+      case AssistantRunItemStatus.failed:
+        return "failed";
+      case AssistantRunItemStatus.cancelled:
+        return "cancelled";
+    }
+  }
+}
+
+enum AssistantTaskStatus {
+  pending,
+  ready,
+  running,
+  waiting,
+  completed,
+  failed,
+  cancelled,
+}
+
+AssistantTaskStatus parseAssistantTaskStatusStrict(String raw) {
+  switch (raw.trim()) {
+    case "pending":
+      return AssistantTaskStatus.pending;
+    case "ready":
+      return AssistantTaskStatus.ready;
+    case "running":
+      return AssistantTaskStatus.running;
+    case "waiting":
+      return AssistantTaskStatus.waiting;
+    case "completed":
+      return AssistantTaskStatus.completed;
+    case "failed":
+      return AssistantTaskStatus.failed;
+    case "cancelled":
+      return AssistantTaskStatus.cancelled;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantTaskStatus", raw.trim());
+  }
+}
+
+extension AssistantTaskStatusX on AssistantTaskStatus {
+  String get wireName {
+    switch (this) {
+      case AssistantTaskStatus.pending:
+        return "pending";
+      case AssistantTaskStatus.ready:
+        return "ready";
+      case AssistantTaskStatus.running:
+        return "running";
+      case AssistantTaskStatus.waiting:
+        return "waiting";
+      case AssistantTaskStatus.completed:
+        return "completed";
+      case AssistantTaskStatus.failed:
+        return "failed";
+      case AssistantTaskStatus.cancelled:
+        return "cancelled";
+    }
+  }
+}
+
+enum AssistantReasoningProfile {
+  fast,
+  balanced,
+  deep,
+  backgroundLong,
+}
+
+AssistantReasoningProfile parseAssistantReasoningProfileStrict(String raw) {
+  switch (raw.trim()) {
+    case "fast":
+      return AssistantReasoningProfile.fast;
+    case "balanced":
+      return AssistantReasoningProfile.balanced;
+    case "deep":
+      return AssistantReasoningProfile.deep;
+    case "background_long":
+      return AssistantReasoningProfile.backgroundLong;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantReasoningProfile", raw.trim());
+  }
+}
+
+extension AssistantReasoningProfileX on AssistantReasoningProfile {
+  String get wireName {
+    switch (this) {
+      case AssistantReasoningProfile.fast:
+        return "fast";
+      case AssistantReasoningProfile.balanced:
+        return "balanced";
+      case AssistantReasoningProfile.deep:
+        return "deep";
+      case AssistantReasoningProfile.backgroundLong:
+        return "background_long";
     }
   }
 }
@@ -260,6 +1104,33 @@ extension SkillSubscriptionStatusX on SkillSubscriptionStatus {
         return "paused";
       case SkillSubscriptionStatus.archived:
         return "archived";
+    }
+  }
+}
+
+enum SkillSubscriptionDestinationType {
+  user,
+  chatConversation,
+}
+
+SkillSubscriptionDestinationType parseSkillSubscriptionDestinationTypeStrict(String raw) {
+  switch (raw.trim()) {
+    case "user":
+      return SkillSubscriptionDestinationType.user;
+    case "chat_conversation":
+      return SkillSubscriptionDestinationType.chatConversation;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillSubscriptionDestinationType", raw.trim());
+  }
+}
+
+extension SkillSubscriptionDestinationTypeX on SkillSubscriptionDestinationType {
+  String get wireName {
+    switch (this) {
+      case SkillSubscriptionDestinationType.user:
+        return "user";
+      case SkillSubscriptionDestinationType.chatConversation:
+        return "chat_conversation";
     }
   }
 }
@@ -324,7 +1195,7 @@ enum AssistantReferralSource {
   chat,
   create,
   search,
-  assistantConversation,
+  assistantSession,
   service,
 }
 
@@ -348,8 +1219,8 @@ AssistantReferralSource parseAssistantReferralSourceStrict(String raw) {
       return AssistantReferralSource.create;
     case "search":
       return AssistantReferralSource.search;
-    case "assistant_conversation":
-      return AssistantReferralSource.assistantConversation;
+    case "assistant_session":
+      return AssistantReferralSource.assistantSession;
     case "service":
       return AssistantReferralSource.service;
     default:
@@ -375,8 +1246,8 @@ AssistantReferralSource parseAssistantReferralSource(String raw) {
       return AssistantReferralSource.create;
     case "search":
       return AssistantReferralSource.search;
-    case "assistant_conversation":
-      return AssistantReferralSource.assistantConversation;
+    case "assistant_session":
+      return AssistantReferralSource.assistantSession;
     case "service":
       return AssistantReferralSource.service;
     default:
@@ -405,8 +1276,8 @@ extension AssistantReferralSourceX on AssistantReferralSource {
         return "create";
       case AssistantReferralSource.search:
         return "search";
-      case AssistantReferralSource.assistantConversation:
-        return "assistant_conversation";
+      case AssistantReferralSource.assistantSession:
+        return "assistant_session";
       case AssistantReferralSource.service:
         return "service";
     }
@@ -873,6 +1744,38 @@ extension SearchIntensityX on SearchIntensity {
         return "medium";
       case SearchIntensity.high:
         return "high";
+    }
+  }
+}
+
+enum AssistantRunIntentKind {
+  answer,
+  search,
+  creationAssistance,
+}
+
+AssistantRunIntentKind parseAssistantRunIntentKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "answer":
+      return AssistantRunIntentKind.answer;
+    case "search":
+      return AssistantRunIntentKind.search;
+    case "creation_assistance":
+      return AssistantRunIntentKind.creationAssistance;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantRunIntentKind", raw.trim());
+  }
+}
+
+extension AssistantRunIntentKindX on AssistantRunIntentKind {
+  String get wireName {
+    switch (this) {
+      case AssistantRunIntentKind.answer:
+        return "answer";
+      case AssistantRunIntentKind.search:
+        return "search";
+      case AssistantRunIntentKind.creationAssistance:
+        return "creation_assistance";
     }
   }
 }
@@ -3036,7 +3939,7 @@ extension AssistantPreferenceKindX on AssistantPreferenceKind {
 enum AssistantPreferenceSourceType {
   explicitRewrite,
   management,
-  conversationConfirmed,
+  sessionConfirmed,
   unknown,
 }
 
@@ -3046,8 +3949,8 @@ AssistantPreferenceSourceType parseAssistantPreferenceSourceTypeStrict(String ra
       return AssistantPreferenceSourceType.explicitRewrite;
     case "management":
       return AssistantPreferenceSourceType.management;
-    case "conversation_confirmed":
-      return AssistantPreferenceSourceType.conversationConfirmed;
+    case "session_confirmed":
+      return AssistantPreferenceSourceType.sessionConfirmed;
     case "":
       return AssistantPreferenceSourceType.unknown;
     default:
@@ -3061,8 +3964,8 @@ AssistantPreferenceSourceType parseAssistantPreferenceSourceType(String raw) {
       return AssistantPreferenceSourceType.explicitRewrite;
     case "management":
       return AssistantPreferenceSourceType.management;
-    case "conversation_confirmed":
-      return AssistantPreferenceSourceType.conversationConfirmed;
+    case "session_confirmed":
+      return AssistantPreferenceSourceType.sessionConfirmed;
     default:
       return AssistantPreferenceSourceType.unknown;
   }
@@ -3075,8 +3978,8 @@ extension AssistantPreferenceSourceTypeX on AssistantPreferenceSourceType {
         return "explicit_rewrite";
       case AssistantPreferenceSourceType.management:
         return "management";
-      case AssistantPreferenceSourceType.conversationConfirmed:
-        return "conversation_confirmed";
+      case AssistantPreferenceSourceType.sessionConfirmed:
+        return "session_confirmed";
       case AssistantPreferenceSourceType.unknown:
         return "";
     }

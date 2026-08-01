@@ -19,7 +19,7 @@ void main() {
       final result = await client.contentMediaUploadSessionInitMediaUpload(
         InitContentMediaUploadCommand(
           mediaType: ContentMediaType.image,
-          contentType: 'image/jpeg',
+          mimeType: 'image/jpeg',
           fileSize: 256,
           expectedSha256:
               'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -37,7 +37,7 @@ void main() {
       expect(executor.operation?.commercialStatus, 'ready');
       expect(executor.body, <String, Object?>{
         'mediaType': 'image',
-        'contentType': 'image/jpeg',
+        'mimeType': 'image/jpeg',
         'fileSize': 256,
         'expectedSha256':
             'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -130,7 +130,7 @@ void main() {
         'assetId': 'mas-1',
         'version': 1,
         'mediaType': 'image',
-        'contentType': 'image/jpeg',
+        'mimeType': 'image/jpeg',
         'fileSize': 256,
         'status': 'ready',
         'accessPolicy': 'owner_only',
@@ -145,7 +145,7 @@ void main() {
       'assetId': 'mas-1',
       'version': 2,
       'mediaType': 'image',
-      'contentType': 'image/jpeg',
+      'mimeType': 'image/jpeg',
       'fileSize': 256,
       'status': 'ready',
       'accessPolicy': 'public',
@@ -175,7 +175,7 @@ void main() {
         'version': 2,
         'assetId': 'mas-1',
         'mediaType': 'video',
-        'contentType': 'video/mp4',
+        'mimeType': 'video/mp4',
         'fileSize': 256,
         'status': 'completed',
         'createdAt': '2030-01-02T03:04:05Z',

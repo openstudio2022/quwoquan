@@ -6,7 +6,7 @@ overrides:
   sys.content-service.oss.use_ssl: true
   sys.content-service.rec_model_service.timeout_ms: 200
   sys.content-service.rec_model_service.url: http://recommendation-service:8000
-  sys.content-service.redis.rec.addr: 127.0.0.1:6379
+  sys.content-service.redis.rec.addr: redis:6379
   sys.content-service.tag_service.url: http://tag-service:18092
 secretRefs:
   sys.content-service.mongo.uri: MONGO_URI
@@ -20,13 +20,13 @@ externalBindings:
     state: enabled
   content.embedding.generation:
     state: enabled
-    adapter: ext.embed.protocol_fixture
-    endpointRef: environment_binding:content.embedding_fixture
+    adapter: ext.embed.openai_compatible
+    endpointRef: environment_binding:content.embedding
     endpointEnvs:
-      endpoint: CONTENT_EMBEDDING_FIXTURE_ENDPOINT
+      endpoint: CONTENT_EMBEDDING_ENDPOINT
     secretRefs:
-    - CONTENT_EMBEDDING_FIXTURE_API_KEY
-    timeoutMs: 1000
+    - CONTENT_EMBEDDING_API_KEY
+    timeoutMs: 10000
   runtime.object.storage:
     state: enabled
     adapter: infra.minio.object_storage

@@ -43,9 +43,9 @@ class AssistantJourneyEntry {
   factory AssistantJourneyEntry.fromJson(Map<String, dynamic> json) {
     return AssistantJourneyEntry(
       entryId: (json['entryId'] as String?)?.trim() ?? "",
-      stageId: parseJourneyStageId((json['stageId'] as String?)?.trim() ?? ""),
-      kind: parseJourneyEntryKind((json['kind'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "active"),
+      stageId: parseJourneyStageIdStrict((json['stageId'] as String?)?.trim() ?? ""),
+      kind: parseJourneyEntryKindStrict((json['kind'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "active"),
       order: (json['order'] as num?)?.toInt() ?? 0,
       headline: (json['headline'] as String?)?.trim() ?? "",
       detail: (json['detail'] as String?)?.trim() ?? "",
@@ -126,9 +126,9 @@ class AssistantJourneyProvenance {
 
   factory AssistantJourneyProvenance.fromJson(Map<String, dynamic> json) {
     return AssistantJourneyProvenance(
-      phaseId: parsePlannerPhaseId((json['phaseId'] as String?)?.trim() ?? ""),
-      actionCode: parsePlannerActionCode((json['actionCode'] as String?)?.trim() ?? ""),
-      reasonCode: parsePlannerReasonCode((json['reasonCode'] as String?)?.trim() ?? ""),
+      phaseId: parsePlannerPhaseIdStrict((json['phaseId'] as String?)?.trim() ?? ""),
+      actionCode: parsePlannerActionCodeStrict((json['actionCode'] as String?)?.trim() ?? ""),
+      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? ""),
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
     );
@@ -171,9 +171,9 @@ class AssistantJourneyReadiness {
 
   factory AssistantJourneyReadiness.fromJson(Map<String, dynamic> json) {
     return AssistantJourneyReadiness(
-      nextAction: parseAssistantNextAction((json['nextAction'] as String?)?.trim() ?? ""),
-      finalAnswerMode: parseFinalAnswerMode((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
-      answerEligibility: parseAnswerEligibility((json['answerEligibility'] as String?)?.trim() ?? "unknown"),
+      nextAction: parseAssistantNextActionStrict((json['nextAction'] as String?)?.trim() ?? ""),
+      finalAnswerMode: parseFinalAnswerModeStrict((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
+      answerEligibility: parseAnswerEligibilityStrict((json['answerEligibility'] as String?)?.trim() ?? "unknown"),
       finalAnswerReady: json['finalAnswerReady'] == true,
       clarificationNeeded: json['clarificationNeeded'] == true,
       needExpansion: json['needExpansion'] == true,
@@ -242,8 +242,8 @@ class AssistantJourneyStage {
 
   factory AssistantJourneyStage.fromJson(Map<String, dynamic> json) {
     return AssistantJourneyStage(
-      stageId: parseJourneyStageId((json['stageId'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatus((json['status'] as String?)?.trim() ?? "pending"),
+      stageId: parseJourneyStageIdStrict((json['stageId'] as String?)?.trim() ?? ""),
+      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "pending"),
       order: (json['order'] as num?)?.toInt() ?? 0,
       summary: (json['summary'] as String?)?.trim() ?? "",
       referenceCount: (json['referenceCount'] as num?)?.toInt() ?? 0,

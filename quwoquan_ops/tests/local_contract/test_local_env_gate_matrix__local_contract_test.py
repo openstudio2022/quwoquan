@@ -52,7 +52,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertFalse(payload["overHardBudget"])
         self.assertEqual(payload["phases"][0]["name"], "alpha_up")
 
-    def test_matrix_orchestrator_is_serial_package_bound_and_full(self) -> None:
+    def test_matrix_orchestrator_is_serial_package_bound_content_consumer(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix
 
         calls: list[str] = []
@@ -62,17 +62,74 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 calls.append(f"{name}:{getattr(args, 'env', '')}:{getattr(args, 'target', '')}:{getattr(args, 'command', '')}")
                 if name == "verify":
                     self.assertFalse(hasattr(args, "reuse_package"))
+                    self.assertEqual(args.profile, "smoke")
+                    self.assertEqual(args.nonprod_data_evidence, "")
                 if name == "up":
-                    self.assertEqual(args.workload, "full")
+                    self.assertEqual(args.workload, "content-release")
                     self.assertTrue(args.skip_build)
-                return {
+                if name == "health":
+                    self.assertEqual(args.scope, "content-import")
+                payload = {
                     "exitCode": 0,
                     "summary": f"{name} ok",
                     "details": [],
                     "reportDir": f"runs/{name}",
                 }
+                if name == "package":
+                    payload["baselineId"] = f"sha256:{'c' * 64}"
+                return payload
 
             return _fn
+
+        def _data_ok(**kwargs):
+            calls.append(
+                f"data:{kwargs['environment']}:{kwargs['action']}:"
+                f"{Path(kwargs['report_path']).name}"
+            )
+            payload = {
+                "exitCode": 0,
+                "summary": f"{kwargs['action']} ok",
+                "details": [],
+                "reportDir": str(Path(kwargs["report_path"]).parent),
+            }
+            if kwargs["action"].startswith("acceptance-lease-"):
+                action = kwargs["action"].removeprefix("acceptance-lease-")
+                argv = kwargs["argv"]
+                payload["payload"] = {
+                    "schema": "quwoquan_data.release_acceptance_lease_event",
+                    "action": action,
+                    "environment": kwargs["environment"],
+                    "releaseId": argv[argv.index("--release-id") + 1],
+                    "leaseId": argv[argv.index("--lease-id") + 1],
+                    "eventRef": f"receipt:{kwargs['environment']}:{action}",
+                }
+            return payload
+
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        temporary_root = Path(temporary.name)
+        candidate_attestation = temporary_root / "candidate.json"
+        rollback_attestation = temporary_root / "rollback.json"
+        candidate_attestation.write_text(
+            json.dumps(
+                {
+                    "schema": "quwoquan_data.release_attestation",
+                    "releaseId": "candidate-release",
+                    "payloadSha256": f"sha256:{'a' * 64}",
+                }
+            ),
+            encoding="utf-8",
+        )
+        rollback_attestation.write_text(
+            json.dumps(
+                {
+                    "schema": "quwoquan_data.release_attestation",
+                    "releaseId": "rollback-release",
+                    "payloadSha256": f"sha256:{'b' * 64}",
+                }
+            ),
+            encoding="utf-8",
+        )
 
         with mock.patch(
             "quwoquan_ops.cli.lib.local_env_gate_matrix._run_commit_gate",
@@ -107,11 +164,16 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 health_fn=_ok("health"),
                 verify_fn=_ok("verify"),
                 down_fn=_ok("down"),
+                filter_catalog_fn=_ok("filter-catalog"),
                 targets=("alpha-local", "beta-local", "gamma-local"),
                 include_l0=True,
+                release_attestation=str(candidate_attestation),
+                rollback_release_attestation=str(rollback_attestation),
+                data_fn=_data_ok,
+                execution_class="contract-simulation",
             )
         self.assertEqual(payload["exitCode"], 0)
-        self.assertEqual(payload["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
+        self.assertEqual(payload["claim"], "CONTRACT_SIMULATION_PASSED")
         self.assertGreater(payload["executed"], 0)
         self.assertEqual(payload["skipped"], 0)
         self.assertLessEqual(payload["wallClockSeconds"], 600)
@@ -120,8 +182,30 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             c.split(":")[1] for c in calls if c.startswith("package:")
         ]
         self.assertEqual(package_envs, ["alpha", "beta", "gamma"])
+        data_actions = [
+            c.split(":")[2] for c in calls if c.startswith("data:")
+        ]
+        self.assertEqual(
+            data_actions,
+            [
+                action
+                for _environment in ("alpha", "beta", "gamma")
+                for action in (
+                    "candidate-apply",
+                    "candidate-verify",
+                    "rollback-apply",
+                    "rollback-verify",
+                    "replay-apply",
+                    "replay-verify",
+                    "lifecycle-exit",
+                    "acceptance-lease-acquire",
+                    "acceptance-lease-revoke",
+                )
+            ],
+        )
         timing_path = ROOT / payload["reportDir"] / "timing.json"
         self.assertTrue(timing_path.is_file(), timing_path)
+        self.assertTrue(Path(payload["reportDir"]).name.startswith("matrix-"))
         timing = json.loads(timing_path.read_text(encoding="utf-8"))
         self.assertEqual(timing["cacheMode"], "package-bound")
         self.assertFalse(timing["overHardBudget"])
@@ -131,9 +215,16 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             )
         )
         self.assertEqual(matrix["schema"], "quwoquan.test.case-result")
+        self.assertEqual(matrix["executionClass"], "contract-simulation")
+        self.assertNotEqual(matrix["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
         phase_names = [p["name"] for p in timing["phases"]]
         self.assertIn("L0_commit_gate", phase_names)
         self.assertIn("gamma-local_up", phase_names)
+        self.assertIn("gamma-local_data_candidate_verify", phase_names)
+        self.assertIn("gamma-local_runtime_smoke_revalidate", phase_names)
+        self.assertIn("gamma-local_data_lifecycle_exit", phase_names)
+        self.assertIn("gamma-local_acceptance_lease_acquire", phase_names)
+        self.assertIn("gamma-local_acceptance_lease_revoke", phase_names)
         self.assertNotIn("prod_verify_release", phase_names)
 
     def test_package_reuse_fingerprint(self) -> None:
@@ -257,6 +348,93 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertEqual(payload["claim"], "GATE_BLOCK")
         self.assertEqual(payload["skipped"], 0)
         runner.assert_not_called()
+
+    def test_missing_exit_code_is_gate_block_not_implicit_success(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import _record_phase
+
+        phases: list[dict[str, object]] = []
+        exit_code = _record_phase(
+            phases,
+            name="missing_exit",
+            payload={"summary": "ambiguous runner result"},
+        )
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(phases[0]["status"], "gate_block")
+
+    def test_live_matrix_requires_explicit_release_bindings(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix
+
+        runner = mock.Mock()
+        payload = run_local_env_gate_matrix(
+            package_fn=runner,
+            up_fn=runner,
+            health_fn=runner,
+            verify_fn=runner,
+            down_fn=runner,
+        )
+
+        self.assertEqual(payload["exitCode"], 2)
+        self.assertEqual(payload["claim"], "GATE_BLOCK")
+        self.assertIn("release/data inputs", payload["summary"])
+        runner.assert_not_called()
+
+    def test_live_matrix_lease_blocks_overlap_and_releases_on_exit(self) -> None:
+        from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
+
+        runner = mock.Mock()
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            candidate = root / "candidate.json"
+            rollback = root / "rollback.json"
+            candidate.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_data.release_attestation",
+                        "releaseId": "candidate-release",
+                        "payloadSha256": f"sha256:{'a' * 64}",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rollback.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_data.release_attestation",
+                        "releaseId": "rollback-release",
+                        "payloadSha256": f"sha256:{'b' * 64}",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(matrix_mod, "output_root", return_value=root):
+                with matrix_mod._matrix_execution_lease("matrix-owner"):
+                    payload = matrix_mod.run_local_env_gate_matrix(
+                        package_fn=runner,
+                        up_fn=runner,
+                        health_fn=runner,
+                        verify_fn=runner,
+                        down_fn=runner,
+                        release_attestation=str(candidate),
+                        rollback_release_attestation=str(rollback),
+                    )
+
+                self.assertEqual(payload["exitCode"], 2)
+                self.assertEqual(payload["status"], "gate_block")
+                self.assertIn("execution lease", payload["summary"])
+                runner.assert_not_called()
+
+                with matrix_mod._matrix_execution_lease("matrix-after-release"):
+                    lease = json.loads(
+                        matrix_mod._matrix_lease_path().read_text(encoding="utf-8")
+                    )
+                    self.assertEqual(lease["status"], "active")
+                    self.assertEqual(lease["matrixRunId"], "matrix-after-release")
+
+                released = json.loads(
+                    matrix_mod._matrix_lease_path().read_text(encoding="utf-8")
+                )
+                self.assertEqual(released["status"], "released")
 
     def test_verify_profile_never_performs_nested_up(self) -> None:
         from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile

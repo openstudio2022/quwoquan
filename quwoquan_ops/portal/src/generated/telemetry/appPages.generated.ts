@@ -152,14 +152,14 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
-      "internal_id": "assistantConversationChatSettings",
-      "location": "page_internal_assistant_conversation_chat_settings",
+      "internal_id": "assistantSessionChatSettings",
+      "location": "page_internal_assistant_session_chat_settings",
       "page_name": "assistant_chat_settings_modal"
     },
     {
       "collect_page_access": true,
-      "internal_id": "assistantConversationReferenceWeb",
-      "location": "page_internal_assistant_conversation_reference_web",
+      "internal_id": "assistantSessionReferenceWeb",
+      "location": "page_internal_assistant_session_reference_web",
       "page_name": "assistant_reference_webview_modal"
     },
     {

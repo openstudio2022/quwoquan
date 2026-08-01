@@ -48,6 +48,7 @@ func TestConversationPreviewTypesReferenceCanonicalMessageType(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join(root, "contracts", "chat", "conversation", "fields.yaml"),
 		filepath.Join(root, "contracts", "chat", "chat_inbox_view", "fields.yaml"),
+		filepath.Join(root, "contracts", "chat", "conversation", "projections", "chat_conversation.yaml"),
 		filepath.Join(root, "contracts", "chat", "conversation", "projections", "chat_inbox.yaml"),
 	} {
 		contract := readChatContract(t, path)

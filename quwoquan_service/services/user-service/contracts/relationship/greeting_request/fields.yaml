@@ -45,6 +45,28 @@ fields:
     ops_exposure: mask
     description: 打招呼自定义内容，最长 200 字
     role: authoritative_state
+  - name: intersectionRef
+    source: intersectionRef
+    type: jsonb
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: mask
+    description: 发起方提交的强类型交集意图引用；不得直接作为可见依据使用
+    role: authoritative_state
+  - name: intersectionSnapshot
+    source: intersectionSnapshot
+    type: jsonb
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: mask
+    description: 服务端按当前双方重解析后写入的不可变交集依据；引用失效时为空
+    role: authoritative_state
   - name: status
     source: status
     type: enum
@@ -143,6 +165,64 @@ unique_constraints:
     where: status = 'pending'
     description: 同一发起方对同一接收方，同时只能有一条 pending 请求（频控幂等）
 types:
+  GreetingIntersectionRef:
+    description: 客户端可提交的最小交集引用；不包含标题、结论、URL 或标签
+    fields:
+      - name: intersectionId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: evidenceId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: sourceRef
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: objectTypeRef
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: objectId
+        type: string
+        constraints:
+          - NOT_BLANK
+  GreetingIntersectionSnapshot:
+    description: user-service 以当前双方重新解析后持久化的不可变展示快照
+    fields:
+      - name: intersectionId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: evidenceId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: sourceRef
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: objectTypeRef
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: objectId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: primaryText
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: dimension
+        type: string
+        constraints:
+          - NULLABLE
+      - name: resolvedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
   ListGreetingRequestsQuery:
     fields:
       - name: status
@@ -198,6 +278,13 @@ types:
         client_dart_type: String
         client_default: '''profile'''
         client_normalization: trim
+      - name: intersectionRef
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: GreetingIntersectionRef?
+        client_wire: toWire
+        client_omit_empty: true
   CancelGreetingCommand:
     fields:
       - name: requestId

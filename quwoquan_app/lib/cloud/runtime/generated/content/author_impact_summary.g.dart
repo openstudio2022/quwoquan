@@ -9,9 +9,9 @@ class AuthorImpactSummary {
   final List<AuthorImpactItem> items;
 
   AuthorImpactSummary({
-    required this.authorId,
-    required this.total,
-    required this.items,
+    this.authorId = '',
+    this.total = 0,
+    this.items = const <AuthorImpactItem>[],
   });
 
   factory AuthorImpactSummary.fromMap(Map<String, dynamic> m) {

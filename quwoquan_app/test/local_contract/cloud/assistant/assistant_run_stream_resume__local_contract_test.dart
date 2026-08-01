@@ -32,8 +32,8 @@ void main() {
     final repository = RemoteAssistantRepository(
       httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      conversationInvocationContext: assistantRemoteTestInvocationContext,
-      consentActorScope: 'assistant-stream-resume-test',
+      sessionInvocationContext: assistantRemoteTestInvocationContext,
+      consentAccountId: 'assistant-stream-resume-test',
     );
 
     final events = await repository
@@ -61,8 +61,8 @@ String _sseFrame({
   final envelope = <String, Object?>{
     'schema': 'assistant_stream_event',
     'eventId': 'event-$seq',
-    'conversationId': 'conversation-resume-test',
-    'turnId': 'run-resume-test',
+    'sessionId': 'session-resume-test',
+    'runId': 'run-resume-test',
     'seq': seq,
     'eventType': eventType,
     'traceId': 'trace-resume-test',

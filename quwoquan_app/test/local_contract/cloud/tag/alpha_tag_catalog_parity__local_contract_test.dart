@@ -1,17 +1,14 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {
-  final taxonomyReleaseId =
-      ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId;
   late AlphaTagFacet query;
 
   setUp(() {
-    query = AlphaTagFacet(taxonomyReleaseId: taxonomyReleaseId);
+    query = AlphaTagFacet();
   });
 
   group('Alpha TagCatalog 与 Remote 查询语义对等', () {
@@ -59,18 +56,18 @@ void main() {
     test('校验结果绑定 taxonomy release，过期 release 不伪装成功', () async {
       const validRef = 'Topic/主题/自然风光';
       final accepted = await query.validateRefs(
-        expectedTaxonomyReleaseId: taxonomyReleaseId,
+        expectedTaxonomyReleaseId: query.taxonomyReleaseId,
         tagRefs: const <String>[validRef],
       );
-      expect(accepted.taxonomyReleaseId, taxonomyReleaseId);
+      expect(accepted.taxonomyReleaseId, query.taxonomyReleaseId);
       expect(accepted.valid, const <String>[validRef]);
       expect(accepted.invalid, isEmpty);
 
       final rejected = await query.validateRefs(
-        expectedTaxonomyReleaseId: '$taxonomyReleaseId-stale',
+        expectedTaxonomyReleaseId: '${query.taxonomyReleaseId}-stale',
         tagRefs: const <String>[validRef],
       );
-      expect(rejected.taxonomyReleaseId, taxonomyReleaseId);
+      expect(rejected.taxonomyReleaseId, query.taxonomyReleaseId);
       expect(rejected.valid, isEmpty);
       expect(rejected.invalid, const <String>[validRef]);
     });

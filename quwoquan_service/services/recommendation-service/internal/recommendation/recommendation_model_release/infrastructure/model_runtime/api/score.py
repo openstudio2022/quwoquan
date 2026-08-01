@@ -120,6 +120,10 @@ _scoring_facade = RecommendationScoringQueryFacade(
 )
 
 
+def get_scoring_facade() -> RecommendationScoringQueryFacade:
+    return _scoring_facade
+
+
 def require_scoring_service(request: Request) -> dict[str, Any]:
     try:
         return _service_token_verifier.verify(request.headers.get("Authorization"))
@@ -169,5 +173,74 @@ def batch_score(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+def health(request: Request) -> dict[str, str]:
+    candidate_consumer = getattr(
+        request.app.state,
+        "candidate_post_lifecycle_consumer",
+        None,
+    )
+    premium_consumer = getattr(
+        request.app.state,
+        "candidate_premium_pool_consumer",
+        None,
+    )
+    experiment_policy_consumer = getattr(
+        request.app.state,
+        "experiment_policy_consumer",
+        None,
+    )
+    closure_consumer = getattr(
+        request.app.state,
+        "user_account_closed_consumer",
+        None,
+    )
+    feedback_consumer = getattr(
+        request.app.state,
+        "content_behavior_consumer",
+        None,
+    )
+    exposure_consumer = getattr(
+        request.app.state,
+        "feed_page_delivered_consumer",
+        None,
+    )
+    ranked_window_facade = getattr(request.app.state, "ranked_window_facade", None)
+    model_release_facade = getattr(
+        request.app.state,
+        "model_release_command_facade",
+        None,
+    )
+    common_runtime_unready = (
+        model_release_facade is None
+        or candidate_consumer is None
+        or premium_consumer is None
+        or closure_consumer is None
+        or feedback_consumer is None
+        or exposure_consumer is None
+        or not candidate_consumer.healthy()
+        or not premium_consumer.healthy()
+        or not closure_consumer.healthy()
+        or not feedback_consumer.healthy()
+        or not exposure_consumer.healthy()
+    )
+    content_release_only = (
+        getattr(request.app.state, "runtime_workload", "full") == "content-release"
+    )
+    scoring_runtime_unready = (
+        ranked_window_facade is None
+        or experiment_policy_consumer is None
+        or not experiment_policy_consumer.healthy()
+    )
+    if common_runtime_unready:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready"},
+        )
+    if scoring_runtime_unready and content_release_only:
+        return {"status": "content_release_only"}
+    if scoring_runtime_unready:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready"},
+        )
     return {"status": "ok"}

@@ -28,7 +28,7 @@ func (ProtocolFixtureLocationProvider) Nearby(
 
 func (ProtocolFixtureLocationProvider) Search(
 	_ context.Context,
-	query model.SearchQuery,
+	query model.SearchRequestFact,
 ) ([]model.POI, error) {
 	return []model.POI{{
 		ID:        "fixture-search",

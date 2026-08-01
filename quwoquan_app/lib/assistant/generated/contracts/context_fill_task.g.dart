@@ -45,15 +45,15 @@ class ContextFillTaskDto {
   factory ContextFillTaskDto.fromJson(Map<String, dynamic> json) {
     return ContextFillTaskDto(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
-      fillType: parseContextFillType((json['fillType'] as String?)?.trim() ?? ""),
-      targetSlot: parseContextTargetSlot((json['targetSlot'] as String?)?.trim() ?? ""),
+      fillType: parseContextFillTypeStrict((json['fillType'] as String?)?.trim() ?? ""),
+      targetSlot: parseContextTargetSlotStrict((json['targetSlot'] as String?)?.trim() ?? ""),
       reason: (json['reason'] as String?)?.trim() ?? "",
       prompt: (json['prompt'] as String?)?.trim() ?? "",
       required: json['required'] != false,
       suggestions: _assistantStringList(json['suggestions']),
       generatedQueryConditions: _assistantStringList(json['generatedQueryConditions']),
-      scopeExpansionPolicy: parseContextScopeExpansionPolicy((json['scopeExpansionPolicy'] as String?)?.trim() ?? "none"),
-      retryPolicy: parseContextRetryPolicy((json['retryPolicy'] as String?)?.trim() ?? "single_retry"),
+      scopeExpansionPolicy: parseContextScopeExpansionPolicyStrict((json['scopeExpansionPolicy'] as String?)?.trim() ?? "none"),
+      retryPolicy: parseContextRetryPolicyStrict((json['retryPolicy'] as String?)?.trim() ?? "single_retry"),
     );
   }
 

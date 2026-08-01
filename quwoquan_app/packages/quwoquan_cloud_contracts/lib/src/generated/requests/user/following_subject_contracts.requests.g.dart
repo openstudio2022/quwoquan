@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/following_subject_contracts.dart';
 
@@ -20,6 +20,12 @@ final class ListFollowingSubjectsQuery {
   final String? cursor;
   final int limit;
   final FollowSubjectKind? subjectType;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+    if (this.subjectType != null) "subjectType": switch (this.subjectType!) { FollowSubjectKind.persona => "persona", FollowSubjectKind.homepage => "homepage", FollowSubjectKind.circle => "circle", FollowSubjectKind.location => "location", },
+  };
 }
 
 final class MarkFollowedSubjectVisitedCommand {
@@ -41,6 +47,13 @@ final class MarkFollowedSubjectVisitedCommand {
   final FollowSubjectKind subjectType;
   final DateTime visitedAt;
   final String? clientRequestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "subjectId": this.subjectId,
+    "subjectType": switch (this.subjectType) { FollowSubjectKind.persona => "persona", FollowSubjectKind.homepage => "homepage", FollowSubjectKind.circle => "circle", FollowSubjectKind.location => "location", },
+    "visitedAt": this.visitedAt.toUtc().toIso8601String(),
+    if (this.clientRequestId?.isNotEmpty == true) "clientRequestId": this.clientRequestId!,
+  };
 }
 
 CloudOperationRequestPayload encodeUserFollowedSubjectVisitStateMarkFollowedSubjectVisitedGeneratedRequest(MarkFollowedSubjectVisitedCommand request) {

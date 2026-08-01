@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/persona_relationship_contracts.dart';
 
@@ -13,6 +13,10 @@ final class BlockUserCommand {
   }
 
   final String targetPersonaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+  };
 }
 
 final class FollowUserCommand {
@@ -31,6 +35,12 @@ final class FollowUserCommand {
   final String targetPersonaId;
   final String? source;
   final String? clientRequestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+    if (this.source?.isNotEmpty == true) "source": this.source!,
+    if (this.clientRequestId?.isNotEmpty == true) "clientRequestId": this.clientRequestId!,
+  };
 }
 
 final class GetRelationshipCapabilityQuery {
@@ -43,6 +53,10 @@ final class GetRelationshipCapabilityQuery {
   }
 
   final String targetPersonaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.targetPersonaId,
+  };
 }
 
 final class ListBlockedUsersQuery {
@@ -54,6 +68,11 @@ final class ListBlockedUsersQuery {
 
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class PersonaRelationshipListQuery {
@@ -75,6 +94,13 @@ final class PersonaRelationshipListQuery {
   final String? query;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    if (this.query?.isNotEmpty == true) "query": this.query!,
+    if (this.cursor?.isNotEmpty == true) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class UnblockUserCommand {
@@ -87,6 +113,10 @@ final class UnblockUserCommand {
   }
 
   final String targetPersonaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+  };
 }
 
 final class UnfollowUserCommand {
@@ -102,6 +132,11 @@ final class UnfollowUserCommand {
 
   final String targetPersonaId;
   final String? clientRequestId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "targetPersonaId": this.targetPersonaId,
+    if (this.clientRequestId?.isNotEmpty == true) "clientRequestId": this.clientRequestId!,
+  };
 }
 
 CloudOperationRequestPayload encodeUserPersonaRelationshipBlockUserGeneratedRequest(BlockUserCommand request) {

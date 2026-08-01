@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
-	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
 type postReceipt struct {

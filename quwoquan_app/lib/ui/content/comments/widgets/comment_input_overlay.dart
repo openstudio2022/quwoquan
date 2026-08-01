@@ -404,7 +404,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           ).uploadPreparedSource(
             source: source,
             mediaType: ContentMediaType.image,
-            contentType: contentMediaTypeForPath(path, ContentMediaType.image),
+            mimeType: contentMediaMimeTypeForPath(path, ContentMediaType.image),
             uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
           );
       if (!mounted) return;

@@ -53,7 +53,7 @@ class ToolAssessmentDto {
       gapFill: json['gapFill'] == true,
       rewriteQuery: json['rewriteQuery'] == true,
       allowAnswerWithCurrentEvidence: json['allowAnswerWithCurrentEvidence'] == true,
-      reasonCode: parsePlannerReasonCode((json['reasonCode'] as String?)?.trim() ?? "assessment_update"),
+      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? "assessment_update"),
       referenceCount: (json['referenceCount'] as num?)?.toInt() ?? 0,
       queryCount: (json['queryCount'] as num?)?.toInt() ?? 0,
       coveredDimensions: _assistantStringList(json['coveredDimensions']),

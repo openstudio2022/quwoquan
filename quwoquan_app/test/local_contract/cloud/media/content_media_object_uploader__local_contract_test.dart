@@ -24,7 +24,7 @@ void main() {
         Uri.parse('https://upload.example.test/object'),
         Stream<List<int>>.value(const <int>[1, 2, 3]),
         contentLength: 3,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
         expectedSha256: digest,
       );
 
@@ -50,7 +50,7 @@ void main() {
           Uri.parse('https://upload.example.test/retry'),
           Stream<List<int>>.value(const <int>[4]),
           contentLength: 1,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           expectedSha256: digest,
         ),
         throwsA(
@@ -85,7 +85,7 @@ void main() {
           Uri.parse('https://upload.example.test/forbidden'),
           Stream<List<int>>.value(const <int>[5]),
           contentLength: 1,
-          contentType: 'image/jpeg',
+          mimeType: 'image/jpeg',
           expectedSha256: digest,
         ),
         throwsA(
@@ -118,7 +118,7 @@ void main() {
         Uri.parse('https://upload.example.test/unreachable'),
         Stream<List<int>>.value(const <int>[6]),
         contentLength: 1,
-        contentType: 'image/jpeg',
+        mimeType: 'image/jpeg',
         expectedSha256: digest,
       ),
       throwsA(
@@ -147,7 +147,7 @@ void main() {
           Uri.parse('https://attacker.example.invalid/object'),
           Stream<List<int>>.value(const <int>[7]),
           contentLength: 1,
-          contentType: 'image/jpeg',
+          mimeType: 'image/jpeg',
           expectedSha256: digest,
         ),
         throwsA(

@@ -47,7 +47,8 @@ class _ObjectIntersectionCardSkeletonState
       ColorType.backgroundSecondary,
     );
     final rowCount = widget.rows <= 0 ? 3 : widget.rows;
-    final isWide = MediaQuery.sizeOf(context).width >= AppSpacing.wideBreakpoint;
+    final isWide =
+        MediaQuery.sizeOf(context).width >= AppSpacing.wideBreakpoint;
     if (isWide) {
       return _buildWideSkeleton(context, surface);
     }
@@ -122,11 +123,7 @@ class _ObjectIntersectionCardSkeletonState
         ),
         SizedBox(width: AppSpacing.intraGroupSm),
         Expanded(
-          child: _bar(
-            context,
-            width: double.infinity,
-            height: AppSpacing.sm,
-          ),
+          child: _bar(context, width: double.infinity, height: AppSpacing.sm),
         ),
       ],
     );

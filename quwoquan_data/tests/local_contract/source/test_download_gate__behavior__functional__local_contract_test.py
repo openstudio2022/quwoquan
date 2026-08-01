@@ -391,6 +391,55 @@ def test_frozen_authority_title_survives_plan_to_source_unit_projection():
     assert manifest["qualifiedAuthorityTitle"] == "梅湾街"
 
 
+def test_video_frame_collection_is_not_validated_as_direct_video():
+    """A retained still-frame fallback is a video-lane input, not a video file."""
+
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "乐山大佛")
+
+    manifest = write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="video_frame_1",
+        source_md="# 乐山大佛\n\n清权静帧来源集合。",
+        quality={"sourceId": "video_frame_1", "quality": "B-fact", "score": 1},
+        platform="Wikimedia Commons",
+        source_category="image_collection",
+        source_kind="image_collection",
+        extractor="image_collection_download",
+        policy_revision="image-collection-attribution",
+        source_use_mode="licensed_adaptation",
+        research_lane="video",
+        license_value="CC BY 4.0",
+        url="https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha.jpg",
+        title="乐山大佛",
+        target_ref="/entity/地点/景区/乐山大佛",
+        images=[
+            {
+                "bytes": jpeg_bytes(),
+                "url": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha.jpg",
+                "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha.jpg",
+                "license": "CC BY 4.0",
+                "credit": "Example photographer",
+                "creator": "Example photographer",
+                "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha.jpg",
+                "usageScope": "app_publish",
+                "caption": "乐山大佛",
+                "relevance": "乐山大佛",
+            }
+        ],
+        execution_id=TASK,
+        build_variants=False,
+    )
+
+    assert manifest["researchLane"] == "video"
+    assert manifest["hasVideo"] is False
+    assert manifest["sourceKind"] == "image_collection"
+    assert manifest["assetCount"] == 1
+
+
 def test_gate_download_blocks_single_source_unit():
     ensure_execution_layout(TASK)
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "乐山大佛")

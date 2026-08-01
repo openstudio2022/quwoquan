@@ -18,3 +18,13 @@ capabilities:
 - searchable
 taggable: false
 vector_enabled: false
+business_rules:
+- provider 响应必须先映射到 canonical LocationPoi，业务域不得消费第三方原始字段。
+- locationRef 由 provider authority 与稳定外部标识派生，展示名或坐标变化不得改变引用身份。
+- provider 不可用时返回 canonical dependency failure，不使用静态或第二 provider 数据冒充成功。
+lifecycle:
+  refresh_semantics: provider_read_through_without_local_authoritative_state
+  tombstone: detach_reference_when_external_authority_confirms_deletion
+external_authority:
+  owner: configured_location_provider
+  identity_contract: provider_kind_and_external_location_id

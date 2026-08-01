@@ -157,22 +157,14 @@
     {"flags": 0, "tag": "iodef", "value": "mailto:security@quwoquan.com"}
   ],
   "tlsProfiles": {
-    "acme-dns01-alpha": {
-      "target": "alpha-local",
-      "apex": "alpha.quwoquan.com",
-      "wildcard": "*.alpha.quwoquan.com"
-    },
-    "acme-dns01-beta": {
-      "target": "beta-local",
-      "apex": "beta.quwoquan.com",
-      "wildcard": "*.beta.quwoquan.com"
-    },
-    "acme-dns01-gamma": {
-      "target": "gamma-local",
-      "apex": "gamma.quwoquan.com",
-      "wildcard": "*.gamma.quwoquan.com"
+    "local-managed": {
+      "kind": "local-managed",
+      "targets": ["alpha-local", "beta-local", "gamma-local"],
+      "renewBeforeDays": 14,
+      "certificateDays": 90
     },
     "acme-dns01-sim": {
+      "kind": "dns-01-public-ca",
       "target": "prod-sim",
       "apex": "sim.quwoquan.com",
       "wildcard": "*.sim.quwoquan.com"

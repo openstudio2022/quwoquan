@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Protocol
 
 from core.data_issue import (
     DataIssueCode,
@@ -13,7 +13,6 @@ from core.data_issue import (
     data_issue,
 )
 from core.runtime_policy import active_runtime_policy
-from content.source.contracts import QualifiedHomepageSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +20,16 @@ class TargetSourceQualification:
     """Pre-freeze source eligibility for one candidate target."""
 
     accepted: bool
-    qualified_source: QualifiedHomepageSource | None
+    qualified_source: "QualifiedTargetSource | None"
     rejection_code: DataIssueCode | None = None
 
     def __post_init__(self) -> None:
         if self.accepted != (self.qualified_source is not None):
             raise ValueError("qualification acceptance and qualified source disagree")
+        if self.qualified_source is not None and not hasattr(
+            self.qualified_source, "to_dict"
+        ):
+            raise TypeError("qualified source must provide to_dict")
         if self.accepted and self.rejection_code is not None:
             raise ValueError("accepted qualification cannot carry rejection_code")
         if not self.accepted and not self.rejection_code:
@@ -45,6 +48,12 @@ class TargetSourceCandidate:
 
 
 TargetSourceQualifier = Callable[[TargetSourceCandidate], TargetSourceQualification]
+
+
+class QualifiedTargetSource(Protocol):
+    """A pre-freeze evidence summary; only homepage persists it on targets."""
+
+    def to_dict(self) -> dict[str, str]: ...
 
 
 def _rejection_summary(rows: list[dict[str, object]]) -> str:
@@ -113,6 +122,8 @@ def qualify_source_ready_targets(
     quota: int,
     source_qualifier: TargetSourceQualifier,
     target_names: tuple[str, ...],
+    qualification_source_key: str = "qualifiedHomepageSource",
+    persist_qualified_source: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, object], tuple[str, ...]]:
     """Freeze the qualified candidate pool from the complete ordered reference set.
 
@@ -133,10 +144,20 @@ def qualify_source_ready_targets(
     else:
         scoped_rows = candidate_rows
     qualification_rows: list[dict[str, object]] = []
-    selected: list[dict[str, Any]] = []
+    accepted: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
     worker_count = max(1, active_runtime_policy().research_workers)
+    # Homepage must keep only authority-qualified rows. Video (and other
+    # non-persisted qualification lanes) still require ``quota`` accepted rows,
+    # then fill the oversampled ``limit`` pool with rejected/unevaluated leaves
+    # so download admission and M100→M1000 promotion see a full candidate set.
+    stop_after_quota = not persist_qualified_source
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         for start in range(0, len(scoped_rows), worker_count):
+            if len(accepted) >= limit:
+                break
+            if stop_after_quota and len(accepted) >= quota:
+                break
             batch = scoped_rows[start : start + worker_count]
             futures = [executor.submit(source_qualifier, _candidate_from_row(row)) for row in batch]
             for row, future in zip(batch, futures, strict=True):
@@ -159,7 +180,7 @@ def qualify_source_ready_targets(
                     {
                         "name": str(row["name"]),
                         "accepted": verdict.accepted,
-                        "qualifiedHomepageSource": (
+                        qualification_source_key: (
                             verdict.qualified_source.to_dict()
                             if verdict.qualified_source is not None
                             else None
@@ -168,17 +189,23 @@ def qualify_source_ready_targets(
                     }
                 )
                 if verdict.accepted:
-                    selected.append(
-                        {
-                            **row,
-                            "qualifiedHomepageSource": verdict.qualified_source.to_dict(),
-                        }
-                    )
-                if len(selected) >= limit:
+                    selected_row = dict(row)
+                    if persist_qualified_source:
+                        selected_row[qualification_source_key] = (
+                            verdict.qualified_source.to_dict()
+                        )
+                    accepted.append(selected_row)
+                else:
+                    rejected.append(dict(row))
+                if len(accepted) >= limit:
                     break
-            if len(selected) >= limit:
+                if stop_after_quota and len(accepted) >= quota:
+                    break
+            if len(accepted) >= limit:
                 break
-    if len(selected) < quota:
+            if stop_after_quota and len(accepted) >= quota:
+                break
+    if len(accepted) < quota:
         raise DataIssueError(
             (
                 data_issue(
@@ -189,7 +216,7 @@ def qualify_source_ready_targets(
                     attributes={
                         "candidatePool": limit,
                         "approvedQuota": quota,
-                        "acceptedCount": len(selected),
+                        "acceptedCount": len(accepted),
                         "evaluatedCount": len(qualification_rows),
                         "candidateCount": len(scoped_rows),
                         "rejectionCounts": _rejection_summary(qualification_rows),
@@ -197,6 +224,40 @@ def qualify_source_ready_targets(
                 ),
             )
         )
+    selected = list(accepted[:limit])
+    if len(selected) < limit:
+        seen = {str(row.get("name") or "") for row in selected}
+        for row in rejected:
+            name = str(row.get("name") or "")
+            if not name or name in seen:
+                continue
+            selected.append(row)
+            seen.add(name)
+            if len(selected) >= limit:
+                break
+        if len(selected) < limit and not persist_qualified_source:
+            evaluated_names = {
+                str(row.get("name") or "")
+                for row in qualification_rows
+                if str(row.get("name") or "")
+            }
+            for row in scoped_rows:
+                name = str(row.get("name") or "")
+                if not name or name in seen or name in evaluated_names:
+                    continue
+                selected.append(dict(row))
+                seen.add(name)
+                qualification_rows.append(
+                    {
+                        "name": name,
+                        "accepted": False,
+                        qualification_source_key: None,
+                        "rejectionCode": DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL.value,
+                        "oversampleFill": True,
+                    }
+                )
+                if len(selected) >= limit:
+                    break
     return (
         selected,
         {
@@ -204,6 +265,7 @@ def qualify_source_ready_targets(
             "acceptedCount": sum(1 for row in qualification_rows if row["accepted"]),
             "rejectedCount": sum(1 for row in qualification_rows if not row["accepted"]),
             "candidates": qualification_rows,
+            "oversampleFilled": len(selected) - len(accepted[:limit]),
         },
         requested_target_names,
     )

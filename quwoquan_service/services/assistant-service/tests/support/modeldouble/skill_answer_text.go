@@ -3,7 +3,7 @@ package modeldouble
 import (
 	"fmt"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 )
 
 // domainSkillFinalAnswer 是测试树内的领域技能话术表，只用于让断言可以稳定匹配某个
