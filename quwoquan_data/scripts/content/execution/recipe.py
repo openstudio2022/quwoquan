@@ -499,7 +499,6 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 
     from content.execution.materialization import ensure_execution_spec
     from core.data_issue import DataIssueError
-
     try:
         execution_spec_id = ensure_execution_spec(
             recipe,
@@ -509,6 +508,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             content_type=identity.content_type.value,
             target_names=runtime_request.target_names,
             inherit_frozen_targets=bool(manifest_retry_of),
+            inherited_targets=tuple(getattr(args, "inherited_targets", ()) or ()),
         )
     except DataIssueError as exc:
         raise SystemExit(

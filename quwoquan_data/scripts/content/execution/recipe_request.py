@@ -68,6 +68,35 @@ def retry_target_names(
     return inherited_names
 
 
+def retry_target_rows(
+    retry_of: str | None,
+    *,
+    target_names: tuple[str, ...],
+    load_frozen_target_set: Callable[[str], dict[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    """Load predecessor rows so retries retain source-qualification evidence."""
+    if not retry_of:
+        return ()
+    try:
+        target_set = load_frozen_target_set(retry_of)
+    except FileNotFoundError:
+        return ()
+    targets = target_set.get("targets")
+    if not isinstance(targets, list) or any(not isinstance(row, dict) for row in targets):
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target rows are invalid"
+        )
+    rows = tuple(dict(row) for row in targets)
+    inherited_names = tuple(str(row.get("name") or "").strip() for row in rows)
+    if inherited_names != target_names:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target rows must match the requested target order exactly"
+        )
+    return rows
+
+
 def handle_execute(
     args: argparse.Namespace,
     invoke: Callable[[list[str]], int] | None,
@@ -151,12 +180,23 @@ def handle_execute(
             "[task execute] GATE_BLOCK homepage carrier requires "
             "--selector source-ready-priority"
         )
+    retry_of = str(getattr(args, "retry_of", "") or "").strip() or None
     target_names = owner._retry_target_names(
-        str(getattr(args, "retry_of", "") or "").strip() or None,
+        retry_of,
         count=count,
         quota=quota,
         requested_target_names=tuple(getattr(args, "target_names", ()) or ()),
     )
+    inherited_targets = retry_target_rows(
+        retry_of,
+        target_names=target_names,
+        load_frozen_target_set=owner.load_frozen_target_set,
+    )
+    if retry_of and identity.content_type.value == "homepage" and not inherited_targets:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: homepage retry requires "
+            "the predecessor frozen target-set evidence"
+        )
     owner._run_execution(
         argparse.Namespace(
             execution_id=execution_id,
@@ -174,6 +214,7 @@ def handle_execute(
             region_ref=region_ref,
             selector=target_selector.value,
             target_names=target_names,
+            inherited_targets=inherited_targets,
             topic=getattr(args, "topic", None),
             source_providers=tuple(getattr(args, "source_providers", ()) or ()),
             vertical=identity.vertical,
