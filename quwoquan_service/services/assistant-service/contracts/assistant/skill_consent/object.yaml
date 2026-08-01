@@ -1,5 +1,5 @@
 kind: aggregate_root
-description: 'Skill 授权同意独立聚合。拥有 grant/revoke/version/audit 生命周期，
+description: 'Skill 授权同意独立聚合。拥有 grant/revoke/immutable-history/audit 生命周期，
 
   不作为 AssistantRun 的 owned member。
 
@@ -22,7 +22,7 @@ relationships:
   name: accountOwner
   on_delete: cascade
   reference_fields:
-  - userId
+  - accountId
   target_object: user.UserAccount
 local_identity_reasons:
   skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
@@ -32,9 +32,9 @@ capabilities:
 taggable: false
 vector_enabled: false
 business_rules:
-- consent identity 固定为 personaId + skillId + scope
-- grant 必须记录版本化条款、actor 与审计时间
+- consent owner 固定为可信 accountId；每个授权事实由 id 唯一标识，同一 accountId + skillId 最多一个生效事实
+- grantedScope 是授权内容而非身份；grant 必须记录 scope、actor 与审计时间
 - revoke 立即阻断后续 run，但不删除历史审计
 - AssistantRun 只能读取当前 consent Slice，不能直接修改 consent
 lifecycle:
-  notes: 生效性只由 canonical revokedAt 是否为空判定；Grant 创建授权记录，Revoke 原子写入 revokedAt，不复制 status 第二真相源。
+  notes: 生效性只由 canonical revokedAt 是否为空判定；granted 是该事实的只读 projection。Grant 创建授权记录，Revoke 原子写入 revokedAt，不持久化第二状态源。

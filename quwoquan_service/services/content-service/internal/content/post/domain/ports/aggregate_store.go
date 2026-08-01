@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 // OutboxEvent 是 Post 聚合变更与版本提交同事务写入的不可变事实。

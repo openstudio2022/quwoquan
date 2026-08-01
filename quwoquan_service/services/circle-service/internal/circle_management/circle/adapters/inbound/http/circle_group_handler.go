@@ -64,7 +64,7 @@ func (handler *CircleHandler) handleGroups(w http.ResponseWriter, request *http.
 			writeHTTPError(w, request, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "group search only accepts GET"))
 			return
 		}
-		result, err := handler.groupQueries.Search(request.Context(), groupports.SearchQuery{
+		result, err := handler.groupQueries.Search(request.Context(), groupports.SearchRequestFact{
 			CircleID: circleID, Query: request.URL.Query().Get("query"),
 			Visibility: request.URL.Query().Get("visibility"), GroupType: request.URL.Query().Get("groupType"),
 			Cursor: request.URL.Query().Get("cursor"), Limit: groupPageLimit(request),

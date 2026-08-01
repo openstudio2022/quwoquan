@@ -25,7 +25,7 @@ abstract final class PageAccessInternalRoutes {
   static const String globalSurfaceCircleEditCreate = 'page_internal_global_circle_edit_create';
   static const String publishLocationSearch = 'page_internal_publish_location_search';
   static const String chatInputExpandedDraft = 'page_internal_chat_input_expanded_draft';
-  static const String assistantConversationChatSettings = 'page_internal_assistant_conversation_chat_settings';
-  static const String assistantConversationReferenceWeb = 'page_internal_assistant_conversation_reference_web';
+  static const String assistantSessionChatSettings = 'page_internal_assistant_session_chat_settings';
+  static const String assistantSessionReferenceWeb = 'page_internal_assistant_session_reference_web';
   static const String assistantChatSettingsHistory = 'page_internal_assistant_chat_settings_history';
 }

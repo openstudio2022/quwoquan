@@ -1,5 +1,5 @@
 kind: projection
-description: SearchIndexView 的领域对象契约。
+description: 各业务域公开搜索事件构建的统一对象索引视图，并拥有无版本 POST /search 的 typed query facade。
 identity:
   fields:
   - objectId
@@ -23,3 +23,12 @@ relationships:
   - circle.Circle
   - circle.CircleGroup
   - user.Persona
+business_rules:
+- 索引只消费各 owner 发布的 typed public projection，不跨库读取源集合或补齐私有字段。
+- objectType 与 objectId 唯一定位一条索引文档，版本和 tombstone 必须单调应用。
+- 搜索排序、权限过滤和稳定分页在 SearchIndexView Reader 内完成，SearchRequestFact 只记录请求事实。
+lifecycle:
+  source_events: [PostSearchItemProjected, HomepageSearchItemProjected, CircleSearchItemProjected, PersonaSearchItemProjected, CanonicalObjectTombstoned]
+  checkpoint: per_source_event_sequence
+  rebuild: recreate_index_then_replay_all_typed_search_item_events
+  tombstone: delete_index_document_keep_source_checkpoint

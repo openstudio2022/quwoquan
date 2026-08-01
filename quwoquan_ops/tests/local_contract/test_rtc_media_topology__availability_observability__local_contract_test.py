@@ -106,10 +106,10 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
             external_deployments,
         )
         self.assertIn(
-            'RTC_MEDIA_CONNECTION_URL: "${QWQ_COMPOSE_RTC_MEDIA_CONNECTION_URL:-}"',
+            'RTC_MEDIA_CONNECTION_URL: "${RTC_MEDIA_CONNECTION_URL:-}"',
             compose,
         )
-        self.assertIn("RTC_MEDIA_FIXTURE_CONNECTION_URL", compose)
+        self.assertNotIn("RTC_MEDIA_FIXTURE_CONNECTION_URL", compose)
         self.assertNotIn("RTC_MEDIA_CONNECTION_URL: ws://livekit-sfu:7880", compose)
         self.assertNotIn(
             "livekit-sfu",
@@ -133,7 +133,7 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
             "wss://rtc.quwoquan.com",
         )
 
-    def test_gamma_health_excludes_vendor_media_for_protocol_fixture(self) -> None:
+    def test_gamma_health_includes_nonprod_livekit_provider(self) -> None:
         roles = set(_expected_local_roles("gamma-local"))
         self.assertTrue(
             {
@@ -147,7 +147,7 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
                 "livekit-rtc-tcp",
                 "livekit-metrics",
                 "coturn",
-            }.isdisjoint(roles)
+            }.issubset(roles)
         )
         checks = {
             check["name"]: check["url"]
@@ -155,8 +155,8 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
         }
         self.assertTrue(checks["realtime-gateway"].endswith(":19340/healthz"))
         self.assertTrue(checks["rtc-service"].endswith(":19350/healthz"))
-        self.assertNotIn("livekit-http", checks)
-        self.assertNotIn("livekit-metrics", checks)
+        self.assertTrue(checks["livekit-http"].endswith(":19140/"))
+        self.assertTrue(checks["livekit-metrics"].endswith(":19170/metrics"))
 
 
 if __name__ == "__main__":

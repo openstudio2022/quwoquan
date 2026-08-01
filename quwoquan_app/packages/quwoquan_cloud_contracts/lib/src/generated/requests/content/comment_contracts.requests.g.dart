@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../content/comment_contracts.dart';
 
@@ -39,6 +39,11 @@ final class BindContentCommentAttachmentsCommand {
 
   final String commentId;
   final List<String> attachmentMediaIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "commentId": this.commentId,
+    "attachmentMediaIds": this.attachmentMediaIds.map((value) => value).toList(growable: false),
+  };
 }
 
 final class ChangeContentCommentPinCommand {
@@ -57,6 +62,11 @@ final class ChangeContentCommentPinCommand {
 
   final String postId;
   final String commentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    "commentId": this.commentId,
+  };
 }
 
 final class ContentCommentPageQuery {
@@ -69,6 +79,11 @@ final class ContentCommentPageQuery {
 
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class CreateContentCommentCommand {
@@ -105,6 +120,17 @@ final class CreateContentCommentCommand {
   final String? authorDisplayNameSnapshot;
   final String? authorAvatarUrlSnapshot;
   final int? personaContextVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    "content": this.content,
+    if (this.replyToCommentId != null) "replyToCommentId": this.replyToCommentId!,
+    "attachmentMediaIds": this.attachmentMediaIds.map((value) => value).toList(growable: false),
+    "mentions": this.mentions.map((value) => <String, Object?>{'subjectType': value.subjectType, 'subjectId': value.subjectId, if (value.displayName != null) 'displayName': value.displayName}).toList(growable: false),
+    if (this.authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": this.authorDisplayNameSnapshot!,
+    if (this.authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": this.authorAvatarUrlSnapshot!,
+    if (this.personaContextVersion != null) "personaContextVersion": this.personaContextVersion!,
+  };
 }
 
 final class DeleteContentCommentCommand {
@@ -123,6 +149,11 @@ final class DeleteContentCommentCommand {
 
   final String postId;
   final String commentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    "commentId": this.commentId,
+  };
 }
 
 final class ListContentCommentRepliesQuery {
@@ -147,6 +178,13 @@ final class ListContentCommentRepliesQuery {
   final String commentId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    "commentId": this.commentId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class ListContentCommentsQuery {
@@ -168,6 +206,13 @@ final class ListContentCommentsQuery {
   final String? cursor;
   final int limit;
   final ContentCommentSort sort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    "sort": switch (this.sort) { ContentCommentSort.hot => "hot", ContentCommentSort.latest => "latest", },
+  };
 }
 
 CloudOperationRequestPayload encodeContentCommentBindMediaAssetsToCommentGeneratedRequest(BindContentCommentAttachmentsCommand request) {

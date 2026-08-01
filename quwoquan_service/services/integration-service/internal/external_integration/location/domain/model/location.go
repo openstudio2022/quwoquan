@@ -18,7 +18,7 @@ type NearbyQuery struct {
 	Limit        int
 }
 
-type SearchQuery struct {
+type SearchRequestFact struct {
 	Query    string
 	CityCode string
 	Lat      float64

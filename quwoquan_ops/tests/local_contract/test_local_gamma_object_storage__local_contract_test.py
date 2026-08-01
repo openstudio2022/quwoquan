@@ -30,6 +30,10 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             f"private-key-{target}\n",
             encoding="utf-8",
         )
+        (certificate_root / "root.crt").write_text(
+            f"root-certificate-{target}\n",
+            encoding="utf-8",
+        )
 
     def test_prepares_public_tls_and_secret_outside_output_and_is_idempotent(
         self,
@@ -54,7 +58,14 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             self.assertEqual(first.environment["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"], "upload.gamma.quwoquan.com:19130")
             self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN", first.environment)
             self.assertEqual(first.host_endpoint, "https://upload.gamma.quwoquan.com:19130")
-            self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE", first.environment)
+            self.assertEqual(
+                Path(first.environment["LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE"]).resolve(),
+                (deploy_root / "gamma-local/certificates/root.crt").resolve(),
+            )
+            self.assertEqual(
+                first.root_certificate_path.resolve(),
+                (deploy_root / "gamma-local/certificates/root.crt").resolve(),
+            )
             self.assertNotIn(".qwq_output", str(first.secret_path))
 
     def test_rejects_invalid_edge_port(self) -> None:

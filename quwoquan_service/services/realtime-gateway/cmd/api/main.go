@@ -146,6 +146,10 @@ func run() error {
 	leaseStore := redisstore.NewLeaseStore(realtimeClient)
 	presenceStore := redisstore.NewPresenceStore(realtimeClient)
 	eventSource := redisstore.NewEventSource(messageTransport)
+	resumeReader, err := redisstore.NewResumableEventReader(messageTransport)
+	if err != nil {
+		return fmt.Errorf("realtime resumable event reader init failed: %w", err)
+	}
 	accountSecurityStore := redisstore.NewAccountSecurityStateStore(realtimeClient)
 	accountSecurityRelay := redisstore.NewAccountSecurityRelay(realtimeClient)
 
@@ -209,6 +213,7 @@ func run() error {
 	handler, err := httpadapter.NewHandler(
 		tickets,
 		hub,
+		resumeReader,
 		presenceStore,
 		httpadapter.DefaultTransportConfig(),
 	)

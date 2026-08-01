@@ -28,6 +28,9 @@ fields:
   type: string
 - name: originType
   type: string
+- name: originIntersectionSnapshot
+  type: object
+  nullable: true
 - name: maxSeq
   type: int64
 - name: memberCount
@@ -50,6 +53,9 @@ fields:
   type: string
 - name: lastMessagePreview
   type: string
+- name: lastMessageType
+  type: enum
+  enum_ref: MessageType
 - name: lastMessageTime
   type: timestamp
 - name: messageCount
@@ -65,6 +71,9 @@ client_projection:
   base_class: ''
   output_path: cloud/runtime/generated/chat/chat_conversation_wire_dto.g.dart
   strict: true
+  dart_imports:
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
+  - chat_greeting_intersection_snapshot_dto.g.dart
   fields:
   - name: id
     dart_type: String
@@ -121,6 +130,12 @@ client_projection:
     nullable: false
     source: originType
     default: ''''''
+  - name: originIntersectionSnapshot
+    dart_type: ChatGreetingIntersectionSnapshotDto
+    nullable: true
+    source: originIntersectionSnapshot
+    map_from_string_key_class: ChatGreetingIntersectionSnapshotDto
+    default: 'null'
   - name: maxSeq
     dart_type: int
     nullable: false
@@ -176,6 +191,12 @@ client_projection:
     nullable: false
     source: lastMessagePreview
     default: ''''''
+  - name: lastMessageType
+    type: enum
+    dart_type: MessageType
+    enum_ref: MessageType
+    nullable: false
+    source: lastMessageType
   - name: lastMessageTime
     dart_type: DateTime
     nullable: true

@@ -19,14 +19,23 @@ NONPROD_DEFAULTS = {
     "sys.user-service.integration.external_interaction_base_url": (
         "https://integration-service.local"
     ),
-    "sys.user-service.integration.otp.mode": "fixed_test",
+}
+NONPROD_BINDINGS = {
+    "identity.sms.otp": {"state": "enabled"},
+    "identity.carrier.one_tap": {"state": "not_required"},
+    "identity.social.login": {"state": "not_required"},
+}
+PROD_BINDINGS = {
+    "identity.sms.otp": {"state": "enabled"},
+    "identity.carrier.one_tap": {"state": "enabled"},
+    "identity.social.login": {"state": "enabled"},
 }
 
 
 def test_login_dependency_config__repository_matrix__security__local_contract() -> None:
     assert verify_config(
         "gamma",
-        {},
+        {"externalBindings": NONPROD_BINDINGS},
         NONPROD_DEFAULTS,
     ) == []
 
@@ -35,11 +44,12 @@ def test_login_dependency_config__retired_bypass__security__local_contract() -> 
     config = {
         "integration": {
             "external_interaction_base_url": "https://integration-service.local",
-            "otp": {"mode": "fixed_test"},
+            "otp": {"mode": "retired"},
             "sms_otp": {"sandbox_allowlist": {"enabled": True}},
             "social": {"providers": {}},
             "one_tap": {"resolver": "aliyun", "sandbox_phones": {}},
-        }
+        },
+        "externalBindings": NONPROD_BINDINGS,
     }
 
     assert retired_key_paths(config) == [
@@ -52,7 +62,7 @@ def test_login_dependency_config__retired_bypass__security__local_contract() -> 
     ]
 
 
-def test_login_dependency_config__prod_rejects_fixed_otp__security__local_contract() -> None:
+def test_login_dependency_config__retired_otp_mode__security__local_contract() -> None:
     failures = verify_config(
         "prod",
         {
@@ -60,13 +70,14 @@ def test_login_dependency_config__prod_rejects_fixed_otp__security__local_contra
                 "sys.user-service.integration.external_interaction_base_url": (
                     "https://integration-service.prod"
                 ),
-                "sys.user-service.integration.otp.mode": "fixed_test",
-            }
+                "sys.user-service.integration.otp.mode": "retired",
+            },
+            "externalBindings": PROD_BINDINGS,
         },
         NONPROD_DEFAULTS,
     )
     assert failures == [
-        "prod: sys.user-service.integration.otp.mode must be provider"
+        "prod: retired OTP mode configuration sys.user-service.integration.otp.mode"
     ]
 
 

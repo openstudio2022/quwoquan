@@ -5,6 +5,8 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 
@@ -62,37 +64,43 @@ class AssistantRunObservabilityPayloadFields {
 
 class AssistantRunResponseWire {
   const AssistantRunResponseWire({
-    required this.conversationId,
+    required this.sessionId,
     required this.turnId,
     this.status = "completed",
     this.finalText = "",
     this.summary = "",
     this.journey = const AssistantJourney(),
     this.runArtifacts = const RunArtifacts(),
+    this.runtime,
+    this.presentation,
     this.observability = const AssistantRunObservabilityPayload(),
     this.runtimeFailure,
     this.completedAt = "",
   });
 
-  final String conversationId;
+  final String sessionId;
   final String turnId;
   final String status;
   final String finalText;
   final String summary;
   final AssistantJourney journey;
   final RunArtifacts runArtifacts;
+  final AssistantRunRuntimeWire? runtime;
+  final AssistantPresentationDocumentWire? presentation;
   final AssistantRunObservabilityPayload observability;
   final RuntimeFailureWire? runtimeFailure;
   final String completedAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'conversationId': conversationId,
+        'sessionId': sessionId,
         'turnId': turnId,
         'status': status,
         'finalText': finalText,
         'summary': summary,
         'journey': journey.toJson(),
         'runArtifacts': runArtifacts.toJson(),
+        'runtime': runtime?.toJson(),
+        'presentation': presentation?.toJson(),
         'observability': observability.toJson(),
         'runtimeFailure': runtimeFailure?.toJson(),
         'completedAt': completedAt,
@@ -100,13 +108,15 @@ class AssistantRunResponseWire {
 
   factory AssistantRunResponseWire.fromJson(Map<String, dynamic> json) {
     return AssistantRunResponseWire(
-      conversationId: (json['conversationId'] as String?)?.trim() ?? "",
+      sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
       status: (json['status'] as String?)?.trim() ?? "completed",
       finalText: (json['finalText'] as String?)?.trim() ?? "",
       summary: (json['summary'] as String?)?.trim() ?? "",
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
       runArtifacts: json['runArtifacts'] is Map ? RunArtifacts.fromJson((json['runArtifacts'] as Map).cast<String, dynamic>()) : const RunArtifacts(),
+      runtime: json['runtime'] is Map ? AssistantRunRuntimeWire.fromJson((json['runtime'] as Map).cast<String, dynamic>()) : null,
+      presentation: json['presentation'] is Map ? AssistantPresentationDocumentWire.fromJson((json['presentation'] as Map).cast<String, dynamic>()) : null,
       observability: json['observability'] is Map ? AssistantRunObservabilityPayload.fromJson((json['observability'] as Map).cast<String, dynamic>()) : const AssistantRunObservabilityPayload(),
       runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,
       completedAt: (json['completedAt'] as String?)?.trim() ?? "",
@@ -116,13 +126,15 @@ class AssistantRunResponseWire {
 }
 
 class AssistantRunResponseWireFields {
-  static const String conversationId = 'conversationId';
+  static const String sessionId = 'sessionId';
   static const String turnId = 'turnId';
   static const String status = 'status';
   static const String finalText = 'finalText';
   static const String summary = 'summary';
   static const String journey = 'journey';
   static const String runArtifacts = 'runArtifacts';
+  static const String runtime = 'runtime';
+  static const String presentation = 'presentation';
   static const String observability = 'observability';
   static const String runtimeFailure = 'runtimeFailure';
   static const String completedAt = 'completedAt';

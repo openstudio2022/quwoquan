@@ -258,27 +258,6 @@ func seedAccountClosureOwnedData(t *testing.T) {
 	); err != nil {
 		t.Fatalf("seed account-closure command receipt: %v", err)
 	}
-	if _, err := notificationMongoDB.Collection(
-		"external_provider_attempt_ledger",
-	).InsertOne(
-		ctx,
-		bson.M{
-			"_id":               "attempt-account-owner",
-			"requestId":         "request-account-owner",
-			"taskId":            "job-account-owner",
-			"operation":         "push",
-			"provider":          "provider",
-			"providerRequestId": "provider-request-owner",
-			"maskedRecipient":   "account-owner",
-			"attributes": bson.M{
-				"endpointRef": "endpoint-account-owner",
-			},
-			"status":    "accepted",
-			"createdAt": now,
-		},
-	); err != nil {
-		t.Fatalf("seed account-closure provider attempt: %v", err)
-	}
 }
 
 func countAccountClosureDocuments(

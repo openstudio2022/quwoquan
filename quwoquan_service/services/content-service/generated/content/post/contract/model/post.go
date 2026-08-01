@@ -13,79 +13,220 @@ var _ = time.Now
 
 // Post domain model.
 type Post struct {
-	ID                        string            `json:"id" bson:"_id"`
-	Version                   int64             `json:"version" bson:"version"`
-	PublishIntentId           string            `json:"publishIntentId" bson:"publishIntentId"`
-	LocalDraftId              string            `json:"localDraftId" bson:"localDraftId"`
-	AuthorId                  string            `json:"authorId" bson:"authorId"`
-	CreatorProfileId          string            `json:"creatorProfileId" bson:"creatorProfileId"`
-	CreatorArchetype          string            `json:"creatorArchetype" bson:"creatorArchetype"`
-	CreatorProfileVersion     string            `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
-	CreatorDisclosure         map[string]any    `json:"creatorDisclosure" bson:"creatorDisclosure"`
-	SourceAttribution         SourceAttribution `json:"sourceAttribution" bson:"sourceAttribution"`
-	ExperienceClaimMode       string            `json:"experienceClaimMode" bson:"experienceClaimMode"`
-	AuthorQualitySignals      map[string]any    `json:"authorQualitySignals" bson:"authorQualitySignals"`
-	AuthorDisplayNameSnapshot string            `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
-	AuthorAvatarUrlSnapshot   string            `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
-	PersonaContextVersion     int64             `json:"personaContextVersion" bson:"personaContextVersion"`
-	ContentType               string            `json:"contentType" bson:"contentType"`
-	ContentIdentity           string            `json:"contentIdentity" bson:"contentIdentity"`
-	Title                     string            `json:"title" bson:"title"`
-	Body                      string            `json:"body" bson:"body"`
-	TagRefs                   []string          `json:"tagRefs" bson:"tagRefs"`
-	EntityRefs                []string          `json:"entityRefs" bson:"entityRefs"`
-	SemanticMentions          []map[string]any  `json:"semanticMentions" bson:"semanticMentions"`
-	MediaAssetIds             []string          `json:"mediaAssetIds" bson:"mediaAssetIds"`
-	MediaUrls                 []string          `json:"mediaUrls" bson:"mediaUrls"`
-	MediaItems                []map[string]any  `json:"mediaItems" bson:"mediaItems"`
-	CoverUrl                  string            `json:"coverUrl" bson:"coverUrl"`
-	ThumbnailUrl              string            `json:"thumbnailUrl" bson:"thumbnailUrl"`
-	ArticleMarkdown           string            `json:"articleMarkdown" bson:"articleMarkdown"`
-	MarkdownDialect           string            `json:"markdownDialect" bson:"markdownDialect"`
-	ArticleMarkdownDigest     string            `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
-	ArticleAssetManifest      map[string]any    `json:"articleAssetManifest" bson:"articleAssetManifest"`
-	ArticleRenderProfile      map[string]any    `json:"articleRenderProfile" bson:"articleRenderProfile"`
-	ContentVertical           string            `json:"contentVertical" bson:"contentVertical"`
-	EntityMentions            []map[string]any  `json:"entityMentions" bson:"entityMentions"`
-	ArticleTemplate           string            `json:"articleTemplate" bson:"articleTemplate"`
-	ArticleFontPreset         string            `json:"articleFontPreset" bson:"articleFontPreset"`
-	VideoUrl                  string            `json:"videoUrl" bson:"videoUrl"`
-	Width                     int64             `json:"width" bson:"width"`
-	Height                    int64             `json:"height" bson:"height"`
-	DurationMs                int64             `json:"durationMs" bson:"durationMs"`
-	CoverStrategy             string            `json:"coverStrategy" bson:"coverStrategy"`
-	CoverFrameTimeMs          int64             `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
-	Location                  GeoPoint          `json:"location" bson:"location"`
-	LocationName              string            `json:"locationName" bson:"locationName"`
-	GeoTagRef                 string            `json:"geoTagRef" bson:"geoTagRef"`
-	VisitedAt                 time.Time         `json:"visitedAt" bson:"visitedAt"`
-	PrimaryHomepageId         string            `json:"primaryHomepageId" bson:"primaryHomepageId"`
-	PrimaryHomepageType       string            `json:"primaryHomepageType" bson:"primaryHomepageType"`
-	PrimaryHomepageSnapshot   map[string]any    `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
-	Status                    string            `json:"status" bson:"status"`
-	Visibility                string            `json:"visibility" bson:"visibility"`
-	AssistantUsePolicy        string            `json:"assistantUsePolicy" bson:"assistantUsePolicy"`
-	SourcePostId              string            `json:"sourcePostId" bson:"sourcePostId"`
-	SourceType                string            `json:"sourceType" bson:"sourceType"`
-	Summary                   string            `json:"summary" bson:"summary"`
-	IllustrationAssetId       string            `json:"illustrationAssetId" bson:"illustrationAssetId"`
-	PublishLocation           map[string]any    `json:"publishLocation" bson:"publishLocation"`
-	DeviceInfo                map[string]any    `json:"deviceInfo" bson:"deviceInfo"`
-	LikeCount                 int64             `json:"likeCount" bson:"likeCount"`
-	CommentCount              int64             `json:"commentCount" bson:"commentCount"`
-	PinnedCommentId           string            `json:"pinnedCommentId" bson:"pinnedCommentId"`
-	ShareCount                int64             `json:"shareCount" bson:"shareCount"`
-	ViewCount                 int64             `json:"viewCount" bson:"viewCount"`
-	Embedding                 []float32         `json:"embedding" bson:"embedding"`
-	HelperReadSummary         string            `json:"helperReadSummary" bson:"helperReadSummary"`
-	ModerationStatus          string            `json:"moderationStatus" bson:"moderationStatus"`
-	ContentDigest             string            `json:"contentDigest" bson:"contentDigest"`
-	CreatedAt                 time.Time         `json:"createdAt" bson:"createdAt"`
-	UpdatedAt                 time.Time         `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt               time.Time         `json:"publishedAt" bson:"publishedAt"`
-	LastActiveAt              time.Time         `json:"lastActiveAt" bson:"lastActiveAt"`
-	SourceTaskId              string            `json:"sourceTaskId" bson:"sourceTaskId"`
-	DeletedAt                 time.Time         `json:"deletedAt" bson:"deletedAt"`
+	ID                        string                   `json:"id" bson:"_id"`
+	Version                   int64                    `json:"version" bson:"version"`
+	PublishIntentId           string                   `json:"publishIntentId" bson:"publishIntentId"`
+	LocalDraftId              string                   `json:"localDraftId" bson:"localDraftId"`
+	AuthorId                  string                   `json:"authorId" bson:"authorId"`
+	CreatorProfileId          string                   `json:"creatorProfileId" bson:"creatorProfileId"`
+	CreatorArchetype          string                   `json:"creatorArchetype" bson:"creatorArchetype"`
+	CreatorProfileVersion     string                   `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
+	CreatorDisclosure         PostCreatorDisclosure    `json:"creatorDisclosure" bson:"creatorDisclosure"`
+	SourceAttribution         SourceAttribution        `json:"sourceAttribution" bson:"sourceAttribution"`
+	ExperienceClaimMode       string                   `json:"experienceClaimMode" bson:"experienceClaimMode"`
+	AuthorQualitySignals      PostAuthorQualitySignals `json:"authorQualitySignals" bson:"authorQualitySignals"`
+	AuthorDisplayNameSnapshot string                   `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarUrlSnapshot   string                   `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	PersonaContextVersion     int64                    `json:"personaContextVersion" bson:"personaContextVersion"`
+	ContentType               string                   `json:"contentType" bson:"contentType"`
+	ContentIdentity           string                   `json:"contentIdentity" bson:"contentIdentity"`
+	Title                     string                   `json:"title" bson:"title"`
+	Body                      string                   `json:"body" bson:"body"`
+	TagRefs                   []string                 `json:"tagRefs" bson:"tagRefs"`
+	EntityRefs                []string                 `json:"entityRefs" bson:"entityRefs"`
+	SemanticMentions          []PostSemanticMention    `json:"semanticMentions" bson:"semanticMentions"`
+	MediaAssetIds             []string                 `json:"mediaAssetIds" bson:"mediaAssetIds"`
+	MediaUrls                 []string                 `json:"mediaUrls" bson:"mediaUrls"`
+	MediaItems                []PostMediaItem          `json:"mediaItems" bson:"mediaItems"`
+	CoverUrl                  string                   `json:"coverUrl" bson:"coverUrl"`
+	ThumbnailUrl              string                   `json:"thumbnailUrl" bson:"thumbnailUrl"`
+	ArticleMarkdown           string                   `json:"articleMarkdown" bson:"articleMarkdown"`
+	MarkdownDialect           string                   `json:"markdownDialect" bson:"markdownDialect"`
+	ArticleMarkdownDigest     string                   `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
+	ArticleAssetManifest      PostArticleAssetManifest `json:"articleAssetManifest" bson:"articleAssetManifest"`
+	ArticleRenderProfile      PostArticleRenderProfile `json:"articleRenderProfile" bson:"articleRenderProfile"`
+	ContentVertical           string                   `json:"contentVertical" bson:"contentVertical"`
+	EntityMentions            []PostEntityMention      `json:"entityMentions" bson:"entityMentions"`
+	ArticleTemplate           string                   `json:"articleTemplate" bson:"articleTemplate"`
+	ArticleFontPreset         string                   `json:"articleFontPreset" bson:"articleFontPreset"`
+	VideoUrl                  string                   `json:"videoUrl" bson:"videoUrl"`
+	Width                     int64                    `json:"width" bson:"width"`
+	Height                    int64                    `json:"height" bson:"height"`
+	DurationMs                int64                    `json:"durationMs" bson:"durationMs"`
+	CoverStrategy             string                   `json:"coverStrategy" bson:"coverStrategy"`
+	CoverFrameTimeMs          int64                    `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
+	Location                  GeoPoint                 `json:"location" bson:"location"`
+	LocationName              string                   `json:"locationName" bson:"locationName"`
+	GeoTagRef                 string                   `json:"geoTagRef" bson:"geoTagRef"`
+	VisitedAt                 time.Time                `json:"visitedAt" bson:"visitedAt"`
+	CaptureDisclosure         []string                 `json:"captureDisclosure" bson:"captureDisclosure"`
+	CaptureFeatureRefs        []string                 `json:"captureFeatureRefs" bson:"captureFeatureRefs"`
+	PrimaryHomepageId         string                   `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	PrimaryHomepageType       string                   `json:"primaryHomepageType" bson:"primaryHomepageType"`
+	PrimaryHomepageSnapshot   PostHomepageSnapshot     `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
+	Status                    string                   `json:"status" bson:"status"`
+	Visibility                string                   `json:"visibility" bson:"visibility"`
+	AssistantUsePolicy        string                   `json:"assistantUsePolicy" bson:"assistantUsePolicy"`
+	SourcePostId              string                   `json:"sourcePostId" bson:"sourcePostId"`
+	SourceType                string                   `json:"sourceType" bson:"sourceType"`
+	Summary                   string                   `json:"summary" bson:"summary"`
+	IllustrationAssetId       string                   `json:"illustrationAssetId" bson:"illustrationAssetId"`
+	PublishLocation           PostPublishLocation      `json:"publishLocation" bson:"publishLocation"`
+	DeviceInfo                PostDeviceInfo           `json:"deviceInfo" bson:"deviceInfo"`
+	LikeCount                 int64                    `json:"likeCount" bson:"likeCount"`
+	CommentCount              int64                    `json:"commentCount" bson:"commentCount"`
+	PinnedCommentId           string                   `json:"pinnedCommentId" bson:"pinnedCommentId"`
+	ShareCount                int64                    `json:"shareCount" bson:"shareCount"`
+	ViewCount                 int64                    `json:"viewCount" bson:"viewCount"`
+	Embedding                 []float32                `json:"embedding" bson:"embedding"`
+	HelperReadSummary         string                   `json:"helperReadSummary" bson:"helperReadSummary"`
+	ModerationStatus          string                   `json:"moderationStatus" bson:"moderationStatus"`
+	ContentDigest             string                   `json:"contentDigest" bson:"contentDigest"`
+	CreatedAt                 time.Time                `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                 time.Time                `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt               time.Time                `json:"publishedAt" bson:"publishedAt"`
+	LastActiveAt              time.Time                `json:"lastActiveAt" bson:"lastActiveAt"`
+	SourceTaskId              string                   `json:"sourceTaskId" bson:"sourceTaskId"`
+	DeletedAt                 time.Time                `json:"deletedAt" bson:"deletedAt"`
+}
+
+// PostArticleAsset domain model.
+type PostArticleAsset struct {
+	AssetId              string `json:"assetId" bson:"assetId"`
+	Kind                 string `json:"kind" bson:"kind"`
+	PublicSliceKey       string `json:"publicSliceKey" bson:"publicSliceKey"`
+	Sha256               string `json:"sha256" bson:"sha256"`
+	MimeType             string `json:"mimeType" bson:"mimeType"`
+	SourceOriginalSha256 string `json:"sourceOriginalSha256" bson:"sourceOriginalSha256"`
+	Caption              string `json:"caption" bson:"caption"`
+	Role                 string `json:"role" bson:"role"`
+	Layout               string `json:"layout" bson:"layout"`
+	Width                int64  `json:"width" bson:"width"`
+	Height               int64  `json:"height" bson:"height"`
+	DurationMs           int64  `json:"durationMs" bson:"durationMs"`
+	ThumbnailUrl         string `json:"thumbnailUrl" bson:"thumbnailUrl"`
+	CoverUrl             string `json:"coverUrl" bson:"coverUrl"`
+	CoverStrategy        string `json:"coverStrategy" bson:"coverStrategy"`
+	CoverFrameTimeMs     int64  `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
+	SourceCollectionId   string `json:"sourceCollectionId" bson:"sourceCollectionId"`
+}
+
+// PostArticleAssetManifest domain model.
+type PostArticleAssetManifest struct {
+	Schema                string             `json:"schema" bson:"schema"`
+	MarkdownVersion       string             `json:"markdownVersion" bson:"markdownVersion"`
+	MarkdownDialect       string             `json:"markdownDialect" bson:"markdownDialect"`
+	ArticleMarkdownDigest string             `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
+	DocumentSha256        string             `json:"documentSha256" bson:"documentSha256"`
+	AssetManifestSha256   string             `json:"assetManifestSha256" bson:"assetManifestSha256"`
+	DocumentVersionSha256 string             `json:"documentVersionSha256" bson:"documentVersionSha256"`
+	Assets                []PostArticleAsset `json:"assets" bson:"assets"`
+}
+
+// PostArticleLayoutPolicy domain model.
+type PostArticleLayoutPolicy struct {
+	WrapDowngrade    string `json:"wrapDowngrade" bson:"wrapDowngrade"`
+	GalleryDowngrade string `json:"galleryDowngrade" bson:"galleryDowngrade"`
+}
+
+// PostArticleRenderProfile domain model.
+type PostArticleRenderProfile struct {
+	Template        string                  `json:"template" bson:"template"`
+	FontPreset      string                  `json:"fontPreset" bson:"fontPreset"`
+	PaperThemeMode  string                  `json:"paperThemeMode" bson:"paperThemeMode"`
+	PaperTexture    string                  `json:"paperTexture" bson:"paperTexture"`
+	ContentVertical string                  `json:"contentVertical" bson:"contentVertical"`
+	LayoutPolicy    PostArticleLayoutPolicy `json:"layoutPolicy" bson:"layoutPolicy"`
+	Width           int64                   `json:"width" bson:"width"`
+	Height          int64                   `json:"height" bson:"height"`
+	DurationMs      int64                   `json:"durationMs" bson:"durationMs"`
+}
+
+// PostAuthorQualitySignals domain model.
+type PostAuthorQualitySignals struct {
+	QualityScore float64 `json:"qualityScore" bson:"qualityScore"`
+	FatigueScore float64 `json:"fatigueScore" bson:"fatigueScore"`
+	RiskTier     string  `json:"riskTier" bson:"riskTier"`
+}
+
+// PostCreatorDisclosure domain model.
+type PostCreatorDisclosure struct {
+	Type        string `json:"type" bson:"type"`
+	DisplayText string `json:"displayText" bson:"displayText"`
+	Visible     bool   `json:"visible" bson:"visible"`
+}
+
+// PostDeviceInfo domain model.
+type PostDeviceInfo struct {
+	Manufacturer string `json:"manufacturer" bson:"manufacturer"`
+	Brand        string `json:"brand" bson:"brand"`
+	Model        string `json:"model" bson:"model"`
+	Os           string `json:"os" bson:"os"`
+	AppVersion   string `json:"appVersion" bson:"appVersion"`
+	Width        int64  `json:"width" bson:"width"`
+	Height       int64  `json:"height" bson:"height"`
+	DurationMs   int64  `json:"durationMs" bson:"durationMs"`
+}
+
+// PostEntityMention domain model.
+type PostEntityMention struct {
+	SubjectType string `json:"subjectType" bson:"subjectType"`
+	SubjectId   string `json:"subjectId" bson:"subjectId"`
+	HomepageId  string `json:"homepageId" bson:"homepageId"`
+	DisplayName string `json:"displayName" bson:"displayName"`
+	RangeStart  int64  `json:"rangeStart" bson:"rangeStart"`
+	RangeEnd    int64  `json:"rangeEnd" bson:"rangeEnd"`
+}
+
+// PostHomepageSnapshot domain model.
+type PostHomepageSnapshot struct {
+	CanonicalEntityId string `json:"canonicalEntityId" bson:"canonicalEntityId"`
+	Title             string `json:"title" bson:"title"`
+	Subtitle          string `json:"subtitle" bson:"subtitle"`
+	CoverUrl          string `json:"coverUrl" bson:"coverUrl"`
+	Width             int64  `json:"width" bson:"width"`
+	Height            int64  `json:"height" bson:"height"`
+	DurationMs        int64  `json:"durationMs" bson:"durationMs"`
+}
+
+// PostMediaItem domain model.
+type PostMediaItem struct {
+	Kind                     string `json:"kind" bson:"kind"`
+	MediaAssetId             string `json:"mediaAssetId" bson:"mediaAssetId"`
+	MediaAssetVersion        int64  `json:"mediaAssetVersion" bson:"mediaAssetVersion"`
+	Url                      string `json:"url" bson:"url"`
+	CoverUrl                 string `json:"coverUrl" bson:"coverUrl"`
+	ThumbnailUrl             string `json:"thumbnailUrl" bson:"thumbnailUrl"`
+	DurationMs               int64  `json:"durationMs" bson:"durationMs"`
+	Width                    int64  `json:"width" bson:"width"`
+	Height                   int64  `json:"height" bson:"height"`
+	PreviewTrackManifestUrl  string `json:"previewTrackManifestUrl" bson:"previewTrackManifestUrl"`
+	PreviewTrackVersion      int64  `json:"previewTrackVersion" bson:"previewTrackVersion"`
+	HlsCmafMasterManifestUrl string `json:"hlsCmafMasterManifestUrl" bson:"hlsCmafMasterManifestUrl"`
+	HlsCmafDescriptorVersion int64  `json:"hlsCmafDescriptorVersion" bson:"hlsCmafDescriptorVersion"`
+	Title                    string `json:"title" bson:"title"`
+	CoverStrategy            string `json:"coverStrategy" bson:"coverStrategy"`
+	CoverFrameTimeMs         int64  `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
+}
+
+// PostPublishLocation domain model.
+type PostPublishLocation struct {
+	Country  string `json:"country" bson:"country"`
+	Province string `json:"province" bson:"province"`
+	City     string `json:"city" bson:"city"`
+}
+
+// PostSemanticMention domain model.
+type PostSemanticMention struct {
+	MentionId   string `json:"mentionId" bson:"mentionId"`
+	Kind        string `json:"kind" bson:"kind"`
+	Surface     string `json:"surface" bson:"surface"`
+	Location    string `json:"location" bson:"location"`
+	RangeStart  int64  `json:"rangeStart" bson:"rangeStart"`
+	RangeEnd    int64  `json:"rangeEnd" bson:"rangeEnd"`
+	Status      string `json:"status" bson:"status"`
+	CandidateId string `json:"candidateId" bson:"candidateId"`
+	TargetRef   string `json:"targetRef" bson:"targetRef"`
 }
 
 // SourceAttribution domain model.

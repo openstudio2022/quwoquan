@@ -100,8 +100,8 @@ internal_pages:
   - { page_name: circle_edit_create, internal_id: globalSurfaceCircleEditCreate, location: page_internal_global_circle_edit_create, collect_page_access: true }
   - { page_name: publish_location_search, internal_id: publishLocationSearch, location: page_internal_publish_location_search, collect_page_access: true }
   - { page_name: chat_input_expanded_draft, internal_id: chatInputExpandedDraft, location: page_internal_chat_input_expanded_draft, collect_page_access: true }
-  - { page_name: assistant_chat_settings_modal, internal_id: assistantConversationChatSettings, location: page_internal_assistant_conversation_chat_settings, collect_page_access: true }
-  - { page_name: assistant_reference_webview_modal, internal_id: assistantConversationReferenceWeb, location: page_internal_assistant_conversation_reference_web, collect_page_access: true }
+  - { page_name: assistant_chat_settings_modal, internal_id: assistantSessionChatSettings, location: page_internal_assistant_session_chat_settings, collect_page_access: true }
+  - { page_name: assistant_reference_webview_modal, internal_id: assistantSessionReferenceWeb, location: page_internal_assistant_session_reference_web, collect_page_access: true }
   - { page_name: assistant_chat_history, internal_id: assistantChatSettingsHistory, location: page_internal_assistant_chat_settings_history, collect_page_access: true }
 
 fallback_contexts:

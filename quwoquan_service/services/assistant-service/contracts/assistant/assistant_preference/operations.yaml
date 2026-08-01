@@ -1,0 +1,209 @@
+commercial_defaults:
+  block_reason: 端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据
+  gap_id: ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE
+  status: blocked
+  target_story: session-preference-memory-control
+description: AssistantPreference 对象专属命令与查询 packet。
+api_routes:
+- actor: persona
+  application:
+    aggregate_owner: AssistantPreference
+    mutation_target: AssistantPreference
+    invariant_target: AssistantPreference
+    facet: AssistantPreferenceCommandFacade
+    kind: command
+    method: setPreference
+  method: POST
+  operation: SetAssistantPreference
+  path: /assistant/preferences
+  description: 为当前 owner 幂等设置文风偏好或经显式确认的事实型长期记忆。
+  request_entity: SetAssistantPreferenceRequest
+  request_body_kind: object
+  response_entity: AssistantPreference
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.preference_invalid_argument
+  - ASSISTANT.USER.preference_not_found
+  - ASSISTANT.USER.preference_unauthorized
+  - ASSISTANT.SYSTEM.preference_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_preference_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - scope
+    - kind
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: requester_self
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: AssistantPreferenceQueryFacade
+    kind: query
+    method: listPreferences
+    reader: AssistantPreferenceReader
+    slice: AssistantPreferenceListView
+  method: GET
+  operation: ListAssistantPreferences
+  path: /assistant/preferences
+  description: 列出当前 owner 的偏好事实，可按 scope、sessionId 和 status 筛选。
+  request_bindings:
+    query:
+    - {name: scope, field: scope, required: false}
+    - {name: sessionId, field: sessionId, required: false}
+    - {name: status, field: status, required: false}
+  response_entity: AssistantPreferenceListView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.preference_invalid_argument
+  - ASSISTANT.USER.preference_unauthorized
+  - ASSISTANT.SYSTEM.preference_storage_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_preference_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - scope
+    - status
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: requester_self
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: AssistantPreference
+    mutation_target: AssistantPreference
+    invariant_target: AssistantPreference
+    facet: AssistantPreferenceCommandFacade
+    kind: command
+    method: revokePreference
+  method: POST
+  operation: RevokeAssistantPreference
+  path: /assistant/preferences/{preferenceId}/revoke
+  request_bindings:
+    path:
+    - {name: preferenceId, field: preferenceId}
+  description: owner 遗忘偏好事实；重复调用保持 revoked，非 owner 返回 not_found。
+  response_entity: AssistantPreference
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.preference_not_found
+  - ASSISTANT.USER.preference_unauthorized
+  - ASSISTANT.SYSTEM.preference_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_preference_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: preference_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: AssistantPreference
+    mutation_target: AssistantPreference
+    invariant_target: AssistantPreference
+    facet: AssistantPreferenceCommandFacade
+    kind: command
+    method: restorePreference
+  method: POST
+  operation: RestoreAssistantPreference
+  path: /assistant/preferences/{preferenceId}/restore
+  request_bindings:
+    path:
+    - {name: preferenceId, field: preferenceId}
+  description: owner 在撤销窗口内恢复偏好事实；重复调用保持 active，非 owner 返回 not_found。
+  response_entity: AssistantPreference
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.preference_not_found
+  - ASSISTANT.USER.preference_restore_expired
+  - ASSISTANT.USER.preference_unauthorized
+  - ASSISTANT.SYSTEM.preference_storage_unavailable
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_preference_command
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  authorization:
+    principal: persona
+    ownership_policy: preference_owner
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private

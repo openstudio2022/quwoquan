@@ -29,6 +29,8 @@
 ### REQ-001 sourced video preserves rights and attribution facts
 
 - 不满足 admission 的候选以 typed issue 阻断。
+- 匿名公开 HTTPS 下载只记录候选字节、受限响应头、重定向链、checksum 与无凭证断言；下载成功、可播放或画质合格均只能是 `unverified`，不得替代对象级 commercial admission。
+- 下载器不得持有账号、Cookie 会话或 API 凭证，不得绕过访问控制、DRM、robots 或水印；出现非 HTTPS 重定向、访问控制或水印时写 typed rejection。
 
 <a id="req-002"></a>
 ### REQ-002 media package and attribution reach consumers unchanged
@@ -39,6 +41,7 @@
 ### REQ-003 video release and capacity conclusions use immutable receipts
 
 - 容量与预算结论只读取真实 receipt，未执行不冒充完成。
+- travel/video M1000 只接受已批准的 travel/video M100 promotion receipt；receipt 必须与当前 named branch/commit、source digest、entity catalog digest、Grok Fast readiness、对象级 review closure 与 canonical publish receipt 一致，任何缺失、partial 或漂移均 fail-closed。
 
 ## 4. 契约引用
 
@@ -58,6 +61,7 @@
 - WHEN 一个视频候选请求进入发布。
 - THEN 原创者、source post、原始资产、rights、风险与 takedown 事实都在对象级证据中保留。
 - THEN 无商业授权不能被标成 licensed 或 commercially-cleared。
+- THEN 匿名下载证据可复核其无凭证访问、最终 HTTPS URL、重定向和字节 checksum，但候选在 admission 通过前仍不可 render 或 publish。
 
 <a id="gwt-002"></a>
 ### GWT-002 media package and attribution reach consumers unchanged
@@ -74,6 +78,7 @@
 - WHEN execution 形成 release 并通过对应 environment profile。
 - THEN import、API、播放、rollback/replay、成本与 QoE 证据绑定同一 release digest。
 - THEN 缺 commercial profile 依赖时返回 GATE_BLOCK，不影响 baseline 或 integration 数据面验证。
+- THEN 请求 M1000 时，缺 M100 promotion receipt、receipt digest/冻结输入漂移、M100 未达到 review/publish closure 或其它 carrier 的聚合成功均返回 GATE_BLOCK。
 
 ## 6. 依赖
 

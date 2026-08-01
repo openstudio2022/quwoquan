@@ -1,1 +1,13 @@
-events: []
+events:
+- name: RecommendationModelReleaseStaged
+  producer: recommendation-service
+  consumers: [recommendation-service]
+  channel: outbox
+  payload_entity: RecommendationModelRelease
+  payload_fields: [id, scenario, modelDigest, featureContractDigest, status, createdAt]
+- name: RecommendationModelReleaseActivated
+  producer: recommendation-service
+  consumers: [recommendation-service, product-ops-service]
+  channel: outbox
+  payload_entity: RecommendationModelRelease
+  payload_fields: [id, scenario, modelDigest, featureContractDigest, status, activatedAt]

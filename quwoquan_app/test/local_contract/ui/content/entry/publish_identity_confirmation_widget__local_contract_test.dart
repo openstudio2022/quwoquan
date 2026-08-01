@@ -168,7 +168,7 @@ List<Override> _createPublishOverrides(
       uploadUri,
       bytes, {
       required contentLength,
-      required contentType,
+      required mimeType,
       required expectedSha256,
       abortTrigger,
     }) async {},
@@ -464,7 +464,6 @@ void main() {
     expect(payload?.containsKey('mediaUrls'), isFalse);
     expect(payload?.containsKey('coverUrl'), isFalse);
     expect(payload?.containsKey('mediaItems'), isFalse);
-    expect(postPublication.submitCommands.single.mediaItems, isEmpty);
     expect(postPublication.submitCommands.single.mediaAssetIds, <String>[
       'image_asset_a',
       'image_asset_b',

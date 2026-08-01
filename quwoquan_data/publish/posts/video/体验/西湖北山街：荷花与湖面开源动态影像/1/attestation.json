@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "composer-2.5",
+    "modelFamily": "composer",
+    "runId": "run-9773d9c7-312a-4977-8372-ab22c5834984",
+    "resultHash": "sha256:6ab9ad0af2c4efb383f00fb22df35e782529f687f679f790649485bbd5ddd596"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

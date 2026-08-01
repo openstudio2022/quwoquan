@@ -7,7 +7,6 @@ import 'package:quwoquan_app/app/navigation/app_page_access_navigator_observer.d
 import 'package:quwoquan_app/app/navigation/native_back_navigation.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/recovery/recovery_surface.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
@@ -84,7 +83,7 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
@@ -683,7 +682,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               : null;
           return appRoutePage<void>(
             state: state,
-            child: PersonalAssistantConversationPage(
+            child: PersonalAssistantSessionPage(
               assistantOpenContext: assistantOpenContext,
               onBack: () {
                 if (context.canPop()) {

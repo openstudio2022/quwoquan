@@ -131,10 +131,10 @@ void main() {
       draft: const CommentDraft(content: '账号 B 未发评论'),
     );
     await AssistantConsentStore(
-      actorScope: actorA,
+      accountId: actorA,
     ).save(const <AssistantSkillConsent>[]);
     await AssistantConsentStore(
-      actorScope: actorB,
+      accountId: actorB,
     ).save(const <AssistantSkillConsent>[]);
     final emoji = EmojiRepository(preferences);
     await emoji.setLastReportDate('2026-07-24');
@@ -152,7 +152,7 @@ void main() {
           ),
           CommentDraftStore.clearForTerminalAccountClosure(actorA),
           AssistantConsentStore(
-            actorScope: actorA,
+            accountId: actorA,
           ).clearForTerminalAccountClosure(),
           emoji.clearForTerminalAccountClosure(),
         ]);

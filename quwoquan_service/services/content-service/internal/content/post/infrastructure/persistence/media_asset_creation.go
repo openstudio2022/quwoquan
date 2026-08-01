@@ -43,6 +43,7 @@ func (s *MongoMediaStore) AppendCreated(
 		MediaType:        commit.Asset.MediaType,
 		MimeType:         commit.Asset.MimeType,
 		FileSize:         commit.Asset.FileSize,
+		CaptureMetadata:  commit.Asset.CaptureMetadata,
 		AccessPolicy:     mediamodel.AccessPolicy(commit.Asset.AccessPolicy),
 		ProcessingStatus: mediamodel.ProcessingStatus(commit.Asset.ProcessingStatus),
 		CoverStrategy:    commit.Asset.CoverStrategy,

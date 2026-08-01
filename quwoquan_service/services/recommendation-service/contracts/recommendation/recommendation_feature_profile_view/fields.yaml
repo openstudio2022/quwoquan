@@ -1,0 +1,11 @@
+description: 推荐长期特征、影响力、协同与交集的统一投影视图。
+fields:
+- {name: subjectId, source: subjectId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection}
+- {name: lastFeedbackFactId, source: lastFeedbackFactId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: lastExposureFactId, source: lastExposureFactId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: sparseFeatures, source: sparseFeatures, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: influenceScore, source: influenceScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: collaborativeFeatures, source: collaborativeFeatures, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: intersectionFeatures, source: intersectionFeatures, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}

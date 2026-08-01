@@ -11,19 +11,17 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 
 
-def test_local_test_environments_use_substitutes_and_prod_uses_real_adapters() -> None:
+def test_nonprod_bindings_are_enabled_and_prod_uses_real_adapters() -> None:
     compiled, issues = governance.load_and_compile()
 
     assert issues == []
 
-    for environment in governance.SUBSTITUTE_ENVIRONMENTS:
+    for environment in governance.NONPROD_ENVIRONMENTS:
         for capability_id, readiness in compiled["readiness"][environment].items():
             if not readiness["required"] or not readiness.get("adapter_id"):
                 continue
             assert readiness["state"] == "enabled", (environment, capability_id)
-            assert governance.is_local_substitute_adapter(
-                readiness["adapter_id"]
-            ), (environment, capability_id)
+            assert readiness["capability_ready"], (environment, capability_id)
 
     for environment in governance.RELEASE_ADAPTER_ENVIRONMENTS:
         for capability_id, readiness in compiled["readiness"][environment].items():
@@ -43,4 +41,4 @@ def test_local_test_environments_use_substitutes_and_prod_uses_real_adapters() -
 
 
 if __name__ == "__main__":
-    test_local_test_environments_use_substitutes_and_prod_uses_real_adapters()
+    test_nonprod_bindings_are_enabled_and_prod_uses_real_adapters()

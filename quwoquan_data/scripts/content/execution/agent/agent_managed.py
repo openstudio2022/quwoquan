@@ -44,8 +44,14 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
             return False
         from core.paths import PUBLISH_ROOT
         from content.execution.workspace import execution_root, write_publish_ref
-        from content.release.canonical.object_transaction_audit import validate_canonical_publish
+        from content.release.canonical.object_transaction_audit import (
+            validate_canonical_publish,
+        )
+        from content.release.canonical.object_transaction_contract import (
+            refresh_canonical_tag_snapshots,
+        )
 
+        refresh_canonical_tag_snapshots(PUBLISH_ROOT)
         closure = validate_canonical_publish(PUBLISH_ROOT)
         if closure["status"] != "passed":
             state.completed = [stage for stage in (state.completed or []) if stage != "publish"]
@@ -90,11 +96,30 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
     from content.execution.recovery.download_unresolved import _download_plan_unresolved_entities, _write_download_availability
     from content.execution.controller.control import _recover_stale_controller_yield
     from content.execution.controller.orchestrator import run_controller
+    reconcile_failures = 0
     while True:
         code = run_controller(ctx)
         if code == 0:
             if _reconcile_completed_publish_state(ctx):
                 return 0
+            # promote/closure repair stripped publish; allow one repair pass only.
+            # Infinite continue previously burned disk when create-once / identity
+            # conflicts kept failing after a successful publish stage.
+            reconcile_failures += 1
+            if reconcile_failures > 1:
+                state = load_execution_state(ctx.execution_id)
+                state.status = ExecutionStateStatus.MANUAL_REQUIRED
+                state.next_action = (
+                    "canonical publish reconcile failed after publish; "
+                    "see failedObjects for promote/closure evidence"
+                )
+                state.heartbeat_at = store.now_iso()
+                if not state.failed_objects:
+                    state.failed_objects = [
+                        "canonical publish reconcile failed after publish"
+                    ]
+                save_execution_state(state)
+                return 1
             continue
         if code != 10:
             return code

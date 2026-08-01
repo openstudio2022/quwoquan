@@ -14,10 +14,15 @@ import (
 )
 
 // ErrAuthRuntimeCapabilityBlocked 表示 metadata 明确禁用认证外部能力。
-// composition root 可保留 nil adapter，让应用层返回生成的 structured unavailable
-// error；未知 binding、错误 adapter 或缺失材料仍必须 fail-fast。
+// ErrAuthRuntimeCapabilityUnavailable 表示可选能力缺少受保护的运行材料。
+// 两者都会在 composition root 保留 nil adapter，让应用层返回生成的 structured
+// unavailable error；未知 binding、错误 adapter 与非法 binding 元数据仍须 fail-fast。
 var ErrAuthRuntimeCapabilityBlocked = errors.New(
 	"user authentication external capability is blocked",
+)
+
+var ErrAuthRuntimeCapabilityUnavailable = errors.New(
+	"user authentication external capability is unavailable",
 )
 
 const nonPromotablePrevalidationEnv = "QWQ_NONPROMOTABLE_PREVALIDATION"
@@ -25,6 +30,10 @@ const nonPromotablePrevalidationEnv = "QWQ_NONPROMOTABLE_PREVALIDATION"
 func nonPromotableFirstPartyPrevalidation(appEnv string) bool {
 	return strings.EqualFold(strings.TrimSpace(appEnv), "prod") &&
 		strings.TrimSpace(os.Getenv(nonPromotablePrevalidationEnv)) == "first-party"
+}
+
+func contentReleaseExternalAuthDisabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")), "content-release")
 }
 
 // federatedLoginBindings is the explicit production composition for every
@@ -185,6 +194,13 @@ func resolveAuthRuntimeBinding(
 	if appEnv == "" {
 		appEnv = "alpha"
 	}
+	if contentReleaseExternalAuthDisabled() {
+		return authRuntimeBinding{}, fmt.Errorf(
+			"%w: %s is outside the content-release workload",
+			ErrAuthRuntimeCapabilityBlocked,
+			capabilityID,
+		)
+	}
 	if nonPromotableFirstPartyPrevalidation(appEnv) {
 		// prod-hosted first-party prevalidation deliberately has no commercial
 		// login Provider. Returning the existing typed blocked condition keeps
@@ -235,7 +251,8 @@ func resolveAuthRuntimeBinding(
 		value, ok := configProvider.GetString(environmentKey)
 		if !ok {
 			return authRuntimeBinding{}, fmt.Errorf(
-				"%s endpoint material is unavailable for role=%s",
+				"%w: %s endpoint material is unavailable for role=%s",
+				ErrAuthRuntimeCapabilityUnavailable,
 				capabilityID,
 				role,
 			)
@@ -246,7 +263,8 @@ func resolveAuthRuntimeBinding(
 		value, ok := configProvider.GetString(environmentKey)
 		if !ok {
 			return authRuntimeBinding{}, fmt.Errorf(
-				"%s secret material is unavailable",
+				"%w: %s secret material is unavailable",
+				ErrAuthRuntimeCapabilityUnavailable,
 				capabilityID,
 			)
 		}

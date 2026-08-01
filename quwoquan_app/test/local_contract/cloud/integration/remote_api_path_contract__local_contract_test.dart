@@ -159,13 +159,19 @@ MockClient _captureClient(List<_CapturedRequest> log) {
         path == ContentApiMetadata.createReportPath) {
       return http.Response('', 204);
     }
-    if (request.method == 'POST' && path == SearchApiMetadata.searchQueryPath) {
+    if (request.method == 'POST' && path == SearchApiMetadata.searchPath) {
       return http.Response(
         json.encode({
           'hits': <dynamic>[],
+          'citations': <dynamic>[],
+          'facets': <dynamic>[],
           'requestId': 'search-request-1',
           'relatedTerms': <String>[],
           'degradeSignals': <dynamic>[],
+          'provenance': <String, dynamic>{
+            'provider': 'elasticsearch',
+            'generatedAt': '2026-07-31T00:00:00Z',
+          },
         }),
         200,
         headers: {'content-type': 'application/json'},
@@ -886,15 +892,15 @@ void main() {
         ),
       );
       expect(log.last.method, 'POST');
-      expect(log.last.path, SearchApiMetadata.searchQueryPath);
+      expect(log.last.path, SearchApiMetadata.searchPath);
       expect(log.last.body['query'], '摄影');
       expect(log.last.body['objectTypes'], const <String>['article']);
       expect(log.last.body['limit'], 9);
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        clientPageId: SearchRequestPageIds.searchQuery,
+        clientPageId: SearchRequestPageIds.search,
         surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-        operationId: AppCloudOperationIds.searchSearchQuerySearchQuery,
+        operationId: AppCloudOperationIds.searchSearchIndexViewSearch,
       );
     });
 

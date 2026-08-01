@@ -415,12 +415,14 @@ def load_release_video_binding(
                 "configured video workId is not in the release-bound video/premium intersection"
             )
         post_id = requested_work
-    elif len(candidate_post_ids) == 1:
-        post_id = next(iter(candidate_post_ids))
-    else:
+    elif not candidate_post_ids:
         raise ReleaseVideoDeliveryError(
-            "release must expose exactly one premium video or configure VIDEO_PLAYBACK_CANARY_WORK_ID"
+            "release must expose at least one premium video for playback canary"
         )
+    else:
+        # Multi-video releases pick a deterministic canary; operators may still
+        # pin VIDEO_PLAYBACK_CANARY_WORK_ID / --video-work-id for a specific work.
+        post_id = sorted(candidate_post_ids)[0]
 
     post_bindings = identity["postBindings"]
     matching_posts = [

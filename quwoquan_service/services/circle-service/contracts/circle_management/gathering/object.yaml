@@ -1,0 +1,39 @@
+kind: aggregate_root
+description: 有目标、有时间、可加入并绑定群会话的结伴与线下相聚聚合。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- name: creator_persona
+  kind: reference
+  cardinality: N:1
+  consistency: eventual
+  access: named_reader
+  on_delete: tombstone
+  reference_fields: [creatorPersonaId]
+  target_object: user.Persona
+- name: conversation
+  kind: reference
+  cardinality: N:1
+  consistency: eventual
+  access: command_facade
+  on_delete: detach
+  reference_fields: [conversationId]
+  target_object: chat.Conversation
+capabilities: [commandable, queryable, idempotent_commands]
+business_rules:
+- targetRef、startAt、creatorPersonaId 创建后不可变
+- 会话未绑定时保持 draft，不接受加入
+- joined 参与者数量不得超过 capacity，数量只由 participants 派生
+- 同一 persona 在 participants 中至多一条当前记录，left/rejected 可重新申请并复用该记录
+- cancelled 与 completed 是不可逆终态
+- Gathering 只持有 conversationId，不拥有消息、会话成员或通话事实
+lifecycle:
+  state_field: status
+  states: [draft, open, full, cancelled, completed]
+  optimistic_concurrency: version
+  idempotency: command_receipt

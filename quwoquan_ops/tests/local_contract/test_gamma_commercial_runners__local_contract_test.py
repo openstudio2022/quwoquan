@@ -65,11 +65,7 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
 
         self.assertIn("health --target", api_runner)
         self.assertIn("run_local_gamma_t3.py", api_runner)
-        self.assertIn("open_local_acceptance_session", api_runner)
-        self.assertIn(
-            "resolve_running_local_deployment_work_root",
-            api_runner,
-        )
+        self.assertIn("open_reference_acceptance_session", api_runner)
         self.assertIn(
             "onboarding_author_impact_gamma__api_integration_test.dart",
             api_runner,
@@ -177,7 +173,7 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         self.assertTrue(assistant["stopOnFailure"])
         runner = (ROOT / assistant["argv"][1]).read_text(encoding="utf-8")
-        self.assertIn("open_local_acceptance_session", runner)
+        self.assertIn("open_reference_acceptance_session", runner)
         self.assertIn(
             "assistant_learning_remote_roundtrip__api_integration_test.dart",
             runner,
@@ -216,7 +212,7 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         self.assertTrue(proposal["stopOnFailure"])
         runner = (ROOT / proposal["argv"][1]).read_text(encoding="utf-8")
-        self.assertIn("open_local_acceptance_session", runner)
+        self.assertIn("open_reference_acceptance_session", runner)
         self.assertIn(
             "profile_update_proposal_remote_roundtrip__api_integration_test.dart",
             runner,

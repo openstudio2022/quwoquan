@@ -9,7 +9,7 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	"testing"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
 

@@ -301,6 +301,40 @@ func LoadFleetStoreConfig(
 	return cfg, nil
 }
 
+// DataWorkerEnvironment builds the process environment for the Python object
+// worker. WorkDir is quwoquan_data, so PYTHONPATH must include both the data
+// scripts root and the repository root (for quwoquan_ops and related packages).
+func DataWorkerEnvironment(
+	current []string,
+	evidenceRoot string,
+	publishRoot string,
+	scriptsRoot string,
+) []string {
+	repoRoot := filepath.Clean(filepath.Join(scriptsRoot, "..", ".."))
+	pythonPath := scriptsRoot
+	if repoRoot != "" && repoRoot != "." && repoRoot != scriptsRoot {
+		pythonPath = scriptsRoot + string(os.PathListSeparator) + repoRoot
+	}
+	overrides := map[string]string{
+		"PYTHONDONTWRITEBYTECODE": "1",
+		"QWQ_OUTPUT_ROOT":         evidenceRoot,
+		"QWQ_PUBLISH_ROOT":        publishRoot,
+		"PYTHONPATH":              pythonPath,
+	}
+	result := make([]string, 0, len(current)+len(overrides))
+	for _, row := range current {
+		key, _, found := strings.Cut(row, "=")
+		if _, overridden := overrides[key]; found && overridden {
+			continue
+		}
+		result = append(result, row)
+	}
+	for key, value := range overrides {
+		result = append(result, key+"="+value)
+	}
+	return result
+}
+
 // SelectExecutionTasks returns only the frozen jobs named by request. It
 // rejects non-unique or mismatched remote tasks instead of guessing a result.
 func SelectExecutionTasks(

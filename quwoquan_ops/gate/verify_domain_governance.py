@@ -14,7 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.domain_governance import LOCAL_TARGETS, desired_dns_records
+from quwoquan_ops.cli.domain_governance import (
+    LOCAL_TARGETS,
+    PUBLIC_DNS_TARGETS,
+    desired_dns_records,
+)
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
@@ -43,12 +47,17 @@ PRIVATE_TRUST_TOKENS = (
     "materialize-app-trust-bundle",
     "badCertificateCallback",
     "SecurityContext.defaultContext.setTrustedCertificatesBytes",
-    "OBJECT_STORAGE_CA_FILE",
     "object-storage-ca.crt",
     "QWQ_LOCAL_UPLOAD_LOCAL_HOST",
     "ssl._create_unverified_context",
     "socket.getaddrinfo =",
 )
+LOCAL_MANAGED_TRUST_TOKEN = "OBJECT_STORAGE_CA_FILE"
+LOCAL_MANAGED_TRUST_OWNERS = {
+    "quwoquan_ops/cli/lib/local_environment_object_storage.py",
+    "quwoquan_ops/cli/stackctl.py",
+    "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
+}
 PRIVATE_TRUST_SCAN_ROOTS = (
     ROOT / "quwoquan_app" / "lib",
     ROOT / "quwoquan_app" / "android",
@@ -297,7 +306,7 @@ def main() -> int:
     if len(record_identities) != len(set(record_identities)):
         issues.append("DNS plan contains duplicate record identities")
     topology_local_hosts: set[str] = set()
-    for target_name in LOCAL_TARGETS:
+    for target_name in PUBLIC_DNS_TARGETS:
         for value in (get_target(topology, target_name).get("publicBases") or {}).values():
             host = urlsplit(str(value)).hostname
             if host:
@@ -431,17 +440,34 @@ def main() -> int:
         issues.append("Gamma T4 endpoint overrides must be canonical-equality checked")
 
     tls_profiles = policy.get("tlsProfiles") or {}
-    profile_targets = {
+    local_profile = tls_profiles.get("local-managed")
+    if not isinstance(local_profile, dict):
+        issues.append("local-managed TLS profile is required")
+    else:
+        if local_profile.get("kind") != "local-managed":
+            issues.append("local-managed TLS profile kind mismatch")
+        if set(local_profile.get("targets") or []) != {
+            "alpha-local",
+            "beta-local",
+            "gamma-local",
+        }:
+            issues.append("local-managed TLS profile must own Alpha/Beta/Gamma local targets")
+        for field in ("renewBeforeDays", "certificateDays"):
+            if int(local_profile.get(field) or 0) <= 0:
+                issues.append(f"local-managed.{field} must be positive")
+    public_profile_targets = {
         str(profile.get("target") or "")
         for profile in tls_profiles.values()
         if isinstance(profile, dict)
+        and profile.get("kind") == "dns-01-public-ca"
     }
-    if profile_targets != set(LOCAL_TARGETS):
-        issues.append("DNS-01 TLS profiles must cover every local topology target exactly once")
-    if len(tls_profiles) != len(profile_targets):
-        issues.append("TLS profiles must not duplicate topology targets")
+    if public_profile_targets != set(PUBLIC_DNS_TARGETS):
+        issues.append("DNS-01 TLS profiles must cover prod-sim exactly once")
     for profile_name, profile in tls_profiles.items():
-        if not isinstance(profile, dict):
+        if (
+            not isinstance(profile, dict)
+            or profile.get("kind") != "dns-01-public-ca"
+        ):
             continue
         target_name = str(profile.get("target") or "")
         env_label = {
@@ -474,6 +500,15 @@ def main() -> int:
         ):
             continue
         source = path.read_text(encoding="utf-8", errors="ignore")
+        relative_path = path.relative_to(ROOT).as_posix()
+        if (
+            LOCAL_MANAGED_TRUST_TOKEN in source
+            and relative_path not in LOCAL_MANAGED_TRUST_OWNERS
+        ):
+            issues.append(
+                f"{relative_path} contains local-managed trust material outside "
+                "the stackctl-owned object-storage path"
+            )
         for token in PRIVATE_TRUST_TOKENS:
             if token in source:
                 issues.append(

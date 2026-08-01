@@ -116,8 +116,11 @@ func TestLifecycleEnumAndFieldTypeGovernanceAreHardFailures(t *testing.T) {
 			}},
 			Fields: []ast.FieldDefinition{
 				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "status", Type: "enum", EnumRef: "PostStatus", SourcePath: "content/content/post/fields.yaml"},
+				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "payload", Type: "object", SourcePath: "content/content/post/fields.yaml"},
+				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "items", Type: "[]object", SourcePath: "content/content/post/fields.yaml"},
+				{ObjectID: "content.post", Domain: "content", Entity: "PostView", Name: "projectionPayload", Type: "object", SourcePath: "content/content/post/fields.yaml"},
 				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "createdAt", Type: "string", SourcePath: "content/content/post/fields.yaml"},
-				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "payload", Type: "UnknownPayload", SourcePath: "content/content/post/fields.yaml"},
+				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "unknownPayload", Type: "UnknownPayload", SourcePath: "content/content/post/fields.yaml"},
 				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "legacyItems", Type: "string[]", SourcePath: "content/content/post/fields.yaml"},
 				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "unknownItems", Type: "array", SourcePath: "content/content/post/fields.yaml"},
 				{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "releaseVersion", Type: "int64", SemanticType: "release_version", SourcePath: "content/content/post/fields.yaml"},
@@ -132,6 +135,8 @@ func TestLifecycleEnumAndFieldTypeGovernanceAreHardFailures(t *testing.T) {
 		},
 	}
 	assertGovernanceIssueCodes(t, validateMetadataGovernance(contractGraph),
+		"CONTRACT.FIELD.AGGREGATE_ROOT_BARE_OBJECT",
+		"CONTRACT.FIELD.AGGREGATE_ROOT_BARE_OBJECT",
 		"CONTRACT.FIELD.INVALID_INSTANT_TYPE",
 		"CONTRACT.FIELD.NON_CANONICAL_COLLECTION",
 		"CONTRACT.FIELD.SEMANTIC_TYPE_MISMATCH",
@@ -139,6 +144,23 @@ func TestLifecycleEnumAndFieldTypeGovernanceAreHardFailures(t *testing.T) {
 		"CONTRACT.FIELD.UNKNOWN_TYPE",
 		"CONTRACT.LIFECYCLE.ENUM_DRIFT",
 		"CONTRACT.LIFECYCLE.FACT_NOT_IMMUTABLE",
+	)
+}
+
+func TestAggregateRootBareObjectFieldsAreAlwaysRejected(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "content.post", Domain: "content", Name: "Post", Kind: ast.ObjectKindAggregateRoot,
+		}},
+		Governance: ast.MetadataGovernance{Fields: []ast.FieldDefinition{
+			{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "mediaItems", Type: "[]object", SourcePath: "content/content/post/fields.yaml"},
+			{ObjectID: "content.post", Domain: "content", Entity: "Post", Name: "newPayload", Type: "object", SourcePath: "content/content/post/fields.yaml"},
+		}},
+	}
+	assertGovernanceIssueCodes(
+		t,
+		validateFieldTypes(contractGraph),
+		"CONTRACT.FIELD.AGGREGATE_ROOT_BARE_OBJECT",
 	)
 }
 

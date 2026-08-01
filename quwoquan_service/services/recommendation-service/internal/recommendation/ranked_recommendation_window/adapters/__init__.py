@@ -1,0 +1,1 @@
+"""RankedRecommendationWindow inbound adapters."""

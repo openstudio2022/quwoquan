@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
@@ -128,5 +129,32 @@ void main() {
         expect(item.thumbnailUrl, 'https://cdn.example.com/photo2.jpg');
       },
     );
+  });
+
+  group('chat canonical MessageType preview rendering', () {
+    const expectedFallback = <MessageType, String>{
+      MessageType.text: '',
+      MessageType.image: '[图片]',
+      MessageType.video: '[视频]',
+      MessageType.audio: '[语音]',
+      MessageType.file: '[文件]',
+      MessageType.card: '[卡片]',
+      MessageType.systemCallLog: '[通话]',
+      MessageType.systemAnnouncement: '群公告',
+    };
+
+    for (final entry in expectedFallback.entries) {
+      test('${entry.key.wireValue} uses the canonical list preview', () {
+        final item = ChatListItemViewModel.fromDto(
+          chatInboxFixture(
+            id: 'conv_${entry.key.wireValue}',
+            type: 'group',
+            title: '类型渲染',
+            lastMessageType: entry.key,
+          ),
+        );
+        expect(item.subtitle, entry.value);
+      });
+    }
   });
 }

@@ -1,3 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 /// 跳转到作者主页时通过 GoRouter extra 传递的初始展示数据。
 /// 取代之前散落的 `Map<String, String?>` {'avatar':..., 'displayName':..., 'backgroundImage':...}
 class UserProfileRouteExtra {
@@ -7,6 +9,7 @@ class UserProfileRouteExtra {
     this.displayName,
     this.backgroundImage,
     this.openMessageComposer = false,
+    this.greetingIntersectionRef,
   });
 
   final String? personaId;
@@ -20,6 +23,7 @@ class UserProfileRouteExtra {
   /// 状态机上，而不是只把用户丢在对方主页；能力位、陌生人破冰、登录续接全部复用
   /// 主页原有实现，不在交集组件内重造第二套私信逻辑。
   final bool openMessageComposer;
+  final GreetingIntersectionRef? greetingIntersectionRef;
 
   /// null / empty 过滤：与路由解析侧保持一致
   String? get safePersonaId => personaId?.isEmpty == true ? null : personaId;

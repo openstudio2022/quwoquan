@@ -6,15 +6,15 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
-/// 云端会话历史快照：conversationId 供续聊绑定，transcript 按时间正序。
+/// 云端会话历史快照：sessionId 供续聊绑定，transcript 按时间正序。
 class AssistantHistorySnapshot {
   const AssistantHistorySnapshot({
-    required this.conversationId,
+    required this.sessionId,
     required this.topicTitle,
     required this.transcript,
   });
 
-  final String conversationId;
+  final String sessionId;
   final String topicTitle;
   final List<AssistantTranscriptTimelineRow> transcript;
 }
@@ -22,42 +22,40 @@ class AssistantHistorySnapshot {
 abstract class AssistantHistoryLoader {
   const AssistantHistoryLoader();
 
-  /// 恢复最近一个会话的 transcript；[conversationId] 非空时恢复指定会话。
+  /// 恢复最近一个会话的 transcript；[sessionId] 非空时恢复指定会话。
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   });
 }
 
-/// 云端历史恢复（R-ASSIST-001 收口）：消费 ListAssistantConversations /
-/// ListConversationTurns 查询面，替代已删除的本地 AssistantSessionStore 双模型。
+/// 云端历史恢复（R-ASSIST-001 收口）：消费 ListAssistantSessions /
+/// ListSessionTurns 查询面，替代已删除的本地 AssistantSessionStore 双模型。
 class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
   const CloudAssistantHistoryLoader(this._facet);
 
-  final AssistantConversationRunFacet _facet;
+  final AssistantSessionRunFacet _facet;
 
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
-    var targetConversationId = conversationId.trim();
+    var targetSessionId = sessionId.trim();
     var topicTitle = '';
-    if (targetConversationId.isEmpty) {
-      final conversations = await _facet.listAssistantConversations(limit: 1);
-      if (conversations.items.isEmpty) {
+    if (targetSessionId.isEmpty) {
+      final sessions = await _facet.listAssistantSessions(limit: 1);
+      if (sessions.items.isEmpty) {
         return null;
       }
-      final latest = conversations.items.first;
-      targetConversationId = latest.conversationId;
+      final latest = sessions.items.first;
+      targetSessionId = latest.sessionId;
       topicTitle = latest.summary;
     }
-    final turnsView = await _facet.listConversationTurns(
-      conversationId: targetConversationId,
-    );
+    final turnsView = await _facet.listSessionTurns(sessionId: targetSessionId);
     if (turnsView.items.isEmpty) {
       return AssistantHistorySnapshot(
-        conversationId: targetConversationId,
+        sessionId: targetSessionId,
         topicTitle: topicTitle,
         transcript: const <AssistantTranscriptTimelineRow>[],
       );
@@ -71,7 +69,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
         transcript.add(
           UserTranscriptTimelineRow(
             id: 'history_user_${turn.turnId}',
-            conversationId: AppConceptConstants.assistantConversationId,
+            sessionId: targetSessionId,
             type: 'text',
             content: question,
             senderId: 'current_user',
@@ -88,7 +86,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
         transcript.add(
           AssistantAnswerTranscriptRow(
             id: 'history_assistant_${turn.turnId}',
-            conversationId: AppConceptConstants.assistantConversationId,
+            sessionId: targetSessionId,
             content: answer,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
@@ -105,7 +103,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
         transcript.add(
           AssistantAnswerTranscriptRow(
             id: 'history_assistant_${turn.turnId}',
-            conversationId: AppConceptConstants.assistantConversationId,
+            sessionId: targetSessionId,
             content: AssistantText.assistantUnavailable,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
@@ -122,7 +120,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
         transcript.add(
           AssistantAnswerTranscriptRow(
             id: 'history_assistant_${turn.turnId}',
-            conversationId: AppConceptConstants.assistantConversationId,
+            sessionId: targetSessionId,
             content: AssistantText.assistantTaskStatusCancelled,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
@@ -138,7 +136,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
       }
     }
     return AssistantHistorySnapshot(
-      conversationId: targetConversationId,
+      sessionId: targetSessionId,
       topicTitle: topicTitle,
       transcript: transcript,
     );
@@ -146,7 +144,6 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
 }
 
 final assistantHistoryLoaderProvider = Provider<AssistantHistoryLoader>(
-  (ref) => CloudAssistantHistoryLoader(
-    ref.watch(assistantConversationRunFacetProvider),
-  ),
+  (ref) =>
+      CloudAssistantHistoryLoader(ref.watch(assistantSessionRunFacetProvider)),
 );

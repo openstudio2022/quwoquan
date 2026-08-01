@@ -33,7 +33,7 @@ func (s *Service) Nearby(ctx context.Context, q model.NearbyQuery) (_ []model.PO
 	return s.provider.Nearby(ctx, q)
 }
 
-func (s *Service) Search(ctx context.Context, q model.SearchQuery) (_ []model.POI, err error) {
+func (s *Service) Search(ctx context.Context, q model.SearchRequestFact) (_ []model.POI, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "integration.Search",
 		attribute.String("search.query", q.Query),
 		attribute.String("city.code", q.CityCode))

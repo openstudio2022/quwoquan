@@ -20,10 +20,10 @@ class EmojiCatalog {
 
   static final List<EmojiEntry> _allEntries = _buildEntries();
   static final Map<String, String> _idToChar = {
-    for (final e in _allEntries) e.id: e.char
+    for (final e in _allEntries) e.id: e.char,
   };
   static final Map<String, String> _charToId = {
-    for (final e in _allEntries) e.char: e.id
+    for (final e in _allEntries) e.char: e.id,
   };
 
   static List<EmojiEntry> _buildEntries() {
@@ -32,11 +32,13 @@ class EmojiCatalog {
       final categoryId = emojiCategoryIds[c];
       final chars = _categories[c];
       for (var i = 0; i < chars.length; i++) {
-        list.add(EmojiEntry(
-          id: '${categoryId}_$i',
-          char: chars[i],
-          categoryId: categoryId,
-        ));
+        list.add(
+          EmojiEntry(
+            id: '${categoryId}_$i',
+            char: chars[i],
+            categoryId: categoryId,
+          ),
+        );
       }
     }
     return list;

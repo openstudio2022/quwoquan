@@ -85,20 +85,32 @@ def resolve_cursor_startup_timeout_seconds(
     return max(1.0, seconds)
 
 
-def _redact_secret_text(value: str) -> str:
-    return re.sub(r"crsr_[A-Za-z0-9_-]+", "<redacted-cursor-key>", str(value or ""))
+def _redact_secret_text(
+    value: str,
+    *,
+    secrets: Iterable[str | None] = (),
+) -> str:
+    """Redact resolved credentials before retaining any runtime diagnostics."""
+    text = str(value or "")
+    for secret in secrets:
+        if secret:
+            text = text.replace(str(secret), "<redacted-cursor-key>")
+    return re.sub(r"crsr_[A-Za-z0-9_-]+", "<redacted-cursor-key>", text)
 
 
-def _redact_secret_value(value):
+def _redact_secret_value(value, *, secrets: Iterable[str | None] = ()):
     if isinstance(value, dict):
         return {
-            _redact_secret_text(str(k)): _redact_secret_value(v)
+            _redact_secret_text(str(k), secrets=secrets): _redact_secret_value(
+                v,
+                secrets=secrets,
+            )
             for k, v in value.items()
         }
     if isinstance(value, list):
-        return [_redact_secret_value(item) for item in value]
+        return [_redact_secret_value(item, secrets=secrets) for item in value]
     if isinstance(value, str):
-        return _redact_secret_text(value)
+        return _redact_secret_text(value, secrets=secrets)
     return value
 
 

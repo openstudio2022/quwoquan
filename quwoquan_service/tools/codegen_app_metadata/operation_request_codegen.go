@@ -80,7 +80,7 @@ func writeGeneratedOperationRequests(
 				operation.CanonicalOperationID,
 			)
 		}
-		model, err := loadOperationRequestModel(operation, requestType)
+		model, dependencies, err := loadOperationRequestModel(operation, requestType)
 		if err != nil {
 			return nil, err
 		}
@@ -135,6 +135,38 @@ func writeGeneratedOperationRequests(
 				Models:      map[string]requestModelSpec{},
 			}
 			libraries[client.DartImport] = library
+		}
+		dependencyNames := make([]string, 0, len(dependencies))
+		for name := range dependencies {
+			dependencyNames = append(dependencyNames, name)
+		}
+		sort.Strings(dependencyNames)
+		for _, name := range dependencyNames {
+			dependency := dependencies[name]
+			if err := validateRequestModelCanonicalEnums(
+				operation.CanonicalOperationID,
+				dependency,
+				enumValues,
+			); err != nil {
+				return nil, err
+			}
+			if err := validateRequestModelDefaults(
+				operation.CanonicalOperationID,
+				dependency,
+			); err != nil {
+				return nil, err
+			}
+			if previous, exists := library.Models[name]; exists {
+				if requestModelFingerprint(previous) != requestModelFingerprint(dependency) {
+					return nil, fmt.Errorf(
+						"%s reuses request value object %s with a different field contract",
+						operation.CanonicalOperationID,
+						name,
+					)
+				}
+			} else {
+				library.Models[name] = dependency
+			}
 		}
 		if previous, exists := library.Models[requestType]; exists {
 			if requestModelFingerprint(previous) != requestModelFingerprint(clientModel) {
@@ -401,7 +433,7 @@ func validateCanonicalRequestEnumField(
 func loadOperationRequestModel(
 	operation appExposedOperation,
 	requestType string,
-) (requestModelSpec, error) {
+) (requestModelSpec, map[string]requestModelSpec, error) {
 	fieldsPath := filepath.Join(
 		filepath.Dir(operation.SourcePath),
 		"fields.yaml",
@@ -411,7 +443,7 @@ func loadOperationRequestModel(
 		filepath.Join(activeMetadataRoot, filepath.FromSlash(fieldsPath)),
 		&document,
 	); err != nil {
-		return requestModelSpec{}, fmt.Errorf(
+		return requestModelSpec{}, nil, fmt.Errorf(
 			"%s load request model %s: %w",
 			operation.CanonicalOperationID,
 			requestType,
@@ -431,25 +463,84 @@ func loadOperationRequestModel(
 	for name, entity := range document.Members {
 		entities[name] = entity
 	}
-	if entity, exists := entities[requestType]; exists {
-		return requestModelSpec{
-			Name:   requestType,
-			Fields: append([]fieldDef(nil), entity.Fields...),
-		}, nil
+	var shared fieldsFile
+	sharedPath := filepath.Join(activeMetadataRoot, "_shared", "types.yaml")
+	if err := decodeMetadataDocument(sharedPath, &shared); err != nil {
+		return requestModelSpec{}, nil, fmt.Errorf(
+			"%s load shared request value types: %w",
+			operation.CanonicalOperationID,
+			err,
+		)
 	}
-	if strings.TrimSpace(document.Entity) == requestType &&
-		document.Fields != nil {
-		return requestModelSpec{
-			Name:   requestType,
-			Fields: append([]fieldDef(nil), document.Fields...),
-		}, nil
+	for name, sharedEntity := range shared.Types {
+		if local, found := entities[name]; found {
+			localModel := requestModelSpec{Name: name, Fields: local.Fields}
+			sharedModel := requestModelSpec{Name: name, Fields: sharedEntity.Fields}
+			if requestModelFingerprint(localModel) != requestModelFingerprint(sharedModel) {
+				return requestModelSpec{}, nil, fmt.Errorf(
+					"%s request type %s conflicts with canonical _shared/types.yaml",
+					operation.CanonicalOperationID,
+					name,
+				)
+			}
+			continue
+		}
+		entities[name] = sharedEntity
 	}
-	return requestModelSpec{}, fmt.Errorf(
-		"%s request_entity %s is absent from %s",
-		operation.CanonicalOperationID,
-		requestType,
-		fieldsPath,
-	)
+	entity, exists := entities[requestType]
+	if !exists && strings.TrimSpace(document.Entity) == requestType && document.Fields != nil {
+		entity = entityDef{Fields: append([]fieldDef(nil), document.Fields...)}
+		exists = true
+	}
+	if !exists {
+		return requestModelSpec{}, nil, fmt.Errorf(
+			"%s request_entity %s is absent from %s",
+			operation.CanonicalOperationID,
+			requestType,
+			fieldsPath,
+		)
+	}
+	root := requestModelSpec{
+		Name:   requestType,
+		Fields: append([]fieldDef(nil), entity.Fields...),
+	}
+	dependencies := map[string]requestModelSpec{}
+	visiting := map[string]bool{requestType: true}
+	var collect func(requestModelSpec) error
+	collect = func(model requestModelSpec) error {
+		for _, field := range model.Fields {
+			typeName := strings.TrimPrefix(strings.TrimSpace(field.Type), "[]")
+			dependencyEntity, found := entities[typeName]
+			if !found || typeName == requestType {
+				continue
+			}
+			if visiting[typeName] {
+				return fmt.Errorf(
+					"%s request value object cycle includes %s",
+					operation.CanonicalOperationID,
+					typeName,
+				)
+			}
+			if _, found := dependencies[typeName]; found {
+				continue
+			}
+			dependency := requestModelSpec{
+				Name:   typeName,
+				Fields: append([]fieldDef(nil), dependencyEntity.Fields...),
+			}
+			dependencies[typeName] = dependency
+			visiting[typeName] = true
+			if err := collect(dependency); err != nil {
+				return err
+			}
+			delete(visiting, typeName)
+		}
+		return nil
+	}
+	if err := collect(root); err != nil {
+		return requestModelSpec{}, nil, err
+	}
+	return root, dependencies, nil
 }
 
 func validateRequestModelBindings(
@@ -996,6 +1087,44 @@ func renderRequestModel(
 			requestFieldDartName(field),
 		)
 	}
+	output.WriteString("\n  Map<String, Object?> toJson() => <String, Object?>{\n")
+	for _, field := range model.Fields {
+		dartName := requestFieldDartName(field)
+		value, err := requestFieldWireExpression(
+			"this."+dartName,
+			field,
+			false,
+			enumValues,
+		)
+		if err != nil {
+			return fmt.Errorf("%s.%s: %w", model.Name, field.Name, err)
+		}
+		if isRequestFieldNullable(field) || field.ClientOmitEmpty {
+			condition := "this." + dartName + " != null"
+			if field.ClientOmitEmpty {
+				if isRequestFieldNullable(field) {
+					condition = "this." + dartName + "?.isNotEmpty == true"
+				} else {
+					condition = "this." + dartName + ".isNotEmpty"
+				}
+			}
+			fmt.Fprintf(
+				output,
+				"    if (%s) %q: %s,\n",
+				condition,
+				requestFieldWireName(field),
+				value,
+			)
+		} else {
+			fmt.Fprintf(
+				output,
+				"    %q: %s,\n",
+				requestFieldWireName(field),
+				value,
+			)
+		}
+	}
+	output.WriteString("  };\n")
 	output.WriteString("}\n\n")
 	return nil
 }
@@ -1844,6 +1973,7 @@ func requestInlineObjectWireExpression(
 		return "<String, Object?>{" +
 			"'kind': " + access + ".kind, " +
 			"'title': " + access + ".title, " +
+			"if (" + access + ".objectRef != null) 'objectRef': " + access + ".objectRef!.toWire(), " +
 			"if (" + access + ".subtitle != null) 'subtitle': " + access + ".subtitle, " +
 			"if (" + access + ".thumbnailUrl != null) 'thumbnailUrl': " + access + ".thumbnailUrl, " +
 			"if (" + access + ".deeplink != null) 'deeplink': " + access + ".deeplink, " +

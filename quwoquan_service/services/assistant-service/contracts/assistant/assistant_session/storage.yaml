@@ -1,0 +1,18 @@
+backend: mongodb
+collections:
+  assistant_sessions:
+    entity: AssistantSession
+    role: authoritative
+    description: AssistantSession 聚合真相源；一次创建幂等由 userId+clientRequestId 唯一约束承载（聚合自身即 receipt，与 Post 发布同型）。
+    indexes:
+    - name: idx_sessions_user_updated
+      keys:
+        userId: 1
+        updatedAt: -1
+    - name: uq_sessions_client_request
+      keys:
+        userId: 1
+        clientRequestId: 1
+      unique: true
+      sparse: true
+role: authoritative

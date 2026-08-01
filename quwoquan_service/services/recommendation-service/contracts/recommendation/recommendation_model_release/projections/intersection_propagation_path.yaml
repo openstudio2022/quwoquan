@@ -1,5 +1,5 @@
 read_model: IntersectionPropagationPath
-description: "交集传播链值对象（架构基线 v2 §21.4 · 统一交互子契约延伸；草案/未冻结）。\n承载「沿边的可证下游传播」：路径节点视觉 + 跳数 + 二级传播绝对人数 + 一句话摘要。\n\
+description: "交集传播链当前值对象。\n承载「沿边的可证下游传播」：路径节点视觉 + 跳数 + 二级传播绝对人数 + 一句话摘要。\n\
   红线（§21.4 / author·circle impact 对齐）：只承载可证绝对计数与路径节点视觉，\n禁止 reach / conversion / 漏斗 / 增长率等运营比率指标进入本契约。\n\
   端只读渲染（传播视图件，复用 IntersectionVisualCluster / IntersectionTargetNavigator），\n云侧同源产出；本期端 Mock 原型，云侧多跳真算后置（§21.10）。\n\
   \n闭集枚举（端按字符串解析，未知值优雅降级为通用路径）：\n  pathKind: personToPerson | personToCircle | personToContentToPerson\n\

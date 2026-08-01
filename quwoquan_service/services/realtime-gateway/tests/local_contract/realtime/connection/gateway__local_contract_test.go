@@ -67,6 +67,7 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	handler, err := httpadapter.NewHandler(
 		tickets,
 		hub,
+		mustTestResumableEventReader(t, client),
 		redisstore.NewPresenceStore(client),
 		httpadapter.DefaultTransportConfig(),
 	)
@@ -89,6 +90,27 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 		hub:       hub,
 		server:    server,
 	}
+}
+
+func mustTestResumableEventReader(
+	t *testing.T,
+	client rtredis.Client,
+) *redisstore.ResumableEventReader {
+	t.Helper()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"realtime-gateway-resume-test",
+		runtimemessaging.RedisMessageTransportFixture,
+		client,
+		client,
+	)
+	if err != nil {
+		t.Fatalf("new resume message transport: %v", err)
+	}
+	reader, err := redisstore.NewResumableEventReader(transport)
+	if err != nil {
+		t.Fatalf("new resumable event reader: %v", err)
+	}
+	return reader
 }
 
 type testAccountSecurityAuthority struct {
@@ -494,11 +516,11 @@ func TestLeaseFencingTokensAreMonotonic(t *testing.T) {
 	}
 }
 
-func TestLongPollReturnsEventsOrNoContent(t *testing.T) {
+func TestLongPollReturnsCursorEnvelopeForEmptyAndEphemeralDelivery(t *testing.T) {
 	t.Parallel()
 	harness := newGatewayHarness(t)
 
-	// 无事件：短 hold 返回 204。
+	// 无事件：短 hold 仍返回可持久化 cursor envelope，避免相邻 poll 窗口丢事件。
 	request, _ := http.NewRequest(
 		http.MethodGet,
 		harness.server.URL+"/realtime/poll?timeout=1",
@@ -511,9 +533,20 @@ func TestLongPollReturnsEventsOrNoContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = response.Body.Close()
-	if response.StatusCode != http.StatusNoContent {
-		t.Fatalf("empty poll status = %d, want 204", response.StatusCode)
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("empty poll status = %d, want 200", response.StatusCode)
+	}
+	var emptyBody struct {
+		Events           []map[string]any `json:"events"`
+		NextCursor       string           `json:"nextCursor"`
+		TransportResumed bool             `json:"transportResumed"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&emptyBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(emptyBody.Events) != 0 || emptyBody.NextCursor != "0-0" || emptyBody.TransportResumed {
+		t.Fatalf("empty poll body = %#v", emptyBody)
 	}
 
 	// 有事件：hold 期间发布，返回 200 + events。
@@ -543,13 +576,17 @@ func TestLongPollReturnsEventsOrNoContent(t *testing.T) {
 		t.Fatalf("poll with event status = %d, want 200", response2.StatusCode)
 	}
 	var body struct {
-		Events []map[string]any `json:"events"`
+		Events     []map[string]any `json:"events"`
+		NextCursor string           `json:"nextCursor"`
 	}
 	if err := json.NewDecoder(response2.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
 	if len(body.Events) != 1 || body.Events[0]["type"] != "chat.poll_event" {
 		t.Fatalf("poll events = %v", body.Events)
+	}
+	if body.NextCursor != "0-0" {
+		t.Fatalf("ephemeral delivery must not advance durable cursor: %q", body.NextCursor)
 	}
 
 	// 匿名 poll 返回 401。
@@ -565,6 +602,76 @@ func TestLongPollReturnsEventsOrNoContent(t *testing.T) {
 	_ = anonymousResponse.Body.Close()
 	if anonymousResponse.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("anonymous poll status = %d, want 401", anonymousResponse.StatusCode)
+	}
+}
+
+func TestLongPollResumesDurableEventsStrictlyAfterCursor(t *testing.T) {
+	t.Parallel()
+	harness := newGatewayHarness(t)
+	ctx := context.Background()
+	stream := runtimemessaging.RealtimeChatResumeStream("acct-resume")
+	firstPayload, _ := json.Marshal(map[string]any{
+		"eventId": "event-1", "type": "MessageSent", "conversationId": "conv-1",
+	})
+	firstCursor, err := harness.client.XAdd(ctx, stream, map[string]string{
+		"payload": string(firstPayload),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPayload, _ := json.Marshal(map[string]any{
+		"eventId": "event-2", "type": "MessageSent", "conversationId": "conv-1",
+	})
+	secondCursor, err := harness.client.XAdd(ctx, stream, map[string]string{
+		"payload": string(secondPayload),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request, _ := http.NewRequest(
+		http.MethodGet,
+		harness.server.URL+"/realtime/poll?timeout=1&cursor="+firstCursor,
+		nil,
+	)
+	request.Header.Set("X-Test-Account", "acct-resume")
+	request.Header.Set("X-Test-Persona", "persona-resume")
+	request.Header.Set("X-Test-Device", "device-resume")
+	response, err := harness.server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var body struct {
+		Events           []map[string]any `json:"events"`
+		NextCursor       string           `json:"nextCursor"`
+		TransportResumed bool             `json:"transportResumed"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || len(body.Events) != 1 {
+		t.Fatalf("resume status=%d body=%#v", response.StatusCode, body)
+	}
+	if body.Events[0]["eventId"] != "event-2" || body.NextCursor != secondCursor || !body.TransportResumed {
+		t.Fatalf("resume body=%#v", body)
+	}
+
+	invalid, _ := http.NewRequest(
+		http.MethodGet,
+		harness.server.URL+"/realtime/poll?cursor=%24",
+		nil,
+	)
+	invalid.Header.Set("X-Test-Account", "acct-resume")
+	invalid.Header.Set("X-Test-Persona", "persona-resume")
+	invalid.Header.Set("X-Test-Device", "device-resume")
+	invalidResponse, err := harness.server.Client().Do(invalid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = invalidResponse.Body.Close() }()
+	if invalidResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid cursor status=%d, want 400", invalidResponse.StatusCode)
 	}
 }
 

@@ -1,0 +1,42 @@
+{
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "agentRunId": "run-03d83f42-4184-4ebe-a82c-e239aa411678",
+  "agentModel": "grok-4.5",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "preserved_authorized",
+  "sources": [
+    {
+      "assetRef": "sources/横店影视城__tourism_video_site__debdd8c1/assets/source.webm",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:2019%E5%B9%B41%E6%9C%881%E6%97%A5_%E6%98%9F%E5%A5%B3%E9%83%8E%E2%80%9C%E7%9F%B3%E6%A6%B4%E5%A7%90%E2%80%9D%E7%8E%B0%E8%BA%AB%E6%B5%99%E6%B1%9F%E6%A8%AA%E5%BA%97_%E4%B8%8E%E5%8D%83%E5%90%8D%E6%B8%B8%E5%AE%A2%E4%B8%80%E8%B5%B7%E6%AC%A2%E7%AC%91%E8%B7%A8%E5%B9%B4.webm",
+      "rightsRef": "sources/横店影视城__tourism_video_site__debdd8c1/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/横店影视城__tourism_video_site__debdd8c1/media/probe.json",
+      "watermarkEvidenceRef": "sources/横店影视城__tourism_video_site__debdd8c1/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/横店影视城__tourism_video_site__debdd8c1/rights/audio_rights_evidence.json",
+      "sha256": "sha256:1261fdabc3c9fe17a63aabd111f1ea0084df40e7c1c07deea99262b757be5025",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "中国新闻网",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:2019%E5%B9%B41%E6%9C%881%E6%97%A5_%E6%98%9F%E5%A5%B3%E9%83%8E%E2%80%9C%E7%9F%B3%E6%A6%B4%E5%A7%90%E2%80%9D%E7%8E%B0%E8%BA%AB%E6%B5%99%E6%B1%9F%E6%A8%AA%E5%BA%97_%E4%B8%8E%E5%8D%83%E5%90%8D%E6%B8%B8%E5%AE%A2%E4%B8%80%E8%B5%B7%E6%AC%A2%E7%AC%91%E8%B7%A8%E5%B9%B4.webm",
+      "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/7/73/2019%E5%B9%B41%E6%9C%881%E6%97%A5_%E6%98%9F%E5%A5%B3%E9%83%8E%E2%80%9C%E7%9F%B3%E6%A6%B4%E5%A7%90%E2%80%9D%E7%8E%B0%E8%BA%AB%E6%B5%99%E6%B1%9F%E6%A8%AA%E5%BA%97_%E4%B8%8E%E5%8D%83%E5%90%8D%E6%B8%B8%E5%AE%A2%E4%B8%80%E8%B5%B7%E6%AC%A2%E7%AC%91%E8%B7%A8%E5%B9%B4.webm",
+      "attributionText": "2019年1月1日 星女郎“石榴姐”现身浙江横店 与千名游客一起欢笑跨年.webm — 中国新闻网 — CC BY 3.0 — https://commons.wikimedia.org/wiki/File:2019%E5%B9%B41%E6%9C%881%E6%97%A5_%E6%98%9F%E5%A5%B3%E9%83%8E%E2%80%9C%E7%9F%B3%E6%A6%B4%E5%A7%90%E2%80%9D%E7%8E%B0%E8%BA%AB%E6%B5%99%E6%B1%9F%E6%A8%AA%E5%BA%97_%E4%B8%8E%E5%8D%83%E5%90%8D%E6%B8%B8%E5%AE%A2%E4%B8%80%E8%B5%B7%E6%AC%A2%E7%AC%91%E8%B7%A8%E5%B9%B4.webm",
+      "rightsBasis": "CC BY 3.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "commercial_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:2019%E5%B9%B41%E6%9C%881%E6%97%A5_%E6%98%9F%E5%A5%B3%E9%83%8E%E2%80%9C%E7%9F%B3%E6%A6%B4%E5%A7%90%E2%80%9D%E7%8E%B0%E8%BA%AB%E6%B5%99%E6%B1%9F%E6%A8%AA%E5%BA%97_%E4%B8%8E%E5%8D%83%E5%90%8D%E6%B8%B8%E5%AE%A2%E4%B8%80%E8%B5%B7%E6%AC%A2%E7%AC%91%E8%B7%A8%E5%B9%B4.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "licensed",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-07-31T02:01:24.328004+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY 3.0"
+    }
+  ]
+}

@@ -97,7 +97,7 @@ type ListQuery struct {
 	Limit         int
 }
 
-type SearchQuery struct {
+type SearchRequestFact struct {
 	CircleID   string
 	Query      string
 	Visibility string
@@ -109,7 +109,7 @@ type SearchQuery struct {
 type GroupReader interface {
 	ReadGroup(context.Context, string, string) (GroupReadSlice, bool, error)
 	ListGroups(context.Context, ListQuery) (GroupPageSlice, error)
-	SearchGroups(context.Context, SearchQuery) (GroupPageSlice, error)
+	SearchGroups(context.Context, SearchRequestFact) (GroupPageSlice, error)
 }
 
 type OutboxEvent struct {

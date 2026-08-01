@@ -20,6 +20,7 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: projection
+    reference: true
   - name: subjectType
     source: subjectType
     type: enum

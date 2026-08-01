@@ -30,7 +30,7 @@ class UserUtterance {
 class UserUtteranceEnvelope {
   const UserUtteranceEnvelope({
     required this.id,
-    required this.conversationId,
+    required this.sessionId,
     required this.senderId,
     required this.senderName,
     this.senderAvatar = '',
@@ -39,7 +39,7 @@ class UserUtteranceEnvelope {
   });
 
   final TranscriptLineId id;
-  final String conversationId;
+  final String sessionId;
   final String senderId;
   final String senderName;
   final String senderAvatar;

@@ -38,18 +38,18 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_preference_fact/operations.yaml`
+- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_preference/operations.yaml`
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
 ### GWT-001 会话偏好立即影响下一次回答
 
-- GIVEN 用户已有一个可续聊的 assistant conversation
+- GIVEN 用户已有一个可续接的 `AssistantSession`
 - WHEN 用户选择结构化重新生成风格并继续提问
-- THEN 下一次 Run 的模型请求收到同 conversation 的 session preference
+- THEN 下一次 Run 的模型请求收到同一 `AssistantSession` 的 session preference
 - THEN 用户原始问题不被拼接风格前缀
-- THEN 其他 conversation 不继承该 session preference
+- THEN 其他 `AssistantSession` 不继承该 session preference
 
 <a id="gwt-002"></a>
 ### GWT-002 用户遗忘偏好并撤销恢复

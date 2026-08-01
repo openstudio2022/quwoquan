@@ -1,0 +1,19 @@
+{
+  "skillId": "creation_assistant",
+  "displayName": "创作助手",
+  "description": "帮助整理草稿摘要、推荐标签和关联主页，优先引导关注对象、加入圈子与进入讨论。",
+  "domainId": "content_creation",
+  "problemClass": "complex_reasoning",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "创作辅助",
+    "发布辅助",
+    "关联主页建议"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.app2",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.complex_reasoning",
+  "replayAssetRef": "assistant.replay.creation_assistant.v1"
+}

@@ -187,6 +187,25 @@ def _public_headers() -> dict[str, str]:
     return {"Accept": "application/json"}
 
 
+_INTEGRATION_FEED_SESSION_ID = "stackctl-environment-integration-probe"
+
+
+def _feed_headers(test_auth_token: str = "") -> dict[str, str]:
+    """Ranked recommend feeds require a session id (query or X-Client-Session-Id)."""
+
+    headers = _common_headers(test_auth_token)
+    headers["X-Client-Session-Id"] = _INTEGRATION_FEED_SESSION_ID
+    return headers
+
+
+def _feed_url(base: str, query: str) -> str:
+    separator = "&" if "?" in query else "?"
+    return (
+        f"{base.rstrip('/')}/content/feed{query}"
+        f"{separator}sessionId={_INTEGRATION_FEED_SESSION_ID}"
+    )
+
+
 def _owner_matches_post(owner_ref: object, post_ref: str) -> bool:
     owner = str(owner_ref or "").strip().strip("/")
     post = str(post_ref or "").strip().strip("/")
@@ -292,8 +311,8 @@ def build_checks(
         {
             "name": "content_feed",
             "method": "GET",
-            "url": f"{base}/content/feed?identity=work&sort=recommend&limit=1",
-            "headers": public_headers,
+            "url": _feed_url(base, "?identity=work&sort=recommend&limit=1"),
+            "headers": _feed_headers(),
             "expected_statuses": [200],
         },
         {
@@ -316,23 +335,27 @@ def build_checks(
         },
     ]
     if require_non_empty_content_feed:
+        feed_headers = _feed_headers()
         checks.extend(
             [
                 {
                     "name": "video_book_feed",
                     "method": "GET",
-                    "url": (
-                        f"{base}/content/feed?identity=work&type=video"
-                        "&sort=recommend&limit=1"
+                    "url": _feed_url(
+                        base,
+                        "?identity=work&type=video&sort=recommend&limit=1",
                     ),
-                    "headers": public_headers,
+                    "headers": feed_headers,
                     "expected_statuses": [200],
                 },
                 {
                     "name": "premium_feed",
                     "method": "GET",
-                    "url": f"{base}/content/feed?channelId=premium_stream&limit=1",
-                    "headers": public_headers,
+                    "url": _feed_url(
+                        base,
+                        "?sort=recommend&channelId=premium_stream&limit=1",
+                    ),
+                    "headers": feed_headers,
                     "expected_statuses": [200],
                 },
             ]

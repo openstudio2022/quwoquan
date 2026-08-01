@@ -27,6 +27,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 
 _TMP = Path(tempfile.mkdtemp(prefix="research_etype_guard_"))
 
+from core.io import write_json  # noqa: E402
 from core.paths import execution_entity_object_dir, ensure_execution_command_layout  # noqa: E402
 from content.source.prepare import (  # noqa: E402
     prepare_source_plan,
@@ -36,11 +37,12 @@ from content.execution import store  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-homepage-research-type--test-region-a--pilot-001"
+DRIFT_EXECUTION_ID = "20260711--travel-homepage-research-type--test-region-a--pilot-002"
 
 
-def _mixed_type_task() -> str:
+def _mixed_type_task(execution_id: str = EXECUTION_ID) -> str:
     spec = ExecutionFixtureBuilder(
-        EXECUTION_ID,
+        execution_id,
         targets=(
             {
                 "entityType": "地点/古镇",
@@ -104,6 +106,43 @@ def test_prepare_source_plan_corrects_dir_and_refuses_default_drift():
     else:
         raise AssertionError("expected prepare_source_plan fail-fast")
     assert not execution_entity_object_dir(execution_id, "地点", "打卡地", "花鸟岛").exists()
+
+
+def test_prepare_source_plan_rejects_external_plan_in_wrong_canonical_tree():
+    execution_id = _mixed_type_task(DRIFT_EXECUTION_ID)
+    ensure_execution_command_layout(execution_id, "source")
+    wrong_plan = (
+        execution_entity_object_dir(execution_id, "地点", "打卡地", "秀山岛")
+        / "1.download"
+        / "article_source_plan.json"
+    )
+    write_json(
+        wrong_plan,
+        {
+            "schema": "quwoquan_data.stage_envelope",
+            "executionId": execution_id,
+            "step": "article_research",
+            "ref": "秀山岛",
+            "payload": {
+                "entityId": "秀山岛",
+                "entityType": "地点/打卡地",
+                "researchLane": "article",
+                "sources": [],
+            },
+        },
+    )
+
+    try:
+        prepare_source_plan(
+            execution_id,
+            [{"entityId": "秀山岛", "canonicalName": "秀山岛", "entityType": "地点/自然景观"}],
+        )
+    except ValueError as exc:
+        assert "entity type drift" in str(exc)
+        assert "地点/自然景观/秀山岛" in str(exc)
+        assert "地点/打卡地/秀山岛" in str(exc)
+    else:
+        raise AssertionError("external wrong-type source plan must fail before prepare")
 
 
 def _run_all() -> None:

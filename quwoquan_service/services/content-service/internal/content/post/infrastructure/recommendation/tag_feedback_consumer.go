@@ -22,7 +22,7 @@ const (
 	TagFeedbackConsumerGroup = "content-service-tag-feedback"
 	TagFeedbackDLQ           = "events.tag.feedback.content-service.dlq"
 
-	tagFeedbackInboxCollection = "rm_tag_feedback_inbox"
+	tagFeedbackInboxCollection = "rm_tag_feedback_fact_inbox"
 	tagFeedbackBatchSize       = int64(20)
 	tagFeedbackMinIdle         = 30 * time.Second
 	tagFeedbackPollInterval    = 500 * time.Millisecond
@@ -61,7 +61,7 @@ func (p *TagFeedbackFeatureProjector) EnsureIndexes(ctx context.Context) error {
 	}
 	_, err := p.inbox.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "recordedAt", Value: -1}},
-		Options: options.Index().SetName("idx_rm_tag_feedback_inbox_recorded_at"),
+		Options: options.Index().SetName("idx_rm_tag_feedback_fact_inbox_recorded_at"),
 	})
 	if err != nil {
 		return fmt.Errorf("create tag feedback inbox index: %w", err)

@@ -2,7 +2,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
-import 'package:quwoquan_app/core/services/retrieve_request.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -57,7 +56,7 @@ final class RemoteSearchRepository implements SearchRepository {
 
   SearchResponse _responseFromCanonical(
     SearchRequest request,
-    CanonicalSearchResult result,
+    SearchResponseView result,
   ) {
     final hits = result.hits
         .map(_hitFromCanonical)
@@ -107,11 +106,21 @@ final class RemoteSearchRepository implements SearchRepository {
     if (entry == null || !_isCloudRetrievable(entry.objectType)) {
       return null;
     }
+    if (hit.objectType != entry.objectType.wireValue) {
+      return null;
+    }
     final objectID = hit.objectId.trim();
     if (objectID.isEmpty) {
       return null;
     }
-    final connectionState = hit.connectionState.trim();
+    final connectionState = hit.connectionState?.trim() ?? '';
+    final matchedField = hit.evidence.isEmpty
+        ? null
+        : hit.evidence.first.field.trim();
+    final rankReasons = hit.rankReasons
+        .map((reason) => reason.label.trim())
+        .where((label) => label.isNotEmpty)
+        .toList(growable: false);
 
     final SearchHitPayload payload;
     if (entry.objectType == SearchObjectType.contentPost) {
@@ -120,7 +129,15 @@ final class RemoteSearchRepository implements SearchRepository {
         return null;
       }
       payload = SearchHitPayloadContentPost(
-        PostSearchItemView.fromCanonical(content),
+        PostSearchItemView.fromCanonical(
+          content,
+          highlightText: hit.snippet,
+          matchedField: matchedField,
+          connectionState: connectionState.isEmpty
+              ? 'unconnected'
+              : connectionState,
+          intersectionReason: hit.intersectionReason,
+        ),
       );
     } else if (entry.objectType == SearchObjectType.userProfile) {
       payload = SearchHitPayloadUserProfile(
@@ -148,10 +165,10 @@ final class RemoteSearchRepository implements SearchRepository {
           homepageId: objectID,
           name: hit.title,
           subtitle: hit.snippet,
-          placeName: _payloadText(hit.payload, 'placeName'),
-          address: _payloadText(hit.payload, 'address'),
-          followerCount: _payloadInt(hit.payload, 'followerCount'),
-          contentCount: _payloadInt(hit.payload, 'contentCount'),
+          placeName: hit.payload?.placeName,
+          address: hit.payload?.address,
+          followerCount: hit.payload?.followerCount ?? 0,
+          contentCount: hit.payload?.contentCount ?? 0,
         ),
       );
     } else if (entry.objectType == SearchObjectType.locationPlace) {
@@ -159,7 +176,7 @@ final class RemoteSearchRepository implements SearchRepository {
         SearchLocationPlaceHitView(
           placeId: objectID,
           name: hit.title,
-          address: _payloadText(hit.payload, 'address'),
+          address: hit.payload?.address,
         ),
       );
     } else {
@@ -173,23 +190,19 @@ final class RemoteSearchRepository implements SearchRepository {
       objectId: objectID,
       title: hit.title.trim().isEmpty ? objectID : hit.title.trim(),
       subtitle: _firstNonEmpty(<Object?>[
-        rawPayload['subtitle'],
-        rawPayload['placeName'],
-        rawPayload['circleName'],
-        rawPayload['authorDisplayName'],
+        rawPayload?.placeName,
+        rawPayload?.circleName,
       ]),
       snippet: hit.snippet,
       resolvedFrom: SearchResolvedFrom.remote,
-      matchedField: hit.matchedField,
+      matchedField: matchedField,
       payload: payload,
       connectionState: connectionState.isEmpty
           ? 'unconnected'
           : connectionState,
       intersectionReason: intersectionReason,
-      rankReasons: hit.rankReasons,
+      rankReasons: rankReasons,
       rankPosition: hit.rankPosition,
-      coverWidth: hit.coverWidth,
-      coverHeight: hit.coverHeight,
     );
   }
 
@@ -197,47 +210,107 @@ final class RemoteSearchRepository implements SearchRepository {
     CanonicalSearchHit hit, {
     required String objectID,
   }) {
+    final payload = hit.payload;
     return CircleSearchItemView(
-      circleId: _payloadText(hit.payload, 'circleId') ?? objectID,
+      circleId: payload?.circleId ?? objectID,
       name: hit.title,
       description: hit.snippet,
-      coverUrl: _payloadText(hit.payload, 'coverUrl'),
-      categoryId: _payloadText(hit.payload, 'categoryId'),
-      subCategory: _payloadText(hit.payload, 'subCategory'),
-      domainId: _payloadText(hit.payload, 'domainId'),
-      kind: _payloadText(hit.payload, 'kind'),
-      displaySubjectType: _payloadText(hit.payload, 'displaySubjectType'),
-      memberCount: _payloadInt(hit.payload, 'memberCount'),
-      postCount: _payloadInt(hit.payload, 'postCount'),
+      coverUrl: payload?.coverUrl,
+      categoryId: payload?.categoryId,
+      subCategory: payload?.subCategory,
+      domainId: payload?.domainId,
+      kind: payload?.kind,
+      displaySubjectType: payload?.displaySubjectType,
+      memberCount: payload?.memberCount ?? 0,
+      postCount: payload?.postCount ?? 0,
       highlightText: hit.snippet,
-      matchedField: hit.matchedField,
-      circleName: _payloadText(hit.payload, 'circleName'),
-      linkedHomepageId: _payloadText(hit.payload, 'linkedHomepageId'),
-      linkedHomepageType: _payloadText(hit.payload, 'linkedHomepageType'),
-      linkedHomepageTitle: _payloadText(hit.payload, 'linkedHomepageTitle'),
+      matchedField: hit.evidence.isEmpty ? null : hit.evidence.first.field,
+      circleName: payload?.circleName,
+      linkedHomepageId: payload?.linkedHomepageId,
+      linkedHomepageType: payload?.linkedHomepageType,
+      linkedHomepageTitle: payload?.linkedHomepageTitle,
     );
   }
 
   IntersectionReason? _intersectionReason(
     CanonicalSearchIntersectionReason? reason,
   ) {
-    if (reason == null || reason.primaryText.trim().isEmpty) {
+    if (reason == null || (reason.primaryText?.trim() ?? '').isEmpty) {
       return null;
     }
     return IntersectionReason(
-      primaryText: reason.primaryText,
-      intersectionId: reason.intersectionId,
-      dimension: reason.dimension,
-      intersectionClass: reason.intersectionClass,
-      source: reason.sourceRef,
+      primaryText: reason.primaryText ?? '',
+      intersectionId: reason.intersectionId ?? '',
+      dimension: reason.dimension ?? '',
+      intersectionClass: reason.intersectionClass ?? '',
+      source: reason.sourceRef ?? '',
       displayBinding: 'host_plain',
     );
   }
 
   List<RetrieveTarget> _canonicalTargets(SearchRequest request) {
-    return RetrieveRequest.fromSearchRequest(request).targets
-        .where((target) => target != RetrieveTarget.chat)
-        .toList(growable: false);
+    final targets = <RetrieveTarget>{};
+    for (final objectType in request.objectTypes) {
+      switch (objectType) {
+        case SearchObjectType.contentPost:
+          targets.addAll(_contentTargets(request.contentTypes));
+        case SearchObjectType.userProfile:
+          targets.add(RetrieveTarget.user);
+        case SearchObjectType.entityHomepage:
+          targets.add(RetrieveTarget.entity);
+        case SearchObjectType.circleCircle:
+          targets.add(RetrieveTarget.circle);
+        case SearchObjectType.circleGroup:
+          targets.add(RetrieveTarget.group);
+        case SearchObjectType.locationPlace:
+          targets.add(RetrieveTarget.location);
+        case SearchObjectType.chatContact:
+        case SearchObjectType.chatConversation:
+        case SearchObjectType.chatMessage:
+        case SearchObjectType.webDocument:
+        case SearchObjectType.tag:
+        case SearchObjectType.integrationLocationPoi:
+          break;
+      }
+    }
+    if (targets.isEmpty && request.objectTypes.isEmpty) {
+      targets.addAll(<RetrieveTarget>[
+        RetrieveTarget.article,
+        RetrieveTarget.photo,
+        RetrieveTarget.video,
+        RetrieveTarget.user,
+        RetrieveTarget.entity,
+        RetrieveTarget.circle,
+        RetrieveTarget.group,
+        RetrieveTarget.location,
+      ]);
+    }
+    return targets.toList(growable: false);
+  }
+
+  Iterable<RetrieveTarget> _contentTargets(
+    Set<SearchContentTypeFilter> contentTypes,
+  ) {
+    if (contentTypes.isEmpty) {
+      return const <RetrieveTarget>[
+        RetrieveTarget.article,
+        RetrieveTarget.photo,
+        RetrieveTarget.video,
+      ];
+    }
+    final targets = <RetrieveTarget>{};
+    for (final contentType in contentTypes) {
+      switch (contentType) {
+        case SearchContentTypeFilter.article:
+        case SearchContentTypeFilter.micro:
+          targets.add(RetrieveTarget.article);
+        case SearchContentTypeFilter.image:
+          targets.add(RetrieveTarget.photo);
+        case SearchContentTypeFilter.video:
+          targets.add(RetrieveTarget.video);
+      }
+    }
+    return targets;
   }
 
   bool _isCloudRetrievable(SearchObjectType type) {
@@ -265,18 +338,5 @@ final class RemoteSearchRepository implements SearchRepository {
       }
     }
     return null;
-  }
-
-  String? _payloadText(Map<String, Object?> payload, String key) {
-    final text = payload[key]?.toString().trim();
-    return text == null || text.isEmpty ? null : text;
-  }
-
-  int _payloadInt(Map<String, Object?> payload, String key) {
-    final value = payload[key];
-    if (value is num) {
-      return value.toInt();
-    }
-    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

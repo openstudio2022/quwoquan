@@ -17,6 +17,21 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	if err != nil {
 		return err
 	}
+	sharedFields, err := readFields(filepath.Join(
+		metadataDir,
+		"assistant",
+		"_shared",
+		"types.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	for name, entity := range sharedFields.Entities {
+		if _, exists := ff.Entities[name]; exists {
+			return fmt.Errorf("assistant wire entity %q declared more than once", name)
+		}
+		ff.Entities[name] = entity
+	}
 	enumCatalog, err := readAssistantEnumCatalog(filepath.Join(
 		metadataDir,
 		"assistant",
@@ -32,7 +47,10 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	}
 	for _, relativePath := range []string{
 		"assistant/assistant/assistant_learning_fact/fields.yaml",
-		"assistant/assistant/assistant_preference_fact/fields.yaml",
+		"assistant/assistant/assistant_preference/fields.yaml",
+		"assistant/assistant/page_context/fields.yaml",
+		"assistant/assistant/assistant_entry_view/fields.yaml",
+		"assistant/assistant/assistant_task_view/fields.yaml",
 	} {
 		additional, readErr := readFields(filepath.Join(metadataDir, relativePath))
 		if readErr != nil {
@@ -45,36 +63,52 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 			ff.Entities[name] = entity
 		}
 	}
-	conversationFields, err := readFields(filepath.Join(
+	sessionFields, err := readFields(filepath.Join(
 		metadataDir,
 		"assistant",
 		"assistant",
-		"assistant_conversation",
+		"assistant_session",
 		"fields.yaml",
 	))
 	if err != nil {
 		return err
 	}
-	const createConversationRequest = "AssistantCreateConversationRequest"
-	requestEntity, exists := conversationFields.Entities[createConversationRequest]
+	const createSessionRequest = "AssistantCreateSessionRequest"
+	requestEntity, exists := sessionFields.Entities[createSessionRequest]
 	if !exists {
 		return fmt.Errorf(
-			"assistant conversation metadata is missing %s",
-			createConversationRequest,
+			"assistant session metadata is missing %s",
+			createSessionRequest,
 		)
 	}
-	if _, exists := ff.Entities[createConversationRequest]; exists {
+	if _, exists := ff.Entities[createSessionRequest]; exists {
 		return fmt.Errorf(
 			"assistant wire entity %q declared more than once",
-			createConversationRequest,
+			createSessionRequest,
 		)
 	}
-	ff.Entities[createConversationRequest] = requestEntity
+	ff.Entities[createSessionRequest] = requestEntity
+	turnViewFields, err := readFields(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant",
+		"assistant_turn_view",
+		"fields.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	for name, entity := range turnViewFields.Entities {
+		if _, exists := ff.Entities[name]; exists {
+			return fmt.Errorf("assistant wire entity %q declared more than once", name)
+		}
+		ff.Entities[name] = entity
+	}
 	preferenceService, err := readService(filepath.Join(
 		metadataDir,
 		"assistant",
 		"assistant",
-		"assistant_preference_fact",
+		"assistant_preference",
 		"operations.yaml",
 	))
 	if err != nil {
@@ -92,29 +126,51 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 		return err
 	}
 	svc.APIRoutes = append(svc.APIRoutes, learningService.APIRoutes...)
-	conversationService, err := readService(filepath.Join(
+	sessionService, err := readService(filepath.Join(
 		metadataDir,
 		"assistant",
 		"assistant",
-		"assistant_conversation",
+		"assistant_session",
 		"operations.yaml",
 	))
 	if err != nil {
 		return err
 	}
-	foundCreateConversation := false
-	for _, route := range conversationService.APIRoutes {
-		if route.Operation != "CreateAssistantConversation" {
+	foundCreateSession := false
+	for _, route := range sessionService.APIRoutes {
+		if route.Operation != "CreateAssistantSession" {
 			continue
 		}
 		svc.APIRoutes = append(svc.APIRoutes, route)
-		foundCreateConversation = true
+		foundCreateSession = true
 		break
 	}
-	if !foundCreateConversation {
+	if !foundCreateSession {
 		return fmt.Errorf(
-			"assistant conversation metadata is missing CreateAssistantConversation route",
+			"assistant session metadata is missing CreateAssistantSession route",
 		)
+	}
+	turnViewService, err := readService(filepath.Join(
+		metadataDir,
+		"assistant",
+		"assistant",
+		"assistant_turn_view",
+		"operations.yaml",
+	))
+	if err != nil {
+		return err
+	}
+	svc.APIRoutes = append(svc.APIRoutes, turnViewService.APIRoutes...)
+	for _, relativePath := range []string{
+		"assistant/assistant/page_context/operations.yaml",
+		"assistant/assistant/assistant_entry_view/operations.yaml",
+		"assistant/assistant/assistant_task_view/operations.yaml",
+	} {
+		additional, readErr := readService(filepath.Join(metadataDir, relativePath))
+		if readErr != nil {
+			return readErr
+		}
+		svc.APIRoutes = append(svc.APIRoutes, additional.APIRoutes...)
 	}
 	names := collectAssistantWireEntities(ff, svc)
 	out := renderAssistantCloudApiWireDart(ff, names, enumCatalog)

@@ -29,7 +29,7 @@ var (
 
 // MetricsCollector records per-scene Redis operation metrics.
 // Bridges to Prometheus counters/histograms and retains atomic snapshots
-// for backward-compatible periodic log output.
+// for the canonical periodic operational log.
 type MetricsCollector struct {
 	scenes map[string]*sceneMetrics
 }
@@ -320,6 +320,18 @@ func (c *instrumentedClient) XGroupCreateMkStream(ctx context.Context, stream st
 func (c *instrumentedClient) XAdd(ctx context.Context, stream string, values map[string]string) (string, error) {
 	t := time.Now()
 	v, err := c.inner.XAdd(ctx, stream, values)
+	c.record(t, err)
+	return v, err
+}
+
+func (c *instrumentedClient) XRead(
+	ctx context.Context,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]StreamMessage, error) {
+	t := time.Now()
+	v, err := c.inner.XRead(ctx, streams, count, block)
 	c.record(t, err)
 	return v, err
 }

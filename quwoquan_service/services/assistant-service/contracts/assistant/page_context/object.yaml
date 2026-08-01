@@ -1,0 +1,34 @@
+kind: runtime_session
+description: 可信账号主体在当前助手入口上报的短期页面上下文会话，只保存最小对象引用与授权快照，供后续 AssistantRun 读取。
+identity:
+  fields: [accountId]
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- name: account
+  target_object: user.UserAccount
+  reference_fields: [accountId]
+  kind: reference
+  cardinality: '1:1'
+  consistency: runtime
+  access: named_reader
+  on_delete: cascade
+- name: persona
+  target_object: user.Persona
+  reference_fields: [personaId]
+  kind: reference
+  cardinality: 'N:1'
+  consistency: runtime
+  access: named_reader
+  on_delete: cascade
+business_rules:
+- accountId 与 personaId 只能由已验签 principal 派生，客户端 payload 不得声明或覆盖主体身份。
+- 每个账号仅保留当前一份页面上下文，写入固定五分钟后过期，读取不得滑动续期。
+- 上下文只允许最小对象引用、结构化动作和当页授权，不复制其他领域的私有状态。
+lifecycle:
+  ttl_seconds: 300
+  expiry_semantics: fixed_five_minute_expiry_delete
+  renewal: replace_with_new_authenticated_report_only

@@ -69,21 +69,26 @@ void main() {
 
 final class _UserSearchQueryFacet implements CanonicalSearchQueryFacet {
   @override
-  Future<CanonicalSearchResult> search(
+  Future<SearchResponseView> search(
     CanonicalSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    return CanonicalSearchResult(
+    return SearchResponseView(
+      provenance: CanonicalSearchProvenance(
+        provider: 'elasticsearch',
+        generatedAt: DateTime.utc(2026, 7, 31),
+      ),
       requestId: 'search.req.user',
       hits: <CanonicalSearchHit>[
-        CanonicalSearchHit(
+        _canonicalHit(
           target: 'user',
+          objectType: 'user.profile',
           objectId: 'user_lin',
           title: '林同学',
           snippet: '摄影与城市漫步',
           connectionState: 'intersection_lead',
-          intersectionReason: const CanonicalSearchIntersectionReason(
+          intersectionReason: CanonicalSearchIntersectionReason(
             primaryText: '你们都关注了光影摄影社',
             intersectionId: 'ix_user_lin',
             dimension: 'circle',
@@ -98,42 +103,88 @@ final class _UserSearchQueryFacet implements CanonicalSearchQueryFacet {
 
 final class _AllTargetsFacet implements CanonicalSearchQueryFacet {
   @override
-  Future<CanonicalSearchResult> search(
+  Future<SearchResponseView> search(
     CanonicalSearchQuery query, {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
-    return CanonicalSearchResult(
+    return SearchResponseView(
+      provenance: CanonicalSearchProvenance(
+        provider: 'elasticsearch',
+        generatedAt: DateTime.utc(2026, 7, 31),
+      ),
       requestId: 'search.req.all-targets',
       hits: <CanonicalSearchHit>[
-        CanonicalSearchHit(
+        _canonicalHit(
           target: 'article',
+          objectType: 'content.post',
           objectId: 'post-1',
           title: '光影文章',
-          content: const CanonicalSearchContentHit(
+          content: CanonicalSearchContentHit(
             postId: 'post-1',
-            contentType: 'article',
+            contentType: ContentType.article,
             title: '光影文章',
+            likeCount: 0,
           ),
         ),
-        CanonicalSearchHit(target: 'user', objectId: 'user-1', title: '光影用户'),
-        CanonicalSearchHit(
+        _canonicalHit(
+          target: 'user',
+          objectType: 'user.profile',
+          objectId: 'user-1',
+          title: '光影用户',
+        ),
+        _canonicalHit(
           target: 'entity',
+          objectType: 'entity.homepage',
           objectId: 'homepage-1',
           title: '光影主页',
         ),
-        CanonicalSearchHit(
+        _canonicalHit(
           target: 'location',
+          objectType: 'location.place',
           objectId: 'place-1',
           title: '光影地点',
         ),
-        CanonicalSearchHit(
+        _canonicalHit(
           target: 'circle',
+          objectType: 'circle.circle',
           objectId: 'circle-1',
           title: '光影圈子',
         ),
-        CanonicalSearchHit(target: 'group', objectId: 'group-1', title: '光影讨论'),
+        _canonicalHit(
+          target: 'group',
+          objectType: 'circle.group',
+          objectId: 'group-1',
+          title: '光影讨论',
+        ),
       ],
     );
   }
+}
+
+CanonicalSearchHit _canonicalHit({
+  required String target,
+  required String objectType,
+  required String objectId,
+  required String title,
+  String? snippet,
+  String? connectionState,
+  CanonicalSearchIntersectionReason? intersectionReason,
+  CanonicalSearchContentHit? content,
+}) {
+  return CanonicalSearchHit(
+    target: target,
+    objectType: objectType,
+    objectId: objectId,
+    title: title,
+    snippet: snippet,
+    score: 0,
+    matchedTerms: const <String>[],
+    matchedTags: const <String>[],
+    evidence: const <CanonicalSearchEvidence>[],
+    connectionState: connectionState,
+    intersectionReason: intersectionReason,
+    rankReasons: const <CanonicalSearchRankReason>[],
+    content: content,
+  );
 }

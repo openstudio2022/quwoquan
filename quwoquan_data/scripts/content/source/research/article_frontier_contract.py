@@ -106,7 +106,9 @@ class ArticleSourceCandidate:
         source["publishMediaMode"] = "text_only"
         source["sourceUseMode"] = "factual_reference_only"
         source["articleCommercialAdmission"] = ALLOWED_ADMISSION
+        source["articleSiteId"] = self.site_id
         source["sourceDiscoveryProfileDigest"] = self.profile_digest
+        source["researchLane"] = "article"
         return source
 
     def as_evidence(self) -> dict[str, object]:

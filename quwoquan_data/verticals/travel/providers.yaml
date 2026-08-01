@@ -69,6 +69,8 @@ sites:
       discoveryStrategy:
         mode: entity_seeded_scan
         seedAxes: [entity, topic, time_window]
+        queryTemplates:
+          - "{entity} site:zh.wikivoyage.org/wiki"
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
         notes: 以目的地/主题/时间片检索可读指南页；不按作者维度扩展。
       maxDepth: 2
@@ -606,14 +608,18 @@ sites:
       robotsPolicy: respect_robots_txt
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
-      termsUrl: https://touch.travel.qunar.com/
+      termsUrl: https://pay.qunar.com/site/m_usercenter_my/service_20210610.html
       rateLimit:
         mode: conservative
         maxRequestsPerSecond: 0.2
         backoffOnStatus: [403, 429]
       discoveryStrategy:
         mode: site_listing_scan
+        searchProvider: brave_public
         seedAxes: [topic, time_window, site_listing]
+        queryTemplates:
+          - "{entity} site:travel.qunar.com"
+          - "{entity} site:touch.travel.qunar.com"
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
         notes: 去哪儿等旅行类站点按公开攻略/景点/游记页轻量巡检候选内容，再进入 source quality 与实体锚点门；不按作者扩源。
       maxDepth: 3

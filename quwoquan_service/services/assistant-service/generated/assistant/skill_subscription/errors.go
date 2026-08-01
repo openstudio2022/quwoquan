@@ -17,6 +17,7 @@ var (
 	ErrSubscriptionInvalidTransition                = errors.New("ASSISTANT.USER.subscription_invalid_transition")
 	ErrSubscriptionNotFound                         = errors.New("ASSISTANT.USER.subscription_not_found")
 	ErrSubscriptionStorageUnavailable               = errors.New("ASSISTANT.SYSTEM.subscription_storage_unavailable")
+	ErrSubscriptionUnauthorized                     = errors.New("ASSISTANT.USER.subscription_unauthorized")
 )
 
 // AppErrorFromSubscriptionDeliveryFailed returns *AppError for ASSISTANT.SYSTEM.subscription_delivery_failed (user_message from errors.yaml).
@@ -28,13 +29,13 @@ func AppErrorFromSubscriptionDeliveryFailed(debugMessage string) *rterr.AppError
 // AppErrorFromSubscriptionDestinationForbidden returns *AppError for ASSISTANT.USER.subscription_destination_forbidden (user_message from errors.yaml).
 func AppErrorFromSubscriptionDestinationForbidden(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.subscription_destination_forbidden")
-	return rterr.NewAppError(code, "你已不在该会话中，无法创建或继续投递此订阅", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "你已不在该群聊中，无法创建或继续投递此订阅", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubscriptionDestinationValidationUnavailable returns *AppError for ASSISTANT.SYSTEM.subscription_destination_validation_unavailable (user_message from errors.yaml).
 func AppErrorFromSubscriptionDestinationValidationUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.subscription_destination_validation_unavailable")
-	return rterr.NewAppError(code, "暂时无法验证会话成员资格，请稍后重试", debugMessage).WithMetadata("destination_validation_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "暂时无法验证群聊成员资格，请稍后重试", debugMessage).WithMetadata("destination_validation_unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromSubscriptionIdempotencyConflict returns *AppError for ASSISTANT.USER.subscription_idempotency_conflict (user_message from errors.yaml).
@@ -65,4 +66,10 @@ func AppErrorFromSubscriptionNotFound(debugMessage string) *rterr.AppError {
 func AppErrorFromSubscriptionStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.subscription_storage_unavailable")
 	return rterr.NewAppError(code, "订阅服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromSubscriptionUnauthorized returns *AppError for ASSISTANT.USER.subscription_unauthorized (user_message from errors.yaml).
+func AppErrorFromSubscriptionUnauthorized(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.subscription_unauthorized")
+	return rterr.NewAppError(code, "请先登录后管理技能订阅", debugMessage).WithMetadata("subscription_unauthorized", 401).WithRecovery("surface", 0)
 }

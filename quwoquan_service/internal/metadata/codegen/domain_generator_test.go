@@ -49,7 +49,7 @@ func TestFieldGoTypeRequiresTypedEnumReference(t *testing.T) {
 	}
 }
 
-func TestIncludeReferencedValueObjectsOnlyPromotesReachableValues(t *testing.T) {
+func TestIncludeReferencedOwnedTypesOnlyPromotesReachableValues(t *testing.T) {
 	t.Parallel()
 
 	fields := fieldsDocument{
@@ -63,7 +63,7 @@ func TestIncludeReferencedValueObjectsOnlyPromotesReachableValues(t *testing.T) 
 		},
 	}
 
-	promoted := includeReferencedValueObjects(&fields)
+	promoted := includeReferencedOwnedTypes(&fields)
 	for _, name := range []string{"SourceAttribution", "RightsProof"} {
 		if _, ok := promoted[name]; !ok {
 			t.Fatalf("reachable value object %s was not promoted", name)
@@ -74,5 +74,54 @@ func TestIncludeReferencedValueObjectsOnlyPromotesReachableValues(t *testing.T) 
 	}
 	if _, ok := fields.Entities["UnrelatedView"]; ok {
 		t.Fatal("unreferenced value object leaked into generated domain graph")
+	}
+}
+
+func TestIncludeReferencedOwnedTypesResolvesObjectRefAndTypes(t *testing.T) {
+	t.Parallel()
+
+	fields := fieldsDocument{
+		Entities: map[string]domainEntityDocument{
+			"Gathering": {Fields: []domainField{
+				{Name: "targetRef", Type: "object", ObjectRef: "GatheringTargetRef"},
+				{Name: "participants", Type: "[]GatheringParticipant"},
+			}},
+		},
+		Types: map[string]domainEntityDocument{
+			"GatheringTargetRef":     {Fields: []domainField{{Name: "objectId", Type: "string"}}},
+			"GatheringParticipant":   {Fields: []domainField{{Name: "personaId", Type: "string"}}},
+			"CreateGatheringCommand": {Fields: []domainField{{Name: "title", Type: "string"}}},
+		},
+	}
+
+	promoted := includeReferencedOwnedTypes(&fields)
+	for _, name := range []string{"GatheringTargetRef", "GatheringParticipant"} {
+		if _, ok := promoted[name]; !ok {
+			t.Fatalf("reachable owned type %s was not promoted", name)
+		}
+	}
+	if _, ok := promoted["CreateGatheringCommand"]; ok {
+		t.Fatal("unreferenced command DTO leaked into generated domain graph")
+	}
+}
+
+func TestCollectEnumTypesPrefersObjectLocalEnum(t *testing.T) {
+	t.Parallel()
+
+	generator := &DomainGenerator{}
+	fields := fieldsDocument{
+		Entities: map[string]domainEntityDocument{
+			"Gathering": {Fields: []domainField{{Name: "status", Type: "enum", EnumRef: "GatheringStatus"}}},
+		},
+		Enums: map[string]localEnumDocument{
+			"GatheringStatus": {Values: []string{"draft", "open"}},
+		},
+	}
+	types, err := generator.collectEnumTypes(fields, []string{"Gathering"})
+	if err != nil {
+		t.Fatalf("collectEnumTypes: %v", err)
+	}
+	if len(types) != 1 || len(types[0].Values) != 2 || types[0].Values[0].WireValue != "draft" {
+		t.Fatalf("local enum values = %#v", types)
 	}
 }

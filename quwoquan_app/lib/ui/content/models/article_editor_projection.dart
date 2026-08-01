@@ -9,6 +9,7 @@ import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart'
 const String kArticleEditorStartAnchorId = '__article_editor_start__';
 
 enum ArticleEditorProjectionEntryKind { slot, node, wrapGroup }
+
 enum ArticleEditorSlotRole { start, between, tail }
 
 @immutable
@@ -65,22 +66,22 @@ class ArticleEditorSlotProjection extends ArticleEditorProjectionEntry {
 
 @immutable
 class ArticleEditorNodeProjection extends ArticleEditorProjectionContentEntry {
-  ArticleEditorNodeProjection({
-    required this.node,
-  }) : super(
-         ArticleEditorProjectionEntryKind.node,
-         node.id,
-         leadingSemantic: _semanticForNode(node),
-         trailingSemantic: _semanticForNode(node),
-         leadingNodeId: node.id,
-         trailingNodeId: node.id,
-       );
+  ArticleEditorNodeProjection({required this.node})
+    : super(
+        ArticleEditorProjectionEntryKind.node,
+        node.id,
+        leadingSemantic: _semanticForNode(node),
+        trailingSemantic: _semanticForNode(node),
+        leadingNodeId: node.id,
+        trailingNodeId: node.id,
+      );
 
   final ArticleDocumentNode node;
 }
 
 @immutable
-class ArticleEditorWrapGroupProjection extends ArticleEditorProjectionContentEntry {
+class ArticleEditorWrapGroupProjection
+    extends ArticleEditorProjectionContentEntry {
   ArticleEditorWrapGroupProjection({
     required this.figure,
     required this.narrowParagraphNode,
@@ -92,14 +93,14 @@ class ArticleEditorWrapGroupProjection extends ArticleEditorProjectionContentEnt
          trailingSemantic: belowParagraphNode != null
              ? _semanticForNode(belowParagraphNode)
              : narrowParagraphNode != null
-                 ? _semanticForNode(narrowParagraphNode)
-                 : ArticleSpacingSemantic.figure,
+             ? _semanticForNode(narrowParagraphNode)
+             : ArticleSpacingSemantic.figure,
          leadingNodeId: figure.id,
          trailingNodeId: belowParagraphNode != null
              ? belowParagraphNode.id
              : narrowParagraphNode != null
-                 ? narrowParagraphNode.id
-                 : figure.id,
+             ? narrowParagraphNode.id
+             : figure.id,
        );
 
   final ArticleDocumentNode figure;
@@ -115,8 +116,7 @@ class ArticleEditorWrapGroupProjection extends ArticleEditorProjectionContentEnt
     if (narrowParagraphNode != null &&
         narrowParagraphNode!.id.trim().isNotEmpty)
       narrowParagraphNode!.id,
-    if (belowParagraphNode != null &&
-        belowParagraphNode!.id.trim().isNotEmpty)
+    if (belowParagraphNode != null && belowParagraphNode!.id.trim().isNotEmpty)
       belowParagraphNode!.id,
   };
 }
@@ -127,9 +127,8 @@ class ArticleEditorProjection {
 
   final List<ArticleEditorProjectionEntry> entries;
 
-  bool get hasContent => entries.any(
-    (entry) => entry is ArticleEditorProjectionContentEntry,
-  );
+  bool get hasContent =>
+      entries.any((entry) => entry is ArticleEditorProjectionContentEntry);
 }
 
 ArticleEditorProjection buildArticleEditorProjection(
@@ -214,8 +213,7 @@ ArticleEditorProjection buildArticleEditorProjection(
 
     entries.add(
       ArticleEditorSlotProjection(
-        id:
-            'slot_${previous?.trailingNodeId ?? kArticleEditorStartAnchorId}_${current.leadingNodeId}',
+        id: 'slot_${previous?.trailingNodeId ?? kArticleEditorStartAnchorId}_${current.leadingNodeId}',
         anchorNodeId: previous?.trailingNodeId ?? titleNodeId,
         role: previous == null
             ? ArticleEditorSlotRole.start
@@ -238,7 +236,8 @@ ArticleEditorProjection buildArticleEditorProjection(
         anchorNodeId: previous.trailingNodeId,
         role: ArticleEditorSlotRole.tail,
         collapsedHeight: spacing.after(previous.trailingSemantic),
-        hasFigureAbove: previous.trailingSemantic == ArticleSpacingSemantic.figure,
+        hasFigureAbove:
+            previous.trailingSemantic == ArticleSpacingSemantic.figure,
         hasFigureBelow: false,
         previousSemantic: previous.trailingSemantic,
       ),

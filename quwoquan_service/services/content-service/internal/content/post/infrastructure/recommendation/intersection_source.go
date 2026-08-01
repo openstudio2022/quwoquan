@@ -752,7 +752,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 
 	// sharedEntityAttention：双方都浏览过的实体（实体页浏览行为的 entityRefs 交集）。
 	// entity_page_view 只能证明「共同关注同一对象」，不能证明物理到访；到访事实需要
-	// 带定位发布 / 显式打卡 / 行程回执，见注册表 coVisitedEntity 的 deferredReason。
+	// 带定位发布 / 显式打卡 / 行程回执进入 coVisitedEntity 的可证到访生产链。
 	coAttended := intersectKeys(
 		s.behaviorRefs(ctx, viewerID, "entity_page_view", true),
 		s.behaviorRefs(ctx, objectID, "entity_page_view", true))
@@ -1252,7 +1252,7 @@ func wishlistSampleNames(refs []wishlistEntityRef, limit int) []string {
 
 // followeeViewedObjectReason 桥接型交集：viewer 关注的人里有谁浏览过该对象（实体/地点页）。
 // 数据源 rm_behavior_events{action:entity_page_view} 只证明浏览，不证明到访；
-// 物理到访由 deferred 的 followeeVisited 承载，需可证到访源后才可启用。
+// 物理到访由 followeeVisited 承载，只接受可证到访源。
 func (s *MongoIntersectionSource) followeeViewedObjectReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (intersectionapp.IntersectionReasonView, bool) {
 	if s.social == nil || s.social.db == nil || strings.TrimSpace(viewerID) == "" {
 		return intersectionapp.IntersectionReasonView{}, false

@@ -24,7 +24,7 @@
 
 - 新建托管 Gamma，或替代云侧 K8s/Ingress/Secret/云观测/多云 overlay
 - 替代云侧 prod 灰度流量、SLO 卡点、审批与回滚演练
-- 新增 local-gamma 环境枚举、APP_ENV 枚举或第四份 seed manifest
+- 新增 local-gamma 环境枚举、APP_ENV 枚举或任何环境 seed manifest
 - 在生产包引入 test fixture / seed reset / 本地 mirror URL
 
 ## 3. 行为要求
@@ -40,8 +40,8 @@
 - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
 - full 镜像栈使用唯一的 Caddy 路由真相源与各服务声明的内部监听端口；非生产环境不会因生产 operator OIDC 前提阻塞健康检查。
 - 以已有 package provenance image 启动时必须先验证本地 image 可用，缺镜像为可诊断的 GATE_BLOCK，禁止通过手工重标记、拉取 localhost tag 或旧 Caddyfile 路径绕开。
-- 领域 readback 使用 `app_gamma_seed_manifest.json` 声明的独立 verification principal；不得复用 App user_acceptance principal 消耗推荐曝光、改写关系或污染后续自然入口证据。
-- 首页、视频书、消息与我的统一由 metadata `app-core-readback` scope 验证；每次执行使用新的 ephemeral owner/persona，Content 必须读到非空 recommend/video feed，Chat 必须经公开命令创建并回读会话，User 必须经公开命令 provision 账号事实并校验 `/me` canonical 字段。禁止复用已耗尽曝光预算的固定账号把首页空集合误判为可用。
+- 领域 readback 使用候选绑定的 nonprod acceptance account receipt；账号必须通过正式 OTP 与 `LoginWithPhone` 创建，不得签发无 canonical UserAccount 的验收 JWT，也不得复用 App user_acceptance principal 消耗推荐曝光、改写关系或污染后续自然入口证据。
+- 首页、视频书、消息与我的统一由 metadata `app-core-readback` scope 验证；Content 只读取已激活 immutable release，Chat/Circle/User/Assistant/RTC 只由 user_acceptance typed recipe 经公开命令创建并回读。固定账号、固定业务对象 ID、DB seed、派生计数预填与运行时 fake 均不得构成 Gamma 证据。
 - 每个 T3/API 验证段必须同时记录执行前和执行后 readiness；验证后 edge 或所需控制面未恢复健康时结果为 `GATE_BLOCK`，不得用已经通过的业务断言掩盖环境失稳。
 
 <a id="req-002"></a>
@@ -63,11 +63,32 @@
 - 对外 DNS 名与 prod 对齐：recommendation 服务在各环境统一以 `http://recommendation-service:8000` 被调用。
 - edge-media 名册与 prod 目录扫描结果一致：`realtime-gateway / rtc-service / livekit / coturn` 必须由真实 compose/Kustomize 入口承载。
 
+<a id="req-004"></a>
+### REQ-004 首页可用性、受保护发布与本地 TLS 边界
+
+- `content-release` workload 只启动首页读取与 release 验证所需的 canonical service 集合，
+  并使用与 full workload 同一 packaged OCI candidate；不得维护专用镜像或 fixture 数据源。
+- 首页 runtime readiness 与 FilterCatalog 发布是两个独立门：runtime 启动只证明服务
+  readiness，不读取或改写 catalog；`stage-and-activate -> verify` 由启动后的显式 release
+  操作执行。发布失败不得污染已经健康的 runtime，也不得以空 catalog 合成成功。
+- 本地受保护 FilterCatalog 操作只能使用按调用即时签发的短期 service JWT：
+  `sub=service:qwq-data`、`roles=["service"]`、
+  `scope=content.filter_catalog.manage`、TTL 不超过 30 分钟；token 仅进入子进程环境，
+  不得写 argv、日志、报告或长期文件。
+- local-managed target 的 host probe 必须显式使用 target CA；Simulator/Emulator 必须将
+  同一根安装至系统 trust store 并以默认平台信任栈验证。禁止 `-k`、
+  `--no-check-certificate`、App 私有 trust 注入或静默回退系统公网根。
+- Feed 黑盒探针必须校验 `outcome/emptyReason`；验收首页时必须证明非空结果来自当前
+  immutable release。canonical empty 只能作为空态契约证据，不能替代首页可用性证据。
+- Alpha、Beta、Gamma 的 runtime health scope 必须优先读取共享 `stack_status` /
+  startup receipt；旧环境专用回执只能作为受控 legacy fallback，不能遮蔽当前 runtime。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
 - canonical：`quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py`
-- canonical：`quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json`
+- canonical：`quwoquan_ops/cli/lib/nonprod_business_data.py`（仅组合 ContractGraph operation，不拥有 wire schema）
+- canonical：候选绑定的 `qwq.nonprod_acceptance_dataset_receipt` 运行回执
 - canonical：`quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml` 与 `quwoquan_service/services/*/deploy/compose.yaml`
 - canonical：`quwoquan_ops/environments`
 - canonical：`quwoquan_ops/gate/verify_service_architecture.py`
@@ -79,15 +100,15 @@
 
 - GIVEN 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
 - GIVEN 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma 的 production Remote composition 接入本地 mirror endpoint，代码图中不存在运行时 Mock/Remote 开关。
-- GIVEN 测试数据仅来自 app_gamma_seed_manifest.json 与 metadata fixtures。
+- GIVEN 内容与 creator 仅来自当前 immutable release，非内容业务数据由当前候选的 typed recipe 经正式认证与公开 API 创建。
 - WHEN 提交前运行 make gate-local-gamma，或 main 受控 promotion 对当前 candidate digest 执行 gamma-local release-fast。
-- THEN 启动 gamma 语义镜像栈并完成 CONFIG_VERSION/依赖/health/DNS/TLS/media 前置检查。
-- THEN 依次执行 local_contract->user_acceptance，并在 `.qwq_output/env/gamma/runs/<run-id>/` 生成 canonical 报告与摘要；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
+- THEN 启动 gamma 语义镜像栈并完成配置摘要、依赖、health、local-managed TLS/resolver 与 media 前置检查。
+- THEN 依次执行 local_contract->user_acceptance，并在 `.qwq_output/env/gamma/runs/<run-id>/` 生成 canonical 报告与摘要；缺 local-managed TLS/resolver、设备或服务依赖时状态为 GATE_BLOCK，公网 DNS/ACME 缺失不阻断 gamma-local。
 - THEN 提交前运行只形成左移报告；main 运行形成绑定当前 candidate digest 的正式 Gamma 环境回执，缺失、失败或摘要不一致均阻断 Prod。
 - THEN full health 覆盖 platform-ops、content、user、Elasticsearch 与 proxy；受保护 user route 经 canonical Caddy 上游抵达 user-service。
-- THEN content 等领域探针从 metadata 解析独立 verification principal，App user_acceptance principal 的推荐曝光与关系事实保持不变。
+- THEN content 等领域探针从候选绑定 receipt 解析独立真实 verification principal，App user_acceptance principal 的推荐曝光与关系事实保持不变。
 - THEN `app-core-readback` 在同一 production Remote composition 中断言首页推荐非空、视频书只返回可播放 video work、Chat API contract 可发送/撤回/回读消息、`/me` 的 owner/persona/displayName/postCount 与本次 ephemeral principal 一致。
-- THEN ContactDiscovery、Conversation 与 Message 验收事实经公开 operation 与幂等键建立；fixture 只提供 immutable input，不得直接写服务存储冒充在线业务 provisioning。
+- THEN ContactDiscovery、Conversation 与 Message 验收事实经公开 operation 与幂等键建立；环境不得读取 fixture 或直接写服务存储冒充在线业务 provisioning。
 - THEN 每段集成探针结束后重新验证 edge/readiness；PostgreSQL 连接耗尽、outbox heartbeat stale 或任一依赖降级均阻断通过。
 - THEN 复用 package 时的 image 缺失在启动前失败并给出修复动作，而非运行时拉取或人工 image tag 修补。
 
@@ -98,6 +119,19 @@
 - WHEN 需要云侧手动复验、nightly 或发布前高置信度回归时，统一在 prod gray-initial rollout stage 执行。
 - THEN prod gray-initial 执行 hosted deploy、readiness、api_integration API contract、assistant/chat-avatar probe。
 - THEN 远端复验不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
+
+<a id="gwt-003"></a>
+### GWT-003 首页 content-release 与系统 TLS 可用
+
+- GIVEN full runtime candidate 已绑定 candidate/rollback release，FilterCatalog active release
+  已由显式短期 service JWT 操作激活，target local-managed CA 有效。
+- WHEN 启动 Alpha、Beta 或 Gamma `content-release` workload 并运行 App 首页与 Feed probe。
+- THEN runtime 只装载 canonical content consumer 服务，health scope 与 startup receipt
+  一致，Feed 返回 `outcome=content`、`emptyReason=null` 且至少一个 postId 命中当前 release。
+- THEN host、Simulator/Emulator 与 App 默认信任栈均完成 TLS 验证，App 不含私有 CA 或
+  TLS bypass。
+- AND FilterCatalog、TLS、Feed 契约或 release identity 任一失败均返回可区分的
+  `GATE_BLOCK`，不显示“环境健康”伪成功、不写入 fixture 或 fallback 内容。
 
 ## 6. 依赖
 

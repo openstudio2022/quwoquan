@@ -4,7 +4,9 @@ title: 旅行文章执行（通用模板）
 presetRef: content/travel/article/base
 runtimeProfile: cursor_local_calibrated
 selection:
-  category: 景区
+  # Article selection spans every admitted 地点 subtype; source readiness,
+  # rather than a scenic-only recipe label, decides the frozen pool.
+  category: 地点
   entityHomepagesPerTarget: 0
   entityArticlesPerTarget: 1
   imageWorksPerTarget: 0

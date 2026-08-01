@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 )
 
 var (

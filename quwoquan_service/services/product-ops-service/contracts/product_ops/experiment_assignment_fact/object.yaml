@@ -31,3 +31,7 @@ capabilities:
 - queryable
 taggable: false
 vector_enabled: false
+business_rules:
+- assignment 只能由已激活 ExperimentPolicy 与可信 subject key 通过同一确定性算法计算。
+- 同一 experimentId、revision 与 subject key 只追加一次，客户端不得主动指定 bucket。
+- Recommendation 与 Search 只发布观察事实，不维护私有实验配置真相源。

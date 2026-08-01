@@ -14,7 +14,7 @@ source_entities:
 - Circle
 - CircleMembership
 - VisitRecord
-- SearchQuery
+- SearchRequestFact
 source_events:
 - UserProfileUpdated
 - PostCreated

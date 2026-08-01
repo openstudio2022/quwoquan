@@ -84,12 +84,52 @@ export const eventCatalog = {
       "internal_priority": "critical",
       "log_type": "event",
       "normal_sample_rate": 1,
-      "optional_extensions": [],
+      "optional_extensions": [
+        "surfaceId",
+        "channelId"
+      ],
       "required_extensions": [
         "sampledFrames",
         "jankyFrames",
         "worstFrameMs",
+        "worstBuildFrameMs",
+        "worstRasterFrameMs",
         "jankThresholdMs",
+        "result"
+      ]
+    },
+    {
+      "event_type": "home_feed_resource_snapshot",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "resourceProfile",
+        "limitValue",
+        "queuedValue",
+        "inflightValue",
+        "cacheSizeBytes",
+        "surfaceId",
+        "channelId"
+      ],
+      "required_extensions": [
+        "resourceKind",
+        "currentValue",
+        "result"
+      ]
+    },
+    {
+      "event_type": "home_feed_cache_read_outcome",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "surfaceId",
+        "channelId"
+      ],
+      "required_extensions": [
+        "cacheSource",
+        "cacheClass",
         "result"
       ]
     },
@@ -594,6 +634,25 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "cacheClass": {
+      "max_length": 32,
+      "type": "string"
+    },
+    "cacheSizeBytes": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "cacheSource": {
+      "enum": [
+        "memory",
+        "disk",
+        "remote",
+        "seed",
+        "optimistic_overlay",
+        "unknown"
+      ],
+      "type": "string"
+    },
     "callStack": {
       "item_max_length": 256,
       "max_items": 10,
@@ -613,6 +672,10 @@ export const eventCatalog = {
         "verified_cache",
         "bootstrap_replica"
       ],
+      "type": "string"
+    },
+    "channelId": {
+      "max_length": 64,
       "type": "string"
     },
     "chatAction": {
@@ -679,6 +742,10 @@ export const eventCatalog = {
     "countdownBucket": {
       "max_length": 32,
       "type": "string"
+    },
+    "currentValue": {
+      "minimum": 0,
+      "type": "int"
     },
     "declaredDurationMs": {
       "minimum": 0,
@@ -797,6 +864,10 @@ export const eventCatalog = {
       "minimum": 100,
       "type": "int"
     },
+    "inflightValue": {
+      "minimum": 0,
+      "type": "int"
+    },
     "jankThresholdMs": {
       "minimum": 1,
       "type": "int"
@@ -808,6 +879,10 @@ export const eventCatalog = {
     "journey": {
       "max_length": 128,
       "type": "string"
+    },
+    "limitValue": {
+      "minimum": 0,
+      "type": "int"
     },
     "mediaConnected": {
       "type": "bool"
@@ -908,6 +983,10 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "queuedValue": {
+      "minimum": 0,
+      "type": "int"
+    },
     "rankPosition": {
       "minimum": 0,
       "type": "int"
@@ -949,6 +1028,22 @@ export const eventCatalog = {
     },
     "requestId": {
       "max_length": 256,
+      "type": "string"
+    },
+    "resourceKind": {
+      "enum": [
+        "image_cache_bytes",
+        "active_video_controllers",
+        "media_downloads"
+      ],
+      "type": "string"
+    },
+    "resourceProfile": {
+      "enum": [
+        "compact",
+        "regular",
+        "expanded"
+      ],
       "type": "string"
     },
     "result": {
@@ -1083,7 +1178,15 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "worstBuildFrameMs": {
+      "minimum": 0,
+      "type": "int"
+    },
     "worstFrameMs": {
+      "minimum": 0,
+      "type": "int"
+    },
+    "worstRasterFrameMs": {
       "minimum": 0,
       "type": "int"
     }

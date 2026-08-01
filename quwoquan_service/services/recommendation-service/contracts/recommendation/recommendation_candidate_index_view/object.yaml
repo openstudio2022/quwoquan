@@ -1,0 +1,22 @@
+kind: projection
+description: 内容、主页、圈子与标签事件构建的推荐候选索引视图，唯一拥有发现候选、premium pool 与实体标签索引。
+identity:
+  fields: [scenario, contentId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: content, target_object: content.Post, reference_fields: [contentId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: tombstone}
+- {name: author, target_object: user.Persona, reference_fields: [authorId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: detach}
+- {name: tags, target_object: tag.TagNodeView, reference_fields: [entityTagIds], kind: projection_source, cardinality: 'N:N', consistency: eventual, access: event, on_delete: detach}
+business_rules:
+- 候选只由上游 typed 事件构建，不跨库读取 Content、Entity、Circle 或 Tag 私有集合。
+- scenario 与 contentId 唯一定位候选；Post 生命周期以 aggregateVersion 单调推进，premium admission 以自身 updatedAt 水位推进，任一旧事件都不得覆盖较新状态或复活已删除内容。
+- premium pool 和实体标签是同一候选身份的具名索引，不得形成第二候选真相源。
+lifecycle:
+  source_events: [PostPublished, PostUpdated, PostSettingsUpdated, PostPromotedToWork, PostDeleted, PostPrivacyRedacted, PostPurged, PremiumPoolEntryUpserted, PremiumPoolEntryRolledBack, PremiumPoolEntryTakedownEjected]
+  checkpoint: per_source_partition_sequence
+  rebuild: recreate_candidate_indexes_then_replay_all_source_events
+  tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint

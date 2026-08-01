@@ -6,10 +6,7 @@ class CallTimerState {
   final Duration elapsed;
   final bool isRunning;
 
-  const CallTimerState({
-    this.elapsed = Duration.zero,
-    this.isRunning = false,
-  });
+  const CallTimerState({this.elapsed = Duration.zero, this.isRunning = false});
 
   String get formattedTime {
     final hours = elapsed.inHours;
@@ -25,10 +22,7 @@ class CallTimerState {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
-  CallTimerState copyWith({
-    Duration? elapsed,
-    bool? isRunning,
-  }) {
+  CallTimerState copyWith({Duration? elapsed, bool? isRunning}) {
     return CallTimerState(
       elapsed: elapsed ?? this.elapsed,
       isRunning: isRunning ?? this.isRunning,
@@ -77,7 +71,6 @@ class CallTimerNotifier extends Notifier<CallTimerState> {
   }
 }
 
-final callTimerProvider =
-    NotifierProvider<CallTimerNotifier, CallTimerState>(
+final callTimerProvider = NotifierProvider<CallTimerNotifier, CallTimerState>(
   CallTimerNotifier.new,
 );

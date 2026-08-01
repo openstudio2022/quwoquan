@@ -30,7 +30,8 @@ import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart
 import 'package:quwoquan_app/cloud/remote/user/profile/profile_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentType;
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 

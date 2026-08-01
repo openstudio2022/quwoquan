@@ -13,6 +13,8 @@ class ToolUseWire {
     this.input = const <String, dynamic>{},
     this.status = "requested",
     this.requiresConfirmation = false,
+    this.confirmationState = "not_required",
+    this.continuationToken = "",
     this.result = const <String, dynamic>{},
     this.failure,
     required this.createdAt,
@@ -26,6 +28,8 @@ class ToolUseWire {
   final Map<String, dynamic> input;
   final String status;
   final bool requiresConfirmation;
+  final String confirmationState;
+  final String continuationToken;
   final Map<String, dynamic> result;
   final RuntimeFailureWire? failure;
   final String createdAt;
@@ -39,6 +43,8 @@ class ToolUseWire {
         'input': input,
         'status': status,
         'requiresConfirmation': requiresConfirmation,
+        'confirmationState': confirmationState,
+        'continuationToken': continuationToken,
         'result': result,
         'failure': failure?.toJson(),
         'createdAt': createdAt,
@@ -54,6 +60,8 @@ class ToolUseWire {
       input: (json['input'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       status: (json['status'] as String?)?.trim() ?? "requested",
       requiresConfirmation: json['requiresConfirmation'] == true,
+      confirmationState: (json['confirmationState'] as String?)?.trim() ?? "not_required",
+      continuationToken: (json['continuationToken'] as String?)?.trim() ?? "",
       result: (json['result'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       failure: json['failure'] is Map ? RuntimeFailureWire.fromJson((json['failure'] as Map).cast<String, dynamic>()) : null,
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
@@ -71,6 +79,8 @@ class ToolUseWireFields {
   static const String input = 'input';
   static const String status = 'status';
   static const String requiresConfirmation = 'requiresConfirmation';
+  static const String confirmationState = 'confirmationState';
+  static const String continuationToken = 'continuationToken';
   static const String result = 'result';
   static const String failure = 'failure';
   static const String createdAt = 'createdAt';

@@ -2,7 +2,7 @@
 
 历史断裂：workflow 只在 join 步骤传 --db（quwoquan_content_training），
 train/evaluate/replay 落脚本默认 quwoquan_content —— join 写 A 库、训练读 B 库，
-train 永远训不到新样本、promote 必报 No staged model。
+train 永远训不到新样本、activation gate 必报无候选证据。
 
 契约（防回归）：
  1. 五个训练链脚本的 --db 默认值必须消费 DB 环境变量（env-first）；

@@ -32,7 +32,7 @@ func TestViewerObjectIntersectionStore_RoundTrip(t *testing.T) {
 			PrimaryText:       "你们都关注了 张三",
 			SecondaryText:     "共同关注 2 人",
 			Strength:          0.8,
-			// 架构基线 v2：边权 / 生命周期弱标必须随读模型精确往返（读路径零计算消费）。
+			// 边权 / 生命周期弱标必须随读模型精确往返（读路径零计算消费）。
 			EdgeWeight:     0.66,
 			LifecycleState: "strengthened",
 		},

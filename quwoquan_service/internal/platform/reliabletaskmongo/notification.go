@@ -194,6 +194,11 @@ func (s *Store) RecordProviderAttempt(
 	ctx context.Context,
 	record reliabletask.ProviderAttemptRecord,
 ) (reliabletask.ProviderAttemptRecord, error) {
+	if s == nil || s.attempts == nil {
+		return reliabletask.ProviderAttemptRecord{}, errors.New(
+			"provider attempt ledger is available only to integration-service",
+		)
+	}
 	if strings.TrimSpace(record.AttemptID) == "" {
 		record.AttemptID = reliabletask.NewRecordID("attempt")
 	}
@@ -211,6 +216,11 @@ func (s *Store) ListProviderAttempts(
 	ctx context.Context,
 	requestID string,
 ) ([]reliabletask.ProviderAttemptRecord, error) {
+	if s == nil || s.attempts == nil {
+		return nil, errors.New(
+			"provider attempt ledger is available only to integration-service",
+		)
+	}
 	cursor, err := s.attempts.Find(
 		ctx,
 		bson.M{"requestId": strings.TrimSpace(requestID)},

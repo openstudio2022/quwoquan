@@ -236,6 +236,16 @@ func validateBusinessObjectMap(
 			boundaries,
 			members,
 		)...)
+		issues = append(issues, validateProjectionSourceRelationship(
+			sourcePath,
+			object,
+		)...)
+		issues = append(issues, validateCounterSources(
+			sourcePath,
+			object,
+			boundaries,
+			members,
+		)...)
 		if _, exists := seenCanonicalObjects[object.CanonicalObject]; exists {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_MAP.DUPLICATE_CANONICAL_OBJECT",
@@ -453,10 +463,8 @@ func validateObjectSemantics(
 		))
 	}
 	if object.ObjectKind == ast.ObjectKindAggregateRoot {
-		declared, declaredExists := canonicalObjects[domainObjectKey(domain, object.CanonicalObject)]
-		deferredRoot := declaredExists && len(declared.DeferredOperations) > 0
 		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 &&
-			!deferredRoot {
+			object.Access.Commands != "cli_facade" {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.ZERO_ENTRYPOINT_ROOT",
 				sourcePath,
@@ -647,7 +655,7 @@ func validateObjectAccess(
 	valid := false
 	switch object.ObjectKind {
 	case ast.ObjectKindAggregateRoot:
-		valid = commands == "aggregate_facade" &&
+		valid = oneOf(commands, "aggregate_facade", "cli_facade") &&
 			oneOf(queries, "named_reader", "none") &&
 			oneOf(crossContext, "public_contract_only", "event_only")
 	case ast.ObjectKindOwnedEntity, ast.ObjectKindValueObject:
@@ -886,6 +894,86 @@ func validateObjectRelationships(
 				object.CanonicalObject,
 				relationship,
 				field,
+			))
+		}
+	}
+	return issues
+}
+
+func validateProjectionSourceRelationship(
+	sourcePath string,
+	object ast.BusinessObjectBoundary,
+) []Issue {
+	if object.ObjectKind != ast.ObjectKindProjection {
+		return nil
+	}
+	for _, relationship := range object.Relationships {
+		if relationship.Kind == "projection_source" {
+			return nil
+		}
+	}
+	return []Issue{issue(
+		"CONTRACT.PROJECTION.MISSING_SOURCE_RELATIONSHIP",
+		sourcePath,
+		"projection object %q must declare at least one projection_source relationship",
+		object.CanonicalObject,
+	)}
+}
+
+func validateCounterSources(
+	sourcePath string,
+	object ast.BusinessObjectBoundary,
+	boundaries map[string]registeredBoundary,
+	members map[string]registeredMember,
+) []Issue {
+	var issues []Issue
+	for counter, source := range object.CounterSources {
+		parts := strings.Split(strings.TrimSpace(source), ".")
+		if len(parts) < 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			issues = append(issues, issue(
+				"CONTRACT.COUNTER_SOURCE.INVALID_REFERENCE",
+				sourcePath,
+				"object %q counter %q has invalid source %q; expected domain.Object or domain.Object.fact",
+				object.CanonicalObject,
+				counter,
+				source,
+			))
+			continue
+		}
+		for _, qualifier := range parts[2:] {
+			if strings.TrimSpace(qualifier) == "" {
+				issues = append(issues, issue(
+					"CONTRACT.COUNTER_SOURCE.INVALID_REFERENCE",
+					sourcePath,
+					"object %q counter %q has invalid source %q; qualifiers cannot be empty",
+					object.CanonicalObject,
+					counter,
+					source,
+				))
+				break
+			}
+		}
+		targetID := strings.TrimSpace(parts[0]) + "." + strings.TrimSpace(parts[1])
+		if member, exists := members[targetID]; exists {
+			issues = append(issues, issue(
+				"CONTRACT.COUNTER_SOURCE.DIRECT_CHILD_ACCESS",
+				sourcePath,
+				"object %q counter %q targets aggregate member %q owned by %q",
+				object.CanonicalObject,
+				counter,
+				targetID,
+				member.OwnerID,
+			))
+			continue
+		}
+		if _, exists := boundaries[targetID]; !exists {
+			issues = append(issues, issue(
+				"CONTRACT.COUNTER_SOURCE.UNKNOWN_TARGET",
+				sourcePath,
+				"object %q counter %q references unknown source object %q",
+				object.CanonicalObject,
+				counter,
+				targetID,
 			))
 		}
 	}

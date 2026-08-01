@@ -690,7 +690,7 @@ CloudOperationInvocationContext _profileUpdateProposalInvocationContext(
   );
 }
 
-/// SearchQuery term-heat 榜单查询面：production 只经 generated client。
+/// SearchRequestFact term-heat 榜单查询面：production 只经 generated client。
 final searchHotQueryReaderProvider = Provider<SearchHotQueryReader>((ref) {
   return RemoteSearchHotQueryReader(
     client: ref.watch(generatedCloudOperationClientProvider),
@@ -738,7 +738,7 @@ final searchFeedbackCommandWriterProvider =
       );
     });
 
-/// TagFeedback typed append 写面：标签编辑页添加/移除动作产出反馈事实。
+/// TagFeedbackFact typed append 写面：标签编辑页添加/移除动作产出反馈事实。
 final tagFeedbackCommandWriterProvider = Provider<TagFeedbackCommandWriter>((
   ref,
 ) {

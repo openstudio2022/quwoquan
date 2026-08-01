@@ -25,7 +25,6 @@ from content.filter_catalog.contract import (
 
 
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-SEED_ENVIRONMENTS = ("alpha", "beta", "gamma")
 CATALOG_ROOT_REF = Path("quwoquan_data/reference/filter_catalog")
 BINDING_REF = CATALOG_ROOT_REF / "bootstrap_binding.json"
 DIGEST_VECTOR_REF = CATALOG_ROOT_REF / "digest_test_vector.json"
@@ -33,12 +32,6 @@ APP_BOOTSTRAP_REF = Path("quwoquan_app/assets/filters/filter_presets.json")
 METADATA_OBJECT_REF = Path(
     "quwoquan_service/services/content-service/contracts/media/filter_catalog_release"
 )
-SEED_ROOT_REF = Path("quwoquan_service/contracts/metadata/_shared/test_fixtures")
-SEED_MANIFEST_REFS = {
-    environment: SEED_ROOT_REF / f"app_{environment}_seed_manifest.json"
-    for environment in SEED_ENVIRONMENTS
-}
-SEED_SCHEMA_REF = SEED_ROOT_REF / "seed_manifest.schema.json"
 OBJECT_ID = "content.filter_catalog_release"
 REQUIRED_OPERATION_NAMES = {
     "stage": "StageFilterCatalogRelease",
@@ -67,11 +60,10 @@ class CatalogLayout:
         return self.repo_root / self.release_ref
 
     def environment_ref(self, environment: str) -> Path:
-        suffix = "seed" if environment in SEED_ENVIRONMENTS else "import"
         return (
             self.release_ref.parent
             / "environments"
-            / f"{environment}.{suffix}.json"
+            / f"{environment}.import.json"
         )
 
     def environment_path(self, environment: str) -> Path:
@@ -106,8 +98,6 @@ def materialize_release(
         _write_json_atomic(layout.environment_path(environment), manifest)
     _write_json_atomic(repo_root / BINDING_REF, binding)
     _write_json_atomic(repo_root / DIGEST_VECTOR_REF, vector)
-    _update_seed_manifest_refs(layout)
-
     report = validate_repository(repo_root)
     if not report["passed"]:
         raise CatalogContractError(
@@ -288,30 +278,6 @@ def _validate_repository(repo_root: Path) -> dict[str, object]:
     if vector_digest != vector["sha256"]:
         raise CatalogContractError("digest test vector SHA-256 不匹配")
 
-    _validate_seed_schema(repo_root)
-    for environment in SEED_ENVIRONMENTS:
-        seed_manifest = _load_mapping(
-            repo_root / SEED_MANIFEST_REFS[environment]
-        )
-        refs = seed_manifest.get("releaseInputs")
-        if not isinstance(refs, list):
-            raise CatalogContractError(
-                f"{environment} seed manifest 缺少 releaseInputs"
-            )
-        expected_ref = {
-            "objectId": OBJECT_ID,
-            "manifestPath": layout.environment_ref(environment).as_posix(),
-        }
-        matches = [
-            item
-            for item in refs
-            if isinstance(item, dict) and item.get("objectId") == OBJECT_ID
-        ]
-        if matches != [expected_ref]:
-            raise CatalogContractError(
-                f"{environment} seed manifest FilterCatalogRelease 引用漂移"
-            )
-
     return {
         "releaseId": release["releaseId"],
         "canonicalDigest": release["canonicalDigest"],
@@ -354,9 +320,7 @@ def _environment_manifest(
     return {
         "schema": "quwoquan_data.filter_catalog_environment_import",
         "environment": environment,
-        "deliveryMode": (
-            "seed" if environment in SEED_ENVIRONMENTS else "release"
-        ),
+        "deliveryMode": "immutable_release",
         "canonicalArtifactRef": layout.release_ref.as_posix(),
         "releaseId": release["releaseId"],
         "sourceOwner": release["sourceOwner"],
@@ -366,9 +330,9 @@ def _environment_manifest(
         "idempotencyKey": f"filter-catalog:{release['canonicalDigest']}",
         "operations": operations,
         "activationPolicy": (
-            "stage_then_activate"
-            if environment in SEED_ENVIRONMENTS
-            else "stage_then_gray_activate"
+            "stage_then_gray_activate"
+            if environment == "prod"
+            else "stage_then_activate"
         ),
     }
 
@@ -425,59 +389,6 @@ def _metadata_operations(repo_root: Path) -> dict[str, str]:
         role: f"{OBJECT_ID}.{operation}"
         for role, operation in REQUIRED_OPERATION_NAMES.items()
     }
-
-
-def _update_seed_manifest_refs(layout: CatalogLayout) -> None:
-    for environment in SEED_ENVIRONMENTS:
-        path = layout.repo_root / SEED_MANIFEST_REFS[environment]
-        manifest = _load_mapping(path)
-        existing = manifest.get("releaseInputs")
-        refs = list(existing) if isinstance(existing, list) else []
-        refs = [
-            item
-            for item in refs
-            if not (
-                isinstance(item, dict)
-                and item.get("objectId") == OBJECT_ID
-            )
-        ]
-        refs.append(
-            {
-                "objectId": OBJECT_ID,
-                "manifestPath": layout.environment_ref(
-                    environment
-                ).as_posix(),
-            }
-        )
-        updated: dict[str, object] = {}
-        inserted = False
-        for key, value in manifest.items():
-            if key == "releaseInputs":
-                continue
-            updated[key] = value
-            if key == "description":
-                updated["releaseInputs"] = refs
-                inserted = True
-        if not inserted:
-            updated["releaseInputs"] = refs
-        _write_json_atomic(path, updated)
-
-
-def _validate_seed_schema(repo_root: Path) -> None:
-    schema = _load_mapping(repo_root / SEED_SCHEMA_REF)
-    properties = schema.get("properties")
-    definitions = schema.get("$defs")
-    if not isinstance(properties, dict) or not isinstance(definitions, dict):
-        raise CatalogContractError("seed manifest schema 结构非法")
-    release_inputs = properties.get("releaseInputs")
-    release_input_ref = definitions.get("releaseInputRef")
-    if not isinstance(release_inputs, dict) or not isinstance(
-        release_input_ref,
-        dict,
-    ):
-        raise CatalogContractError(
-            "seed manifest schema 尚未声明 releaseInputs/releaseInputRef"
-        )
 
 
 def _load_release(path: Path) -> dict[str, object]:

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	rtsearch "quwoquan_service/runtime/search"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 // PlaceRef is the first-party place reference a single post contributes from its

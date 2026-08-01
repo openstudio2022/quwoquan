@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../chat/message_contracts.dart';
 
@@ -42,6 +42,13 @@ final class ChatListMessagesQuery {
   final int? afterSeq;
   final int? beforeSeq;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    if (this.afterSeq != null) "afterSeq": this.afterSeq!,
+    if (this.beforeSeq != null) "beforeSeq": this.beforeSeq!,
+    "limit": this.limit,
+  };
 }
 
 final class ChatRecallMessageCommand {
@@ -60,6 +67,11 @@ final class ChatRecallMessageCommand {
 
   final String conversationId;
   final String messageId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "messageId": this.messageId,
+  };
 }
 
 final class ChatSendMessageCommand {
@@ -138,6 +150,20 @@ final class ChatSendMessageCommand {
   final String? senderDisplayNameSnapshot;
   final String? senderAvatarUrlSnapshot;
   final int? personaContextVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "type": this.type,
+    "content": this.content,
+    "clientMsgId": this.clientMsgId,
+    if (this.mediaAssetId != null) "mediaAssetId": this.mediaAssetId!,
+    if (this.card != null) "card": <String, Object?>{'kind': this.card!.kind, 'title': this.card!.title, if (this.card!.objectRef != null) 'objectRef': this.card!.objectRef!.toWire(), if (this.card!.subtitle != null) 'subtitle': this.card!.subtitle, if (this.card!.thumbnailUrl != null) 'thumbnailUrl': this.card!.thumbnailUrl, if (this.card!.deeplink != null) 'deeplink': this.card!.deeplink, if (this.card!.landingUrl != null) 'landingUrl': this.card!.landingUrl, if (this.card!.shareText != null) 'shareText': this.card!.shareText, if (this.card!.message != null) 'message': this.card!.message, 'attributes': <Map<String, String>>[for (final attribute in this.card!.attributes) <String, String>{'name': attribute.name, 'value': attribute.value}]},
+    if (this.replyToMessageId != null) "replyToMessageId": this.replyToMessageId!,
+    if (this.mentions.isNotEmpty) "mentions": this.mentions.map((value) => value).toList(growable: false),
+    if (this.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": this.senderDisplayNameSnapshot!,
+    if (this.senderAvatarUrlSnapshot != null) "senderAvatarUrlSnapshot": this.senderAvatarUrlSnapshot!,
+    if (this.personaContextVersion != null) "personaContextVersion": this.personaContextVersion!,
+  };
 }
 
 final class ChatSyncMessagesQuery {
@@ -156,6 +182,12 @@ final class ChatSyncMessagesQuery {
   final String conversationId;
   final int lastSeq;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "lastSeq": this.lastSeq,
+    "limit": this.limit,
+  };
 }
 
 CloudOperationRequestPayload encodeChatMessageListMessagesGeneratedRequest(ChatListMessagesQuery request) {
@@ -190,7 +222,7 @@ CloudOperationRequestPayload encodeChatMessageSendMessageGeneratedRequest(ChatSe
       "content": request.content,
       "clientMsgId": request.clientMsgId,
       if (request.mediaAssetId != null) "mediaAssetId": request.mediaAssetId!,
-      if (request.card != null) "card": <String, Object?>{'kind': request.card!.kind, 'title': request.card!.title, if (request.card!.subtitle != null) 'subtitle': request.card!.subtitle, if (request.card!.thumbnailUrl != null) 'thumbnailUrl': request.card!.thumbnailUrl, if (request.card!.deeplink != null) 'deeplink': request.card!.deeplink, if (request.card!.landingUrl != null) 'landingUrl': request.card!.landingUrl, if (request.card!.shareText != null) 'shareText': request.card!.shareText, if (request.card!.message != null) 'message': request.card!.message, 'attributes': <Map<String, String>>[for (final attribute in request.card!.attributes) <String, String>{'name': attribute.name, 'value': attribute.value}]},
+      if (request.card != null) "card": <String, Object?>{'kind': request.card!.kind, 'title': request.card!.title, if (request.card!.objectRef != null) 'objectRef': request.card!.objectRef!.toWire(), if (request.card!.subtitle != null) 'subtitle': request.card!.subtitle, if (request.card!.thumbnailUrl != null) 'thumbnailUrl': request.card!.thumbnailUrl, if (request.card!.deeplink != null) 'deeplink': request.card!.deeplink, if (request.card!.landingUrl != null) 'landingUrl': request.card!.landingUrl, if (request.card!.shareText != null) 'shareText': request.card!.shareText, if (request.card!.message != null) 'message': request.card!.message, 'attributes': <Map<String, String>>[for (final attribute in request.card!.attributes) <String, String>{'name': attribute.name, 'value': attribute.value}]},
       if (request.replyToMessageId != null) "replyToMessageId": request.replyToMessageId!,
       if (request.mentions.isNotEmpty) "mentions": request.mentions.map((value) => value).toList(growable: false),
       if (request.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": request.senderDisplayNameSnapshot!,

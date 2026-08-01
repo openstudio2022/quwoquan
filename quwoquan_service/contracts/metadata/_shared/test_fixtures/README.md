@@ -1,6 +1,6 @@
 # Contract Scenario Fixtures
 
-`test_fixtures` 是端云 alpha/beta/gamma 测试数据的契约资源区。该目录不参与实体 registry 聚合，供 Dart/Go 测试 loader 与本地 beta seed runner 读取。
+`test_fixtures` 只保存 `local_contract` 与 `api_integration` 测试树使用的对象级 typed double 资产。它不参与环境 package、runtime bootstrap 或 user_acceptance 数据供给。
 
 ## 目录约定
 
@@ -8,24 +8,16 @@
 contracts/metadata/{domain}/test_fixtures/scenarios/{domain}_scenarios.json
 ```
 
-跨域共享规范位于：
-
-```text
-contracts/metadata/_shared/test_fixtures/scenario_fixture.schema.json
-```
-
 ## 环境约定
 
-- `local_contract`：测试树内对象级 typed double 可读取 fixture seed；Alpha 与其他环境 App 不得消费本目录。
-- `beta`：端侧通过 RemoteRepository 访问本地云服务；云服务测试前 reset + seed。
-- `gamma`：`app_gamma_seed_manifest.json` 是 curated 场景选择的唯一真相源；其中以 `*.gamma-curated.json` 结尾的条目必须声明 `curation`，并由 `make verify-gamma-curated-scenarios` 校验派生结果。更新选择后只执行 `make generate-gamma-curated-scenarios`，禁止手改派生 JSON。
-- Gamma runtime 业务数据与媒体只由 canonical immutable release activation 交付；测试场景投影器不写 manifest、不生成媒体 bundle，也不承担环境 seed。
-- `prod`：不读取测试 fixture。
+- `local_contract` / `api_integration`：测试树内对象级 typed double 可读取测试资产。
+- `alpha` / `beta` / `gamma`：内容由 canonical immutable release 激活；账号、评论、圈子、会话和消息由 `stackctl verify` 使用真实非生产主体调用公开 command/event 创建。
+- `prod`：不包含或读取本目录，也不执行任何 nonprod provision runner。
 
 ## 字段约定
 
-- `seedSets`：云侧或端侧 mock 初始化数据。
+- `seedSets`：仅用于测试进程内 typed double 初始化。
 - `scenarios`：测试入口，只引用 `seedRefs` 与断言期望。
-- `repositoryExpectations`：环境到数据源的唯一契约。
-- `remoteExpectations`：beta/gamma 远端返回断言。
+- `repositoryExpectations`：测试 double 的对象级契约。
+- `remoteExpectations`：API integration 的契约断言，不是环境 seed。
 - `uiExpectations`：页面层可见文案、首屏关键元素等断言。

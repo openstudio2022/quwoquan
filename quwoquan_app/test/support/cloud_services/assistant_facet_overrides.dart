@@ -11,14 +11,15 @@ export 'assistant_facets_mock.dart';
 /// 这是测试容器 wiring，不是业务 Repository 聚合或 App 运行时 Provider。
 List<Override> alphaAssistantFacetOverrides(AlphaAssistantFacets facets) {
   return <Override>[
-    assistantConversationRunFacetProvider.overrideWithValue(facets),
+    assistantSessionRunFacetProvider.overrideWithValue(facets),
+    assistantRunControlFacetProvider.overrideWithValue(facets),
     assistantSkillSubscriptionFacetProvider.overrideWithValue(facets),
     assistantSkillConsentFacetProvider.overrideWithValue(facets),
     assistantLearningFactAppendFacetProvider.overrideWithValue(facets),
     assistantPersonalizationFacetProvider.overrideWithValue(facets),
     assistantPersonalDataFacetProvider.overrideWithValue(facets),
     assistantPreferenceFactFacetProvider.overrideWithValue(facets),
-    assistantXiaoquSearchFacetProvider.overrideWithValue(facets),
-    assistantCreationSuggestFacetProvider.overrideWithValue(facets),
+    assistantSearchRunFacetProvider.overrideWithValue(facets),
+    assistantCreationRunFacetProvider.overrideWithValue(facets),
   ];
 }

@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ConversationCacheRecord {
   const ConversationCacheRecord({
@@ -21,7 +22,7 @@ class ConversationCacheRecord {
     this.receiptEnabled = true,
     this.lastMessageId,
     this.lastMessagePreview = '',
-    this.lastMessageType = 'text',
+    this.lastMessageType = MessageType.text,
     this.lastMessageAt = '',
     this.messageCount = 0,
     this.status = '',
@@ -52,7 +53,7 @@ class ConversationCacheRecord {
   final bool receiptEnabled;
   final String? lastMessageId;
   final String lastMessagePreview;
-  final String lastMessageType;
+  final MessageType lastMessageType;
   final String lastMessageAt;
   final int messageCount;
   final String status;
@@ -86,6 +87,7 @@ class ConversationCacheRecord {
       receiptEnabled: dto.receiptEnabled,
       lastMessageId: _optionalString(dto.lastMessageId),
       lastMessagePreview: dto.lastMessagePreview?.trim() ?? '',
+      lastMessageType: dto.lastMessageType,
       lastMessageAt: dto.lastMessageTime?.toIso8601String() ?? '',
       messageCount: dto.messageCount,
       status: dto.status.trim(),
@@ -106,9 +108,7 @@ class ConversationCacheRecord {
       circleId: dto.circleId.trim(),
       lastSeq: dto.lastSeq,
       lastMessagePreview: dto.lastMessagePreview.trim(),
-      lastMessageType: dto.lastMessageType.trim().isEmpty
-          ? 'text'
-          : dto.lastMessageType.trim(),
+      lastMessageType: dto.lastMessageType,
       lastMessageAt: dto.lastMessageTime?.toIso8601String() ?? '',
       unreadCount: dto.unreadCount,
       mentionUnreadCount: dto.mentionUnreadCount,
@@ -136,7 +136,9 @@ class ConversationCacheRecord {
       receiptEnabled: _bool(map['receiptEnabled'], fallback: true),
       lastMessageId: _optionalString(map['lastMessageId']),
       lastMessagePreview: _string(map['lastMessagePreview']),
-      lastMessageType: _string(map['lastMessageType']),
+      lastMessageType: map['lastMessageType'] == null
+          ? MessageType.text
+          : MessageType.fromWire(map['lastMessageType']),
       lastMessageAt: _normalizeIsoString(map['lastMessageAt']) ?? '',
       messageCount: _int(map['messageCount']),
       status: _string(map['status']),
@@ -216,6 +218,7 @@ class ConversationCacheRecord {
       lastMessagePreview: lastMessagePreview.isEmpty
           ? null
           : lastMessagePreview,
+      lastMessageType: lastMessageType,
       lastMessageTime: _parseDateTime(lastMessageAt),
       messageCount: messageCount,
       status: status,
@@ -246,7 +249,7 @@ class ConversationCacheRecord {
       if (lastMessageId != null) 'lastMessageId': lastMessageId,
       if (lastMessagePreview.isNotEmpty)
         'lastMessagePreview': lastMessagePreview,
-      if (lastMessageType.isNotEmpty) 'lastMessageType': lastMessageType,
+      'lastMessageType': lastMessageType.wireValue,
       if (lastMessageAt.isNotEmpty) 'lastMessageAt': lastMessageAt,
       'messageCount': messageCount,
       if (status.isNotEmpty) 'status': status,
@@ -283,7 +286,7 @@ class ConversationCacheRecord {
     String? lastMessageId,
     bool clearLastMessageId = false,
     String? lastMessagePreview,
-    String? lastMessageType,
+    MessageType? lastMessageType,
     String? lastMessageAt,
     int? messageCount,
     String? status,

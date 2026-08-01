@@ -42,16 +42,11 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
 .PHONY: verify-production-wiring-purity
-.PHONY: verify-app-seed-manifest
-.PHONY: verify-gamma-curated-scenarios
-.PHONY: generate-gamma-curated-scenarios
+.PHONY: verify-nonprod-business-data-provisioning
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
 .PHONY: check-app-bundled-fonts-updates
 .PHONY: verify-app-web-offline-resources
-.PHONY: verify-avatar-user-pool
-.PHONY: probe-avatar-user-pool-gateway
-.PHONY: verify-business-env-data-inventory
 .PHONY: verify-quwoquan-data
 .PHONY: verify-markdown-article-no-article-document verify-article-contract-purity
 .PHONY: verify-app-env-package
@@ -73,8 +68,6 @@
 .PHONY: verify-metadata
 .PHONY: build-app-env
 .PHONY: build-service-env
-.PHONY: test-app-alpha-seed
-.PHONY: test-app-beta-seed
 .PHONY: beta-up
 .PHONY: beta-down
 .PHONY: beta-status
@@ -289,14 +282,8 @@ verify-app-production-data-source-single-path:
 
 verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries
 
-verify-app-seed-manifest:
-	@python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py
-
-verify-gamma-curated-scenarios:
-	@python3 quwoquan_ops/tests/support/environment_seeds/sync_gamma_curated_scenarios.py --check
-
-generate-gamma-curated-scenarios:
-	@python3 quwoquan_ops/tests/support/environment_seeds/sync_gamma_curated_scenarios.py --write
+verify-nonprod-business-data-provisioning:
+	@python3 quwoquan_ops/gate/verify_nonprod_business_data_provisioning.py
 
 fetch-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts fetch
@@ -312,15 +299,6 @@ verify-app-web-offline-resources:
 
 verify-app-assistant-old-stack-retired:
 	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_old_stack_retired.py
-
-verify-avatar-user-pool:
-	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py
-
-probe-avatar-user-pool-gateway:
-	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py
-
-verify-business-env-data-inventory:
-	@python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py
 
 verify-quwoquan-data:
 	@python3 quwoquan_data/scripts/cli.py verify all
@@ -508,12 +486,6 @@ stackctl-deploy:
 verify-env-instance-isolation:
 	@python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
 
-test-app-alpha-seed:
-	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart
-
-test-app-beta-seed:
-	@python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py
-
 beta-up:
 	@DEVICE_ID="$(DEVICE_ID)" \
 	AUTO_OPEN_OPS="$(AUTO_OPEN_OPS)" \
@@ -607,6 +579,9 @@ verify-homepage-type-contract:
 verify-tag-collection-wiring:
 	@python3 quwoquan_ops/gate/verify_tag_collection_wiring.py
 
+verify-tag-closure-baseline:
+	@python3 quwoquan_data/scripts/cli.py governance taxonomy closure-scorecard --gate
+
 verify-app-cloud-runtime-single-path:
 	@python3 quwoquan_app/scripts/runtime/verify_cloud_runtime_single_path.py
 
@@ -630,7 +605,7 @@ verify-app-assistant-search-weak-typing-ratchet:
 	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py
 
 verify-assistant-agent-replay-evaluation:
-	@cd quwoquan_service/services/assistant-service && go test ./tests/local_contract/assistant/assistant_conversation -run '^TestAgentReplayEvaluationGate$$' -count=1
+	@cd quwoquan_service/services/assistant-service && go test ./tests/local_contract/assistant/assistant_session -run '^TestAgentReplayEvaluationGate$$' -count=1
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
@@ -677,7 +652,7 @@ gate-local-gamma:
 		export LOCAL_GAMMA_USER_PORT="$$LG_USER_PORT"; \
 		if [ "$${LOCAL_GAMMA_SKIP_GATE:-1}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
-		$(MAKE) verify-app-seed-manifest; \
+		$(MAKE) verify-nonprod-business-data-provisioning; \
 		python3 quwoquan_ops/cli/stackctl.py up --env gamma --skip-app --workload full; \
 		python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py; \
 		bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh; \
@@ -800,7 +775,7 @@ commit-gate:
 	@bash quwoquan_ops/gate/commit_gate.sh
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
-.PHONY: test-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance
+.PHONY: test-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence
 
 prepare-test-python:
 	@python3 quwoquan_ops/cli/prepare_test_python.py
@@ -814,6 +789,9 @@ verify-test-nonfunctional-coverage:
 	@python3 quwoquan_ops/gate/scaffold/verify_performance_budget.py
 	@python3 quwoquan_ops/gate/scaffold/verify_observability_coverage.py
 	@python3 quwoquan_ops/gate/scaffold/verify_data_consistency_coverage.py
+
+verify-homepage-performance-evidence:
+	@python3 quwoquan_ops/gate/scaffold/verify_performance_budget.py --require-candidate $(if $(PERFORMANCE_EVIDENCE),--evidence "$(PERFORMANCE_EVIDENCE)",) $(if $(PERFORMANCE_ARTIFACT_ROOT),--artifact-root "$(PERFORMANCE_ARTIFACT_ROOT)",)
 
 verify-test-directory-layout:
 	@python3 quwoquan_ops/gate/scaffold/verify_test_directory_layout.py

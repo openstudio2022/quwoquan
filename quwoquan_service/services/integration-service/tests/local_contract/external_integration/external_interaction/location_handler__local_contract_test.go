@@ -21,14 +21,14 @@ import (
 
 type fakeProviderClient struct {
 	nearbyFn func(model.NearbyQuery) ([]model.POI, error)
-	searchFn func(model.SearchQuery) ([]model.POI, error)
+	searchFn func(model.SearchRequestFact) ([]model.POI, error)
 }
 
 func (f *fakeProviderClient) Nearby(_ context.Context, q model.NearbyQuery) ([]model.POI, error) {
 	return f.nearbyFn(q)
 }
 
-func (f *fakeProviderClient) Search(_ context.Context, q model.SearchQuery) ([]model.POI, error) {
+func (f *fakeProviderClient) Search(_ context.Context, q model.SearchRequestFact) ([]model.POI, error) {
 	return f.searchFn(q)
 }
 
@@ -87,7 +87,7 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 	}
 	svc := newLocationService(t, &fakeProviderClient{
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) { return nil, nil },
-		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) { return nil, nil },
 	})
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2, external).Routes()
 	body := []byte(`{
@@ -134,7 +134,7 @@ func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {
 			got = q
 			return []model.POI{{Name: "x", Latitude: q.Lat, Longitude: q.Lng}}, nil
 		},
-		searchFn: func(model.SearchQuery) ([]model.POI, error) {
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) {
 			return nil, nil
 		},
 	})
@@ -155,7 +155,7 @@ func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {
 func TestSearchEmptyQueryReturnsBadRequest(t *testing.T) {
 	svc := newLocationService(t, &fakeProviderClient{
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) { return nil, nil },
-		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) { return nil, nil },
 	})
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
 	req := httptest.NewRequest(http.MethodGet, locationgenerated.SearchPath, nil)
@@ -178,7 +178,7 @@ func TestNearbyProviderFailureReturnsStructuredUnavailableError(t *testing.T) {
 				"location provider request failed",
 			)
 		},
-		searchFn: func(model.SearchQuery) ([]model.POI, error) {
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) {
 			return nil, nil
 		},
 	}
@@ -204,7 +204,7 @@ func TestNearbyTimeoutReturns504WithUpstreamTimeoutCode(t *testing.T) {
 				"location provider request timed out",
 			)
 		},
-		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) { return nil, nil },
 	}
 	svc := newLocationService(t, timeoutClient)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()

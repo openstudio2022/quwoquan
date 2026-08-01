@@ -204,8 +204,12 @@ void main() {
           sampledFrames: 120,
           jankyFrames: 0,
           worstFrameMs: 16,
+          worstBuildFrameMs: 7,
+          worstRasterFrameMs: 5,
           jankThresholdMs: 50,
           result: 'ok',
+          surfaceId: 'home_feed',
+          channelId: 'recommend',
         ),
         AppTelemetryRecordResult.accepted,
       );
@@ -216,11 +220,56 @@ void main() {
         'sampledFrames': 120,
         'jankyFrames': 0,
         'worstFrameMs': 16,
+        'worstBuildFrameMs': 7,
+        'worstRasterFrameMs': 5,
         'jankThresholdMs': 50,
         'result': 'ok',
+        'surfaceId': 'home_feed',
+        'channelId': 'recommend',
       });
     },
   );
+
+  test('page visits enforce the 2048-item and TTL boundary', () async {
+    var now = DateTime.utc(2026, 7, 20, 10);
+    final context = AppPageContextStore.instance..setPageName('home');
+    final recorder = _CapturingRecorder();
+    final tracker = AppPageExperienceTracker(
+      pageContextStore: context,
+      now: () => now,
+      maxVisits: 2,
+      visitMaxAge: const Duration(minutes: 5),
+    )..attachReporter(recorder);
+
+    tracker.beginPageVisit(
+      pageName: 'home',
+      pageVisitId: 'evicted-by-capacity',
+      openedAt: now,
+    );
+    tracker.beginPageVisit(
+      pageName: 'chat',
+      pageVisitId: 'kept-until-ttl',
+      openedAt: now,
+    );
+    tracker.beginPageVisit(
+      pageName: 'search',
+      pageVisitId: 'newest',
+      openedAt: now,
+    );
+    context.setPageName('home');
+    expect(
+      await tracker.recordFirstUsable(terminal: AppPageUsableTerminal.content),
+      AppTelemetryRecordResult.rejected,
+    );
+
+    now = now.add(const Duration(minutes: 6));
+    context.setPageName('chat');
+    expect(
+      await tracker.recordFirstUsable(terminal: AppPageUsableTerminal.content),
+      AppTelemetryRecordResult.rejected,
+    );
+    expect(recorder.records, isEmpty);
+  });
 
   test(
     'telemetry persistence failures never escape into product flows',

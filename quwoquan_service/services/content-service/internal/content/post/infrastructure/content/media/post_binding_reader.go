@@ -69,6 +69,7 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 			MediaType:                     asset.MediaType,
 			MimeType:                      asset.MimeType,
 			Version:                       asset.Version,
+			CaptureMetadata:               asset.CaptureMetadata,
 			PublicSliceKey:                publicSliceKey,
 			VerifiedDurationMs:            asset.VerifiedDurationMs,
 			VideoWidth:                    asset.VideoWidth,

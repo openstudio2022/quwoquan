@@ -527,9 +527,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       final beforePath = _currentPath;
       final afterPath = await _bakeProCategoryToCurrentImage(subType);
       if (afterPath == null) {
-        await _showEditorActionFailure(
-          title: MediaText.imageEditorProTools,
-        );
+        await _showEditorActionFailure(title: MediaText.imageEditorProTools);
         return;
       }
       _commitBakedStep(

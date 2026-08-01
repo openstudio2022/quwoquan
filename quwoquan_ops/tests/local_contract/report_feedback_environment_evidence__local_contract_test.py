@@ -167,32 +167,20 @@ class ReportFeedbackEnvironmentEvidenceTest(unittest.TestCase):
             "验收探针不得调用已退役的非合同路由",
         )
 
-    def test_local_operator_session_reuses_canonical_acceptance_issuer(self) -> None:
+    def test_local_operator_session_requires_protected_service_token(self) -> None:
         support = _load_probe_support_module()
-        session = support.LocalAcceptanceSession(
-            owner_id="fixture_content_report_operator",
-            persona_id="fixture_content_report_operator",
-            access_token="operator-token",
-        )
-        with mock.patch.object(
-            support,
-            "open_local_acceptance_session",
-            return_value=session,
-        ) as issue:
+        with mock.patch.dict(
+            support.os.environ,
+            {"CONTENT_REPORT_OPERATOR_TOKEN": "operator-token"},
+        ):
             actual = support.operator_session(
                 environment="gamma",
                 base_url="https://api.gamma.quwoquan.com:19000",
                 hosted_token_env="unused",
             )
 
-        self.assertIs(actual, session)
-        issue.assert_called_once_with(
-            "https://api.gamma.quwoquan.com:19000",
-            environment="gamma",
-            target_name="gamma-local",
-            profile="content-report-operator",
-            subject="fixture_content_report_operator",
-        )
+        self.assertEqual(actual.owner_id, "hosted-content-report-operator")
+        self.assertEqual(actual.persona_id, "hosted-content-report-operator")
 
     def test_gate_rejects_generic_stack_reports_without_object_probe(self) -> None:
         gate = _load_gate_module()

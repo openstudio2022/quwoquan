@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../circle/group_contracts.dart';
 
@@ -19,6 +19,11 @@ final class ArchiveCircleGroupCommand {
 
   final String circleId;
   final String groupId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "groupId": this.groupId,
+  };
 }
 
 final class CircleGroupListQuery {
@@ -49,6 +54,16 @@ final class CircleGroupListQuery {
   final CircleGroupNodeType? nodeType;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.groupType != null) "groupType": switch (this.groupType!) { CircleGroupType.publicGroup => "public_group", CircleGroupType.selfBuilt => "self_built", CircleGroupType.orgNode => "org_node", },
+    if (this.visibility != null) "visibility": switch (this.visibility!) { CircleGroupVisibility.public => "public", CircleGroupVisibility.private => "private", },
+    if (this.parentGroupId != null) "parentGroupId": this.parentGroupId!,
+    if (this.nodeType != null) "nodeType": switch (this.nodeType!) { CircleGroupNodeType.generic => "generic", CircleGroupNodeType.college => "college", CircleGroupNodeType.grade => "grade", CircleGroupNodeType.classroom => "classroom", CircleGroupNodeType.department => "department", CircleGroupNodeType.team => "team", },
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class CircleGroupQuery {
@@ -67,6 +82,11 @@ final class CircleGroupQuery {
 
   final String circleId;
   final String groupId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "groupId": this.groupId,
+  };
 }
 
 final class CircleGroupSearchQuery {
@@ -97,6 +117,15 @@ final class CircleGroupSearchQuery {
   final CircleGroupType? groupType;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "query": this.query,
+    if (this.visibility != null) "visibility": switch (this.visibility!) { CircleGroupVisibility.public => "public", CircleGroupVisibility.private => "private", },
+    if (this.groupType != null) "groupType": switch (this.groupType!) { CircleGroupType.publicGroup => "public_group", CircleGroupType.selfBuilt => "self_built", CircleGroupType.orgNode => "org_node", },
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class CreateCircleGroupCommand {
@@ -139,6 +168,19 @@ final class CreateCircleGroupCommand {
   final CircleGroupJoinPolicy joinPolicy;
   final bool storageEnabled;
   final bool noticeEnabled;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    if (this.parentGroupId != null) "parentGroupId": this.parentGroupId!,
+    "groupType": switch (this.groupType) { CircleGroupType.publicGroup => "public_group", CircleGroupType.selfBuilt => "self_built", CircleGroupType.orgNode => "org_node", },
+    if (this.nodeType != null) "nodeType": switch (this.nodeType!) { CircleGroupNodeType.generic => "generic", CircleGroupNodeType.college => "college", CircleGroupNodeType.grade => "grade", CircleGroupNodeType.classroom => "classroom", CircleGroupNodeType.department => "department", CircleGroupNodeType.team => "team", },
+    "name": this.name,
+    "description": this.description,
+    "visibility": switch (this.visibility) { CircleGroupVisibility.public => "public", CircleGroupVisibility.private => "private", },
+    "joinPolicy": switch (this.joinPolicy) { CircleGroupJoinPolicy.applyOnly => "apply_only", CircleGroupJoinPolicy.inviteOnly => "invite_only", },
+    "storageEnabled": this.storageEnabled,
+    "noticeEnabled": this.noticeEnabled,
+  };
 }
 
 final class UpdateCircleGroupCommand {
@@ -187,6 +229,20 @@ final class UpdateCircleGroupCommand {
   final CircleGroupJoinPolicy? joinPolicy;
   final bool? storageEnabled;
   final bool? noticeEnabled;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "circleId": this.circleId,
+    "groupId": this.groupId,
+    "expectedVersion": '"${this.expectedVersion}"',
+    if (this.parentGroupId != null) "parentGroupId": this.parentGroupId!,
+    if (this.nodeType != null) "nodeType": switch (this.nodeType!) { CircleGroupNodeType.generic => "generic", CircleGroupNodeType.college => "college", CircleGroupNodeType.grade => "grade", CircleGroupNodeType.classroom => "classroom", CircleGroupNodeType.department => "department", CircleGroupNodeType.team => "team", },
+    if (this.name != null) "name": this.name!,
+    if (this.description != null) "description": this.description!,
+    if (this.visibility != null) "visibility": switch (this.visibility!) { CircleGroupVisibility.public => "public", CircleGroupVisibility.private => "private", },
+    if (this.joinPolicy != null) "joinPolicy": switch (this.joinPolicy!) { CircleGroupJoinPolicy.applyOnly => "apply_only", CircleGroupJoinPolicy.inviteOnly => "invite_only", },
+    if (this.storageEnabled != null) "storageEnabled": this.storageEnabled!,
+    if (this.noticeEnabled != null) "noticeEnabled": this.noticeEnabled!,
+  };
 }
 
 CloudOperationRequestPayload encodeCircleCircleGroupArchiveCircleGroupGeneratedRequest(ArchiveCircleGroupCommand request) {

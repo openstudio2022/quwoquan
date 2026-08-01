@@ -1,0 +1,37 @@
+description: 助手页面上下文五分钟运行时会话。
+fields:
+- {name: accountId, source: authenticatedAccountId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: personaId, source: authenticatedPersonaId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: contextSnapshot, source: contextSnapshot, type: PageContextSnapshot, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read, role: authoritative_state}
+- {name: capturedAt, source: capturedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+types:
+  PageContextObjectRef:
+    description: 页面上下文中的最小 canonical 对象引用。
+    fields:
+    - {name: objectTypeRef, source: objectTypeRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+  PageContextAction:
+    description: 页面上已经发生或当前允许的一项结构化动作。
+    fields:
+    - {name: actionType, source: actionType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: objectTypeRef, source: objectTypeRef, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+  PageContextSnapshot:
+    description: 五分钟 PageContext 会话保存的最小强类型页面快照。
+    fields:
+    - {name: capturedAt, source: capturedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+    - {name: pageType, source: pageType, type: enum, enum_ref: AssistantPageContextType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: pageObjects, source: pageObjects, type: '[]PageContextObjectRef', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+    - {name: userActions, source: userActions, type: '[]PageContextAction', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+    - {name: consentGranted, source: consentGranted, type: bool, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+  ReportPageContextCommand:
+    description: 页面上下文上报的唯一强类型输入，主体身份由安全上下文注入。
+    fields:
+    - {name: contextSnapshot, source: contextSnapshot, type: PageContextSnapshot, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+  PageContextReceipt:
+    description: 页面上下文固定过期时刻与接受状态。
+    fields:
+    - {name: accepted, source: accepted, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: contextKey, source: contextKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}

@@ -60,7 +60,10 @@ class SelectionRequest:
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN
     target_selector: TargetSelector = TargetSelector.ALL
     source_qualifier: TargetSourceQualifier | None = None
+    qualification_source_key: str = "qualifiedHomepageSource"
+    persist_qualified_source: bool = True
     target_names: tuple[str, ...] = ()
+    inherit_frozen_targets: bool = False
 
 
 def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
@@ -113,6 +116,26 @@ def _candidate_pool_exhausted(
     )
 
 
+def _matches_category(
+    row: Mapping[str, Any],
+    category: str | None,
+) -> bool:
+    """Match a declared selection category against a structured entity type."""
+    requested = str(category or "").strip()
+    if not requested:
+        return True
+    entity_type = str(row.get("entityType") or "").strip()
+    if not entity_type:
+        return False
+    if entity_type == requested:
+        return True
+    return requested in {
+        segment.strip()
+        for segment in entity_type.split("/")
+        if segment.strip()
+    }
+
+
 def select_targets(
     *,
     discovery_path: Path,
@@ -120,7 +143,11 @@ def select_targets(
     quota: int,
     target_selector: TargetSelector,
     source_qualifier: TargetSourceQualifier | None = None,
+    qualification_source_key: str = "qualifiedHomepageSource",
+    persist_qualified_source: bool = True,
     target_names: tuple[str, ...] = (),
+    category: str | None = None,
+    inherit_frozen_targets: bool = False,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
     """Select up to ``limit`` candidates and require at least ``quota`` of them.
 
@@ -138,7 +165,14 @@ def select_targets(
             f"approved quota {quota} exceeds the candidate pool {limit}"
         )
     partitions = load_partitions(discovery_path)
-    by_name = partition_targets(partitions, target_selector=target_selector)
+    by_name = {
+        name: row
+        for name, row in partition_targets(
+            partitions,
+            target_selector=target_selector,
+        ).items()
+        if _matches_category(row, category)
+    }
     selected: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -151,11 +185,24 @@ def select_targets(
                 "requested targets are absent from the region reference: "
                 + ", ".join(missing)
             )
-        if target_selector is not TargetSelector.SOURCE_READY_PRIORITY:
+        if (
+            target_selector is not TargetSelector.SOURCE_READY_PRIORITY
+            or inherit_frozen_targets
+        ):
+            if inherit_frozen_targets and target_selector is TargetSelector.SOURCE_READY_PRIORITY:
+                # retryOf must keep the predecessor's exact candidate pool.
+                # Re-probing Commons/Wikipedia here is unbounded and can reshape
+                # the immutable retry set; download admission re-verifies rights.
+                if source_qualifier is None:
+                    raise ValueError("source-ready-priority requires source_qualifier")
             selected = [by_name[name] for name in target_names]
             report = {
                 "schema": "quwoquan_data.target_selection",
-                "strategy": "explicit frozen target order",
+                "strategy": (
+                    "inherited frozen target order"
+                    if inherit_frozen_targets
+                    else "explicit frozen target order"
+                ),
                 "targetSelector": target_selector.value,
                 "discoveryPath": str(discovery_path),
                 "limit": limit,
@@ -164,7 +211,10 @@ def select_targets(
                 "selectionShortfall": max(0, quota - len(selected)),
                 "targets": selected,
                 "requestedTargetNames": list(target_names),
+                "inheritedFrozenTargets": bool(inherit_frozen_targets),
             }
+            if category:
+                report["category"] = str(category).strip()
             if len(selected) < quota:
                 raise _candidate_pool_exhausted(
                     selected_count=len(selected),
@@ -211,6 +261,8 @@ def select_targets(
             quota=quota,
             source_qualifier=source_qualifier,
             target_names=target_names,
+            qualification_source_key=qualification_source_key,
+            persist_qualified_source=persist_qualified_source,
         )
     else:
         for row in candidate_rows:
@@ -235,6 +287,8 @@ def select_targets(
         "selectionShortfall": max(0, quota - len(selected)),
         "targets": selected,
     }
+    if category:
+        report["category"] = str(category).strip()
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
         report["sourceQualification"] = source_qualification
         if requested_target_names:
@@ -401,6 +455,9 @@ def build_execution_spec(
         "targetObjectCount": target_object_count,
         "approvedQuota": approved_quota,
         "oversampleFactor": float(oversample_factor),
+        # Scale article source plans must use the registry-admitted commercial
+        # frontier; they may not fall back to uncontrolled platform sources.
+        "articleCommercialClosure": carriers == ["article"],
     }
     spec["queuePolicy"] = {
         "backend": "reliabletask",
@@ -463,7 +520,11 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         quota=approved_quota,
         target_selector=request.target_selector,
         source_qualifier=request.source_qualifier,
+        qualification_source_key=request.qualification_source_key,
+        persist_qualified_source=request.persist_qualified_source,
         target_names=request.target_names,
+        category=request.category,
+        inherit_frozen_targets=bool(request.inherit_frozen_targets),
     )
     spec = build_execution_spec(
         execution_id=execution_id,

@@ -96,6 +96,32 @@ func TestSendAudioMessageUpdatesConversationPreview(t *testing.T) {
 	if preview != "[语音消息]" {
 		t.Errorf("expected lastMessagePreview=[语音消息], got %v", preview)
 	}
+	if got := convResult["lastMessageType"]; got != "audio" {
+		t.Errorf("expected detail lastMessageType=audio, got %v", got)
+	}
+
+	code, inboxResult := doGet(t, "/chat/inbox?limit=20", "user_test_001")
+	if code != http.StatusOK {
+		t.Fatalf("inbox expected 200, got %d", code)
+	}
+	items, ok := inboxResult["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("inbox missing items: %#v", inboxResult)
+	}
+	var matched map[string]any
+	for _, raw := range items {
+		item, itemOK := raw.(map[string]any)
+		if itemOK && item["id"] == convId {
+			matched = item
+			break
+		}
+	}
+	if matched == nil {
+		t.Fatalf("inbox missing conversation %s: %#v", convId, inboxResult)
+	}
+	if got := matched["lastMessageType"]; got != "audio" {
+		t.Errorf("expected inbox lastMessageType=audio, got %v", got)
+	}
 }
 
 func TestSendAudioMessageDedup(t *testing.T) {

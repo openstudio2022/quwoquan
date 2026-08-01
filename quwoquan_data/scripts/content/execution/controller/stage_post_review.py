@@ -140,6 +140,16 @@ def _runtime_materialization_issues(ctx: ExecutionContext, refs: list[str]) -> l
         except KeyError:
             missing.append(ref)
             continue
+        failure_path = obj_dir / "5.review" / "materialize_failure.json"
+        if failure_path.is_file():
+            try:
+                failure = read_json(failure_path)
+                message = str(failure.get("message") or "materialize failed")
+            except (OSError, ValueError, TypeError):
+                message = "materialize failed"
+            issues.append(f"{ref}: {message}")
+            missing.append(ref)
+            continue
         manifest_path = obj_dir / "manifest.json"
         if not manifest_path.is_file():
             missing.append(ref)
@@ -153,6 +163,8 @@ def _runtime_materialization_issues(ctx: ExecutionContext, refs: list[str]) -> l
         if actual_type != expected_type:
             issues.append(f"{ref}: runtime carrier {actual_type} != planned {expected_type}")
         if expected_type == "article" and not (obj_dir / "article.md").is_file():
+            missing.append(ref)
+        if expected_type == "video" and not (obj_dir / "assets" / "video.mp4").is_file():
             missing.append(ref)
     if missing:
         issues.insert(0, "release missing planned post ref(s): " + ", ".join(sorted(set(missing))[:20]))
@@ -262,9 +274,23 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
     preflight_short_refs = _content_plan_base_draft_shortfall_refs(ctx, active_refs)
     for ref in preflight_short_refs:
         add_issues(ref, ["baseDraftText effective length below content_plan gate"])
-    reviewable_refs = [
-        ref for ref in active_refs if ref not in set(preflight_short_refs)
+    from content.execution.controller.stage_post_compose import compose_brief_absorbed_path
+
+    compose_absorbed_refs = [
+        ref
+        for ref in active_refs
+        if compose_brief_absorbed_path(ctx.execution_id, ref).is_file()
     ]
+    for ref in compose_absorbed_refs:
+        absorbed = {}
+        try:
+            absorbed = read_json(compose_brief_absorbed_path(ctx.execution_id, ref))
+        except (OSError, ValueError, TypeError):
+            absorbed = {}
+        reason = str(absorbed.get("reason") or "compose-brief gate failed; absorbed")
+        add_issues(ref, [reason])
+    excluded_refs = set(preflight_short_refs) | set(compose_absorbed_refs)
+    reviewable_refs = [ref for ref in active_refs if ref not in excluded_refs]
     all_green = bool(reviewable_refs)
     stale_review_refs: list[str] = []
     for ref in reviewable_refs:
@@ -387,12 +413,14 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         object_issues=object_issues,
     )
     write_post_review_closure(closure)
-    if closure.passed:
+    # Quota is a milestone, not a publish veto: any qualified objects may proceed.
+    if closure.qualified_count > 0:
+        milestone = "met" if closure.passed else "partial"
         return StageResult(
             ExecutionStage.POST_REVIEW,
             AUTO,
             StageStatus.DONE,
-            "post_review quota met "
+            f"post_review quota {milestone} "
             f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
             f"discarded={len(closure.discarded)})",
         )
@@ -429,7 +457,7 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         ExecutionStage.POST_REVIEW,
         AUTO,
         StageStatus.FAILED,
-        "post_review quota shortfall "
+        "post_review has zero qualified objects "
         f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
         f"discarded={len(closure.discarded)})",
         fallback_stage=fallback,

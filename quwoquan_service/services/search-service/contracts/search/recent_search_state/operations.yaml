@@ -91,7 +91,7 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
-      - SEARCH.USER.invalid_argument
+      - SEARCH.USER.recent_invalid_argument
       - SEARCH.USER.recent_version_conflict
       - SEARCH.USER.recent_idempotency_conflict
       - SEARCH.SYSTEM.recent_storage_failed
@@ -269,7 +269,7 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
-      - SEARCH.USER.invalid_argument
+      - SEARCH.USER.recent_invalid_argument
       - SEARCH.SYSTEM.internal_error
     privacy:
       request_classification: INTERNAL

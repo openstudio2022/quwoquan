@@ -97,6 +97,7 @@ type SendMessageRequest struct {
 type MessageCardCommand struct {
 	Kind         string                        `json:"kind"`
 	Title        string                        `json:"title"`
+	ObjectRef    *MessageCardObjectRefCommand  `json:"objectRef"`
 	Subtitle     string                        `json:"subtitle"`
 	ThumbnailURL string                        `json:"thumbnailUrl"`
 	DeepLink     string                        `json:"deeplink"`
@@ -104,6 +105,12 @@ type MessageCardCommand struct {
 	ShareText    string                        `json:"shareText"`
 	Message      string                        `json:"message"`
 	Attributes   []MessageCardAttributeCommand `json:"attributes"`
+}
+
+type MessageCardObjectRefCommand struct {
+	ObjectTypeRef string `json:"objectTypeRef"`
+	ObjectID      string `json:"objectId"`
+	RouteID       string `json:"routeId"`
 }
 
 type MessageCardAttributeCommand struct {
@@ -494,6 +501,10 @@ func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, 
 	if !kind.Valid() {
 		return nil, generated.AppErrorFromMessageInvalid("unsupported card kind")
 	}
+	objectRef, err := validateMessageCardObjectRef(kind, req.Card.ObjectRef)
+	if err != nil {
+		return nil, err
+	}
 	if len([]rune(title)) > messageCardTitleRuneLimit {
 		return nil, generated.AppErrorFromMessageInvalid("card title exceeds 120 Unicode code points")
 	}
@@ -519,6 +530,7 @@ func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, 
 	return &messagemodel.MessageCard{
 		Kind:         kind,
 		Title:        title,
+		ObjectRef:    objectRef,
 		Subtitle:     strings.TrimSpace(req.Card.Subtitle),
 		ThumbnailURL: strings.TrimSpace(req.Card.ThumbnailURL),
 		DeepLink:     strings.TrimSpace(req.Card.DeepLink),
@@ -526,6 +538,43 @@ func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, 
 		ShareText:    strings.TrimSpace(req.Card.ShareText),
 		Message:      strings.TrimSpace(req.Card.Message),
 		Attributes:   attributes,
+	}, nil
+}
+
+func validateMessageCardObjectRef(
+	kind messagemodel.MessageCardKind,
+	ref *MessageCardObjectRefCommand,
+) (*messagemodel.MessageCardObjectRef, error) {
+	required := map[messagemodel.MessageCardKind]struct {
+		objectType string
+		routeID    string
+	}{
+		messagemodel.MessageCardKindContentPost:   {"post", "contentDetail"},
+		messagemodel.MessageCardKindUserProfile:   {"user", "userProfile"},
+		messagemodel.MessageCardKindEntityProfile: {"homepage", "homepageDetail"},
+		messagemodel.MessageCardKindCircle:        {"circle", "circleDetail"},
+		messagemodel.MessageCardKindGathering:     {"gathering", "gatheringDetail"},
+	}
+	expected, actionable := required[kind]
+	if !actionable {
+		if ref != nil {
+			return nil, generated.AppErrorFromMessageInvalid("non-actionable card must not contain objectRef")
+		}
+		return nil, nil
+	}
+	if ref == nil {
+		return nil, generated.AppErrorFromMessageInvalid("actionable card requires objectRef")
+	}
+	objectType := strings.TrimSpace(ref.ObjectTypeRef)
+	objectID := strings.TrimSpace(ref.ObjectID)
+	routeID := strings.TrimSpace(ref.RouteID)
+	if objectID == "" || objectType != expected.objectType || routeID != expected.routeID {
+		return nil, generated.AppErrorFromMessageInvalid("card objectRef does not match kind")
+	}
+	return &messagemodel.MessageCardObjectRef{
+		ObjectTypeRef: objectType,
+		ObjectID:      objectID,
+		RouteID:       routeID,
 	}, nil
 }
 

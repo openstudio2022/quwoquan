@@ -1,5 +1,5 @@
 kind: append_only_fact
-description: ExternalInteractionDeadLetterFact 的领域对象契约。
+description: Integration 在外部交互达到不可再重试终态时追加的不可变 dead-letter 事实，作为恢复与审计的唯一依据。
 identity:
   fields:
   - deadLetterId
@@ -22,3 +22,7 @@ lifecycle:
   immutable: true
 local_identity_reasons:
   taskId: reliable-task terminal work item key scoped to this dead-letter fact; it is not a business-object reference
+business_rules:
+- 每个终态 requestId 至多一个 active dead-letter identity，恢复尝试另行追加审计事件而不修改原事实。
+- dead-letter 只保存稳定错误分类与脱敏上下文，不复制 provider 原始响应或凭据。
+- 清理、恢复和保留策略只由 integration-service 执行，其他服务不得跨库访问。

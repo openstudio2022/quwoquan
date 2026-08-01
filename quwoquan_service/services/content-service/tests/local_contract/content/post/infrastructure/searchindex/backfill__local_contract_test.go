@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/search/es"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 // recordingBulk captures backfill writes through the BulkIndexer contract.

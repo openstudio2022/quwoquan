@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -23,31 +23,11 @@ func TestSubmitPostPublicationProjectsPublishedSemanticMentions(t *testing.T) {
 	command := semanticPublicationCommand(
 		"semantic-mention-publication",
 		nil,
-		[]any{
-			map[string]any{
-				"mentionId": "m_entity_published",
-				"kind":      "entity",
-				"status":    "published",
-				"targetRef": "/entity/地点/景区/九寨沟",
-			},
-			map[string]any{
-				"mentionId": "m_tag_published",
-				"kind":      "tag",
-				"status":    "published",
-				"targetRef": "tag:topic:川西秋色",
-			},
-			map[string]any{
-				"mentionId":   "m_entity_pending",
-				"kind":        "entity",
-				"status":      "pending_review",
-				"candidateId": "cand_huanglong",
-			},
-			map[string]any{
-				"mentionId": "m_tag_rejected",
-				"kind":      "tag",
-				"status":    "rejected",
-				"targetRef": "tag:topic:被驳回",
-			},
+		[]postmodel.PostSemanticMention{
+			{MentionId: "m_entity_published", Kind: "entity", Status: "published", TargetRef: "/entity/地点/景区/九寨沟"},
+			{MentionId: "m_tag_published", Kind: "tag", Status: "published", TargetRef: "tag:topic:川西秋色"},
+			{MentionId: "m_entity_pending", Kind: "entity", Status: "pending_review", CandidateId: "cand_huanglong"},
+			{MentionId: "m_tag_rejected", Kind: "tag", Status: "rejected", TargetRef: "tag:topic:被驳回"},
 		},
 	)
 	receipt, err := service.SubmitPostPublication(
@@ -80,11 +60,8 @@ func TestSubmitPostPublicationRejectsPublishedMentionWithInvalidTargetRef(t *tes
 	command := semanticPublicationCommand(
 		"semantic-mention-invalid-target",
 		nil,
-		[]any{map[string]any{
-			"mentionId": "m_entity_bad",
-			"kind":      "entity",
-			"status":    "published",
-			"targetRef": "entity:sight",
+		[]postmodel.PostSemanticMention{{
+			MentionId: "m_entity_bad", Kind: "entity", Status: "published", TargetRef: "entity:sight",
 		}},
 	)
 	if _, err := service.SubmitPostPublication(
@@ -106,11 +83,8 @@ func TestSubmitPostPublicationRejectsClientSuppliedRefsDivergingFromMentions(t *
 	command := semanticPublicationCommand(
 		"semantic-mention-diverging-refs",
 		[]string{"/entity/地点/景区/不存在的实体"},
-		[]any{map[string]any{
-			"mentionId": "m_entity_published",
-			"kind":      "entity",
-			"status":    "published",
-			"targetRef": "/entity/地点/景区/九寨沟",
+		[]postmodel.PostSemanticMention{{
+			MentionId: "m_entity_published", Kind: "entity", Status: "published", TargetRef: "/entity/地点/景区/九寨沟",
 		}},
 	)
 	if _, err := service.SubmitPostPublication(
@@ -138,7 +112,7 @@ func TestSubmitPostPublicationRequiresTransportIdempotencyContext(t *testing.T) 
 func semanticPublicationCommand(
 	intentID string,
 	entityRefs []string,
-	semanticMentions []any,
+	semanticMentions []postmodel.PostSemanticMention,
 ) SubmitPostPublicationCommand {
 	return SubmitPostPublicationCommand{
 		PublishIntentID: intentID,

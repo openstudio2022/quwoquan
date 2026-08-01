@@ -55,7 +55,8 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentType;
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
@@ -70,6 +71,7 @@ import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentEngagementTracker, ContentType;
+import 'package:quwoquan_app/core/trackers/feed_performance_observability_provider.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -145,7 +147,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.onTapBack,
     this.onSwitchToFollowing,
     this.onSwitchToCircles,
-    this.onSwitchToMoment, // Deprecated/Fallback
     this.onRevealSystemNav,
     this.onHideSystemNav,
     this.showTopNavigation = true,
@@ -178,7 +179,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final VoidCallback? onTapBack;
   final VoidCallback? onSwitchToFollowing;
   final VoidCallback? onSwitchToCircles;
-  final VoidCallback? onSwitchToMoment;
   final VoidCallback? onRevealSystemNav;
   final VoidCallback? onHideSystemNav;
   final bool showTopNavigation;

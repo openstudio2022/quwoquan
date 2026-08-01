@@ -791,43 +791,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-        post:
-            operationId: AssignExperimentVariant
-            x-contract-operation-id: ops.experiment_assignment_fact.AssignExperimentVariant
-            x-object-id: ops.experiment_assignment_fact
-            x-actor: persona_or_device
-            x-application:
-                kind: command
-                facet: ExperimentAssignmentCommandFacade
-                method: appendAssignment
-                appendSink: ExperimentAssignmentFact
-            parameters:
-                - name: experimentId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-                - name: Idempotency-Key
-                  in: header
-                  required: true
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ExperimentAssignmentFact'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /ops/experiments/{experimentId}/stats:
         get:
             operationId: GetExperimentStats

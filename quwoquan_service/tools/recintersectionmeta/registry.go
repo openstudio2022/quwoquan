@@ -217,15 +217,13 @@ func (c ColdStartSupply) MinDistinctObjectsFor(kind string) int {
 //
 //	Tier               light（轻查看/关注）| heavy（重社交，需破冰阶梯/请求）。
 //	RequiredGates      重行动前置安全门（⊆ registry.gateKeys）；空=无门（轻查看类）。
-//	TargetAvailability available（有真实承接页）| deferred（承接页/数据源未就绪，端不得伪造成行）。
 //	Dispatch           ∈ registry.actionDispatch（assistant|navigate|message|companion|connect|commerce）：
 //	                   端交互 handler 路由维度，与 Tier 权限成本维度正交；端 navigator/徽标/助手分发读此字段，
 //	                   禁止端手写「哪些 actionKey 属助手/约伴」第二份枚举（M0.7）。
 type ActionKeyMeta struct {
-	Tier               string   `yaml:"tier"`
-	RequiredGates      []string `yaml:"requiredGates"`
-	TargetAvailability string   `yaml:"targetAvailability"`
-	Dispatch           string   `yaml:"dispatch"`
+	Tier          string   `yaml:"tier"`
+	RequiredGates []string `yaml:"requiredGates"`
+	Dispatch      string   `yaml:"dispatch"`
 }
 
 // DefaultMoment 是 kind 未显式声明 moment 时的缺省意图时态（§24 M0.2：大多数交集是当下事实）。
@@ -275,7 +273,6 @@ type KindDef struct {
 	EvidenceRank        int      `yaml:"evidenceRank"`
 	LifecycleApplicable bool     `yaml:"lifecycleApplicable"`
 	Moment              string   `yaml:"moment"`
-	Status              string   `yaml:"status"`
 }
 
 // MomentOrDefault 返回 kind 的意图时态，未显式声明时回退 DefaultMoment（current）。
@@ -404,7 +401,7 @@ func Validate(r *Registry) error {
 		}
 	}
 	// §24 M0.1/M0.3：actionKeyMeta 键集必须 == actionHintLegend，
-	// 且 tier / requiredGates / targetAvailability 取值受闭集约束（gateKeys / {light,heavy} / {available,deferred}）。
+	// 且 tier / requiredGates / dispatch 取值受闭集约束。
 	if len(r.ActionKeyMeta) > 0 || len(r.ActionHintLegend) > 0 {
 		gates := toStringSet(r.GateKeys)
 		dispatches := toStringSet(r.ActionDispatch)
@@ -419,9 +416,6 @@ func Validate(r *Registry) error {
 			}
 			if meta.Tier != "light" && meta.Tier != "heavy" {
 				return fmt.Errorf("actionKeyMeta[%q] tier %q must be light|heavy", key, meta.Tier)
-			}
-			if meta.TargetAvailability != "available" && meta.TargetAvailability != "deferred" {
-				return fmt.Errorf("actionKeyMeta[%q] targetAvailability %q must be available|deferred", key, meta.TargetAvailability)
 			}
 			if _, ok := dispatches[meta.Dispatch]; !ok {
 				return fmt.Errorf("actionKeyMeta[%q] dispatch %q not in actionDispatch closed set", key, meta.Dispatch)

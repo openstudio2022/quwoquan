@@ -276,6 +276,16 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       authTokenProvider: authTokenProvider,
       onEvents: _onLongPollEvents,
     );
+    _longPoll!.onFirstTransportFailure = (reasonCode) {
+      unawaited(
+        _recordConnectResult(
+          transport: 'long_poll',
+          result: 'failed',
+          durationMs: 0,
+          failReasonCode: reasonCode,
+        ),
+      );
+    };
     _longPoll!.start();
     unawaited(
       _recordConnectResult(

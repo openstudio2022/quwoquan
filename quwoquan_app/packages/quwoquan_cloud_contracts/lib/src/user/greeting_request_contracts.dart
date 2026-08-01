@@ -11,6 +11,64 @@ abstract interface class GreetingRequestCommandWriter {
   Future<GreetingRequestRecord> cancelGreeting(CancelGreetingCommand command);
 }
 
+/// 发起打招呼时可提交的最小交集意图引用。
+///
+/// 不携带任何展示文案、URL 或标签；user-service 必须按当前双方重新解析，
+/// 解析失效时仍发送普通问候。
+final class GreetingIntersectionRef {
+  const GreetingIntersectionRef({
+    required this.intersectionId,
+    required this.evidenceId,
+    required this.sourceRef,
+    required this.objectTypeRef,
+    required this.objectId,
+  });
+
+  final String intersectionId;
+  final String evidenceId;
+  final String sourceRef;
+  final String objectTypeRef;
+  final String objectId;
+
+  bool get isComplete =>
+      intersectionId.trim().isNotEmpty &&
+      evidenceId.trim().isNotEmpty &&
+      sourceRef.trim().isNotEmpty &&
+      objectTypeRef.trim().isNotEmpty &&
+      objectId.trim().isNotEmpty;
+  bool get isNotEmpty => isComplete;
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    'intersectionId': intersectionId.trim(),
+    'evidenceId': evidenceId.trim(),
+    'sourceRef': sourceRef.trim(),
+    'objectTypeRef': objectTypeRef.trim(),
+    'objectId': objectId.trim(),
+  };
+}
+
+final class GreetingIntersectionSnapshot {
+  const GreetingIntersectionSnapshot({
+    required this.intersectionId,
+    required this.evidenceId,
+    required this.sourceRef,
+    required this.objectTypeRef,
+    required this.objectId,
+    required this.primaryText,
+    required this.resolvedAt,
+    this.dimension,
+  });
+
+  final String intersectionId;
+  final String evidenceId;
+  final String sourceRef;
+  final String objectTypeRef;
+  final String objectId;
+  final String primaryText;
+  final String? dimension;
+  final DateTime resolvedAt;
+}
+
 abstract interface class GreetingRequestQuery {
   Future<GreetingRequestSlice> listGreetingInbox(
     ListGreetingRequestsQuery query,
@@ -31,6 +89,8 @@ final class GreetingRequestRecord {
     required this.createdAt,
     required this.updatedAt,
     this.requestMessage,
+    this.intersectionRef,
+    this.intersectionSnapshot,
     this.promotedConversationId,
     this.expireAt,
     this.decisionAt,
@@ -40,6 +100,8 @@ final class GreetingRequestRecord {
   final String requesterPersonaId;
   final String targetPersonaId;
   final String? requestMessage;
+  final GreetingIntersectionRef? intersectionRef;
+  final GreetingIntersectionSnapshot? intersectionSnapshot;
   final String status;
   final String source;
   final String? promotedConversationId;
@@ -63,6 +125,10 @@ GreetingRequestRecord decodeGreetingRequestRecord(Object? response) {
     requesterPersonaId: _requiredField(root, 'requesterPersonaId'),
     targetPersonaId: _requiredField(root, 'targetPersonaId'),
     requestMessage: _optionalString(root['requestMessage']),
+    intersectionRef: _decodeIntersectionRef(root['intersectionRef']),
+    intersectionSnapshot: _decodeIntersectionSnapshot(
+      root['intersectionSnapshot'],
+    ),
     status: _requiredField(root, 'status'),
     source: _requiredField(root, 'source'),
     promotedConversationId: _optionalString(root['promotedConversationId']),
@@ -70,6 +136,33 @@ GreetingRequestRecord decodeGreetingRequestRecord(Object? response) {
     decisionAt: _optionalTimestamp(root['decisionAt']),
     createdAt: _requiredTimestamp(root, 'createdAt'),
     updatedAt: _requiredTimestamp(root, 'updatedAt'),
+  );
+}
+
+GreetingIntersectionRef? _decodeIntersectionRef(Object? value) {
+  if (value == null) return null;
+  final root = _object(value, 'GreetingIntersectionRef');
+  return GreetingIntersectionRef(
+    intersectionId: _requiredField(root, 'intersectionId'),
+    evidenceId: _requiredField(root, 'evidenceId'),
+    sourceRef: _requiredField(root, 'sourceRef'),
+    objectTypeRef: _requiredField(root, 'objectTypeRef'),
+    objectId: _requiredField(root, 'objectId'),
+  );
+}
+
+GreetingIntersectionSnapshot? _decodeIntersectionSnapshot(Object? value) {
+  if (value == null) return null;
+  final root = _object(value, 'GreetingIntersectionSnapshot');
+  return GreetingIntersectionSnapshot(
+    intersectionId: _requiredField(root, 'intersectionId'),
+    evidenceId: _requiredField(root, 'evidenceId'),
+    sourceRef: _requiredField(root, 'sourceRef'),
+    objectTypeRef: _requiredField(root, 'objectTypeRef'),
+    objectId: _requiredField(root, 'objectId'),
+    primaryText: _requiredField(root, 'primaryText'),
+    dimension: _optionalString(root['dimension']),
+    resolvedAt: _requiredTimestamp(root, 'resolvedAt'),
   );
 }
 

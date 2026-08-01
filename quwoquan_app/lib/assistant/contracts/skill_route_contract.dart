@@ -68,17 +68,17 @@ class SkillRouteTarget {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'skillId': skillId,
-        'role': role,
-        'priority': priority,
-        'goal': goal,
-        'problemClass': problemClass,
-        'taskBrief': taskBrief,
-        'routeNarrative': routeNarrative,
-        'localContextSeed': localContextSeed,
-        'needClarify': needClarify,
-        'pendingClarifications': pendingClarifications,
-      };
+    'skillId': skillId,
+    'role': role,
+    'priority': priority,
+    'goal': goal,
+    'problemClass': problemClass,
+    'taskBrief': taskBrief,
+    'routeNarrative': routeNarrative,
+    'localContextSeed': localContextSeed,
+    'needClarify': needClarify,
+    'pendingClarifications': pendingClarifications,
+  };
 
   factory SkillRouteTarget.fromJson(Map<String, dynamic> json) {
     return SkillRouteTarget(
@@ -91,7 +91,9 @@ class SkillRouteTarget {
       routeNarrative: (json['routeNarrative'] as String?)?.trim() ?? '',
       localContextSeed: (json['localContextSeed'] as String?)?.trim() ?? '',
       needClarify: json['needClarify'] == true,
-      pendingClarifications: _normalizeStringList(json['pendingClarifications']),
+      pendingClarifications: _normalizeStringList(
+        json['pendingClarifications'],
+      ),
     );
   }
 }
@@ -117,14 +119,15 @@ class SkillRouteOutput {
       selectedTargets.any((item) => item.skillId.trim().isNotEmpty);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'userQuery': userQuery,
-        'selectedTargets':
-            selectedTargets.map((item) => item.toJson()).toList(growable: false),
-        'routeNarrative': routeNarrative,
-        'needClarify': needClarify,
-        'pendingClarifications': pendingClarifications,
-      };
+    'contractId': contractId,
+    'userQuery': userQuery,
+    'selectedTargets': selectedTargets
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'routeNarrative': routeNarrative,
+    'needClarify': needClarify,
+    'pendingClarifications': pendingClarifications,
+  };
 
   factory SkillRouteOutput.fromJson(Map<String, dynamic> json) {
     return SkillRouteOutput(
@@ -133,7 +136,9 @@ class SkillRouteOutput {
       selectedTargets: _targetList(json['selectedTargets']),
       routeNarrative: (json['routeNarrative'] as String?)?.trim() ?? '',
       needClarify: json['needClarify'] == true,
-      pendingClarifications: _normalizeStringList(json['pendingClarifications']),
+      pendingClarifications: _normalizeStringList(
+        json['pendingClarifications'],
+      ),
     );
   }
 
@@ -148,10 +153,7 @@ class SkillRouteOutput {
     final selectedTargets = <SkillRouteTarget>[
       primaryTarget,
       for (var i = 0; i < supportingPlans.length; i++)
-        SkillRouteTarget.fromSubagentPlan(
-          supportingPlans[i],
-          priority: i + 2,
-        ),
+        SkillRouteTarget.fromSubagentPlan(supportingPlans[i], priority: i + 2),
     ];
     final mergedClarifications = <String>{
       ..._normalizeStringList(pendingClarifications),
@@ -160,9 +162,9 @@ class SkillRouteOutput {
     final resolvedRouteNarrative = routeNarrative.trim().isNotEmpty
         ? routeNarrative.trim()
         : selectedTargets
-            .map((item) => item.routeNarrative.trim())
-            .where((item) => item.isNotEmpty)
-            .join(' | ');
+              .map((item) => item.routeNarrative.trim())
+              .where((item) => item.isNotEmpty)
+              .join(' | ');
     return SkillRouteOutput(
       userQuery: userQuery,
       selectedTargets: selectedTargets,

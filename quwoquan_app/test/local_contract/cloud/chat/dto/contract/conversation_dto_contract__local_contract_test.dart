@@ -32,6 +32,7 @@ void main() {
       expect(dto.receiptEnabled, isTrue);
       expect(dto.lastMessageId, equals('msg_last'));
       expect(dto.lastMessagePreview, equals('周六早上8点出发'));
+      expect(dto.lastMessageType.wireValue, equals('text'));
       expect(dto.lastMessageTime, DateTime.parse('2026-03-07T09:15:00Z'));
       expect(dto.messageCount, equals(256));
       expect(dto.status, equals('active'));
@@ -55,6 +56,32 @@ void main() {
       expect(map.containsKey('conversationId'), isFalse);
       expect(map.containsKey('bindingType'), isFalse);
       expect(map.containsKey('lifecyclePolicy'), isFalse);
+    });
+
+    test('Greeting 升级交集快照严格 round-trip', () {
+      final dto = ConversationDto.fromMap(
+        _conversationWire(<String, dynamic>{
+          'originType': 'greeting_reply',
+          'originIntersectionSnapshot': <String, Object?>{
+            'intersectionId': 'intersection_1',
+            'evidenceId': 'evidence_1',
+            'sourceRef': 'coVisitedEntity',
+            'objectTypeRef': 'user',
+            'objectId': 'user_002',
+            'primaryText': '你们都去过老君山',
+            'dimension': 'destination',
+            'resolvedAt': '2026-07-31T08:00:00Z',
+          },
+        }),
+      );
+
+      expect(dto.originIntersectionSnapshot?.primaryText, '你们都去过老君山');
+      final decoded = ConversationDto.fromMap(dto.toMap());
+      expect(decoded.originIntersectionSnapshot?.evidenceId, 'evidence_1');
+      expect(
+        decoded.originIntersectionSnapshot?.resolvedAt,
+        DateTime.utc(2026, 7, 31, 8),
+      );
     });
   });
 
@@ -100,6 +127,7 @@ void main() {
         'creatorId',
         'maxGroupSize',
         'receiptEnabled',
+        'lastMessageType',
         'status',
         'createdAt',
         'updatedAt',
@@ -153,6 +181,7 @@ Map<String, dynamic> _conversationWire([
     'memberCount': 0,
     'maxGroupSize': 1000,
     'receiptEnabled': true,
+    'lastMessageType': 'text',
     'messageCount': 0,
     'status': 'active',
     'createdAt': '2026-02-01T10:00:00Z',

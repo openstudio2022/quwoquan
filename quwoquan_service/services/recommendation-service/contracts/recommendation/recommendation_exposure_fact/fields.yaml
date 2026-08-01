@@ -1,4 +1,4 @@
-description: 推荐曝光不可变事实（rec_impression 信封投影）。
+description: Content 确认 FeedDeliveryPage 后由 Recommendation 形成的不可变交付曝光事实。
 fields:
 - name: id
   source: eventId
@@ -6,7 +6,18 @@ fields:
   constraints:
   - PK
   - NOT_NULL
-  description: 从 requestId+targetId 确定性派生的 dedupe 身份
+  description: 从 deliveryPageId+ordinal+targetId 确定性派生的 dedupe 身份
+  role: append_only_fact
+- name: sourceEventId
+  source: eventId
+  type: string
+  constraints: [NOT_NULL]
+  description: FeedPageDelivered 源事件身份
+  role: append_only_fact
+- name: deliveryPageId
+  source: deliveryPageId
+  type: string
+  constraints: [NOT_NULL]
   role: append_only_fact
 - name: requestId
   source: context.feedRequestId
@@ -14,6 +25,12 @@ fields:
   constraints:
   - NOT_NULL
   description: feedRequestId，曝光批次的归因键
+  role: append_only_fact
+- name: windowId
+  source: context.windowId
+  type: string
+  constraints: [NOT_NULL]
+  description: Recommendation 稳定排序窗口身份
   role: append_only_fact
 - name: userId
   source: userId
@@ -50,12 +67,12 @@ fields:
   - NOT_NULL
   role: append_only_fact
   reference: true
-- name: rank
-  source: context.rank
+- name: ordinal
+  source: ordinal
   type: int
   constraints:
   - NOT_NULL
-  description: 服务端重排后的全局一基序位，禁止消费端侧 position
+  description: 服务端稳定窗口的零基序位，禁止消费端侧 position
   role: append_only_fact
 - name: modelBucket
   source: context.modelBucket
@@ -86,6 +103,18 @@ fields:
   - NOT_NULL
   description: 在线评分读取用户与候选特征后的统一快照时刻
   role: append_only_fact
+- name: featureSnapshotDigest
+  source: context.featureSnapshotDigest
+  type: string
+  constraints: [NOT_NULL]
+  description: 对本次 user/item snapshot 的 canonical SHA-256 绑定
+  role: append_only_fact
+- name: rankingSnapshotDigest
+  source: context.rankingSnapshotDigest
+  type: string
+  constraints: [NOT_NULL]
+  description: 包含候选集合、序位、模型身份与逐项特征摘要的窗口级 canonical SHA-256
+  role: append_only_fact
 - name: userFeatureSnapshot
   source: context.userFeatureSnapshot
   type: object
@@ -105,4 +134,9 @@ fields:
   type: timestamp
   constraints:
   - NOT_NULL
+  role: append_only_fact
+- name: recordedAt
+  source: recordedAt
+  type: timestamp
+  constraints: [NOT_NULL]
   role: append_only_fact

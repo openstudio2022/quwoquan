@@ -9,6 +9,7 @@
     "environment",
     "releaseId",
     "runId",
+    "readinessPhase",
     "sourceImportReportRef",
     "creatorImportReportRef",
     "apiBaseUrl",
@@ -27,6 +28,7 @@
     "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
     "releaseId": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
+    "readinessPhase": {"enum": ["consumer", "commercial"]},
     "sourceImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "creatorImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "apiBaseUrl": {"type": "string", "pattern": "^https://"},
@@ -53,7 +55,7 @@
     "passed": {"const": true},
     "feedQueries": {
       "type": "array",
-      "minItems": 6,
+      "minItems": 5,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -93,8 +95,7 @@
       "allOf": [
         {"contains": {"type": "object", "properties": {"name": {"const": "discovery_work"}, "query": {"pattern": "^identity=work&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}},
         {"contains": {"type": "object", "properties": {"name": {"const": "typed_video"}, "query": {"pattern": "^identity=work&type=video&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}},
-        {"contains": {"type": "object", "properties": {"name": {"const": "homepage_recommend"}, "query": {"pattern": "^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}},
-        {"contains": {"type": "object", "properties": {"name": {"const": "premium_stream"}, "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}}
+        {"contains": {"type": "object", "properties": {"name": {"const": "homepage_recommend"}, "query": {"pattern": "^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"}}, "required": ["name", "query"]}}
       ]
     },
     "creators": {
@@ -155,6 +156,43 @@
     },
     "issues": {"type": "array", "maxItems": 0}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"readinessPhase": {"const": "commercial"}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "properties": {
+          "feedQueries": {
+            "minItems": 6,
+            "contains": {
+              "type": "object",
+              "properties": {
+                "name": {"const": "premium_stream"},
+                "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
+              },
+              "required": ["name", "query"]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "feedQueries": {
+            "maxItems": 5,
+            "not": {
+              "contains": {
+                "type": "object",
+                "properties": {"name": {"const": "premium_stream"}},
+                "required": ["name"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "releaseMediaProbe": {
       "type": "object",

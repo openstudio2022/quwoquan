@@ -1,7 +1,7 @@
 {
   "schema": "quwoquan_data.filter_catalog_environment_import",
   "environment": "prod",
-  "deliveryMode": "release",
+  "deliveryMode": "immutable_release",
   "canonicalArtifactRef": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/filter_catalog_release.json",
   "releaseId": "filter-catalog-20260720-001",
   "sourceOwner": "qwq_data",

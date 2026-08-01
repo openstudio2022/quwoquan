@@ -108,7 +108,9 @@ class _MarkdownBlockView extends StatelessWidget {
         ),
         QwqMarkdownBlockKind.callout => _CalloutBlock(block: block),
         QwqMarkdownBlockKind.card => _CardBlock(block: block),
-        QwqMarkdownBlockKind.horizontalRule => const SizedBox(height: AppSpacing.lg),
+        QwqMarkdownBlockKind.horizontalRule => const SizedBox(
+          height: AppSpacing.lg,
+        ),
         QwqMarkdownBlockKind.spacer => const SizedBox(height: AppSpacing.lg),
         QwqMarkdownBlockKind.codeBlock => Text(
           block.text,

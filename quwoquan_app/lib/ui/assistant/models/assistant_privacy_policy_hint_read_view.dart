@@ -12,12 +12,7 @@ class AssistantPrivacyPolicyHintReadView {
   static Map<String, dynamic> defaultPrivacyPolicyMap() => <String, dynamic>{
     'webAccessMode': 'limited',
     'allowedCapabilities': AssistantCapabilityCatalog.defaultCatalog,
-    'allowedProviders': <String>[
-      'page_context',
-      'conversation',
-      'memory',
-      'web',
-    ],
+    'allowedProviders': <String>['page_context', 'session', 'memory', 'web'],
     'blockedProviders': <String>[],
     'allowedPageTypes': <String>[
       'discovery',

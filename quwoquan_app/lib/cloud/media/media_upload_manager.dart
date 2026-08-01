@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
+import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
@@ -15,7 +16,7 @@ enum UploadStatus { pending, uploading, completed, failed }
 class UploadTask {
   final String localPath;
   final MediaCategory category;
-  final String contentType;
+  final String mimeType;
   final int fileSize;
 
   UploadStatus status;
@@ -26,7 +27,7 @@ class UploadTask {
   UploadTask({
     required this.localPath,
     required this.category,
-    required this.contentType,
+    required this.mimeType,
     required this.fileSize,
     this.status = UploadStatus.pending,
     this.retryCount = 0,
@@ -39,15 +40,32 @@ class MediaUploadManager {
     required this.coordinator,
     required this.sourceReader,
     required this.uploadStream,
-    this._maxConcurrent = 3,
-    this._maxRetries = 3,
-  });
+    this.maxConcurrent = 3,
+    this.maxRetries = 3,
+    Random? retryRandom,
+  }) : _retryRandom = retryRandom ?? Random.secure() {
+    if (maxConcurrent <= 0) {
+      throw ArgumentError.value(
+        maxConcurrent,
+        'maxConcurrent',
+        'must be positive',
+      );
+    }
+    if (maxRetries < 0) {
+      throw ArgumentError.value(
+        maxRetries,
+        'maxRetries',
+        'must be non-negative',
+      );
+    }
+  }
 
   final ContentMediaUploadCoordinator coordinator;
   final ContentMediaSourceReader sourceReader;
   final ContentMediaStreamObjectUpload uploadStream;
-  final int _maxConcurrent;
-  final int _maxRetries;
+  final int maxConcurrent;
+  final int maxRetries;
+  final Random _retryRandom;
   final Queue<UploadTask> _queue = Queue<UploadTask>();
   final List<UploadTask> _active = [];
   final Set<UploadTask> _failedRetryable = <UploadTask>{};
@@ -66,7 +84,7 @@ class MediaUploadManager {
     final policyError = validateUpload(
       category: task.category,
       fileSize: task.fileSize,
-      contentType: task.contentType,
+      mimeType: task.mimeType,
     );
     if (policyError != null) {
       task
@@ -85,7 +103,7 @@ class MediaUploadManager {
     if (_disposed) {
       return;
     }
-    while (_active.length < _maxConcurrent && _queue.isNotEmpty) {
+    while (_active.length < maxConcurrent && _queue.isNotEmpty) {
       final task = _queue.removeFirst();
       _active.add(task);
       _executeUpload(task);
@@ -107,7 +125,7 @@ class MediaUploadManager {
       final asset = await coordinator.uploadPreparedSource(
         source: source,
         mediaType: contentMediaTypeForCategory(task.category),
-        contentType: task.contentType,
+        mimeType: task.mimeType,
         uploadStream: uploadStream,
       );
       if (_disposed) {
@@ -129,7 +147,7 @@ class MediaUploadManager {
       );
       task.retryCount++;
       final retryable = _isRetryableUploadError(error);
-      if (retryable && task.retryCount <= _maxRetries) {
+      if (retryable && task.retryCount <= maxRetries) {
         task.status = UploadStatus.pending;
         _scheduleRetry(task);
       } else {
@@ -197,8 +215,10 @@ class MediaUploadManager {
   int get activeCount => _active.length;
 
   void _scheduleRetry(UploadTask task) {
-    final exponent = (task.retryCount - 1).clamp(0, 5);
-    final delay = Duration(seconds: 1 << exponent);
+    final delay = mediaUploadFullJitterDelay(
+      retryCount: task.retryCount,
+      random: _retryRandom,
+    );
     late final Timer timer;
     timer = Timer(delay, () {
       _retryTimers.remove(timer);
@@ -208,6 +228,19 @@ class MediaUploadManager {
     });
     _retryTimers.add(timer);
   }
+}
+
+/// 有界全抖动：第 n 次恢复在 `[0, min(2^(n-1), 32s)]` 内均匀取值。
+///
+/// 入口显式接收 [Random]，local_contract 可重放边界，生产组合使用
+/// `Random.secure()`；不存在确定性指数退避支路。
+Duration mediaUploadFullJitterDelay({
+  required int retryCount,
+  required Random random,
+}) {
+  final exponent = (retryCount - 1).clamp(0, 5);
+  final capMilliseconds = Duration(seconds: 1 << exponent).inMilliseconds;
+  return Duration(milliseconds: random.nextInt(capMilliseconds + 1));
 }
 
 bool _isRetryableUploadError(Object error) {

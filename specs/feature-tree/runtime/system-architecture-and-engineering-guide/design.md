@@ -20,7 +20,7 @@
 - 对象契约位于 `services/<service>/contracts/<context>/<object>`；服务唯一 domain 位于 `contracts/domain.yaml`。
 - 人工实现位于 `internal/<context>/<object>/<layer>`；生成代码位于 `generated/<context>/<object>`，禁止生成物藏在 `internal`。
 - 配置有效值由 `config/schema.yaml` 默认值与 `environments/<env>/config.yaml` 差异合成。
-- 公共 migration/template/policy/skill/static/model 位于 `resources/`；环境只选择 seed、Data release 和 artifact digest。
+- 公共 migration/template/policy/skill/static/model 位于 `resources/`；环境只选择 Data release、artifact digest 与 Provider binding，非生产交易数据由公开 command/event 在候选验证期产生。
 - 部署有效清单由 `deploy/base` 与 `environments/<env>/deploy` 合成；镜像 digest、配置摘要和资源摘要在 package 阶段注入。
 - Ops 四环境目录只引用各服务同名环境入口以及 external/platform workload，是可执行装配而非注册表。
 
@@ -53,8 +53,8 @@
 - 决策：第一方 workload 基线和四环境入口归领域服务；Ops 只保留四环境聚合、跨服务平台策略和 coturn/livekit 等 external workload。
 - 理由：workload 与服务代码必须由同一 owner 演进，Ops 只负责跨服务装配才能避免部署清单漂移。
 - 被否决方案：Ops 复制所有第一方 workload、保留 environment topology 人工注册表、使用 seed-box 组合业务服务。
-- 约束：seed 由各服务 job 执行，Data 大制品只通过 `releaseRef + digest` 绑定。
-- 影响：prod 包禁止 fixture、mock、测试 seed 和明文 secret。
+- 约束：领域业务 seed job 数量为零；Data 大制品只通过 `releaseRef + digest` 绑定，Alpha/Beta/Gamma 验收数据只由 `stackctl verify` 经公开 command/event 创建。
+- 影响：Prod 包禁止 fixture、mock、测试 seed、非生产数据编排器和明文 secret。
 - 关联要求：`REQ-003`、`REQ-004`
 
 <a id="dec-004"></a>

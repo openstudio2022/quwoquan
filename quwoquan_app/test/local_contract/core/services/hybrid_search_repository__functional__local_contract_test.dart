@@ -2,10 +2,12 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_search_index.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
@@ -307,6 +309,23 @@ final class _CircleGroupIndexSpy implements LocalCircleGroupSearchIndex {
 
 final class _LocalReader implements LocalChatSearchReader {
   final List<String> calls = <String>[];
+
+  @override
+  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+    required LocalSearchNamespace namespace,
+    required String conversationId,
+    int beforeSeq = 0,
+    int limit = 50,
+  }) async {
+    return const CacheReadResult<List<MessageDto>>(
+      value: <MessageDto>[],
+      source: CacheReadSource.disk,
+      freshness: CacheFreshness.unknown,
+      syncState: CacheSyncState.idle,
+      cacheClass: CacheClass.recent,
+      diagnostics: CacheDiagnostics(hitLayer: 'disk'),
+    );
+  }
 
   @override
   Future<List<LocalChatSearchContactRecord>> searchContacts({

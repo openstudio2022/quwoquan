@@ -348,12 +348,8 @@ class _WorksVideoSourceAttribution extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: AppColors.black.withValues(alpha: 0.28),
-          borderRadius: BorderRadius.circular(
-            AppSpacing.circularBorderRadius,
-          ),
-          border: Border.all(
-            color: AppColors.white.withValues(alpha: 0.14),
-          ),
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+          border: Border.all(color: AppColors.white.withValues(alpha: 0.14)),
         ),
         child: Text(
           text,

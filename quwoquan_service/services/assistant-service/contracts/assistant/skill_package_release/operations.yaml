@@ -1,0 +1,94 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Skill Package 发布只允许受控 publisher 通过对象 Facade 执行，当前阶段不暴露 HTTP route
+  gap_id: ASSISTANT_SKILL_PACKAGE_UNDECLARED_OPERATION
+  target_story: skill-context-proactive-runtime
+description: >-
+  SkillPackageRelease 的 Stage、CAS Activate、Rollback 与 active Reader
+  应用边界；服务端核心先保持 typed port，公开或内部 HTTP 接线需独立声明后方可开放。
+api_routes:
+- method: POST
+  path: /internal/assistant/skill-package-releases
+  operation: StageAssistantSkillPackageRelease
+  actor: account
+  application:
+    kind: command
+    facet: SkillPackageReleaseCommandFacade
+    method: stage
+    aggregate_owner: SkillPackageRelease
+    mutation_target: SkillPackageRelease
+    invariant_target: SkillPackageRelease
+  authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
+  commercial: {status: blocked, block_reason: publisher 身份与生产 artifact store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_PUBLISHER_COMPOSITION, target_story: skill-context-proactive-runtime}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  request_entity: SkillPackageRelease
+  request_body_kind: object
+  response_entity: SkillPackageRelease
+  error_codes:
+  - ASSISTANT.USER.skill_package_invalid
+  - ASSISTANT.USER.skill_package_digest_mismatch
+  - ASSISTANT.USER.skill_package_capability_denied
+  - ASSISTANT.DEPENDENCY.skill_package_asset_unavailable
+  - ASSISTANT.SYSTEM.skill_package_signature_invalid
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_package_stage, trace: true, attributes: [outcome, replayed, package_id, package_version, release_digest]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+- method: POST
+  path: /internal/assistant/skill-package-releases:activate
+  operation: ActivateAssistantSkillPackageRelease
+  actor: account
+  application:
+    kind: command
+    facet: SkillPackageReleaseCommandFacade
+    method: activate
+    aggregate_owner: SkillPackageRelease
+    mutation_target: SkillPackageRelease
+    invariant_target: SkillPackageRelease
+  authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
+  commercial: {status: blocked, block_reason: publisher 身份与生产 activation store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_ACTIVATION_COMPOSITION, target_story: skill-context-proactive-runtime}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  request_entity: ActivateSkillPackageCommand
+  request_body_kind: object
+  response_entity: SkillPackageActivation
+  error_codes:
+  - ASSISTANT.USER.skill_package_invalid
+  - ASSISTANT.USER.skill_package_digest_mismatch
+  - ASSISTANT.USER.skill_package_revision_conflict
+  - ASSISTANT.USER.skill_package_capability_denied
+  - ASSISTANT.DEPENDENCY.skill_package_asset_unavailable
+  - ASSISTANT.SYSTEM.skill_package_signature_invalid
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_package_activate, trace: true, attributes: [outcome, replayed, package_id, release_digest, revision]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+- method: POST
+  path: /internal/assistant/skill-package-releases:rollback
+  operation: RollbackAssistantSkillPackageRelease
+  actor: account
+  application:
+    kind: command
+    facet: SkillPackageReleaseCommandFacade
+    method: rollback
+    aggregate_owner: SkillPackageRelease
+    mutation_target: SkillPackageRelease
+    invariant_target: SkillPackageRelease
+  authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
+  commercial: {status: blocked, block_reason: publisher 身份与生产 activation store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_ACTIVATION_COMPOSITION, target_story: skill-context-proactive-runtime}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  request_entity: RollbackSkillPackageCommand
+  request_body_kind: object
+  response_entity: SkillPackageActivation
+  error_codes:
+  - ASSISTANT.USER.skill_package_invalid
+  - ASSISTANT.USER.skill_package_digest_mismatch
+  - ASSISTANT.USER.skill_package_revision_conflict
+  - ASSISTANT.DEPENDENCY.skill_package_asset_unavailable
+  - ASSISTANT.SYSTEM.skill_package_signature_invalid
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_package_rollback, trace: true, attributes: [outcome, replayed, package_id, release_digest, revision]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+consumers:
+- name: assistant-skill-package-publish-pipeline
+  capabilities: [stage, activate, rollback]

@@ -65,11 +65,7 @@ List<ChatMentionTextSegment> resolveChatMentionTextSegments({
         break;
       }
       final end = start + label.length;
-      final candidate = _MentionTokenMatch(
-        start: start,
-        end: end,
-        text: label,
-      );
+      final candidate = _MentionTokenMatch(start: start, end: end, text: label);
       if (_hasMentionBoundaryAfter(content, end) &&
           !tokens.any((token) => _overlaps(token, candidate))) {
         tokens.add(candidate);
@@ -77,9 +73,7 @@ List<ChatMentionTextSegment> resolveChatMentionTextSegments({
       offset = start + 1;
     }
   }
-  for (final match in RegExp(
-    r'@[^\s@，。！？、,.!?;；:：]+',
-  ).allMatches(content)) {
+  for (final match in RegExp(r'@[^\s@，。！？、,.!?;；:：]+').allMatches(content)) {
     final candidate = _MentionTokenMatch(
       start: match.start,
       end: match.end,

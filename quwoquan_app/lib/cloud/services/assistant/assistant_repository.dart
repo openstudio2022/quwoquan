@@ -10,7 +10,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -21,9 +20,11 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/remote/assistant/assistant_conversation_query_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_session_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantDeviceActionExecutionReceipt, AssistantSurfaceCapabilities;
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
@@ -38,7 +39,7 @@ export 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.da
 export 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 
 part 'assistant_repository_consent.dart';
-part 'assistant_repository_conversation_run.dart';
+part 'assistant_repository_session_run.dart';
 part 'assistant_repository_experience.dart';
 part 'assistant_repository_preferences.dart';
 part 'assistant_repository_search.dart';
@@ -58,7 +59,7 @@ String _requireAssistantCommandRequestId(
   return normalized;
 }
 
-typedef AssistantConversationInvocationContextFactory =
+typedef AssistantSessionInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);
 
 /// 公开 Remote 类型维持为所有 assistant typed Facet 的唯一 production 装配点。
@@ -67,48 +68,48 @@ typedef AssistantConversationInvocationContextFactory =
 /// transport 基座，不引入方法转发层或第二个公开 repository。
 class RemoteAssistantRepository extends _RemoteAssistantRepositoryBase
     with
-        _RemoteAssistantConversationRun,
+        _RemoteAssistantSessionRun,
         _RemoteAssistantSkillConsent,
         _RemoteAssistantExperience,
-        _RemoteAssistantPreferenceFact,
-        _RemoteAssistantXiaoquSearch
+        _RemoteAssistantPreference,
+        _RemoteAssistantSearchRun
     implements
-        AssistantConversationRunFacet,
+        AssistantSessionRunFacet,
+        AssistantRunControlFacet,
         AssistantSkillConsentFacet,
         AssistantPersonalizationFacet,
         AssistantPersonalDataFacet,
-        AssistantPreferenceFactFacet,
-        AssistantXiaoquSearchFacet,
-        AssistantCreationSuggestFacet {
+        AssistantPreferenceFacet,
+        AssistantSearchRunFacet,
+        AssistantCreationRunFacet {
   factory RemoteAssistantRepository({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
     required GeneratedCloudOperationClient operationClient,
-    required AssistantConversationInvocationContextFactory
-    conversationInvocationContext,
-    required String consentActorScope,
+    required AssistantSessionInvocationContextFactory sessionInvocationContext,
+    required String consentAccountId,
   }) {
     return RemoteAssistantRepository._(
       httpClient: httpClient,
       store: store,
-      conversationQuery: RemoteAssistantConversationQueryAdapter(
+      sessionQuery: RemoteAssistantSessionQueryAdapter(
         client: operationClient,
-        invocationContext: conversationInvocationContext,
+        invocationContext: sessionInvocationContext,
       ),
       skillCatalog: RemoteAssistantSkillCatalogAdapter(
         client: operationClient,
-        invocationContext: conversationInvocationContext,
+        invocationContext: sessionInvocationContext,
       ),
-      consentActorScope: consentActorScope,
+      consentAccountId: consentAccountId,
     );
   }
 
   RemoteAssistantRepository._({
     super.httpClient,
     super.store,
-    required super.conversationQuery,
+    required super.sessionQuery,
     required super.skillCatalog,
-    required super.consentActorScope,
+    required super.consentAccountId,
   });
 }
 
@@ -119,15 +120,15 @@ abstract class _RemoteAssistantRepositoryBase {
   _RemoteAssistantRepositoryBase({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
-    required this._conversationQuery,
+    required this._sessionQuery,
     required this._skillCatalog,
-    required String consentActorScope,
+    required String consentAccountId,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _store = store ?? AssistantConsentStore(actorScope: consentActorScope);
+       _store = store ?? AssistantConsentStore(accountId: consentAccountId);
 
   final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
-  final RemoteAssistantConversationQueryAdapter _conversationQuery;
+  final RemoteAssistantSessionQueryAdapter _sessionQuery;
   final RemoteAssistantSkillCatalogAdapter _skillCatalog;
 
   static final CloudOperationContract _assistantStreamOperation =
@@ -160,14 +161,7 @@ abstract class _RemoteAssistantRepositoryBase {
       surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
       routeId: AppUiSurfaces.globalSearchNetworkResults.routeId,
       operationId: operationId,
-      clientPageId: AssistantRequestPageIds.searchXiaoquResults,
-    );
-  }
-
-  String _networkResultsContext({required String operationId}) {
-    return CloudRequestHeaders.contextForSurfaceOperation(
-      surfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-      operationId: operationId,
+      clientPageId: AssistantRequestPageIds.startAssistantRun,
     );
   }
 
@@ -203,26 +197,6 @@ abstract class _RemoteAssistantRepositoryBase {
     );
   }
 
-  List<Map<String, dynamic>> _decodeItemsMap(
-    Object? decoded, {
-    required String context,
-  }) {
-    if (decoded is List) {
-      return decoded
-          .whereType<Map>()
-          .map((row) => row.cast<String, dynamic>())
-          .toList(growable: false);
-    }
-    final object = CloudResponseDecoder.asObject(decoded, context: context);
-    final raw =
-        (object['items'] as List?)
-            ?.whereType<Map>()
-            .map((row) => row.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    return raw;
-  }
-
   Uri _assistantUri(String path) {
     return Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path');
   }
@@ -244,6 +218,69 @@ abstract class _RemoteAssistantRepositoryBase {
     return CloudResponseDecoder.asObject(
       decoded,
       context: _personalAssistantDialogContext(operationId: operationId),
+    );
+  }
+
+  /// [StartAssistantRun] 的唯一 HTTP 写入口。回答、搜索与创作辅助只通过
+  /// generated tagged union 区分 intent，不再拥有独立路由或 decoder。
+  Future<AssistantRunEnvelopeWire> _startAssistantRunIntent({
+    required String sessionId,
+    required String clientRequestId,
+    required AssistantRunIntent intent,
+    AssistantContextSnapshot? contextSnapshot,
+    bool networkSurface = false,
+  }) async {
+    final requestId = _requireAssistantCommandRequestId(
+      clientRequestId,
+      operation: AssistantApiMetadata.startAssistantRunOperation,
+    );
+    final request = AssistantStartRunRequest(
+      sessionId: sessionId,
+      clientRequestId: requestId,
+      intent: intent,
+      contextSnapshot: contextSnapshot,
+      surfaceCapabilities: AssistantSurfaceCapabilities(
+        surfaceId: networkSurface
+            ? AppUiSurfaces.globalSearchNetworkResults.id
+            : AppUiSurfaces.personalAssistantDialog.id,
+        supportedNodeKinds: <String>[
+          AssistantPresentationNodeKind.markdown.wireName,
+          AssistantPresentationNodeKind.column.wireName,
+          AssistantPresentationNodeKind.actionGroup.wireName,
+          AssistantPresentationNodeKind.confirmationCard.wireName,
+        ],
+        viewportClass: 'any',
+        platform: CloudRequestHeaders.platform(),
+        theme: 'system',
+        textScale: 1,
+        reducedMotion: false,
+        offline: false,
+      ),
+    );
+    final uri = _assistantUri(
+      AssistantApiMetadata.startAssistantRunPath(sessionId: sessionId),
+    );
+    final response = await _httpClient.post(
+      uri,
+      headers: <String, String>{
+        ...(networkSurface
+            ? _headersForNetworkResults(
+                operationId: AssistantApiMetadata.startAssistantRunOperation,
+              )
+            : _headersForPersonalAssistantDialog(
+                operationId: AssistantApiMetadata.startAssistantRunOperation,
+                clientPageId: AssistantRequestPageIds.startAssistantRun,
+              )),
+        'Idempotency-Key': requestId,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(request.toJson()..remove('sessionId')),
+    );
+    return AssistantRunEnvelopeWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.startAssistantRunOperation,
+      ),
     );
   }
 }
@@ -278,8 +315,8 @@ _AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
   const allowedKeys = <String>{
     'schema',
     'eventId',
-    'conversationId',
-    'turnId',
+    'sessionId',
+    'runId',
     'seq',
     'eventType',
     'traceId',
@@ -302,8 +339,8 @@ _AssistantSseFrame? _decodeAssistantStreamFrame(String frame) {
   }
   for (final field in const <String>[
     'eventId',
-    'conversationId',
-    'turnId',
+    'sessionId',
+    'runId',
     'eventType',
     'createdAt',
   ]) {
@@ -357,12 +394,4 @@ void _debugAssistantRepository(String message) {
     return;
   }
   debugPrint('[assistant-repository] $message');
-}
-
-String _assistantDebugSnippet(String value, {int maxLength = 120}) {
-  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return '${normalized.substring(0, maxLength)}...';
 }

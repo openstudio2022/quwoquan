@@ -1,0 +1,17 @@
+events:
+- name: AssistantSessionCreated
+  producer: assistant-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: AssistantSession
+  payload_fields:
+  - sessionId
+- name: AssistantSessionArchived
+  producer: assistant-service
+  consumers:
+  - projection-workers
+  channel: event_store
+  payload_entity: AssistantSession
+  payload_fields:
+  - sessionId

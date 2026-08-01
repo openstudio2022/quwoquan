@@ -22,7 +22,10 @@ class ObjectCacheEntry<T> {
   }
 }
 
-/// 对象级 LRU 缓存。首版使用内存 + 进程内磁盘桶，后续可替换为 Hive/SQLite adapter。
+/// 对象级有界 LRU 内存缓存。
+///
+/// 持久 feed 只由 `ContentQuerySnapshotStore` 拥有；本类不创建第二个
+/// feed store，也不将进程内 Map 标记为 disk hit。
 class ObjectCacheStore<T> {
   ObjectCacheStore({
     this.maxMemoryEntries = 200,
@@ -33,8 +36,6 @@ class ObjectCacheStore<T> {
   final Duration freshFor;
   final LinkedHashMap<String, ObjectCacheEntry<T>> _memory =
       LinkedHashMap<String, ObjectCacheEntry<T>>();
-  final Map<String, ObjectCacheEntry<T>> _disk =
-      <String, ObjectCacheEntry<T>>{};
 
   CacheReadResult<T>? get(String id) {
     final normalized = id.trim();
@@ -47,12 +48,7 @@ class ObjectCacheStore<T> {
       _memory[normalized] = memoryEntry;
       return _resultFor(memoryEntry, CacheReadSource.memory, now);
     }
-    final diskEntry = _disk[normalized];
-    if (diskEntry == null) {
-      return null;
-    }
-    _putMemory(normalized, diskEntry);
-    return _resultFor(diskEntry, CacheReadSource.disk, now);
+    return null;
   }
 
   void put(
@@ -73,16 +69,14 @@ class ObjectCacheStore<T> {
       cacheClass: cacheClass,
     );
     _putMemory(normalized, entry);
-    _disk[normalized] = entry;
   }
 
   int clearWhere(bool Function(ObjectCacheEntry<T> entry) shouldClear) {
-    final ids = _disk.entries
+    final ids = _memory.entries
         .where((entry) => shouldClear(entry.value))
         .map((entry) => entry.key)
         .toList(growable: false);
     for (final id in ids) {
-      _disk.remove(id);
       _memory.remove(id);
     }
     return ids.length;
@@ -93,18 +87,14 @@ class ObjectCacheStore<T> {
     if (normalized.isEmpty) {
       return false;
     }
-    final removedDisk = _disk.remove(normalized) != null;
-    final removedMemory = _memory.remove(normalized) != null;
-    return removedDisk || removedMemory;
+    return _memory.remove(normalized) != null;
   }
 
   int clearAllRebuildable() {
     return clearWhere((entry) => entry.cacheClass != CacheClass.pinned);
   }
 
-  int get diskCount => _disk.length;
-
-  int get memoryCount => _memory.length;
+  int get count => _memory.length;
 
   void _putMemory(String id, ObjectCacheEntry<T> entry) {
     _memory.remove(id);

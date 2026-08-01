@@ -3,16 +3,38 @@ collections:
   rec_model_registry:
     entity: RecommendationModelRelease
     role: authoritative
-    description: 场景模型发布登记与 production 激活标记；写入方为 model_registry_cli 与 CI 训练管线，读取方为 recommendation-service 推理热加载。
+    description: RecommendationModelRelease Facade 事务写入的场景发布聚合；推理 Reader 只读取 status=active 的不可变 artifact 身份。
     indexes:
     - name: uq_model_registry_scenario_digest
       keys:
         scenario: 1
         modelDigest: 1
       unique: true
-    - name: idx_model_registry_scenario_production
+    - name: uq_model_registry_active_scenario
       keys:
         scenario: 1
-        production: 1
+      unique: true
+      partial_filter:
+        status: active
+    - name: idx_model_registry_scenario_status_updated
+      keys:
+        scenario: 1
+        status: 1
         updatedAt: -1
+  rec_model_release_command_receipts:
+    entity: RecommendationModelReleaseCommandReceipt
+    role: authoritative
+    description: 与 Stage/Activate 聚合提交同事务写入的幂等命令回执。
+    indexes:
+    - name: ttl_model_release_command_receipt
+      keys: {expiresAt: 1}
+      expire_after_seconds: 0
+  rec_model_release_outbox:
+    entity: RecommendationModelReleaseOutbox
+    role: append_only
+    description: 与 Stage/Activate 聚合状态同事务追加的不可变事件记录。
+    indexes:
+    - name: uq_model_release_outbox_aggregate_version_event
+      keys: {aggregateId: 1, aggregateVersion: 1, eventType: 1}
+      unique: true
 role: authoritative

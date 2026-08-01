@@ -3,10 +3,10 @@
 ///
 /// surface: assistantHistory · owner: assistant · route: chatDetail
 /// 本文件替代旧「证据文件路径存在性断言」伪验收。承载关系说明：
-/// assistantHistory surface（私助记录抽屉与分页）由 `PersonalAssistantConversationPage`
+/// assistantHistory surface（私助记录抽屉与分页）由 `PersonalAssistantSessionPage`
 /// 承载：进入页面时经 `assistantHistoryLoaderProvider`
-/// （`CloudAssistantHistoryLoader`，消费 ListAssistantConversations /
-/// ListConversationTurns 云端查询面）恢复最近会话 transcript，
+/// （`CloudAssistantHistoryLoader`，消费 ListAssistantSessions /
+/// ListSessionTurns 云端查询面）恢复最近会话 transcript，
 /// 再在同一时间线上继续新 turn；顶栏历史按钮打开会话抽屉可切换/新建会话。
 /// 四类必测 case：
 /// - load_success：历史 snapshot 恢复后真实渲染到时间线（历史问答上屏）；
@@ -40,10 +40,10 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/assistant_conversation_inline_error.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_session_inline_error.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -68,11 +68,11 @@ void main() {
   });
 
   test('terminal_history：failed 与 cancelled 终态不被恢复成空白历史', () async {
-    const conversationId = 'terminal_state_history';
+    const sessionId = 'terminal_state_history';
     final loader = CloudAssistantHistoryLoader(
       _HistoryQueryFacetStub(
-        conversation: const AssistantConversationWire(
-          conversationId: conversationId,
+        session: const AssistantSessionWire(
+          sessionId: sessionId,
           userId: 'user_uat',
           summary: '终态恢复',
           createdAt: '2026-07-20T09:00:00Z',
@@ -81,7 +81,7 @@ void main() {
         turns: const <AssistantTurnSummaryView>[
           AssistantTurnSummaryView(
             turnId: 'turn_cancelled',
-            conversationId: conversationId,
+            sessionId: sessionId,
             status: 'cancelled',
             inputText: '取消的问题',
             terminalSnapshot: AssistantRunTerminalSnapshotView(
@@ -93,7 +93,7 @@ void main() {
           ),
           AssistantTurnSummaryView(
             turnId: 'turn_failed',
-            conversationId: conversationId,
+            sessionId: sessionId,
             status: 'failed',
             inputText: '失败的问题',
             terminalSnapshot: AssistantRunTerminalSnapshotView(
@@ -208,8 +208,8 @@ void main() {
       findsNothing,
     );
     // 页面不崩溃、不把失败伪装成无历史，结构化错误卡可见。
-    expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
-    expect(find.byType(AssistantConversationInlineError), findsOneWidget);
+    expect(find.byType(PersonalAssistantSessionPage), findsOneWidget);
+    expect(find.byType(AssistantSessionInlineError), findsOneWidget);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
     loader
@@ -226,7 +226,7 @@ void main() {
     expect(recovered.retryAvailable, isFalse);
     expect(recovered.errorMessage, isEmpty);
     expect(recovered.transcript, hasLength(2));
-    expect(find.byType(AssistantConversationInlineError), findsNothing);
+    expect(find.byType(AssistantSessionInlineError), findsNothing);
 
     await _disposeTree(tester);
   });
@@ -316,10 +316,10 @@ void main() {
     await _sendUatText(tester, '历史续聊问题');
 
     final state = container.read(personalAssistantStreamControllerProvider);
-    // 云端历史恢复绑定 conversationId：续聊沿用已恢复会话，不新建云端会话
+    // 云端历史恢复绑定 sessionId：续聊沿用已恢复会话，不新建云端会话
     // （R-ASSIST-001 收口后的会话生命周期语义）。
-    expect(state.conversationId, 'restored_conversation_uat');
-    expect(state.turnId, 'atn_uat_personal');
+    expect(state.sessionId, 'restored_session_uat');
+    expect(state.runId, 'atn_uat_personal');
     expect(
       state.events.map((event) => event.eventType),
       containsAll(<AssistantStreamEventType>[
@@ -333,13 +333,13 @@ void main() {
 }
 
 /// 由云端历史恢复真相源构造 snapshot：CloudAssistantHistoryLoader 消费
-/// List conversations/turns 查询面（与 api_integration 的服务端断言同源）。
+/// List sessions/turns 查询面（与 api_integration 的服务端断言同源）。
 Future<AssistantHistorySnapshot> _buildHistorySnapshot() async {
-  const conversationId = 'restored_conversation_uat';
+  const sessionId = 'restored_session_uat';
   final loader = CloudAssistantHistoryLoader(
     _HistoryQueryFacetStub(
-      conversation: AssistantConversationWire(
-        conversationId: conversationId,
+      session: AssistantSessionWire(
+        sessionId: sessionId,
         userId: 'user_uat',
         summary: '深圳天气',
         createdAt: '2026-07-20T09:00:00Z',
@@ -348,7 +348,7 @@ Future<AssistantHistorySnapshot> _buildHistorySnapshot() async {
       turns: const <AssistantTurnSummaryView>[
         AssistantTurnSummaryView(
           turnId: 'turn_restored_uat',
-          conversationId: conversationId,
+          sessionId: sessionId,
           status: 'completed',
           inputText: _historyQuestion,
           terminalSnapshot: AssistantRunTerminalSnapshotView(
@@ -393,24 +393,22 @@ Future<AssistantHistorySnapshot> _buildHistorySnapshot() async {
 
 /// 只服务历史恢复断言的最小查询桩。
 class _HistoryQueryFacetStub extends _RecordingAssistantRunFacet {
-  _HistoryQueryFacetStub({required this.conversation, required this.turns});
+  _HistoryQueryFacetStub({required this.session, required this.turns});
 
-  final AssistantConversationWire conversation;
+  final AssistantSessionWire session;
   final List<AssistantTurnSummaryView> turns;
 
   @override
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    return AssistantConversationListPage(
-      items: <AssistantConversationWire>[conversation],
-    );
+    return AssistantSessionListPage(items: <AssistantSessionWire>[session]);
   }
 
   @override
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
@@ -428,7 +426,7 @@ Future<ProviderContainer> _pumpDialogPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        assistantConversationRunFacetProvider.overrideWithValue(runFacet),
+        assistantSessionRunFacetProvider.overrideWithValue(runFacet),
         assistantLearningFactAppendFacetProvider.overrideWithValue(
           _RecordingLearningFactAppendFacet(),
         ),
@@ -454,14 +452,14 @@ Future<ProviderContainer> _pumpDialogPage(
         ),
       ],
       child: const MaterialApp(
-        home: _AuthWarmup(child: PersonalAssistantConversationPage()),
+        home: _AuthWarmup(child: PersonalAssistantSessionPage()),
       ),
     ),
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
   return ProviderScope.containerOf(
-    tester.element(find.byType(PersonalAssistantConversationPage)),
+    tester.element(find.byType(PersonalAssistantSessionPage)),
   );
 }
 
@@ -517,8 +515,8 @@ AssistantStreamEventWire _event({
   return AssistantStreamEventWire(
     schema: 'assistant_stream_event',
     eventId: 'evt_uat_$seq',
-    conversationId: 'acv_uat_personal',
-    turnId: 'atn_uat_personal',
+    sessionId: 'asn_uat_personal',
+    runId: 'arn_uat_personal',
     seq: seq,
     eventType: eventType,
     payload: wirePayload,
@@ -563,7 +561,7 @@ class _RecordingHistoryLoader implements AssistantHistoryLoader {
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
     loadCount += 1;
     final failure = error;
@@ -575,7 +573,7 @@ class _RecordingHistoryLoader implements AssistantHistoryLoader {
 }
 
 /// Recording run Facet：记录 run 启动并回放固定事件流。
-class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
+class _RecordingAssistantRunFacet implements AssistantSessionRunFacet {
   _RecordingAssistantRunFacet({
     this.events = const <AssistantStreamEventWire>[],
   });
@@ -585,12 +583,12 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   final List<String> cancelledRunIds = <String>[];
 
   @override
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   }) async {
-    return const AssistantConversationWire(
-      conversationId: 'acv_uat_personal',
+    return const AssistantSessionWire(
+      sessionId: 'asn_uat_personal',
       userId: 'user_assistant_uat',
       createdAt: '2026-07-19T00:00:00Z',
       updatedAt: '2026-07-19T00:00:00Z',
@@ -598,21 +596,19 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    return const AssistantConversationListPage(
-      items: <AssistantConversationWire>[],
-    );
+    return const AssistantSessionListPage(items: <AssistantSessionWire>[]);
   }
 
   @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
+  Future<AssistantSessionWire> getAssistantSession({
+    required String sessionId,
   }) async {
-    return AssistantConversationWire(
-      conversationId: conversationId,
+    return AssistantSessionWire(
+      sessionId: sessionId,
       userId: 'user_assistant_uat',
       createdAt: '2026-07-19T00:00:00Z',
       updatedAt: '2026-07-19T00:00:00Z',
@@ -620,8 +616,8 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
@@ -629,8 +625,8 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
     String turnType = 'user',
@@ -640,38 +636,36 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
         const <AssistantIntersectionEvidenceRef>[],
   }) async {
     startedRunTexts.add(text);
-    return AssistantTurnEnvelopeWire(
-      turnId: 'atn_uat_personal',
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId,
-      domainId: domainId,
-      input: AssistantTurnInputWire(text: text),
+    return AssistantRunEnvelopeWire(
+      runId: 'arn_uat_personal',
+      sessionId: sessionId,
+      goal: text,
       traceId: 'trace_uat_personal',
       createdAt: '2026-07-19T00:00:00Z',
     );
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
+  Future<AssistantRunEnvelopeWire> getAssistantRun({
     required String runId,
   }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_uat_personal',
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_uat_personal',
       traceId: 'trace_uat_personal',
       createdAt: '2026-07-19T00:00:00Z',
     );
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
     required String runId,
+    required String commandRequestId,
   }) async {
     cancelledRunIds.add(runId);
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_uat_personal',
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_uat_personal',
       status: 'cancelled',
       traceId: 'trace_uat_personal',
       createdAt: '2026-07-19T00:00:00Z',
@@ -681,6 +675,7 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
+    String lastEventId = '',
   }) {
     return Stream<AssistantStreamEventWire>.fromIterable(events);
   }

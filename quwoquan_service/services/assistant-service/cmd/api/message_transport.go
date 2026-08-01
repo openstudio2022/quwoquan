@@ -7,7 +7,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	bindingdescriptor "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
+	bindingdescriptor "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 )
 
 const assistantAPIMessageTransportRoot = "assistant-service-api"

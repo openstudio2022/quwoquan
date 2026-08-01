@@ -4,7 +4,7 @@
 /// 本文件替代旧「证据文件路径存在性断言」伪验收。承载关系说明：
 /// assistantFeedback surface（私助反馈与纠错，operation：
 /// AppendAssistantLearningFact）没有独立路由页面，真实承载页是
-/// `PersonalAssistantConversationPage` 的 answer toolbar：完成一轮 turn 后
+/// `PersonalAssistantSessionPage` 的 answer toolbar：完成一轮 turn 后
 /// 点击反馈按钮，经 `submitFeedback` → `appendUserFact` 学习回路
 /// 上报（3b 接通）。
 /// 四类必测 case：
@@ -37,7 +37,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/hive_runtime.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -113,7 +113,7 @@ void main() {
       contains(AssistantText.assistantFeedbackUsefulLabel),
     );
     // 页面不崩溃：对话页与反馈工具栏仍在。
-    expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
+    expect(find.byType(PersonalAssistantSessionPage), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsOneWidget);
 
     await _disposeTree(tester);
@@ -153,7 +153,7 @@ void main() {
       contains(AssistantText.assistantFeedbackUsefulLabel),
     );
     expect(state.feedbackType, 'useful');
-    expect(state.turnId, 'atn_uat_personal');
+    expect(state.runId, 'atn_uat_personal');
 
     await _disposeTree(tester);
   });
@@ -177,7 +177,7 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        assistantConversationRunFacetProvider.overrideWithValue(runFacet),
+        assistantSessionRunFacetProvider.overrideWithValue(runFacet),
         assistantLearningFactAppendFacetProvider.overrideWithValue(
           learningFacet,
         ),
@@ -205,7 +205,7 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
         ),
       ],
       child: const MaterialApp(
-        home: _AuthWarmup(child: PersonalAssistantConversationPage()),
+        home: _AuthWarmup(child: PersonalAssistantSessionPage()),
       ),
     ),
   );
@@ -224,12 +224,12 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
   }
 
   final container = ProviderScope.containerOf(
-    tester.element(find.byType(PersonalAssistantConversationPage)),
+    tester.element(find.byType(PersonalAssistantSessionPage)),
   );
   final state = container.read(personalAssistantStreamControllerProvider);
   expect(state.running, isFalse);
   expect(state.errorMessage, isEmpty);
-  expect(state.turnId, 'atn_uat_personal');
+  expect(state.runId, 'atn_uat_personal');
   return container;
 }
 
@@ -275,8 +275,8 @@ AssistantStreamEventWire _event({
   return AssistantStreamEventWire(
     schema: 'assistant_stream_event',
     eventId: 'evt_uat_$seq',
-    conversationId: 'acv_uat_personal',
-    turnId: 'atn_uat_personal',
+    sessionId: 'asn_uat_personal',
+    runId: 'arn_uat_personal',
     seq: seq,
     eventType: parseAssistantStreamEventTypeStrict(eventType),
     payload: wirePayload,
@@ -311,20 +311,18 @@ class _AuthenticatedSessionController extends AuthSessionController {
 }
 
 /// Recording run Facet：回放一轮固定 turn 事件流。
-class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
+class _RecordingAssistantRunFacet implements AssistantSessionRunFacet {
   @override
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    return const AssistantConversationListPage(
-      items: <AssistantConversationWire>[],
-    );
+    return const AssistantSessionListPage(items: <AssistantSessionWire>[]);
   }
 
   @override
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
@@ -332,8 +330,9 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
     required String runId,
+    required String commandRequestId,
   }) {
     return getAssistantRun(runId: runId);
   }
@@ -345,12 +344,12 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   final List<AssistantStreamEventWire> events;
 
   @override
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   }) async {
-    return const AssistantConversationWire(
-      conversationId: 'acv_uat_personal',
+    return const AssistantSessionWire(
+      sessionId: 'asn_uat_personal',
       userId: 'user_assistant_uat',
       createdAt: '2026-07-19T00:00:00Z',
       updatedAt: '2026-07-19T00:00:00Z',
@@ -358,11 +357,11 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
+  Future<AssistantSessionWire> getAssistantSession({
+    required String sessionId,
   }) async {
-    return AssistantConversationWire(
-      conversationId: conversationId,
+    return AssistantSessionWire(
+      sessionId: sessionId,
       userId: 'user_assistant_uat',
       createdAt: '2026-07-19T00:00:00Z',
       updatedAt: '2026-07-19T00:00:00Z',
@@ -370,8 +369,8 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
     String turnType = 'user',
@@ -380,25 +379,22 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
     List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
         const <AssistantIntersectionEvidenceRef>[],
   }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: 'atn_uat_personal',
-      conversationId: conversationId,
-      turnType: turnType,
-      skillId: skillId,
-      domainId: domainId,
-      input: AssistantTurnInputWire(text: text),
+    return AssistantRunEnvelopeWire(
+      runId: 'arn_uat_personal',
+      sessionId: sessionId,
+      goal: text,
       traceId: 'trace_uat_personal',
       createdAt: '2026-07-19T00:00:00Z',
     );
   }
 
   @override
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({
+  Future<AssistantRunEnvelopeWire> getAssistantRun({
     required String runId,
   }) async {
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_uat_personal',
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_uat_personal',
       traceId: 'trace_uat_personal',
       createdAt: '2026-07-19T00:00:00Z',
     );
@@ -407,6 +403,7 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
   @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
+    String lastEventId = '',
   }) {
     return Stream<AssistantStreamEventWire>.fromIterable(events);
   }
@@ -489,7 +486,7 @@ class _EmptyHistoryLoader implements AssistantHistoryLoader {
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
     return null;
   }

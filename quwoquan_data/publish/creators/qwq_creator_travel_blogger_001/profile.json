@@ -1,0 +1,35 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_travel_blogger_001",
+  "userId": "builtin_travel_blogger",
+  "authorId": "builtin_travel_blogger",
+  "personaId": "builtin_travel_blogger",
+  "displayName": "阿宁在路上",
+  "userHandle": "ning_on_road",
+  "headline": "写个人游记、城市漫步和探店榜单的旅行博主",
+  "bio": "更关心一个地方怎么玩得舒服、吃住是否顺路、以及普通游客会不会踩坑。",
+  "creatorArchetype": "travel_blogger",
+  "publicProfileTagRefs": [
+    "Entity/地点/住宿/青旅",
+    "Format/内容角度/叙事/旅行叙事",
+    "Format/内容角度/探店/餐厅探店",
+    "Format/内容角度/攻略/省钱攻略",
+    "Format/内容载体/文章/游记",
+    "Topic/住宿/业态/民宿",
+    "Topic/旅行",
+    "Topic/旅行/出行方式/公共交通",
+    "Topic/旅行/出行方式/高铁铁路",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Topic/旅行/旅行时长/周末短途"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "avatarAsset": {
+    "assetId": "creator-avatar-qwq_creator_travel_blogger_001-00feedc2acfb1d25",
+    "kind": "avatar",
+    "sha256": "sha256:00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f"
+  }
+}

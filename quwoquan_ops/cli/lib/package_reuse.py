@@ -17,6 +17,7 @@ from quwoquan_ops.cli.lib.output_paths import (
     service_deployment_package_dir,
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+    RUNTIME_CANDIDATE_TYPE,
     validate_candidate_manifest,
 )
 
@@ -38,6 +39,7 @@ _FINGERPRINT_FIELDS = frozenset(
         "schema",
         "environment",
         "target",
+        "candidateType",
         "includeServices",
         "servicePackages",
         "reportRef",
@@ -291,18 +293,13 @@ def write_package_fingerprint(
     del details
     if not str(report_dir).strip():
         raise ValueError("package fingerprint requires a report reference")
-    if include_services:
-        packages = _normalized_service_packages(
-            service_packages
-            if service_packages is not None
-            else _expected_service_packages()
-        )
-    else:
-        if service_packages:
-            raise ValueError(
-                "package fingerprint cannot declare services when includeServices is false"
-            )
-        packages = []
+    if not include_services:
+        raise ValueError("runtime package fingerprint requires all services")
+    packages = _normalized_service_packages(
+        service_packages
+        if service_packages is not None
+        else _expected_service_packages()
+    )
     snapshot = expected_snapshot or workspace_snapshot()
     input_digest = str(snapshot["deploymentInputDigest"])
     input_count = int(snapshot["deploymentInputFileCount"])
@@ -317,7 +314,8 @@ def write_package_fingerprint(
         "schema": FINGERPRINT_SCHEMA,
         "environment": env_name,
         "target": target_name,
-        "includeServices": include_services,
+        "candidateType": RUNTIME_CANDIDATE_TYPE,
+        "includeServices": True,
         "servicePackages": packages,
         "reportRef": str(report_dir),
         "baselineId": snapshot["baselineId"],
@@ -374,7 +372,10 @@ def can_reuse_package(
     *,
     include_services: bool = True,
     required_services: list[str] | None = None,
+    require_workspace_match: bool = True,
 ) -> tuple[bool, str]:
+    if not include_services:
+        return False, "runtime package reuse requires all services"
     active_candidate: dict[str, str] | None = None
     if not os.environ.get(PACKAGE_ROOT_OVERRIDE_ENV, "").strip():
         try:
@@ -396,18 +397,21 @@ def can_reuse_package(
             raise ValueError("fingerprint environment mismatch")
         if payload.get("target") != target_name:
             raise ValueError("fingerprint target mismatch")
+        if payload.get("candidateType") != RUNTIME_CANDIDATE_TYPE:
+            raise ValueError("fingerprint candidateType mismatch")
         if (
             not isinstance(payload.get("includeServices"), bool)
-            or payload.get("includeServices") is not include_services
+            or payload.get("includeServices") is not True
         ):
             raise ValueError("fingerprint includeServices mismatch")
         report_ref = payload.get("reportRef")
         if not isinstance(report_ref, str) or not report_ref.strip():
             raise ValueError("fingerprint reportRef is invalid")
-        snapshot = workspace_snapshot()
-        for field in ("baselineId", "sourceRevision", "workspaceStatusDigest"):
-            if payload.get(field) != snapshot[field]:
-                raise ValueError(f"fingerprint {field} mismatch")
+        snapshot = workspace_snapshot() if require_workspace_match else None
+        if snapshot is not None:
+            for field in ("baselineId", "sourceRevision", "workspaceStatusDigest"):
+                if payload.get(field) != snapshot[field]:
+                    raise ValueError(f"fingerprint {field} mismatch")
         if (
             active_candidate is not None
             and payload.get("baselineId") != active_candidate["baselineId"]
@@ -420,16 +424,12 @@ def can_reuse_package(
             raise ValueError("fingerprint servicePackages is invalid")
         packages = (
             _normalized_service_packages(raw_packages)
-            if include_services
-            else []
         )
-        if not include_services and raw_packages:
-            raise ValueError("fingerprint servicePackages must be empty")
         expected_packages = (
             _normalized_service_packages(required_services)
             if required_services is not None
             else _expected_service_packages()
-        ) if include_services else []
+        )
         if packages != expected_packages:
             raise ValueError("fingerprint servicePackages mismatch")
 
@@ -441,13 +441,14 @@ def can_reuse_package(
         )
         if deployment_inputs.get("roots") != list(DEPLOYMENT_INPUT_ROOTS):
             raise ValueError("deploymentInputs roots mismatch")
-        actual_input_digest = str(snapshot["deploymentInputDigest"])
-        actual_input_count = int(snapshot["deploymentInputFileCount"])
-        if (
-            actual_input_digest != expected_input_digest
-            or actual_input_count != expected_input_count
-        ):
-            raise ValueError("deployment input digest mismatch")
+        if snapshot is not None:
+            actual_input_digest = str(snapshot["deploymentInputDigest"])
+            actual_input_count = int(snapshot["deploymentInputFileCount"])
+            if (
+                actual_input_digest != expected_input_digest
+                or actual_input_count != expected_input_count
+            ):
+                raise ValueError("deployment input digest mismatch")
 
         expected_content_digest, expected_content_count = _digest_payload(
             payload.get("packageContent"),
@@ -472,7 +473,7 @@ def can_reuse_package(
             candidate_manifest,
             expected_environment=env_name,
             expected_target=target_name,
-            require_full=include_services,
+            require_full=True,
         )
         manifest_bindings = {
             "baselineId": payload["baselineId"],

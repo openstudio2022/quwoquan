@@ -29,6 +29,7 @@ type MemberService struct {
 	media                             GroupAvatarAssetizer
 	syncPublisher                     UserSyncPublisher
 	scheduler                         GroupAvatarTaskScheduler
+	contactIntersections              ContactIntersectionResolver
 }
 
 type MemberServiceOption func(*MemberService)
@@ -53,6 +54,16 @@ func WithRelationshipGate(gate RelationshipGate) MemberServiceOption {
 	return func(s *MemberService) {
 		if gate != nil {
 			s.relationships = gate
+		}
+	}
+}
+
+func WithContactIntersectionResolver(
+	resolver ContactIntersectionResolver,
+) MemberServiceOption {
+	return func(s *MemberService) {
+		if resolver != nil {
+			s.contactIntersections = resolver
 		}
 	}
 }
@@ -89,6 +100,7 @@ func NewMemberService(
 		socialContacts:                    noopSocialContactResolver{},
 		circles:                           noopCircleListResolver{},
 		relationships:                     nil,
+		contactIntersections:              emptyContactIntersectionResolver{},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -96,6 +108,19 @@ func NewMemberService(
 		}
 	}
 	return svc
+}
+
+func (s *MemberService) ListContactIntersectionSummaries(
+	ctx context.Context,
+	viewerPersonaID string,
+	contactPersonaID string,
+) ([]ContactIntersectionSummary, error) {
+	return s.contactIntersections.ListContactIntersections(
+		ctx,
+		strings.TrimSpace(viewerPersonaID),
+		strings.TrimSpace(contactPersonaID),
+		2,
+	)
 }
 
 type ListMembersRequest struct {

@@ -8,6 +8,8 @@ class PreferenceFact {
     required this.key,
     required this.value,
     this.source = '',
+    this.sourceSessionId = '',
+    this.confirmedAt = '',
     this.createdAt = '',
     this.revoked = false,
   });
@@ -17,6 +19,8 @@ class PreferenceFact {
   final String key;
   final String value;
   final String source;
+  final String sourceSessionId;
+  final String confirmedAt;
   final String createdAt;
   final bool revoked;
 
@@ -26,6 +30,8 @@ class PreferenceFact {
     'key': key,
     'value': value,
     'source': source,
+    'sourceSessionId': sourceSessionId,
+    'confirmedAt': confirmedAt,
     'createdAt': createdAt,
     'revoked': revoked,
   };
@@ -37,6 +43,8 @@ class PreferenceFact {
       key: (json['key'] as String?)?.trim() ?? '',
       value: (json['value'] as String?)?.trim() ?? '',
       source: (json['source'] as String?)?.trim() ?? '',
+      sourceSessionId: (json['sourceSessionId'] as String?)?.trim() ?? '',
+      confirmedAt: (json['confirmedAt'] as String?)?.trim() ?? '',
       createdAt: (json['createdAt'] as String?)?.trim() ?? '',
       revoked: json['revoked'] == true,
     );

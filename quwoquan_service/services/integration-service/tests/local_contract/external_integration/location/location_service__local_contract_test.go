@@ -18,7 +18,7 @@ func (f *fakeProvider) Nearby(_ context.Context, _ model.NearbyQuery) ([]model.P
 	return f.nearbyFn()
 }
 
-func (f *fakeProvider) Search(_ context.Context, _ model.SearchQuery) ([]model.POI, error) {
+func (f *fakeProvider) Search(_ context.Context, _ model.SearchRequestFact) ([]model.POI, error) {
 	return f.searchFn()
 }
 
@@ -57,7 +57,7 @@ func TestSearchPropagatesBoundProviderFailure(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	_, err = svc.Search(context.Background(), model.SearchQuery{Query: "cafe"})
+	_, err = svc.Search(context.Background(), model.SearchRequestFact{Query: "cafe"})
 	if !errors.Is(err, expected) {
 		t.Fatalf("Search() error = %v, want provider failure", err)
 	}

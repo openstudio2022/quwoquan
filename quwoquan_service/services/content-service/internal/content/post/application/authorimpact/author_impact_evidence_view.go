@@ -5,9 +5,9 @@ import (
 	"time"
 
 	rtimpact "quwoquan_service/runtime/impact"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 // AuthorImpactEvidencePageView is the ListAuthorImpactEvidence response (mirrors

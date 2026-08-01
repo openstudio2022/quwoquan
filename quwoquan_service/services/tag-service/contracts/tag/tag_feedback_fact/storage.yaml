@@ -1,0 +1,20 @@
+backend: mongodb
+collections:
+  tag_feedback_fact:
+    entity: TagFeedbackFact
+    role: authoritative
+    indexes:
+    - name: idx_tag_feedback_fact_actor_idempotency
+      keys:
+        actorId: 1
+        idempotencyKey: 1
+      unique: true
+    - name: idx_tag_feedback_fact_tag_recorded
+      keys:
+        tagRef: 1
+        recordedAt: -1
+    - name: idx_tag_feedback_fact_pending_event
+      keys:
+        eventPublishedAt: 1
+        recordedAt: 1
+role: append_only

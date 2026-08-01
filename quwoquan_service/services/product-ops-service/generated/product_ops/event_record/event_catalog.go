@@ -36,9 +36,13 @@ type EventRecordInput struct {
 	AudioUnderrunCount      *int     `json:"audioUnderrunCount,omitempty"`
 	BackgroundRetryTerminal *string  `json:"backgroundRetryTerminal,omitempty"`
 	CacheAgeBucket          *string  `json:"cacheAgeBucket,omitempty"`
+	CacheClass              *string  `json:"cacheClass,omitempty"`
+	CacheSizeBytes          *int     `json:"cacheSizeBytes,omitempty"`
+	CacheSource             *string  `json:"cacheSource,omitempty"`
 	CallStack               []string `json:"callStack,omitempty"`
 	CallType                *string  `json:"callType,omitempty"`
 	CatalogSource           *string  `json:"catalogSource,omitempty"`
+	ChannelID               *string  `json:"channelId,omitempty"`
 	ChatAction              *string  `json:"chatAction,omitempty"`
 	ChatOutcome             *string  `json:"chatOutcome,omitempty"`
 	ChatSource              *string  `json:"chatSource,omitempty"`
@@ -48,6 +52,7 @@ type EventRecordInput struct {
 	CopyKey                 *string  `json:"copyKey,omitempty"`
 	CorrelationHash         *string  `json:"correlationHash,omitempty"`
 	CountdownBucket         *string  `json:"countdownBucket,omitempty"`
+	CurrentValue            *int     `json:"currentValue,omitempty"`
 	DeclaredDurationMS      *int     `json:"declaredDurationMs,omitempty"`
 	DecoderFallbackEnabled  *bool    `json:"decoderFallbackEnabled,omitempty"`
 	DecoderQueueMode        *string  `json:"decoderQueueMode,omitempty"`
@@ -72,9 +77,11 @@ type EventRecordInput struct {
 	HasCache                *bool    `json:"hasCache,omitempty"`
 	HasError                *bool    `json:"hasError,omitempty"`
 	HTTPStatus              *int     `json:"httpStatus,omitempty"`
+	InflightValue           *int     `json:"inflightValue,omitempty"`
 	JankThresholdMS         *int     `json:"jankThresholdMs,omitempty"`
 	JankyFrames             *int     `json:"jankyFrames,omitempty"`
 	Journey                 *string  `json:"journey,omitempty"`
+	LimitValue              *int     `json:"limitValue,omitempty"`
 	MediaConnected          *bool    `json:"mediaConnected,omitempty"`
 	MemberCountBucket       *string  `json:"memberCountBucket,omitempty"`
 	MentionScope            *string  `json:"mentionScope,omitempty"`
@@ -91,6 +98,7 @@ type EventRecordInput struct {
 	ProcessedVideoFrames    *int     `json:"processedVideoFrames,omitempty"`
 	Provider                *string  `json:"provider,omitempty"`
 	PublicationStage        *string  `json:"publicationStage,omitempty"`
+	QueuedValue             *int     `json:"queuedValue,omitempty"`
 	RankPosition            *int     `json:"rankPosition,omitempty"`
 	ReadyMS                 *int     `json:"readyMs,omitempty"`
 	ReasonID                *string  `json:"reasonId,omitempty"`
@@ -101,6 +109,8 @@ type EventRecordInput struct {
 	ReleaseIDHash           *string  `json:"releaseIdHash,omitempty"`
 	RendererMode            *string  `json:"rendererMode,omitempty"`
 	RequestID               *string  `json:"requestId,omitempty"`
+	ResourceKind            *string  `json:"resourceKind,omitempty"`
+	ResourceProfile         *string  `json:"resourceProfile,omitempty"`
 	Result                  *string  `json:"result,omitempty"`
 	ResultCount             *int     `json:"resultCount,omitempty"`
 	SampledFrames           *int     `json:"sampledFrames,omitempty"`
@@ -125,7 +135,9 @@ type EventRecordInput struct {
 	TurnAction              *string  `json:"turnAction,omitempty"`
 	UnreadCountBucket       *string  `json:"unreadCountBucket,omitempty"`
 	WatermarkResult         *string  `json:"watermarkResult,omitempty"`
+	WorstBuildFrameMS       *int     `json:"worstBuildFrameMs,omitempty"`
 	WorstFrameMS            *int     `json:"worstFrameMs,omitempty"`
+	WorstRasterFrameMS      *int     `json:"worstRasterFrameMs,omitempty"`
 }
 
 func (input EventRecordInput) ExtensionValues() map[string]any {
@@ -145,6 +157,15 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.CacheAgeBucket != nil {
 		out["cacheAgeBucket"] = *input.CacheAgeBucket
 	}
+	if input.CacheClass != nil {
+		out["cacheClass"] = *input.CacheClass
+	}
+	if input.CacheSizeBytes != nil {
+		out["cacheSizeBytes"] = *input.CacheSizeBytes
+	}
+	if input.CacheSource != nil {
+		out["cacheSource"] = *input.CacheSource
+	}
 	if input.CallStack != nil {
 		out["callStack"] = input.CallStack
 	}
@@ -153,6 +174,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.CatalogSource != nil {
 		out["catalogSource"] = *input.CatalogSource
+	}
+	if input.ChannelID != nil {
+		out["channelId"] = *input.ChannelID
 	}
 	if input.ChatAction != nil {
 		out["chatAction"] = *input.ChatAction
@@ -180,6 +204,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.CountdownBucket != nil {
 		out["countdownBucket"] = *input.CountdownBucket
+	}
+	if input.CurrentValue != nil {
+		out["currentValue"] = *input.CurrentValue
 	}
 	if input.DeclaredDurationMS != nil {
 		out["declaredDurationMs"] = *input.DeclaredDurationMS
@@ -253,6 +280,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.HTTPStatus != nil {
 		out["httpStatus"] = *input.HTTPStatus
 	}
+	if input.InflightValue != nil {
+		out["inflightValue"] = *input.InflightValue
+	}
 	if input.JankThresholdMS != nil {
 		out["jankThresholdMs"] = *input.JankThresholdMS
 	}
@@ -261,6 +291,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.Journey != nil {
 		out["journey"] = *input.Journey
+	}
+	if input.LimitValue != nil {
+		out["limitValue"] = *input.LimitValue
 	}
 	if input.MediaConnected != nil {
 		out["mediaConnected"] = *input.MediaConnected
@@ -310,6 +343,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.PublicationStage != nil {
 		out["publicationStage"] = *input.PublicationStage
 	}
+	if input.QueuedValue != nil {
+		out["queuedValue"] = *input.QueuedValue
+	}
 	if input.RankPosition != nil {
 		out["rankPosition"] = *input.RankPosition
 	}
@@ -339,6 +375,12 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.RequestID != nil {
 		out["requestId"] = *input.RequestID
+	}
+	if input.ResourceKind != nil {
+		out["resourceKind"] = *input.ResourceKind
+	}
+	if input.ResourceProfile != nil {
+		out["resourceProfile"] = *input.ResourceProfile
 	}
 	if input.Result != nil {
 		out["result"] = *input.Result
@@ -412,8 +454,14 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.WatermarkResult != nil {
 		out["watermarkResult"] = *input.WatermarkResult
 	}
+	if input.WorstBuildFrameMS != nil {
+		out["worstBuildFrameMs"] = *input.WorstBuildFrameMS
+	}
 	if input.WorstFrameMS != nil {
 		out["worstFrameMs"] = *input.WorstFrameMS
+	}
+	if input.WorstRasterFrameMS != nil {
+		out["worstRasterFrameMs"] = *input.WorstRasterFrameMS
 	}
 	return out
 }
@@ -427,9 +475,13 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"audioUnderrunCount":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"backgroundRetryTerminal": {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "retry_scheduled": {}, "retry_exhausted": {}, "published": {}, "pending_review": {}, "rejected": {}, "cancelled": {}}},
 	"cacheAgeBucket":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "under_1h": {}, "one_to_24h": {}, "over_24h": {}}},
+	"cacheClass":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"cacheSizeBytes":          {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"cacheSource":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"memory": {}, "disk": {}, "remote": {}, "seed": {}, "optimistic_overlay": {}, "unknown": {}}},
 	"callStack":               {Type: "string_list", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 10, ItemMaxLength: 256, Sensitive: true, AllowedValues: map[string]struct{}{}},
 	"callType":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"audio": {}, "video": {}}},
 	"catalogSource":           {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"remote": {}, "verified_cache": {}, "bootstrap_replica": {}}},
+	"channelId":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"chatAction":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"candidate_source_open": {}, "candidate_source_select": {}, "group_create": {}, "member_add": {}, "mention_select": {}, "mention_send": {}, "read_watermark": {}, "group_governance": {}}},
 	"chatOutcome":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"succeeded": {}, "failed": {}, "rejected": {}, "cancelled": {}, "unchanged": {}}},
 	"chatSource":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"contacts": {}, "group": {}, "circle": {}, "roster": {}, "composer": {}, "conversation": {}, "settings": {}}},
@@ -439,6 +491,7 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"copyKey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"correlationHash":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"countdownBucket":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"currentValue":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"declaredDurationMs":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"decoderFallbackEnabled":  {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"decoderQueueMode":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"synchronous": {}}},
@@ -463,9 +516,11 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"hasCache":                {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"hasError":                {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"httpStatus":              {Type: "int", Minimum: func(v int) *int { return &v }(100), Maximum: func(v int) *int { return &v }(599), MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"inflightValue":           {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"jankThresholdMs":         {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"jankyFrames":             {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"journey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"limitValue":              {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"mediaConnected":          {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"memberCountBucket":       {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"zero": {}, "one": {}, "two_to_five": {}, "six_to_fifty": {}, "fifty_one_to_five_hundred": {}, "five_hundred_one_to_one_thousand": {}}},
 	"mentionScope":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"none": {}, "member": {}, "all": {}, "assistant": {}}},
@@ -482,6 +537,7 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"processedVideoFrames":    {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"provider":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"publicationStage":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"editor_ready": {}, "draft_saved": {}, "draft_restored": {}, "submit_started": {}, "queued": {}, "retry_scheduled": {}, "retry_exhausted": {}, "pending_review": {}, "cancelled": {}, "blocked": {}, "published": {}}},
+	"queuedValue":             {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"rankPosition":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"readyMs":                 {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"reasonId":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 256, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -492,6 +548,8 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"releaseIdHash":           {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"rendererMode":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"platform_view": {}, "texture_view": {}}},
 	"requestId":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 256, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"resourceKind":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"image_cache_bytes": {}, "active_video_controllers": {}, "media_downloads": {}}},
+	"resourceProfile":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"compact": {}, "regular": {}, "expanded": {}}},
 	"result":                  {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"resultCount":             {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"sampledFrames":           {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -516,42 +574,46 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"turnAction":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"submit": {}, "first_answer": {}, "completed": {}, "failed": {}, "cancelled": {}, "stream_failure": {}}},
 	"unreadCountBucket":       {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"zero": {}, "one": {}, "two_to_five": {}, "six_to_fifty": {}, "fifty_one_to_five_hundred": {}, "five_hundred_one_to_one_thousand": {}}},
 	"watermarkResult":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"none": {}, "advanced": {}, "already_current": {}, "rejected": {}, "failed": {}}},
+	"worstBuildFrameMs":       {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"worstFrameMs":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"worstRasterFrameMs":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 }
 var EventCatalog = map[string]EventCatalogDefinition{
-	"page_open":                {EventType: "page_open", LogType: "event", RequiredExtensions: map[string]struct{}{}, OptionalExtensions: map[string]struct{}{"readyMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"page_return":              {EventType: "page_return", LogType: "event", RequiredExtensions: map[string]struct{}{"durationMs": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"page_first_usable":        {EventType: "page_first_usable", LogType: "event", RequiredExtensions: map[string]struct{}{"durationMs": {}, "terminalState": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"page_error_outcome":       {EventType: "page_error_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "errorCode": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"action": {}, "durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"app_anr_outcome":          {EventType: "app_anr_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"detectionSource": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"app_frame_jank_outcome":   {EventType: "app_frame_jank_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"sampledFrames": {}, "jankyFrames": {}, "worstFrameMs": {}, "jankThresholdMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"app_startup":              {EventType: "app_startup", LogType: "event", RequiredExtensions: map[string]struct{}{"tClickToFirstFrameMs": {}, "tFirstFrameToShellMs": {}, "tShellToContentMs": {}, "tClickToContentMs": {}, "hasError": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 3000, InternalPriority: "critical"},
-	"runtime_exception":        {EventType: "runtime_exception", LogType: "error", RequiredExtensions: map[string]struct{}{"errorCode": {}}, OptionalExtensions: map[string]struct{}{"operationId": {}, "httpStatus": {}, "callStack": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
-	"product_action":           {EventType: "product_action", LogType: "event", RequiredExtensions: map[string]struct{}{"journey": {}, "action": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "reasonId": {}, "targetType": {}, "targetId": {}, "environment": {}, "durationMs": {}, "result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"login_funnel":             {EventType: "login_funnel", LogType: "event", RequiredExtensions: map[string]struct{}{"action": {}, "flowId": {}, "step": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"entryMode": {}, "fromStep": {}, "toStep": {}, "provider": {}, "otpPurpose": {}, "consentState": {}, "durationMs": {}, "attemptIndex": {}, "countdownBucket": {}, "motionReduced": {}, "dismissPolicy": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"login_operation":          {EventType: "login_operation", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "surfaceId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"flowId": {}, "step": {}, "provider": {}, "otpPurpose": {}, "failReasonCode": {}, "failureKind": {}, "recoveryAction": {}, "copyKey": {}, "feedbackSurface": {}, "durationMs": {}, "attemptIndex": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"chat_interaction_outcome": {EventType: "chat_interaction_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"chatAction": {}, "chatOutcome": {}}, OptionalExtensions: map[string]struct{}{"chatSource": {}, "mentionScope": {}, "governanceAction": {}, "watermarkResult": {}, "memberCountBucket": {}, "unreadCountBucket": {}, "surfaceId": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"performance_sample":       {EventType: "performance_sample", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 0.1, SlowThresholdMS: 0, InternalPriority: "normal"},
-	"operation_result":         {EventType: "operation_result", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "hasCache": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"filter_catalog_load":      {EventType: "filter_catalog_load", LogType: "event", RequiredExtensions: map[string]struct{}{"catalogSource": {}, "releaseIdHash": {}, "digestMatch": {}, "cacheAgeBucket": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"content_publication":      {EventType: "content_publication", LogType: "event", RequiredExtensions: map[string]struct{}{"publicationStage": {}, "contentType": {}, "objectState": {}, "surfaceId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "correlationHash": {}, "backgroundRetryTerminal": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"article_reader_enter":     {EventType: "article_reader_enter", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"article_reader_dwell":     {EventType: "article_reader_dwell", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 0.1, SlowThresholdMS: 0, InternalPriority: "normal"},
-	"article_reader_exit":      {EventType: "article_reader_exit", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"article_reader_error":     {EventType: "article_reader_error", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "errorCode": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
-	"article_reader_recovery":  {EventType: "article_reader_recovery", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "errorCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"video_preview_track_load": {EventType: "video_preview_track_load", LogType: "event", RequiredExtensions: map[string]struct{}{"result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"rtc_call_outcome":         {EventType: "rtc_call_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"callType": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "participantCount": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"rtc_media_qoe":            {EventType: "rtc_media_qoe", LogType: "event", RequiredExtensions: map[string]struct{}{"callType": {}, "result": {}, "connectTimeMs": {}, "mediaConnected": {}, "reconnectCount": {}}, OptionalExtensions: map[string]struct{}{"disconnectReason": {}, "networkQuality": {}, "participantCount": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"realtime_connect_result":  {EventType: "realtime_connect_result", LogType: "event", RequiredExtensions: map[string]struct{}{"transport": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"video_playback_qoe":       {EventType: "video_playback_qoe", LogType: "event", RequiredExtensions: map[string]struct{}{"readyMs": {}, "rebufferCount": {}, "rebufferMs": {}, "effectivePlaybackMs": {}, "seekCount": {}, "seekFailureCount": {}, "seekCommandMaxMs": {}, "seekSettleMaxMs": {}, "seekEvidenceSource": {}, "devicePlatform": {}, "playbackMode": {}}, OptionalExtensions: map[string]struct{}{"ttffMs": {}, "droppedFrames": {}, "processedVideoFrames": {}, "audioUnderrunCount": {}, "rendererMode": {}, "decoderQueueMode": {}, "decoderFallbackEnabled": {}, "declaredDurationMs": {}, "observedDurationMs": {}, "durationMismatch": {}, "result": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"assistant_turn_quality":   {EventType: "assistant_turn_quality", LogType: "event", RequiredExtensions: map[string]struct{}{"turnAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "operationId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_query_submit":      {EventType: "search_query_submit", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "surfaceId": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_result_impression": {EventType: "search_result_impression", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "resultCount": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_result_click":      {EventType: "search_result_click", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "objectType": {}, "rankPosition": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_refine":            {EventType: "search_refine", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "action": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_zero_result":       {EventType: "search_zero_result", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"search_result_dwell":      {EventType: "search_result_dwell", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "durationMs": {}, "resultCount": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"page_open":                    {EventType: "page_open", LogType: "event", RequiredExtensions: map[string]struct{}{}, OptionalExtensions: map[string]struct{}{"readyMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"page_return":                  {EventType: "page_return", LogType: "event", RequiredExtensions: map[string]struct{}{"durationMs": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"page_first_usable":            {EventType: "page_first_usable", LogType: "event", RequiredExtensions: map[string]struct{}{"durationMs": {}, "terminalState": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"page_error_outcome":           {EventType: "page_error_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "errorCode": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"action": {}, "durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"app_anr_outcome":              {EventType: "app_anr_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"detectionSource": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"app_frame_jank_outcome":       {EventType: "app_frame_jank_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"sampledFrames": {}, "jankyFrames": {}, "worstFrameMs": {}, "worstBuildFrameMs": {}, "worstRasterFrameMs": {}, "jankThresholdMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"home_feed_resource_snapshot":  {EventType: "home_feed_resource_snapshot", LogType: "event", RequiredExtensions: map[string]struct{}{"resourceKind": {}, "currentValue": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"resourceProfile": {}, "limitValue": {}, "queuedValue": {}, "inflightValue": {}, "cacheSizeBytes": {}, "surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"home_feed_cache_read_outcome": {EventType: "home_feed_cache_read_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"cacheSource": {}, "cacheClass": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"app_startup":                  {EventType: "app_startup", LogType: "event", RequiredExtensions: map[string]struct{}{"tClickToFirstFrameMs": {}, "tFirstFrameToShellMs": {}, "tShellToContentMs": {}, "tClickToContentMs": {}, "hasError": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 3000, InternalPriority: "critical"},
+	"runtime_exception":            {EventType: "runtime_exception", LogType: "error", RequiredExtensions: map[string]struct{}{"errorCode": {}}, OptionalExtensions: map[string]struct{}{"operationId": {}, "httpStatus": {}, "callStack": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
+	"product_action":               {EventType: "product_action", LogType: "event", RequiredExtensions: map[string]struct{}{"journey": {}, "action": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "reasonId": {}, "targetType": {}, "targetId": {}, "environment": {}, "durationMs": {}, "result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"login_funnel":                 {EventType: "login_funnel", LogType: "event", RequiredExtensions: map[string]struct{}{"action": {}, "flowId": {}, "step": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"entryMode": {}, "fromStep": {}, "toStep": {}, "provider": {}, "otpPurpose": {}, "consentState": {}, "durationMs": {}, "attemptIndex": {}, "countdownBucket": {}, "motionReduced": {}, "dismissPolicy": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"login_operation":              {EventType: "login_operation", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "surfaceId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"flowId": {}, "step": {}, "provider": {}, "otpPurpose": {}, "failReasonCode": {}, "failureKind": {}, "recoveryAction": {}, "copyKey": {}, "feedbackSurface": {}, "durationMs": {}, "attemptIndex": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"chat_interaction_outcome":     {EventType: "chat_interaction_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"chatAction": {}, "chatOutcome": {}}, OptionalExtensions: map[string]struct{}{"chatSource": {}, "mentionScope": {}, "governanceAction": {}, "watermarkResult": {}, "memberCountBucket": {}, "unreadCountBucket": {}, "surfaceId": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"performance_sample":           {EventType: "performance_sample", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 0.1, SlowThresholdMS: 0, InternalPriority: "normal"},
+	"operation_result":             {EventType: "operation_result", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "hasCache": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"filter_catalog_load":          {EventType: "filter_catalog_load", LogType: "event", RequiredExtensions: map[string]struct{}{"catalogSource": {}, "releaseIdHash": {}, "digestMatch": {}, "cacheAgeBucket": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"content_publication":          {EventType: "content_publication", LogType: "event", RequiredExtensions: map[string]struct{}{"publicationStage": {}, "contentType": {}, "objectState": {}, "surfaceId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "correlationHash": {}, "backgroundRetryTerminal": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"article_reader_enter":         {EventType: "article_reader_enter", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"article_reader_dwell":         {EventType: "article_reader_dwell", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 0.1, SlowThresholdMS: 0, InternalPriority: "normal"},
+	"article_reader_exit":          {EventType: "article_reader_exit", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "durationMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"article_reader_error":         {EventType: "article_reader_error", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "errorCode": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
+	"article_reader_recovery":      {EventType: "article_reader_recovery", LogType: "event", RequiredExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "recoveryAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "errorCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"video_preview_track_load":     {EventType: "video_preview_track_load", LogType: "event", RequiredExtensions: map[string]struct{}{"result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"rtc_call_outcome":             {EventType: "rtc_call_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"callType": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "participantCount": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"rtc_media_qoe":                {EventType: "rtc_media_qoe", LogType: "event", RequiredExtensions: map[string]struct{}{"callType": {}, "result": {}, "connectTimeMs": {}, "mediaConnected": {}, "reconnectCount": {}}, OptionalExtensions: map[string]struct{}{"disconnectReason": {}, "networkQuality": {}, "participantCount": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"realtime_connect_result":      {EventType: "realtime_connect_result", LogType: "event", RequiredExtensions: map[string]struct{}{"transport": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"video_playback_qoe":           {EventType: "video_playback_qoe", LogType: "event", RequiredExtensions: map[string]struct{}{"readyMs": {}, "rebufferCount": {}, "rebufferMs": {}, "effectivePlaybackMs": {}, "seekCount": {}, "seekFailureCount": {}, "seekCommandMaxMs": {}, "seekSettleMaxMs": {}, "seekEvidenceSource": {}, "devicePlatform": {}, "playbackMode": {}}, OptionalExtensions: map[string]struct{}{"ttffMs": {}, "droppedFrames": {}, "processedVideoFrames": {}, "audioUnderrunCount": {}, "rendererMode": {}, "decoderQueueMode": {}, "decoderFallbackEnabled": {}, "declaredDurationMs": {}, "observedDurationMs": {}, "durationMismatch": {}, "result": {}, "failReasonCode": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"assistant_turn_quality":       {EventType: "assistant_turn_quality", LogType: "event", RequiredExtensions: map[string]struct{}{"turnAction": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"durationMs": {}, "failReasonCode": {}, "operationId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_query_submit":          {EventType: "search_query_submit", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "surfaceId": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_result_impression":     {EventType: "search_result_impression", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "resultCount": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_result_click":          {EventType: "search_result_click", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "objectType": {}, "rankPosition": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_refine":                {EventType: "search_refine", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "action": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_zero_result":           {EventType: "search_zero_result", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"search_result_dwell":          {EventType: "search_result_dwell", LogType: "event", RequiredExtensions: map[string]struct{}{"requestId": {}, "durationMs": {}, "resultCount": {}}, OptionalExtensions: map[string]struct{}{"action": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 }
 var AppPageNames = map[string]struct{}{
 	"add_contact":                       {},

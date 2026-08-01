@@ -184,10 +184,7 @@ class ContentShareTemplateBuilder {
     switch (view.kind) {
       case ContentSurfaceKind.article:
         return _ShareSeed(
-          title: _clip(
-            title,
-            fallback: ContentText.shareSeedWorkFallbackTitle,
-          ),
+          title: _clip(title, fallback: ContentText.shareSeedWorkFallbackTitle),
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,
         );

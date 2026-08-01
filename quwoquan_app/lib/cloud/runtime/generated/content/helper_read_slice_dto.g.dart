@@ -8,10 +8,10 @@ class HelperReadSliceDto {
   final String summary;
 
   HelperReadSliceDto({
-    required this.postId,
-    required this.contentType,
-    required this.title,
-    required this.summary,
+    this.postId = '',
+    this.contentType = '',
+    this.title = '',
+    this.summary = '',
   });
 
   factory HelperReadSliceDto.fromMap(Map<String, dynamic> m) {

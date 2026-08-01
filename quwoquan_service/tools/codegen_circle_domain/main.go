@@ -44,6 +44,7 @@ func main() {
 		"CircleGroupMembership",
 		"CircleMembership",
 		"CirclePostPlacement",
+		"Gathering",
 	}
 	for _, object := range objects {
 		generator := contractcodegen.NewDomainGenerator(

@@ -55,7 +55,7 @@ void main() {
       fail(
         'Profile proposal Remote API verification requires '
         'TEST_AUTH_TOKEN and TEST_PERSONA_ID from the local Gamma '
-        'acceptance-session issuer.',
+        'candidate-bound nonprod phone identity pool.',
       );
     }
   });

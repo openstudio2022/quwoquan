@@ -793,11 +793,13 @@ def validate_manifest(
     *,
     allowed_statuses: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Validate the online canonical contract and reject every legacy envelope."""
+    """Validate the one canonical online contract and reject forbidden fields."""
 
-    legacy = sorted(_forbidden_field_paths(manifest))
-    if legacy:
-        raise ValueError(f"legacy release evidence fields are forbidden: {legacy}")
+    forbidden_paths = sorted(_forbidden_field_paths(manifest))
+    if forbidden_paths:
+        raise ValueError(
+            f"release evidence manifest fields are forbidden: {forbidden_paths}"
+        )
     if set(manifest) != ROOT_FIELDS:
         missing = sorted(ROOT_FIELDS - set(manifest))
         extra = sorted(set(manifest) - ROOT_FIELDS)

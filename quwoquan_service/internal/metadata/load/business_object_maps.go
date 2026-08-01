@@ -30,9 +30,14 @@ type objectDocument struct {
 	Identity             objectIdentityWire       `json:"identity"`
 	Access               objectAccessPolicyWire   `json:"access"`
 	Relationships        []objectRelationshipWire `json:"relationships"`
+	CounterStrategy      counterStrategyWire      `json:"counter_strategy"`
 	BusinessRules        []any                    `json:"business_rules"`
 	Lifecycle            any                      `json:"lifecycle"`
 	LocalIdentityReasons map[string]string        `json:"local_identity_reasons"`
+}
+
+type counterStrategyWire struct {
+	Sources map[string]string `json:"sources"`
 }
 
 type objectIdentityWire struct {
@@ -270,6 +275,7 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 				CrossContext: strings.TrimSpace(objectWire.Access.CrossContext),
 			},
 			Relationships:        relationships,
+			CounterSources:       cloneStringMap(objectWire.CounterStrategy.Sources),
 			FieldRoles:           fieldRoles,
 			LocalIdentityReasons: cloneStringMap(objectWire.LocalIdentityReasons),
 		})

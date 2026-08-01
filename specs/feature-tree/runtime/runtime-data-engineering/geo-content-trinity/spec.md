@@ -73,10 +73,10 @@
 ## 7. 开放事项
 
 <a id="open-002"></a>
-### OPEN-002 失败对象隔离与成功对象独立发布
+### OPEN-002 四环境 activation 与 rollback 晋级证据
 
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺同一 immutable release digest 的 tag/creator/content/homepage 四环境 activation、API/media consumer readback 与 rollback/replay receipt。仓库内 importer 已统一消费 release MediaAsset authority，环境业务 seed 与环境私有 media manifest 已由架构门禁止，但这些静态约束不能代替 Alpha → Beta → Gamma → Prod 的真实晋级证据。
+- 影响或价值：尚缺同一 immutable release digest 的 tag/creator/content/homepage 四环境 activation、API/media consumer readback 与 rollback/replay receipt。仓库内 importer/MediaAsset authority、local/hosted topology 的 `userPostgresPortRole`/`userPostgresDsnEnv` 契约与 local_contract 已另轨关闭，禁止用这些静态工程门替代 Alpha → Beta → Gamma → Prod 的真实晋级证据。Alpha 对 `20260731--travel-zhejiang-six--scale-017`（`payloadSha256=sha256:93af46e1a2399c22ae6df81c95a6a546a5f652ad025ad477f49b6885c9bc4eae`）已有 import + consumer ship verify + `stackctl verify --profile integration` 证据，但**不得**据此关闭本 OPEN；Beta/Gamma/Prod activation、readback 与 rollback/replay 仍缺。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 覆盖 Alpha → Beta → Gamma → Prod 晋级。

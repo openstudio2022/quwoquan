@@ -1,8 +1,8 @@
 overrides:
-  sys.product-ops-service.account_security_authority.base_url: http://127.0.0.1:18081
+  sys.product-ops-service.account_security_authority.base_url: http://user-service:18081
   sys.product-ops-service.account_security_authority.timeout_ms: 300
-  sys.product-ops-service.redis.general.addr: 127.0.0.1:6379
-  sys.product-ops-service.redis.rec.addr: 127.0.0.1:6379
+  sys.product-ops-service.redis.general.addr: redis:6379
+  sys.product-ops-service.redis.rec.addr: redis:6379
 secretRefs:
   sys.product-ops-service.mongodb.uri: MONGODB_URI
   sys.product-ops-service.postgres.dsn: POSTGRES_DSN

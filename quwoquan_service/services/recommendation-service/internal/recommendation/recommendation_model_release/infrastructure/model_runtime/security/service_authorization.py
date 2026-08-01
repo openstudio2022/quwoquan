@@ -65,7 +65,12 @@ class ServiceTokenVerifier:
             token_version=token_version,
         )
 
-    def verify(self, authorization: str | None) -> dict[str, Any]:
+    def verify(
+        self,
+        authorization: str | None,
+        *,
+        required_scope: str = REQUIRED_SCOPE,
+    ) -> dict[str, Any]:
         if not authorization or not authorization.startswith("Bearer "):
             raise AuthorizationFailure(401, UNAUTHORIZED_CODE)
         token = authorization.removeprefix("Bearer ").strip()
@@ -113,6 +118,6 @@ class ServiceTokenVerifier:
 
         roles = claims.get("roles")
         scopes = str(claims.get("scope", "")).split()
-        if not isinstance(roles, list) or "service" not in roles or REQUIRED_SCOPE not in scopes:
+        if not isinstance(roles, list) or "service" not in roles or required_scope not in scopes:
             raise AuthorizationFailure(403, FORBIDDEN_CODE)
         return claims

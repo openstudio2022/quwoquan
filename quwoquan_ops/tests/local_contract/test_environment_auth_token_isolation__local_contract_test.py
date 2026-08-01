@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import runpy
 import sys
@@ -62,12 +61,7 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
         mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
         mock.patch.object(
             stackctl,
-            "resolve_running_local_deployment_work_root",
-            return_value=None,
-        ),
-        mock.patch.object(
-            stackctl,
-            "open_local_acceptance_session",
+            "open_reference_acceptance_session",
             side_effect=PermissionError("auth directory is not readable"),
         ),
     ):
@@ -83,54 +77,6 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
     assert findings == [output]
 
 
-def test_local_report_account_backfill_uses_only_canonical_acceptance_identity(
-    tmp_path: Path,
-) -> None:
-    output_path = tmp_path / "report-account-backfill.json"
-
-    with mock.patch.object(
-        local_environment_auth,
-            "_local_acceptance_principal",
-        return_value=("fixture-account", "fixture-persona"),
-    ):
-        payload = local_environment_auth.write_local_report_account_backfill(
-            "beta",
-            "beta-local",
-            output_path,
-        )
-
-    assert payload == {
-        "kind": "content.reporter_account_backfill",
-        "entries": [
-            {
-                "reporterId": "fixture-persona",
-                "accountId": "fixture-account",
-            }
-        ],
-    }
-    assert json.loads(output_path.read_text(encoding="utf-8")) == payload
-    assert output_path.stat().st_mode & 0o777 == 0o600
-
-
-def test_local_report_account_backfill_can_intentionally_remain_empty(
-    tmp_path: Path,
-) -> None:
-    output_path = tmp_path / "report-account-backfill.json"
-
-    payload = local_environment_auth.write_local_report_account_backfill(
-        "gamma",
-        "gamma-local",
-        output_path,
-        include_acceptance_principal=False,
-    )
-
-    assert payload == {
-        "kind": "content.reporter_account_backfill",
-        "entries": [],
-    }
-    assert json.loads(output_path.read_text(encoding="utf-8")) == payload
-
-
 def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None:
     module = runpy.run_path(str(INTERSECTION_SMOKE_RUNNER))
     session = SimpleNamespace(
@@ -143,7 +89,7 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
     with (
         mock.patch.object(
             local_environment_auth,
-            "open_local_acceptance_session",
+            "open_reference_acceptance_session",
             return_value=session,
         ) as open_session,
         mock.patch.object(
@@ -193,7 +139,10 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
     smoke_command = smoke_call.args[0]
     child_environment = smoke_call.kwargs["env"]
 
-    assert open_session.call_args.kwargs["subject"] == "release-author-a"
+    assert open_session.call_args.kwargs == {
+        "environment": "gamma",
+        "target_name": "gamma-local",
+    }
     assert all(
         "secret-acceptance-token" not in argument
         for call in run.call_args_list

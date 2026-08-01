@@ -388,10 +388,7 @@ const _oneTapMovieEffects = <_OneTapMovieEffect>[
     id: 'gentle_motion',
     label: MediaText.mediaPickerOneTapMovieGentleMotion,
   ),
-  _OneTapMovieEffect(
-    id: 'beat',
-    label: MediaText.mediaPickerOneTapMovieBeat,
-  ),
+  _OneTapMovieEffect(id: 'beat', label: MediaText.mediaPickerOneTapMovieBeat),
   _OneTapMovieEffect(
     id: 'scenery',
     label: MediaText.mediaPickerOneTapMovieScenery,

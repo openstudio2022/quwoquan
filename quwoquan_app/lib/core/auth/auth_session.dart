@@ -24,7 +24,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part "auth_session_controller.dart";
-part "auth_session_persona_key_migration.dart";
 
 /// 派生隐私安全的设备 actor 标识（installId hash 派生，非原始设备 ID）。
 ///
@@ -308,7 +307,7 @@ class AuthSessionStore {
   Future<StoredAuthSession> read() async {
     final prefs = await _prefsFactory();
     final installId = await _ensureInstallId(prefs);
-    final activePersonaId = await _migrateActivePersonaKey(prefs);
+    final activePersonaId = prefs.getString(_activePersonaIdKey)?.trim() ?? '';
     final accessToken = await _secureStorage.read(key: _accessTokenKey) ?? '';
     final refreshToken = await _secureStorage.read(key: _refreshTokenKey) ?? '';
     final rememberedRefreshToken =
@@ -378,7 +377,6 @@ class AuthSessionStore {
     );
     await prefs.setString(_ownerIdKey, result.ownerId);
     await prefs.setString(_activePersonaIdKey, activePersona);
-    await _removeRetiredActivePersonaKey(prefs);
     await prefs.setString(_accountStateKey, result.accountState);
     await prefs.setString(_identityOriginKey, result.identityOrigin);
     await prefs.setInt(_lastRefreshAtKey, nowEpochMs);
@@ -485,7 +483,6 @@ class AuthSessionStore {
   Future<void> updateActivePersona(String personaId) async {
     final prefs = await _prefsFactory();
     await prefs.setString(_activePersonaIdKey, personaId.trim());
-    await _removeRetiredActivePersonaKey(prefs);
   }
 
   /// 软退出：把显式账号 refresh token 移入 remembered 槽，仅失效当前活跃会话。
@@ -537,7 +534,6 @@ class AuthSessionStore {
     }
     await prefs.remove(_ownerIdKey);
     await prefs.remove(_activePersonaIdKey);
-    await _removeRetiredActivePersonaKey(prefs);
     await prefs.remove(_accountStateKey);
     await prefs.remove(_identityOriginKey);
     await prefs.remove(_lastRefreshAtKey);

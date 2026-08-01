@@ -12,13 +12,7 @@ import 'package:quwoquan_app/core/platform/platform_os_io.dart'
 /// Business / UI code MUST NOT branch on `AppPlatform`. It should consume
 /// `PlatformCapabilities` instead (capability-first), so that adding a new
 /// platform requires zero business-layer changes.
-enum AppPlatform {
-  android,
-  ios,
-  ohos,
-  web,
-  desktop,
-}
+enum AppPlatform { android, ios, ohos, web, desktop }
 
 /// Resolves the current platform once, web-safely.
 ///

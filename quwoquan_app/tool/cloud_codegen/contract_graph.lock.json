@@ -2,190 +2,34 @@
   "appExposedOperations": [
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "AssistantConversation",
+      "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_conversation.CreateAssistantConversation",
+      "canonicalOperationId": "assistant.assistant_entry_view.GetAssistantEntry",
       "clientContract": null,
       "commercial": {
-        "blockReason": "conversation aggregate mutation does not yet commit its declared domain event through a transactional outbox",
+        "blockReason": "AssistantEntryView 对象源与投影测试尚待闭环",
         "explicit": true,
-        "gapId": "ASSISTANT_CONVERSATION_WIRING",
+        "gapId": "ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE",
         "status": "blocked",
         "targetStory": "app-cloud-business-object-commercial-closure"
       },
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
-        "ASSISTANT.USER.conversation_invalid_argument",
-        "ASSISTANT.USER.conversation_idempotency_conflict",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.conversation_storage_unavailable"
+        "ASSISTANT.USER.run_unauthorized",
+        "ASSISTANT.USER.run_invalid_argument"
       ],
-      "facadeMethod": "createConversation",
-      "facet": "AssistantConversationCommandFacade",
-      "invariantTarget": "AssistantConversation",
-      "kind": "command",
-      "localOperationId": "CreateAssistantConversation",
-      "method": "POST",
-      "mutationTarget": "AssistantConversation",
-      "objectId": "assistant.assistant_conversation",
-      "ownershipPolicy": "conversation_owner",
-      "pagination": null,
-      "pathTemplate": "/assistant/conversations",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": null,
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "AssistantCreateConversationRequest",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantConversation",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
-      "surfaceIds": [
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code",
-          "replayed"
-        ],
-        "metric": "assistant_conversation_command",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_conversation.GetAssistantConversation",
-      "clientContract": {
-        "dartImport": "../assistant/assistant_contracts.dart",
-        "responseDecoder": "decodeAssistantConversation",
-        "responseType": "AssistantConversationProjection"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.conversation_not_found",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.conversation_storage_unavailable"
-      ],
-      "facadeMethod": "getConversation",
-      "facet": "AssistantConversationQueryFacade",
+      "facadeMethod": "getEntry",
+      "facet": "AssistantEntryViewQueryFacade",
       "invariantTarget": "",
       "kind": "query",
-      "localOperationId": "GetAssistantConversation",
+      "localOperationId": "GetAssistantEntry",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "assistant.assistant_conversation",
-      "ownershipPolicy": "conversation_owner",
-      "pagination": null,
-      "pathTemplate": "/assistant/conversations/{conversationId}",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "conversationId",
-            "name": "conversationId"
-          }
-        ]
-      },
-      "requestBodyKind": "none",
-      "requestConstants": null,
-      "requestEntity": "AssistantConversationByIdQuery",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantConversation",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 300
-      },
-      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
-      "surfaceIds": [
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_conversation_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_conversation.ListAssistantConversations",
-      "clientContract": {
-        "dartImport": "../assistant/assistant_contracts.dart",
-        "responseDecoder": "decodeAssistantConversationList",
-        "responseType": "AssistantConversationListProjection"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.conversation_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.conversation_storage_unavailable"
-      ],
-      "facadeMethod": "listConversations",
-      "facet": "AssistantConversationQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ListAssistantConversations",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_conversation",
+      "objectId": "assistant.assistant_entry_view",
       "ownershipPolicy": "requester_self",
       "pagination": null,
-      "pathTemplate": "/assistant/conversations",
+      "pathTemplate": "/assistant/entry",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -198,37 +42,37 @@
         "idempotency": "none",
         "maxAttempts": 2,
         "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
+        "timeoutMilliseconds": 500
       },
       "requestBindings": {
         "query": [
           {
-            "field": "limit",
-            "name": "limit"
+            "field": "pageType",
+            "name": "pageType",
+            "required": false
           },
           {
-            "field": "cursor",
-            "name": "cursor",
+            "field": "objectId",
+            "name": "objectId",
             "required": false
           }
         ]
       },
-      "requestBodyKind": "none",
+      "requestBodyKind": "",
       "requestConstants": null,
-      "requestEntity": "AssistantConversationListQuery",
+      "requestEntity": "",
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantConversationListView",
+      "responseEntity": "AssistantEntryResponse",
       "scopes": [],
       "slo": {
-        "availabilityPercent": 99.9,
+        "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant/assistant_conversation/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_entry_view/operations.yaml",
       "surfaceIds": [
-        "assistantHistory",
-        "assistantSkills",
+        "assistantHalfSheet",
         "personalAssistantDialog"
       ],
       "telemetry": {
@@ -237,7 +81,7 @@
           "outcome",
           "error_code"
         ],
-        "metric": "assistant_conversation_query",
+        "metric": "assistant_entry_view_query",
         "trace": true
       }
     },
@@ -325,7 +169,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_preference_fact.ListAssistantPreferences",
+      "canonicalOperationId": "assistant.assistant_preference.ListAssistantPreferences",
       "clientContract": null,
       "commercial": {
         "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
@@ -338,17 +182,17 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.preference_unauthorized",
         "ASSISTANT.SYSTEM.preference_storage_unavailable"
       ],
       "facadeMethod": "listPreferences",
-      "facet": "AssistantPreferenceFactQueryFacade",
+      "facet": "AssistantPreferenceQueryFacade",
       "invariantTarget": "",
       "kind": "query",
       "localOperationId": "ListAssistantPreferences",
       "method": "GET",
       "mutationTarget": "",
-      "objectId": "assistant.assistant_preference_fact",
+      "objectId": "assistant.assistant_preference",
       "ownershipPolicy": "requester_self",
       "pagination": null,
       "pathTemplate": "/assistant/preferences",
@@ -374,8 +218,8 @@
             "required": false
           },
           {
-            "field": "conversationId",
-            "name": "conversationId",
+            "field": "sessionId",
+            "name": "sessionId",
             "required": false
           },
           {
@@ -391,13 +235,13 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantPreferenceFactListView",
+      "responseEntity": "AssistantPreferenceListView",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -411,15 +255,15 @@
           "scope",
           "status"
         ],
-        "metric": "assistant_preference_fact_query",
+        "metric": "assistant_preference_query",
         "trace": true
       }
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "AssistantPreferenceFact",
+      "aggregateOwner": "AssistantPreference",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_preference_fact.RestoreAssistantPreference",
+      "canonicalOperationId": "assistant.assistant_preference.RestoreAssistantPreference",
       "clientContract": null,
       "commercial": {
         "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
@@ -433,17 +277,17 @@
       "errorCodes": [
         "ASSISTANT.USER.preference_not_found",
         "ASSISTANT.USER.preference_restore_expired",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.preference_unauthorized",
         "ASSISTANT.SYSTEM.preference_storage_unavailable"
       ],
       "facadeMethod": "restorePreference",
-      "facet": "AssistantPreferenceFactCommandFacade",
-      "invariantTarget": "AssistantPreferenceFact",
+      "facet": "AssistantPreferenceCommandFacade",
+      "invariantTarget": "AssistantPreference",
       "kind": "command",
       "localOperationId": "RestoreAssistantPreference",
       "method": "POST",
-      "mutationTarget": "AssistantPreferenceFact",
-      "objectId": "assistant.assistant_preference_fact",
+      "mutationTarget": "AssistantPreference",
+      "objectId": "assistant.assistant_preference",
       "ownershipPolicy": "preference_owner",
       "pagination": null,
       "pathTemplate": "/assistant/preferences/{preferenceId}/restore",
@@ -475,13 +319,13 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantPreferenceFact",
+      "responseEntity": "AssistantPreference",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -493,15 +337,15 @@
           "outcome",
           "error_code"
         ],
-        "metric": "assistant_preference_fact_command",
+        "metric": "assistant_preference_command",
         "trace": true
       }
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "AssistantPreferenceFact",
+      "aggregateOwner": "AssistantPreference",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_preference_fact.RevokeAssistantPreference",
+      "canonicalOperationId": "assistant.assistant_preference.RevokeAssistantPreference",
       "clientContract": null,
       "commercial": {
         "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
@@ -514,17 +358,17 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.preference_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.preference_unauthorized",
         "ASSISTANT.SYSTEM.preference_storage_unavailable"
       ],
       "facadeMethod": "revokePreference",
-      "facet": "AssistantPreferenceFactCommandFacade",
-      "invariantTarget": "AssistantPreferenceFact",
+      "facet": "AssistantPreferenceCommandFacade",
+      "invariantTarget": "AssistantPreference",
       "kind": "command",
       "localOperationId": "RevokeAssistantPreference",
       "method": "POST",
-      "mutationTarget": "AssistantPreferenceFact",
-      "objectId": "assistant.assistant_preference_fact",
+      "mutationTarget": "AssistantPreference",
+      "objectId": "assistant.assistant_preference",
       "ownershipPolicy": "preference_owner",
       "pagination": null,
       "pathTemplate": "/assistant/preferences/{preferenceId}/revoke",
@@ -556,13 +400,13 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantPreferenceFact",
+      "responseEntity": "AssistantPreference",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -574,15 +418,15 @@
           "outcome",
           "error_code"
         ],
-        "metric": "assistant_preference_fact_command",
+        "metric": "assistant_preference_command",
         "trace": true
       }
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "AssistantPreferenceFact",
+      "aggregateOwner": "AssistantPreference",
       "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_preference_fact.SetAssistantPreference",
+      "canonicalOperationId": "assistant.assistant_preference.SetAssistantPreference",
       "clientContract": null,
       "commercial": {
         "blockReason": "端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据",
@@ -596,17 +440,17 @@
       "errorCodes": [
         "ASSISTANT.USER.preference_invalid_argument",
         "ASSISTANT.USER.preference_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.preference_unauthorized",
         "ASSISTANT.SYSTEM.preference_storage_unavailable"
       ],
       "facadeMethod": "setPreference",
-      "facet": "AssistantPreferenceFactCommandFacade",
-      "invariantTarget": "AssistantPreferenceFact",
+      "facet": "AssistantPreferenceCommandFacade",
+      "invariantTarget": "AssistantPreference",
       "kind": "command",
       "localOperationId": "SetAssistantPreference",
       "method": "POST",
-      "mutationTarget": "AssistantPreferenceFact",
-      "objectId": "assistant.assistant_preference_fact",
+      "mutationTarget": "AssistantPreference",
+      "objectId": "assistant.assistant_preference",
       "ownershipPolicy": "requester_self",
       "pagination": null,
       "pathTemplate": "/assistant/preferences",
@@ -631,13 +475,13 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantPreferenceFact",
+      "responseEntity": "AssistantPreference",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "assistant/assistant/assistant_preference_fact/operations.yaml",
+      "sourcePath": "assistant/assistant/assistant_preference/operations.yaml",
       "surfaceIds": [
         "assistantManagement",
         "assistantSettings",
@@ -651,7 +495,7 @@
           "scope",
           "kind"
         ],
-        "metric": "assistant_preference_fact_command",
+        "metric": "assistant_preference_command",
         "trace": true
       }
     },
@@ -662,7 +506,7 @@
       "canonicalOperationId": "assistant.assistant_run.CancelAssistantRun",
       "clientContract": null,
       "commercial": {
-        "blockReason": "AssistantRun cancel aggregate/store/HTTP adapter remain physically co-owned by AssistantConversation",
+        "blockReason": "AssistantRun cancel aggregate/store/HTTP adapter remain physically mixed with AssistantSession orchestration",
         "explicit": true,
         "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -672,7 +516,7 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.run_unauthorized",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
       "facadeMethod": "cancelRun",
@@ -695,12 +539,18 @@
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
+        "idempotency": "required",
         "maxAttempts": 2,
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
       },
       "requestBindings": {
+        "injected": [
+          {
+            "field": "idempotencyKey",
+            "name": "Idempotency-Key"
+          }
+        ],
         "path": [
           {
             "field": "runId",
@@ -710,11 +560,11 @@
       },
       "requestBodyKind": "",
       "requestConstants": null,
-      "requestEntity": "",
+      "requestEntity": "AssistantRunCommandRequest",
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantTurnEnvelope",
+      "responseEntity": "AssistantRunEnvelope",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -741,7 +591,7 @@
       "canonicalOperationId": "assistant.assistant_run.GetAssistantRun",
       "clientContract": null,
       "commercial": {
-        "blockReason": "AssistantRun domain model, Mongo store and HTTP adapter remain physically co-owned by AssistantConversation",
+        "blockReason": "AssistantRun domain model, Mongo store and HTTP adapter remain physically mixed with AssistantSession orchestration",
         "explicit": true,
         "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -751,11 +601,11 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.run_unauthorized",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
       "facadeMethod": "getRun",
-      "facet": "AssistantTurnQueryFacade",
+      "facet": "AssistantRunQueryFacade",
       "invariantTarget": "",
       "kind": "query",
       "localOperationId": "GetAssistantRun",
@@ -793,7 +643,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantTurnEnvelope",
+      "responseEntity": "AssistantRunEnvelope",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -810,493 +660,6 @@
           "error_code"
         ],
         "metric": "assistant_run_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.GetEntryPersonalization",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "entry personalization read model is still declared and implemented under AssistantRun rather than its owning object",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.unauthorized"
-      ],
-      "facadeMethod": "getEntryPersonalization",
-      "facet": "AssistantPersonalizationQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "GetEntryPersonalization",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "requester_self",
-      "pagination": null,
-      "pathTemplate": "/assistant/personalization",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "query": [
-          {
-            "field": "pageType",
-            "name": "pageType",
-            "required": false
-          }
-        ]
-      },
-      "requestBodyKind": "",
-      "requestConstants": null,
-      "requestEntity": "",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantEntryPersonalizationView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantHalfSheet",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_personalization_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.GetSuggestedActions",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "suggested-action read model is still declared and implemented under AssistantRun rather than its owning object",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.USER.run_invalid_argument"
-      ],
-      "facadeMethod": "getSuggestedActions",
-      "facet": "AssistantSuggestionQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "GetSuggestedActions",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "requester_self",
-      "pagination": null,
-      "pathTemplate": "/assistant/suggested-actions",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "query": [
-          {
-            "field": "pageType",
-            "name": "pageType",
-            "required": true
-          },
-          {
-            "field": "objectId",
-            "name": "objectId",
-            "required": false
-          }
-        ]
-      },
-      "requestBodyKind": "",
-      "requestConstants": null,
-      "requestEntity": "",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "SuggestedActionListView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantHalfSheet",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_personalization_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.ListAssistantTasks",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "AssistantTask has no object-owned contract/source/store boundary and remains embedded in AssistantRun",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.unauthorized"
-      ],
-      "facadeMethod": "listTasks",
-      "facet": "AssistantPersonalDataQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ListAssistantTasks",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "requester_self",
-      "pagination": null,
-      "pathTemplate": "/assistant/tasks",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "query": [
-          {
-            "field": "limit",
-            "name": "limit",
-            "required": false
-          },
-          {
-            "field": "status",
-            "name": "status",
-            "required": false
-          }
-        ]
-      },
-      "requestBodyKind": "",
-      "requestConstants": null,
-      "requestEntity": "",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantUserTaskListView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantSettings",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_personal_data_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.ListConversationTurns",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "AssistantRun transcript reader and Mongo slice remain physically co-owned by AssistantConversation",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.run_invalid_argument",
-        "ASSISTANT.USER.conversation_not_found",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.run_storage_unavailable"
-      ],
-      "facadeMethod": "listConversationTurns",
-      "facet": "AssistantTurnQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ListConversationTurns",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "conversation_owner",
-      "pagination": null,
-      "pathTemplate": "/assistant/conversations/{conversationId}/turns",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "conversationId",
-            "name": "conversationId"
-          }
-        ],
-        "query": [
-          {
-            "field": "limit",
-            "name": "limit",
-            "required": false
-          },
-          {
-            "field": "cursor",
-            "name": "cursor",
-            "required": false
-          }
-        ]
-      },
-      "requestBodyKind": "",
-      "requestConstants": null,
-      "requestEntity": "",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantTurnListView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantHistory",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_run_query",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "AssistantRun",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.ReportPageContext",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "page-context command is still modeled as an AssistantRun mutation instead of an object-owned PageContext aggregate",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.run_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.SYSTEM.page_context_unavailable"
-      ],
-      "facadeMethod": "reportPageContext",
-      "facet": "AssistantContextCommandFacade",
-      "invariantTarget": "AssistantRun",
-      "kind": "command",
-      "localOperationId": "ReportPageContext",
-      "method": "POST",
-      "mutationTarget": "AssistantRun",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "requester_self",
-      "pagination": null,
-      "pathTemplate": "/assistant/page-context",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "optional",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": null,
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "AssistantReportPageContextRequestWire",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "PageContextAck",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 300
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "assistantHalfSheet",
-        "personalAssistantDialog"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_context_command",
-        "trace": true
-      }
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "assistant.assistant_run.SearchXiaoquResults",
-      "clientContract": null,
-      "commercial": {
-        "blockReason": "search query still belongs to AssistantRun instead of an object-owned search slice, and Prod public-search Provider conformance is unproven",
-        "explicit": true,
-        "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
-        "status": "blocked",
-        "targetStory": "app-cloud-business-object-commercial-closure"
-      },
-      "concurrency": {},
-      "domain": "assistant",
-      "errorCodes": [
-        "ASSISTANT.USER.run_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
-        "ASSISTANT.MIDDLEWARE.upstream_timeout",
-        "ASSISTANT.SYSTEM.stream_unavailable"
-      ],
-      "facadeMethod": "searchXiaoquResults",
-      "facet": "AssistantSearchQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "SearchXiaoquResults",
-      "method": "POST",
-      "mutationTarget": "",
-      "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "requester_self",
-      "pagination": null,
-      "pathTemplate": "/assistant/search/xiaoqu",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 1,
-        "retryMode": "none",
-        "timeoutMilliseconds": 15000
-      },
-      "requestBindings": null,
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "AssistantSearchXiaoquRequestWire",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "AssistantSearchResultView",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 8000
-      },
-      "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
-      "surfaceIds": [
-        "globalSearchNetworkResults"
-      ],
-      "telemetry": {
-        "attributes": [
-          "operation",
-          "outcome",
-          "error_code"
-        ],
-        "metric": "assistant_search_query",
         "trace": true
       }
     },
@@ -1307,7 +670,7 @@
       "canonicalOperationId": "assistant.assistant_run.StartAssistantRun",
       "clientContract": null,
       "commercial": {
-        "blockReason": "AssistantRun domain/store/HTTP adapter remain co-owned by AssistantConversation, and Prod model Provider conformance is unproven",
+        "blockReason": "AssistantRun domain/store/HTTP adapter remain physically mixed with AssistantSession orchestration, and Prod model Provider conformance is unproven",
         "explicit": true,
         "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -1317,12 +680,13 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.run_invalid_argument",
-        "ASSISTANT.USER.conversation_not_found",
+        "ASSISTANT.USER.session_not_found",
         "ASSISTANT.USER.run_idempotency_conflict",
         "ASSISTANT.USER.skill_consent_required",
         "ASSISTANT.USER.intersection_evidence_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.run_unauthorized",
         "ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable",
+        "ASSISTANT.SYSTEM.consent_unavailable",
         "ASSISTANT.SYSTEM.run_policy_unavailable",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
@@ -1334,9 +698,9 @@
       "method": "POST",
       "mutationTarget": "AssistantRun",
       "objectId": "assistant.assistant_run",
-      "ownershipPolicy": "conversation_owner",
+      "ownershipPolicy": "session_owner",
       "pagination": null,
-      "pathTemplate": "/assistant/conversations/{conversationId}/runs",
+      "pathTemplate": "/assistant/sessions/{sessionId}/runs",
       "permissions": [],
       "principal": "persona",
       "privacy": {
@@ -1354,8 +718,8 @@
       "requestBindings": {
         "path": [
           {
-            "field": "conversationId",
-            "name": "conversationId"
+            "field": "sessionId",
+            "name": "sessionId"
           }
         ]
       },
@@ -1365,7 +729,7 @@
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "AssistantTurnEnvelope",
+      "responseEntity": "AssistantRunEnvelope",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.9,
@@ -1373,6 +737,7 @@
       },
       "sourcePath": "assistant/assistant/assistant_run/operations.yaml",
       "surfaceIds": [
+        "globalSearchNetworkResults",
         "personalAssistantDialog"
       ],
       "telemetry": {
@@ -1393,7 +758,7 @@
       "canonicalOperationId": "assistant.assistant_run.StreamAssistantRunEvents",
       "clientContract": null,
       "commercial": {
-        "blockReason": "AssistantRun event journal and SSE adapter remain physically co-owned by AssistantConversation",
+        "blockReason": "AssistantRun event journal and SSE adapter remain physically mixed with AssistantSession orchestration",
         "explicit": true,
         "gapId": "ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -1404,7 +769,7 @@
       "errorCodes": [
         "ASSISTANT.USER.run_not_found",
         "ASSISTANT.USER.run_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.run_unauthorized",
         "ASSISTANT.SYSTEM.stream_unavailable",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
@@ -1472,6 +837,497 @@
           "resumed"
         ],
         "metric": "assistant_run_stream",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "AssistantSession",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.assistant_session.CreateAssistantSession",
+      "clientContract": null,
+      "commercial": {
+        "blockReason": "AssistantSession aggregate mutation does not yet commit its declared domain event through a transactional outbox",
+        "explicit": true,
+        "gapId": "ASSISTANT_SESSION_WIRING",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.session_invalid_argument",
+        "ASSISTANT.USER.session_idempotency_conflict",
+        "ASSISTANT.USER.session_unauthorized",
+        "ASSISTANT.SYSTEM.session_storage_unavailable"
+      ],
+      "facadeMethod": "createSession",
+      "facet": "AssistantSessionCommandFacade",
+      "invariantTarget": "AssistantSession",
+      "kind": "command",
+      "localOperationId": "CreateAssistantSession",
+      "method": "POST",
+      "mutationTarget": "AssistantSession",
+      "objectId": "assistant.assistant_session",
+      "ownershipPolicy": "session_owner",
+      "pagination": null,
+      "pathTemplate": "/assistant/sessions",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "AssistantCreateSessionRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "AssistantSession",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/assistant_session/operations.yaml",
+      "surfaceIds": [
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "replayed"
+        ],
+        "metric": "assistant_session_command",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.assistant_session.GetAssistantSession",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "responseDecoder": "decodeAssistantSession",
+        "responseType": "AssistantSessionProjection"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.session_not_found",
+        "ASSISTANT.USER.session_unauthorized",
+        "ASSISTANT.SYSTEM.session_storage_unavailable"
+      ],
+      "facadeMethod": "getSession",
+      "facet": "AssistantSessionQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetAssistantSession",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.assistant_session",
+      "ownershipPolicy": "session_owner",
+      "pagination": null,
+      "pathTemplate": "/assistant/sessions/{sessionId}",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "sessionId",
+            "name": "sessionId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "AssistantSessionByIdQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "AssistantSession",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "assistant/assistant/assistant_session/operations.yaml",
+      "surfaceIds": [
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_session_query",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.assistant_session.ListAssistantSessions",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_contracts.dart",
+        "responseDecoder": "decodeAssistantSessionList",
+        "responseType": "AssistantSessionListProjection"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.session_invalid_argument",
+        "ASSISTANT.USER.session_unauthorized",
+        "ASSISTANT.SYSTEM.session_storage_unavailable"
+      ],
+      "facadeMethod": "listSessions",
+      "facet": "AssistantSessionQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListAssistantSessions",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.assistant_session",
+      "ownershipPolicy": "requester_self",
+      "pagination": null,
+      "pathTemplate": "/assistant/sessions",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "limit",
+            "name": "limit"
+          },
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "AssistantSessionListQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "AssistantSessionListView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/assistant_session/operations.yaml",
+      "surfaceIds": [
+        "assistantHistory",
+        "assistantSkills",
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_session_query",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.assistant_task_view.ListAssistantTasks",
+      "clientContract": null,
+      "commercial": {
+        "blockReason": "AssistantTaskView 对象源与投影测试尚待闭环",
+        "explicit": true,
+        "gapId": "ASSISTANT_TASK_VIEW_MODEL_GOVERNANCE",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.run_unauthorized"
+      ],
+      "facadeMethod": "listTasks",
+      "facet": "AssistantTaskViewQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListAssistantTasks",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.assistant_task_view",
+      "ownershipPolicy": "requester_self",
+      "pagination": null,
+      "pathTemplate": "/assistant/tasks",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 500
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "limit",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "field": "status",
+            "name": "status",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "",
+      "requestConstants": null,
+      "requestEntity": "",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "AssistantTaskSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/assistant_task_view/operations.yaml",
+      "surfaceIds": [
+        "assistantSettings",
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_task_view_query",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.assistant_turn_view.ListSessionTurns",
+      "clientContract": null,
+      "commercial": {
+        "blockReason": "AssistantTurnView 独立读侧已通过 local_contract 与真实 Mongo API integration，尚缺候选绑定的四环境 Remote UAT、SLI/SLO 读回和回滚证据",
+        "explicit": true,
+        "gapId": "ASSISTANT_TURN_VIEW_COMMERCIAL_EVIDENCE",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.run_invalid_argument",
+        "ASSISTANT.USER.session_not_found",
+        "ASSISTANT.USER.turn_view_unauthorized",
+        "ASSISTANT.SYSTEM.run_storage_unavailable"
+      ],
+      "facadeMethod": "listSessionTurns",
+      "facet": "AssistantTurnViewQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListSessionTurns",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.assistant_turn_view",
+      "ownershipPolicy": "session_owner",
+      "pagination": null,
+      "pathTemplate": "/assistant/sessions/{sessionId}/turns",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "sessionId",
+            "name": "sessionId"
+          }
+        ],
+        "query": [
+          {
+            "field": "limit",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "",
+      "requestConstants": null,
+      "requestEntity": "",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "AssistantTurnListView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/assistant_turn_view/operations.yaml",
+      "surfaceIds": [
+        "assistantHistory",
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_turn_view_query",
+        "trace": true
+      }
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.page_context.ReportPageContext",
+      "clientContract": null,
+      "commercial": {
+        "blockReason": "PageContext 对象源与测试尚待闭环",
+        "explicit": true,
+        "gapId": "ASSISTANT_PAGE_CONTEXT_MODEL_GOVERNANCE",
+        "status": "blocked",
+        "targetStory": "app-cloud-business-object-commercial-closure"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.run_invalid_argument",
+        "ASSISTANT.USER.run_unauthorized",
+        "ASSISTANT.SYSTEM.page_context_unavailable"
+      ],
+      "facadeMethod": "report",
+      "facet": "PageContextSessionFacade",
+      "invariantTarget": "",
+      "kind": "session",
+      "localOperationId": "ReportPageContext",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "assistant.page_context",
+      "ownershipPolicy": "requester_self",
+      "pagination": null,
+      "pathTemplate": "/assistant/page-context",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "optional",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 300
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "ReportPageContextCommand",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "PageContextReceipt",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "assistant/assistant/page_context/operations.yaml",
+      "surfaceIds": [
+        "assistantHalfSheet",
+        "personalAssistantDialog"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "assistant_page_context_session",
         "trace": true
       }
     },
@@ -1572,7 +1428,7 @@
       "canonicalOperationId": "assistant.skill_consent.GrantSkillConsent",
       "clientContract": null,
       "commercial": {
-        "blockReason": "command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentGranted outbox event; store/domain model remain under AssistantConversation",
+        "blockReason": "对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据",
         "explicit": true,
         "gapId": "ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -1582,7 +1438,8 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.consent_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.consent_idempotency_conflict",
+        "ASSISTANT.USER.consent_unauthorized",
         "ASSISTANT.SYSTEM.consent_unavailable"
       ],
       "facadeMethod": "grantConsent",
@@ -1654,7 +1511,7 @@
       "canonicalOperationId": "assistant.skill_consent.ListConsents",
       "clientContract": null,
       "commercial": {
-        "blockReason": "query has real PostgreSQL evidence but SkillConsent domain model, store and HTTP adapter remain physically owned by AssistantConversation",
+        "blockReason": "对象专属 QueryFacade 与真实 PostgreSQL 读证据已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据",
         "explicit": true,
         "gapId": "ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -1663,7 +1520,7 @@
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.consent_unauthorized",
         "ASSISTANT.SYSTEM.consent_unavailable"
       ],
       "facadeMethod": "listConsents",
@@ -1727,7 +1584,7 @@
       "canonicalOperationId": "assistant.skill_consent.RevokeSkillConsent",
       "clientContract": null,
       "commercial": {
-        "blockReason": "command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentRevoked outbox event; store/domain model remain under AssistantConversation",
+        "blockReason": "对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据",
         "explicit": true,
         "gapId": "ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE",
         "status": "blocked",
@@ -1737,7 +1594,8 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.consent_invalid_argument",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.consent_idempotency_conflict",
+        "ASSISTANT.USER.consent_unauthorized",
         "ASSISTANT.SYSTEM.consent_unavailable"
       ],
       "facadeMethod": "revokeConsent",
@@ -1822,7 +1680,7 @@
         "ASSISTANT.USER.subscription_invalid_argument",
         "ASSISTANT.USER.subscription_idempotency_conflict",
         "ASSISTANT.USER.subscription_destination_forbidden",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.subscription_unauthorized",
         "ASSISTANT.SYSTEM.subscription_storage_unavailable",
         "ASSISTANT.SYSTEM.subscription_destination_validation_unavailable"
       ],
@@ -1897,7 +1755,7 @@
       "domain": "assistant",
       "errorCodes": [
         "ASSISTANT.USER.subscription_not_found",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.subscription_unauthorized",
         "ASSISTANT.SYSTEM.subscription_storage_unavailable"
       ],
       "facadeMethod": "getSubscription",
@@ -1976,7 +1834,7 @@
       "concurrency": {},
       "domain": "assistant",
       "errorCodes": [
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.subscription_unauthorized",
         "ASSISTANT.SYSTEM.subscription_storage_unavailable"
       ],
       "facadeMethod": "listSubscriptions",
@@ -2064,7 +1922,7 @@
         "ASSISTANT.USER.subscription_invalid_argument",
         "ASSISTANT.USER.subscription_invalid_transition",
         "ASSISTANT.USER.subscription_idempotency_conflict",
-        "ASSISTANT.USER.unauthorized",
+        "ASSISTANT.USER.subscription_unauthorized",
         "ASSISTANT.SYSTEM.subscription_storage_unavailable"
       ],
       "facadeMethod": "updateSubscriptionStatus",
@@ -15523,79 +15381,6 @@
       }
     },
     {
-      "actorRequirement": "persona_or_device",
-      "aggregateOwner": "",
-      "authMode": "optional",
-      "canonicalOperationId": "search.feedback_fact.ReportSearchFeedback",
-      "clientContract": {
-        "dartImport": "../search/search_feedback_contracts.dart",
-        "responseDecoder": "decodeSearchFeedbackAck",
-        "responseType": "SearchFeedbackAck"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "search",
-      "errorCodes": [
-        "SEARCH.USER.invalid_argument",
-        "SEARCH.USER.feedback_conflict",
-        "SEARCH.SYSTEM.storage_write_failed"
-      ],
-      "facadeMethod": "reportFeedback",
-      "facet": "SearchFeedbackCommandFacade",
-      "invariantTarget": "FeedbackFact",
-      "kind": "command",
-      "localOperationId": "ReportSearchFeedback",
-      "method": "POST",
-      "mutationTarget": "FeedbackFact",
-      "objectId": "search.feedback_fact",
-      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
-      "pagination": null,
-      "pathTemplate": "/search/feedback",
-      "permissions": [],
-      "principal": "public",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "SENSITIVE",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": null,
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "ReportSearchFeedbackCommand",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.5,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "search/search/feedback_fact/operations.yaml",
-      "surfaceIds": [
-        "globalSearchNetworkResults"
-      ],
-      "telemetry": {
-        "attributes": [
-          "event_type",
-          "target",
-          "outcome"
-        ],
-        "metric": "search_feedback_report",
-        "trace": true
-      }
-    },
-    {
       "actorRequirement": "persona",
       "aggregateOwner": "RecentSearchState",
       "authMode": "required",
@@ -15851,7 +15636,7 @@
       "concurrency": {},
       "domain": "search",
       "errorCodes": [
-        "SEARCH.USER.invalid_argument",
+        "SEARCH.USER.recent_invalid_argument",
         "SEARCH.USER.recent_version_conflict",
         "SEARCH.USER.recent_idempotency_conflict",
         "SEARCH.SYSTEM.recent_storage_failed"
@@ -15911,14 +15696,14 @@
       }
     },
     {
-      "actorRequirement": "none",
+      "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "search.search_query.ListHotQueries",
+      "canonicalOperationId": "search.search_feedback_fact.ReportSearchFeedback",
       "clientContract": {
-        "dartImport": "../search/hot_query_contracts.dart",
-        "responseDecoder": "decodeHotQuerySlice",
-        "responseType": "HotQuerySlice"
+        "dartImport": "../search/search_feedback_contracts.dart",
+        "responseDecoder": "decodeSearchFeedbackAck",
+        "responseType": "SearchFeedbackAck"
       },
       "commercial": {
         "explicit": true,
@@ -15927,67 +15712,59 @@
       "concurrency": {},
       "domain": "search",
       "errorCodes": [
-        "SEARCH.USER.invalid_argument",
-        "SEARCH.MIDDLEWARE.unavailable"
+        "SEARCH.USER.feedback_invalid_argument",
+        "SEARCH.USER.feedback_conflict",
+        "SEARCH.SYSTEM.storage_write_failed"
       ],
-      "facadeMethod": "listHotQueries",
-      "facet": "SearchHotQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ListHotQueries",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "search.search_query",
-      "ownershipPolicy": "public_search_discovery",
-      "pagination": {
-        "defaultItems": 10,
-        "maximumItems": 20
-      },
-      "pathTemplate": "/search/hot-queries",
+      "facadeMethod": "reportFeedback",
+      "facet": "SearchFeedbackCommandFacade",
+      "invariantTarget": "SearchFeedbackFact",
+      "kind": "command",
+      "localOperationId": "ReportSearchFeedback",
+      "method": "POST",
+      "mutationTarget": "SearchFeedbackFact",
+      "objectId": "search.search_feedback_fact",
+      "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
+      "pagination": null,
+      "pathTemplate": "/search/feedback",
       "permissions": [],
       "principal": "public",
       "privacy": {
         "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
+        "requestClassification": "SENSITIVE",
         "responseClassification": "PUBLIC"
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
+        "idempotency": "required",
         "maxAttempts": 2,
         "retryMode": "idempotent",
         "timeoutMilliseconds": 1500
       },
-      "requestBindings": {
-        "query": [
-          {
-            "field": "limit",
-            "name": "limit"
-          }
-        ]
-      },
-      "requestBodyKind": "none",
+      "requestBindings": null,
+      "requestBodyKind": "object",
       "requestConstants": null,
-      "requestEntity": "ListHotQueriesQuery",
+      "requestEntity": "ReportSearchFeedbackCommand",
       "responseAdmission": null,
       "responseBody": "",
       "responseBodyKind": "",
-      "responseEntity": "HotQueryView",
+      "responseEntity": "",
       "scopes": [],
       "slo": {
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "search/search/search_query/operations.yaml",
+      "sourcePath": "search/search/search_feedback_fact/operations.yaml",
       "surfaceIds": [
-        "globalSearchLanding"
+        "globalSearchNetworkResults"
       ],
       "telemetry": {
         "attributes": [
-          "outcome",
-          "result_count"
+          "event_type",
+          "target",
+          "outcome"
         ],
-        "metric": "search_hot_queries",
+        "metric": "search_feedback_report",
         "trace": true
       }
     },
@@ -15995,11 +15772,11 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "search.search_query.SearchQuery",
+      "canonicalOperationId": "search.search_index_view.Search",
       "clientContract": {
         "dartImport": "../search/search_query_contracts.dart",
-        "responseDecoder": "decodeCanonicalSearchResult",
-        "responseType": "CanonicalSearchResult"
+        "responseDecoder": "decodeSearchResponseView",
+        "responseType": "SearchResponseView"
       },
       "commercial": {
         "explicit": true,
@@ -16012,13 +15789,13 @@
         "SEARCH.MIDDLEWARE.unavailable"
       ],
       "facadeMethod": "search",
-      "facet": "SearchFacade",
+      "facet": "SearchIndexFacade",
       "invariantTarget": "",
       "kind": "query",
-      "localOperationId": "SearchQuery",
+      "localOperationId": "Search",
       "method": "POST",
       "mutationTarget": "",
-      "objectId": "search.search_query",
+      "objectId": "search.search_index_view",
       "ownershipPolicy": "public_search_discovery",
       "pagination": null,
       "pathTemplate": "/search",
@@ -16057,7 +15834,7 @@
         "availabilityPercent": 99.5,
         "latencyP95Milliseconds": 1500
       },
-      "sourcePath": "search/search/search_query/operations.yaml",
+      "sourcePath": "search/search/search_index_view/operations.yaml",
       "surfaceIds": [
         "globalSearchNetworkResults"
       ],
@@ -16072,12 +15849,93 @@
       }
     },
     {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "search.search_request_fact.ListHotQueries",
+      "clientContract": {
+        "dartImport": "../search/hot_query_contracts.dart",
+        "responseDecoder": "decodeHotQuerySlice",
+        "responseType": "HotQuerySlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "search",
+      "errorCodes": [
+        "SEARCH.USER.hot_query_invalid_argument",
+        "SEARCH.MIDDLEWARE.hot_query_unavailable"
+      ],
+      "facadeMethod": "listHotQueries",
+      "facet": "SearchHotQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListHotQueries",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "search.search_request_fact",
+      "ownershipPolicy": "public_search_discovery",
+      "pagination": {
+        "defaultItems": 10,
+        "maximumItems": 20
+      },
+      "pathTemplate": "/search/hot-queries",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "limit",
+            "name": "limit"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "ListHotQueriesQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SearchTermHeatView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "search/search/search_request_fact/operations.yaml",
+      "surfaceIds": [
+        "globalSearchLanding"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "result_count"
+        ],
+        "metric": "search_hot_queries",
+        "trace": true
+      }
+    },
+    {
       "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "tag.tag_feedback.ReportTagFeedback",
+      "canonicalOperationId": "tag.tag_feedback_fact.ReportTagFeedback",
       "clientContract": {
-        "dartImport": "../tag/tag_feedback_contracts.dart",
+        "dartImport": "../tag/tag_feedback_fact_contracts.dart",
         "responseDecoder": "decodeTagFeedbackAck",
         "responseType": "TagFeedbackAck"
       },
@@ -16096,12 +15954,12 @@
       ],
       "facadeMethod": "appendTagFeedback",
       "facet": "TagFeedbackAppendFacet",
-      "invariantTarget": "TagFeedback",
+      "invariantTarget": "TagFeedbackFact",
       "kind": "command",
       "localOperationId": "ReportTagFeedback",
       "method": "POST",
-      "mutationTarget": "TagFeedback",
-      "objectId": "tag.tag_feedback",
+      "mutationTarget": "TagFeedbackFact",
+      "objectId": "tag.tag_feedback_fact",
       "ownershipPolicy": "authenticated_persona_or_derived_device_actor",
       "pagination": null,
       "pathTemplate": "/tag/feedback",
@@ -16132,7 +15990,7 @@
         "availabilityPercent": 99.9,
         "latencyP95Milliseconds": 500
       },
-      "sourcePath": "tag/tag/tag_feedback/operations.yaml",
+      "sourcePath": "tag/tag/tag_feedback_fact/operations.yaml",
       "surfaceIds": [
         "profileCareerInterests"
       ],
@@ -16142,7 +16000,7 @@
           "outcome",
           "replayed"
         ],
-        "metric": "tag_feedback_append",
+        "metric": "tag_feedback_fact_append",
         "trace": true
       }
     },
@@ -22432,13 +22290,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "d0874210f56ad3b2cd635087402a650e758a372279878278909317dc5d442e55"
+    "sha256": "370a21503fc4665bd369c1772c590427bbf24f7e868d4a70b3aac0f58b1c5f08"
   },
   "contractGraph": {
-    "compilerHash": "sha256:031f5e540fece3c10ab1c653df9cd6ef803f34c91cf1d2fb875243a81311fd9c",
+    "compilerHash": "sha256:8f8d9baab695a5e587121c59fb5c46f9e7aa51663bd3934f177a07144c181e7a",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e",
-    "sourceDigestSetSha256": "dae79882c69035849fb6a36ea5b48abf13dbda6ca1bda0460bd4f19e0dd24c9e"
+    "sha256": "07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a",
+    "sourceDigestSetSha256": "63d52bd2c9c87656ffb0541e42ccb46c95340678e7463bc2f10aace43554b34a"
   },
   "generator": "app-cloud-handoff"
 }

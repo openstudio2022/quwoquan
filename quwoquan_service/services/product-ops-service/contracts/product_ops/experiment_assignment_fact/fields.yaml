@@ -62,17 +62,6 @@ fields:
   ops_exposure: read
   role: append_only_fact
 types:
-  AssignExperimentVariantRequest:
-    description: 分配实验变体的唯一请求实体；experimentId 只从 path 绑定，受试主体只从已验签 Persona 或 Device 派生。
-    fields:
-    - name: experimentId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
   ExperimentStatsSlice:
     fields:
     - name: experimentId

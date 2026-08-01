@@ -21,10 +21,7 @@ var objectTopLevelKeys = stringSet(
 	"kind", "description", "identity", "access", "relationships",
 	"capabilities", "taggable", "vector_enabled", "members",
 	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
-	"local_identity_reasons",
-	// deferred_operations 是文档性声明：登记对象显式推迟的公开命令与恢复前置条件，
-	// 不进入 ContractGraph operation 集合。
-	"deferred_operations",
+	"local_identity_reasons", "external_authority",
 )
 
 var operationsTopLevelKeys = stringSet(
@@ -174,48 +171,7 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 			object.Members[index].AggregateOwner = object.Name
 		}
 	}
-	if deferred := top["deferred_operations"]; deferred != nil {
-		mapping, err := mappingFromNode(deferred)
-		if err != nil {
-			return ast.Object{}, fmt.Errorf("%s: deferred_operations: %w", path, err)
-		}
-		if operations := mapping["operations"]; operations != nil {
-			if operations.Kind != yaml.SequenceNode {
-				return ast.Object{}, fmt.Errorf(
-					"%s: deferred_operations.operations must be a sequence",
-					path,
-				)
-			}
-			for _, item := range operations.Content {
-				if name := strings.TrimSpace(item.Value); name != "" {
-					object.DeferredOperations = append(object.DeferredOperations, name)
-				}
-			}
-		}
-		if strings.TrimSpace(scalarString(mapping["reason"])) == "" ||
-			len(object.DeferredOperations) == 0 {
-			return ast.Object{}, fmt.Errorf(
-				"%s: deferred_operations requires a non-empty reason and operations",
-				path,
-			)
-		}
-	}
 	return object, nil
-}
-
-func decodeDDDLayerMapping(node *yaml.Node) (ast.DDDLayerMapping, error) {
-	mapping, err := mappingFromNode(node)
-	if err != nil {
-		return ast.DDDLayerMapping{}, err
-	}
-	return ast.DDDLayerMapping{
-		DomainModel:  scalarString(mapping["domain_model"]),
-		Ports:        scalarString(mapping["ports"]),
-		Application:  scalarString(mapping["application"]),
-		Persistence:  scalarString(mapping["persistence"]),
-		AdapterREST:  scalarString(mapping["adapter_rest"]),
-		AdapterEvent: scalarString(mapping["adapter_event"]),
-	}, nil
 }
 
 func resolveObjectKind(top map[string]*yaml.Node) (ast.ObjectKind, bool, error) {

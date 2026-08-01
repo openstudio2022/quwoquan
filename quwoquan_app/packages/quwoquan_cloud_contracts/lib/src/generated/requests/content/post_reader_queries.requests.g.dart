@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../content/post_reader_queries.dart';
 
@@ -24,6 +24,15 @@ final class ContentAuthorPostsQuery {
   final String? visibility;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    if (this.identity != null) "identity": this.identity!,
+    if (this.type != null) "type": this.type!,
+    if (this.visibility != null) "visibility": this.visibility!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class ContentDiscoveryFeedQuery {
@@ -66,6 +75,19 @@ final class ContentDiscoveryFeedQuery {
   final String? feedRequestId;
   final int limit;
   final List<String> blockedKeywords;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.identity != null) "identity": this.identity!,
+    if (this.type != null) "type": this.type!,
+    if (this.sort != null) "sort": this.sort!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    if (this.subCategory != null) "subCategory": this.subCategory!,
+    if (this.channelId != null) "channelId": this.channelId!,
+    if (this.sessionId != null) "sessionId": this.sessionId!,
+    if (this.feedRequestId != null) "feedRequestId": this.feedRequestId!,
+    "limit": this.limit,
+    if (this.blockedKeywords.isNotEmpty) "X-Blocked-Keywords": this.blockedKeywords.map(Uri.encodeQueryComponent).join(','),
+  };
 }
 
 final class ContentPostDetailQuery {
@@ -74,6 +96,10 @@ final class ContentPostDetailQuery {
   }) : postId = postId;
 
   final String postId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+  };
 }
 
 CloudOperationRequestPayload encodeContentPostGetFeedGeneratedRequest(ContentDiscoveryFeedQuery request) {

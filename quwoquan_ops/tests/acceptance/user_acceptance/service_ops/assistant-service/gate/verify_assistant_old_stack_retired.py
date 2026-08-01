@@ -29,8 +29,8 @@ SCAN_PATHS = [
 ]
 
 RETIRED_PATHS = [
-    ROOT / "quwoquan_app" / "lib" / "ui" / "assistant" / "pages" / "assistant_conversation_page.dart",
-    ROOT / "quwoquan_app" / "lib" / "ui" / "assistant" / "providers" / "assistant_conversation_controller.dart",
+    ROOT / "quwoquan_app" / "lib" / "ui" / "assistant" / "pages" / "assistant_session_page.dart",
+    ROOT / "quwoquan_app" / "lib" / "ui" / "assistant" / "providers" / "assistant_session_controller.dart",
     ROOT / "quwoquan_app" / "lib" / "assistant" / "application" / "local_assistant_entry.dart",
     ROOT / "quwoquan_app" / "lib" / "assistant" / "infrastructure" / "openclaw_bridge.dart",
     ROOT / "quwoquan_app" / "lib" / "assistant" / "application" / "assistant_http_gateway.dart",
@@ -43,11 +43,11 @@ RETIRED_PATHS = [
 ]
 
 BLOCKED_PATTERNS = [
-    re.compile(r"\bAssistantConversationPage\b"),
-    re.compile(r"\bAssistantConversationController\b"),
+    re.compile(r"\bAssistantSessionPage\b"),
+    re.compile(r"\bAssistantSessionController\b"),
     re.compile(r"\bCreateRunStream\b"),
     re.compile(r"\bCreateRun\b"),
-    re.compile(r"assistant_conversation_controller\.dart"),
+    re.compile(r"assistant_session_controller\.dart"),
     re.compile(r"local_assistant_entry\.dart"),
     re.compile(r"openclaw_bridge\.dart"),
     re.compile(r"assistant_http_gateway\.dart"),

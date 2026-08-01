@@ -2,7 +2,7 @@ kind: projection
 description: >-
   SkillCatalog 是技能清单资源与账号当前授权事实组合出的私有只读目录投影。
   技能展示元数据只来自 canonical manifest catalog，授权标记只经 SkillConsentReader
-  按可信 accountId 查询；它不属于 AssistantRun 或 AssistantConversation 的一致性边界。
+  按可信 accountId 查询；它不属于 AssistantRun 或 AssistantSession 的一致性边界。
 identity:
   fields:
   - skillId
@@ -15,7 +15,7 @@ relationships:
 - access: named_reader
   cardinality: N:1
   consistency: eventual
-  kind: reference
+  kind: projection_source
   name: accountOwner
   on_delete: cascade
   reference_fields:
@@ -30,4 +30,8 @@ business_rules:
 - catalog source 缺失、清单无效、SkillConsentReader 缺失或读取失败均 fail-closed
 - 同一 skillId 只能存在一个目录项，清单项按 skillId 稳定排序后返回
 - 授权 scope 只对请求账号自己的匹配 skillId 可见
-
+lifecycle:
+  source_events: [SkillConsentGranted, SkillConsentRevoked, SkillCatalogReleaseActivated]
+  checkpoint: catalog_release_digest_and_consent_sequence
+  rebuild: reload_manifest_catalog_then_replay_skill_consent_outbox
+  tombstone: remove_account_consent_projection_keep_catalog_entry

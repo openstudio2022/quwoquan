@@ -23,10 +23,10 @@ fields:
     dart_type: String
     json_key: source
     default: ''
-  - name: sourceConversationId
-    source: sourceConversationId
+  - name: sourceSessionId
+    source: sourceSessionId
     dart_type: String
-    json_key: sourceConversationId
+    json_key: sourceSessionId
     default: ''
   - name: confirmedAt
     source: confirmedAt

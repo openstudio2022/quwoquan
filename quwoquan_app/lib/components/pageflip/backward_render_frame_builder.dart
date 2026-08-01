@@ -113,8 +113,8 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   final backwardLeafFrame = resolveArticlePageBackwardLeafFrame(
     direction: StPageFlipDirection.back,
     progress: progress,
-    // Portrait BACK paints forward-isomorphic geometry. Reusing the legacy
-    // reverse pose here holds the sheet at a constant width until its unroll
+    // Portrait BACK paints forward-isomorphic geometry. Reusing the reverse
+    // pose here holds the sheet at a constant width until its unroll
     // phase starts, then switches recto/verso in one frame. The face timeline
     // must therefore follow the same continuous visual progress as the frame.
     reversePose: visualGeometry.direction == StPageFlipDirection.forward

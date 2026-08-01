@@ -54,7 +54,7 @@ RUN set -e; \
     fi
 
 COPY services/recommendation-service/generated/ ./generated/
-COPY services/recommendation-service/internal/recommendation/recommendation_model_release/application/ ./internal/recommendation/recommendation_model_release/application/
+COPY services/recommendation-service/internal/recommendation/ ./internal/recommendation/
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/api/ ./api/
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/features/ ./features/
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/models/ ./models/
@@ -64,7 +64,6 @@ COPY services/recommendation-service/internal/recommendation/recommendation_mode
 COPY services/recommendation-service/cmd/api/main.py ./
 
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/artifact_store.py ./scripts/artifact_store.py
-COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/model_registry.py ./scripts/model_registry.py
 
 ENV PYTHONPATH=.
 ENV PYTHONUNBUFFERED=1

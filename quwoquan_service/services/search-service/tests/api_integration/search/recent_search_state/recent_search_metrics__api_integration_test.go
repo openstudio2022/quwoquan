@@ -8,14 +8,14 @@ import (
 
 	rtmetrics "quwoquan_service/runtime/metrics"
 	httpadapter "quwoquan_service/services/search-service/internal/search/recent_search_state/adapters/inbound/http"
-	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/searchmetrics"
+	recentmetrics "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/metrics"
 )
 
 func TestRecentSearchRoutePublishesBoundedPrometheusMetrics(t *testing.T) {
 	mux := http.NewServeMux()
 	httpadapter.NewRecentSearchHandler(
 		nil,
-		searchmetrics.NewRecorder(),
+		recentmetrics.NewRecorder(),
 	).Register(mux)
 	mux.Handle("/metrics", rtmetrics.Handler())
 

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -20,12 +19,7 @@ void main() {
           profileEditQueryProvider.overrideWith(
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagCatalogQueryProvider.overrideWithValue(
-            AlphaTagFacet(
-              taxonomyReleaseId:
-                  ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-            ),
-          ),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
           tagFeedbackCommandWriterProvider.overrideWithValue(
             AlphaTagFeedbackWriter(),
           ),
@@ -91,12 +85,7 @@ void main() {
           profileEditQueryProvider.overrideWith(
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
-          tagCatalogQueryProvider.overrideWithValue(
-            AlphaTagFacet(
-              taxonomyReleaseId:
-                  ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-            ),
-          ),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
           tagFeedbackCommandWriterProvider.overrideWithValue(
             AlphaTagFeedbackWriter(),
           ),
@@ -178,11 +167,7 @@ final class _CapturingProfileCommandWriter implements ProfileCommandWriter {
 }
 
 final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
-  _ReleaseOverrideTagCatalogQuery(this.releaseId)
-    : _inner = AlphaTagFacet(
-        taxonomyReleaseId:
-            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-      );
+  _ReleaseOverrideTagCatalogQuery(this.releaseId) : _inner = AlphaTagFacet();
 
   final String releaseId;
   final AlphaTagFacet _inner;
@@ -225,8 +210,7 @@ final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
       );
     }
     final innerResult = await _inner.validateRefs(
-      expectedTaxonomyReleaseId:
-          ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+      expectedTaxonomyReleaseId: _inner.taxonomyReleaseId,
       tagRefs: tagRefs,
     );
     return TagValidationResult(

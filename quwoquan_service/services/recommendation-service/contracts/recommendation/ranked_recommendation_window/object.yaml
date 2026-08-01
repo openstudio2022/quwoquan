@@ -1,0 +1,23 @@
+kind: runtime_session
+description: 推荐服务为一次候选排序创建的有界稳定窗口，按不可变 ordinal 与 contentId 续读，禁止滑动续期和跨窗口拼接。
+identity:
+  fields: [windowId]
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: modelRelease, target_object: recommendation.RecommendationModelRelease, reference_fields: [modelReleaseId], kind: reference, cardinality: 'N:1', consistency: runtime, access: named_reader, on_delete: retain}
+local_identity_reasons:
+  subjectId: 推荐运行时 actor key；可为 persona、设备或匿名主体，不等价于单一 canonical Persona 引用。
+business_rules:
+- 创建时一次性固化有界候选、ordinal、模型分桶、模型发布、用户特征与逐项候选特征；每项 featureSnapshotDigest 必须绑定实际评分输入，后续读取不得重新排序或回查漂移特征。
+- Idempotency-Key 在窗口 TTL 内唯一派生 windowId；同键同载荷返回原窗口，同键异载荷必须冲突且不得重排。
+- 续页仅使用 windowId 与稳定 ordinal，读取不得刷新 TTL，也不得把另一窗口结果拼接进来。
+- 窗口过期返回结构化 not-found；Content 必须创建新窗口并重新做权限 hydration。
+- UserAccountClosed 生效后必须按 subject 索引立即删除全部活动窗口；读取栅栏只是并发兜底，不得依赖 TTL 代替隐私清理。
+lifecycle:
+  ttl_seconds: 900
+  expiry_semantics: fixed_bounded_window_expiry_delete
+  renewal: forbidden

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// V2 收口合同：收件箱（List/Summary）与 Feed/Object 同一 fail-closed 展示合同——
+// 收件箱（List/Summary）与 Feed/Object 共用同一 fail-closed 展示合同——
 // Explain 证据不足被 hideDisplayStatement 清空的 reason 必须在云侧淘汰，
 // summary 红点计数必须与 List 可见条目同源（禁止「有红点、点进去空列表」）。
 func TestIntersectionService_ListAndSummaryDropHiddenReasons(t *testing.T) {

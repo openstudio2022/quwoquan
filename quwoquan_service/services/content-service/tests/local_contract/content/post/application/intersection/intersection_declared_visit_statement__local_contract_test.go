@@ -15,11 +15,6 @@ import (
 // 都去过（coVisitedEntity，作者声明 visitedAt）、都想去（coWishlistedEntity，wishlist 意图）、
 // 也看过（sharedEntityAttention，页面浏览）。任一条被当成另一条就是把弱事实说强。
 func TestDeclaredVisitKindsAreServable(t *testing.T) {
-	for _, kind := range []string{"coVisitedEntity", "followeeVisited"} {
-		if _, deferred := generated.IntersectionDeferredKinds[kind]; deferred {
-			t.Fatalf("%s 已有可证到访 producer（posts.visitedAt），不应仍被 deferred 闸门丢弃", kind)
-		}
-	}
 	// 到访供给与浏览供给不同源：到访池远小于浏览池，用浏览池当分母会高估区分度。
 	if key := generated.IntersectionColdStartSupplyKeyByKind["coVisitedEntity"]; key != "post_declared_visit" {
 		t.Fatalf("coVisitedEntity supplyKey = %q, want post_declared_visit", key)

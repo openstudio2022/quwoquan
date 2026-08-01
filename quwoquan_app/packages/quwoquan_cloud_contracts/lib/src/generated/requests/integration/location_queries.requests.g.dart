@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../integration/location_queries.dart';
 
@@ -21,6 +21,14 @@ final class LocationSearchQueryParams {
   final double? latitude;
   final double? longitude;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "q": this.query,
+    if (this.cityCode?.isNotEmpty == true) "cityCode": this.cityCode!,
+    if (this.latitude != null) "lat": this.latitude!,
+    if (this.longitude != null) "lng": this.longitude!,
+    "limit": this.limit,
+  };
 }
 
 final class NearbyLocationQueryParams {
@@ -38,6 +46,13 @@ final class NearbyLocationQueryParams {
   final double? longitude;
   final int? radiusMeters;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.latitude != null) "lat": this.latitude!,
+    if (this.longitude != null) "lng": this.longitude!,
+    if (this.radiusMeters != null) "radiusMeters": this.radiusMeters!,
+    "limit": this.limit,
+  };
 }
 
 CloudOperationRequestPayload encodeIntegrationLocationGetNearbyLocationsGeneratedRequest(NearbyLocationQueryParams request) {

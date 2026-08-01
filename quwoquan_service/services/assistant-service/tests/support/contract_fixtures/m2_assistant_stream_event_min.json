@@ -1,7 +1,7 @@
 {
   "schema": "assistant_stream_event",
   "eventId": "evt_m2_001",
-  "conversationId": "acv_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+  "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
   "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
   "seq": 1,
   "eventType": "answer_delta",

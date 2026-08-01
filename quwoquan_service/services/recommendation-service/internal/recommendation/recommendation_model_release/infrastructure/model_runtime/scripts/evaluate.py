@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Offline evaluation: load model from registry (or explicit path) and test samples,
+Offline evaluation: load an explicit immutable artifact and test samples,
 compute AUC/GAUC/NDCG@20/logloss.
 
 Usage:
-    python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/evaluate.py --scenario content_feed
     python services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/evaluate.py --scenario content_feed --model-path /tmp/model.txt
 """
 import argparse
@@ -71,47 +70,34 @@ def _extract_features(sample: dict) -> list[float]:
     return _ef(sample)
 
 
-def _resolve_model_path(db, scenario: str, explicit_path: str | None) -> str | None:
-    """Resolve model path: explicit > registry artifactUri > registry artifactPath."""
+def _resolve_model_path(explicit_path: str | None, artifact_uri: str | None) -> str | None:
+    """Resolve one explicitly selected immutable artifact."""
     if explicit_path:
         if os.path.exists(explicit_path):
             return explicit_path
         print(f"[evaluate] Explicit model path not found: {explicit_path}", file=sys.stderr)
         return None
 
-    coll = db["rec_model_registry"]
-    doc = coll.find_one({"scenario": scenario}, sort=[("createdAt", -1)])
-    if not doc:
-        print(f"[evaluate] No model in registry for scenario={scenario}", file=sys.stderr)
-        return None
-
-    version = doc.get("version", "unknown")
-
-    artifact_uri = doc.get("artifactUri", "")
     if artifact_uri:
         try:
             import artifact_store
             local = artifact_store.download(artifact_uri)
-            print(f"[evaluate] Downloaded model v={version} from {artifact_uri}", file=sys.stderr)
+            print(f"[evaluate] Downloaded model from {artifact_uri}", file=sys.stderr)
             return local
         except Exception as e:
             print(f"[evaluate] artifact download failed: {e}", file=sys.stderr)
 
-    artifact_path = doc.get("artifactPath", "")
-    if artifact_path and os.path.exists(artifact_path):
-        print(f"[evaluate] Using local model v={version} at {artifact_path}", file=sys.stderr)
-        return artifact_path
-
-    print(f"[evaluate] Model v={version} registered but artifact not accessible", file=sys.stderr)
+    print("[evaluate] --model-path or --artifact-uri is required", file=sys.stderr)
     return None
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
-    p.add_argument("--model-path", default=None, help="Explicit path to LightGBM model (optional; defaults to registry)")
+    p.add_argument("--model-path", default=None, help="Explicit local LightGBM artifact")
+    p.add_argument("--artifact-uri", default=None, help="Explicit immutable S3 artifact URI")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_recommendation"))
     p.add_argument("--split", default="test", choices=["test", "val", "all"])
     p.add_argument(
         "--replay-dataset",
@@ -137,7 +123,7 @@ def main():
     client = MongoClient(args.mongodb_uri)
     db = client[args.db]
 
-    model_path = _resolve_model_path(db, args.scenario, args.model_path)
+    model_path = _resolve_model_path(args.model_path, args.artifact_uri)
     if not model_path:
         print("[evaluate] No model available — skipping evaluation", file=sys.stderr)
         return 1

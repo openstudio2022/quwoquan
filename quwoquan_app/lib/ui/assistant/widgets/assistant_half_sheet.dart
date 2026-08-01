@@ -29,19 +29,17 @@ final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose
         context: openContext,
         userAction: 'open_assistant_entry',
       );
-      final personalization = await personalizationFacet
-          .getEntryPersonalization(context: openContext);
-      final suggestedActions = await personalizationFacet.getSuggestedActions(
+      final entry = await personalizationFacet.getAssistantEntry(
         context: openContext,
       );
       return AssistantHalfSheetPersonalization(
-        welcomeMessage: personalization.welcomeMessage.trim(),
-        chips: personalization.chips,
-        suggestionLines: personalization.suggestionLines
+        welcomeMessage: entry.welcomeMessage.trim(),
+        chips: entry.chips,
+        suggestionLines: entry.suggestionLines
             .map((line) => line.trim())
             .where((line) => line.isNotEmpty)
             .toList(growable: false),
-        suggestedActions: suggestedActions.items,
+        suggestedActions: entry.actions,
       );
     });
 
@@ -54,9 +52,9 @@ class AssistantHalfSheetPersonalization {
   });
 
   final String welcomeMessage;
-  final List<AssistantEntryPersonalizationChipView> chips;
+  final List<AssistantEntryChip> chips;
   final List<String> suggestionLines;
-  final List<SuggestedAction> suggestedActions;
+  final List<AssistantEntryAction> suggestedActions;
 }
 
 /// 私助半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
@@ -125,10 +123,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
   /// chip 点击真实分发：按 actionType 落地真实指令或跳转。
   /// command → 进入会话页并携带指令；route → 跳转目标路由；setting → 打开设置。
   /// 仅在用户主动打开半弹窗时出现，无自动弹窗骚扰（克制出现）。
-  void _dispatchChip(
-    BuildContext context,
-    AssistantEntryPersonalizationChipView chip,
-  ) {
+  void _dispatchChip(BuildContext context, AssistantEntryChip chip) {
     switch (chip.actionType) {
       case 'route':
         switch (chip.value) {
@@ -157,7 +152,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
     }
   }
 
-  void _dispatchSuggestedAction(SuggestedAction action) {
+  void _dispatchSuggestedAction(AssistantEntryAction action) {
     _closeAndPush(
       AppRoutePaths.assistantPersonal,
       extra: widget.openContext.copyWith(
@@ -170,7 +165,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
     );
   }
 
-  void _openFullConversation() {
+  void _openFullSession() {
     final query = _inputController.text.trim();
     final targetContext = query.isEmpty
         ? widget.openContext
@@ -249,13 +244,11 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
     final showLoadingSkeleton =
         personalizationAsync.isLoading && !personalizationAsync.hasValue;
     final welcome = personalization?.welcomeMessage ?? '';
-    final chips =
-        personalization?.chips ??
-        const <AssistantEntryPersonalizationChipView>[];
+    final chips = personalization?.chips ?? const <AssistantEntryChip>[];
     final suggestionLines =
         personalization?.suggestionLines ?? const <String>[];
     final suggestedActions =
-        personalization?.suggestedActions ?? const <SuggestedAction>[];
+        personalization?.suggestedActions ?? const <AssistantEntryAction>[];
     final personalizationError = personalizationAsync.hasError
         ? personalizationAsync.error
         : null;
@@ -432,7 +425,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                       controller: _inputController,
                       focusNode: _inputFocusNode,
                       textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _openFullConversation(),
+                      onSubmitted: (_) => _openFullSession(),
                       decoration: InputDecoration(
                         hintText:
                             AssistantText.assistantHalfSheetInputPlaceholder,
@@ -454,7 +447,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                       horizontal: AppSpacing.containerMd,
                       vertical: AppSpacing.sm,
                     ),
-                    onPressed: _openFullConversation,
+                    onPressed: _openFullSession,
                     child: Text(AssistantText.assistantHalfSheetEnterFullChat),
                   ),
                 ],

@@ -26,6 +26,7 @@ import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
@@ -83,6 +84,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
   void initState() {
     super.initState();
     _inputController.addListener(_onInputChanged);
+    _scrollController.addListener(_onTimelineScroll);
     _realtimeNotifier = ref.read(realtimeConnectionManagerProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -107,6 +109,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     AppToast.dismiss();
     unawaited(_voiceRecorder.dispose());
     _inputController.removeListener(_onInputChanged);
+    _scrollController.removeListener(_onTimelineScroll);
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -116,6 +119,10 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
   Future<void> _bootstrapConversation(String conversationId) async {
     final notifier = ref.read(chatMessageProvider(conversationId).notifier);
     await notifier.loadMessages();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
     final marked = await notifier.markConversationRead();
     unawaited(
       ref
@@ -142,6 +149,33 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
       }
       refreshMessageReadState(ref, conversationId);
     });
+  }
+
+  void _onTimelineScroll() {
+    if (!_scrollController.hasClients || !mounted) return;
+    final position = _scrollController.position;
+    if (position.extentBefore > AppSpacing.xl * 2) return;
+    final messageState = ref.read(chatMessageProvider(widget.conversationId));
+    if (!messageState.hasMore || messageState.isLoadingOlder) return;
+    final previousMaxExtent = position.maxScrollExtent;
+    final previousOffset = position.pixels;
+    unawaited(() async {
+      final added = await ref
+          .read(chatMessageProvider(widget.conversationId).notifier)
+          .loadOlderMessages();
+      if (!mounted || added <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final delta =
+            _scrollController.position.maxScrollExtent - previousMaxExtent;
+        _scrollController.jumpTo(
+          (previousOffset + delta).clamp(
+            _scrollController.position.minScrollExtent,
+            _scrollController.position.maxScrollExtent,
+          ),
+        );
+      });
+    }());
   }
 
   void _subscribeRouteAware() {
@@ -228,8 +262,14 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     );
     final chatListBg = isDark ? bgColor : AppColors.chatBackground;
     final messageState = ref.watch(chatMessageProvider(widget.conversationId));
+    final mediaEndpointConfig = ref.watch(mediaEndpointConfigProvider);
     final displayMessages = messageState.messages
-        .map((dto) => dto.toDisplayItem(currentUserId: currentUserId))
+        .map(
+          (dto) => dto.toDisplayItem(
+            currentUserId: currentUserId,
+            mediaEndpointConfig: mediaEndpointConfig,
+          ),
+        )
         .toList();
     final voiceSendState = ref.watch(voiceSendProvider(widget.conversationId));
     final timelinePadding = EdgeInsets.symmetric(
@@ -457,12 +497,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                     : CupertinoIcons.back,
                 onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
               ),
-              middle: Text(
-                _isSelectionMode
-                    ? ChatText.selectedMessagesCount(_selectedIds.length)
-                    : _conversationTitle,
-                style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-              ),
+              middle: _buildConversationHeader(isDark),
               trailing: _isSelectionMode
                   ? AppNavigationBarTextAction(
                       label: ChatText.messageActionForward,
@@ -485,6 +520,45 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
       overlays: actionMenuOverlay == null
           ? const <Widget>[]
           : <Widget>[actionMenuOverlay],
+    );
+  }
+
+  Widget _buildConversationHeader(bool isDark) {
+    if (_isSelectionMode) {
+      return Text(
+        ChatText.selectedMessagesCount(_selectedIds.length),
+        style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+      );
+    }
+    final intersectionText = _conversationDto
+        ?.originIntersectionSnapshot
+        ?.primaryText
+        .trim();
+    if (intersectionText == null || intersectionText.isEmpty) {
+      return Text(
+        _conversationTitle,
+        style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          _conversationTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        ),
+        Text(
+          intersectionText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppTypography.iosCaption2,
+            color: AppColors.iosSecondaryLabel(context),
+          ),
+        ),
+      ],
     );
   }
 

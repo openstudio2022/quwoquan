@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	rtredis "quwoquan_service/runtime/redis"
+	mqpkg "quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
 )
 
 // TestSubjectFollow_FullChain 验证 SubjectFollow 聚合的商用契约全链：
@@ -21,6 +24,7 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 	createTestPersonaFull(t, "", "sf_user_1", "ps_sf_1", "关注者", "default", true)
 
 	headers := authHeadersForPersona("sf_user_1", "ps_sf_1")
+	eventGroup := subscribeSubjectFollowEvents(t)
 
 	rec := doRequest(
 		t,
@@ -49,28 +53,127 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	var aggregateID string
 	var state string
 	var version int64
 	if err := pgPool.QueryRow(ctx, `
-		SELECT state, version FROM subject_follows
+		SELECT id, state, version FROM subject_follows
 		WHERE persona_id = $1 AND subject_type = 'homepage' AND subject_id = $2`,
-		"ps_sf_1", "homepage_emeishan").Scan(&state, &version); err != nil {
+		"ps_sf_1", "homepage_emeishan").Scan(&aggregateID, &state, &version); err != nil {
 		t.Fatalf("query subject follow row: %v", err)
 	}
-	if state != "following" || version != 1 {
-		t.Fatalf("unexpected aggregate state=%s version=%d", state, version)
+	if aggregateID == "" || state != "following" || version != 1 {
+		t.Fatalf("unexpected aggregate id=%q state=%s version=%d", aggregateID, state, version)
 	}
-	var outboxCount int
-	if err := pgPool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM subject_follow_outbox`).Scan(&outboxCount); err != nil {
-		t.Fatalf("count outbox: %v", err)
+
+	var (
+		receiptPersonaID       string
+		receiptJSONPersonaID   string
+		receiptHasLegacyTop    bool
+		receiptHasLegacyNested bool
+		receiptTopKeyCount     int
+		receiptFollowKeyCount  int
+	)
+	if err := pgPool.QueryRow(ctx, `
+		SELECT persona_id,
+		       response_json #>> '{follow,personaId}',
+		       response_json ? 'Follow',
+		       COALESCE((response_json -> 'follow') ? 'PersonaID', FALSE),
+		       (SELECT COUNT(*) FROM jsonb_object_keys(response_json)),
+		       (SELECT COUNT(*) FROM jsonb_object_keys(response_json -> 'follow'))
+		FROM subject_follow_command_receipts
+		WHERE persona_id = $1 AND operation = 'FollowSubject'`,
+		"ps_sf_1",
+	).Scan(
+		&receiptPersonaID,
+		&receiptJSONPersonaID,
+		&receiptHasLegacyTop,
+		&receiptHasLegacyNested,
+		&receiptTopKeyCount,
+		&receiptFollowKeyCount,
+	); err != nil {
+		t.Fatalf("query subject follow receipt: %v", err)
 	}
-	if outboxCount != 1 {
-		t.Fatalf("subject follow outbox count=%d, want 1", outboxCount)
+	if receiptPersonaID != "ps_sf_1" || receiptJSONPersonaID != "ps_sf_1" ||
+		receiptHasLegacyTop || receiptHasLegacyNested ||
+		receiptTopKeyCount != 4 || receiptFollowKeyCount != 8 {
+		t.Fatalf(
+			"subject follow receipt is not canonical: persona=%q jsonPersona=%q legacyTop=%t legacyNested=%t topKeys=%d followKeys=%d",
+			receiptPersonaID,
+			receiptJSONPersonaID,
+			receiptHasLegacyTop,
+			receiptHasLegacyNested,
+			receiptTopKeyCount,
+			receiptFollowKeyCount,
+		)
 	}
+
+	var (
+		outboxEventName     string
+		outboxAggregateID   string
+		outboxVersion       int64
+		outboxPersonaID     string
+		outboxHasLegacyName bool
+	)
+	if err := pgPool.QueryRow(ctx, `
+		SELECT event_name, aggregate_id, aggregate_version,
+		       payload_json ->> 'personaId', payload_json ? 'PersonaID'
+		FROM subject_follow_outbox
+		WHERE aggregate_id = $1 AND aggregate_version = 1`,
+		aggregateID,
+	).Scan(
+		&outboxEventName,
+		&outboxAggregateID,
+		&outboxVersion,
+		&outboxPersonaID,
+		&outboxHasLegacyName,
+	); err != nil {
+		t.Fatalf("query subject follow outbox: %v", err)
+	}
+	if outboxEventName != "SubjectFollowStateChanged" ||
+		outboxAggregateID != aggregateID || outboxVersion != 1 ||
+		outboxPersonaID != "ps_sf_1" || outboxHasLegacyName {
+		t.Fatalf(
+			"subject follow outbox is not canonical: event=%q aggregate=%q version=%d persona=%q legacy=%t",
+			outboxEventName,
+			outboxAggregateID,
+			outboxVersion,
+			outboxPersonaID,
+			outboxHasLegacyName,
+		)
+	}
+
+	streamEvent := waitForSubjectFollowEvent(t, eventGroup)
+	assertSubjectFollowEventFields(t, streamEvent, map[string]string{
+		"eventName":   "SubjectFollowStateChanged",
+		"id":          aggregateID,
+		"personaId":   "ps_sf_1",
+		"subjectType": "homepage",
+		"subjectId":   "homepage_emeishan",
+		"state":       "following",
+		"version":     "1",
+	})
 
 	// relay 投递后投影收敛（轮询最多 5s）。
 	waitForFollowingSubjectRow(t, "ps_sf_1", "homepage", "homepage_emeishan")
+	var projection bson.M
+	if err := mongoDB.Collection("following_subjects").FindOne(
+		ctx,
+		bson.M{
+			"viewerPersonaId": "ps_sf_1",
+			"subjectType":     "homepage",
+			"subjectId":       "homepage_emeishan",
+		},
+	).Decode(&projection); err != nil {
+		t.Fatalf("read following_subjects projection: %v", err)
+	}
+	if projection["viewerPersonaId"] != "ps_sf_1" {
+		t.Fatalf("projection viewerPersonaId=%v, want ps_sf_1", projection["viewerPersonaId"])
+	}
+	retiredViewerKey := "viewer" + "Sub" + "AccountId"
+	if _, exists := projection[retiredViewerKey]; exists {
+		t.Fatalf("projection retains retired viewer identity key %q", retiredViewerKey)
+	}
 
 	listRec := doRequest(t, http.MethodGet, "/user/following-subjects", "", headers)
 	if listRec.Code != http.StatusOK {
@@ -327,6 +430,89 @@ func TestSubjectFollow_IdempotentReplayAndUnfollow(t *testing.T) {
 	}
 }
 
+func TestSubjectFollow_RejectsNonCanonicalReceiptWithoutMutation(t *testing.T) {
+	requireMongoBackedRuntime(t)
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "sf_receipt_reject_user", "receipt-reject-user")
+	createTestPersonaFull(
+		t,
+		"",
+		"sf_receipt_reject_user",
+		"ps_sf_receipt_reject",
+		"回执拒绝测试",
+		"default",
+		true,
+	)
+
+	const idempotencyKey = "subject-follow-noncanonical-receipt"
+	legacyReceipt := mustJSON(t, map[string]any{
+		"Follow": map[string]any{
+			"ID":          "sf_noncanonical_receipt",
+			"PersonaID":   "ps_sf_receipt_reject",
+			"SubjectType": "homepage",
+			"SubjectID":   "homepage_noncanonical_receipt",
+			"State":       "following",
+			"Version":     1,
+			"FollowedAt":  "2026-07-30T12:00:00Z",
+			"UpdatedAt":   "2026-07-30T12:00:00Z",
+		},
+		"Changed":          true,
+		"IdempotentReplay": false,
+		"OccurredAt":       "2026-07-30T12:00:00Z",
+	})
+	if _, err := pgPool.Exec(context.Background(), `
+		INSERT INTO subject_follow_command_receipts (
+			receipt_id, persona_id, idempotency_key, operation,
+			aggregate_id, aggregate_version, response_json
+		) VALUES (
+			'subject-follow-noncanonical-receipt',
+			'ps_sf_receipt_reject', $1, 'FollowSubject',
+			'sf_noncanonical_receipt', 1, $2::jsonb
+		)
+	`, idempotencyKey, legacyReceipt); err != nil {
+		t.Fatalf("seed non-canonical subject follow receipt: %v", err)
+	}
+
+	headers := authHeadersForPersona(
+		"sf_receipt_reject_user",
+		"ps_sf_receipt_reject",
+	)
+	headers["Idempotency-Key"] = idempotencyKey
+	rec := doRequest(
+		t,
+		http.MethodPost,
+		"/relationships/subjects/homepage/homepage_noncanonical_receipt/follow",
+		`{"source":"homepage_detail"}`,
+		headers,
+	)
+	if rec.Code < 500 {
+		t.Fatalf(
+			"non-canonical receipt must fail closed, got status=%d body=%s",
+			rec.Code,
+			rec.Body.String(),
+		)
+	}
+
+	var stateCount, outboxCount int
+	if err := pgPool.QueryRow(context.Background(), `
+		SELECT
+			(SELECT COUNT(*) FROM subject_follows
+			 WHERE persona_id = 'ps_sf_receipt_reject'
+			   AND subject_id = 'homepage_noncanonical_receipt'),
+			(SELECT COUNT(*) FROM subject_follow_outbox
+			 WHERE aggregate_id = 'sf_noncanonical_receipt')
+	`).Scan(&stateCount, &outboxCount); err != nil {
+		t.Fatalf("read fail-closed subject follow state: %v", err)
+	}
+	if stateCount != 0 || outboxCount != 0 {
+		t.Fatalf(
+			"non-canonical receipt mutated state: follows=%d outbox=%d",
+			stateCount,
+			outboxCount,
+		)
+	}
+}
+
 // TestSubjectFollow_RejectsPersonaSubjectType 验证 persona 主体被拒绝：
 // persona 间关系只能走 PersonaRelationship。
 func TestSubjectFollow_RejectsPersonaSubjectType(t *testing.T) {
@@ -436,5 +622,58 @@ func waitForFollowingSubjectRow(t *testing.T, personaID, subjectType, subjectID 
 			t.Fatalf("following_subjects row not converged: %s/%s/%s", personaID, subjectType, subjectID)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func subscribeSubjectFollowEvents(t *testing.T) string {
+	t.Helper()
+	group := "subject-follow-contract-" + t.Name()
+	if err := redisClient.XGroupCreateMkStream(
+		context.Background(),
+		mqpkg.SubjectFollowEventStream,
+		group,
+		"$",
+	); err != nil {
+		t.Fatalf("create SubjectFollow event consumer group: %v", err)
+	}
+	return group
+}
+
+func waitForSubjectFollowEvent(t *testing.T, group string) rtredis.StreamMessage {
+	t.Helper()
+	messages, err := redisClient.XReadGroup(
+		context.Background(),
+		group,
+		"subject-follow-contract",
+		map[string]string{mqpkg.SubjectFollowEventStream: ">"},
+		1,
+		3*time.Second,
+	)
+	if err != nil {
+		t.Fatalf("read SubjectFollow event stream: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected one SubjectFollow stream event, got %d", len(messages))
+	}
+	return messages[0]
+}
+
+func assertSubjectFollowEventFields(
+	t *testing.T,
+	message rtredis.StreamMessage,
+	want map[string]string,
+) {
+	t.Helper()
+	if message.Stream != mqpkg.SubjectFollowEventStream {
+		t.Fatalf("SubjectFollow stream=%q, want %q", message.Stream, mqpkg.SubjectFollowEventStream)
+	}
+	for key, value := range want {
+		if message.Values[key] != value {
+			t.Errorf("SubjectFollow stream field %s=%q, want %q", key, message.Values[key], value)
+		}
+	}
+	retiredPersonaKey := "persona" + "ID"
+	if _, exists := message.Values[retiredPersonaKey]; exists {
+		t.Errorf("SubjectFollow stream retains non-canonical field %q", retiredPersonaKey)
 	}
 }

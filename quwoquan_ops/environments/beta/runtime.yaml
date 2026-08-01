@@ -3,17 +3,17 @@
   "environment": "beta",
   "dataReleaseTarget": "beta-local",
   "urlRoles": {
-    "api": {"scheme": "https", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
-    "realtime": {"scheme": "wss", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
-    "rtc": {"scheme": "wss", "host": "rtc.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
-    "productOps": {"scheme": "https", "host": "ops.beta.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
-    "publicWeb": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
-    "appDownload": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "acme-dns01-beta"},
-    "legal": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "acme-dns01-beta"},
-    "mediaAvatar": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "acme-dns01-beta"},
-    "mediaImage": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "acme-dns01-beta"},
-    "mediaVideo": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "acme-dns01-beta"},
-    "mediaUpload": {"scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"}
+    "api": {"scheme": "https", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},
+    "realtime": {"scheme": "wss", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},
+    "rtc": {"scheme": "wss", "host": "rtc.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},
+    "productOps": {"scheme": "https", "host": "ops.beta.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "local-managed"},
+    "publicWeb": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},
+    "appDownload": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "local-managed"},
+    "legal": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "local-managed"},
+    "mediaAvatar": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "local-managed"},
+    "mediaImage": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "local-managed"},
+    "mediaVideo": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "local-managed"},
+    "mediaUpload": {"scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/", "tlsProfile": "local-managed"}
   },
   "subnets": {
     "edge": "172.31.10.0/24",
@@ -75,6 +75,8 @@
       "dataRelease": {
         "mode": "local-import",
         "mongoPortRole": "mongodb",
+        "redisPortRole": "redis",
+        "redisDatabase": 1,
         "mediaLocalRef": "cache/media",
         "userPostgresPortRole": "postgres",
         "publicReadyTimeoutSeconds": 240

@@ -79,7 +79,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       final policyError = validateUpload(
         category: MediaCategory.chatVoice,
         fileSize: result.fileSize,
-        contentType: 'audio/mp4',
+        mimeType: 'audio/mp4',
       );
       if (policyError != null) {
         _trackUploadFailed('upload_policy_rejected');
@@ -92,7 +92,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       final task = UploadTask(
         localPath: result.filePath,
         category: MediaCategory.chatVoice,
-        contentType: 'audio/mp4',
+        mimeType: 'audio/mp4',
         fileSize: result.fileSize,
       );
 
@@ -174,7 +174,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       deliveryUrl: update.localPath,
       assetId: assetId,
       mediaType: 'audio',
-      contentType: 'audio/mp4',
+      mimeType: 'audio/mp4',
       fileSizeBytes: result.fileSize,
       durationMs: result.durationMs,
       waveform: _compactWaveform(result.waveform),

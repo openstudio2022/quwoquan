@@ -9,8 +9,8 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
-	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
 type RedisPublicationRateGate struct {

@@ -2,8 +2,9 @@ package semantic
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
+
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 const (
@@ -29,24 +30,23 @@ type GovernanceEvent struct {
 	TargetRef   string `json:"targetRef"`
 }
 
-func Present(raw any) bool {
-	return raw != nil
+func Present(mentions []postmodel.PostSemanticMention) bool {
+	return len(mentions) > 0
 }
 
-func Project(raw any) Projection {
-	rows := Rows(raw)
+func Project(mentions []postmodel.PostSemanticMention) Projection {
 	entityRefs := make([]string, 0)
 	tagRefs := make([]string, 0)
 	entitySeen := map[string]struct{}{}
 	tagSeen := map[string]struct{}{}
 	invalid := 0
 
-	for _, row := range rows {
-		if normalizeStatus(stringValue(row["status"])) != StatusPublished {
+	for _, mention := range mentions {
+		if normalizeStatus(mention.Status) != StatusPublished {
 			continue
 		}
-		kind := normalizeKind(stringValue(row["kind"]))
-		targetRef := strings.TrimSpace(stringValue(row["targetRef"]))
+		kind := normalizeKind(mention.Kind)
+		targetRef := strings.TrimSpace(mention.TargetRef)
 		if !ValidTargetRef(kind, targetRef) {
 			invalid++
 			continue
@@ -74,14 +74,14 @@ func Project(raw any) Projection {
 	}
 }
 
-func ValidateSuppliedRefs(raw any, entityRefs, tagRefs []string) error {
+func ValidateSuppliedRefs(mentions []postmodel.PostSemanticMention, entityRefs, tagRefs []string) error {
 	if err := RejectCandidateRefs(entityRefs, tagRefs); err != nil {
 		return err
 	}
-	if !Present(raw) {
+	if !Present(mentions) {
 		return nil
 	}
-	projected := Project(raw)
+	projected := Project(mentions)
 	if projected.InvalidPublishedCount > 0 {
 		return fmt.Errorf("semanticMentions contains %d published mention(s) with invalid targetRef", projected.InvalidPublishedCount)
 	}
@@ -158,68 +158,34 @@ func ValidateGovernanceEvent(event GovernanceEvent) error {
 	return nil
 }
 
-func ApplyGovernanceEvent(raw any, event GovernanceEvent) (any, int, error) {
+func ApplyGovernanceEvent(
+	mentions []postmodel.PostSemanticMention,
+	event GovernanceEvent,
+) ([]postmodel.PostSemanticMention, int, error) {
 	if err := ValidateGovernanceEvent(event); err != nil {
-		return raw, 0, err
+		return mentions, 0, err
 	}
-	rows := Rows(raw)
+	updatedMentions := append([]postmodel.PostSemanticMention(nil), mentions...)
 	updated := 0
-	for _, row := range rows {
-		if strings.TrimSpace(stringValue(row["candidateId"])) != strings.TrimSpace(event.CandidateID) {
+	for index := range updatedMentions {
+		mention := &updatedMentions[index]
+		if strings.TrimSpace(mention.CandidateId) != strings.TrimSpace(event.CandidateID) {
 			continue
 		}
 		if kind := normalizeKind(event.Kind); kind != "" {
-			row["kind"] = kind
+			mention.Kind = kind
 		}
-		row["status"] = normalizeStatus(event.Status)
+		mention.Status = normalizeStatus(event.Status)
 		if normalizeStatus(event.Status) == StatusPublished {
-			row["targetRef"] = strings.TrimSpace(event.TargetRef)
+			mention.TargetRef = strings.TrimSpace(event.TargetRef)
 		}
 		updated++
 	}
-	return rowsAsAny(rows), updated, nil
+	return updatedMentions, updated, nil
 }
 
-func Rows(raw any) []map[string]any {
-	if raw == nil {
-		return nil
-	}
-	value := reflect.ValueOf(raw)
-	if value.Kind() != reflect.Slice && value.Kind() != reflect.Array {
-		return nil
-	}
-	rows := make([]map[string]any, 0, value.Len())
-	for i := 0; i < value.Len(); i++ {
-		item := value.Index(i)
-		if item.Kind() == reflect.Interface {
-			if item.IsNil() {
-				continue
-			}
-			item = item.Elem()
-		}
-		if !item.IsValid() || item.Kind() != reflect.Map {
-			continue
-		}
-		row := map[string]any{}
-		iter := item.MapRange()
-		for iter.Next() {
-			key := iter.Key()
-			if key.Kind() != reflect.String {
-				continue
-			}
-			row[key.String()] = iter.Value().Interface()
-		}
-		rows = append(rows, row)
-	}
-	return rows
-}
-
-func rowsAsAny(rows []map[string]any) []any {
-	out := make([]any, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, row)
-	}
-	return out
+func Rows(mentions []postmodel.PostSemanticMention) []postmodel.PostSemanticMention {
+	return mentions
 }
 
 func normalizeKind(kind string) string {
@@ -228,11 +194,6 @@ func normalizeKind(kind string) string {
 
 func normalizeStatus(status string) string {
 	return strings.ToLower(strings.TrimSpace(status))
-}
-
-func stringValue(value any) string {
-	text, _ := value.(string)
-	return text
 }
 
 func nonEmptyParts(parts []string) []string {
@@ -248,7 +209,15 @@ func nonEmptyParts(parts []string) []string {
 func sameStrings(left, right []string) bool {
 	leftSet := normalizedSet(left)
 	rightSet := normalizedSet(right)
-	return reflect.DeepEqual(leftSet, rightSet)
+	if len(leftSet) != len(rightSet) {
+		return false
+	}
+	for item := range leftSet {
+		if _, found := rightSet[item]; !found {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizedSet(items []string) map[string]struct{} {

@@ -18,10 +18,10 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/searchprojection"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 // PostReader reads posts back so a lifecycle event (which carries only an

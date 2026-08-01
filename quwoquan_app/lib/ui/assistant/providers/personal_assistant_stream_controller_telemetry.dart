@@ -1,5 +1,19 @@
 part of 'personal_assistant_stream_controller.dart';
 
+extension PersonalAssistantPresentationTelemetry
+    on PersonalAssistantStreamController {
+  void recordPresentationFallback(String reason) {
+    _recordAssistantTurnQuality(
+      _telemetryRef,
+      turnAction: 'presentation_fallback',
+      result: 'presentation_fallback',
+      startedAt: DateTime.now(),
+      failReasonCode: reason,
+      operationId: AssistantApiMetadata.streamAssistantRunEventsOperation,
+    );
+  }
+}
+
 void _recordAssistantTurnQuality(
   Ref ref, {
   required String turnAction,

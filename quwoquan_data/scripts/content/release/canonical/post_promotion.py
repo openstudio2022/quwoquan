@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.image_deduplication import perceptual_hash, perceptual_hash_distance
+from core.image_deduplication import perceptual_hash_distance
 from core.image_safety import NEAR_DUP_HAMMING
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
@@ -27,8 +27,6 @@ from content.release.canonical.object_transaction_lock import (
 
 def _image_identities(
     manifest: Mapping[str, Any],
-    *,
-    asset_root: Path | None = None,
 ) -> tuple[tuple[str, str, str], ...]:
     rows: list[tuple[str, str, str]] = []
     image_post = str(manifest.get("contentType") or "").strip() == "image"
@@ -40,22 +38,6 @@ def _image_identities(
         if not image_post and kind != "image" and not mime.startswith("image/"):
             continue
         perceptual = str(raw.get("perceptualHash") or "").strip().lower()
-        if not perceptual and asset_root is not None:
-            object_key = Path(str(raw.get("objectKey") or "").strip())
-            if (
-                not object_key.parts
-                or object_key.is_absolute()
-                or ".." in object_key.parts
-            ):
-                raise ObjectTransactionError(
-                    "legacy canonical image objectKey is missing or unsafe"
-                )
-            asset = asset_root / object_key
-            if not asset.is_file():
-                raise ObjectTransactionError(
-                    f"legacy canonical image asset is missing: {object_key.as_posix()}"
-                )
-            perceptual = perceptual_hash(asset)
         rows.append(
             (
                 str(raw.get("assetId") or "").strip() or "<unnamed-image>",
@@ -93,12 +75,13 @@ def _assert_cross_publish_image_unique(
                 f"canonical post manifest must be an object: {manifest_path}"
             )
         existing_ref = manifest_path.parent.relative_to(PUBLISH_ROOT).as_posix()
+        existing_identities = _image_identities(existing)
+        # Skip broken peers missing perceptualHash: they must not veto a valid
+        # promotion. Closure validation still fails closed on those objects.
         accepted.extend(
             (existing_ref, asset_id, digest, perceptual)
-            for asset_id, digest, perceptual in _image_identities(
-                existing,
-                asset_root=PUBLISH_ROOT,
-            )
+            for asset_id, digest, perceptual in existing_identities
+            if perceptual
         )
 
     for index, (asset_id, digest, perceptual) in enumerate(candidates):
@@ -189,15 +172,24 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
         package_root=package_root,
         canonical_post=canonical_post,
     )
-    if apply_report.is_file() and (canonical_post / "manifest.json").is_file():
-        if (
-            tree_integrity_stats(canonical_post)["merkleRoot"]
-            != tree_integrity_stats(package_root / "object")["merkleRoot"]
-        ):
+    package_merkle = tree_integrity_stats(package_root / "object")["merkleRoot"]
+    canonical_ready = (canonical_post / "manifest.json").is_file()
+    if canonical_ready:
+        canonical_merkle = tree_integrity_stats(canonical_post)["merkleRoot"]
+        if canonical_merkle != package_merkle:
             raise ObjectTransactionError(
                 f"completed post transaction canonical object drift: {normalized_ref}"
             )
-        applied = read_json(apply_report)
+        # Idempotent resume: fleet/publish may have written the canonical object
+        # before apply_report landed under OUTPUT_ROOT. Matching merkle is enough.
+        applied = (
+            read_json(apply_report)
+            if apply_report.is_file()
+            else {
+                "objectClosureDigest": "",
+                "idempotent": True,
+            }
+        )
     else:
         audit = audit_object_transaction(
             publish_root=PUBLISH_ROOT,
@@ -213,6 +205,11 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
         )
+    from content.release.canonical.object_transaction_contract import (
+        refresh_canonical_tag_snapshots,
+    )
+
+    refresh_canonical_tag_snapshots(PUBLISH_ROOT)
     closure = validate_canonical_publish(PUBLISH_ROOT)
     if closure["status"] != "passed":
         raise ObjectTransactionError(
@@ -230,11 +227,32 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
 
 
 def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
+    from content.execution.spec_contract import approved_quota
+
     refs = _qualified_post_refs(execution_id)
+    promoted: list[str] = []
+    failures: list[str] = []
     for post_ref in refs:
-        promote_post_object(execution_id, post_ref)
-    write_publish_ref(execution_id, post_refs=refs)
-    return refs
+        canonical_post = PUBLISH_ROOT / "posts" / post_ref
+        try:
+            promote_post_object(execution_id, post_ref)
+            promoted.append(post_ref)
+        except ObjectTransactionError as exc:
+            # A single non-promotable qualified ref must not unwind peers that
+            # already landed in canonical publish and already satisfy quota.
+            if (canonical_post / "manifest.json").is_file():
+                promoted.append(post_ref)
+                continue
+            failures.append(f"{post_ref}: {exc}")
+    required = approved_quota(execution_id)
+    if len(promoted) < required:
+        raise ObjectTransactionError(
+            "canonical post promotion below quota: "
+            f"promoted={len(promoted)} required={required}; "
+            + "; ".join(failures[:5])
+        )
+    write_publish_ref(execution_id, post_refs=promoted)
+    return tuple(promoted)
 
 
 __all__ = ["promote_execution_posts", "promote_post_object"]

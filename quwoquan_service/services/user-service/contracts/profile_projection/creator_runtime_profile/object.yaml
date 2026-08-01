@@ -29,3 +29,12 @@ local_identity_reasons:
     never used as an aggregate Store identity
   releaseId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
+business_rules:
+- Creator package 只由已激活 immutable release 投影，禁止创建可登录账号或复制 Post 正文。
+- creatorId 唯一映射 canonical personaId，release 切换必须整包原子替换并校验媒体引用。
+- Persona 关闭或 release 撤销必须 tombstone 该运行时档案并从公开查询移除。
+lifecycle:
+  source_events: [CreatorReleaseActivated, CreatorReleaseRetired, PersonaUpdated, UserAccountClosed]
+  checkpoint: creator_release_digest_and_persona_sequence
+  rebuild: import_active_creator_release_then_replay_persona_events
+  tombstone: remove_public_profile_keep_release_audit

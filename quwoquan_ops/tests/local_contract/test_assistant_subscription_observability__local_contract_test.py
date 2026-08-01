@@ -16,7 +16,7 @@ DASHBOARD = (
 METRICS = (
     ROOT
     / "quwoquan_service/services/assistant-service/internal/assistant/"
-    "assistant_conversation/application/orchestration/proactive_metrics.go"
+    "assistant_session/application/orchestration/proactive_metrics.go"
 )
 
 

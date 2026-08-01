@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
 
@@ -24,7 +24,7 @@ void main() {
     );
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(home: PersonalAssistantConversationPage()),
+        child: MaterialApp(home: PersonalAssistantSessionPage()),
       ),
     );
     await _pumpFrames(tester);
@@ -49,9 +49,7 @@ void main() {
     await _pumpUntilStreamSettled(tester);
 
     expect(find.byType(AssistantMessageBubble), findsWidgets);
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
@@ -119,9 +117,7 @@ Future<void> _pumpUntilSendButtonVisible(WidgetTester tester) async {
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
   for (var i = 0; i < 240; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

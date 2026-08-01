@@ -16,7 +16,7 @@ class RealtimeConfig {
 
   const RealtimeConfig({
     required this.wsUrl,
-    this.gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
+    this.gatewayBaseUrl = '',
     this.heartbeatIntervalSec = 15,
     this.authAckTimeoutSec = 5,
     this.wsIdleTimeoutSec = 120,
@@ -27,14 +27,18 @@ class RealtimeConfig {
   });
 
   factory RealtimeConfig.fromRuntime({
-    String gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
-    String realtimeBaseUrl = CloudRuntimeConfig.realtimeConnectionUrl,
+    String? gatewayBaseUrl,
+    String? realtimeBaseUrl,
   }) {
+    final resolvedGatewayBaseUrl =
+        gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl;
+    final resolvedRealtimeBaseUrl =
+        realtimeBaseUrl ?? CloudRuntimeConfig.realtimeConnectionUrl;
     return RealtimeConfig(
       wsUrl:
-          '${realtimeBaseUrl.replaceAll(RegExp(r'/+$'), '')}'
+          '${resolvedRealtimeBaseUrl.replaceAll(RegExp(r'/+$'), '')}'
           '${RealtimeApiMetadata.webSocketUpgradePath}',
-      gatewayBaseUrl: gatewayBaseUrl,
+      gatewayBaseUrl: resolvedGatewayBaseUrl,
     );
   }
 

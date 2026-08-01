@@ -61,7 +61,7 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_conversation/fields.yaml`
+- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_session/fields.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/message/fields.yaml`
 - 父能力公开契约：[`L2 spec`](../spec.md)
 
@@ -92,20 +92,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 提及事件无消费者
+### OPEN-001 四环境真实回群链路尚未验收
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前群会话只有 @小趣 的文本插入按钮，提及事件没有消费者，助手不会回群回复，会话内答疑完全不可用。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 conversationId 跨域类型不一致
-
-- 类型：`risk`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：同名标识在消息域与助手域使用不同类型，跨域传参没有编译期保护，上下文注入链路上的错传只能在运行时暴露。
-- 完成判定：助手域改用体现一段连续交互的 session 语义，且同名字段类型一致门禁生效
-- 依赖：`list-detail-message-delivery` 的同名开放事项
+- 影响或价值：尚缺 alpha/beta/gamma/prod 同一候选上的真实身份、可靠事件、回复回读、结构化不可用和回滚证据；Chat `conversationId` 与 Assistant `sessionId` 已在契约、运行时、生成物和测试中物理分离，消费者与回群写入已有 local/API integration 证据。
+- 完成判定：`GWT-001` 与 `GWT-002` 在四环境 Remote composition 上产生候选绑定的 CaseResult、消息回读、事件水位、告警与回滚证据。

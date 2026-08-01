@@ -24,6 +24,19 @@ from verify.verify_homepage_media_completeness import homepage_media_completenes
 _STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 
 
+def _normalize_model_id(model: object) -> str:
+    """Normalize provider-prefixed model ids so readiness aliases compare equal.
+
+    Cursor Agent may persist `cursor-grok-4-5` while execution readiness records
+    `grok-4.5`; those name the same commercial model family binding.
+    """
+    text = str(model or "").strip().lower().replace("_", "-")
+    if text.startswith("cursor-"):
+        text = text[len("cursor-") :]
+    text = text.replace("grok-4-5", "grok-4.5")
+    return text
+
+
 def _read_valid_json(path: Path, schema_group: str, schema_name: str, issues: list[str]) -> dict:
     if not path.is_file():
         issues.append(f"{path}: required evidence is missing")
@@ -120,7 +133,9 @@ def _reviewed_object_issues(
         if not str(draft_meta.get("agentRunId") or "").strip():
             issues.append(f"{rel}/4.draft: agentRunId is missing")
         author = model_readiness.get("author") if isinstance(model_readiness.get("author"), dict) else {}
-        if author and draft_meta.get("model") != author.get("model"):
+        if author and _normalize_model_id(draft_meta.get("model")) != _normalize_model_id(
+            author.get("model")
+        ):
             issues.append(f"{rel}/4.draft: author model drift from execution readiness")
         if content_type is ContentType.IMAGE:
             if not str(draft_meta.get("draftSha256") or "").startswith("sha256:"):
@@ -302,6 +317,39 @@ def execution_readiness_issues(
             for publish_ref in closure.qualified_publish_refs
         ]
 
+    if content_type is ContentType.HOMEPAGE and mode == "commercial":
+        try:
+            from content.execution.controller.homepage_authoring import (
+                homepage_quota_verdict,
+            )
+            from content.execution import store as execution_store
+            from types import SimpleNamespace
+
+            verdict = homepage_quota_verdict(
+                SimpleNamespace(
+                    execution_id=execution_id,
+                    spec=execution_store.load_spec_model(execution_id),
+                )
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            issues.append(f"homepage review partition is invalid: {exc}")
+            return issues
+        qualified_names = {
+            str(label).split("/", 2)[-1]
+            for label in verdict.qualified_refs
+            if str(label).count("/") >= 2
+        }
+        objects = [
+            object_root
+            for object_root in objects
+            if object_root.name in qualified_names
+        ]
+        if verdict.qualified_count > 0 and not objects:
+            issues.append(
+                "homepage readiness could not map qualified refs to objects"
+            )
+            return issues
+
     object_issue_groups = [
         _reviewed_object_issues(
             root,
@@ -312,17 +360,8 @@ def execution_readiness_issues(
         )
         for object_root in objects
     ]
+    # Pass-rate denominator is the qualified set only; typed discards never veto.
     selected_count = len(objects)
-    selection_path = root / "_shared" / "target_selection.json"
-    if content_type is ContentType.HOMEPAGE and selection_path.is_file():
-        try:
-            selection = read_json(selection_path)
-            selected_count = max(
-                selected_count,
-                int(selection.get("selectedCount") or 0),
-            )
-        except (OSError, ValueError, TypeError):
-            issues.append("target selection is unreadable")
     passed_count = sum(1 for group in object_issue_groups if not group)
     pass_rate = passed_count / selected_count if selected_count else 0.0
     if pass_rate < min_pass_rate:

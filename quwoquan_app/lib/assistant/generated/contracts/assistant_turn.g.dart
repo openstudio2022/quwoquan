@@ -13,6 +13,8 @@ import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 class AssistantTurnAnswerProcessing {
@@ -642,6 +644,8 @@ class AssistantTurnOutput {
     required this.messageKind,
     this.userMarkdown = "",
     required this.result,
+    this.runtime,
+    this.presentation,
     this.displayState = const AssistantDisplayState(),
     this.evidence = const <AssistantTurnEvidenceItem>[],
     this.reasoningBasis = const <AssistantTurnReasoningBasisItem>[],
@@ -654,7 +658,7 @@ class AssistantTurnOutput {
     this.subagentPlan = const <SubagentPlan>[],
     this.understandingResult = const UnderstandingResult(),
     this.taskGraph = const TaskGraph(),
-    this.orchestratorState = const ConversationOrchestratorState(),
+    this.orchestratorState = const SessionOrchestratorState(),
     this.turnSynthesisState = const TurnSynthesisState(),
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
@@ -679,6 +683,8 @@ class AssistantTurnOutput {
   final AssistantMessageKind messageKind;
   final String userMarkdown;
   final AssistantTurnResult result;
+  final AssistantRunRuntimeWire? runtime;
+  final AssistantPresentationDocumentWire? presentation;
   final AssistantDisplayState displayState;
   final List<AssistantTurnEvidenceItem> evidence;
   final List<AssistantTurnReasoningBasisItem> reasoningBasis;
@@ -691,7 +697,7 @@ class AssistantTurnOutput {
   final List<SubagentPlan> subagentPlan;
   final UnderstandingResult understandingResult;
   final TaskGraph taskGraph;
-  final ConversationOrchestratorState orchestratorState;
+  final SessionOrchestratorState orchestratorState;
   final TurnSynthesisState turnSynthesisState;
   final List<SkillRun> skillRuns;
   final AggregationState? aggregationState;
@@ -716,6 +722,8 @@ class AssistantTurnOutput {
         'messageKind': messageKind.wireName,
         'userMarkdown': userMarkdown,
         'result': result.toJson(),
+        'runtime': runtime?.toJson(),
+        'presentation': presentation?.toJson(),
         'displayState': displayState.toJson(),
         'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
         'reasoningBasis': reasoningBasis.map((item) => item.toJson()).toList(growable: false),
@@ -755,6 +763,8 @@ class AssistantTurnOutput {
       messageKind: parseAssistantMessageKindStrict((json['messageKind'] as String?)?.trim() ?? ''),
       userMarkdown: (json['userMarkdown'] as String?)?.trim() ?? "",
       result: json['result'] is Map ? AssistantTurnResult.fromJson((json['result'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field result is missing')),
+      runtime: json['runtime'] is Map ? AssistantRunRuntimeWire.fromJson((json['runtime'] as Map).cast<String, dynamic>()) : null,
+      presentation: json['presentation'] is Map ? AssistantPresentationDocumentWire.fromJson((json['presentation'] as Map).cast<String, dynamic>()) : null,
       displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
       evidence: (json['evidence'] as List?)?.whereType<Map>().map((item) => AssistantTurnEvidenceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnEvidenceItem>[],
       reasoningBasis: (json['reasoningBasis'] as List?)?.whereType<Map>().map((item) => AssistantTurnReasoningBasisItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnReasoningBasisItem>[],
@@ -767,7 +777,7 @@ class AssistantTurnOutput {
       subagentPlan: (json['subagentPlan'] as List?)?.whereType<Map>().map((item) => SubagentPlan.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SubagentPlan>[],
       understandingResult: json['understandingResult'] is Map ? UnderstandingResult.fromJson((json['understandingResult'] as Map).cast<String, dynamic>()) : const UnderstandingResult(),
       taskGraph: json['taskGraph'] is Map ? TaskGraph.fromJson((json['taskGraph'] as Map).cast<String, dynamic>()) : const TaskGraph(),
-      orchestratorState: json['orchestratorState'] is Map ? ConversationOrchestratorState.fromJson((json['orchestratorState'] as Map).cast<String, dynamic>()) : const ConversationOrchestratorState(),
+      orchestratorState: json['orchestratorState'] is Map ? SessionOrchestratorState.fromJson((json['orchestratorState'] as Map).cast<String, dynamic>()) : const SessionOrchestratorState(),
       turnSynthesisState: json['turnSynthesisState'] is Map ? TurnSynthesisState.fromJson((json['turnSynthesisState'] as Map).cast<String, dynamic>()) : const TurnSynthesisState(),
       skillRuns: (json['skillRuns'] as List?)?.whereType<Map>().map((item) => SkillRun.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SkillRun>[],
       aggregationState: json['aggregationState'] is Map ? AggregationState.fromJson((json['aggregationState'] as Map).cast<String, dynamic>()) : null,
@@ -775,9 +785,9 @@ class AssistantTurnOutput {
       missingContextSlots: _assistantStringList(json['missingContextSlots']),
       fillGuidance: (json['fillGuidance'] as List?)?.whereType<Map>().map((item) => AssistantTurnFillGuidanceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnFillGuidanceItem>[],
       followupPrompt: (json['followupPrompt'] as String?)?.trim() ?? "",
-      phaseId: parsePlannerPhaseId((json['phaseId'] as String?)?.trim() ?? ""),
-      actionCode: parsePlannerActionCode((json['actionCode'] as String?)?.trim() ?? ""),
-      reasonCode: parsePlannerReasonCode((json['reasonCode'] as String?)?.trim() ?? ""),
+      phaseId: parsePlannerPhaseIdStrict((json['phaseId'] as String?)?.trim() ?? ""),
+      actionCode: parsePlannerActionCodeStrict((json['actionCode'] as String?)?.trim() ?? ""),
+      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? ""),
       reasonShort: (json['reasonShort'] as String?)?.trim() ?? "",
       understandingSnapshot: json['understandingSnapshot'] is Map ? AssistantTurnUnderstandingSnapshot.fromJson((json['understandingSnapshot'] as Map).cast<String, dynamic>()) : const AssistantTurnUnderstandingSnapshot(),
       retrievalProcessing: json['retrievalProcessing'] is Map ? RetrievalProcessingSnapshot.fromJson((json['retrievalProcessing'] as Map).cast<String, dynamic>()) : const RetrievalProcessingSnapshot(),
@@ -802,6 +812,8 @@ class AssistantTurnOutputFields {
   static const String messageKind = 'messageKind';
   static const String userMarkdown = 'userMarkdown';
   static const String result = 'result';
+  static const String runtime = 'runtime';
+  static const String presentation = 'presentation';
   static const String displayState = 'displayState';
   static const String evidence = 'evidence';
   static const String reasoningBasis = 'reasoningBasis';

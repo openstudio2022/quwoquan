@@ -72,6 +72,11 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
         )
+    from content.release.canonical.object_transaction_contract import (
+        refresh_canonical_tag_snapshots,
+    )
+
+    refresh_canonical_tag_snapshots(PUBLISH_ROOT)
     closure = validate_canonical_publish(PUBLISH_ROOT)
     if closure["status"] != "passed":
         raise RuntimeError(f"canonical publish closure failed: {closure['issues'][:5]}")
@@ -203,13 +208,23 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     )
     homepage_refs: set[str] = set()
     if homepage_only:
-        homepage_refs = _publishable_homepage_refs(ctx)
+        from content.execution.controller.homepage_authoring import (
+            homepage_quota_verdict,
+        )
+
+        # Publish closure must equal review qualified set (campaign receipt).
+        # approved_only entity pages can still include typed-discarded objects.
+        verdict = homepage_quota_verdict(ctx)
+        homepage_refs = {
+            f"/entity/{label}" if not str(label).startswith("/entity/") else str(label)
+            for label in verdict.qualified_refs
+        }
         if not homepage_refs:
             return StageResult(
                 ExecutionStage.PUBLISH,
                 AUTO,
                 StageStatus.FAILED,
-                "homepage-only publish 前无 approved 实体主页可发布",
+                "homepage-only publish 前无 qualified 实体主页可发布",
                 fallback_stage=ExecutionStage.BUILD_VALIDATE,
             )
     elif summary["postCount"] <= 0:
@@ -221,18 +236,40 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             fallback_stage=ExecutionStage.POST_REVIEW,
         )
     from content.execution.reliabletask_jobs import prepare_reliable_publish_jobs
+    from content.execution.spec_contract import approved_quota
+    from content.execution.workspace import execution_root as _execution_root
+    from core.io import read_json
 
     reliable_jobs = prepare_reliable_publish_jobs(
         ctx,
         homepage_refs=homepage_refs if homepage_only else None,
     )
     if reliable_jobs:
+        fleet_report_path = (
+            _execution_root(ctx.execution_id)
+            / "evidence/reliabletask/publish_fleet_report.json"
+        )
+        fleet_report = (
+            read_json(fleet_report_path) if fleet_report_path.is_file() else None
+        )
+        # Idempotent re-apply can leave local jobs DEAD while canonical objects
+        # already satisfy quota. Fleet.passed already encodes commercialAccepted
+        # or finalizedObjectCount ≥ requiredQuota (see data_content_report.go).
+        required = approved_quota(ctx.execution_id)
+        fleet_quota_met = bool(
+            isinstance(fleet_report, dict)
+            and fleet_report.get("passed") is True
+            and (
+                int(fleet_report.get("finalizedObjectCount") or 0) >= required
+                or int(fleet_report.get("commercialAcceptedCount") or 0) >= required
+            )
+        )
         terminal_failures = [
             job
             for job in reliable_jobs
             if job.state in {QueueJobState.DEAD, QueueJobState.BLOCKED}
         ]
-        if terminal_failures:
+        if terminal_failures and not fleet_quota_met:
             return StageResult(
                 ExecutionStage.PUBLISH,
                 AUTO,
@@ -246,7 +283,14 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
                 ),
             )
         pending_jobs = [
-            job for job in reliable_jobs if job.state is not QueueJobState.SUCCEEDED
+            job
+            for job in reliable_jobs
+            if job.state
+            not in {
+                QueueJobState.SUCCEEDED,
+                QueueJobState.DEAD,
+                QueueJobState.BLOCKED,
+            }
         ]
         if pending_jobs:
             return StageResult(
@@ -272,6 +316,11 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             post_refs = [
                 str(job.content_object_dir or "").removeprefix("posts/")
                 for job in reliable_jobs
+                if job.state is QueueJobState.SUCCEEDED
+                or (
+                    fleet_quota_met
+                    and job.state in {QueueJobState.DEAD, QueueJobState.BLOCKED}
+                )
             ]
             write_publish_ref(ctx.execution_id, post_refs=post_refs)
     if homepage_only and not reliable_jobs:
@@ -322,9 +371,18 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
                 ),
             )
     if ctx.managed or ctx.release_only:
-        from content.release.canonical.object_transaction_audit import validate_canonical_publish
+        from content.release.canonical.object_transaction_audit import (
+            validate_canonical_publish,
+        )
+        from content.release.canonical.object_transaction_contract import (
+            refresh_canonical_tag_snapshots,
+        )
         from core.paths import PUBLISH_ROOT
 
+        # Homepage / managed promote can land objects before a later closure check.
+        # Refresh consumer tag snapshots so validate does not see dangling_tag_ref
+        # against an otherwise complete publish tree.
+        refresh_canonical_tag_snapshots(PUBLISH_ROOT)
         closure = validate_canonical_publish(PUBLISH_ROOT)
         if closure["status"] != "passed":
             issues = [str(issue) for issue in closure["issues"]]

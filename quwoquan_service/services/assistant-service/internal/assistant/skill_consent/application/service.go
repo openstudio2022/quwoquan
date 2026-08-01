@@ -2,109 +2,119 @@ package application
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
-	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	catalogmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
 )
 
 const SkillPersonalContentAccess = catalogmodel.PersonalContentAccessSkillID
 
-type Store interface {
-	ListActiveConsents(context.Context, string) ([]assistant.SkillConsent, error)
-	UpsertConsent(context.Context, assistant.SkillConsent) (assistant.SkillConsent, error)
-	RevokeConsent(context.Context, string, string, time.Time) error
-}
-
-type Service struct {
-	store Store
+type CommandFacade struct {
+	store ports.Store
 	now   func() time.Time
 }
 
-func NewService(store Store, now func() time.Time) *Service {
+type QueryFacade struct {
+	reader ports.Reader
+}
+
+func NewCommandFacade(store ports.Store, now func() time.Time) *CommandFacade {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Service{store: store, now: now}
+	return &CommandFacade{store: store, now: now}
 }
 
-func (s *Service) List(ctx context.Context, userID string) (_ []assistant.SkillConsent, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListConsents", attribute.String("user.id", userID))
+func NewQueryFacade(reader ports.Reader) *QueryFacade {
+	return &QueryFacade{reader: reader}
+}
+
+func (facade *QueryFacade) List(
+	ctx context.Context,
+	accountID string,
+) (_ []model.Consent, err error) {
+	accountID = strings.TrimSpace(accountID)
+	ctx, span := rtobs.StartBusinessSpan(
+		ctx, "assistant.ListConsents", attribute.String("account.id", accountID),
+	)
 	defer func() { rtobs.EndSpan(span, err) }()
-	if strings.TrimSpace(userID) == "" {
-		return []assistant.SkillConsent{}, nil
+	if accountID == "" {
+		return []model.Consent{}, nil
 	}
-	if s.store == nil {
-		return nil, StoreUnavailable()
+	if facade == nil || facade.reader == nil {
+		return nil, model.ErrStorageUnavailable
 	}
-	return s.store.ListActiveConsents(ctx, userID)
+	return facade.reader.ListActiveConsents(ctx, accountID)
 }
 
-func (s *Service) Grant(ctx context.Context, userID, skillID, grantedScope string) (_ assistant.SkillConsent, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GrantSkillConsent", attribute.String("user.id", userID), attribute.String("skill.id", skillID))
+func (facade *CommandFacade) Grant(
+	ctx context.Context,
+	idempotencyKey, accountID, skillID, grantedScope string,
+) (_ model.MutationResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(
+		ctx,
+		"assistant.GrantSkillConsent",
+		attribute.String("account.id", strings.TrimSpace(accountID)),
+		attribute.String("skill.id", strings.TrimSpace(skillID)),
+	)
 	defer func() { rtobs.EndSpan(span, err) }()
-	userID, skillID = strings.TrimSpace(userID), strings.TrimSpace(skillID)
-	if userID == "" {
-		return assistant.SkillConsent{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
+	if facade == nil || facade.store == nil {
+		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
-	if skillID == "" {
-		return assistant.SkillConsent{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "skillId 不能为空", "missing skillId")
+	command, err := model.NewGrantCommand(
+		accountID, skillID, grantedScope, idempotencyKey, facade.now(),
+	)
+	if err != nil {
+		return model.MutationResult{}, err
 	}
-	if strings.TrimSpace(grantedScope) == "" {
-		grantedScope = skillID
-	}
-	if s.store == nil {
-		return assistant.SkillConsent{}, StoreUnavailable()
-	}
-	grantedAt := s.now().UTC()
-	consent := assistant.SkillConsent{ID: consentID(userID, skillID, grantedAt), UserID: userID, SkillID: skillID, GrantedScope: grantedScope, GrantedAt: grantedAt}
-	return s.store.UpsertConsent(ctx, consent)
+	return facade.store.Apply(ctx, command)
 }
 
-func (s *Service) Revoke(ctx context.Context, userID, skillID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.RevokeSkillConsent", attribute.String("user.id", userID), attribute.String("skill.id", skillID))
+func (facade *CommandFacade) Revoke(
+	ctx context.Context,
+	idempotencyKey, accountID, skillID string,
+) (_ model.MutationResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(
+		ctx,
+		"assistant.RevokeSkillConsent",
+		attribute.String("account.id", strings.TrimSpace(accountID)),
+		attribute.String("skill.id", strings.TrimSpace(skillID)),
+	)
 	defer func() { rtobs.EndSpan(span, err) }()
-	userID, skillID = strings.TrimSpace(userID), strings.TrimSpace(skillID)
-	if userID == "" || skillID == "" {
-		return rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 和 skillId 不能为空", "missing userId or skillId")
+	if facade == nil || facade.store == nil {
+		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
-	if s.store == nil {
-		return StoreUnavailable()
+	command, err := model.NewRevokeCommand(
+		accountID, skillID, idempotencyKey, facade.now(),
+	)
+	if err != nil {
+		return model.MutationResult{}, err
 	}
-	return s.store.RevokeConsent(ctx, userID, skillID, s.now().UTC())
+	return facade.store.Apply(ctx, command)
 }
 
-func (s *Service) Require(ctx context.Context, userID, skillID string) error {
+func (facade *QueryFacade) Require(
+	ctx context.Context,
+	accountID, skillID string,
+) error {
 	if strings.TrimSpace(skillID) != SkillPersonalContentAccess {
 		return nil
 	}
-	if s.store == nil {
-		return StoreUnavailable()
-	}
-	consents, err := s.store.ListActiveConsents(ctx, userID)
+	consents, err := facade.List(ctx, accountID)
 	if err != nil {
-		return StoreUnavailable()
+		return err
 	}
 	for _, consent := range consents {
-		if strings.TrimSpace(consent.SkillID) == strings.TrimSpace(skillID) {
+		if consent.IsGranted() &&
+			strings.TrimSpace(consent.SkillID) == strings.TrimSpace(skillID) {
 			return nil
 		}
 	}
-	appErr := rterr.NewAppError(rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "skill_consent_required"), "该能力需要先授权后使用", "skill "+strings.TrimSpace(skillID)+" requires active consent")
-	appErr.HTTPStatus = 403
-	return appErr
-}
-
-func StoreUnavailable() error {
-	return rterr.NewUnavailable(rterr.ModuleAssistant, "授权服务暂不可用", "assistant consent store is not configured")
-}
-
-func consentID(userID, skillID string, grantedAt time.Time) string {
-	return strings.TrimSpace(userID) + ":" + strings.TrimSpace(skillID) + ":" + strconv.FormatInt(grantedAt.UTC().UnixNano(), 36)
+	return model.ErrConsentRequired
 }

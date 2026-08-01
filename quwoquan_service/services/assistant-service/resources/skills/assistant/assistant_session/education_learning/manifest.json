@@ -1,0 +1,22 @@
+{
+  "skillId": "education_learning",
+  "displayName": "学习助手",
+  "description": "学习辅导、考试备考、课程推荐、解题思路。",
+  "domainId": "education_learning",
+  "problemClass": "complex_reasoning",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "学习",
+    "考试",
+    "课程",
+    "刷题",
+    "作业",
+    "备考"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web3",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.complex_reasoning",
+  "replayAssetRef": "assistant.replay.education_learning.v1"
+}

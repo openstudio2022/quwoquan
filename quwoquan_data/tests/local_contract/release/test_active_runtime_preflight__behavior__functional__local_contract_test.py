@@ -1,6 +1,7 @@
 """Data full-gate preflight for active runtime processes."""
 from __future__ import annotations
 
+from verify import verify_no_active_data_runtime
 from verify.verify_no_active_data_runtime import active_runtime_processes
 
 
@@ -48,3 +49,21 @@ def test_active_runtime_preflight_ignores_parent_shell_with_cli_text():
     ]
 
     assert active_runtime_processes(lines) == []
+
+
+def test_active_runtime_preflight_ignores_other_git_worktree(monkeypatch, tmp_path):
+    lines = [
+        "12345 python3 quwoquan_data/scripts/cli.py task execute --execution-id other"
+    ]
+    monkeypatch.setattr(
+        verify_no_active_data_runtime,
+        "_process_lines",
+        lambda: lines,
+    )
+    monkeypatch.setattr(
+        verify_no_active_data_runtime,
+        "_process_worktree_root",
+        lambda _pid: tmp_path.resolve(),
+    )
+
+    assert verify_no_active_data_runtime.active_runtime_processes() == []

@@ -50,6 +50,7 @@
 
 - Gathering 必须以起始时间与可空结束时间表达时间；结束时间为空表示一个尚未确定的时间窗，两者同时存在表示一个确定区间。
 - 时间区间过期后状态必须自动流转为已结束，不得停留在开放态。
+- 生命周期只使用 `draft / open / full / cancelled / completed`：会话尚未绑定时为 draft，可加入时为 open，容量用尽时为 full，取消与完成是不同终态。
 
 <a id="req-003"></a>
 ### REQ-003 Gathering 不拥有消息
@@ -77,7 +78,7 @@
 - 下游能力：本目录直接 Story 及其公开结果；`chat-conversation` 承接绑定会话内的协调与通话。
 - 读取事实：目标对象引用、发起方身份与关系门禁结果。
 - 写入事实：Gathering 状态、参与者名单与会话绑定关系。
-- operation / event / surface：`quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/operations.yaml`、`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- operation / event / surface：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/operations.yaml`、`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
 - 一致性要求：参与者计数是名单的投影而非独立事实；容量判定以名单为准。
 
 ## 7. 集成验收

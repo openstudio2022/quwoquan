@@ -11,10 +11,6 @@ import 'package:quwoquan_app/components/object_page/intersection_propagation_vie
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
-  'INTERSECTION_COMMERCE_ACTIONS_ENABLED',
-);
-
 /// 一条交集结论行的数据模型与单行渲染（统一交互子契约 · A–E 横切复用）。
 ///
 /// 从 `intersection_statement_card.dart` 抽出（R03 体量收敛）：单行模型 / 渲染 / 行动 pill
@@ -171,10 +167,7 @@ class IntersectionStatementRow extends StatelessWidget {
     final hasVisuals = item.visuals.isNotEmpty && !item._suppressLeadingCluster;
     final primaryActionHint = item.actionHints
         .where(
-          (hint) => isDisplayableIntersectionActionHint(
-            hint,
-            commerceActionsEnabled: _defaultIntersectionCommerceActionsEnabled,
-          ),
+          isDisplayableIntersectionActionHint,
         )
         .fold<IntersectionActionHint?>(
           null,
@@ -340,34 +333,20 @@ class IntersectionStatementRow extends StatelessWidget {
 /// 判定 actionHint 是否应渲染成可执行 pill。
 ///
 /// 与 `IntersectionTargetNavigator.openActionHint` 分发口径保持单一真相源：
-/// - `deferred`：能力未上线，不展示；
 /// - `assistant`：展示（打开小艺）；
 /// - `navigate`：有真实可导航 target 才展示（关注 / 加入 / 进入讨论 / 看共同来源等）。
 ///   `login` 等 requiredGates 由承接页承接续接（§15），不在本层隐藏，否则已登录用户
 ///   也会失去行动入口；
 /// - `gathering`：结伴同行类有真实承接（进发起群聊页，见
-///   `IntersectionTargetNavigator._openGathering`），available + 有对象上下文（target 非空）时
+///   `IntersectionTargetNavigator._openGathering`），有对象上下文（target 非空）时
 ///   展示成可点「发起结伴」pill，兑现「共同想去→约伴」北极星闭环（C0）；target 空则不展示，
 ///   避免无对象上下文的空发起；
-/// - `commerce`：必须有 target，且默认受 feature flag 关闭；真实商务渠道未接入时不展示；
 /// - `message`：打招呼 / 私信有真实承接（对方主页的破冰状态机，见
 ///   `IntersectionTargetNavigator._openMessage`），target 是真实 person 时展示；
 ///   非 person target 不展示，避免「打招呼」退化成对象下钻；
-/// - `connect`：话题房 / 语音房没有落地页，注册表里该类别成员全部
-///   `targetAvailability: deferred`（心动打招呼已归回 `message`，复用打招呼请求状态机）。
-///   端对没有落点的 dispatch 一律 fail-closed 不渲染，避免退化成对象下钻
-///   （§24.10 诚实红线，不伪造重社交行动）；
-/// - **未登记的新 dispatch**：按 fail-open 处理，有 target 就渲染并交给 navigator 的
-///   通用下钻。云侧已用 `targetAvailability` 表达落点是否就绪，端侧再判一次闭集，
-///   只会让新行动在旧版本上永不出现。
-bool isDisplayableIntersectionActionHint(
-  IntersectionActionHint hint, {
-  bool commerceActionsEnabled = _defaultIntersectionCommerceActionsEnabled,
-}) {
+/// - 未登记 dispatch：fail-closed，不渲染。
+bool isDisplayableIntersectionActionHint(IntersectionActionHint hint) {
   if (hint.label.trim().isEmpty) {
-    return false;
-  }
-  if (hint.targetAvailability.trim() == 'deferred') {
     return false;
   }
   switch (hint.dispatch.trim()) {
@@ -384,18 +363,8 @@ bool isDisplayableIntersectionActionHint(
       return target.objectKind.trim() == 'person' ||
           target.objectType.trim() == 'user' ||
           target.routeId.trim() == 'userProfile';
-    case 'commerce':
-      return commerceActionsEnabled &&
-          (hint.target?.objectId.trim().isNotEmpty ?? false);
-    case 'connect':
-      // 话题房 / 语音房没有落地页，navigator 对该类别显式返回 unsupported。
-      // 这是「已登记但确实无落点」，与下面的「端侧还不认识」是两回事。
-      return false;
     default:
-      // 未知 dispatch：云侧已用 targetAvailability 表达「有没有落点」，上面那道
-      // deferred 闸就是诚实红线。这里再 fail-closed 一次的后果是新 dispatch 的
-      // 行动 pill 在旧版本上永不出现——那不是诚实，是静默失能。
-      return hint.target?.objectId.trim().isNotEmpty ?? false;
+      return false;
   }
 }
 

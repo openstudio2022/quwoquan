@@ -20,6 +20,8 @@ var (
 	appFrameSamplesTotal      *prometheus.CounterVec
 	appJankyFramesTotal       *prometheus.CounterVec
 	appFrameWorstDuration     *prometheus.HistogramVec
+	appFrameWorstBuild        *prometheus.HistogramVec
+	appFrameWorstRaster       *prometheus.HistogramVec
 	videoPlaybackEvents       *prometheus.CounterVec
 	videoPlaybackReady        *prometheus.HistogramVec
 	videoPlaybackEffective    *prometheus.CounterVec
@@ -73,6 +75,16 @@ func registerTelemetryMetrics() {
 			Name:    "ops_app_frame_batch_worst_duration_seconds",
 			Help:    "Worst frame duration reported by each complete App frame batch.",
 			Buckets: []float64{0.008, 0.016, 0.024, 0.032, 0.05, 0.075, 0.1, 0.2, 0.5, 1},
+		}, []string{"page_name"})
+		appFrameWorstBuild = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_app_frame_batch_worst_build_duration_seconds",
+			Help:    "Worst Flutter build duration reported by each complete App frame batch.",
+			Buckets: []float64{0.004, 0.008, 0.012, 0.016, 0.024, 0.032, 0.05, 0.075, 0.1, 0.2},
+		}, []string{"page_name"})
+		appFrameWorstRaster = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_app_frame_batch_worst_raster_duration_seconds",
+			Help:    "Worst Flutter raster duration reported by each complete App frame batch.",
+			Buckets: []float64{0.004, 0.008, 0.012, 0.016, 0.024, 0.032, 0.05, 0.075, 0.1, 0.2},
 		}, []string{"page_name"})
 		videoPlaybackEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "ops_video_playback_events_total",
@@ -155,6 +167,8 @@ func registerTelemetryMetrics() {
 		registerCollector(&appFrameSamplesTotal)
 		registerCollector(&appJankyFramesTotal)
 		registerCollector(&appFrameWorstDuration)
+		registerCollector(&appFrameWorstBuild)
+		registerCollector(&appFrameWorstRaster)
 		registerCollector(&videoPlaybackEvents)
 		registerCollector(&videoPlaybackReady)
 		registerCollector(&videoPlaybackEffective)
@@ -206,7 +220,9 @@ func recordAppExperienceEvents(records []application.EventRecordInput) {
 			if record.EventType == "app_frame_jank_outcome" &&
 				record.SampledFrames != nil && *record.SampledFrames > 0 &&
 				record.JankyFrames != nil && *record.JankyFrames >= 0 &&
-				record.WorstFrameMS != nil && *record.WorstFrameMS >= 0 {
+				record.WorstFrameMS != nil && *record.WorstFrameMS >= 0 &&
+				record.WorstBuildFrameMS != nil && *record.WorstBuildFrameMS >= 0 &&
+				record.WorstRasterFrameMS != nil && *record.WorstRasterFrameMS >= 0 {
 				pageName := boundedAppExperiencePage(record.PageName)
 				appFrameSamplesTotal.WithLabelValues(pageName).Add(
 					float64(*record.SampledFrames),
@@ -218,6 +234,12 @@ func recordAppExperienceEvents(records []application.EventRecordInput) {
 				)
 				appFrameWorstDuration.WithLabelValues(pageName).Observe(
 					float64(*record.WorstFrameMS) / 1000,
+				)
+				appFrameWorstBuild.WithLabelValues(pageName).Observe(
+					float64(*record.WorstBuildFrameMS) / 1000,
+				)
+				appFrameWorstRaster.WithLabelValues(pageName).Observe(
+					float64(*record.WorstRasterFrameMS) / 1000,
 				)
 			}
 		case "login_funnel":

@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-image-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "千岛湖_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:d955d44239ddd448b082acbfcedbb10817053ce2533e419ca14dd1f1b13c8a8f"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:be50145d620a53aea3c215d079d17a851d49a616651eadc1a2431a7dc0b71267"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:1c94a7773e7ca2bc8f24371648a432ac0867cde362f97c5a878b3a69875dc47d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:2c9df8123656a3ff716c4e1db58296dff596f5727b1f8048fae26bcc10ae8f80"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:8ee956216084c82c4a1d989830ce811ffc82ffec873c720f5151777a765094e9"
+    }
+  ]
+}

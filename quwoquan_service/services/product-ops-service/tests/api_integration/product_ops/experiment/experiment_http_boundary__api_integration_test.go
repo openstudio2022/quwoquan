@@ -16,6 +16,7 @@ import (
 	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
+	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
 )
 
 func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *testing.T) {
@@ -84,22 +85,22 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 	}
 
 	var outboxCount int
-	var leakedSeed bool
+	var unexpectedEventType bool
 	err := controlPlanePGPool.QueryRow(context.Background(), `
-SELECT COUNT(*), COALESCE(BOOL_OR(payload::text LIKE '%allocationSeed%'), false)
-FROM product_ops_outbox WHERE aggregate_id=$1`, experimentID).Scan(&outboxCount, &leakedSeed)
+SELECT COUNT(*), COALESCE(BOOL_OR(event_type <> 'ExperimentPolicyActivated'), false)
+FROM product_ops_outbox WHERE aggregate_id=$1`, experimentID).Scan(&outboxCount, &unexpectedEventType)
 	if err != nil {
 		t.Fatalf("inspect experiment outbox: %v", err)
 	}
-	if outboxCount != 1 || leakedSeed {
-		t.Fatalf("rollout outbox count=%d leakedAllocationSeed=%v", outboxCount, leakedSeed)
+	if outboxCount != 1 || unexpectedEventType {
+		t.Fatalf("policy activation outbox count=%d unexpectedEventType=%v", outboxCount, unexpectedEventType)
 	}
 }
 
-func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *testing.T) {
+func TestExperimentAssignmentRejectsPublicWritesAndReadsObservedFacts(t *testing.T) {
+	facade := newRealExperimentFacade(t)
 	handler := newRealExperimentHTTPHandler(t)
 	authenticated := realExperimentAuthenticatedHandler(t, false, handler)
-	guarded := realExperimentAuthenticatedHandler(t, true, handler)
 	experimentID := seedRealExperiment(t, "running")
 	assignmentPath := "/ops/experiments/" + experimentID + "/assignment"
 	personaToken := experimentAccessToken(t, "account-1", "", nil, "persona-1")
@@ -110,27 +111,29 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 			Body: `{"subjectKey":"persona:victim"}`, Credential: personaToken,
 		},
 	)
-	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.experiment_assignment_invalid_argument")
+	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.experiment_invalid_argument")
 
-	assigned := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{
-		Credential: personaToken,
-	})
-	if assigned.Code != http.StatusCreated {
-		t.Fatalf("assign status=%d body=%s", assigned.Code, assigned.Body.String())
+	experiment, err := facade.Get(context.Background(), experimentID)
+	if err != nil {
+		t.Fatalf("load experiment for observed assignment: %v", err)
 	}
-	var assignedFact struct {
-		SubjectKey string `json:"subjectKey"`
-		Variant    string `json:"variant"`
+	observedAt := time.Now().UTC().Truncate(time.Second)
+	for _, subjectKey := range []string{"persona:persona-1", "device:device-1"} {
+		expected, err := experiment.Assign(subjectKey, observedAt)
+		if err != nil {
+			t.Fatalf("derive canonical assignment for %s: %v", subjectKey, err)
+		}
+		fact, inserted, err := facade.AssignmentFacts().AppendObserved(
+			context.Background(),
+			assignmentapp.AssignmentObservation{
+				ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
+				SubjectKey: subjectKey, Variant: expected.Variant, ObservedAt: observedAt,
+			},
+		)
+		if err != nil || !inserted || fact.SubjectKey != subjectKey {
+			t.Fatalf("append observed assignment for %s: inserted=%v fact=%+v err=%v", subjectKey, inserted, fact, err)
+		}
 	}
-	decodeExperimentResponse(t, assigned, &assignedFact)
-	if assignedFact.SubjectKey != "persona:persona-1" || assignedFact.Variant == "" {
-		t.Fatalf("assignment did not derive verified persona: %+v", assignedFact)
-	}
-
-	blocked := performExperimentRequest(guarded, http.MethodPost, assignmentPath, experimentRequestOptions{
-		Credential: personaToken,
-	})
-	assertExperimentError(t, blocked, http.StatusForbidden, "GATEWAY.USER.forbidden")
 
 	readOwn := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, experimentRequestOptions{
 		Credential: personaToken,
@@ -140,15 +143,15 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 	}
 
 	deviceTicket := experimentDeviceTicket(t, "device-1")
-	assignedDevice := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{
+	readDevice := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, experimentRequestOptions{
 		Credential: deviceTicket, UseDeviceTicket: true,
 	})
-	if assignedDevice.Code != http.StatusCreated || !strings.Contains(assignedDevice.Body.String(), `"subjectKey":"device:device-1"`) {
-		t.Fatalf("device assignment status=%d body=%s", assignedDevice.Code, assignedDevice.Body.String())
+	if readDevice.Code != http.StatusOK || !strings.Contains(readDevice.Body.String(), `"subjectKey":"device:device-1"`) {
+		t.Fatalf("read device assignment status=%d body=%s", readDevice.Code, readDevice.Body.String())
 	}
 
 	unauthorized := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{})
-	assertExperimentError(t, unauthorized, http.StatusUnauthorized, "OPS.USER.experiment_assignment_unauthorized")
+	assertExperimentError(t, unauthorized, http.StatusBadRequest, "OPS.USER.experiment_invalid_argument")
 
 	var subjects []string
 	rows, err := controlPlanePGPool.Query(context.Background(), `
@@ -171,6 +174,16 @@ SELECT subject_key FROM experiment_assignment_facts WHERE experiment_id=$1 ORDER
 
 func newRealExperimentHTTPHandler(t *testing.T) http.Handler {
 	t.Helper()
+	facade := newRealExperimentFacade(t)
+	handler, err := experimenthttp.NewHandler(facade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
+}
+
+func newRealExperimentFacade(t *testing.T) *experimentapp.Facade {
+	t.Helper()
 	store, err := experimentpersistence.NewPostgresStore(controlPlanePGPool)
 	if err != nil {
 		t.Fatal(err)
@@ -182,11 +195,7 @@ func newRealExperimentHTTPHandler(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := experimenthttp.NewHandler(facade)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return handler
+	return facade
 }
 
 func seedRealExperiment(t *testing.T, status string) string {
@@ -195,13 +204,12 @@ func seedRealExperiment(t *testing.T, status string) string {
 	now := time.Now().UTC().Truncate(time.Second)
 	_, err := controlPlanePGPool.Exec(context.Background(), `
 INSERT INTO experiments(
-  id, key, version, status, variants, audience_rule, allocation_seed, created_at, updated_at
-) VALUES ($1,$1,1,$2,$3,$4,$5,$6,$6)`,
+  id, key, version, status, variants, audience_rule, created_at, updated_at
+) VALUES ($1,$1,1,$2,$3,$4,$5,$5)`,
 		id,
 		status,
 		`[{"key":"control","allocationBasisPoints":5000},{"key":"treatment","allocationBasisPoints":5000}]`,
 		`{"kind":"all"}`,
-		"must-not-leave-aggregate",
 		now,
 	)
 	if err != nil {

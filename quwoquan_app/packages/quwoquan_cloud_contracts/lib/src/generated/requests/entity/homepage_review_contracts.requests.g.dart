@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../entity/homepage_review_contracts.dart';
 
@@ -48,6 +48,15 @@ final class CreateHomepageReviewCommand {
   final List<String> tagRefs;
   final String? authorDisplayNameSnapshot;
   final String? authorAvatarUrlSnapshot;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    "rating": this.rating,
+    if (this.body != null) "body": this.body!,
+    "tagRefs": this.tagRefs.map((value) => value).toList(growable: false),
+    if (this.authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": this.authorDisplayNameSnapshot!,
+    if (this.authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": this.authorAvatarUrlSnapshot!,
+  };
 }
 
 final class DeleteHomepageReviewCommand {
@@ -60,6 +69,10 @@ final class DeleteHomepageReviewCommand {
   }
 
   final String reviewId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "reviewId": this.reviewId,
+  };
 }
 
 final class HomepageReviewListQuery {
@@ -78,6 +91,12 @@ final class HomepageReviewListQuery {
   final String homepageId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class MyHomepageReviewQuery {
@@ -90,6 +109,10 @@ final class MyHomepageReviewQuery {
   }
 
   final String homepageId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+  };
 }
 
 final class UpdateHomepageReviewCommand {
@@ -117,6 +140,15 @@ final class UpdateHomepageReviewCommand {
   final List<String> tagRefs;
   final String? authorDisplayNameSnapshot;
   final String? authorAvatarUrlSnapshot;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "reviewId": this.reviewId,
+    "rating": this.rating,
+    if (this.body != null) "body": this.body!,
+    "tagRefs": this.tagRefs.map((value) => value).toList(growable: false),
+    if (this.authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": this.authorDisplayNameSnapshot!,
+    if (this.authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": this.authorAvatarUrlSnapshot!,
+  };
 }
 
 CloudOperationRequestPayload encodeEntityHomepageReviewCreateHomepageReviewGeneratedRequest(CreateHomepageReviewCommand request) {

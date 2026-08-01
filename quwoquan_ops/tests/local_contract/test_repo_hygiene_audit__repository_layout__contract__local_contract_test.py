@@ -85,7 +85,7 @@ def test_service_runtime_config_has_no_retired_single_file_fallback() -> None:
         "quwoquan_service/services/rtc-service/cmd/api/main.go",
         "quwoquan_service/services/integration-service/cmd/api/runtime_config.go",
         "quwoquan_service/services/content-service/cmd/api/runtime_config_and_projection.go",
-        "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig/config.go",
+        "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig/config.go",
     )
     for path in sources:
         source = (ROOT / path).read_text(encoding="utf-8")

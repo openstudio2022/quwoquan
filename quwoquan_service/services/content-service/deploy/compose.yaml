@@ -15,9 +15,9 @@ services:
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
+      QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"
       MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
       REPORT_DATABASE_URL: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
-      CONTENT_REPORT_ACCOUNT_BACKFILL_FILE: /etc/qwq-config/report-account-backfill.json
       CONTENT_REDIS_REC_ADDR: redis:6379
       CONTENT_REDIS_GENERAL_ADDR: redis:6379
       CONTENT_REDIS_REALTIME_ADDR: redis:6379
@@ -32,15 +32,11 @@ services:
       CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET: "${CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET:?CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET is required}"
       SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
       SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
-      REC_MODEL_SERVICE_ENABLED: "true"
+      REC_MODEL_SERVICE_ENABLED: "${QWQ_COMPOSE_REC_MODEL_SERVICE_ENABLED:-true}"
       REC_MODEL_SERVICE_URL: http://recommendation-service:8000
       # 推荐 policy 只消费 content-service canonical resource；30s 热更仍执行
       # validate-before-swap，发布身份由内容摘要承担。
       QWQ_REC_POLICY_PATH: /etc/qwq-rec-policy/policy.yaml
-      # Non-prod binds ext.embed.protocol_fixture; compose still injects fixture
-      # materials for Binding descriptor parity. Prod alone uses openai_compatible.
-      CONTENT_EMBEDDING_FIXTURE_ENDPOINT: "${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-}"
-      CONTENT_EMBEDDING_FIXTURE_API_KEY: "${QWQ_COMPOSE_EMBEDDING_API_KEY:-}"
       CONTENT_EMBEDDING_ENDPOINT: "${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-}"
       CONTENT_EMBEDDING_API_KEY: "${QWQ_COMPOSE_EMBEDDING_API_KEY:-}"
       CIRCLE_SERVICE_BASE_URL: "${QWQ_COMPOSE_CIRCLE_SERVICE_BASE_URL:-http://circle-service:18082}"
@@ -62,6 +58,8 @@ services:
       redis:
         condition: service_healthy
       recommendation-service:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     ports:
       - "${QWQ_COMPOSE_CONTENT_PORT:-19220}:18080"

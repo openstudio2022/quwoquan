@@ -476,7 +476,6 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
               ),
           onAssistantTap: () => _openAssistantHalfSheet(context, ref),
           onTapBack: onExitToHome,
-          onSwitchToMoment: onExitToHome,
           onSwitchToFollowing: onExitToHome,
           onSwitchToCircles: onExitToHome,
         ),

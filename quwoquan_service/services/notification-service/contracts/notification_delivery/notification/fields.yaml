@@ -66,7 +66,7 @@ fields:
     role: authoritative_state
   - name: destination
     source: destination
-    type: object
+    type: AppMessageDestination
     constraints:
       - NOT_NULL
     classification: PII
@@ -96,7 +96,7 @@ fields:
     role: authoritative_state
   - name: target
     source: target
-    type: object
+    type: AppMessageTarget
     constraints:
       - NOT_NULL
     classification: PII
@@ -106,7 +106,7 @@ fields:
     role: authoritative_state
   - name: provenance
     source: provenance
-    type: object
+    type: AppMessageProvenance
     constraints:
       - NOT_NULL
     classification: INTERNAL
@@ -167,6 +167,30 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  AppMessageDestination:
+    description: App 消息投递目标。
+    fields:
+      - {name: type, source: type, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: id, source: id, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read_write, ops_exposure: none}
+  AppMessageRouteQuery:
+    description: App 消息目标路由的规范化查询参数。
+    fields:
+      - {name: dimension, source: dimension, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  AppMessageTarget:
+    description: App 消息的业务对象目标与 canonical route。
+    fields:
+      - {name: targetType, source: targetType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: targetId, source: targetId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: read_write, ops_exposure: none}
+      - {name: routeId, source: routeId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+      - {name: routePath, source: routePath, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: read_write, ops_exposure: read}
+      - {name: query, source: query, type: AppMessageRouteQuery, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
+  AppMessageProvenance:
+    description: 生产者提交的个性化归因事实，仅用于审计与行为回流。
+    fields:
+      - {name: personalized, source: personalized, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: interestTags, source: interestTags, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+      - {name: matchedSegments, source: matchedSegments, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+      - {name: lifecycleStage, source: lifecycleStage, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
   NotificationPushRequestedEvent:
     description: Notification 与 NotificationDeliveryJob 同事务创建后写入投递 outbox 的严格载荷。
     fields:
@@ -214,7 +238,7 @@ types:
         ops_exposure: write
       - name: destination
         source: destination
-        type: object
+        type: AppMessageDestination
         constraints: [NOT_NULL]
         classification: PII
         log_policy: metadata_only
@@ -238,7 +262,7 @@ types:
         ops_exposure: write
       - name: target
         source: target
-        type: object
+        type: AppMessageTarget
         constraints: [NOT_NULL]
         classification: PII
         log_policy: metadata_only
@@ -246,7 +270,7 @@ types:
         ops_exposure: write
       - name: provenance
         source: provenance
-        type: object
+        type: AppMessageProvenance
         constraints: [NOT_NULL]
         classification: INTERNAL
         log_policy: metadata_only

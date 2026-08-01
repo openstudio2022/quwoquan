@@ -10,7 +10,7 @@ from core.paths import (
     execution_root,
     execution_shared_dir,
 )
-from core.io import write_json, write_assistant_task
+from core.io import read_json, write_json, write_assistant_task
 from core.carrier_contract import research_plan_files
 from core.content_source_registry import build_content_source_guidance
 from core.source_catalog import source_plan_guidance, vertical_from_task_id
@@ -77,6 +77,82 @@ def resolve_research_entity_types(
             )
         resolved[entity_id] = etype
     return resolved
+
+
+def assert_research_entity_type_bindings(
+    execution_id: str,
+) -> None:
+    """Reject external source-plan output outside the frozen target type binding.
+
+    Managed research agents write under ``entities/<domain>/<type>/<name>``.
+    The path is therefore part of the immutable target contract, not a
+    best-effort routing hint.  Check every existing lane plan before a new
+    prepare pass so an old or external write cannot coexist until a later
+    source-unit reader happens to encounter the conflicting tree.
+    """
+    canonical = canonical_coverage_entity_types(execution_id)
+    entities_root = execution_root(execution_id) / "entities"
+    if not entities_root.is_dir() or not canonical:
+        return
+    filenames = set(RESEARCH_PLAN_FILES.values())
+    for plan_path in entities_root.rglob("*.json"):
+        if plan_path.name not in filenames:
+            continue
+        try:
+            relative = plan_path.relative_to(entities_root)
+        except ValueError:
+            continue
+        # entities/<domain>/<type>/<name>/1.download/<lane>_source_plan.json
+        if len(relative.parts) != 5 or relative.parts[-2] != STAGE_DOWNLOAD:
+            continue
+        domain, subtype, path_name = relative.parts[:3]
+        expected = canonical.get(path_name)
+        if expected is None:
+            continue
+        actual = f"{domain}/{subtype}"
+        if actual != expected:
+            raise ValueError(
+                "entity type drift: frozen coverage target "
+                f"{expected}/{path_name} has research output at "
+                f"{actual}/{path_name}: "
+                f"{plan_path.relative_to(execution_root(execution_id)).as_posix()}"
+            )
+        try:
+            payload = read_json(plan_path)
+        except (OSError, ValueError, TypeError) as exc:
+            raise ValueError(
+                f"invalid research source plan: "
+                f"{plan_path.relative_to(execution_root(execution_id)).as_posix()}"
+            ) from exc
+        plan_execution_id = str(payload.get("executionId") or "").strip()
+        plan_ref = str(payload.get("ref") or "").strip()
+        lane_payload = payload.get("payload")
+        lane_payload = lane_payload if isinstance(lane_payload, dict) else {}
+        plan_entity_type = str(lane_payload.get("entityType") or "").strip()
+        if plan_execution_id != execution_id:
+            raise ValueError(
+                f"research source plan executionId mismatch at "
+                f"{plan_path.relative_to(execution_root(execution_id)).as_posix()}"
+            )
+        if plan_ref != path_name or str(lane_payload.get("entityId") or "").strip() != path_name:
+            raise ValueError(
+                f"research source plan entity binding mismatch at "
+                f"{plan_path.relative_to(execution_root(execution_id)).as_posix()}"
+            )
+        if plan_entity_type != expected:
+            raise ValueError(
+                f"research source plan entityType mismatch for {path_name}: "
+                f"frozen={expected}, plan={plan_entity_type or '<missing>'}"
+            )
+
+
+def research_entity_type_binding_error(execution_id: str) -> str | None:
+    """Return the frozen-tree binding failure in checkpoint-friendly form."""
+    try:
+        assert_research_entity_type_bindings(execution_id)
+    except ValueError as exc:
+        return str(exc)
+    return None
 
 
 def _lane_payload(
@@ -203,6 +279,7 @@ def _lane_payload(
 
 def prepare_source_plan(execution_id: str, entities: list[dict]) -> Path:
     """Prepare one isolated research plan per formal content carrier."""
+    assert_research_entity_type_bindings(execution_id)
     guidance = source_plan_guidance(vertical_from_task_id(execution_id))
     vertical = vertical_from_task_id(execution_id)
     registry_guidance = build_travel_source_guidance() if vertical == "travel" else {}

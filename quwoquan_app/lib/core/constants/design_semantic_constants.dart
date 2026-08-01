@@ -51,4 +51,3 @@ class DesignSemanticConstants {
   static const double squareAspectRatio = 1.0;
   static const double verticalAspectRatio = 9 / 16;
 }
-

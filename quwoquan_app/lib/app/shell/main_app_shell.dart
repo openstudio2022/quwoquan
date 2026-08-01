@@ -189,6 +189,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       AuthSessionState? previous,
       AuthSessionState next,
     ) {
+      // Riverpod 的异步通知可能与 shell 卸载交错；此时 ConsumerState 的 ref
+      // 已不可访问，不能为了同步来电协调器或 continuation 再读取任何 Provider。
+      if (!mounted) {
+        return;
+      }
       // 登录态翻转时同步全局来电协调器：登录启动来电监听，登出停止解绑。
       _syncIncomingCallCoordinator();
       final justLoggedIn =

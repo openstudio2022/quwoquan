@@ -4,7 +4,6 @@ from core.control_types import ExecutionStage, StageStatus
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, CHECKPOINT, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Sequence, StageResult, _active_spec, _entity_homepages_per_target, _is_homepage_only_execution, data_issue, execution_root, issue_messages, stage_issues, write_json
 
-
 def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
     """Validate the complete frozen media pool before network download starts."""
     from content.source.image_scale_proof import (
@@ -44,7 +43,6 @@ def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
         "download_plan frozen media pool is not release-ready",
         issue_records=(issue,),
     )
-
 def _download_plan_network_outage_result(
     ctx: ExecutionContext,
     auto_report: Mapping[str, Any],
@@ -81,12 +79,15 @@ def _download_plan_network_outage_result(
             attributes={"detail": detail},
         )],
     )
-
 def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _run_download_auto_research
     from content.execution.recovery.download_gate import _download_retry_entity_ids, _stale_source_plan_entities
-    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability
+    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability, absorb_download_shortfall_if_quota_met
     from content.execution.recovery.stage_reset import _source_plan_filled, _source_plan_issue_records
+    from content.execution.controller.checkpoint_binding import source_plan_binding_failure
+
+    if binding_failure := source_plan_binding_failure(ctx):
+        return binding_failure
     ok, missing = _source_plan_filled(ctx)
     current_unresolved = _download_plan_unresolved_entities(ctx)
     build_prepare_unresolved = _build_prepare_homepage_unresolved_entities(ctx)
@@ -119,6 +120,32 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
     )
     if not repair_scope and len(ctx.entity_ids) == 1:
         repair_scope = list(ctx.entity_ids)
+    # If oversample already produced an audited ready pool at/above quota,
+    # absorb the retryable tail before spending another research wave.
+    if unresolved_ids or missing_ids:
+        pre_unresolved = dict(current_unresolved)
+        for entity_id, lanes in build_prepare_unresolved.items():
+            entity_lanes = pre_unresolved.setdefault(entity_id, {})
+            for lane, issues in lanes.items():
+                lane_rows = entity_lanes.setdefault(lane, [])
+                for issue in issues:
+                    if issue not in lane_rows:
+                        lane_rows.append(issue)
+        pre_availability = _write_download_availability(
+            ctx,
+            pre_unresolved,
+            source="download_plan",
+        )
+        pre_absorbed = absorb_download_shortfall_if_quota_met(
+            ctx,
+            pre_availability,
+            stage=DataIssueStage.DOWNLOAD_PLAN,
+            stage_enum=ExecutionStage.DOWNLOAD_PLAN,
+            auto_mode=CHECKPOINT,
+            done_status=StageStatus.DONE,
+        )
+        if pre_absorbed is not None:
+            return pre_absorbed
     stale_entities = (
         _stale_source_plan_entities(ctx, entity_ids=repair_scope)
         if repair_scope
@@ -139,7 +166,7 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             scale_result = _download_plan_scale_readiness(ctx)
             if scale_result is not None:
                 return scale_result
-            _write_download_availability(ctx, {})
+            _write_download_availability(ctx, {}, source="download_plan")
             return StageResult(
                 ExecutionStage.DOWNLOAD_PLAN,
                 CHECKPOINT,
@@ -235,7 +262,7 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
         else []
     )
     if ok_after_auto and not stale_after_auto:
-        _write_download_availability(ctx, {})
+        _write_download_availability(ctx, {}, source="download_plan")
         message = "三路 research plan 已由 CLI 自动检索就绪"
         if stale_entities:
             message += "；过期 source_plan 已按 source registry/rights policy 重算: " + ", ".join(auto_entity_ids[:8])
@@ -255,12 +282,26 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             for issue in issues:
                 if issue not in lane_rows:
                     lane_rows.append(issue)
-    _write_download_availability(ctx, unresolved)
+    availability = _write_download_availability(
+        ctx,
+        unresolved,
+        source="download_plan",
+    )
     full_missing = _format_download_unresolved(unresolved, prefix="source_plan")
     if full_missing:
         missing = full_missing
     deterministic = _download_plan_repair_exhausted_unresolved(ctx, unresolved)
     if deterministic:
+        absorbed = absorb_download_shortfall_if_quota_met(
+            ctx,
+            availability,
+            stage=DataIssueStage.DOWNLOAD_PLAN,
+            stage_enum=ExecutionStage.DOWNLOAD_PLAN,
+            auto_mode=CHECKPOINT,
+            done_status=StageStatus.DONE,
+        )
+        if absorbed is not None:
+            return absorbed
         return StageResult(
             ExecutionStage.DOWNLOAD_PLAN,
             CHECKPOINT,
@@ -276,6 +317,18 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
                 recovery=DataRecoveryAction.STOP,
             ),
         )
+    # Oversample media lanes may keep retryable tails forever. Once the audited
+    # ready pool already meets approvedQuota, absorb the remainder and advance.
+    absorbed = absorb_download_shortfall_if_quota_met(
+        ctx,
+        availability,
+        stage=DataIssueStage.DOWNLOAD_PLAN,
+        stage_enum=ExecutionStage.DOWNLOAD_PLAN,
+        auto_mode=CHECKPOINT,
+        done_status=StageStatus.DONE,
+    )
+    if absorbed is not None:
+        return absorbed
     image_works = ctx.spec.content.quotas.image_works_per_target
     hint = (
         f"[CHECKPOINT download_plan] 三类独立 Agent 检索真实素材，为以下实体写满足规模化门的 research plan：\n"
@@ -299,7 +352,6 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         ),
     )
-
 def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.content_plan import _auto_content_plan
     from content.execution.controller.content_plan_prep import _clean_content_plan_outputs
@@ -338,40 +390,48 @@ def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
                 fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
             )
         issues = issue_messages(auto_issues)
-    quotas = (active_spec.get("content") or {}).get("quotas") or {}
-    acceptance = active_spec.get("acceptance") or {}
+    from content.execution.source_ready_scope import source_ready_runtime_spec
+
+    runtime_spec = source_ready_runtime_spec(ctx.execution_id, active_spec)
+    quotas = (runtime_spec.get("content") or {}).get("quotas") or {}
+    acceptance = runtime_spec.get("acceptance") or {}
     required_angles = [str(a) for a in (acceptance.get("requiredAngles") or []) if str(a)]
     per_target_entity = int(quotas.get("entityArticlesPerTarget") or 0)
     per_target_image = int(quotas.get("imageWorksPerTarget") or 0)
+    per_target_video = int(quotas.get("videoWorksPerTarget") or 0)
     active_targets = [
         str(target.get("name") or "").strip()
-        for target in (active_spec.get("scope") or {}).get("coverageTargets") or []
+        for target in (runtime_spec.get("scope") or {}).get("coverageTargets") or []
         if str(target.get("name") or "").strip()
     ]
     entity_q = (
         per_target_entity * len(active_targets)
         if per_target_entity
         else int(quotas.get("entityArticles") or 0)
-    ) if content_plan_quotas_required(active_spec) else 0
-    route_q = int(quotas.get("routeArticles") or 0) if content_plan_quotas_required(active_spec) else 0
+    ) if content_plan_quotas_required(runtime_spec) else 0
+    route_q = int(quotas.get("routeArticles") or 0) if content_plan_quotas_required(runtime_spec) else 0
     image_q = (
         per_target_image * len(active_targets)
         if per_target_image
         else 0
-    ) if content_plan_quotas_required(active_spec) else 0
+    ) if content_plan_quotas_required(runtime_spec) else 0
+    video_q = (
+        per_target_video * len(active_targets)
+        if per_target_video
+        else 0
+    ) if content_plan_quotas_required(runtime_spec) else 0
     hint = (
         f"[CHECKPOINT content_plan] Agent 通读已下载来源，证据驱动规划 "
-        f"{entity_q} 篇文章 + {image_q} 个图片作品 + {route_q} 篇线路：\n"
+        f"{entity_q} 篇文章 + {image_q} 个图片作品 + {video_q} 个视频作品 + {route_q} 篇线路：\n"
         f"  产出: batches/{ctx.execution_id}/_shared/content_plan_packet.json\n"
         f"  每条: ref, kind(entity|route), title, entityRefs, evidenceRefs(相对batch路径), rationale, mustIncludeFacts,\n"
         f"        writingIntent(按 acceptance.requiredAngles，单篇唯一主线: {required_angles}),\n"
-        f"        article 写 baseSourceRef；image 写 sourceCollectionId/assetRefs，可选 title/caption\n"
+        f"        article 写 baseSourceRef；image/video 写 sourceCollectionId/assetRefs，可选 title/caption\n"
         f"  并 register_content_object + 写 posts/.../3.compose/brief.json（禁止预置营销 ref；brief 写入 writingIntent/baseSourceRef）\n"
         f"  未过项:\n    - " + "\n    - ".join(issues[:12]) + "\n"
         "  完成后: 由当前 task execute 调度器继续执行，不得调用其它工作流入口"
     )
     return StageResult(ExecutionStage.CONTENT_PLAN, CHECKPOINT, StageStatus.WAITING, "等待 Agent 证据驱动篇目规划", hint)
-
 def _strict_source_unavailable_issues(ctx: ExecutionContext, issues: Sequence[DataIssue]) -> bool:
     """True when issues are deterministic source gaps that the stage Agent cannot fix."""
     if not issues:
@@ -421,14 +481,26 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
         )
     # 配额未达成时才回退 source：底稿与实体不匹配的对象本身由过采吸收，
     # 只有过采后仍补不齐配额，才说明区域来源供给不足、必须重找 source。
+    # 关键：个别 failure.json 不足以证明候选池耗尽——只要 runtime 活跃池里
+    # 仍有足够「非 source-failure」待创作对象，就继续派发 author，而不是烧 ReAct。
+    from content.execution.controller.homepage_authoring import _homepage_pending_entities
+
     source_failures = _homepage_source_failure_entities(ctx)
-    if source_failures:
+    failure_ids = set(source_failures)
+    remaining_authorable = [
+        entity_id
+        for entity_id in _homepage_pending_entities(ctx)
+        if entity_id not in failure_ids
+    ]
+    quota_gap = max(0, int(verdict.approved_quota) - int(verdict.qualified_count))
+    if source_failures and len(remaining_authorable) < quota_gap:
         return StageResult(
             ExecutionStage.BUILD_HOMEPAGE,
             CHECKPOINT,
             StageStatus.FAILED,
             f"主页达标 {verdict.qualified_count}/{verdict.approved_quota}，"
-            "且 Agent 判定部分底稿与实体不匹配；候选池已耗尽，回退 source discovery",
+            f"source-failure={len(failure_ids)}，剩余可创作候选 {len(remaining_authorable)} "
+            f"< 配额缺口 {quota_gap}；候选池已耗尽，回退 source discovery",
             fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
             issue_records=stage_issues(
                 ExecutionStage.BUILD_HOMEPAGE,
@@ -436,6 +508,12 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
                 code=DataIssueCode.SOURCE_RETAINED_SHORTFALL,
                 recovery=DataRecoveryAction.REWIND_DOWNLOAD,
             ),
+        )
+    if source_failures:
+        print(
+            "[build_homepage] absorb source-failure oversample "
+            f"failures={len(failure_ids)} remaining_authorable={len(remaining_authorable)} "
+            f"quota_gap={quota_gap}; continue author fleet"
         )
     issues = verdict.blocking_issues()
     from content.execution.reliabletask_jobs import prepare_reliable_author_jobs

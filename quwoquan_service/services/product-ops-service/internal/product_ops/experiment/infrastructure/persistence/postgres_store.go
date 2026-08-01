@@ -35,14 +35,36 @@ CREATE TABLE IF NOT EXISTS experiments (
   status VARCHAR(32) NOT NULL,
   variants JSONB NOT NULL,
   audience_rule JSONB NOT NULL,
-  allocation_seed VARCHAR(128) NOT NULL,
   starts_at TIMESTAMPTZ NULL,
   ends_at TIMESTAMPTZ NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE experiments DROP COLUMN IF EXISTS allocation_seed;
 CREATE INDEX IF NOT EXISTS idx_experiments_status_window
   ON experiments(status, starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS experiment_policy_revisions (
+  experiment_id VARCHAR(64) NOT NULL REFERENCES experiments(id),
+  revision BIGINT NOT NULL,
+  key VARCHAR(128) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  variants JSONB NOT NULL,
+  audience_rule JSONB NOT NULL,
+  starts_at TIMESTAMPTZ NULL,
+  ends_at TIMESTAMPTZ NULL,
+  activated_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY(experiment_id, revision)
+);
+CREATE INDEX IF NOT EXISTS idx_experiment_policy_revisions_activated
+  ON experiment_policy_revisions(experiment_id, activated_at);
+INSERT INTO experiment_policy_revisions(
+  experiment_id, revision, key, status, variants, audience_rule,
+  starts_at, ends_at, activated_at
+)
+SELECT id, version, key, status, variants, audience_rule, starts_at, ends_at, updated_at
+FROM experiments
+ON CONFLICT (experiment_id, revision) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS experiment_assignment_facts (
   id VARCHAR(36) PRIMARY KEY,
@@ -92,6 +114,32 @@ CREATE TABLE IF NOT EXISTS experiment_idempotency_receipts (
 func (s *PostgresStore) Load(ctx context.Context, id string) (model.Experiment, error) {
 	row := s.pool.QueryRow(ctx, experimentSelect+` WHERE id=$1`, strings.TrimSpace(id))
 	return scanExperiment(row)
+}
+
+func (s *PostgresStore) LoadRevision(
+	ctx context.Context,
+	id string,
+	revision int64,
+) (model.Experiment, error) {
+	normalizedID := strings.TrimSpace(id)
+	row := s.pool.QueryRow(ctx, `SELECT
+  experiment_id, key, revision, status, variants, audience_rule,
+  starts_at, ends_at, activated_at, activated_at
+FROM experiment_policy_revisions
+WHERE experiment_id=$1 AND revision=$2`, normalizedID, revision)
+	experiment, err := scanExperiment(row)
+	if !errors.Is(err, model.ErrNotFound) {
+		return experiment, err
+	}
+	// Existing deployments and fixture-created current aggregates are readable
+	// before their first activation backfill. Historical revisions never fall
+	// through to the mutable current row.
+	return scanExperiment(s.pool.QueryRow(
+		ctx,
+		experimentSelect+` WHERE id=$1 AND version=$2`,
+		normalizedID,
+		revision,
+	))
 }
 
 func (s *PostgresStore) List(ctx context.Context) ([]model.Experiment, error) {
@@ -186,13 +234,23 @@ WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempoten
 	if err != nil {
 		return ports.CommitReceipt{}, err
 	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO experiment_policy_revisions(
+  experiment_id, revision, key, status, variants, audience_rule,
+  starts_at, ends_at, activated_at
+)
+SELECT id, version, key, status, variants, audience_rule, starts_at, ends_at, updated_at
+FROM experiments WHERE id=$1 AND version=$2
+ON CONFLICT (experiment_id, revision) DO NOTHING`, changes.Experiment.ID, expectedVersion); err != nil {
+		return ports.CommitReceipt{}, err
+	}
 	commandTag, err := tx.Exec(ctx, `
 UPDATE experiments SET
   key=$3, version=$4, status=$5, variants=$6, audience_rule=$7,
-  allocation_seed=$8, starts_at=$9, ends_at=$10, created_at=$11, updated_at=$12
+  starts_at=$8, ends_at=$9, created_at=$10, updated_at=$11
 WHERE id=$1 AND version=$2`,
 		changes.Experiment.ID, expectedVersion, changes.Experiment.Key, changes.Experiment.Version,
-		changes.Experiment.Status, variants, audience, changes.Experiment.AllocationSeed,
+		changes.Experiment.Status, variants, audience,
 		startsAt, endsAt, createdAt, updatedAt)
 	if err != nil {
 		return ports.CommitReceipt{}, err
@@ -213,6 +271,16 @@ WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempoten
 			return ports.CommitReceipt{}, err
 		}
 		return ports.CommitReceipt{}, model.ErrVersionConflict
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO experiment_policy_revisions(
+  experiment_id, revision, key, status, variants, audience_rule,
+  starts_at, ends_at, activated_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		changes.Experiment.ID, changes.Experiment.Version, changes.Experiment.Key,
+		changes.Experiment.Status, variants, audience, startsAt, endsAt, updatedAt,
+	); err != nil {
+		return ports.CommitReceipt{}, err
 	}
 	for _, event := range changes.Events {
 		if err := insertOutbox(ctx, tx, event); err != nil {
@@ -319,7 +387,7 @@ WHERE experiment_id=$1 AND experiment_revision=$2 GROUP BY variant ORDER BY vari
 }
 
 const experimentSelect = `SELECT
-  id, key, version, status, variants, audience_rule, allocation_seed,
+  id, key, version, status, variants, audience_rule,
   starts_at, ends_at, created_at, updated_at
 FROM experiments`
 
@@ -334,7 +402,7 @@ func scanExperiment(row rowScanner) (model.Experiment, error) {
 	var createdAt, updatedAt time.Time
 	err := row.Scan(
 		&out.ID, &out.Key, &out.Version, &out.Status, &variants, &audience,
-		&out.AllocationSeed, &startsAt, &endsAt, &createdAt, &updatedAt,
+		&startsAt, &endsAt, &createdAt, &updatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Experiment{}, model.ErrNotFound

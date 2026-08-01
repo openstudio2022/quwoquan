@@ -8,17 +8,19 @@ import (
 	"quwoquan_service/generated/serviceclients"
 	rterr "quwoquan_service/runtime/errors"
 	conversationapp "quwoquan_service/services/chat-service/internal/chat/conversation/application"
+	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
 )
 
 type assistantGroundingMessageWire struct {
-	ID                        string    `json:"id"`
-	Seq                       int64     `json:"seq"`
-	SenderID                  string    `json:"senderId"`
-	SenderDisplayNameSnapshot string    `json:"senderDisplayNameSnapshot"`
-	Type                      string    `json:"type"`
-	Content                   string    `json:"content"`
-	Mentions                  []string  `json:"mentions"`
-	Timestamp                 time.Time `json:"timestamp"`
+	ID                        string                    `json:"id"`
+	Seq                       int64                     `json:"seq"`
+	SenderID                  string                    `json:"senderId"`
+	SenderDisplayNameSnapshot string                    `json:"senderDisplayNameSnapshot"`
+	Type                      string                    `json:"type"`
+	Content                   string                    `json:"content"`
+	Mentions                  []string                  `json:"mentions"`
+	Timestamp                 time.Time                 `json:"timestamp"`
+	Card                      *messagemodel.MessageCard `json:"card,omitempty"`
 }
 
 type assistantGroundingMessagesResponse struct {
@@ -81,6 +83,7 @@ func (h *ChatHandler) handleListAssistantGroundingMessages(
 			Content:                   message.Content,
 			Mentions:                  message.Mentions,
 			Timestamp:                 message.Timestamp,
+			Card:                      message.Card,
 		})
 	}
 	writeJSON(

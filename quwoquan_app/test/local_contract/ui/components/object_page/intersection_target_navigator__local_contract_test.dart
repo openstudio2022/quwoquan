@@ -279,7 +279,6 @@ void main() {
         IntersectionActionHint(
           actionKey: 'ask_assistant',
           dispatch: 'assistant',
-          targetAvailability: 'available',
         ),
         evidenceReason: IntersectionReason(
           kind: 'shared_followees',
@@ -321,7 +320,6 @@ void main() {
           actionKey: 'open_object',
           dispatch: 'navigate',
           target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
-          targetAvailability: 'available',
         ),
         attribution: const IntersectionNavAttribution(
           intersectionId: 'ix1',
@@ -334,27 +332,6 @@ void main() {
       expect(find.text('USER:u_lin'), findsOneWidget);
       expect(trackedTarget?.objectId, 'u_lin');
       expect(trackedAttr?.intersectionId, 'ix1');
-    });
-
-    testWidgets('deferred action → 不执行、不伪造成对象导航', (tester) async {
-      late BuildContext homeContext;
-      await tester.pumpWidget(hostWith((c) => homeContext = c));
-      await tester.pumpAndSettle();
-
-      final result = const IntersectionTargetNavigator().openActionHint(
-        homeContext,
-        IntersectionActionHint(
-          actionKey: 'join_gathering',
-          dispatch: 'gathering',
-          targetAvailability: 'deferred',
-          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(result.status, IntersectionActionDispatchStatus.deferred);
-      expect(find.text('HOME'), findsOneWidget);
-      expect(find.text('USER:u_lin'), findsNothing);
     });
 
     testWidgets(
@@ -373,7 +350,6 @@ void main() {
             actionKey: 'follow_person',
             dispatch: 'navigate',
             requiredGates: <String>['login'],
-            targetAvailability: 'available',
             target: IntersectionTarget(
               objectId: 'u_lin',
               objectKind: 'person',
@@ -421,7 +397,6 @@ void main() {
             'blocked',
             'rateLimit',
           ],
-          targetAvailability: 'available',
           target: IntersectionTarget(
             objectId: 'fixture_homepage_travel_photo_west_lake',
             objectKind: 'place',
@@ -483,7 +458,6 @@ void main() {
         IntersectionActionHint(
           actionKey: 'start_gathering',
           dispatch: 'gathering',
-          targetAvailability: 'available',
         ),
       );
       await tester.pumpAndSettle();
@@ -491,57 +465,6 @@ void main() {
       expect(result.status, IntersectionActionDispatchStatus.missingTarget);
       expect(find.text('HOME'), findsOneWidget);
       expect(find.text('START_GROUP_CHAT'), findsNothing);
-    });
-
-    testWidgets('commerce dispatch 默认 feature flag 关闭 → 明确不可执行', (
-      tester,
-    ) async {
-      late BuildContext homeContext;
-      await tester.pumpWidget(hostWith((c) => homeContext = c));
-      await tester.pumpAndSettle();
-
-      final result = const IntersectionTargetNavigator().openActionHint(
-        homeContext,
-        IntersectionActionHint(
-          actionKey: 'view_official_deals',
-          dispatch: 'commerce',
-          targetAvailability: 'available',
-          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(result.status, IntersectionActionDispatchStatus.featureDisabled);
-      expect(find.text('HOME'), findsOneWidget);
-      expect(find.text('USER:u_lin'), findsNothing);
-    });
-
-    testWidgets('commerce dispatch 显式启用 + target 可路由 → 按真实 target 导航', (
-      tester,
-    ) async {
-      late BuildContext homeContext;
-      await tester.pumpWidget(hostWith((c) => homeContext = c));
-      await tester.pumpAndSettle();
-
-      final result =
-          const IntersectionTargetNavigator(
-            commerceActionsEnabled: true,
-          ).openActionHint(
-            homeContext,
-            IntersectionActionHint(
-              actionKey: 'view_official_deals',
-              dispatch: 'commerce',
-              targetAvailability: 'available',
-              target: IntersectionTarget(
-                objectId: 'u_lin',
-                objectKind: 'person',
-              ),
-            ),
-          );
-      await tester.pumpAndSettle();
-
-      expect(result.status, IntersectionActionDispatchStatus.opened);
-      expect(find.text('USER:u_lin'), findsOneWidget);
     });
 
     testWidgets('message → 对方主页破冰承接（打招呼 / 私信兑现承诺）', (tester) async {
@@ -555,7 +478,6 @@ void main() {
           actionKey: 'greet_person',
           dispatch: 'message',
           requiredGates: const <String>['login', 'greetPreference', 'blocked'],
-          targetAvailability: 'available',
           target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
         ),
       );
@@ -575,7 +497,6 @@ void main() {
           actionKey: 'message_person',
           dispatch: 'message',
           requiredGates: const <String>['login'],
-          targetAvailability: 'available',
           target: IntersectionTarget(
             objectId: 'fixture_circle_photo',
             objectKind: 'circle',
@@ -587,7 +508,7 @@ void main() {
       expect(find.text('HOME'), findsOneWidget);
     });
 
-    testWidgets('connect 无专属真实破冰状态机 → 不伪装成 target 导航', (tester) async {
+    testWidgets('未登记 dispatch → fail-closed', (tester) async {
       late BuildContext homeContext;
       await tester.pumpWidget(hostWith((c) => homeContext = c));
       await tester.pumpAndSettle();
@@ -595,10 +516,8 @@ void main() {
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
         IntersectionActionHint(
-          actionKey: 'join_topic_room',
-          dispatch: 'connect',
-          requiredGates: const <String>['login'],
-          targetAvailability: 'available',
+          actionKey: 'unknown_action',
+          dispatch: 'unknown',
           target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
         ),
       );

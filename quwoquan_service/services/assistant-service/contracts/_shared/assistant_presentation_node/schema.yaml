@@ -1,0 +1,54 @@
+dart_class: AssistantPresentationNodeWire
+library_path: assistant/generated/contracts/assistant_presentation_node.g.dart
+output_path: assistant/generated/contracts/assistant_presentation_node.g.dart
+contract: assistant_presentation_node
+kind: shared_wire_contract
+fields:
+  - { name: nodeId, type: string, required: true }
+  - { name: parentNodeId, type: string, default: '' }
+  - { name: order, type: int, default: 0 }
+  # 未知节点是 capability negotiation 的预期降级输入，不是旧 wire alias。
+  - { name: kind, type: enum, enum_ref: AssistantPresentationNodeKind, required: true, allow_unknown: true }
+  - { name: title, type: string, default: '' }
+  - { name: body, type: string, default: '' }
+  - { name: data, type: map, default: {} }
+  - { name: binding, type: map, default: {} }
+  - { name: style, type: object, ref: style, default: {} }
+  - { name: media, type: object, ref: media_ref }
+  - { name: action, type: object, ref: action_intent }
+  - { name: accessibility, type: object, ref: accessibility, default: {} }
+subcontracts:
+  style:
+    class_name: AssistantPresentationStyleWire
+    fields:
+      - { name: tone, type: enum, enum_ref: AssistantPresentationTone, default: neutral }
+      - { name: density, type: enum, enum_ref: AssistantPresentationDensity, default: standard }
+      - { name: emphasis, type: string, default: normal }
+      - { name: variant, type: string, default: standard }
+      - { name: alignment, type: string, default: start }
+      - { name: spacingRole, type: string, default: related }
+      - { name: aspectRatio, type: double, default: 0.0 }
+      - { name: responsiveSpan, type: int, default: 1 }
+  media_ref:
+    class_name: AssistantPresentationMediaRefWire
+    fields:
+      - { name: mediaAssetId, type: string, required: true }
+      - { name: alt, type: string, required: true }
+      - { name: width, type: int, default: 0 }
+      - { name: height, type: int, default: 0 }
+      - { name: provenanceRef, type: string, required: true }
+  action_intent:
+    class_name: AssistantActionIntentWire
+    fields:
+      - { name: intentId, type: string, required: true }
+      - { name: operation, type: string, required: true }
+      - { name: objectTypeRef, type: string, default: '' }
+      - { name: objectId, type: string, default: '' }
+      - { name: payload, type: map, default: {} }
+      - { name: requiresConfirmation, type: bool, default: false }
+  accessibility:
+    class_name: AssistantPresentationAccessibilityWire
+    fields:
+      - { name: semanticLabel, type: string, default: '' }
+      - { name: semanticHint, type: string, default: '' }
+      - { name: excludeFromSemantics, type: bool, default: false }

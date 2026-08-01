@@ -30,10 +30,6 @@ tables:
       type: JSONB
       constraints:
       - NOT_NULL
-    - name: allocation_seed
-      type: VARCHAR(128)
-      constraints:
-      - NOT_NULL
     - name: starts_at
       type: TIMESTAMPTZ
       constraints:
@@ -57,6 +53,44 @@ tables:
       - starts_at
       - ends_at
     optimistic_lock: version
+  experiment_policy_revisions:
+    entity: Experiment
+    role: append_only
+    pk:
+    - experiment_id
+    - revision
+    description: 每次 ExperimentPolicyActivated 对应的不可变策略快照；用于校验延迟到达的 assignment observation，不构成并行契约轨。
+    columns:
+    - name: experiment_id
+      type: VARCHAR(64)
+      constraints: [PK, NOT_NULL]
+    - name: revision
+      type: BIGINT
+      constraints: [PK, NOT_NULL]
+    - name: key
+      type: VARCHAR(128)
+      constraints: [NOT_NULL]
+    - name: status
+      type: VARCHAR(32)
+      constraints: [NOT_NULL]
+    - name: variants
+      type: JSONB
+      constraints: [NOT_NULL]
+    - name: audience_rule
+      type: JSONB
+      constraints: [NOT_NULL]
+    - name: starts_at
+      type: TIMESTAMPTZ
+      constraints: [NULLABLE]
+    - name: ends_at
+      type: TIMESTAMPTZ
+      constraints: [NULLABLE]
+    - name: activated_at
+      type: TIMESTAMPTZ
+      constraints: [NOT_NULL]
+    indexes:
+    - name: idx_experiment_policy_revisions_activated
+      columns: [experiment_id, activated_at]
   experiment_idempotency_receipts:
     entity: Experiment
     role: authoritative
@@ -92,7 +126,7 @@ tables:
     entity: Experiment
     role: append_only
     pk: event_id
-    description: Experiment 与 ExperimentAssignmentFact 共享的同库事务 outbox，由租约 dispatcher 重试投递。
+    description: Experiment 的同库事务 outbox，由租约 dispatcher 重试投递。
     columns:
     - name: event_id
       type: VARCHAR(128)
@@ -153,3 +187,10 @@ tables:
       - next_attempt_at
       - occurred_at
 role: authoritative
+streams:
+  events.ops.experiment_policy_activated:
+    entity: Experiment
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: ExperimentPolicyActivated 的唯一 durable runtime 分发轨；Recommendation 与 Search 从该流维护本地投影。

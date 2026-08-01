@@ -10,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/application/user/profile/profile_query.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
@@ -380,12 +379,7 @@ void main() {
               const TestRelationshipCapabilityQuery.mutual(),
             ),
           ),
-          tagCatalogQueryProvider.overrideWithValue(
-            AlphaTagFacet(
-              taxonomyReleaseId:
-                  ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-            ),
-          ),
+          tagCatalogQueryProvider.overrideWithValue(AlphaTagFacet()),
           currentUserIdProvider.overrideWithValue(currentUserId),
           activePersonaContextProvider.overrideWith(
             (ref) async => const ActivePersonaContextViewData(

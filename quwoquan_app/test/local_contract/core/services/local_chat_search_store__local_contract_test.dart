@@ -2,7 +2,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
@@ -206,6 +208,57 @@ void main() {
       );
     });
 
+    test(
+      'timeline read preserves canonical payload and beforeSeq order',
+      () async {
+        final messages = <MessageDto>[
+          for (var seq = 1; seq <= 3; seq += 1)
+            MessageDto(
+              id: 'timeline_$seq',
+              conversationId: 'conv_timeline',
+              seq: seq,
+              clientMsgId: 'client_$seq',
+              senderId: 'persona_timeline',
+              senderName: '旅行摄影师',
+              type: seq == 3 ? 'image' : 'text',
+              content: '消息 $seq',
+              mediaAssetId: seq == 3 ? 'asset_3' : null,
+              mediaDeliveryUrl: seq == 3
+                  ? 'https://cdn.example.com/timeline_3.jpg'
+                  : null,
+              mediaType: seq == 3 ? 'image' : null,
+              mediaContentType: seq == 3 ? 'image/jpeg' : null,
+              status: 'sent',
+              timestamp: DateTime.utc(2026, 7, 31, 10, seq),
+            ),
+        ];
+        await store.upsertMessages(
+          namespace: namespace,
+          messages: messages
+              .map(LocalChatSearchMessageRecord.fromMessageDto)
+              .toList(growable: false),
+        );
+
+        final latest = await store.readTimeline(
+          namespace: namespace,
+          conversationId: 'conv_timeline',
+          limit: 2,
+        );
+        expect(latest.source, CacheReadSource.disk);
+        expect(latest.value.map((item) => item.seq), <int>[2, 3]);
+        expect(latest.value.last.mediaAssetId, 'asset_3');
+        expect(latest.value.last.mediaContentType, 'image/jpeg');
+
+        final older = await store.readTimeline(
+          namespace: namespace,
+          conversationId: 'conv_timeline',
+          beforeSeq: 2,
+          limit: 2,
+        );
+        expect(older.value.map((item) => item.seq), <int>[1]);
+      },
+    );
+
     test('账号 closed 终态物理清除全部 namespace', () async {
       await store.upsertConversationRecords(
         namespace: namespace,
@@ -274,6 +327,14 @@ void main() {
       expect(record.toCacheMap()['conversationId'], 'conv_cache_1');
       expect(record.toCacheMap().containsKey('id'), isFalse);
       expect(record.toCacheMap().containsKey('_id'), isFalse);
+      expect(record.lastMessageType.wireValue, 'text');
+      expect(
+        () => ConversationCacheRecord.fromCacheMap(const <String, dynamic>{
+          'conversationId': 'conv_cache_legacy_type',
+          'lastMessageType': 'voice',
+        }),
+        throwsFormatException,
+      );
       expect(
         () => ConversationCacheRecord.fromCacheMap(const <String, dynamic>{
           'id': 'retired-id',

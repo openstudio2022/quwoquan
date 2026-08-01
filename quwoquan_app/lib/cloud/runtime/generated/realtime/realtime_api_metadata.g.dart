@@ -60,6 +60,7 @@ class RealtimeApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
     'GetPersonaPresence': 'object',
     'IssueConnectionTicket': 'object',
+    'LongPoll': 'object',
   };
 
   static const String getPersonaPresenceOperation = 'GetPersonaPresence';

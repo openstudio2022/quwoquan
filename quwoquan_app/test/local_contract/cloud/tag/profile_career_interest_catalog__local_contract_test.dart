@@ -4,7 +4,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/cloud_services/repository_mock_reexports.dart';
 
@@ -12,10 +11,7 @@ void main() {
   test(
     'career and interest profile catalog comes from Audience user roots',
     () async {
-      final repo = AlphaTagFacet(
-        taxonomyReleaseId:
-            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-      );
+      final repo = AlphaTagFacet();
 
       final occupationCategories = await repo.listChildren(
         TagTaxonomyRefs.careerOccupationRoot,
@@ -50,18 +46,14 @@ void main() {
       );
 
       final validation = await repo.validateRefs(
-        expectedTaxonomyReleaseId:
-            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+        expectedTaxonomyReleaseId: repo.taxonomyReleaseId,
         tagRefs: <String>[
           '${TagTaxonomyRefs.careerOccupationRoot}/产品运营/产品经理',
           '${TagTaxonomyRefs.careerInterestRoot}/旅行摄影/旅行',
           'Topic/兴趣/旅行',
         ],
       );
-      expect(
-        validation.taxonomyReleaseId,
-        ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
-      );
+      expect(validation.taxonomyReleaseId, repo.taxonomyReleaseId);
       expect(
         validation.valid,
         contains('${TagTaxonomyRefs.careerInterestRoot}/旅行摄影/旅行'),

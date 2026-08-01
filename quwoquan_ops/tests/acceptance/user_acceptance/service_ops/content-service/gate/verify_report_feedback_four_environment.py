@@ -50,7 +50,7 @@ REQUIRED_CODE_EVIDENCE = (
     "quwoquan_service/services/content-service/tests/api_integration/content/post/report_crud_contract__api_integration_test.go",
     "quwoquan_service/services/content-service/tests/api_integration/content/post/report_dismiss_contract__api_integration_test.go",
     "quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/interaction_notification_stream__api_integration_test.go",
-    "quwoquan_service/services/user-service/cmd/acceptance-session/main__local_contract_test.go",
+    "quwoquan_ops/cli/lib/nonprod_data_provisioner.py",
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_report_feedback_lifecycle_probe.py",
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/report_feedback_probe_support.py",
 )

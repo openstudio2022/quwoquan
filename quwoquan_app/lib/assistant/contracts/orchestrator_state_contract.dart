@@ -66,9 +66,9 @@ class InteractionDirective {
   }
 }
 
-class ConversationOrchestratorState {
-  const ConversationOrchestratorState({
-    this.contractId = 'conversation_orchestrator_state',
+class SessionOrchestratorState {
+  const SessionOrchestratorState({
+    this.contractId = 'session_orchestrator_state',
     this.completedTaskIds = const <String>[],
     this.currentBatchTaskIds = const <String>[],
     this.pendingTaskBatches = const <List<String>>[],
@@ -81,10 +81,10 @@ class ConversationOrchestratorState {
   final List<List<String>> pendingTaskBatches;
   final InteractionDirective interactionDirective;
 
-  ConversationOrchestratorState copyWithInteractionDirective(
+  SessionOrchestratorState copyWithInteractionDirective(
     InteractionDirective value,
   ) {
-    return ConversationOrchestratorState(
+    return SessionOrchestratorState(
       contractId: contractId,
       completedTaskIds: completedTaskIds,
       currentBatchTaskIds: currentBatchTaskIds,
@@ -101,11 +101,11 @@ class ConversationOrchestratorState {
     'interactionDirective': interactionDirective.toJson(),
   };
 
-  factory ConversationOrchestratorState.fromJson(Map<String, dynamic> json) {
-    return ConversationOrchestratorState(
+  factory SessionOrchestratorState.fromJson(Map<String, dynamic> json) {
+    return SessionOrchestratorState(
       contractId:
           (json['contractId'] as String?)?.trim() ??
-          'conversation_orchestrator_state',
+          'session_orchestrator_state',
       completedTaskIds: _stringList(json['completedTaskIds']),
       currentBatchTaskIds: _stringList(json['currentBatchTaskIds']),
       pendingTaskBatches: _stringMatrix(json['pendingTaskBatches']),

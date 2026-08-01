@@ -301,19 +301,20 @@ def deployment_package_root(env_name: str, *, target: str = "") -> Path:
 
 
 def deployment_candidate_dir(target: str, baseline_id: str) -> Path:
-    """Return the immutable candidate directory for one baseline digest."""
+    """Return the immutable full-runtime candidate for one baseline digest."""
     baseline = str(baseline_id or "").strip()
     if _BASELINE_ID.fullmatch(baseline) is None:
         raise ValueError("deployment baselineId must be sha256")
     return deployment_target_path(
         target,
         "candidates",
+        "runtime-full",
         baseline.replace(":", "-"),
     )
 
 
 def active_candidate_manifest_path(target: str) -> Path:
-    return deployment_target_path(target, "active-candidate.json")
+    return deployment_target_path(target, "active-runtime-candidate.json")
 
 
 def active_deployment_candidate(target: str) -> dict[str, str] | None:
@@ -325,13 +326,20 @@ def active_deployment_candidate(target: str) -> dict[str, str] | None:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"active deployment candidate is unreadable: {exc}") from exc
-    required = {"schema", "target", "baselineId", "candidateDir"}
+    required = {
+        "schema",
+        "candidateType",
+        "target",
+        "baselineId",
+        "candidateDir",
+    }
     if not isinstance(payload, dict) or set(payload) != required:
         raise ValueError("active deployment candidate fields mismatch")
     baseline = str(payload.get("baselineId") or "")
     expected = deployment_candidate_dir(target, baseline)
     if (
         payload.get("schema") != ACTIVE_CANDIDATE_SCHEMA
+        or payload.get("candidateType") != "runtime-full"
         or payload.get("target") != target
         or Path(str(payload.get("candidateDir") or "")).resolve() != expected
         or not (expected / "packages").is_dir()
@@ -340,6 +348,7 @@ def active_deployment_candidate(target: str) -> dict[str, str] | None:
         raise ValueError("active deployment candidate identity mismatch")
     return {
         "schema": ACTIVE_CANDIDATE_SCHEMA,
+        "candidateType": "runtime-full",
         "target": target,
         "baselineId": baseline,
         "candidateDir": str(expected),
@@ -351,12 +360,25 @@ def activate_deployment_candidate(target: str, baseline_id: str) -> Path:
     candidate = deployment_candidate_dir(target, baseline_id)
     if not (candidate / "packages").is_dir():
         raise ValueError("cannot activate a candidate without packages")
-    if not (candidate / "manifest.json").is_file():
+    manifest_path = candidate / "manifest.json"
+    if not manifest_path.is_file():
         raise ValueError("cannot activate a candidate without manifest.json")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot activate unreadable candidate manifest: {exc}") from exc
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("candidateType") != "runtime-full"
+        or manifest.get("target") != target
+        or manifest.get("baselineId") != baseline_id
+    ):
+        raise ValueError("cannot activate non-runtime or mismatched candidate")
     path = active_candidate_manifest_path(target)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema": ACTIVE_CANDIDATE_SCHEMA,
+        "candidateType": "runtime-full",
         "target": target,
         "baselineId": baseline_id,
         "candidateDir": str(candidate),

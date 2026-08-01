@@ -11,7 +11,6 @@ class IntersectionActionHint {
   final int priority;
   final String actionTier;
   final List<String> requiredGates;
-  final String targetAvailability;
   final String dispatch;
 
   IntersectionActionHint({
@@ -22,7 +21,6 @@ class IntersectionActionHint {
     this.priority = 0,
     this.actionTier = 'light',
     this.requiredGates = const <String>[],
-    this.targetAvailability = 'available',
     this.dispatch = 'navigate',
   });
 
@@ -35,7 +33,6 @@ class IntersectionActionHint {
       priority: (m['priority'] as num?)?.toInt() ?? 0,
       actionTier: m['actionTier']?.toString() ?? 'light',
       requiredGates: _parseStringList(m['requiredGates']) ?? <String>[],
-      targetAvailability: m['targetAvailability']?.toString() ?? 'available',
       dispatch: m['dispatch']?.toString() ?? 'navigate',
     );
   }
@@ -49,7 +46,6 @@ class IntersectionActionHint {
       'priority': priority,
       'actionTier': actionTier,
       'requiredGates': requiredGates,
-      'targetAvailability': targetAvailability,
       'dispatch': dispatch,
     };
   }
@@ -62,7 +58,6 @@ class IntersectionActionHint {
     int? priority,
     String? actionTier,
     List<String>? requiredGates,
-    String? targetAvailability,
     String? dispatch,
   }) {
     return IntersectionActionHint(
@@ -73,7 +68,6 @@ class IntersectionActionHint {
       priority: priority ?? this.priority,
       actionTier: actionTier ?? this.actionTier,
       requiredGates: requiredGates ?? this.requiredGates,
-      targetAvailability: targetAvailability ?? this.targetAvailability,
       dispatch: dispatch ?? this.dispatch,
     );
   }

@@ -60,7 +60,7 @@ func TestLocationSelectedAdapterUsesBoundHTTPSProtocolAndNormalizesResult(t *tes
 		t.Fatalf("construct location application service: %v", err)
 	}
 
-	items, err := service.Search(context.Background(), model.SearchQuery{
+	items, err := service.Search(context.Background(), model.SearchRequestFact{
 		Query: "cafe",
 		Limit: 10,
 	})

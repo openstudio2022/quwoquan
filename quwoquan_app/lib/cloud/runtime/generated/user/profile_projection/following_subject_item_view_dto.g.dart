@@ -20,20 +20,20 @@ class FollowingSubjectItemViewDto {
   final String latestChangeReason;
 
   FollowingSubjectItemViewDto({
-    required this.subjectId,
+    this.subjectId = '',
     required this.subjectType,
-    required this.displayName,
-    required this.avatarUrl,
-    required this.coverUrl,
-    required this.subtitle,
-    required this.targetRouteId,
-    required this.targetObjectId,
-    required this.followedAt,
-    required this.lastVisitedAt,
-    required this.latestChangedAt,
-    required this.unreadChangeCount,
-    required this.hasUnreadChanges,
-    required this.latestChangeReason,
+    this.displayName = '',
+    this.avatarUrl = '',
+    this.coverUrl = '',
+    this.subtitle = '',
+    this.targetRouteId = '',
+    this.targetObjectId = '',
+    this.followedAt = '',
+    this.lastVisitedAt = '',
+    this.latestChangedAt = '',
+    this.unreadChangeCount = 0,
+    this.hasUnreadChanges = false,
+    this.latestChangeReason = '',
   });
 
   factory FollowingSubjectItemViewDto.fromMap(Map<String, dynamic> m) {

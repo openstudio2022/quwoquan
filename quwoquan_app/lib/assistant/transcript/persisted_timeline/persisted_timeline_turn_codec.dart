@@ -45,7 +45,7 @@ class PersistedTimelineTurnCodec {
     if (m['isError'] == true) {
       return ErrorTranscriptTimelineRow(
         id: (m['id'] as String?) ?? '',
-        conversationId: (m['conversationId'] as String?) ?? '',
+        sessionId: (m['sessionId'] as String?) ?? '',
         content: (m['content'] as String?) ?? '',
         senderId: (m['senderId'] as String?) ?? '',
         senderName: (m['senderName'] as String?) ?? '',
@@ -57,7 +57,7 @@ class PersistedTimelineTurnCodec {
     if (m['isSelf'] == true) {
       return UserTranscriptTimelineRow(
         id: (m['id'] as String?) ?? '',
-        conversationId: (m['conversationId'] as String?) ?? '',
+        sessionId: (m['sessionId'] as String?) ?? '',
         type: (m['type'] as String?) ?? 'text',
         content: (m['content'] as String?) ?? '',
         senderId: (m['senderId'] as String?) ?? '',
@@ -96,7 +96,7 @@ class PersistedTimelineTurnCodec {
         : const <Map<String, dynamic>>[];
     return AssistantAnswerTranscriptRow(
       id: (m['id'] as String?) ?? '',
-      conversationId: (m['conversationId'] as String?) ?? '',
+      sessionId: (m['sessionId'] as String?) ?? '',
       type: (m['type'] as String?) ?? 'text',
       content: (m['content'] as String?) ?? '',
       senderId: (m['senderId'] as String?) ?? '',
@@ -127,7 +127,7 @@ class PersistedTimelineTurnCodec {
       UserTranscriptTimelineRow r => {
         ...r.extra,
         'id': r.id,
-        'conversationId': r.conversationId,
+        'sessionId': r.sessionId,
         'type': r.type,
         'content': r.content,
         'senderId': r.senderId,
@@ -142,7 +142,7 @@ class PersistedTimelineTurnCodec {
       ErrorTranscriptTimelineRow r => {
         ...r.extra,
         'id': r.id,
-        'conversationId': r.conversationId,
+        'sessionId': r.sessionId,
         'type': 'text',
         'content': r.content,
         'senderId': r.senderId,
@@ -156,7 +156,7 @@ class PersistedTimelineTurnCodec {
       AssistantAnswerTranscriptRow r => {
         ...r.extra,
         'id': r.id,
-        'conversationId': r.conversationId,
+        'sessionId': r.sessionId,
         'type': r.type,
         'content': r.content,
         'senderId': r.senderId,

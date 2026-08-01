@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-article-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "南浔古镇__article_qunar_base_3",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:0f1fd0b659bc569816ed3b1106c30b0334a0bd1e63ef30246ac3fe5c0193e463"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:48f1f481c382c955bae0f8859e80d20b3198a324c794512a1ee6ba4d82dbee41"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:046fbb12c723b127dd0c93102d3ae6c422a123ee9a60b9d295f5b835a2d1e989"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:142a1aa5aae1f8ccec7afaa3df7cb053b6dc3b0109bddb6d1e6a8e6b06e7a83a"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:8edaef4606d516d635c829fee64146a7ea1da7433b2946874ab5a6a740e613d6"
+    }
+  ]
+}

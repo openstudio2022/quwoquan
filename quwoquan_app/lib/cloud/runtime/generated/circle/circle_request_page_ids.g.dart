@@ -8,11 +8,15 @@ class CircleRequestPageIds {
     'ApplyJoinCircleGroup': 'circle.apply.join.circle.group',
     'ApproveCircleGroupMember': 'circle.approve.circle.group.member',
     'ApproveCircleMember': 'circle.approve.circle.member',
+    'ApproveGatheringParticipant': 'circle.approve.gathering.participant',
     'ArchiveCircle': 'circle.archive',
     'ArchiveCircleGroup': 'circle.archive.circle.group',
+    'CancelGathering': 'circle.cancel.gathering',
+    'CompleteGathering': 'circle.complete.gathering',
     'CreateCircle': 'circle.create',
     'CreateCircleFile': 'circle.files.create',
     'CreateCircleGroup': 'circle.create.circle.group',
+    'CreateGathering': 'circle.create.gathering',
     'DeleteCircleFile': 'circle.files.delete',
     'FeatureCirclePost': 'circle.post.feature',
     'GetCircle': 'circle.get',
@@ -21,11 +25,14 @@ class CircleRequestPageIds {
     'GetCircleGroup': 'circle.get.circle.group',
     'GetCircleImpact': 'circle.get.circle.impact',
     'GetCircleStats': 'circle.stats',
+    'GetGathering': 'circle.get.gathering',
     'GetMyCircleGroupMembership': 'circle.get.my.circle.group.membership',
     'GetMyCircleMembership': 'circle.members.self',
     'JoinCircle': 'circle.join',
+    'JoinGathering': 'circle.join.gathering',
     'LeaveCircle': 'circle.leave',
     'LeaveCircleGroup': 'circle.leave.circle.group',
+    'LeaveGathering': 'circle.leave.gathering',
     'ListCircleDiscoveryFeed': 'circle.discovery.feed.list',
     'ListCircleFiles': 'circle.files.list',
     'ListCircleGroupMemberships': 'circle.list.circle.group.memberships',
@@ -55,11 +62,15 @@ class CircleRequestPageIds {
   static const String applyJoinCircleGroup = 'circle.apply.join.circle.group';
   static const String approveCircleGroupMember = 'circle.approve.circle.group.member';
   static const String approveCircleMember = 'circle.approve.circle.member';
+  static const String approveGatheringParticipant = 'circle.approve.gathering.participant';
   static const String archiveCircle = 'circle.archive';
   static const String archiveCircleGroup = 'circle.archive.circle.group';
+  static const String cancelGathering = 'circle.cancel.gathering';
+  static const String completeGathering = 'circle.complete.gathering';
   static const String createCircle = 'circle.create';
   static const String createCircleFile = 'circle.files.create';
   static const String createCircleGroup = 'circle.create.circle.group';
+  static const String createGathering = 'circle.create.gathering';
   static const String deleteCircleFile = 'circle.files.delete';
   static const String featureCirclePost = 'circle.post.feature';
   static const String getCircle = 'circle.get';
@@ -68,11 +79,14 @@ class CircleRequestPageIds {
   static const String getCircleGroup = 'circle.get.circle.group';
   static const String getCircleImpact = 'circle.get.circle.impact';
   static const String getCircleStats = 'circle.stats';
+  static const String getGathering = 'circle.get.gathering';
   static const String getMyCircleGroupMembership = 'circle.get.my.circle.group.membership';
   static const String getMyCircleMembership = 'circle.members.self';
   static const String joinCircle = 'circle.join';
+  static const String joinGathering = 'circle.join.gathering';
   static const String leaveCircle = 'circle.leave';
   static const String leaveCircleGroup = 'circle.leave.circle.group';
+  static const String leaveGathering = 'circle.leave.gathering';
   static const String listCircleDiscoveryFeed = 'circle.discovery.feed.list';
   static const String listCircleFiles = 'circle.files.list';
   static const String listCircleGroupMemberships = 'circle.list.circle.group.memberships';

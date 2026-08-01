@@ -23,76 +23,110 @@ final class CloudRuntimeConfigurationException implements Exception {
 
 /// 云侧运行时配置（端云协同时使用）。
 ///
-/// 环境和业务 endpoint 必须由 Flutter CLI/Xcode build 的同一环境包显式注入。
-/// 未注入时不再使用 alpha 作为业务运行时默认值。
+/// canonical launcher 通过 Dart defines 注入；裸 Flutter Debug 则读取平台构建阶段
+/// 从 metadata 生成并嵌入制品的同一份 native runtime package。
 class CloudRuntimeConfig {
   const CloudRuntimeConfig._();
+
+  static Map<String, String> _nativeRuntimePackage = const <String, String>{};
+  static bool _nativeRuntimePackageHydrated = false;
+
+  static String _runtimeValue(String key, String compiledValue) {
+    if (compiledValue.isNotEmpty) {
+      return compiledValue;
+    }
+    return _nativeRuntimePackage[key] ?? '';
+  }
 
   /// App 运行环境：alpha / beta / gamma / prod。
   ///
   /// 通过 `--dart-define=APP_RUNTIME_ENV=...` 注入。
-  static const String appRuntimeEnv = String.fromEnvironment(
+  static const String _compiledAppRuntimeEnv = String.fromEnvironment(
     'APP_RUNTIME_ENV',
     defaultValue: '',
   );
+  static String get appRuntimeEnv =>
+      _runtimeValue('APP_RUNTIME_ENV', _compiledAppRuntimeEnv);
 
   /// Gateway Base URL（例如本机联调网关、或 dev/staging/prod）。
   ///
   /// 通过 `--dart-define=CLOUD_GATEWAY_BASE_URL=...` 注入。
-  static const String gatewayBaseUrl = String.fromEnvironment(
+  static const String _compiledGatewayBaseUrl = String.fromEnvironment(
     'CLOUD_GATEWAY_BASE_URL',
     defaultValue: '',
   );
+  static String get gatewayBaseUrl =>
+      _runtimeValue('CLOUD_GATEWAY_BASE_URL', _compiledGatewayBaseUrl);
 
-  static const String realtimeConnectionUrl = String.fromEnvironment(
+  static const String _compiledRealtimeConnectionUrl = String.fromEnvironment(
     'REALTIME_CONNECTION_URL',
     defaultValue: '',
   );
+  static String get realtimeConnectionUrl =>
+      _runtimeValue('REALTIME_CONNECTION_URL', _compiledRealtimeConnectionUrl);
 
-  static const String publicWebBaseUrl = String.fromEnvironment(
+  static const String _compiledPublicWebBaseUrl = String.fromEnvironment(
     'PUBLIC_WEB_BASE_URL',
     defaultValue: '',
   );
+  static String get publicWebBaseUrl =>
+      _runtimeValue('PUBLIC_WEB_BASE_URL', _compiledPublicWebBaseUrl);
 
-  static const String appDownloadBaseUrl = String.fromEnvironment(
+  static const String _compiledAppDownloadBaseUrl = String.fromEnvironment(
     'APP_DOWNLOAD_BASE_URL',
     defaultValue: '',
   );
+  static String get appDownloadBaseUrl =>
+      _runtimeValue('APP_DOWNLOAD_BASE_URL', _compiledAppDownloadBaseUrl);
 
-  static const String legalBaseUrl = String.fromEnvironment(
+  static const String _compiledLegalBaseUrl = String.fromEnvironment(
     'APP_LEGAL_BASE_URL',
     defaultValue: '',
   );
+  static String get legalBaseUrl =>
+      _runtimeValue('APP_LEGAL_BASE_URL', _compiledLegalBaseUrl);
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
-  static const String mediaAvatarCdnBaseUrl = String.fromEnvironment(
+  static const String _compiledMediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
     defaultValue: '',
   );
+  static String get mediaAvatarCdnBaseUrl => _runtimeValue(
+    'MEDIA_AVATAR_CDN_BASE_URL',
+    _compiledMediaAvatarCdnBaseUrl,
+  );
 
-  static const String mediaImageCdnBaseUrl = String.fromEnvironment(
+  static const String _compiledMediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
     defaultValue: '',
   );
+  static String get mediaImageCdnBaseUrl =>
+      _runtimeValue('MEDIA_IMAGE_CDN_BASE_URL', _compiledMediaImageCdnBaseUrl);
 
-  static const String mediaVideoCdnBaseUrl = String.fromEnvironment(
+  static const String _compiledMediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
     defaultValue: '',
   );
+  static String get mediaVideoCdnBaseUrl =>
+      _runtimeValue('MEDIA_VIDEO_CDN_BASE_URL', _compiledMediaVideoCdnBaseUrl);
 
-  static const String mediaUploadBaseUrl = String.fromEnvironment(
+  static const String _compiledMediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
     defaultValue: '',
   );
+  static String get mediaUploadBaseUrl =>
+      _runtimeValue('MEDIA_UPLOAD_BASE_URL', _compiledMediaUploadBaseUrl);
 
   /// 媒体房间连接地址，仅由受控环境包注入平台媒体 adapter。
   ///
   /// 通过 `--dart-define=RTC_MEDIA_CONNECTION_URL=...` 注入；它绝不能由
   /// CallSession operation 响应透传。
-  static const String rtcMediaConnectionUrl = String.fromEnvironment(
+  static const String _compiledRtcMediaConnectionUrl = String.fromEnvironment(
     'RTC_MEDIA_CONNECTION_URL',
     defaultValue: '',
   );
+  static String get rtcMediaConnectionUrl =>
+      _runtimeValue('RTC_MEDIA_CONNECTION_URL', _compiledRtcMediaConnectionUrl);
 
   /// Web 顶部安装提示：移动/Pad 端进入官网平台恢复入口。
   ///
@@ -144,10 +178,14 @@ class CloudRuntimeConfig {
   );
 
   /// 启动入口标识，仅用于诊断；热重启不会重新编译该值。
-  static const String launchMode = String.fromEnvironment(
+  static const String _compiledLaunchMode = String.fromEnvironment(
     'QWQ_APP_LAUNCH_MODE',
-    defaultValue: 'unknown',
+    defaultValue: '',
   );
+  static String get launchMode {
+    final value = _runtimeValue('QWQ_APP_LAUNCH_MODE', _compiledLaunchMode);
+    return value.isEmpty ? 'unknown' : value;
+  }
 
   /// 当前 prod rollout 诊断阶段，仅用于演练/观测，不参与环境枚举。
   static const String appRolloutMode = String.fromEnvironment(
@@ -177,7 +215,56 @@ class CloudRuntimeConfig {
         appRolloutMode == 'full';
   }
 
-  /// 返回编译期业务 define 中缺失或非法的键，不包含任何 endpoint 值。
+  /// 只有 runtime 相关 compile-time define 全部为空时才读取 native package。
+  /// 部分显式配置必须继续 fail-closed，不能与自动 Alpha handoff 拼接。
+  static bool get shouldLoadNativeRuntimePackage {
+    return <String>[
+      _compiledAppRuntimeEnv,
+      _compiledGatewayBaseUrl,
+      _compiledRealtimeConnectionUrl,
+      _compiledPublicWebBaseUrl,
+      _compiledAppDownloadBaseUrl,
+      _compiledLegalBaseUrl,
+      _compiledMediaAvatarCdnBaseUrl,
+      _compiledMediaImageCdnBaseUrl,
+      _compiledMediaVideoCdnBaseUrl,
+      _compiledMediaUploadBaseUrl,
+      _compiledRtcMediaConnectionUrl,
+    ].every((value) => value.isEmpty);
+  }
+
+  static void hydrateFromNativeRuntimePackage(Map<String, String> values) {
+    if (!shouldLoadNativeRuntimePackage) {
+      return;
+    }
+    const allowedKeys = <String>{
+      'APP_RUNTIME_ENV',
+      'CLOUD_GATEWAY_BASE_URL',
+      'APP_LEGAL_BASE_URL',
+      'PUBLIC_WEB_BASE_URL',
+      'APP_DOWNLOAD_BASE_URL',
+      'REALTIME_CONNECTION_URL',
+      'MEDIA_AVATAR_CDN_BASE_URL',
+      'MEDIA_IMAGE_CDN_BASE_URL',
+      'MEDIA_VIDEO_CDN_BASE_URL',
+      'MEDIA_UPLOAD_BASE_URL',
+      'RTC_MEDIA_CONNECTION_URL',
+      'QWQ_APP_LAUNCH_MODE',
+    };
+    _nativeRuntimePackage = Map<String, String>.unmodifiable(<String, String>{
+      for (final entry in values.entries)
+        if (allowedKeys.contains(entry.key) && entry.value.trim().isNotEmpty)
+          entry.key: entry.value.trim(),
+    });
+    _nativeRuntimePackageHydrated = true;
+  }
+
+  static void clearNativeRuntimePackageForTest() {
+    _nativeRuntimePackage = const <String, String>{};
+    _nativeRuntimePackageHydrated = false;
+  }
+
+  /// 返回有效 runtime package 中缺失或非法的键，不包含任何 endpoint 值。
   static List<String> get missingRequiredDefineKeys {
     final invalid = <String>[
       if (!isValidAppRuntimeEnv) 'APP_RUNTIME_ENV',
@@ -202,6 +289,14 @@ class CloudRuntimeConfig {
 
   /// 只用于启动证据的环境摘要；绝不返回 URL。
   static Map<String, String> get runtimeDefineSummary {
+    if (shouldLoadNativeRuntimePackage && !_nativeRuntimePackageHydrated) {
+      return const <String, String>{
+        'runtimeEnv': 'unknown',
+        'launchMode': 'unknown',
+        'configurationState': 'pending_native',
+        'missingKeys': '',
+      };
+    }
     return <String, String>{
       'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
       'launchMode': launchMode,
@@ -212,9 +307,7 @@ class CloudRuntimeConfig {
     };
   }
 
-  /// 正式启动必须显式注入同一环境包的网关与四类媒体 authority。
-  ///
-  /// 缺失时直接终止启动，避免直接执行 `flutter run` 意外连接到 alpha。
+  /// 正式启动必须获得同一环境包的网关与四类媒体 authority。
   static void validateRequiredEndpoints() {
     validateRuntimePackage(
       runtimeEnv: appRuntimeEnv,

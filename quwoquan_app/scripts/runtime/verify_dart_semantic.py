@@ -80,6 +80,8 @@ MIGRATED_TEXT_SCOPE_PREFIXES = (
     "quwoquan_app/lib/ui/welcome/",
     "quwoquan_app/lib/ui/settings/",
     "quwoquan_app/lib/ui/share/",
+    # 交集展示句由云侧 registry/template 下发；cloud 层不得再造端侧中文兜底。
+    "quwoquan_app/lib/cloud/services/content/intersection",
 )
 MIGRATED_TEXT_SCOPE_FILES = frozenset(
     {
@@ -209,7 +211,12 @@ def scan_user_visible_text_literals(
     """
     violations: list[tuple[int, str, str]] = []
     rel_path = os.path.relpath(path, repo_root).replace("\\", "/")
-    if not rel_path.startswith("quwoquan_app/lib/ui/"):
+    scans_presentation_text = rel_path.startswith(
+        "quwoquan_app/lib/ui/"
+    ) or rel_path.startswith(
+        "quwoquan_app/lib/cloud/services/content/intersection"
+    )
+    if not scans_presentation_text:
         return violations
     # Codegen 文案来自 metadata（其唯一真相源），不应再复制到 UITextConstants。
     if "/generated/" in rel_path or rel_path.endswith(".g.dart"):

@@ -175,8 +175,7 @@ final class RtcCallEntryPresenter {
       RtcCallEntryUnavailableReason.missingConversationContext ||
       RtcCallEntryUnavailableReason.missingCircleContext =>
         CallText.callContextUnavailable,
-      RtcCallEntryUnavailableReason.noParticipants =>
-        CallText.callNoContacts,
+      RtcCallEntryUnavailableReason.noParticipants => CallText.callNoContacts,
       RtcCallEntryUnavailableReason.participantLimitExceeded =>
         RtcErrorCode.callFull.defaultMessage,
     };

@@ -39,8 +39,8 @@ class AppTraceContextStore {
     final trimmed = value?.trim();
     _grayRegionCode =
         (trimmed == null || !RegExp(r'^[1-9][0-9]{5}$').hasMatch(trimmed))
-            ? null
-            : trimmed;
+        ? null
+        : trimmed;
   }
 
   /// 灰度路由运营商维度（chinamobile/chinaunicom/chinatelecom/chinabroadnet）。
@@ -58,8 +58,9 @@ class AppTraceContextStore {
 
   set grayCarrier(String? value) {
     final trimmed = value?.trim();
-    _grayCarrier =
-        (trimmed == null || !_allowedCarriers.contains(trimmed)) ? null : trimmed;
+    _grayCarrier = (trimmed == null || !_allowedCarriers.contains(trimmed))
+        ? null
+        : trimmed;
   }
 
   /// 共享「当前页访问」上下文：每次铸造新的 page visit id 时同步更新，

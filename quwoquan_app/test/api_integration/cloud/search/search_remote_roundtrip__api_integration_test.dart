@@ -57,7 +57,7 @@ void main() {
     if (_accessToken.trim().isEmpty) {
       fail(
         'Search feedback Remote API verification requires TEST_AUTH_TOKEN. '
-        'Use the local Gamma acceptance-session issuer.',
+        'Use the candidate-bound nonprod phone identity pool.',
       );
     }
   });

@@ -422,14 +422,14 @@ paths:
     /tag/feedback:
         post:
             operationId: ReportTagFeedback
-            x-contract-operation-id: tag.tag_feedback.ReportTagFeedback
-            x-object-id: tag.tag_feedback
+            x-contract-operation-id: tag.tag_feedback_fact.ReportTagFeedback
+            x-object-id: tag.tag_feedback_fact
             x-actor: persona_or_device
             x-application:
                 kind: command
                 facet: TagFeedbackAppendFacet
                 method: appendTagFeedback
-                appendSink: TagFeedback
+                appendSink: TagFeedbackFact
             parameters:
                 - name: Idempotency-Key
                   in: header

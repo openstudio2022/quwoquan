@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-homepage-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/西溪国家湿地公园",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:2de0c83aec8a9cc15bdf7d4200ed1680319ce3227e35f31531bbffd0e62b2358"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:ce6e70676f5a9d92ebae88524c055aabaa833a2bcec68ee134e7ece9ce593327"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:61d12f37aa0e9d19ca24d943d07b40e370f6cdf42b525e5f4583356c812f6739"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:6432b741341932452a296799ab86f533e06142824961543572272194f0e4b850"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:f059ea31ea9ea3a6e23d57681dd441f61000e7c8d0ccc18d66a2190e758fe639"
+    }
+  ]
+}

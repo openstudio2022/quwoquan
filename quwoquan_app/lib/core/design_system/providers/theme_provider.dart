@@ -93,4 +93,3 @@ final themeProvider = NotifierProvider<ThemeNotifier, ThemeState>(() {
 final effectiveIsDarkProvider = Provider<bool>((ref) {
   return ref.watch(themeProvider).isDark;
 });
-

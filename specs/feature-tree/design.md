@@ -27,7 +27,8 @@
 
 - AppRoot Journey 只编排参与 L1 的公开结果；写事实始终由所属 L1 的 command 完成。
 - 跨域读取使用公开 query/projection，异步变化使用公开 event，任何缓存都不得成为写真相源。
-- alpha/beta/gamma/prod 的 App 统一使用 production Remote composition；第一方业务内容经 `quwoquan_data` canonical publish、immutable release、环境 importer 后进入公开 query/projection，T3/UAT 不创建待验证业务事实。
+- alpha/beta/gamma/prod 的 App 统一使用 production Remote composition，第一方业务内容经 `quwoquan_data` canonical publish、immutable release、环境 importer 后进入公开 query/projection。
+- Alpha/Beta/Gamma 的用户交易事实由真实非生产主体经领域公开 command/event 产生并绑定候选与清理回执，Prod 只接受真实用户或正式运营行为。
 
 ## 4. 全局架构
 
@@ -45,11 +46,11 @@
 - 关联要求：`REQ-001`
 
 <a id="dec-002"></a>
-### DEC-002 四环境 Remote 与 canonical release 单轨
-- 决策：alpha/beta/gamma/prod 的 App 使用同一 Remote composition，第一方 App 可见业务数据只由环境已激活的 canonical immutable release 提供。
-- 理由：环境内 Mock、fixture seed 和验证脚本自建数据会绕过真实 importer、媒体交付、鉴权与恢复链路，产生无法晋级到生产的伪绿。
-- 被否决方案：Alpha runner 注入聚合 Mock、环境名切换数据源、T3/UAT 直写 API/数据库、服务失败后返回 fixture。
-- 约束与影响：测试 double 只存在于 local_contract 测试树。非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。回滚仅允许上一 Remote artifact、service config 或 canonical release。
+### DEC-002 四环境 Remote、内容 release 与领域 command 单轨
+- 决策：alpha/beta/gamma/prod 的 App 使用同一 Remote composition；内容、Creator、实体与发布媒体只由环境已激活的 canonical immutable release 提供，用户、评论、圈子、会话与消息只由所属领域公开 command/event 产生。Alpha/Beta/Gamma 允许候选绑定的真实非生产验收数据，Prod 为真实数据专用。
+- 理由：环境内 Mock、fixture seed、数据库直写或派生投影预填会绕过 importer、媒体交付、鉴权、聚合不变量与事件恢复链路，产生无法晋级到生产的伪绿。
+- 被否决方案：Alpha runner 注入聚合 Mock、环境名切换数据源、T3/UAT 直写数据库、服务失败后返回 fixture、把评论或消息混入内容 release、在 Prod 创建测试业务对象。
+- 约束与影响：测试 double 只存在于 local_contract 测试树。Alpha/Beta/Gamma 的验收写入必须绑定真实非生产主体、公开 command receipt、候选摘要和受控清理；非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。回滚仅允许上一 Remote artifact、service config 或 canonical release。
 - 关联要求：`REQ-009`、`REQ-010`
 
 ## 6. 质量与运行约束

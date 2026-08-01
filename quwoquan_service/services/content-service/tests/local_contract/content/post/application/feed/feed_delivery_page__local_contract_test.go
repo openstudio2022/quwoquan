@@ -8,11 +8,54 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
+	deliverymodel "quwoquan_service/services/content-service/internal/content/feed_delivery_page/domain/model"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
+
+type recordingDeliveryPageStore struct {
+	pages []deliverymodel.Page
+}
+
+func (store *recordingDeliveryPageStore) Append(_ context.Context, page deliverymodel.Page) (deliverymodel.Page, error) {
+	store.pages = append(store.pages, page)
+	return page, nil
+}
+
+func (*recordingDeliveryPageStore) Load(context.Context, string, string) (deliverymodel.Page, error) {
+	return deliverymodel.Page{}, deliveryapp.ErrNotFound
+}
+
+func TestTerminalFeedResponseStillPersistsOneDeliveryPage(t *testing.T) {
+	now := time.Now().UTC()
+	posts := []postmodel.Post{{
+		ID: "terminal-delivery-1", AuthorId: "author-1", ContentType: "image",
+		ContentIdentity: "work", Status: "published", Visibility: "public",
+		CreatedAt: now, PublishedAt: now,
+	}}
+	store := &recordingDeliveryPageStore{}
+	service := NewFeedService(
+		newTerminalFeedEngine(deliveryCandidates(posts)),
+		fixtureFeedReader{posts: posts},
+		WithFeedDeliveryPageStore(store),
+	)
+	response, err := service.ListFeed(context.Background(), ListFeedRequest{
+		UserID: "terminal-user", SessionID: "terminal-session",
+		ChannelID: "following", Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("terminal feed: %v", err)
+	}
+	if response.NextCursor != "" || len(store.pages) != 1 {
+		t.Fatalf("terminal response/page mismatch: response=%+v pages=%d", response, len(store.pages))
+	}
+	if store.pages[0].OutboundCursor != "" || len(store.pages[0].Items) != 1 {
+		t.Fatalf("terminal delivery page=%+v", store.pages[0])
+	}
+}
 
 func TestDeliveredPagePreviousCursorReplaysIdentityOrderWithoutRecall(t *testing.T) {
 	now := time.Now().UTC()

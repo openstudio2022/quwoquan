@@ -17,11 +17,6 @@ type Entry struct {
 }
 
 type envelope struct {
-	SeedSets       map[string]json.RawMessage `json:"seedSets"`
-	ObjectTagIndex []Entry                    `json:"object_tag_index"`
-}
-
-type seedBlock struct {
 	ObjectTagIndex []Entry `json:"object_tag_index"`
 }
 
@@ -39,20 +34,15 @@ var allowedTagPrefixes = []string{
 	"Format/",
 }
 
-// Decode accepts either a flat array/manifest from the data pipeline or
-// explicitly selected seed sets from an environment seed manifest. Seed-set
-// input is fail-closed: callers must name every selected ref, and undeclared
-// blocks are never imported implicitly.
-func Decode(raw []byte, seedRefs []string) ([]Entry, error) {
+// Decode accepts only a flat array or immutable-release manifest from Data
+// Engineering. Environment seed sets are intentionally unsupported.
+func Decode(raw []byte) ([]Entry, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return nil, fmt.Errorf("object tag manifest is empty")
 	}
 
 	if trimmed[0] == '[' {
-		if len(seedRefs) > 0 {
-			return nil, fmt.Errorf("seed refs are only valid for a seed-set manifest")
-		}
 		var entries []Entry
 		if err := json.Unmarshal(trimmed, &entries); err != nil {
 			return nil, fmt.Errorf("decode object tag array: %w", err)
@@ -64,58 +54,10 @@ func Decode(raw []byte, seedRefs []string) ([]Entry, error) {
 	if err := json.Unmarshal(trimmed, &manifest); err != nil {
 		return nil, fmt.Errorf("decode object tag manifest: %w", err)
 	}
-	hasFlatEntries := len(manifest.ObjectTagIndex) > 0
-	hasSeedSets := len(manifest.SeedSets) > 0
-	if hasFlatEntries && hasSeedSets {
-		return nil, fmt.Errorf("object tag manifest cannot mix flat entries and seed sets")
-	}
-	if hasFlatEntries {
-		if len(seedRefs) > 0 {
-			return nil, fmt.Errorf("seed refs are only valid for a seed-set manifest")
-		}
+	if len(manifest.ObjectTagIndex) > 0 {
 		return validateEntries(manifest.ObjectTagIndex)
 	}
-	if !hasSeedSets {
-		return nil, fmt.Errorf("object tag manifest contains no importable entries")
-	}
-
-	refs, err := normalizeSeedRefs(seedRefs)
-	if err != nil {
-		return nil, err
-	}
-	entries := make([]Entry, 0)
-	for _, ref := range refs {
-		rawBlock, ok := manifest.SeedSets[ref]
-		if !ok {
-			return nil, fmt.Errorf("object tag seed ref %q does not exist", ref)
-		}
-		var block seedBlock
-		if err := json.Unmarshal(rawBlock, &block); err != nil {
-			return nil, fmt.Errorf("decode object tag seed ref %q: %w", ref, err)
-		}
-		entries = append(entries, block.ObjectTagIndex...)
-	}
-	return validateEntries(entries)
-}
-
-func normalizeSeedRefs(seedRefs []string) ([]string, error) {
-	if len(seedRefs) == 0 {
-		return nil, fmt.Errorf("seed-set manifest requires explicit seed refs")
-	}
-	seen := make(map[string]struct{}, len(seedRefs))
-	normalized := make([]string, 0, len(seedRefs))
-	for _, raw := range seedRefs {
-		ref := strings.TrimSpace(raw)
-		if ref == "" {
-			return nil, fmt.Errorf("object tag seed ref must not be empty")
-		}
-		if _, exists := seen[ref]; exists {
-			return nil, fmt.Errorf("object tag seed ref %q is duplicated", ref)
-		}
-		seen[ref] = struct{}{}
-		normalized = append(normalized, ref)
-	}
-	return normalized, nil
+	return nil, fmt.Errorf("object tag manifest contains no importable entries")
 }
 
 func validateEntries(entries []Entry) ([]Entry, error) {

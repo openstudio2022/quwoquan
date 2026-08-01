@@ -64,9 +64,7 @@ List<String> administrativeTagRefCandidates(
   ];
   final candidates = <String>[];
   for (var depth = segments.length; depth >= 1; depth--) {
-    candidates.add(
-      '$kAdministrativeTagRoot/${segments.take(depth).join('/')}',
-    );
+    candidates.add('$kAdministrativeTagRoot/${segments.take(depth).join('/')}');
   }
   return candidates;
 }
@@ -77,24 +75,22 @@ List<String> administrativeTagRefCandidates(
 /// 广域市），provider 返回的中文地址也沿用同一套后缀，所以按后缀切段就能对上路径。
 /// 没有可靠后缀约定的国家（欧美多数国家的中文地址不带层级词）不列在此，只产出国家级
 /// 候选——粗粒度的真标签好过按空格瞎切出来的假路径。
-final Map<String, List<RegExp>> _overseasSegmentPatterns = <String, List<RegExp>>{
-  '日本': <RegExp>[
-    RegExp(r'^(.{1,6}?(?:都|道|府|県|县))'),
-    RegExp(r'^(.{1,8}?(?:区|市|町|村))'),
-  ],
-  '韩国': <RegExp>[
-    RegExp(r'^(.{1,8}?(?:特别市|广域市|特别自治市|特别自治道|道))'),
-    RegExp(r'^(.{1,8}?(?:区|市|郡))'),
-  ],
-  '泰国': <RegExp>[
-    RegExp(r'^(.{1,8}?府)'),
-    RegExp(r'^(.{1,8}?(?:市|镇|县))'),
-  ],
-  '越南': <RegExp>[
-    RegExp(r'^(.{1,8}?(?:省|市))'),
-    RegExp(r'^(.{1,8}?(?:区|市|县))'),
-  ],
-};
+final Map<String, List<RegExp>> _overseasSegmentPatterns =
+    <String, List<RegExp>>{
+      '日本': <RegExp>[
+        RegExp(r'^(.{1,6}?(?:都|道|府|県|县))'),
+        RegExp(r'^(.{1,8}?(?:区|市|町|村))'),
+      ],
+      '韩国': <RegExp>[
+        RegExp(r'^(.{1,8}?(?:特别市|广域市|特别自治市|特别自治道|道))'),
+        RegExp(r'^(.{1,8}?(?:区|市|郡))'),
+      ],
+      '泰国': <RegExp>[RegExp(r'^(.{1,8}?府)'), RegExp(r'^(.{1,8}?(?:市|镇|县))')],
+      '越南': <RegExp>[
+        RegExp(r'^(.{1,8}?(?:省|市))'),
+        RegExp(r'^(.{1,8}?(?:区|市|县))'),
+      ],
+    };
 
 /// 标签树收录的境外国家。地址里的国名必须逐字命中这里才认，否则宁可不产出 geoTagRef。
 ///
@@ -160,10 +156,7 @@ const List<String> _overseasCountries = <String>[
     if (matched == null || country.length > matched.length) matched = country;
   }
   if (matched == null) return null;
-  return (
-    country: matched,
-    rest: trimmed.substring(matched.length).trimLeft(),
-  );
+  return (country: matched, rest: trimmed.substring(matched.length).trimLeft());
 }
 
 /// 从境外地址解析行政区链，如 `日本东京都新宿区西新宿2-8-1` → `[东京都, 新宿区]`。

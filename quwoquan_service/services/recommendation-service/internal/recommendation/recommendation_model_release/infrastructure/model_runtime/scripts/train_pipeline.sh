@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 # train_pipeline.sh — Local-reproducible training pipeline.
-# Chains: sample_joiner → train → evaluate → promote-gate → register
+# Chains: sample_joiner → train/evaluate → immutable artifact upload → Stage.
 #
 # Usage:
 #   bash services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train_pipeline.sh --scenario content_feed
 #   bash services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train_pipeline.sh --scenario content_feed --dry-run
-#   bash services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/train_pipeline.sh --scenario content_feed --production
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCENARIO="${SCENARIO:-content_feed}"
 MONGODB_URI="${MONGODB_URI:-mongodb://127.0.0.1:27017/?directConnection=true}"
-DB="${DB:-quwoquan_content}"
+DB="${DB:-quwoquan_recommendation}"
 OUT_DIR="${MODEL_OUT_DIR:-/tmp/rec_models}"
 DRY_RUN=false
-PRODUCTION=false
 LIMIT=50000
 NUM_BOOST_ROUND=100
 
@@ -25,7 +23,6 @@ while [[ $# -gt 0 ]]; do
     --db) DB="$2"; shift 2 ;;
     --out-dir) OUT_DIR="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
-    --production) PRODUCTION=true; shift ;;
     --limit) LIMIT="$2"; shift 2 ;;
     --num-boost-round) NUM_BOOST_ROUND="$2"; shift 2 ;;
     *) echo "Unknown flag: $1" >&2; exit 1 ;;
@@ -43,9 +40,9 @@ if $DRY_RUN; then
   echo "[pipeline] DRY-RUN mode: limit=$LIMIT, rounds=$NUM_BOOST_ROUND, min_samples=$MIN_SAMPLES"
 fi
 
-PROD_FLAG=""
-if $PRODUCTION; then
-  PROD_FLAG="--production"
+LOCAL_EVALUATION_FLAG=""
+if $DRY_RUN; then
+  LOCAL_EVALUATION_FLAG="--local-evaluation-only"
 fi
 
 export MONGODB_URI DB
@@ -57,7 +54,7 @@ echo "[pipeline] Output:   $OUT_DIR"
 echo "============================================"
 
 echo ""
-echo ">>> Step 0/6: Seed Data Bootstrap (dry-run only)"
+echo ">>> Step 0/3: Seed Data Bootstrap (local evaluation only)"
 if $DRY_RUN; then
   python3 "$SCRIPT_DIR/generate_seed_data.py" \
     --scenario "$SCENARIO" \
@@ -70,7 +67,7 @@ else
 fi
 
 echo ""
-echo ">>> Step 1/6: Sample Joiner"
+echo ">>> Step 1/3: Sample Joiner"
 python3 "$SCRIPT_DIR/sample_joiner.py" \
   --scenario "$SCENARIO" \
   --mongodb-uri "$MONGODB_URI" \
@@ -79,7 +76,7 @@ python3 "$SCRIPT_DIR/sample_joiner.py" \
   --clean
 
 echo ""
-echo ">>> Step 2/6: Train LightGBM"
+echo ">>> Step 2/3: Train, verify and Stage LightGBM"
 python3 "$SCRIPT_DIR/train.py" \
   --scenario "$SCENARIO" \
   --mongodb-uri "$MONGODB_URI" \
@@ -87,10 +84,10 @@ python3 "$SCRIPT_DIR/train.py" \
   --out-dir "$OUT_DIR" \
   --num-boost-round "$NUM_BOOST_ROUND" \
   --min-samples "$MIN_SAMPLES" \
-  $PROD_FLAG
+  $LOCAL_EVALUATION_FLAG
 
 echo ""
-echo ">>> Step 3/6: Train Multi-Objective"
+echo ">>> Step 3/3: Train, verify and Stage Multi-Objective"
 python3 "$SCRIPT_DIR/train_multiobjective.py" \
   --scenario "$SCENARIO" \
   --mongodb-uri "$MONGODB_URI" \
@@ -98,45 +95,7 @@ python3 "$SCRIPT_DIR/train_multiobjective.py" \
   --out-dir "$OUT_DIR" \
   --num-boost-round "$NUM_BOOST_ROUND" \
   --min-samples "$MIN_SAMPLES" \
-  $PROD_FLAG
-
-echo ""
-echo ">>> Step 4/6: Evaluate"
-python3 "$SCRIPT_DIR/evaluate.py" \
-  --scenario "$SCENARIO" \
-  --mongodb-uri "$MONGODB_URI" \
-  --db "$DB"
-python3 "$SCRIPT_DIR/evaluate.py" \
-  --scenario "${SCENARIO}_multiobjective" \
-  --mongodb-uri "$MONGODB_URI" \
-  --db "$DB"
-
-GATE_FLAGS=""
-if $DRY_RUN; then
-  GATE_FLAGS="--dry-run"
-fi
-
-echo ""
-echo ">>> Step 5/6: Evaluate Gate"
-python3 "$SCRIPT_DIR/evaluate_gate.py" \
-  --scenario "$SCENARIO" \
-  --mongodb-uri "$MONGODB_URI" \
-  --db "$DB" \
-  --out "eval_report_${SCENARIO}.json" \
-  $GATE_FLAGS || {
-    echo "[pipeline] GATE BLOCKED — model did not pass quality thresholds"
-    exit 1
-  }
-
-python3 "$SCRIPT_DIR/evaluate_gate.py" \
-  --scenario "${SCENARIO}_multiobjective" \
-  --mongodb-uri "$MONGODB_URI" \
-  --db "$DB" \
-  --out "eval_report_${SCENARIO}_multiobjective.json" \
-  $GATE_FLAGS || {
-    echo "[pipeline] MULTIOBJECTIVE GATE BLOCKED — model did not pass quality thresholds"
-    exit 1
-  }
+  $LOCAL_EVALUATION_FLAG
 
 echo ""
 echo "============================================"

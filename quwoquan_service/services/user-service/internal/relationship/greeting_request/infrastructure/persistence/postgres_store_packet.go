@@ -73,11 +73,13 @@ func (s *PgGreetingStore) CommitCommand(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO greeting_requests (
 				id, requester_persona_id, target_persona_id, request_message,
+				intersection_ref, intersection_snapshot,
 				status, source, promoted_conversation_id, expire_at, decision_at,
 				created_at, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
 			greeting.ID, greeting.RequesterPersonaID, greeting.TargetPersonaID,
-			greeting.RequestMessage, greeting.Status, greeting.Source,
+			greeting.RequestMessage, nullableJSON(greeting.IntersectionRef),
+			nullableJSON(greeting.IntersectionSnapshot), greeting.Status, greeting.Source,
 			greeting.PromotedConversationID, greeting.ExpireAt, greeting.DecisionAt,
 		); err != nil {
 			return fmt.Errorf("insert greeting request: %w", err)
@@ -132,6 +134,13 @@ func (s *PgGreetingStore) CommitCommand(
 	}
 	committed = true
 	return nil
+}
+
+func nullableJSON(value json.RawMessage) any {
+	if len(value) == 0 || string(value) == "null" {
+		return nil
+	}
+	return value
 }
 
 func (s *PgGreetingStore) ClaimPendingOutbox(

@@ -13,3 +13,9 @@ collections:
         operation: 1
         provider: 1
         status: 1
+    - name: idx_ext_attempt_subject_cleanup
+      keys:
+        subjectDigest: 1
+    - name: idx_ext_attempt_task_cleanup
+      keys:
+        taskId: 1

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
 
@@ -33,8 +33,9 @@ from content.release.environment.public_api_client import (
 from content.release.model import DeploymentEnvironment
 
 
-SERVICE_PAGINATION_CONTRACT_PATH = (
-    REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/types.yaml"
+CONTENT_POST_OPERATIONS_PATH = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/contracts/content/post/operations.yaml"
 )
 FEED_PAGE_ID = "content.feed.list"
 POST_DETAIL_PAGE_ID = "content.post.get"
@@ -48,29 +49,43 @@ def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
     return operation.as_payload()
 
 
+def _public_media_path(url: str) -> str:
+    parts = urlsplit(str(url or "").strip())
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
 def _post_feed_page_limit() -> int:
+    """Return GET /content/feed maximum_items from the owning operation contract."""
     try:
         document = yaml.safe_load(
-            SERVICE_PAGINATION_CONTRACT_PATH.read_text(encoding="utf-8")
+            CONTENT_POST_OPERATIONS_PATH.read_text(encoding="utf-8")
         )
     except (OSError, yaml.YAMLError) as exc:
         raise PostApiVerificationError(
-            f"service pagination contract unreadable: {SERVICE_PAGINATION_CONTRACT_PATH}"
+            f"content post operations unreadable: {CONTENT_POST_OPERATIONS_PATH}"
         ) from exc
     if not isinstance(document, Mapping):
-        raise PostApiVerificationError("service pagination contract must be an object")
-    types = _object(document.get("types"), label="service pagination types")
-    pagination = _object(types.get("Pagination"), label="service pagination")
-    fields = pagination.get("fields")
-    if not isinstance(fields, list):
-        raise PostApiVerificationError("service pagination fields must be an array")
-    for field in fields:
-        if not isinstance(field, Mapping) or field.get("name") != "limit":
+        raise PostApiVerificationError("content post operations must be an object")
+    routes = document.get("api_routes")
+    if not isinstance(routes, list):
+        raise PostApiVerificationError("content post api_routes must be an array")
+    for route in routes:
+        if not isinstance(route, Mapping):
             continue
-        maximum = field.get("max")
+        if (
+            str(route.get("method") or "").upper() != "GET"
+            or str(route.get("path") or "") != "/content/feed"
+            or str(route.get("operation") or "") != "GetFeed"
+        ):
+            continue
+        pagination = route.get("pagination")
+        if not isinstance(pagination, Mapping):
+            raise PostApiVerificationError("GetFeed pagination contract is missing")
+        maximum = pagination.get("maximum_items")
         if isinstance(maximum, int) and maximum > 0:
             return maximum
-    raise PostApiVerificationError("service pagination limit max is missing")
+        raise PostApiVerificationError("GetFeed pagination.maximum_items is invalid")
+    raise PostApiVerificationError("GetFeed route contract is missing")
 
 
 def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]:
@@ -153,7 +168,9 @@ def _verify_author_profile(
         "avatarUrl",
         endpoint="creator public profile",
     )
-    if avatar_url != creator.avatar_url:
+    # Persona public profiles append ?v=<avatarVersion> for cache busting; the
+    # release authority binds the public slice path without that query.
+    if _public_media_path(avatar_url) != _public_media_path(creator.avatar_url):
         raise PostApiVerificationError(
             f"creator public avatar URL drift for {creator.creator_ref}"
         )
@@ -249,6 +266,8 @@ def _verify_visible_release_feed(
 def _verify_typed_feed(
     client: PublicApiClient,
     cases: list[PostApiCase],
+    *,
+    include_premium_stream: bool,
 ) -> tuple[dict[str, int], list[dict[str, Any]]]:
     page_limit = _post_feed_page_limit()
     cases_by_id = {case.post_id: case for case in cases}
@@ -331,18 +350,20 @@ def _verify_typed_feed(
                 "requests": request_evidence,
             }
         )
-    feed_queries.extend(
-        (
-            _verify_visible_release_feed(
-                client,
-                cases_by_id=cases_by_id,
-                name="homepage_recommend",
-                query={
-                    "sort": "recommend",
-                    "channelId": "recommend",
-                    "limit": str(page_limit),
-                },
-            ),
+    feed_queries.append(
+        _verify_visible_release_feed(
+            client,
+            cases_by_id=cases_by_id,
+            name="homepage_recommend",
+            query={
+                "sort": "recommend",
+                "channelId": "recommend",
+                "limit": str(page_limit),
+            },
+        )
+    )
+    if include_premium_stream:
+        feed_queries.append(
             _verify_visible_release_feed(
                 client,
                 cases_by_id=cases_by_id,
@@ -352,9 +373,8 @@ def _verify_typed_feed(
                     "channelId": "premium_stream",
                     "limit": str(page_limit),
                 },
-            ),
+            )
         )
-    )
     return feed_status, feed_queries
 
 
@@ -369,8 +389,14 @@ def write_post_api_verification(
     output_path: Path,
     api_base_url: str,
     media_delivery_base_url: str,
+    ssl_cafile: str = "",
+    readiness_phase: str = "commercial",
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
+    if readiness_phase not in {"consumer", "commercial"}:
+        raise PostApiVerificationError(
+            "post API verification readiness_phase must be consumer or commercial"
+        )
     try:
         cases, creators_by_author = read_post_and_creator_cases(
             environment=environment,
@@ -382,10 +408,15 @@ def write_post_api_verification(
         )
         unauthenticated_client = PublicApiClient(
             base_url=api_base_url,
+            ssl_cafile=ssl_cafile,
         )
         guest = unauthenticated_client.login_fresh_guest()
         client = unauthenticated_client.for_guest(guest)
-        feed_status, feed_queries = _verify_typed_feed(client, cases)
+        feed_status, feed_queries = _verify_typed_feed(
+            client,
+            cases,
+            include_premium_stream=readiness_phase == "commercial",
+        )
         creator_rows = [
             _verify_author_profile(client, creator)
             for creator in sorted(
@@ -427,6 +458,7 @@ def write_post_api_verification(
         "environment": environment.value,
         "releaseId": release_id,
         "runId": run_id,
+        "readinessPhase": readiness_phase,
         "sourceImportReportRef": importer_ref,
         "creatorImportReportRef": creator_importer_ref,
         "apiBaseUrl": api_base_url.rstrip("/"),

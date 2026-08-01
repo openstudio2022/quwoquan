@@ -1,5 +1,5 @@
 overrides:
-  sys.notification-service.accountSecurityAuthority.baseUrl: http://127.0.0.1:18081
+  sys.notification-service.accountSecurityAuthority.baseUrl: http://user-service:18081
   sys.notification-service.accountSecurityAuthority.timeoutMs: 300
 secretRefs:
   sys.notification-service.mongo.uri: NOTIFICATION_MONGO_URI

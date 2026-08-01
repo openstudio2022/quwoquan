@@ -156,6 +156,7 @@ def load_post_review_closure(
     *,
     root: Path | None = None,
     expected_object_targets: Mapping[str, str] | None = None,
+    require_quota_milestone: bool = True,
 ) -> PostReviewClosure:
     """Load and re-derive all closure invariants; never accept a stale quota."""
     path = (root or execution_root(execution_id)) / POST_REVIEW_CLOSURE_REF
@@ -219,7 +220,7 @@ def load_post_review_closure(
         }
         if actual_targets != normalized_expected:
             raise ValueError("post review closure differs from content object index")
-    if not closure.passed:
+    if require_quota_milestone and not closure.passed:
         raise ValueError(
             "post review closure quota shortfall: "
             f"qualified={closure.qualified_count} approvedQuota={approved_quota}"

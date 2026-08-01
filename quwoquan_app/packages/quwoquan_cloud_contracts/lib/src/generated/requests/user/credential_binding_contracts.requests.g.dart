@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/credential_binding_contracts.dart';
 
@@ -34,6 +34,14 @@ final class BindCarrierPhoneCredentialCommand {
   final String deviceId;
   final String platform;
   final String? displayLabel;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "vendor": this.vendor,
+    "carrierToken": this.carrierToken,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.displayLabel != null) "displayLabel": this.displayLabel!,
+  };
 }
 
 final class BindPhoneCredentialCommand {
@@ -55,6 +63,12 @@ final class BindPhoneCredentialCommand {
   final String phone;
   final String otpCode;
   final String? displayLabel;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "phone": this.phone,
+    "otpCode": this.otpCode,
+    if (this.displayLabel != null) "displayLabel": this.displayLabel!,
+  };
 }
 
 final class CompleteFederatedPhoneBindingCommand {
@@ -115,6 +129,18 @@ final class CompleteFederatedPhoneBindingCommand {
   final String appVersion;
   final String agreementVersion;
   final String privacyVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "bindingTicket": this.bindingTicket,
+    "phone": this.phone,
+    "otpCode": this.otpCode,
+    "challengeId": this.challengeId,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    "appVersion": this.appVersion,
+    "agreementVersion": this.agreementVersion,
+    "privacyVersion": this.privacyVersion,
+  };
 }
 
 final class ListCredentialsQuery {
@@ -131,6 +157,10 @@ final class UnbindCredentialCommand {
   }
 
   final String credentialType;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "credentialType": this.credentialType,
+  };
 }
 
 CloudOperationRequestPayload encodeUserCredentialBindingBindCarrierPhoneCredentialGeneratedRequest(BindCarrierPhoneCredentialCommand request) {

@@ -35,6 +35,7 @@ type cleanupInventory struct {
 	activityDocIDs       []string
 	activityIDs          []string
 	readFactIDs          []string
+	shareRows            []shareClosureRow
 	shareFactIDs         []string
 	moderationCaseIDs    []string
 	mediaSessionIDs      []string
@@ -171,18 +172,16 @@ func (store *MongoStore) collectCleanupInventory(
 	if err != nil {
 		return cleanupInventory{}, fmt.Errorf("collect closed-account interaction read facts: %w", err)
 	}
-	shareFactIDs, err := collectStringField(
+	shareRows, err := collectShareClosureRows(
 		ctx,
 		store.db.Collection("outbound_share_facts"),
-		bson.M{"$or": bson.A{
-			bson.M{"actorId": bson.M{"$in": subjectIDs}},
-			bson.M{"postId": bson.M{"$in": postIDs}},
-		}},
-		"_id",
+		subjectIDs,
+		postIDs,
 	)
 	if err != nil {
 		return cleanupInventory{}, fmt.Errorf("collect closed-account outbound shares: %w", err)
 	}
+	shareFactIDs := rowIDs(shareRows)
 	moderationCaseIDs, err := collectStringField(
 		ctx,
 		store.db.Collection("post_moderation_cases"),
@@ -277,6 +276,9 @@ func (store *MongoStore) collectCleanupInventory(
 			affectedPostIDs = append(affectedPostIDs, row.TargetID)
 		}
 	}
+	for _, row := range shareRows {
+		affectedPostIDs = append(affectedPostIDs, row.PostID)
+	}
 	return cleanupInventory{
 		postRows:             postRows,
 		postIDs:              postIDs,
@@ -289,6 +291,7 @@ func (store *MongoStore) collectCleanupInventory(
 		activityDocIDs:       rowIDs(activityRows),
 		activityIDs:          uniqueStrings(activityIDs),
 		readFactIDs:          readFactIDs,
+		shareRows:            shareRows,
 		shareFactIDs:         shareFactIDs,
 		moderationCaseIDs:    moderationCaseIDs,
 		mediaSessionIDs:      mediaSessionIDs,
@@ -703,7 +706,6 @@ func (store *MongoStore) deleteDerivedData(
 			bson.M{"postId": bson.M{"$in": inventory.postIDs}},
 			bson.M{"authorId": bson.M{"$in": subjectIDs}},
 		}}},
-		{"premium-pool rows", "rm_premium_pool", bson.M{"contentId": bson.M{"$in": inventory.postIDs}}},
 		{"collaborative i2i rows", "rm_collaborative_i2i", bson.M{"$or": bson.A{
 			bson.M{"seedContentId": bson.M{"$in": inventory.postIDs}},
 			bson.M{"contentId": bson.M{"$in": inventory.postIDs}},
@@ -932,6 +934,15 @@ func (store *MongoStore) recomputePostCounters(
 	if err != nil {
 		return fmt.Errorf("recompute closed-account like counts: %w", err)
 	}
+	shareCounts, err := groupedCount(
+		ctx,
+		store.db.Collection("outbound_share_facts"),
+		bson.M{"postId": bson.M{"$in": postIDs}},
+		"postId",
+	)
+	if err != nil {
+		return fmt.Errorf("recompute closed-account share counts: %w", err)
+	}
 	now := time.Now().UTC()
 	postModels := make([]mongo.WriteModel, 0, len(postIDs))
 	feedModels := make([]mongo.WriteModel, 0, len(postIDs))
@@ -939,6 +950,7 @@ func (store *MongoStore) recomputePostCounters(
 		update := bson.M{"$set": bson.M{
 			"commentCount": commentCounts[postID],
 			"likeCount":    likeCounts[postID],
+			"shareCount":   shareCounts[postID],
 			"updatedAt":    now,
 		}}
 		postModels = append(postModels, mongo.NewUpdateOneModel().

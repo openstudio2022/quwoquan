@@ -139,7 +139,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 
 - runtime L1、各 L2、共享 runtime 包、integration-service 和 quwoquan_ops 的工程映射清晰。
 - integration-service 只作为 runtime 治理的独立机制进程，不登记为 integration L1。
-- 外部 Provider 只经能力专属 typed Port 和显式 Adapter 装配；Alpha/Beta/Gamma 绑定 Port 对等本地替身，Prod 绑定真实 Provider，均无 Mock fallback。
+- 外部 Provider 只经能力专属 typed Port 和显式 Adapter 装配；Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 绑定正式生产租户，均无 Mock fallback。
 - alpha/beta/gamma/prod 的 App 使用同一 production Remote composition；第一方业务数据只经 canonical immutable release importer 或所属领域公开 command 生效，环境启动与验证脚本不得注入 fixture。
 
 <a id="req-002"></a>
@@ -161,7 +161,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - 条件：本领域收到有效输入且前置领域事实成立。
 - 可观察结果：runtime L1、各 L2、共享 runtime 包、integration-service 和 quwoquan_ops 的工程映射清晰。
 - integration-service 只作为 runtime 治理的独立机制进程，不登记为 integration L1。
-- 外部 Provider 只经能力专属 typed Port 和显式 Adapter 装配；Alpha/Beta/Gamma 绑定 Port 对等本地替身，Prod 绑定真实 Provider，均无 Mock fallback。
+- 外部 Provider 只经能力专属 typed Port 和显式 Adapter 装配；Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 绑定正式生产租户，均无 Mock fallback。
 - alpha/beta/gamma/prod 的 App composition 与第一方数据入口保持单轨；测试 double、环境 fixture 与第三方 substitute 均不得成为 App 业务成功事实。
 - 禁止结果：domain/application 不依赖 adapters/infrastructure 或 Vendor SDK。
 - 独立机制进程不拥有业务 aggregate，不复制业务对象真相源。

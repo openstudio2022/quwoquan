@@ -1,0 +1,58 @@
+{
+  "label": "南浔古镇",
+  "domain": "地点",
+  "type": "景区",
+  "executionId": "20260731--travel-homepage-copy-ready--zhejiang-six--scale-017",
+  "entityRef": "/entity/地点/景区/南浔古镇",
+  "summary": "南浔古镇位于浙江省湖州市南浔区，是国家AAAAA级旅游景区，也是“江南六大古镇”之一。",
+  "sourceRefs": [
+    "sources/南浔古镇__toutiao_baike__801a42df/source.md",
+    "sources/南浔古镇__image_collection__4c8b5639/source.md"
+  ],
+  "sourceUrls": [
+    "https://www.baike.com/wikiid/7235892285282533416"
+  ],
+  "primarySource": {
+    "entityName": "南浔古镇",
+    "sourceKind": "toutiao_baike",
+    "extractor": "toutiao_baike_html",
+    "canonicalUrl": "https://www.baike.com/wikiid/7235892285282533416",
+    "sourceUrl": "https://www.baike.com/wikiid/7235892285282533416",
+    "title": "南浔古镇",
+    "fetchedAt": "2026-07-31T02:03:33Z",
+    "snapshotHash": "sha256:9cecef3495db3ab78d0faa487dbdb313f459014910ab261c6203bc363021982e",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "textSourceRefs": [
+    "sources/南浔古镇__toutiao_baike__801a42df/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/南浔古镇__image_collection__4c8b5639/source.md"
+  ],
+  "tagRefs": [
+    "Entity/地点/景区",
+    "Topic/地理/行政区/中国/浙江省/湖州市/南浔区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/湖州市/南浔区",
+  "aliases": [
+    "南浔"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:6a4ab98ba999350059967e23751c544af0dd81b143d042eb38a8187e6d38c043",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

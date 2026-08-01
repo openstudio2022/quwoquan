@@ -6,10 +6,7 @@ class SyncResponse {
   final List<MessageDto> messages;
   final bool hasMore;
 
-  const SyncResponse({
-    required this.messages,
-    required this.hasMore,
-  });
+  const SyncResponse({required this.messages, required this.hasMore});
 
   factory SyncResponse.fromMap(Map<String, dynamic> map) {
     final rawMessages = map['messages'];
@@ -30,7 +27,7 @@ class SyncResponse {
   }
 
   Map<String, dynamic> toMap() => {
-        'messages': messages.map((m) => m.toMap()).toList(growable: false),
-        'hasMore': hasMore,
-      };
+    'messages': messages.map((m) => m.toMap()).toList(growable: false),
+    'hasMore': hasMore,
+  };
 }

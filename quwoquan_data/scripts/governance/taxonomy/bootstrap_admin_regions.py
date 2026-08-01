@@ -55,7 +55,6 @@ DATA_DIR = DATA_ROOT / "reference" / "admin_regions"
 DRY_RUN = False
 created = 0
 skipped = 0
-pruned = 0
 
 
 # 行政区标签的采集通道是 POI picker 与 EXIF GPS（见 Post.geoTagRef），消费方是地理召回
@@ -273,44 +272,6 @@ def gen_china(filter_province: str | None = None):
 # 境外行政区（手工定义，量小、变化少）
 # ─────────────────────────────────────────────
 
-# 旧版把欧洲城市直接挂在国家下（法国/巴黎），与亚洲的三层结构不一致，也和端侧
-# GeoTagRefResolver 按「国家 / 一级行政区 / 城市」逐段解析地址的方式对不上。城市迁到
-# 一级行政区之下后，这些扁平路径必须删除，否则同一个城市在同一轴上出现两次（R14）。
-#
-# 不含 挪威/奥斯陆、捷克/布拉格、奥地利/维也纳：这三个名字在新结构里就是一级行政区
-# 名，同名节点被原地提升为一级行政区而不是被删除，列进来只会每次运行都报「仍有下级」。
-LEGACY_FLAT_CITY_PATHS: tuple[str, ...] = (
-    "法国/巴黎", "法国/尼斯", "法国/马赛",
-    "意大利/罗马", "意大利/佛罗伦萨", "意大利/威尼斯",
-    "西班牙/巴塞罗那", "西班牙/马德里", "西班牙/塞维利亚",
-    "瑞士/苏黎世", "瑞士/日内瓦", "瑞士/因特拉肯",
-    "奥地利/萨尔茨堡",
-    "捷克/CK小镇",
-    "荷兰/阿姆斯特丹",
-    "英国/伦敦", "英国/爱丁堡",
-    "希腊/雅典", "希腊/圣托里尼",
-    "葡萄牙/里斯本", "葡萄牙/波尔图",
-    "挪威/卑尔根", "挪威/特罗姆瑟",
-)
-
-
-def prune_legacy_flat_cities():
-    global pruned
-    for rel in LEGACY_FLAT_CITY_PATHS:
-        d = TAGS_ROOT / rel
-        definition = d / "_definition.json"
-        if not definition.exists():
-            continue
-        children = [c for c in d.iterdir() if c.name != "_definition.json"]
-        if children:
-            print(f"WARN: 跳过 {rel}，仍有下级节点 {[c.name for c in children]}", file=sys.stderr)
-            continue
-        if not DRY_RUN:
-            definition.unlink()
-            d.rmdir()
-        pruned += 1
-
-
 def gen_overseas(filter_country: str | None = None):
     """生成境外三层行政区标签：国家 / 一级行政区 / 城市。
 
@@ -403,10 +364,9 @@ def main(argv: list[str] | None = None):
 
     # --province 只对中国有意义；指定它时不触碰境外子树。
     if args.province is None and args.country != "中国":
-        prune_legacy_flat_cities()
         gen_overseas(filter_country=args.country)
 
-    print(f"\n行政区生成完成：新增 {created}，跳过（已存在）{skipped}，删除遗留 {pruned}")
+    print(f"\n行政区生成完成：新增 {created}，跳过（已存在）{skipped}")
     total = created + skipped
     print(f"总节点数：{total}")
     if DRY_RUN:

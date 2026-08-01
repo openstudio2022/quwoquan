@@ -78,7 +78,6 @@ void main() {
         'title': '西湖景区',
         'subtitle': '杭州西湖核心游览区',
         'coverUrl': 'https://example.com/west-lake.jpg',
-        'status': 'published',
         'canonicalEntityId': 'entity:sight:west_lake',
       });
     });
@@ -109,19 +108,23 @@ void main() {
         localDraftId: 'draft-contract',
         contentType: ContentPostType.article,
         summary: '摘要',
-        semanticMentions: <ContentPostStructuredObject>[
-          ContentPostStructuredObject(<String, ContentPostStructuredValue>{
-            'kind': const ContentPostStructuredText('tag'),
-            'status': const ContentPostStructuredText('published'),
-            'targetRef': const ContentPostStructuredText('Topic/旅行/城市漫步'),
-          }),
-          ContentPostStructuredObject(<String, ContentPostStructuredValue>{
-            'kind': const ContentPostStructuredText('entity'),
-            'status': const ContentPostStructuredText('published'),
-            'targetRef': const ContentPostStructuredText(
-              'entity:sight:west_lake',
-            ),
-          }),
+        semanticMentions: const <PostSemanticMention>[
+          PostSemanticMention(
+            mentionId: 'published:tag:Topic/旅行/城市漫步',
+            kind: 'tag',
+            surface: '城市漫步',
+            location: 'publicationSettings',
+            status: 'published',
+            targetRef: 'Topic/旅行/城市漫步',
+          ),
+          PostSemanticMention(
+            mentionId: 'published:entity:entity:sight:west_lake',
+            kind: 'entity',
+            surface: '西湖景区',
+            location: 'publicationSettings',
+            status: 'published',
+            targetRef: 'entity:sight:west_lake',
+          ),
         ],
         assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
       );
@@ -151,6 +154,34 @@ void main() {
       );
       expect(body.containsKey('tagRefs'), isFalse);
       expect(body.containsKey('entityRefs'), isFalse);
+    });
+
+    test('旧 mediaItems 与嵌套任意字段不会被本地队列双读', () {
+      final canonical = SubmitContentPostPublicationCommand(
+        publishIntentId: 'intent-single-track',
+        localDraftId: 'draft-single-track',
+        contentType: ContentPostType.image,
+      ).toJson();
+
+      expect(
+        () => decodeSubmitContentPostPublicationCommand(<String, Object?>{
+          ...canonical,
+          'mediaItems': const <Object?>[],
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => decodeSubmitContentPostPublicationCommand(<String, Object?>{
+          ...canonical,
+          'articleAssetManifest': <String, Object?>{
+            'schema': 'article-asset-manifest',
+            'assets': <Object?>[
+              <String, Object?>{'assetId': 'asset-1', 'kind': 'image'},
+            ],
+          },
+        }),
+        throwsFormatException,
+      );
     });
 
     test('私密 Post payload 同样不携带 circleIds', () {
@@ -340,11 +371,6 @@ void main() {
 }
 
 Set<String> _submitPostPublicationRequestBodyFields() {
-  final structured = ContentPostStructuredObject(
-    <String, ContentPostStructuredValue>{
-      'value': const ContentPostStructuredText('contract'),
-    },
-  );
   final command = SubmitContentPostPublicationCommand(
     publishIntentId: 'intent-contract-fields',
     localDraftId: 'draft-contract-fields',
@@ -353,29 +379,54 @@ Set<String> _submitPostPublicationRequestBodyFields() {
     title: '标题',
     body: '正文',
     summary: '摘要',
-    semanticMentions: <ContentPostStructuredObject>[structured],
+    semanticMentions: const <PostSemanticMention>[
+      PostSemanticMention(
+        mentionId: 'published:tag:Topic/契约',
+        kind: 'tag',
+        surface: '契约',
+        location: 'publicationSettings',
+        status: 'published',
+        targetRef: 'Topic/契约',
+      ),
+    ],
     mediaAssetIds: const <String>['asset-contract'],
-    mediaItems: <ContentPostStructuredObject>[structured],
     articleMarkdown: '# 标题',
     markdownDialect: 'qwq-rich-md',
-    articleAssetManifest: structured,
-    articleRenderProfile: structured,
+    articleAssetManifest: PostArticleAssetManifestInput(
+      schema: 'article-asset-manifest',
+      assets: const <PostArticleAssetInput>[
+        PostArticleAssetInput(assetId: 'asset-contract', role: 'cover'),
+      ],
+    ),
+    articleRenderProfile: const PostArticleRenderProfile(
+      template: 'journal',
+      layoutPolicy: PostArticleLayoutPolicy(
+        wrapDowngrade: 'compactWidthToFullWidth',
+      ),
+    ),
     coverStrategy: 'manual',
     coverFrameTimeMs: 1,
     illustrationAssetId: 'asset-contract',
-    location: structured,
+    location: const GeoPoint(latitude: 30.65, longitude: 104.06),
     locationName: '成都',
     geoTagRef: 'Topic/地理/行政区/四川省/成都市',
     visitedAt: DateTime.utc(2026, 4, 5),
     primaryHomepageId: 'homepage-contract',
     primaryHomepageType: 'sight',
-    primaryHomepageSnapshot: structured,
+    primaryHomepageSnapshot: const PostHomepageSnapshot(
+      canonicalEntityId: 'entity:sight:contract',
+      title: '契约主页',
+    ),
     visibility: ContentPostVisibility.public,
     assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
     sourcePostId: 'source-contract',
     sourceType: ContentPostSourceType.original,
-    deviceInfo: structured,
-    publishLocation: structured,
+    deviceInfo: const PostDeviceInfo(manufacturer: 'contract', os: 'test'),
+    publishLocation: const PostPublishLocation(
+      country: '中国',
+      province: '四川省',
+      city: '成都市',
+    ),
     authorDisplayNameSnapshot: '作者',
     authorAvatarUrlSnapshot: 'https://example.com/avatar.jpg',
     personaContextVersion: 1,

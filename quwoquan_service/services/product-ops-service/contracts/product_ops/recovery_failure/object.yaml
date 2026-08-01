@@ -13,3 +13,7 @@ relationships: []
 capabilities: [append_only, queryable]
 taggable: false
 vector_enabled: false
+business_rules:
+- 只接受固定匿名字段，禁止错误消息、堆栈、账号、设备广告标识或动态诊断编号。
+- 同一启动或运行时失败按 canonical identity 幂等追加，不修改历史事实。
+- 采集失败不得阻断用户仍可执行的安全恢复动作。

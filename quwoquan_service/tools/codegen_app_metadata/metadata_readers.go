@@ -250,6 +250,43 @@ func collectProjectionReadModelDartClass(metadataDir string) (map[string]string,
 	return index, nil
 }
 
+// projectionPathByReadModel resolves a projection from the compiled
+// ContractGraph Source instead of reconstructing its owner directory. Moving a
+// projection between business objects therefore changes only canonical
+// metadata; the App emitter follows the read_model identity and fails on
+// duplicates rather than silently reading a stale path.
+func projectionPathByReadModel(metadataDir, readModel string) (string, error) {
+	readModel = strings.TrimSpace(readModel)
+	if readModel == "" {
+		return "", fmt.Errorf("projection read_model is required")
+	}
+	var matched string
+	for _, path := range metadataDocumentPaths("", ".yaml") {
+		if filepath.Base(filepath.Dir(path)) != "projections" {
+			continue
+		}
+		projection, err := readProjectionBinding(path)
+		if err != nil || strings.TrimSpace(projection.ReadModel) != readModel {
+			continue
+		}
+		if matched != "" {
+			first, _ := filepath.Rel(metadataDir, matched)
+			second, _ := filepath.Rel(metadataDir, path)
+			return "", fmt.Errorf(
+				"projection read_model %q is ambiguous: %s, %s",
+				readModel,
+				filepath.ToSlash(first),
+				filepath.ToSlash(second),
+			)
+		}
+		matched = path
+	}
+	if matched == "" {
+		return "", fmt.Errorf("projection read_model %q is absent", readModel)
+	}
+	return matched, nil
+}
+
 // ── builders ──────────────────────────────────────────────────────────────────
 
 func collectDomainServiceRoutes(metadataDir string) (map[string][]routeDef, error) {

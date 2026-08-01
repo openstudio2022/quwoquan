@@ -7,10 +7,16 @@ fields:
   - { name: toolName, type: string, required: true }
   - { name: displayName, type: string, default: '' }
   - { name: description, type: string, default: '' }
+  - { name: namespace, type: string, required: true }
   - { name: placement, type: string, default: cloud }
   - { name: inputSchema, type: map, default: {} }
   - { name: outputSchema, type: map, default: {} }
   - { name: requiresConfirmation, type: bool, default: false }
+  - { name: idempotency, type: string, default: none }
+  - { name: sensitivity, type: string, default: internal }
+  - { name: environmentScopes, type: list<string>, default: [] }
+  - { name: serverInjectedInputs, type: list<string>, default: [] }
+  - { name: readOnly, type: bool, default: true }
   - { name: resilience, type: object, ref: resilience_policy, default: {} }
   - { name: recovery, type: object, ref: recovery_policy, default: {} }
 subcontracts:

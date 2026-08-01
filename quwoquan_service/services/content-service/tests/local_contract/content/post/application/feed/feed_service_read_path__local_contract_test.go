@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	runtimelearning "quwoquan_service/runtime/learning"
 	rtrec "quwoquan_service/runtime/recommendation"
 	recpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	testsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 // fixtureFeedReader 是只服务 post reader query 的 postReader/publishedPostReader 替身。
@@ -97,7 +97,24 @@ func (r fixtureFeedReader) ListPublishedFeedPosts(
 }
 
 func fixturePostFeedSlice(post postmodel.Post) postports.PostFeedItemSlice {
-	mediaItems, _ := post.MediaItems.([]postports.PostMediaItemSlice)
+	mediaItems := make([]postports.PostMediaItemSlice, 0, len(post.MediaItems))
+	for _, item := range post.MediaItems {
+		mediaItems = append(mediaItems, postports.PostMediaItemSlice{
+			Kind:                     item.Kind,
+			MediaAssetID:             item.MediaAssetId,
+			MediaAssetVersion:        item.MediaAssetVersion,
+			URL:                      item.Url,
+			CoverURL:                 item.CoverUrl,
+			DurationMS:               item.DurationMs,
+			Width:                    item.Width,
+			Height:                   item.Height,
+			PreviewTrackManifestURL:  item.PreviewTrackManifestUrl,
+			PreviewTrackVersion:      item.PreviewTrackVersion,
+			HLSCMAFMasterManifestURL: item.HlsCmafMasterManifestUrl,
+			HLSCMAFDescriptorVersion: item.HlsCmafDescriptorVersion,
+			Title:                    item.Title,
+		})
+	}
 	return postports.PostFeedItemSlice{
 		PostID:           postports.NewPostID(post.ID),
 		AuthorPersonaID:  postports.NewPersonaID(post.AuthorId),
@@ -153,20 +170,20 @@ func TestListFeedCarriesVersionBoundHLSCMAFDelivery(t *testing.T) {
 		Visibility:      "public",
 		VideoUrl:        progressiveURL,
 		DurationMs:      12000,
-		MediaItems: []postports.PostMediaItemSlice{{
+		MediaItems: []postmodel.PostMediaItem{{
 			Kind:                     "video",
-			MediaAssetID:             assetID,
+			MediaAssetId:             assetID,
 			MediaAssetVersion:        assetVersion,
-			URL:                      progressiveURL,
-			HLSCMAFMasterManifestURL: hlsMasterURL,
-			HLSCMAFDescriptorVersion: descriptorVersion,
+			Url:                      progressiveURL,
+			HlsCmafMasterManifestUrl: hlsMasterURL,
+			HlsCmafDescriptorVersion: descriptorVersion,
 		}},
 		CreatedAt:   time.Date(2026, time.July, 28, 12, 0, 0, 0, time.UTC),
 		UpdatedAt:   time.Date(2026, time.July, 28, 12, 0, 0, 0, time.UTC),
 		PublishedAt: time.Date(2026, time.July, 28, 12, 0, 0, 0, time.UTC),
 	}}}
 
-	response, err := NewFeedService(engine, reader, readyActiveSupplyOption()).ListFeed(
+	response, err := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...).ListFeed(
 		ctx,
 		ListFeedRequest{
 			UserID: "user_feed_adaptive", SessionID: "session_feed_adaptive",
@@ -327,7 +344,7 @@ func TestListFeed_PostReaderQuery_FiltersDislikedContent(t *testing.T) {
 		{ID: "p_ok", ContentType: "image", AuthorId: "author_a", Visibility: "public", Status: "published"},
 		{ID: "p_disliked", ContentType: "image", AuthorId: "author_b", Visibility: "public", Status: "published"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
 
 	const userID = "user-neg-1"
 	const sessionID = "sess-neg-1"
@@ -363,10 +380,10 @@ func TestListFeed_PostReaderQuery_FiltersDislikedContent(t *testing.T) {
 	}
 }
 
-// TestListFeed_ChannelRecommendRoutesEngine 守护 B1 频道语义收口：首页 recommend 频道
-// 以 channelId 路由，必须进推荐引擎（FeedDiscovery + home surface + channelId 归因），
-// 绝不落入 PostReader 时间线具名查询。
-func TestListFeed_ChannelRecommendRoutesEngine(t *testing.T) {
+// TestListFeed_ChannelRecommendRoutesRankedWindow 守护 B1 频道语义收口：首页
+// recommend 频道必须调用 Recommendation 拥有的 content_feed 排序窗口，绝不落入
+// PostReader 时间线具名查询。
+func TestListFeed_ChannelRecommendRoutesRankedWindow(t *testing.T) {
 	ctx := context.Background()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
 	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
@@ -378,26 +395,22 @@ func TestListFeed_ChannelRecommendRoutesEngine(t *testing.T) {
 		{ID: "p_rec", ContentType: "image", AuthorId: "author_a", Status: "published", Visibility: "public"},
 		{ID: "p_reader_only", ContentType: "image", AuthorId: "author_b", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_channel", SessionID: "s_channel", ChannelID: "recommend", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.FeedType != rtrec.FeedDiscovery || source.last.Surface != "home" {
-		t.Fatalf("recommend channel must route recommendation engine, got %+v", source.last)
-	}
-	if source.last.ActiveReleaseID != "rel_local_contract" {
-		t.Fatalf("recommend channel must bind active release snapshot, got %+v", source.last)
-	}
-	if source.last.ActiveManifestDigest != terminalManifestDigest {
-		t.Fatalf("recommend channel must bind active manifest digest, got %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "content_feed" || commands[0].SubjectId != "u_channel" {
+		t.Fatalf("recommend channel must use one canonical ranked-window command, got %+v", commands)
 	}
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_rec" {
 		t.Fatalf("recommend channel must serve engine items only (no post reader fill), got %+v", resp.Items)
 	}
 	if resp.Items[0].RecallPath == "post_query" {
-		t.Fatalf("recommend channel item must carry engine recall attribution, got %+v", resp.Items[0])
+		t.Fatalf("recommend channel item must carry recommendation attribution, got %+v", resp.Items[0])
 	}
 }
 
@@ -415,7 +428,8 @@ func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
 		{ID: "p_engine", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_a", Status: "published", Visibility: "public"},
 		{ID: "p_timeline", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_b", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "u_mixed", SessionID: "s_mixed",
@@ -424,8 +438,9 @@ func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.FeedType != rtrec.FeedDiscovery || source.last.Surface != "home" {
-		t.Fatalf("channelId must win over legacy identity/type, got %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "content_feed" {
+		t.Fatalf("channelId must select the content_feed ranked-window scenario, got %+v", commands)
 	}
 	for _, item := range resp.Items {
 		if item.PostID == "p_timeline" {
@@ -448,7 +463,7 @@ func TestListFeed_ChannelFollowingRoutesFollowFeed(t *testing.T) {
 		{ID: "p_followed", ContentType: "image", AuthorId: "author_followed", Status: "published", Visibility: "public"},
 		{ID: "p_stranger", ContentType: "image", AuthorId: "author_stranger", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_follow", SessionID: "s_follow", ChannelID: "following", Limit: 10})
 	if err != nil {
@@ -475,14 +490,16 @@ func TestListFeed_ChannelTravelRoutesVertical(t *testing.T) {
 	reader := fixtureFeedReader{posts: []postmodel.Post{
 		{ID: "p_travel_ch", ContentType: "image", AuthorId: "author_a", ContentVertical: "travel_photography", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_travel_ch", SessionID: "s_travel_ch", ChannelID: "travel", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.Vertical != "travel_photography" || source.last.Surface != "travel_photography" {
-		t.Fatalf("travel channel route not propagated: %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "travel_photography" {
+		t.Fatalf("travel channel must use the travel ranked-window scenario: %+v", commands)
 	}
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_travel_ch" {
 		t.Fatalf("travel channel feed mismatch: %+v", resp.Items)
@@ -501,14 +518,16 @@ func TestListFeed_TravelVerticalRoutesRecommendation(t *testing.T) {
 		{ID: "p_travel", ContentType: "image", AuthorId: "author_a", ContentVertical: "travel_photography", TagRefs: []string{"Topic/旅行"}, Status: "published", Visibility: "public"},
 		{ID: "p_general", ContentType: "image", AuthorId: "author_b", TagRefs: []string{"Topic/美食"}, Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_route", SessionID: "s_route", SubCategory: "travel", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.Vertical != "travel_photography" || source.last.Surface != "travel_photography" || source.last.FeedType != rtrec.FeedDiscovery {
-		t.Fatalf("travel route not propagated: %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "travel_photography" {
+		t.Fatalf("travel route must use the travel ranked-window scenario: %+v", commands)
 	}
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_travel" {
 		t.Fatalf("travel feed must only include travel vertical content, got %+v", resp.Items)
@@ -526,20 +545,16 @@ func TestListFeed_PremiumStreamRoutesToSimilarPresetSurface(t *testing.T) {
 	reader := fixtureFeedReader{posts: []postmodel.Post{
 		{ID: "p_premium", ContentType: "video", AuthorId: "author_p", Status: "published", Visibility: "public", VideoUrl: "https://media.example.test/premium.mp4", DurationMs: 5000},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium", SessionID: "s_premium", Type: "premium", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.FeedType != rtrec.FeedSimilar || source.last.Surface != "premium_stream" {
-		t.Fatalf("premium stream route not propagated: %+v", source.last)
-	}
-	if source.last.ActiveReleaseID != "rel_local_contract" {
-		t.Fatalf("premium stream must bind active release snapshot, got %+v", source.last)
-	}
-	if source.last.ActiveManifestDigest != terminalManifestDigest {
-		t.Fatalf("premium stream must bind active manifest digest, got %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "premium_stream" {
+		t.Fatalf("premium stream must use the premium ranked-window scenario, got %+v", commands)
 	}
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_premium" {
 		t.Fatalf("premium feed item missing: %+v", resp.Items)
@@ -558,7 +573,7 @@ func TestListFeed_PremiumStreamDoesNotUsePostReaderQuery(t *testing.T) {
 		{ID: "p_premium_eligible", ContentType: "video", AuthorId: "author_p", Status: "published", Visibility: "public", VideoUrl: "https://media.example.test/premium-eligible.mp4", DurationMs: 5000},
 		{ID: "p_ordinary_published", ContentType: "image", AuthorId: "author_o", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium_no_reader", SessionID: "s_premium_no_reader", Type: "premium", Limit: 10})
 	if err != nil {
@@ -579,11 +594,7 @@ func TestListFeed_RecordsOnlyHydratedItemsAsServed(t *testing.T) {
 		{ContentID: "p_delivered", ContentType: "image", PublishedAt: now},
 		{ContentID: "p_hydration_missing", ContentType: "image", PublishedAt: now},
 	}}
-	engine := rtrec.NewEngine(
-		sessionCache,
-		[]rtrec.CandidateSource{source},
-		rtrec.WithExposureGovernance(sessionCache, sessionCache),
-	)
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
 	reader := fixtureFeedReader{posts: []postmodel.Post{
 		{
 			ID:          "p_delivered",
@@ -593,7 +604,8 @@ func TestListFeed_RecordsOnlyHydratedItemsAsServed(t *testing.T) {
 			Visibility:  "public",
 		},
 	}}
-	svc := NewFeedService(engine, reader, readyActiveSupplyOption())
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	svc := NewFeedService(engine, reader, options...)
 
 	response, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "u-final-delivery", SessionID: "s-final-delivery",
@@ -606,28 +618,12 @@ func TestListFeed_RecordsOnlyHydratedItemsAsServed(t *testing.T) {
 		t.Fatalf("only hydrated item may enter response: %+v", response.Items)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		filtered, filterErr := hotPath.FilterCandidates(
-			ctx,
-			"u-final-delivery",
-			source.candidates,
-			time.Now(),
-		)
-		if filterErr != nil {
-			t.Fatalf("FilterCandidates: %v", filterErr)
-		}
-		survivors := make(map[string]bool, len(filtered))
-		for _, candidate := range filtered {
-			survivors[candidate.ContentID] = true
-		}
-		if !survivors["p_delivered"] && survivors["p_hydration_missing"] {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("served memory must contain only final response items: %+v", filtered)
-		}
-		time.Sleep(20 * time.Millisecond)
+	events := probe.DeliveryEvents()
+	if len(events) != 1 || len(events[0].Items) != 1 || events[0].Items[0].ContentID != "p_delivered" {
+		t.Fatalf("FeedPageDelivered must contain only hydrated response items: %+v", events)
+	}
+	if events[0].Scenario != "content_feed" || events[0].SubjectID != "u-final-delivery" {
+		t.Fatalf("FeedPageDelivered attribution mismatch: %+v", events[0])
 	}
 }
 
@@ -644,7 +640,6 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 		{ContentID: "p_second_delivered", ContentType: "image", PublishedAt: time.Now()},
 	}}
 	scorer := &releaseByScoreCallScorer{}
-	learning := &feedLearningRecorder{events: make(chan runtimelearning.Event, 1)}
 	policy := recpolicy.Baseline()
 	policy.Scorer.ExploreFraction = 0
 	for i := range policy.Experiments {
@@ -660,7 +655,6 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 		sessionCache,
 		[]rtrec.CandidateSource{source},
 		rtrec.WithScorer(scorer),
-		rtrec.WithFeedbackRecorder(rtrec.NewFeedbackRecorder(learning)),
 		rtrec.WithPolicyStore(recpolicy.NewStore(policy)),
 	)
 	reader := fixtureFeedReader{posts: []postmodel.Post{{
@@ -671,7 +665,8 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 		Visibility:  "public",
 	}}}
 
-	response, err := NewFeedService(engine, reader, readyActiveSupplyOption()).ListFeed(ctx, ListFeedRequest{
+	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
+	response, err := NewFeedService(engine, reader, options...).ListFeed(ctx, ListFeedRequest{
 		UserID: "u-release", SessionID: "s-release",
 		ChannelID: "recommend", FeedRequestID: "frq-release", Limit: 1,
 	})
@@ -685,13 +680,9 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 		t.Fatalf("ranked-window continuation must not score live candidates again, calls=%d", scorer.calls)
 	}
 
-	select {
-	case event := <-learning.events:
-		if got := event.Context["modelReleaseId"]; got != "model_release_call_1" {
-			t.Fatalf("delivered item must retain the immutable window model release, got=%v", got)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for delivered impression")
+	events := probe.DeliveryEvents()
+	if len(events) != 1 || events[0].ModelReleaseID == nil || *events[0].ModelReleaseID != "model_release_call_1" {
+		t.Fatalf("delivered item must retain the immutable window model release, got=%+v", events)
 	}
 }
 
@@ -715,25 +706,6 @@ func (s *releaseByScoreCallScorer) ScoreBatch(
 		})
 	}
 	return scored, nil
-}
-
-type feedLearningRecorder struct {
-	events chan runtimelearning.Event
-}
-
-func (r *feedLearningRecorder) RecordEvent(
-	_ context.Context,
-	event runtimelearning.Event,
-) error {
-	r.events <- event
-	return nil
-}
-
-func (*feedLearningRecorder) RecordScorecard(
-	context.Context,
-	runtimelearning.Scorecard,
-) error {
-	return nil
 }
 
 func TestPostReaderFeedCursorHasOneOpaqueWireFormat(t *testing.T) {

@@ -61,6 +61,8 @@
 
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/fields.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/events.yaml`
 - 父能力公开契约：[`L2 spec`](../spec.md)
 
 ## 5. 验收场景
@@ -90,10 +92,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 会话绑定尚不存在
+### OPEN-001 会话绑定端口尚未接入真实 durable transport
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前发起结伴只能落到裸建群，群与相聚之间没有绑定关系，参与者名单与会话成员各自独立，退出后无法同步。
+- 影响或价值：尚缺 Chat durable consumer、反向绑定事件和生产群会话/名单同步事实；Gathering 已有 idempotent ConversationPort、draft/bound/failed 语义和失败重试本地契约。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

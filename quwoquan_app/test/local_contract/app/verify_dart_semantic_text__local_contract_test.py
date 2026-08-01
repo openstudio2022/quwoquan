@@ -58,6 +58,13 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
         )
         self.assertEqual(len(violations), 1)
 
+    def test_detects_intersection_cloud_fallback_copy(self) -> None:
+        violations = self.scan(
+            "quwoquan_app/lib/cloud/services/content/intersection_statement.dart",
+            "const fallback = Card(description: '你们都去过这里');\n",
+        )
+        self.assertEqual(len(violations), 1)
+
     def test_ignores_constants_comments_and_generated_metadata(self) -> None:
         constants = self.scan(
             "quwoquan_app/lib/ui/content/example.dart",
@@ -79,6 +86,11 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
         self.assertFalse(
             self.verifier.is_migrated_text_scope(
                 "quwoquan_app/lib/ui/rtc/example.dart"
+            )
+        )
+        self.assertTrue(
+            self.verifier.is_migrated_text_scope(
+                "quwoquan_app/lib/cloud/services/content/intersection_statement.dart"
             )
         )
 

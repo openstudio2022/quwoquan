@@ -108,7 +108,7 @@ counter_strategy:
     like: content.ContentReaction
     comment: content.Comment
     share: content.OutboundShareFact
-    view: content.BehaviorFact.impressed
+    view: content.ContentBehaviorFact.impressed
   targets:
   - posts
   - rm_discovery_feed

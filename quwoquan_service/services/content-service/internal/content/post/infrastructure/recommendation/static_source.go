@@ -7,7 +7,7 @@ import (
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 )
 
 type StaticCandidateSource struct {

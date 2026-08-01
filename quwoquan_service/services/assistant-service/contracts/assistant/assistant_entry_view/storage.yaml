@@ -1,0 +1,11 @@
+backend: mongodb
+role: projection
+collections:
+  rm_assistant_entry:
+    entity: AssistantEntryView
+    role: projection
+    indexes:
+    - {name: uq_assistant_entry_account, keys: {accountId: 1}, unique: true}
+  assistant_entry_projection_checkpoints:
+    entity: AssistantEntryProjectionCheckpoint
+    role: checkpoint

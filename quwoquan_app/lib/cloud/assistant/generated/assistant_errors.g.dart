@@ -2,8 +2,10 @@
 // ignore_for_file: constant_identifier_names
 
 enum AssistantErrorCode {
+  runUnauthorized('ASSISTANT.USER.run_unauthorized', '请先登录后使用助手能力', 401),
   runNotFound('ASSISTANT.USER.run_not_found', '本次执行不存在或已失效', 404),
   runInvalidArgument('ASSISTANT.USER.run_invalid_argument', '执行请求参数有误', 400),
+  runStateConflict('ASSISTANT.USER.run_state_conflict', '本次任务状态已经变化，请刷新后重试', 409),
   intersectionEvidenceNotFound('ASSISTANT.USER.intersection_evidence_not_found', '这条交集线索已失效或不可访问', 404),
   intersectionEvidenceUnavailable('ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable', '交集证据暂时无法核验，请稍后重试', 503),
   pageContextUnavailable('ASSISTANT.SYSTEM.page_context_unavailable', '页面上下文暂时无法保存，请稍后重试', 503),
@@ -12,9 +14,15 @@ enum AssistantErrorCode {
   runPolicyUnavailable('ASSISTANT.SYSTEM.run_policy_unavailable', '助手策略暂不可用，请稍后重试', 503),
   skillConsentRequired('ASSISTANT.USER.skill_consent_required', '该能力需要先授权后使用', 403),
   streamUnavailable('ASSISTANT.SYSTEM.stream_unavailable', '流式服务暂不可用，请稍后重试', 503),
-  upstreamTimeout('ASSISTANT.MIDDLEWARE.upstream_timeout', '请求超时，请稍后重试', 504),
+  upstreamTimeout('ASSISTANT.MIDDLEWARE.upstream_timeout', '请求超时，请稍后重试', 0),
   modelProviderUnavailable('ASSISTANT.MIDDLEWARE.model_provider_unavailable', '助手模型服务暂不可用，请稍后重试', 0),
+  runExecutionFailed('ASSISTANT.SYSTEM.run_execution_failed', '本次任务执行失败，请稍后重试', 0),
   publicSearchProviderUnavailable('ASSISTANT.MIDDLEWARE.public_search_provider_unavailable', '公开信息检索暂不可用，请稍后重试', 0),
+  webTargetRejected('ASSISTANT.USER.web_target_rejected', '该网页目标不符合公开只读访问规则', 0),
+  webFetchUnavailable('ASSISTANT.MIDDLEWARE.web_fetch_unavailable', '公开网页暂时无法读取，请稍后重试', 0),
+  webBudgetExhausted('ASSISTANT.MIDDLEWARE.web_budget_exhausted', '本次任务的网页探索预算已用完', 0),
+  webBudgetUnavailable('ASSISTANT.SYSTEM.web_budget_unavailable', '网页探索预算状态暂时不可用，请稍后重试', 0),
+  webEvidenceUnavailable('ASSISTANT.SYSTEM.web_evidence_unavailable', '网页证据暂时无法安全保存或读取，请稍后重试', 0),
   weatherProviderUnavailable('ASSISTANT.MIDDLEWARE.weather_provider_unavailable', '天气数据暂不可用，请稍后重试', 0),
   financeProviderUnavailable('ASSISTANT.MIDDLEWARE.finance_provider_unavailable', '金融行情数据暂不可用，请稍后重试', 0),
   unknown('', '找私助暂时不可用，请稍后重试', 500);
@@ -38,8 +46,10 @@ class AssistantErrorMessages {
   const AssistantErrorMessages._();
 
   static const Map<AssistantErrorCode, String> zh = <AssistantErrorCode, String>{
+    AssistantErrorCode.runUnauthorized: '请先登录后使用助手能力',
     AssistantErrorCode.runNotFound: '本次执行不存在或已失效',
     AssistantErrorCode.runInvalidArgument: '执行请求参数有误',
+    AssistantErrorCode.runStateConflict: '本次任务状态已经变化，请刷新后重试',
     AssistantErrorCode.intersectionEvidenceNotFound: '这条交集线索已失效或不可访问',
     AssistantErrorCode.intersectionEvidenceUnavailable: '交集证据暂时无法核验，请稍后重试',
     AssistantErrorCode.pageContextUnavailable: '页面上下文暂时无法保存，请稍后重试',
@@ -50,14 +60,22 @@ class AssistantErrorMessages {
     AssistantErrorCode.streamUnavailable: '流式服务暂不可用，请稍后重试',
     AssistantErrorCode.upstreamTimeout: '请求超时，请稍后重试',
     AssistantErrorCode.modelProviderUnavailable: '助手模型服务暂不可用，请稍后重试',
+    AssistantErrorCode.runExecutionFailed: '本次任务执行失败，请稍后重试',
     AssistantErrorCode.publicSearchProviderUnavailable: '公开信息检索暂不可用，请稍后重试',
+    AssistantErrorCode.webTargetRejected: '该网页目标不符合公开只读访问规则',
+    AssistantErrorCode.webFetchUnavailable: '公开网页暂时无法读取，请稍后重试',
+    AssistantErrorCode.webBudgetExhausted: '本次任务的网页探索预算已用完',
+    AssistantErrorCode.webBudgetUnavailable: '网页探索预算状态暂时不可用，请稍后重试',
+    AssistantErrorCode.webEvidenceUnavailable: '网页证据暂时无法安全保存或读取，请稍后重试',
     AssistantErrorCode.weatherProviderUnavailable: '天气数据暂不可用，请稍后重试',
     AssistantErrorCode.financeProviderUnavailable: '金融行情数据暂不可用，请稍后重试',
   };
 
   static const Map<AssistantErrorCode, String> en = <AssistantErrorCode, String>{
+    AssistantErrorCode.runUnauthorized: 'Please sign in to use assistant capabilities',
     AssistantErrorCode.runNotFound: 'Assistant run not found or expired',
     AssistantErrorCode.runInvalidArgument: 'Assistant run request is invalid',
+    AssistantErrorCode.runStateConflict: 'The assistant run state has changed; refresh and try again',
     AssistantErrorCode.intersectionEvidenceNotFound: 'This intersection evidence is no longer available',
     AssistantErrorCode.intersectionEvidenceUnavailable: 'Intersection evidence cannot be verified right now',
     AssistantErrorCode.pageContextUnavailable: 'Page context cannot be saved right now',
@@ -68,7 +86,13 @@ class AssistantErrorMessages {
     AssistantErrorCode.streamUnavailable: 'Streaming is temporarily unavailable; please try again later',
     AssistantErrorCode.upstreamTimeout: 'Request timed out, please try again later',
     AssistantErrorCode.modelProviderUnavailable: 'Assistant model service is temporarily unavailable',
+    AssistantErrorCode.runExecutionFailed: 'This assistant run failed; please try again later',
     AssistantErrorCode.publicSearchProviderUnavailable: 'Public search is temporarily unavailable',
+    AssistantErrorCode.webTargetRejected: 'This web target is not allowed by the public read-only access policy',
+    AssistantErrorCode.webFetchUnavailable: 'The public web page cannot be read right now',
+    AssistantErrorCode.webBudgetExhausted: 'This run has exhausted its public web exploration budget',
+    AssistantErrorCode.webBudgetUnavailable: 'The public web budget state is temporarily unavailable',
+    AssistantErrorCode.webEvidenceUnavailable: 'Web evidence cannot be safely stored or read right now',
     AssistantErrorCode.weatherProviderUnavailable: 'Weather data is temporarily unavailable',
     AssistantErrorCode.financeProviderUnavailable: 'Financial market data is temporarily unavailable',
   };

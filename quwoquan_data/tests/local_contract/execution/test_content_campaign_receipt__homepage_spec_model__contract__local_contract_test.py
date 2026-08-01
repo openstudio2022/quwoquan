@@ -17,12 +17,7 @@ EXECUTION_ID = (
 def test_homepage_review_receipt_uses_typed_effective_spec(monkeypatch) -> None:
     spec = ExecutionFixtureBuilder(EXECUTION_ID).spec()
     observed: list[dict[str, object]] = []
-
-    monkeypatch.setattr(
-        campaign_receipt.store,
-        "load_spec",
-        lambda _execution_id: spec.to_dict(),
-    )
+    receipts: list[dict[str, object]] = []
     monkeypatch.setattr(
         campaign_receipt.store,
         "load_spec_model",
@@ -43,6 +38,19 @@ def test_homepage_review_receipt_uses_typed_effective_spec(monkeypatch) -> None:
         "homepage_quota_verdict",
         quota_verdict,
     )
+    monkeypatch.setattr(
+        campaign_receipt,
+        "_write_immutable_receipt",
+        lambda path, payload: receipts.append(payload) or path,
+    )
 
-    assert campaign_receipt._review_counts(EXECUTION_ID, "homepage") == (1, 1, 1)
+    campaign_receipt.write_review_receipt(
+        root_execution_id=EXECUTION_ID,
+        execution_id=EXECUTION_ID,
+    )
+
     assert observed == [spec.to_dict()]
+    assert len(receipts) == 1
+    assert receipts[0]["approvedQuota"] == 1
+    assert receipts[0]["qualifiedCount"] == 1
+    assert receipts[0]["selectedCount"] == 1

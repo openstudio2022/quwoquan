@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../search/search_feedback_contracts.dart';
 
@@ -48,9 +48,20 @@ final class ReportSearchFeedbackCommand {
   final String? referralSource;
   final String? feedRequestId;
   final int? dwellMs;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "searchRequestId": this.searchRequestId,
+    "eventType": switch (this.eventType) { SearchFeedbackEventType.impression => "impression", SearchFeedbackEventType.click => "click", SearchFeedbackEventType.dwell => "dwell", SearchFeedbackEventType.refine => "refine", SearchFeedbackEventType.zeroResult => "zero_result", SearchFeedbackEventType.degrade => "degrade", },
+    if (this.objectId != null) "objectId": this.objectId!,
+    if (this.target != null) "target": this.target!,
+    if (this.rankPosition != null) "rankPosition": this.rankPosition!,
+    if (this.referralSource != null) "referralSource": this.referralSource!,
+    if (this.feedRequestId != null) "feedRequestId": this.feedRequestId!,
+    if (this.dwellMs != null) "dwellMs": this.dwellMs!,
+  };
 }
 
-CloudOperationRequestPayload encodeSearchFeedbackFactReportSearchFeedbackGeneratedRequest(ReportSearchFeedbackCommand request) {
+CloudOperationRequestPayload encodeSearchSearchFeedbackFactReportSearchFeedbackGeneratedRequest(ReportSearchFeedbackCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "searchRequestId": request.searchRequestId,

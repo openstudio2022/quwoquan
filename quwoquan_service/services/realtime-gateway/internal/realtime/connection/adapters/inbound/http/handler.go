@@ -56,6 +56,7 @@ func DefaultTransportConfig() RealtimeTransportConfig {
 type Handler struct {
 	tickets        *application.TicketService
 	hub            *application.Hub
+	resumeReader   application.ResumableEventReader
 	presenceReader application.PresenceViewReader
 	config         RealtimeTransportConfig
 }
@@ -63,15 +64,17 @@ type Handler struct {
 func NewHandler(
 	tickets *application.TicketService,
 	hub *application.Hub,
+	resumeReader application.ResumableEventReader,
 	presenceReader application.PresenceViewReader,
 	config RealtimeTransportConfig,
 ) (*Handler, error) {
-	if tickets == nil || hub == nil || presenceReader == nil {
+	if tickets == nil || hub == nil || resumeReader == nil || presenceReader == nil {
 		return nil, errors.New("realtime http handler requires ticket, hub and presence reader")
 	}
 	return &Handler{
 		tickets:        tickets,
 		hub:            hub,
+		resumeReader:   resumeReader,
 		presenceReader: presenceReader,
 		config:         config,
 	}, nil
@@ -123,6 +126,16 @@ func (h *Handler) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hold := parseHold(r.URL.Query().Get("timeout"))
+	rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	cursor := rawCursor
+	if cursor == "" {
+		cursor = "0-0"
+	} else if !runtimemessaging.IsCanonicalStreamCursor(cursor) {
+		writeError(w, r, generated.AppErrorFromInvalidArgument(
+			"realtime poll cursor must be a canonical stream coordinate",
+		))
+		return
+	}
 	pollCtx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	connID := "poll-" + uuid.NewString()
@@ -141,18 +154,87 @@ func (h *Handler) handleLongPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	defer detach()
 
-	events := collectEvents(pollCtx, sink.Events(), hold)
+	readResult := make(chan resumableEventReadResult, 1)
+	go func() {
+		events, readErr := h.resumeReader.ReadAfter(
+			pollCtx,
+			identity,
+			cursor,
+			longPollBatchLimit,
+			hold,
+		)
+		readResult <- resumableEventReadResult{events: events, err: readErr}
+	}()
+	events, nextCursor, readErr := collectLongPollEvents(
+		pollCtx,
+		sink.Events(),
+		readResult,
+		cursor,
+		hold,
+	)
 	if sink.Kicked() {
 		writeError(w, r, generated.AppErrorFromUnauthorized(
 			"realtime account security rejected the session",
 		))
 		return
 	}
-	if len(events) == 0 {
-		w.WriteHeader(http.StatusNoContent)
+	if readErr != nil {
+		writeError(w, r, generated.AppErrorFromInternalError(
+			"realtime durable cursor read failed",
+		))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events":           events,
+		"nextCursor":       nextCursor,
+		"transportResumed": rawCursor != "",
+	})
+}
+
+type resumableEventReadResult struct {
+	events []application.ResumableEvent
+	err    error
+}
+
+func collectLongPollEvents(
+	ctx context.Context,
+	ephemeral <-chan runtimemessaging.EphemeralDelivery,
+	durable <-chan resumableEventReadResult,
+	cursor string,
+	hold time.Duration,
+) ([]json.RawMessage, string, error) {
+	timer := time.NewTimer(hold)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return nil, cursor, ctx.Err()
+	case <-timer.C:
+		return []json.RawMessage{}, cursor, nil
+	case result := <-durable:
+		if result.err != nil {
+			return nil, cursor, result.err
+		}
+		events := make([]json.RawMessage, 0, len(result.events))
+		nextCursor := cursor
+		for _, event := range result.events {
+			if !json.Valid(event.Payload) {
+				continue
+			}
+			events = append(events, json.RawMessage(event.Payload))
+			nextCursor = event.Cursor
+		}
+		return events, nextCursor, nil
+	case message, ok := <-ephemeral:
+		if !ok {
+			return []json.RawMessage{}, cursor, nil
+		}
+		events := make([]json.RawMessage, 0, 4)
+		if json.Valid(message.Payload) {
+			events = append(events, json.RawMessage(message.Payload))
+		}
+		events = append(events, drainEvents(ctx, ephemeral)...)
+		return events, cursor, nil
+	}
 }
 
 func (h *Handler) handleGetPersonaPresence(

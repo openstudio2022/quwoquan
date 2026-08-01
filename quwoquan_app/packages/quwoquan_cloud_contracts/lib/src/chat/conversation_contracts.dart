@@ -1,5 +1,28 @@
 import '../operation_request_payload.dart';
+import '../generated/chat_contract_enums.g.dart';
 part '../generated/requests/chat/conversation_contracts.requests.g.dart';
+
+final class ChatGreetingIntersectionSnapshot {
+  const ChatGreetingIntersectionSnapshot({
+    required this.intersectionId,
+    required this.evidenceId,
+    required this.sourceRef,
+    required this.objectTypeRef,
+    required this.objectId,
+    required this.primaryText,
+    required this.resolvedAt,
+    this.dimension,
+  });
+
+  final String intersectionId;
+  final String evidenceId;
+  final String sourceRef;
+  final String objectTypeRef;
+  final String objectId;
+  final String primaryText;
+  final String? dimension;
+  final DateTime resolvedAt;
+}
 
 /// The wire representation emitted by Chat's Conversation query and command
 /// handlers. This pure contract intentionally owns the server response shape;
@@ -17,6 +40,7 @@ final class ChatConversation {
     required this.circleGroupId,
     required this.entityId,
     required this.originType,
+    this.originIntersectionSnapshot,
     required this.maxSeq,
     required this.memberCount,
     required this.membersRosterRevision,
@@ -28,6 +52,7 @@ final class ChatConversation {
     required this.nameEditableByAdminOnly,
     required this.lastMessageId,
     required this.lastMessagePreview,
+    required this.lastMessageType,
     required this.lastMessageTime,
     required this.messageCount,
     required this.status,
@@ -46,6 +71,7 @@ final class ChatConversation {
   final String circleGroupId;
   final String entityId;
   final String originType;
+  final ChatGreetingIntersectionSnapshot? originIntersectionSnapshot;
   final int maxSeq;
   final int memberCount;
   final int membersRosterRevision;
@@ -57,6 +83,7 @@ final class ChatConversation {
   final bool nameEditableByAdminOnly;
   final String lastMessageId;
   final String lastMessagePreview;
+  final MessageType lastMessageType;
   final DateTime lastMessageTime;
   final int messageCount;
   final String status;
@@ -185,6 +212,9 @@ ChatConversation _decodeChatConversation(Object? response) {
     circleGroupId: _requiredText(root['circleGroupId'], 'circleGroupId'),
     entityId: _requiredText(root['entityId'], 'entityId'),
     originType: _requiredText(root['originType'], 'originType'),
+    originIntersectionSnapshot: _decodeGreetingIntersectionSnapshot(
+      root['originIntersectionSnapshot'],
+    ),
     maxSeq: _requiredInt(root['maxSeq'], 'maxSeq'),
     memberCount: _requiredInt(root['memberCount'], 'memberCount'),
     membersRosterRevision: _requiredInt(
@@ -211,6 +241,7 @@ ChatConversation _decodeChatConversation(Object? response) {
       root['lastMessagePreview'],
       'lastMessagePreview',
     ),
+    lastMessageType: MessageType.fromWire(root['lastMessageType']),
     lastMessageTime: _requiredTimestamp(
       root['lastMessageTime'],
       'lastMessageTime',
@@ -219,6 +250,23 @@ ChatConversation _decodeChatConversation(Object? response) {
     status: _requiredText(root['status'], 'status'),
     createdAt: _requiredTimestamp(root['createdAt'], 'createdAt'),
     updatedAt: _requiredTimestamp(root['updatedAt'], 'updatedAt'),
+  );
+}
+
+ChatGreetingIntersectionSnapshot? _decodeGreetingIntersectionSnapshot(
+  Object? value,
+) {
+  if (value == null) return null;
+  final root = _expectObject(value, 'Greeting intersection snapshot');
+  return ChatGreetingIntersectionSnapshot(
+    intersectionId: _requiredText(root['intersectionId'], 'intersectionId'),
+    evidenceId: _requiredText(root['evidenceId'], 'evidenceId'),
+    sourceRef: _requiredText(root['sourceRef'], 'sourceRef'),
+    objectTypeRef: _requiredText(root['objectTypeRef'], 'objectTypeRef'),
+    objectId: _requiredText(root['objectId'], 'objectId'),
+    primaryText: _requiredText(root['primaryText'], 'primaryText'),
+    dimension: _optionalText(root['dimension'], 'dimension'),
+    resolvedAt: _requiredTimestamp(root['resolvedAt'], 'resolvedAt'),
   );
 }
 
@@ -449,6 +497,7 @@ const Set<String> _conversationWireKeys = <String>{
   'circleGroupId',
   'entityId',
   'originType',
+  'originIntersectionSnapshot',
   'maxSeq',
   'memberCount',
   'membersRosterRevision',
@@ -460,6 +509,7 @@ const Set<String> _conversationWireKeys = <String>{
   'nameEditableByAdminOnly',
   'lastMessageId',
   'lastMessagePreview',
+  'lastMessageType',
   'lastMessageTime',
   'messageCount',
   'status',

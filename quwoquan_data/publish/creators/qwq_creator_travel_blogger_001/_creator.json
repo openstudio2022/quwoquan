@@ -1,0 +1,21 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_travel_blogger_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Entity/地点/住宿/青旅",
+    "Format/内容角度/叙事/旅行叙事",
+    "Format/内容角度/探店/餐厅探店",
+    "Format/内容角度/攻略/省钱攻略",
+    "Format/内容载体/文章/游记",
+    "Topic/住宿/业态/民宿",
+    "Topic/旅行",
+    "Topic/旅行/出行方式/公共交通",
+    "Topic/旅行/出行方式/高铁铁路",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Topic/旅行/旅行时长/周末短途"
+  ],
+  "entityRefs": []
+}

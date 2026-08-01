@@ -15,10 +15,8 @@ import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-
-const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
-  'INTERSECTION_COMMERCE_ACTIONS_ENABLED',
-);
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show GreetingIntersectionRef;
 
 /// 交集导航归因（埋点上下文），由展示面在构造导航器时透传。
 ///
@@ -51,11 +49,9 @@ typedef IntersectionNavTrack =
 
 enum IntersectionActionDispatchStatus {
   opened,
-  deferred,
   unsupported,
   missingTarget,
   missingRouter,
-  featureDisabled,
 }
 
 class IntersectionActionDispatchResult {
@@ -66,7 +62,7 @@ class IntersectionActionDispatchResult {
   bool get didOpen => status == IntersectionActionDispatchStatus.opened;
 }
 
-/// 统一交集导航器（统一交互子契约 · A–E 横切复用，Phase 0 §20.7）。
+/// 统一交集导航器（统一交互子契约 · A–E 横切复用）。
 ///
 /// 把云侧 [IntersectionTarget]（objectType + objectId + objectKind + routeId）映射为
 /// codegen 路由
@@ -79,13 +75,9 @@ class IntersectionActionDispatchResult {
 /// 不抛错、不崩溃）。埋点经构造时注入的 [onTrack] 透传，导航器本身不依赖 Riverpod，
 /// 便于 A–E 复用与组件测试。
 class IntersectionTargetNavigator {
-  const IntersectionTargetNavigator({
-    this.onTrack,
-    this.commerceActionsEnabled = _defaultIntersectionCommerceActionsEnabled,
-  });
+  const IntersectionTargetNavigator({this.onTrack});
 
   final IntersectionNavTrack? onTrack;
-  final bool commerceActionsEnabled;
 
   /// 把对象页交集行 [IntersectionReason] 归一为统一导航 [IntersectionTarget]。
   ///
@@ -98,10 +90,7 @@ class IntersectionTargetNavigator {
     final objectKind = reason.objectKind.trim();
     final routeId = intersectionRouteIdForObjectKind(objectKind);
     return IntersectionTarget(
-      objectType: objectTypeForTarget(
-        objectKind: objectKind,
-        routeId: routeId,
-      ),
+      objectType: objectTypeForTarget(objectKind: objectKind, routeId: routeId),
       objectId: reason.actionTargetId.trim(),
       objectKind: objectKind,
       routeId: routeId,
@@ -243,7 +232,6 @@ class IntersectionTargetNavigator {
   ///
   /// 本方法只消费 codegen/DTO 字段，不维护第二套 actionKey 分类，也不在本通用交集组件内
   /// 重造多领域写操作与登录续接：
-  /// - `targetAvailability=deferred`：能力尚未上线，不可执行（展示面据此不渲染 pill）；
   /// - `assistant`：打开小艺会话（会话页自行处理登录）；
   /// - `navigate`：导航到承接页（userProfile/circleDetail/homepageDetail/我的交集）。
   ///   `requiredGates`（login 等）不在本层拦截——承接页复用既有 gate + AuthContinuation
@@ -251,12 +239,9 @@ class IntersectionTargetNavigator {
   ///   重造第二套登录逻辑（R24），也避免登录用户看不到行动入口；
   /// - `gathering`：进入既有发起群聊页作为「结伴同行」最薄承接，必须携带
   ///   target/attribution route extra；无对象上下文时不执行，避免退化成普通建群；
-  /// - `commerce`：仅在 `INTERSECTION_COMMERCE_ACTIONS_ENABLED=true` 且 target 可路由时
-  ///   执行；真实渠道未接入时默认 featureDisabled，不伪造交易；
   /// - `message`：进入对方主页并直接拉起主页既有的「私信 / 打招呼」分流，陌生人
   ///   走 greeting 破冰状态机；target 非 person 时不执行，不退化成普通对象下钻；
-  /// - `connect`：心动 / 语音房破冰状态机尚未上线，不可执行，宁可不执行也不伪装
-  ///   （§24.10 诚实红线）。
+  /// - 未登记 dispatch：fail-closed 返回 unsupported。
   IntersectionActionDispatchResult openActionHint(
     BuildContext context,
     IntersectionActionHint hint, {
@@ -265,12 +250,6 @@ class IntersectionTargetNavigator {
     IntersectionReason? evidenceReason,
     IntersectionTarget? contextObjectTarget,
   }) {
-    if (hint.targetAvailability.trim() == 'deferred') {
-      return const IntersectionActionDispatchResult(
-        IntersectionActionDispatchStatus.deferred,
-      );
-    }
-
     switch (hint.dispatch.trim()) {
       case 'assistant':
         return _openAssistant(
@@ -293,32 +272,12 @@ class IntersectionTargetNavigator {
               );
       case 'message':
         return _openMessage(context, hint, attribution);
-      case 'connect':
+      case 'gathering':
+        return _openGathering(context, hint, attribution, evidenceReason);
+      default:
         return const IntersectionActionDispatchResult(
           IntersectionActionDispatchStatus.unsupported,
         );
-      case 'gathering':
-        return _openGathering(context, hint, attribution, evidenceReason);
-      case 'commerce':
-        return _openCommerce(
-          context,
-          hint,
-          sourceRef: sourceRef,
-          attribution: attribution,
-        );
-      default:
-        return open(
-              context,
-              hint.target,
-              sourceRef: sourceRef,
-              attribution: attribution,
-            )
-            ? const IntersectionActionDispatchResult(
-                IntersectionActionDispatchStatus.opened,
-              )
-            : const IntersectionActionDispatchResult(
-                IntersectionActionDispatchStatus.missingTarget,
-              );
     }
   }
 
@@ -410,6 +369,15 @@ class IntersectionTargetNavigator {
       extra: UserProfileRouteExtra(
         personaId: userId,
         openMessageComposer: true,
+        greetingIntersectionRef: attribution == null
+            ? null
+            : GreetingIntersectionRef(
+                intersectionId: attribution.intersectionId,
+                evidenceId: attribution.evidenceId,
+                sourceRef: attribution.sourceRef,
+                objectTypeRef: target.objectType.trim(),
+                objectId: userId,
+              ),
       ),
     );
     return const IntersectionActionDispatchResult(
@@ -492,30 +460,5 @@ class IntersectionTargetNavigator {
     return const IntersectionActionDispatchResult(
       IntersectionActionDispatchStatus.opened,
     );
-  }
-
-  IntersectionActionDispatchResult _openCommerce(
-    BuildContext context,
-    IntersectionActionHint hint, {
-    required String sourceRef,
-    IntersectionNavAttribution? attribution,
-  }) {
-    if (!commerceActionsEnabled) {
-      return const IntersectionActionDispatchResult(
-        IntersectionActionDispatchStatus.featureDisabled,
-      );
-    }
-    return open(
-          context,
-          hint.target,
-          sourceRef: sourceRef,
-          attribution: attribution,
-        )
-        ? const IntersectionActionDispatchResult(
-            IntersectionActionDispatchStatus.opened,
-          )
-        : const IntersectionActionDispatchResult(
-            IntersectionActionDispatchStatus.missingTarget,
-          );
   }
 }

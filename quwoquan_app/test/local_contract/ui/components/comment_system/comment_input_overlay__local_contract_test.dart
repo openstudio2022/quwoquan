@@ -322,7 +322,7 @@ Future<void> testCommentComposerMentionsAndAttachment(
             _,
             _, {
             required contentLength,
-            required contentType,
+            required mimeType,
             required expectedSha256,
             abortTrigger,
           }) async {},

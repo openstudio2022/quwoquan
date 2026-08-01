@@ -10,23 +10,19 @@ import (
 	"sort"
 	"strings"
 
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 )
 
-const manifestFileName = "manifest.json"
+const (
+	manifestFileName      = "manifest.json"
+	profileAssetsFileName = "profile_assets.json"
+)
 
 type CatalogSource struct{}
 
 func NewCatalogSource() *CatalogSource {
 	return &CatalogSource{}
-}
-
-type manifestProjection struct {
-	SkillID     string `json:"skillId"`
-	DisplayName string `json:"displayName"`
-	Description string `json:"description,omitempty"`
-	DomainID    string `json:"domainId"`
-	IconHint    string `json:"iconHint,omitempty"`
 }
 
 func (source *CatalogSource) ListCatalogItems(
@@ -35,6 +31,17 @@ func (source *CatalogSource) ListCatalogItems(
 	root, err := skillManifestRoot()
 	if err != nil {
 		return nil, err
+	}
+	profileRaw, err := os.ReadFile(filepath.Join(root, profileAssetsFileName))
+	if err != nil {
+		return nil, fmt.Errorf("read skill profile assets: %w", err)
+	}
+	var profileAssets skillpkg.ProfileAssetCatalog
+	if err := json.Unmarshal(profileRaw, &profileAssets); err != nil {
+		return nil, fmt.Errorf("decode skill profile assets: %w", err)
+	}
+	if err := profileAssets.Validate(); err != nil {
+		return nil, fmt.Errorf("validate skill profile assets: %w", err)
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -54,9 +61,13 @@ func (source *CatalogSource) ListCatalogItems(
 		if err != nil {
 			return nil, fmt.Errorf("read skill catalog manifest %s: %w", manifestPath, err)
 		}
-		var manifest manifestProjection
+		var manifest skillpkg.Manifest
 		if err := json.Unmarshal(raw, &manifest); err != nil {
 			return nil, fmt.Errorf("decode skill catalog manifest %s: %w", manifestPath, err)
+		}
+		manifest, err = profileAssets.ResolveManifest(manifest)
+		if err != nil {
+			return nil, fmt.Errorf("resolve skill catalog manifest %s: %w", manifestPath, err)
 		}
 		manifest.SkillID = strings.TrimSpace(manifest.SkillID)
 		manifest.DisplayName = strings.TrimSpace(manifest.DisplayName)
@@ -134,14 +145,14 @@ func skillManifestRoot() (string, error) {
 		return "", fmt.Errorf("ASSISTANT_RESOURCE_ROOT is not a directory: %s", configured)
 	}
 	candidates := []string{
-		filepath.Join("resources", "skills", "assistant", "assistant_conversation"),
-		filepath.Join("quwoquan_service", "services", "assistant-service", "resources", "skills", "assistant", "assistant_conversation"),
-		filepath.Join("services", "assistant-service", "resources", "skills", "assistant", "assistant_conversation"),
+		filepath.Join("resources", "skills", "assistant", "assistant_session"),
+		filepath.Join("quwoquan_service", "services", "assistant-service", "resources", "skills", "assistant", "assistant_session"),
+		filepath.Join("services", "assistant-service", "resources", "skills", "assistant", "assistant_session"),
 	}
 	if _, file, _, ok := runtime.Caller(0); ok {
 		candidates = append(candidates, filepath.Join(
 			filepath.Dir(file), "..", "..", "..", "..", "..",
-			"resources", "skills", "assistant", "assistant_conversation",
+			"resources", "skills", "assistant", "assistant_session",
 		))
 	}
 	for _, candidate := range candidates {

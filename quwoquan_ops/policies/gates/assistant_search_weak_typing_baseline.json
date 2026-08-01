@@ -6,8 +6,8 @@
   },
   "buckets": {
     "assistant_handwritten": {
-      "map_string_dynamic": 215,
-      "dynamic_keyword": 380
+      "map_string_dynamic": 209,
+      "dynamic_keyword": 373
     },
     "core_search_repository": {
       "map_string_dynamic": 0,

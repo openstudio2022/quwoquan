@@ -60,6 +60,7 @@ func TestReadAccountSecurity_AllRegisteredResourceServicesAreAuthorized(t *testi
 	createTestProfile(t, accountID, "security_authority_registered_services")
 
 	for _, servicePrincipal := range []string{
+		"service:api-edge",
 		"service:assistant-service",
 		"service:chat-service",
 		"service:circle-service",
@@ -71,6 +72,7 @@ func TestReadAccountSecurity_AllRegisteredResourceServicesAreAuthorized(t *testi
 		"service:realtime-gateway",
 		"service:rtc-service",
 		"service:search-service",
+		"service:tag-service",
 	} {
 		t.Run(servicePrincipal, func(t *testing.T) {
 			response := doRequest(
@@ -174,6 +176,7 @@ func TestReadAccountSecurity_MissingSubjectIsNotConflatedWithAuthorityFailure(t 
 func TestCheckAccountSecurityAuthority_VerifiesScopedReadinessWithoutSubject(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	for _, servicePrincipal := range []string{
+		"service:api-edge",
 		"service:search-service",
 		"service:tag-service",
 	} {

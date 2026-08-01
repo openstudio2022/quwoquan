@@ -203,8 +203,7 @@ class AppUiSurfaces {
     description: '私助半弹层入口',
     operationIds: <String>[
       'ReportPageContext',
-      'GetEntryPersonalization',
-      'GetSuggestedActions',
+      'GetAssistantEntry',
     ],
   );
 
@@ -215,10 +214,10 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/personal',
     description: '找私助云端优先对话入口',
     operationIds: <String>[
-      'CreateAssistantConversation',
-      'ListAssistantConversations',
-      'GetAssistantConversation',
-      'ListConversationTurns',
+      'CreateAssistantSession',
+      'ListAssistantSessions',
+      'GetAssistantSession',
+      'ListSessionTurns',
       'StartAssistantRun',
       'GetAssistantRun',
       'CancelAssistantRun',
@@ -231,8 +230,7 @@ class AppUiSurfaces {
       'GetAppMessageUnreadCount',
       'AppendAssistantLearningFact',
       'ReportPageContext',
-      'GetEntryPersonalization',
-      'GetSuggestedActions',
+      'GetAssistantEntry',
       'ListSkills',
       'ListAssistantTasks',
       'SetAssistantPreference',
@@ -271,12 +269,12 @@ class AppUiSurfaces {
   static const AppUiSurface assistantHistory = AppUiSurface(
     id: 'assistantHistory',
     owner: 'assistant',
-    routeId: 'chatDetail',
-    pathTemplate: '/chat/{id}',
+    routeId: 'assistantPersonal',
+    pathTemplate: '/assistant/personal',
     description: '私助记录抽屉与分页',
     operationIds: <String>[
-      'ListAssistantConversations',
-      'ListConversationTurns',
+      'ListAssistantSessions',
+      'ListSessionTurns',
     ],
   );
 
@@ -328,8 +326,8 @@ class AppUiSurfaces {
     pathTemplate: '/search/network',
     description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
     operationIds: <String>[
-      'SearchQuery',
-      'SearchXiaoquResults',
+      'Search',
+      'StartAssistantRun',
       'UpsertRecentSearch',
       'ReportSearchFeedback',
     ],
@@ -908,17 +906,7 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/skills',
     description: '私助技能中心',
     operationIds: <String>[
-      'ListAssistantConversations',
-    ],
-  );
-
-  static const AppUiSurface personalAssistantChatAlias = AppUiSurface(
-    id: 'personalAssistantChatAlias',
-    owner: 'assistant',
-    routeId: 'chatDetail',
-    pathTemplate: '/chat/{id}',
-    description: 'assistant 会话 ID 经聊天详情路由进入私助对话',
-    operationIds: <String>[
+      'ListAssistantSessions',
     ],
   );
 
@@ -1274,7 +1262,6 @@ class AppUiSurfaces {
     circleStats,
     assistantManagement,
     assistantSkills,
-    personalAssistantChatAlias,
     settingsHome,
     settingsNotifications,
     settingsPrivacy,
@@ -1355,7 +1342,6 @@ class AppUiSurfaces {
     'circleStats': circleStats,
     'assistantManagement': assistantManagement,
     'assistantSkills': assistantSkills,
-    'personalAssistantChatAlias': personalAssistantChatAlias,
     'settingsHome': settingsHome,
     'settingsNotifications': settingsNotifications,
     'settingsPrivacy': settingsPrivacy,

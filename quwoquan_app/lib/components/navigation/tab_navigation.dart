@@ -14,23 +14,23 @@ class TabItem {
   const TabItem({required this.id, required this.label, this.key});
 }
 
-enum TabNavigationMode {
-  compactPill,
-  mixedScrollable,
-}
+enum TabNavigationMode { compactPill, mixedScrollable }
 
 class TabNavigationWidget extends ConsumerWidget {
   final String activeTab;
   final Function(String) onTabChange;
   final bool? isDark;
+
   /// 可选：自定义 Tab 列表。不传则使用默认（发现页：推荐/图片/视频/文章）
   final List<TabItem>? tabs;
   final TabNavigationMode? mode;
   final List<String> fixedTabIds;
   final GestureDragEndCallback? onHorizontalDragEnd;
   final List<Widget> trailingActions;
+
   /// 一级 tab 的对齐方式，默认居中；发现页使用 start 左对齐
   final MainAxisAlignment? tabsAlignment;
+
   /// 可选：横向滚动时使用，用于圈子页等 tab 跟随选中项滚动
   final ScrollController? tabScrollController;
 
@@ -68,7 +68,8 @@ class TabNavigationWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIsDark = (isDark ?? ref.watch(effectiveIsDarkProvider))!;
     final tabList = tabs ?? defaultTabs;
-    final resolvedMode = mode ??
+    final resolvedMode =
+        mode ??
         (tabList.length <= 4
             ? TabNavigationMode.compactPill
             : TabNavigationMode.mixedScrollable);
@@ -174,10 +175,7 @@ class TabNavigationWidget extends ConsumerWidget {
         ),
       );
     }
-    return Row(
-      mainAxisAlignment: tabsAlignment,
-      children: chips,
-    );
+    return Row(mainAxisAlignment: tabsAlignment, children: chips);
   }
 
   Widget _buildMixedScrollableNav(
@@ -189,8 +187,7 @@ class TabNavigationWidget extends ConsumerWidget {
   ) {
     final fixedSet = fixedTabIds.toSet();
     final fixedTabs = <TabItem>[
-      for (final id in fixedTabIds)
-        ...tabList.where((tab) => tab.id == id),
+      for (final id in fixedTabIds) ...tabList.where((tab) => tab.id == id),
     ];
     final scrollTabs = tabList
         .where((tab) => !fixedSet.contains(tab.id))
@@ -241,9 +238,7 @@ class TabNavigationWidget extends ConsumerWidget {
     );
 
     return CupertinoButton(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.intraGroupMd,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupMd),
       minimumSize: Size.zero,
       onPressed: () => onTabChange(tab.id),
       child: ConstrainedBox(

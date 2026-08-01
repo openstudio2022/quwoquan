@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
 type Backend interface {

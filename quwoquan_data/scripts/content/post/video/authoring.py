@@ -94,7 +94,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         frame_issues.append(
             _issue(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                stage=DataIssueStage.QUALITY,
+                stage=DataIssueStage.POST_COMPOSE,
                 ref=ref,
                 recovery=DataRecoveryAction.REWIND_DOWNLOAD,
                 message="video source frame count is below delivery policy",

@@ -19,7 +19,8 @@ class CupertinoConversationSheet extends StatelessWidget {
         CupertinoTheme.of(context).brightness ??
         MediaQuery.platformBrightnessOf(context);
     final isDark = brightness == Brightness.dark;
-    final outer = SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
+    final outer =
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
 
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),

@@ -7,12 +7,15 @@
 }
 
 (media_cors) {
+	# ?Cache-Control keeps the default no-store only when the immutable
+	# matcher below did not already set a Cache-Control. A hard-coded
+	# Cache-Control here would overwrite the immutable policy at flush time.
 	header {
 		Access-Control-Allow-Origin "*"
 		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 		Access-Control-Allow-Headers "*"
 		Cross-Origin-Resource-Policy "cross-origin"
-		Cache-Control "no-store"
+		?Cache-Control "no-store"
 	}
 	@immutable_public_media {
 		path_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$

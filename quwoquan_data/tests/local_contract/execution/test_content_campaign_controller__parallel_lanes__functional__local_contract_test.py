@@ -33,6 +33,7 @@ execution_id = value("--execution-id")
 root_id = value("--campaign-root-execution-id")
 stage = value("--stage")
 quota = int(value("--quota"))
+count = int(value("--count"))
 carrier = next(item for item in ("homepage", "article", "image", "video") if f"-{item}-" in execution_id)
 phase = "review" if stage == "review-only" else "publish"
 event_path = Path(os.environ["CAMPAIGN_EVENT_LOG"])
@@ -64,9 +65,10 @@ campaign = (
 receipts = campaign / "receipts"
 receipts.mkdir(parents=True, exist_ok=True)
 
+# Own-lane publish gate only — never wait for sibling review receipts.
 if phase == "publish":
-    required = [receipts / f"{item}-review.json" for item in ("homepage", "article", "image", "video")]
-    if not all(path.is_file() for path in required):
+    own_review = receipts / f"{carrier}-review.json"
+    if not own_review.is_file():
         raise SystemExit(31)
 
 event("start")
@@ -80,6 +82,12 @@ if (
         encoding="utf-8",
     )
 if (
+    phase == "review"
+    and os.environ.get("FAIL_REVIEW_CARRIER") == carrier
+):
+    event("end")
+    raise SystemExit(19)
+if (
     phase == "publish"
     and os.environ.get("FAIL_PUBLISH_CARRIER") == carrier
 ):
@@ -87,21 +95,54 @@ if (
     raise SystemExit(17)
 
 qualified = quota
+discards = []
 if (
     phase == "review"
     and os.environ.get("SHORT_REVIEW_CARRIER") == carrier
 ):
-    qualified = quota - 1
+    qualified = max(0, quota - 1)
+    if qualified < quota:
+        discards = [{
+            "objectRef": f"{carrier}-discard-1",
+            "issues": ["synthetic quality discard for shortfall proof"],
+        }]
+if (
+    phase == "review"
+    and os.environ.get("ZERO_REVIEW_CARRIER") == carrier
+):
+    qualified = 0
+    discards = [{
+        "objectRef": f"{carrier}-discard-all",
+        "issues": ["synthetic zero-qualified discard"],
+    }]
+
+if phase == "review":
+    status = (
+        "qualified" if qualified >= quota else ("partial" if qualified > 0 else "blocked")
+    )
+    finalized = 0
+else:
+    review = json.loads((receipts / f"{carrier}-review.json").read_text(encoding="utf-8"))
+    qualified = int(review["qualifiedCount"])
+    discards = list(review["discards"])
+    status = "finalized" if qualified >= quota else "partial"
+    finalized = qualified
+
+selected = qualified + len(discards)
 payload = {
     "schema": "quwoquan_data.content_campaign_lane_receipt",
     "rootExecutionId": root_id,
     "executionId": execution_id,
     "carrier": carrier,
     "phase": phase,
-    "status": "qualified" if phase == "review" else "finalized",
+    "status": status,
     "approvedQuota": quota,
     "qualifiedCount": qualified,
-    "finalizedCount": quota if phase == "publish" else qualified,
+    "finalizedCount": finalized,
+    "selectedCount": selected,
+    "discardedCount": len(discards),
+    "shortfallCount": max(0, quota - qualified),
+    "discards": discards,
 }
 (receipts / f"{carrier}-{phase}.json").write_text(
     json.dumps(payload),
@@ -167,7 +208,12 @@ def _runtime(tmp_path: Path, repo: Path) -> CampaignRuntimePaths:
     )
 
 
-def _request(carrier: str) -> RuntimeExecutionRequest:
+def _request(
+    carrier: str,
+    *,
+    count: int = 1,
+    quota: int = 1,
+) -> RuntimeExecutionRequest:
     return RuntimeExecutionRequest(
         family_ref=f"content/travel/{carrier}/{carrier}",
         region_ref="china",
@@ -176,8 +222,8 @@ def _request(carrier: str) -> RuntimeExecutionRequest:
             if carrier == "homepage"
             else TargetSelector.ALL
         ),
-        count=1,
-        quota=1,
+        count=count,
+        quota=quota,
         topic=None,
         source_providers=(),
         target_names=(),
@@ -196,6 +242,8 @@ def _submit_all(
     monkeypatch: pytest.MonkeyPatch,
     *,
     root_id: str = ROOT_ID,
+    count: int = 1,
+    quota: int = 1,
 ) -> None:
     monkeypatch.setattr(campaign_submission.paths, "REPO_ROOT", repo)
     for carrier in CARRIERS:
@@ -204,7 +252,7 @@ def _submit_all(
             execution_id=(
                 root_id if carrier == "homepage" else _execution_id(carrier)
             ),
-            request=_request(carrier),
+            request=_request(carrier, count=count, quota=quota),
             retry_of=None,
             repo_root=repo,
             root=runtime.campaigns_root,
@@ -268,7 +316,7 @@ def test_detached_branch_fallback_requires_campaign_context(
     }
 
 
-def test_real_subprocess_lanes_overlap_and_publish_only_after_review_barrier(
+def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -308,15 +356,118 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_review_barrier(
     }
     assert set(review_starts) == set(CARRIERS)
     assert max(review_starts.values()) < min(review_ends.values())
-    assert min(
-        row["at"] for row in publish_events if row["kind"] == "start"
-    ) >= max(review_ends.values())
+    # Own-lane ordering only: each publish starts after that carrier's review end.
+    publish_starts = {
+        row["carrier"]: row["at"]
+        for row in publish_events
+        if row["kind"] == "start"
+    }
+    assert set(publish_starts) == set(CARRIERS)
+    for carrier in CARRIERS:
+        assert publish_starts[carrier] >= review_ends[carrier]
     assert len({row["pid"] for row in review_events}) == 4
     for lane in report["lanes"].values():
         assert lane["reviewReturnCode"] == 0
         assert lane["publishReturnCode"] == 0
         assert lane["qualifiedCount"] == 1
         assert lane["finalizedCount"] == 1
+    _assert_clones_cleaned(runtime, report)
+
+
+def test_one_lane_review_failure_does_not_block_sibling_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    event_log = tmp_path / "events.ndjson"
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("FAIL_REVIEW_CARRIER", "article")
+
+    report_path = campaign_controller.run_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
+    )
+    report = read_json(report_path)
+    assert report["status"] == "succeeded_partial"
+    assert report["lanes"]["article"]["status"] == "blocked"
+    assert report["lanes"]["article"]["reviewReturnCode"] == 19
+    for carrier in ("homepage", "image", "video"):
+        assert report["lanes"][carrier]["publishReturnCode"] == 0
+        assert report["lanes"][carrier]["finalizedCount"] == 1
+    publish_carriers = {
+        row["carrier"]
+        for row in _events(event_log)
+        if row["phase"] == "publish" and row["kind"] == "start"
+    }
+    assert publish_carriers == {"homepage", "image", "video"}
+    _assert_clones_cleaned(runtime, report)
+
+
+def test_quota_shortfall_publishes_partial_qualified_objects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch, count=2, quota=2)
+    event_log = tmp_path / "events.ndjson"
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("SHORT_REVIEW_CARRIER", "image")
+
+    report_path = campaign_controller.run_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
+    )
+    report = read_json(report_path)
+    assert report["status"] == "succeeded_partial"
+    image = report["lanes"]["image"]
+    assert image["status"] == "partial"
+    assert image["qualifiedCount"] == 1
+    assert image["finalizedCount"] == 1
+    assert image["shortfallCount"] == 1
+    assert image["discardedCount"] == 1
+    for carrier in ("homepage", "article", "video"):
+        assert report["lanes"][carrier]["finalizedCount"] == 2
+        assert report["lanes"][carrier]["status"] == "finalized"
+    assert any(row["phase"] == "publish" for row in _events(event_log))
+    _assert_clones_cleaned(runtime, report)
+
+
+def test_zero_qualified_lane_stays_blocked_without_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    event_log = tmp_path / "events.ndjson"
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("ZERO_REVIEW_CARRIER", "video")
+
+    report_path = campaign_controller.run_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
+    )
+    report = read_json(report_path)
+    assert report["status"] == "succeeded_partial"
+    assert report["lanes"]["video"]["status"] == "blocked"
+    assert report["lanes"]["video"]["qualifiedCount"] == 0
+    publish_carriers = {
+        row["carrier"]
+        for row in _events(event_log)
+        if row["phase"] == "publish"
+    }
+    assert "video" not in publish_carriers
+    for carrier in ("homepage", "article", "image"):
+        assert report["lanes"][carrier]["finalizedCount"] == 1
     _assert_clones_cleaned(runtime, report)
 
 
@@ -385,42 +536,32 @@ def test_submission_collision_and_cross_lane_mismatch_fail_closed(
     assert report["phase"] == "freeze"
 
 
-def test_drift_and_quota_shortfall_never_enter_publish_and_cleanup_clones(
+def test_main_tree_drift_during_review_still_blocks_and_cleans(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for mode in ("drift", "quota"):
-        case = tmp_path / mode
-        case.mkdir()
-        repo = _create_repo(case)
-        runtime = _runtime(case, repo)
-        _submit_all(repo, runtime, monkeypatch)
-        event_log = case / "events.ndjson"
-        monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
-        if mode == "drift":
-            monkeypatch.setenv("DRIFT_CARRIER", "video")
-            monkeypatch.setenv("DRIFT_REPO", str(repo))
-        else:
-            monkeypatch.delenv("DRIFT_CARRIER", raising=False)
-            monkeypatch.delenv("DRIFT_REPO", raising=False)
-            monkeypatch.setenv("SHORT_REVIEW_CARRIER", "image")
-        with pytest.raises(ValueError):
-            campaign_controller.run_campaign(
-                ROOT_ID,
-                submission_timeout_seconds=2,
-                lane_timeout_seconds=5,
-                runtime_paths=runtime,
-            )
-        report = read_json(
-            runtime.campaigns_root / ROOT_ID / "campaign_report.json"
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    event_log = tmp_path / "events.ndjson"
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("DRIFT_CARRIER", "video")
+    monkeypatch.setenv("DRIFT_REPO", str(repo))
+    with pytest.raises(ValueError):
+        campaign_controller.run_campaign(
+            ROOT_ID,
+            submission_timeout_seconds=2,
+            lane_timeout_seconds=5,
+            runtime_paths=runtime,
         )
-        assert report["status"] == "blocked"
-        assert not any(row["phase"] == "publish" for row in _events(event_log))
-        _assert_clones_cleaned(runtime, report)
-        monkeypatch.delenv("SHORT_REVIEW_CARRIER", raising=False)
+    report = read_json(
+        runtime.campaigns_root / ROOT_ID / "campaign_report.json"
+    )
+    assert report["status"] == "blocked"
+    _assert_clones_cleaned(runtime, report)
 
 
-def test_timeout_and_publish_failure_are_blocked_with_cleanup(
+def test_timeout_and_publish_failure_are_lane_local(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -459,7 +600,8 @@ def test_timeout_and_publish_failure_are_blocked_with_cleanup(
         "CAMPAIGN_EVENT_LOG",
         str(lane_timeout_case / "events.ndjson"),
     )
-    with pytest.raises(RuntimeError, match="failed review"):
+    # All lanes time out → no publishable content → blocked + raise.
+    with pytest.raises(RuntimeError, match="no publishable"):
         campaign_controller.run_campaign(
             ROOT_ID,
             submission_timeout_seconds=2,
@@ -483,16 +625,16 @@ def test_timeout_and_publish_failure_are_blocked_with_cleanup(
     _submit_all(repo, runtime, monkeypatch)
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(failure_case / "events.ndjson"))
     monkeypatch.setenv("FAIL_PUBLISH_CARRIER", "article")
-    with pytest.raises(RuntimeError, match="failed publish"):
-        campaign_controller.run_campaign(
-            ROOT_ID,
-            submission_timeout_seconds=2,
-            lane_timeout_seconds=5,
-            runtime_paths=runtime,
-        )
-    report = read_json(
-        runtime.campaigns_root / ROOT_ID / "campaign_report.json"
+    report_path = campaign_controller.run_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
     )
-    assert report["status"] == "blocked"
+    report = read_json(report_path)
+    assert report["status"] == "succeeded_partial"
     assert report["lanes"]["article"]["publishReturnCode"] == 17
+    assert report["lanes"]["article"]["status"] == "blocked"
+    for carrier in ("homepage", "image", "video"):
+        assert report["lanes"][carrier]["finalizedCount"] == 1
     _assert_clones_cleaned(runtime, report)

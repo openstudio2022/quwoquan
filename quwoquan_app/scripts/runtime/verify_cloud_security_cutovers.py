@@ -129,7 +129,9 @@ def main() -> int:
 
     require(
         "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
-        "json['granted'] == true && revokedAt.isEmpty",
+        "if (granted is! bool)",
+        "if (revokedAt != null &&",
+        "granted: granted && revokedAt == null",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/assistant/assistant_facets.dart",
@@ -138,12 +140,15 @@ def main() -> int:
     require(
         "quwoquan_app/lib/cloud/services/assistant/assistant_consent_store.dart",
         "AssistantConsentStore({",
-        "required String actorScope",
+        "required String accountId",
+        "assistant_skill_consents:",
         "sha256.convert",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/assistant/assistant_consent_store.dart",
+        "actorScope",
         "assistant_skill_consents_v1')",
+        "'schema'",
     )
     forbid(
         "quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart",
@@ -154,16 +159,19 @@ def main() -> int:
     )
     require_package(
         "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application",
-        "assistant consent store is not configured",
-        "return nil, StoreUnavailable()",
-        "return assistant.SkillConsent{}, StoreUnavailable()",
-        "return StoreUnavailable()",
-        "return rterr.NewUnavailable(",
+        "return nil, model.ErrStorageUnavailable",
+        "return model.MutationResult{}, model.ErrStorageUnavailable",
+        "return model.ErrConsentRequired",
     )
     require(
-        "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_conversation/consent_fail_closed__security__local_contract_test.go",
-        "TestAssistantConsentFailsClosedWithoutStore",
-        "TestAssistantConsentLifecycleUsesAuthoritativeStore",
+        "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/adapters/inbound/http/handler.go",
+        "AppErrorFromConsentUnauthorized",
+        "AppErrorFromConsentUnavailable",
+    )
+    require(
+        "quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_consent/command_facades__security__local_contract_test.go",
+        "TestSkillConsentFacadesFailClosedWithoutStore",
+        "TestSkillConsentLifecycleUsesAuthoritativeStore",
     )
 
     require(
@@ -241,7 +249,11 @@ def main() -> int:
         "quwoquan_app/lib/core/providers",
         "app_providers*.dart",
         "accountId: accountId",
-        "consentActorScope = '$accountId/$personaId'",
+        "consentAccountId = accountId",
+    )
+    forbid(
+        "quwoquan_app/lib/core/providers/app_providers_client_sync.dart",
+        "consentActorScope",
     )
     require(
         "quwoquan_app/lib/assistant/observability/logging/app_exception_telemetry_service.dart",

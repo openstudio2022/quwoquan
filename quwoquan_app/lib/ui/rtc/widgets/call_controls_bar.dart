@@ -148,9 +148,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
         ),
       _ControlButton(
         icon: session.isMuted ? CupertinoIcons.mic_off : CupertinoIcons.mic,
-        label: session.isMuted
-            ? CallText.callMuted
-            : CallText.callMute,
+        label: session.isMuted ? CallText.callMuted : CallText.callMute,
         isActive: session.isMuted,
         onTap: () {
           ref.read(callSessionProvider.notifier).toggleMute();

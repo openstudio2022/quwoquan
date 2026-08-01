@@ -1,6 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 
 /// Time range filter for [RetrieveRequest]. Matches the frozen retrieve
@@ -23,16 +22,12 @@ class RetrieveTimeRange {
 
 /// Fixed, named filter group. Intentionally NOT a free-form where clause.
 class RetrieveFilters {
-  const RetrieveFilters({
-    this.tags = const <String>[],
-    this.timeRange,
-  });
+  const RetrieveFilters({this.tags = const <String>[], this.timeRange});
 
   final List<String> tags;
   final RetrieveTimeRange? timeRange;
 
-  bool get isEmpty =>
-      tags.isEmpty && (timeRange == null || timeRange!.isEmpty);
+  bool get isEmpty => tags.isEmpty && (timeRange == null || timeRange!.isEmpty);
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -90,107 +85,6 @@ class RetrieveRequest {
       if (!filters.isEmpty) 'filters': filters.toMap(),
       'page': page.toMap(),
     };
-  }
-
-  /// Compatibility bridge: convert an earlier [SearchRequest] into the unified
-  /// retrieve contract. No forbidden field (mode/objectTypes/contentTypes/
-  /// conversationType/categoryId) ever leaks; they only influence target
-  /// selection and term derivation.
-  factory RetrieveRequest.fromSearchRequest(SearchRequest request) {
-    final normalized = request.normalized();
-    return RetrieveRequest(
-      targets: _targetsFor(normalized),
-      terms: _termsFor(normalized.query),
-      page: RetrievePage(limit: normalized.limit),
-    );
-  }
-
-  static List<String> _termsFor(String query) {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
-      return const <String>[];
-    }
-    final terms = <String>[trimmed];
-    for (final token in trimmed.split(RegExp(r'\s+'))) {
-      final t = token.trim();
-      if (t.isNotEmpty && t != trimmed) {
-        terms.add(t);
-      }
-    }
-    return terms;
-  }
-
-  static List<RetrieveTarget> _targetsFor(SearchRequest request) {
-    final targets = <RetrieveTarget>{};
-    for (final objectType in request.objectTypes) {
-      switch (objectType) {
-        case SearchObjectType.contentPost:
-          targets.addAll(_contentTargets(request.contentTypes));
-        case SearchObjectType.userProfile:
-          targets.add(RetrieveTarget.user);
-        case SearchObjectType.entityHomepage:
-          targets.add(RetrieveTarget.entity);
-        case SearchObjectType.circleCircle:
-          targets.add(RetrieveTarget.circle);
-        case SearchObjectType.circleGroup:
-          targets.add(RetrieveTarget.group);
-        case SearchObjectType.chatContact:
-        case SearchObjectType.chatConversation:
-        case SearchObjectType.chatMessage:
-          targets.add(RetrieveTarget.chat);
-        case SearchObjectType.locationPlace:
-          // First-party place object (R-S05e): a free-text place referenced by
-          // content but not yet bound to an entity homepage.
-          targets.add(RetrieveTarget.location);
-        case SearchObjectType.webDocument:
-        case SearchObjectType.tag:
-        case SearchObjectType.integrationLocationPoi:
-          // Not retrieve business targets (web is a citation supplement; tag is a
-          // filter; integration.location_poi is the live 3rd-party POI handled by
-          // integration, distinct from the first-party location.place above).
-          break;
-      }
-    }
-    if (targets.isEmpty) {
-      // Default broad fan-out matching the result-mode object set
-      // (search-service DefaultResultTargets, single-sourced with the cloud).
-      targets.addAll(<RetrieveTarget>[
-        RetrieveTarget.article,
-        RetrieveTarget.photo,
-        RetrieveTarget.video,
-        RetrieveTarget.user,
-        RetrieveTarget.entity,
-        RetrieveTarget.circle,
-        RetrieveTarget.group,
-        RetrieveTarget.location,
-      ]);
-    }
-    return targets.toList(growable: false);
-  }
-
-  static Iterable<RetrieveTarget> _contentTargets(
-    Set<SearchContentTypeFilter> contentTypes,
-  ) {
-    if (contentTypes.isEmpty) {
-      return const <RetrieveTarget>[
-        RetrieveTarget.article,
-        RetrieveTarget.photo,
-        RetrieveTarget.video,
-      ];
-    }
-    final mapped = <RetrieveTarget>{};
-    for (final type in contentTypes) {
-      switch (type) {
-        case SearchContentTypeFilter.article:
-        case SearchContentTypeFilter.micro:
-          mapped.add(RetrieveTarget.article);
-        case SearchContentTypeFilter.image:
-          mapped.add(RetrieveTarget.photo);
-        case SearchContentTypeFilter.video:
-          mapped.add(RetrieveTarget.video);
-      }
-    }
-    return mapped;
   }
 }
 

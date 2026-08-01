@@ -81,7 +81,7 @@ def _assert_canonical_runtime_track() -> None:
     rec_engine_path = "quwoquan_service/runtime/recommendation/engine.go"
     search_path = (
         "quwoquan_service/services/search-service/"
-        "internal/search/search_query/application/experiments.go"
+        "internal/search/search_request_fact/application/experiments.go"
     )
     search_main_path = "quwoquan_service/services/search-service/cmd/api/main.go"
     search_config_path = (

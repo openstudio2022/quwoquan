@@ -44,10 +44,10 @@
 - 理由：`kind + vertical + objectKind` 是正交三元组。垂类的差异化应体现在**事实的丰富度**，而不是结构分叉。一旦为垂类开 kind，同一件事就有 general 与垂类两套句子与两套排序权重（第二真相源），并且端侧不得不按 `vertical` 分叉渲染，垂类数量与端侧分支数线性绑定。
 - 推论：旅行摄影**零新 kind**，三类事实各自归位到已登记的通用 kind 或推荐通道。
   - 同地到访 = 已登记的 `coVisitedEntity` / `followeeVisited`，只缺 `post.visitedAt` + `geoTagRef` 生产者，不缺 kind。
-  - 同器材 = 已 active 的 `sharedEntityAttention`，`gear` objectKind 已指向 `homepageDetail`，把器材注册为 homepage 类型即成立。
-  - 光线窗口 / 焦段 / 曝光参数**不做成交集句**。`objectKind=tag` 只有 `count` 角色且 `routeId` 为空，硬做会产出不可导航的主对象。这些事实的价值在推荐召回与内容理解（`recommend_feature` 通道），登记在 `recommendationOnlyFacts`。
+  - 器材 / 焦段 / 曝光参数**不做成交集句**，只作为作者可控披露、推荐解释与内容理解事实。`gear` objectKind 只保留既有 homepage 结构能力，不因 EXIF 自动生成交集。
+  - 光线条件进入画面氛围语义轴；它可以参与推荐与内容理解，但仍不得作为不可导航 tag 生成交集主句。上述事实统一登记在 `recommendationOnlyFacts`。
 - 被否决方案：为旅行摄影新增 `sameGearUsed` / `sharedPhotoSpot` / `sameLightWindow` 等 `travel.*` 私有 kind；或在端侧按 `vertical` 分支渲染垂类专属卡片与专属页面。
-- 约束与影响：契约与四条禁令（`forbidNewKind` / `forbidNewDimension` / `forbidNewActionKey` / `forbidClientVerticalBranch`）登记在 `intersection_kind_registry.yaml` 的 `verticalExtensionContract`，并由 `verify_intersection_kind_registry.py` 阻断：每个非 general 垂类必须登记 `objectKinds` / `taxonomyRoots` / `factProducers` / `instantiatedKinds` / `newKinds`，`newKinds` 必须为空，且任何 kind 名不得带垂类前缀。端侧 `IntersectionTargetNavigator` 继续只按 `actionKeyMeta.dispatch` / `targetAvailability` 分发。
+- 约束与影响：契约与四条禁令（`forbidNewKind` / `forbidNewDimension` / `forbidNewActionKey` / `forbidClientVerticalBranch`）登记在 `intersection_kind_registry.yaml` 的 `verticalExtensionContract`，事实生产者只引用同文件 `factProducerShapes` 的受控输入与输出 shape，并由 `verify_intersection_kind_registry.py` 阻断自由文本生产者、recommendation-only 事实回流成交集句和当前 kind 缺模板。端侧 `IntersectionTargetNavigator` 只按生成的当前 `actionKeyMeta.dispatch` 闭集分发。
 - 关联要求：`REQ-005`
 - 影响 Story：[`intersection-algorithm-closure`](./intersection-algorithm-closure/spec.md)、[`intersection-sentence-unification`](./intersection-sentence-unification/spec.md)
 - 关联验收：`SIT-005`

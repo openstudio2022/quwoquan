@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../rtc/call_session_contracts.dart';
 
@@ -28,6 +28,10 @@ final class RtcCallIdCommand {
   }
 
   final String callId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callId": this.callId,
+  };
 }
 
 final class RtcGetCallQuery {
@@ -40,6 +44,10 @@ final class RtcGetCallQuery {
   }
 
   final String callId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callId": this.callId,
+  };
 }
 
 final class RtcInitiateCallCommand {
@@ -61,6 +69,14 @@ final class RtcInitiateCallCommand {
   final String? conversationId;
   final String? circleId;
   final int maxParticipants;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callType": switch (this.callType) { CallType.audio => "audio", CallType.video => "video", },
+    "inviteeIds": this.inviteeIds.map((value) => value).toList(growable: false),
+    if (this.conversationId != null) "conversationId": this.conversationId!,
+    if (this.circleId != null) "circleId": this.circleId!,
+    "maxParticipants": this.maxParticipants,
+  };
 }
 
 final class RtcInviteToCallCommand {
@@ -76,6 +92,11 @@ final class RtcInviteToCallCommand {
 
   final String callId;
   final List<String> inviteeIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callId": this.callId,
+    "inviteeIds": this.inviteeIds.map((value) => value).toList(growable: false),
+  };
 }
 
 final class RtcListCallsQuery {
@@ -93,6 +114,13 @@ final class RtcListCallsQuery {
   final int limit;
   final CallStatus? status;
   final bool missedOnly;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    if (this.status != null) "status": switch (this.status!) { CallStatus.initiated => "initiated", CallStatus.ringing => "ringing", CallStatus.connecting => "connecting", CallStatus.inCall => "in_call", CallStatus.ended => "ended", },
+    "missed": this.missedOnly,
+  };
 }
 
 final class RtcToggleCameraCommand {
@@ -108,6 +136,11 @@ final class RtcToggleCameraCommand {
 
   final String callId;
   final bool cameraOn;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callId": this.callId,
+    "cameraOn": this.cameraOn,
+  };
 }
 
 final class RtcToggleMuteCommand {
@@ -123,6 +156,11 @@ final class RtcToggleMuteCommand {
 
   final String callId;
   final bool muted;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "callId": this.callId,
+    "muted": this.muted,
+  };
 }
 
 CloudOperationRequestPayload encodeRtcCallSessionAnswerCallGeneratedRequest(RtcCallIdCommand request) {

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../content/media_contracts.dart';
 
@@ -18,14 +18,20 @@ final class AbortContentMediaUploadCommand {
   }
 
   final String sessionId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "sessionId": this.sessionId,
+  };
 }
 
 final class CompleteContentMediaUploadCommand {
   CompleteContentMediaUploadCommand({
     required String sessionId,
     ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
+    ContentMediaCaptureMetadata? captureMetadata,
   }) : sessionId = sessionId.trim(),
-       accessPolicy = accessPolicy {
+       accessPolicy = accessPolicy,
+       captureMetadata = captureMetadata {
     if (this.sessionId.isEmpty) {
       throw ArgumentError.value(this.sessionId, "sessionId", 'must not be blank');
     }
@@ -33,6 +39,13 @@ final class CompleteContentMediaUploadCommand {
 
   final String sessionId;
   final ContentMediaAccessPolicy accessPolicy;
+  final ContentMediaCaptureMetadata? captureMetadata;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "sessionId": this.sessionId,
+    "accessPolicy": switch (this.accessPolicy) { ContentMediaAccessPolicy.ownerOnly => "owner_only", ContentMediaAccessPolicy.referencedPost => "referenced_post", ContentMediaAccessPolicy.public => "public", },
+    if (this.captureMetadata != null) "captureMetadata": this.captureMetadata!.toWire(),
+  };
 }
 
 final class DiscardContentMediaAssetCommand {
@@ -45,6 +58,10 @@ final class DiscardContentMediaAssetCommand {
   }
 
   final String mediaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaId": this.mediaId,
+  };
 }
 
 final class GetContentMediaAssetQuery {
@@ -57,6 +74,10 @@ final class GetContentMediaAssetQuery {
   }
 
   final String mediaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaId": this.mediaId,
+  };
 }
 
 final class GetContentMediaUploadSessionQuery {
@@ -69,27 +90,38 @@ final class GetContentMediaUploadSessionQuery {
   }
 
   final String sessionId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "sessionId": this.sessionId,
+  };
 }
 
 final class InitContentMediaUploadCommand {
   InitContentMediaUploadCommand({
     required ContentMediaType mediaType,
-    required String contentType,
+    required String mimeType,
     required int fileSize,
     required String expectedSha256,
   }) : mediaType = mediaType,
-       contentType = contentType.trim(),
+       mimeType = mimeType.trim(),
        fileSize = fileSize,
        expectedSha256 = expectedSha256.trim().toLowerCase() {
-    if (this.contentType.isEmpty) {
-      throw ArgumentError.value(this.contentType, "contentType", 'must not be blank');
+    if (this.mimeType.isEmpty) {
+      throw ArgumentError.value(this.mimeType, "mimeType", 'must not be blank');
     }
   }
 
   final ContentMediaType mediaType;
-  final String contentType;
+  final String mimeType;
   final int fileSize;
   final String expectedSha256;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaType": switch (this.mediaType) { ContentMediaType.image => "image", ContentMediaType.video => "video", ContentMediaType.audio => "audio", ContentMediaType.file => "file", },
+    "mimeType": this.mimeType,
+    "fileSize": this.fileSize,
+    "expectedSha256": this.expectedSha256,
+  };
 }
 
 final class RequestContentMediaOriginalAccessCommand {
@@ -105,6 +137,11 @@ final class RequestContentMediaOriginalAccessCommand {
 
   final String mediaId;
   final ContentMediaOriginalAccessPurpose purpose;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaId": this.mediaId,
+    "purpose": switch (this.purpose) { ContentMediaOriginalAccessPurpose.view => "view", ContentMediaOriginalAccessPurpose.save => "save", },
+  };
 }
 
 final class SelectAutoContentMediaCoverCommand {
@@ -117,6 +154,10 @@ final class SelectAutoContentMediaCoverCommand {
   }
 
   final String mediaId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaId": this.mediaId,
+  };
 }
 
 final class SelectManualContentMediaCoverCommand {
@@ -135,6 +176,12 @@ final class SelectManualContentMediaCoverCommand {
   final String mediaId;
   final String? coverAssetId;
   final int coverFrameTimeMs;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "mediaId": this.mediaId,
+    if (this.coverAssetId != null) "coverAssetId": this.coverAssetId!,
+    "coverFrameTimeMs": this.coverFrameTimeMs,
+  };
 }
 
 CloudOperationRequestPayload encodeContentMediaAssetDiscardMediaAssetGeneratedRequest(DiscardContentMediaAssetCommand request) {
@@ -199,6 +246,7 @@ CloudOperationRequestPayload encodeContentMediaUploadSessionCompleteMediaUploadG
     },
     body: <String, Object?>{
       "accessPolicy": switch (request.accessPolicy) { ContentMediaAccessPolicy.ownerOnly => "owner_only", ContentMediaAccessPolicy.referencedPost => "referenced_post", ContentMediaAccessPolicy.public => "public", },
+      if (request.captureMetadata != null) "captureMetadata": request.captureMetadata!.toWire(),
     },
   );
 }
@@ -215,7 +263,7 @@ CloudOperationRequestPayload encodeContentMediaUploadSessionInitMediaUploadGener
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "mediaType": switch (request.mediaType) { ContentMediaType.image => "image", ContentMediaType.video => "video", ContentMediaType.audio => "audio", ContentMediaType.file => "file", },
-      "contentType": request.contentType,
+      "mimeType": request.mimeType,
       "fileSize": request.fileSize,
       "expectedSha256": request.expectedSha256,
     },

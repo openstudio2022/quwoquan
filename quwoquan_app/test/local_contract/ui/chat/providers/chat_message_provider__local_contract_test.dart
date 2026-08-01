@@ -2,8 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -15,11 +15,18 @@ final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 void main() {
   group('ChatMessageNotifier', () {
     test('loadMessages fills missing sender snapshots from members', () async {
+      final mediaEndpoints = MediaEndpointConfig(
+        avatarBaseUrl: 'https://avatar.example.test/media/avatar',
+        imageBaseUrl: 'https://image.example.test/media/image',
+        videoBaseUrl: 'https://video.example.test/media/video',
+        attachmentBaseUrl: 'https://image.example.test/media/image',
+      );
       final container = ProviderContainer(
         overrides: [
           chatRepositoryCompositionProvider.overrideWithValue(
             MockChatRepository(),
           ),
+          mediaEndpointConfigProvider.overrideWithValue(mediaEndpoints),
         ],
       );
       addTearDown(container.dispose);
@@ -40,14 +47,14 @@ void main() {
       expect(friendMessage.senderName, '契约联系人');
       expect(
         friendMessage.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/s/'
+        'https://avatar.example.test/media/avatar/s/'
         'archived-avatar/user/fixture_user_friend/v1/avatar.png',
         reason: '统一 alpha 测试入口注入的 avatar CDN 必须解析相对头像引用',
       );
       expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/s/'
+        'https://avatar.example.test/media/avatar/s/'
         'archived-avatar/user/fixture_user_current/v1/avatar.png',
         reason: '不得改用本地 gateway 或额外 URL 拼接回退',
       );
@@ -84,7 +91,7 @@ void main() {
           assetId: 'asset_photo_001',
           deliveryUrl: 'https://cdn.example.com/photo.jpg',
           mediaType: 'image',
-          contentType: 'image/jpeg',
+          mimeType: 'image/jpeg',
           thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
           fileSizeBytes: 1024,
         ),

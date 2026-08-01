@@ -513,7 +513,7 @@ def main() -> int:
         or "QWQ_PUBLIC_TLS_CERT_FILE" not in gamma_compose
         or "QWQ_PUBLIC_TLS_KEY_FILE" not in gamma_compose
     ):
-        issues.append("gamma launcher and compose must mount DNS-01 public certificates")
+        issues.append("gamma launcher and compose must mount canonical target certificates")
     if '${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data' not in gamma_compose:
         issues.append("gamma compose must bind Caddy data to a named volume")
     if '${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config' not in gamma_compose:

@@ -1,71 +1,57 @@
 part of 'assistant_repository.dart';
 
-/// Xiaoqu network-search transport.
-mixin _RemoteAssistantXiaoquSearch on _RemoteAssistantRepositoryBase
-    implements AssistantXiaoquSearchFacet {
+/// 全网搜索通过 [StartAssistantRun] 执行；本 mixin 不拥有搜索专用 HTTP 路由。
+mixin _RemoteAssistantSearchRun
+    on _RemoteAssistantRepositoryBase, _RemoteAssistantSessionRun
+    implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    // 不再本地合成"假搜索摘要"；空 query、非 2xx、解码失败或空回显一律抛
-    // 结构化 CloudException，由消费页走错误态。
-    const path = AssistantApiMetadata.searchXiaoquResultsPath;
-    final trimmedQuery = query.trim();
-    if (trimmedQuery.isEmpty) {
-      throw CloudErrorMapper.fromException(
-        ArgumentError.value(query, 'query', 'must not be empty'),
-        requestPath: path,
-      );
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      throw ArgumentError.value(query, 'query', 'must not be empty');
     }
-    try {
-      final uri = _assistantUri(path);
-      final response = await _httpClient.post(
-        uri,
-        headers: <String, String>{
-          ..._headersForNetworkResults(
-            operationId: AssistantApiMetadata.searchXiaoquResultsOperation,
-          ),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          AssistantSearchXiaoquRequestWire(
-            userQuery: trimmedQuery,
-            searchIntensity: searchIntensity,
-            sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
-            fromGlobalSearch: true,
-            contextSnapshot: contextSnapshot,
-          ).toJson(),
+    final session = await createAssistantSession(
+      summary: normalizedQuery,
+      clientRequestId: sessionClientRequestId,
+    );
+    final run = await _startAssistantRunIntent(
+      sessionId: session.sessionId,
+      clientRequestId: runClientRequestId,
+      intent: AssistantRunIntent(
+        kind: AssistantRunIntentKind.search,
+        search: AssistantSearchRunIntent(
+          query: normalizedQuery,
+          searchIntensity: searchIntensity,
+          sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
+          fromGlobalSearch: true,
         ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw CloudErrorMapper.fromStatusCode(
-          response.statusCode,
-          body: response.body,
-          requestPath: path,
-        );
+      ),
+      contextSnapshot: contextSnapshot,
+      networkSurface: true,
+    );
+    await for (final event in watchAssistantRunEvents(runId: run.runId)) {
+      if (_isAssistantTerminalStreamEvent(event)) {
+        break;
       }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : CloudResponseDecoder.asObject(
-              jsonDecode(response.body),
-              context: _networkResultsContext(
-                operationId: AssistantApiMetadata.searchXiaoquResultsOperation,
-              ),
-            );
-      final result = AssistantSearchResultView.fromJson(decoded);
-      if (result.queryEcho.isEmpty &&
-          (result.summary?.trim().isEmpty ?? true)) {
-        throw const FormatException(
-          'xiaoqu search result is missing queryEcho and summary',
-        );
-      }
-      return result;
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
     }
+    final terminalRun = await getAssistantRun(runId: run.runId);
+    final snapshot = terminalRun.terminalSnapshot;
+    if (snapshot == null) {
+      throw const FormatException(
+        'assistant search run completed without terminalSnapshot',
+      );
+    }
+    if (snapshot.failure != null) {
+      throw FormatException(
+        'assistant search run failed: ${snapshot.failure!.code}',
+      );
+    }
+    return snapshot;
   }
 }

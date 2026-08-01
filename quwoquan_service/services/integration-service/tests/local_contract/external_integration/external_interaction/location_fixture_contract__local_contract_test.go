@@ -50,7 +50,7 @@ func TestContractFixtureSeed_LocationPOIReadsViaHandler(t *testing.T) {
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
 			return pois, nil
 		},
-		searchFn: func(model.SearchQuery) ([]model.POI, error) {
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) {
 			return pois, nil
 		},
 	}

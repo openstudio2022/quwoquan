@@ -40,6 +40,7 @@ class AppForwardPayload {
     this.shareText = '',
     this.previewBuilder,
     this.extra = const <String, Object?>{},
+    this.objectRef,
   });
 
   final AppForwardSubjectKind kind;
@@ -51,6 +52,7 @@ class AppForwardPayload {
   final String shareText;
   final WidgetBuilder? previewBuilder;
   final Map<String, Object?> extra;
+  final ChatMessageCardObjectRef? objectRef;
 
   String get messagePreview {
     final explicit = shareText.trim();
@@ -64,6 +66,7 @@ class AppForwardPayload {
     return ChatMessageCardCommand(
       kind: kind.wire,
       title: title,
+      objectRef: objectRef,
       subtitle: subtitle,
       thumbnailUrl: thumbnailUrl,
       deeplink: deeplink,

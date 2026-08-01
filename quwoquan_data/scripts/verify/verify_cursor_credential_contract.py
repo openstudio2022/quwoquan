@@ -14,6 +14,10 @@ from core.paths import REPO_ROOT
 
 
 RETIRED_ALIAS = "QWQ_CURSOR_API_KEY" + "FILE"
+_PROHIBITED_SOURCE_FRAGMENTS = (
+    "allow_api_key_env_fallback" + "=True",
+    "os.environ[CURSOR_API_KEY_ENV]" + " =",
+)
 
 
 def cursor_credential_contract_issues(
@@ -33,6 +37,19 @@ def cursor_credential_contract_issues(
     )
     if tracked.stdout.strip():
         issues.extend(f"retired credential alias: {line}" for line in tracked.stdout.splitlines()[:20])
+    for fragment in _PROHIBITED_SOURCE_FRAGMENTS:
+        matches = subprocess.run(
+            ["git", "grep", "-n", "-I", "-F", "-e", fragment, "--", "quwoquan_data/scripts"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if matches.stdout.strip():
+            issues.extend(
+                f"forbidden Cursor credential environment fallback: {line}"
+                for line in matches.stdout.splitlines()[:20]
+            )
     return issues
 
 
@@ -45,3 +62,7 @@ def main() -> int:
         return 1
     print("[verify_cursor_credential_contract] OK")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -49,6 +49,11 @@ var SupportedEventTypes = []string{
 const AssistantMentionedStream = "events.chat.assistant_mentions"
 
 const (
+	realtimeResumeRetention = 24 * time.Hour
+	realtimeFanoutBatchSize = 64
+)
+
+const (
 	recipientCacheTTL        = 30 * time.Second
 	recipientCacheMaxEntries = 4096
 )
@@ -63,8 +68,9 @@ type ConversationRecipientResolver interface {
 // EventPublisher 发布实时扇出事件与持久跨服务事件。
 // 具体 Redis client 只在 runtime MessageTransport 内部，业务 adapter 不直接选择 scene。
 type EventPublisher struct {
-	transport runtimemessaging.MessageTransport
-	resolver  ConversationRecipientResolver
+	transport       runtimemessaging.MessageTransport
+	resumeTransport runtimemessaging.MessageTransport
+	resolver        ConversationRecipientResolver
 
 	mu    sync.Mutex
 	cache map[string]recipientCacheEntry
@@ -84,7 +90,14 @@ func NewEventPublisher(
 	if err != nil {
 		panic(err)
 	}
-	return NewEventPublisherWithTransport(transport, resolver)
+	resumeTransport, err := runtimemessaging.NewRedisMessageTransport(
+		realtimeClient,
+		realtimeClient,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return NewEventPublisherWithTransports(transport, resumeTransport, resolver)
 }
 
 // NewEventPublisherWithTransport is the production composition entrypoint.
@@ -94,13 +107,25 @@ func NewEventPublisherWithTransport(
 	transport runtimemessaging.MessageTransport,
 	resolver ConversationRecipientResolver,
 ) *EventPublisher {
-	if transport == nil || resolver == nil {
+	return NewEventPublisherWithTransports(transport, transport, resolver)
+}
+
+// NewEventPublisherWithTransports keeps object-wide durable events on the
+// general scene while writing per-recipient resumable delivery records to the
+// realtime scene consumed by realtime-gateway.
+func NewEventPublisherWithTransports(
+	transport runtimemessaging.MessageTransport,
+	resumeTransport runtimemessaging.MessageTransport,
+	resolver ConversationRecipientResolver,
+) *EventPublisher {
+	if transport == nil || resumeTransport == nil || resolver == nil {
 		panic("chat event publisher requires realtime, durable and recipient dependencies")
 	}
 	return &EventPublisher{
-		transport: transport,
-		resolver:  resolver,
-		cache:     map[string]recipientCacheEntry{},
+		transport:       transport,
+		resumeTransport: resumeTransport,
+		resolver:        resolver,
+		cache:           map[string]recipientCacheEntry{},
 	}
 }
 
@@ -124,18 +149,102 @@ func (p *EventPublisher) Publish(ctx context.Context, evt DomainEvent) error {
 		return fmt.Errorf("resolve recipients for %s: %w", evt.ConversationID, err)
 	}
 	recipients = recipientsForEvent(recipients, evt)
-	for _, userID := range recipients {
-		if err := p.transport.PublishEphemeral(
-			ctx,
-			runtimemessaging.EphemeralMessage{
-				Channel: "rt:user:" + userID,
-				Payload: payload,
-			},
-		); err != nil {
-			return fmt.Errorf("publish to rt:user:%s: %w", userID, err)
+	var publishErrors []error
+	for offset := 0; offset < len(recipients); offset += realtimeFanoutBatchSize {
+		end := offset + realtimeFanoutBatchSize
+		if end > len(recipients) {
+			end = len(recipients)
+		}
+		if err := p.publishRecipientBatch(ctx, evt, payload, recipients[offset:end]); err != nil {
+			publishErrors = append(publishErrors, err)
 		}
 	}
+	return errors.Join(publishErrors...)
+}
+
+func (p *EventPublisher) publishRecipientBatch(
+	ctx context.Context,
+	evt DomainEvent,
+	payload []byte,
+	recipients []string,
+) error {
+	errorsByRecipient := make(chan error, len(recipients))
+	var wait sync.WaitGroup
+	for _, recipient := range recipients {
+		userID := recipient
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			if strings.TrimSpace(evt.EventID) != "" {
+				if err := p.appendResumeEvent(ctx, userID, evt, payload); err != nil {
+					errorsByRecipient <- fmt.Errorf(
+						"append resume event for rt:user:%s: %w",
+						userID,
+						err,
+					)
+					return
+				}
+			}
+			if err := p.transport.PublishEphemeral(
+				ctx,
+				runtimemessaging.EphemeralMessage{
+					Channel: "rt:user:" + userID,
+					Payload: payload,
+				},
+			); err != nil {
+				errorsByRecipient <- fmt.Errorf("publish to rt:user:%s: %w", userID, err)
+			}
+		}()
+	}
+	wait.Wait()
+	close(errorsByRecipient)
+	var batchErrors []error
+	for err := range errorsByRecipient {
+		batchErrors = append(batchErrors, err)
+	}
+	return errors.Join(batchErrors...)
+}
+
+func (p *EventPublisher) appendResumeEvent(
+	ctx context.Context,
+	userID string,
+	evt DomainEvent,
+	payload []byte,
+) error {
+	stream := RealtimeResumeStream(userID)
+	fields := []runtimemessaging.DurableField{
+		{Name: "eventId", Value: evt.EventID},
+		{Name: "eventType", Value: evt.Type},
+		{Name: "conversationId", Value: evt.ConversationID},
+		{Name: "payload", Value: string(payload)},
+	}
+	if messageID := stringPayload(evt.Payload, "messageId"); messageID != "" {
+		fields = append(fields, runtimemessaging.DurableField{
+			Name: "messageId", Value: messageID,
+		})
+	}
+	if rawSeq, exists := evt.Payload["seq"]; exists && rawSeq != nil {
+		if seq := streamString(rawSeq); seq != "" {
+			fields = append(fields, runtimemessaging.DurableField{Name: "seq", Value: seq})
+		}
+	}
+	if _, err := p.resumeTransport.AppendDurable(
+		ctx,
+		runtimemessaging.DurableMessage{Stream: stream, Fields: fields},
+	); err != nil {
+		return err
+	}
+	if retention, ok := p.resumeTransport.(runtimemessaging.DurableDeliveryTransport); ok {
+		return retention.SetDurableRetention(ctx, stream, realtimeResumeRetention)
+	}
 	return nil
+}
+
+// RealtimeResumeStream is the canonical per-recipient resume coordinate shared
+// with realtime-gateway. The suffix is a trusted account identifier and must
+// never be accepted from an unauthenticated request parameter.
+func RealtimeResumeStream(userID string) string {
+	return runtimemessaging.RealtimeChatResumeStream(userID)
 }
 
 // rosterMutatingEventTypes 触发接收者缓存失效：新成员必须立即可达，

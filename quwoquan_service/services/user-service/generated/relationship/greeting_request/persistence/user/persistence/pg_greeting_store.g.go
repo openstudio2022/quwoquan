@@ -27,11 +27,11 @@ func NewPGGreetingStoreBase(pool *pgxpool.Pool) *PGGreetingStoreBase {
 	return &PGGreetingStoreBase{pool: pool}
 }
 
-const GreetingRequestCols = `id, requester_persona_id, target_persona_id, request_message, status, source, promoted_conversation_id, expire_at, decision_at, created_at, updated_at`
+const GreetingRequestCols = `id, requester_persona_id, target_persona_id, request_message, intersection_ref, intersection_snapshot, status, source, promoted_conversation_id, expire_at, decision_at, created_at, updated_at`
 
 func ScanGreetingRequest(row pgx.Row) (*model.GreetingRequest, error) {
 	e := &model.GreetingRequest{}
-	err := row.Scan(&e.ID, &e.RequesterPersonaID, &e.TargetPersonaID, &e.RequestMessage, &e.Status, &e.Source, &e.PromotedConversationID, &e.ExpireAt, &e.DecisionAt, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.ID, &e.RequesterPersonaID, &e.TargetPersonaID, &e.RequestMessage, &e.IntersectionRef, &e.IntersectionSnapshot, &e.Status, &e.Source, &e.PromotedConversationID, &e.ExpireAt, &e.DecisionAt, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -53,8 +53,8 @@ func (s *PGGreetingStoreBase) Create(ctx context.Context, e *model.GreetingReque
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO greeting_requests (id, requester_persona_id, target_persona_id, request_message, status, source, promoted_conversation_id, expire_at, decision_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		e.ID, e.RequesterPersonaID, e.TargetPersonaID, e.RequestMessage, e.Status, e.Source, e.PromotedConversationID, e.ExpireAt, e.DecisionAt, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO greeting_requests (id, requester_persona_id, target_persona_id, request_message, intersection_ref, intersection_snapshot, status, source, promoted_conversation_id, expire_at, decision_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		e.ID, e.RequesterPersonaID, e.TargetPersonaID, e.RequestMessage, e.IntersectionRef, e.IntersectionSnapshot, e.Status, e.Source, e.PromotedConversationID, e.ExpireAt, e.DecisionAt, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -62,8 +62,8 @@ func (s *PGGreetingStoreBase) Create(ctx context.Context, e *model.GreetingReque
 func (s *PGGreetingStoreBase) Update(ctx context.Context, e *model.GreetingRequest) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE greeting_requests SET requester_persona_id=$2, target_persona_id=$3, request_message=$4, status=$5, source=$6, promoted_conversation_id=$7, expire_at=$8, decision_at=$9, created_at=$10, updated_at=$11 WHERE id = $1`,
-		e.ID, e.RequesterPersonaID, e.TargetPersonaID, e.RequestMessage, e.Status, e.Source, e.PromotedConversationID, e.ExpireAt, e.DecisionAt, e.CreatedAt, e.UpdatedAt)
+		`UPDATE greeting_requests SET requester_persona_id=$2, target_persona_id=$3, request_message=$4, intersection_ref=$5, intersection_snapshot=$6, status=$7, source=$8, promoted_conversation_id=$9, expire_at=$10, decision_at=$11, created_at=$12, updated_at=$13 WHERE id = $1`,
+		e.ID, e.RequesterPersonaID, e.TargetPersonaID, e.RequestMessage, e.IntersectionRef, e.IntersectionSnapshot, e.Status, e.Source, e.PromotedConversationID, e.ExpireAt, e.DecisionAt, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}

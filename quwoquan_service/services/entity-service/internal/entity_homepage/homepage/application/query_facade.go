@@ -83,7 +83,7 @@ func (f *QueryFacade) FindHomepageStatus(
 
 func (f *QueryFacade) Search(
 	ctx context.Context,
-	query homepageports.SearchQuery,
+	query homepageports.SearchRequestFact,
 ) (SearchSlice, error) {
 	page, err := f.reader.Search(ctx, query)
 	if err != nil {

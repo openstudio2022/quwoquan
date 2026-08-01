@@ -214,6 +214,30 @@ class _RetryTransportClient:
 
 
 class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
+    def test_init_upload_uses_canonical_mime_type_field(self) -> None:
+        client = mock.Mock()
+        client.request.return_value = (
+            200,
+            {
+                "sessionId": "session-image",
+                "uploadUrl": "https://upload.example.test/session-image",
+            },
+        )
+
+        probe._init_upload(
+            client,
+            media_type="image",
+            content_type="image/png",
+            payload=b"png-payload",
+            idempotency_key="image-init-key",
+        )
+
+        self.assertEqual(client.request.call_count, 2)
+        for call in client.request.call_args_list:
+            body = call.kwargs["body"]
+            self.assertEqual(body["mimeType"], "image/png")
+            self.assertNotIn("contentType", body)
+
     def test_idempotent_media_command_retries_transient_gateway_status(self) -> None:
         client = _RetryTransportClient([503, 200])
 
@@ -278,58 +302,49 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
             ],
         )
 
-    def test_media_viewer_uses_seeded_persona_without_unsupported_profile(self) -> None:
-        self.assertEqual(probe.MEDIA_VIEWER_SUBJECT, "fixture_user_friend")
+    def test_media_viewer_uses_second_candidate_bound_account(self) -> None:
         expected = probe_support.LocalAcceptanceSession(
-            owner_id="fixture_user_friend",
-            persona_id="fixture_user_friend",
+            owner_id="acceptance-viewer",
+            persona_id="acceptance-viewer",
             access_token="token",
         )
         with mock.patch.object(
             probe_support,
-            "open_local_acceptance_session",
+            "open_reference_acceptance_session",
             return_value=expected,
         ) as open_session:
             actual = probe_support.media_viewer_session(
                 environment="beta",
                 base_url="https://api.beta.example.invalid",
                 target_name="beta-local",
-                subject="fixture_user_friend",
             )
 
-        self.assertIs(actual, expected)
+        self.assertEqual(actual.owner_id, expected.owner_id)
+        self.assertEqual(actual.persona_id, expected.persona_id)
         self.assertEqual(
-            open_session.call_args.kwargs["subject"],
-            "fixture_user_friend",
+            open_session.call_args.kwargs["actor_index"],
+            1,
         )
         self.assertNotIn("profile", open_session.call_args.kwargs)
 
     def test_moderation_operator_uses_dedicated_least_privilege_profile(self) -> None:
         expected = probe_support.LocalAcceptanceSession(
-            owner_id="fixture_content_moderation_operator",
-            persona_id="fixture_content_moderation_operator",
+            owner_id="hosted-content-moderation-operator",
+            persona_id="hosted-content-moderation-operator",
             access_token="token",
         )
-        with mock.patch.object(
-            probe_support,
-            "open_local_acceptance_session",
-            return_value=expected,
-        ) as open_session:
+        with mock.patch.dict(
+            probe_support.os.environ,
+            {"CONTENT_MODERATION_OPERATOR_TOKEN": "token"},
+        ):
             actual = probe_support.moderation_operator_session(
                 environment="beta",
                 base_url="https://api.beta.example.invalid",
                 target_name="beta-local",
             )
 
-        self.assertIs(actual, expected)
-        self.assertEqual(
-            open_session.call_args.kwargs["profile"],
-            "content-moderation-operator",
-        )
-        self.assertEqual(
-            open_session.call_args.kwargs["subject"],
-            "fixture_content_moderation_operator",
-        )
+        self.assertEqual(actual.owner_id, expected.owner_id)
+        self.assertEqual(actual.persona_id, expected.persona_id)
 
     def test_probe_client_ignores_machine_proxy_for_system_resolved_target(self) -> None:
         class Handler(http.server.BaseHTTPRequestHandler):

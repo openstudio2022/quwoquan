@@ -12,7 +12,7 @@ class User {
   final int? following;
   final int? likes;
   final Map<String, dynamic>? metadata;
-  
+
   const User({
     required this.id,
     this.userHandle,
@@ -27,7 +27,7 @@ class User {
     this.likes,
     this.metadata,
   });
-  
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id']?.toString() ?? '',
@@ -37,7 +37,7 @@ class User {
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

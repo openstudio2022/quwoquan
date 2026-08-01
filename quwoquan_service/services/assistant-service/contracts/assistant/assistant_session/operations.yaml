@@ -1,0 +1,201 @@
+commercial_defaults:
+  block_reason: Mongo Store/outbox 与 generated transport 尚未完成生产装配
+  gap_id: ASSISTANT_SESSION_WIRING
+  status: blocked
+  target_story: app-cloud-business-object-commercial-closure
+description: AssistantSession 对象专属命令与查询 packet。
+externalDependencies:
+  - capability: assistant.model.generation
+    port: ModelCompletionPort
+    operations: [complete, stream]
+    conformance: model_generation
+  - capability: assistant.public.search
+    port: PublicSearchPort
+    operations: [search]
+    conformance: public_search
+  - capability: assistant.weather.forecast
+    port: WeatherForecastPort
+    operations: [forecast]
+    conformance: weather_forecast
+  - capability: assistant.finance.quote
+    port: FinanceQuotePort
+    operations: [quote]
+    conformance: finance_quote
+  - role: use
+    capability: runtime.message.transport
+    port: MessageTransportPort
+    operations: [appendDurable, consumeDurable]
+    scenes: [general]
+api_routes:
+  - actor: persona
+    application:
+      aggregate_owner: AssistantSession
+      mutation_target: AssistantSession
+      invariant_target: AssistantSession
+      facet: AssistantSessionCommandFacade
+      kind: command
+      method: createSession
+    method: POST
+    operation: CreateAssistantSession
+    path: /assistant/sessions
+    description: 一次创建助手 Session；clientRequestId 为稳定 intent，重放返回首个结果。
+    request_entity: AssistantCreateSessionRequest
+    request_body_kind: object
+    response_entity: AssistantSession
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - ASSISTANT.USER.session_invalid_argument
+      - ASSISTANT.USER.session_idempotency_conflict
+      - ASSISTANT.USER.session_unauthorized
+      - ASSISTANT.SYSTEM.session_storage_unavailable
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_session_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: session_owner
+    commercial:
+      status: blocked
+      block_reason: AssistantSession aggregate mutation does not yet commit its declared domain event through a transactional outbox
+      gap_id: ASSISTANT_SESSION_WIRING
+      target_story: app-cloud-business-object-commercial-closure
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+  - actor: persona
+    application:
+      facet: AssistantSessionQueryFacade
+      kind: query
+      method: listSessions
+      reader: AssistantSessionReader
+      slice: AssistantSessionListView
+    method: GET
+    operation: ListAssistantSessions
+    path: /assistant/sessions
+    description: owner Session 列表；updatedAt desc + sessionId tiebreak 的 keyset 分页，历史抽屉与最近 Session 的唯一数据源。
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    response_entity: AssistantSessionListView
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.session_invalid_argument
+      - ASSISTANT.USER.session_unauthorized
+      - ASSISTANT.SYSTEM.session_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_session_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: requester_self
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../assistant/assistant_contracts.dart
+      response_type: AssistantSessionListProjection
+      response_decoder: decodeAssistantSessionList
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    request_entity: AssistantSessionListQuery
+    request_body_kind: none
+  - actor: persona
+    application:
+      facet: AssistantSessionQueryFacade
+      kind: query
+      method: getSession
+      reader: AssistantSessionReader
+      slice: AssistantSession
+    method: GET
+    operation: GetAssistantSession
+    path: /assistant/sessions/{sessionId}
+    description: 读取 owner 自己的 Session 快照；非 owner 返回 not_found 防枚举。
+    request_bindings:
+      path:
+        - name: sessionId
+          field: sessionId
+    response_entity: AssistantSession
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ASSISTANT.USER.session_not_found
+      - ASSISTANT.USER.session_unauthorized
+      - ASSISTANT.SYSTEM.session_storage_unavailable
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: assistant_session_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    authorization:
+      principal: persona
+      ownership_policy: session_owner
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../assistant/assistant_contracts.dart
+      response_type: AssistantSessionProjection
+      response_decoder: decodeAssistantSession
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    request_entity: AssistantSessionByIdQuery
+    request_body_kind: none

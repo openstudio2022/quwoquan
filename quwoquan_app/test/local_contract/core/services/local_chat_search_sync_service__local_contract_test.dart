@@ -411,6 +411,7 @@ class _StableChatRepository extends MockChatRepository {
       'memberCount': 2,
       'maxGroupSize': 1000,
       'receiptEnabled': true,
+      'lastMessageType': 'text',
       'messageCount': 0,
       'status': 'active',
       'createdAt': '2026-03-27T10:00:00.000Z',

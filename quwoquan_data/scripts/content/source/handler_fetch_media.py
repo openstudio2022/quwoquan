@@ -74,6 +74,13 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
         source_id = str(first.get("sourceId") or "").strip() or f"{lane}_{slugify(collection_id)}"
         unit_lane = "homepage_image" if lane == "homepage" else lane
         collection_page = str(first.get("collectionPageUrl") or first.get("sourceUrl") or "")
+        # Collections without a formal page title still retain a verified
+        # provider caption.  It is evidence from the source record, unlike
+        # the internal collection ID, and lets the source-unit schema expose
+        # a human-reviewable title without inventing one.
+        collection_title = _source_collection_title(first) or str(
+            first.get("caption") or ""
+        ).strip()
         collection_md = (
             "---\n"
             f"researchLane: {unit_lane}\n"
@@ -100,11 +107,14 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             },
             platform=str(first.get("platform") or "image_collection"),
             source_category="image_collection",
+            source_kind="image_collection",
+            extractor="image_collection_download",
+            policy_revision="image-collection-attribution",
             source_use_mode="licensed_adaptation",
             research_lane=unit_lane,
             license_value=str(first.get("license") or ""),
             url=collection_page,
-            title=_source_collection_title(first),
+            title=collection_title,
             target_ref=spec.target_ref,
             relevance=f"{spec.entity_id} 同一来源图片集合",
             images=group,

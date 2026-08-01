@@ -467,6 +467,19 @@ def write_source_unit(
         },
         "assetCount": len(asset_index),
     }
+    article_site_id = str(source_payload.get("articleSiteId") or "").strip()
+    article_profile_digest = str(
+        source_payload.get("sourceDiscoveryProfileDigest") or ""
+    ).strip()
+    article_admission = str(
+        source_payload.get("articleCommercialAdmission") or ""
+    ).strip()
+    if article_site_id:
+        manifest["articleSiteId"] = article_site_id
+    if article_profile_digest:
+        manifest["sourceDiscoveryProfileDigest"] = article_profile_digest
+    if article_admission:
+        manifest["articleCommercialAdmission"] = article_admission
     requested_title = str(source_payload.get("requestedTitle") or "").strip()
     resolved_title = str(source_payload.get("resolvedTitle") or "").strip()
     redirect_chain = source_payload.get("redirectChain")
@@ -551,7 +564,12 @@ def write_source_unit(
         manifest["entityFocusVerdict"] = focus_verdict
     if asset_funnel:
         manifest["assetFunnel"] = dict(asset_funnel)
-    if research_lane == "video":
+    # A video lane has two distinct admissible material types: direct-video
+    # source units and rights-cleared still-frame collections.  The strict
+    # direct-video contract applies only to the former.  Applying it to a
+    # frame collection makes an otherwise valid fallback impossible before
+    # the media gate can assemble its image sequence.
+    if research_lane == "video" and has_video:
         from content.source.video_source_unit_contract import (
             assert_video_source_unit_invariants,
         )

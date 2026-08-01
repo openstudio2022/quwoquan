@@ -4,6 +4,8 @@
 注释一致、商用判定只在硬性条件不满足时 BLOCK、孤儿棘轮双向收紧（变多要挡，变少要求下调
 上限）。另外对真实仓库做结构自洽与悬空引用校验——发布物引用了 taxonomy 里不存在的
 tagRef，既召回不到也筛选不到。
+
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004
 """
 from __future__ import annotations
 

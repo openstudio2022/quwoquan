@@ -228,6 +228,7 @@
         "targetObjectCount": {"type": "integer", "minimum": 0},
         "approvedQuota": {"type": "integer", "minimum": 1},
         "oversampleFactor": {"type": "number", "minimum": 1},
+        "articleCommercialClosure": {"type": "boolean"},
         "executionBranch": {"type": "string", "minLength": 1},
         "gitCommitSha": {"type": "string", "minLength": 1}
       }

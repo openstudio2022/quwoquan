@@ -1,5 +1,5 @@
 kind: append_only_fact
-description: ExternalInteractionAttemptFact 的领域对象契约。
+description: Integration 对一次 provider 调用尝试追加的不可变事实，记录脱敏请求身份、结果、耗时与重试序号。
 identity:
   fields:
   - attemptId
@@ -20,7 +20,15 @@ relationships:
   target_object: integration.ExternalInteraction
 lifecycle:
   immutable: true
+  retention:
+    policy: audit_retention_or_subject_closure
+    terminal_behavior: UserAccountClosed 到达时按 subjectDigest 删除整条事实，不原地改写不可变事实
 local_identity_reasons:
   taskId: reliable-task worker correlation key scoped to this immutable attempt; it is not a business-object reference
   providerRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference
+business_rules:
+- 同一 requestId 与 attemptNumber 只能追加一次，provider 回执不得覆盖既有尝试事实。
+- 原始 token、secret、完整第三方错误体和 PII 禁止进入事实载荷。
+- Notification 等消费域只引用 attemptId，不得读取或维护本账本集合。
+- subjectDigest 只用于本对象执行 UserAccountClosed 隐私删除，不得通过 API、事件、日志或运营查询暴露。

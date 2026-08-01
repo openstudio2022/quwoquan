@@ -9,7 +9,8 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	recpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	testsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 type stubObjectCardProvider struct {
@@ -55,8 +56,11 @@ func newObjectCardFeedService(t *testing.T, provider ObjectCardProvider, cfg rec
 	return NewFeedService(
 		engine,
 		fixtureFeedReader{posts: posts},
-		WithObjectCardProvider(provider, objectCardPolicy(cfg)),
-		readyActiveSupplyOption(),
+		testsupport.RankedRecommendationOptions(
+			engine,
+			WithObjectCardProvider(provider, objectCardPolicy(cfg)),
+			readyActiveSupplyOption(),
+		)...,
 	)
 }
 

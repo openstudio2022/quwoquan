@@ -55,8 +55,8 @@ class AnswerBoundaryPolicyDto {
       authorityDomains: _assistantStringList(json['authorityDomains']),
       requiredDimensions: _assistantStringList(json['requiredDimensions']),
       blockingDimensions: _assistantStringList(json['blockingDimensions']),
-      expansionPolicy: parseContextScopeExpansionPolicy((json['expansionPolicy'] as String?)?.trim() ?? "expand_scope_and_requery"),
-      insufficiencyReason: parsePlannerReasonCode((json['insufficiencyReason'] as String?)?.trim() ?? "need_more_evidence"),
+      expansionPolicy: parseContextScopeExpansionPolicyStrict((json['expansionPolicy'] as String?)?.trim() ?? "expand_scope_and_requery"),
+      insufficiencyReason: parsePlannerReasonCodeStrict((json['insufficiencyReason'] as String?)?.trim() ?? "need_more_evidence"),
       summary: (json['summary'] as String?)?.trim() ?? "",
     );
   }

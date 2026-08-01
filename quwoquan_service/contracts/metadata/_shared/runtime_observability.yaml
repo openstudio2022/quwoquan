@@ -398,6 +398,8 @@ signals:
   - sampledFrames
   - jankyFrames
   - worstFrameMs
+  - worstBuildFrameMs
+  - worstRasterFrameMs
   - jankThresholdMs
   - ttffMs
   - targetPositionMs
@@ -453,6 +455,7 @@ signals:
   - sampledFrames
   - jankyFrames
   - worstFrameMs
+  - jankThresholdMs
   correlation_keys:
   - requestId
   - traceId

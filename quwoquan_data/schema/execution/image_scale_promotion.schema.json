@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "predecessorExecutionId",
+    "vertical",
+    "carrier",
+    "gitBranch",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "targetSetDigest",
+    "predecessorInputMode",
+    "predecessorInputDigest",
+    "modelBinding",
+    "modelReadinessDigest",
+    "postReviewClosureDigest",
+    "publishReceiptDigest",
+    "sourceReadyCount",
+    "sourceIneligibleCount",
+    "candidateCount",
+    "approvedQuota",
+    "qualifiedCount",
+    "finalizedCount",
+    "discardedCount",
+    "shortfallCount",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": { "const": "quwoquan_data.image_scale_promotion" },
+    "status": { "const": "approved" },
+    "predecessorExecutionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--travel-image-m100--[a-z0-9][a-z0-9-]*--scale-[0-9]{3,}$"
+    },
+    "vertical": { "const": "travel" },
+    "carrier": { "const": "image" },
+    "gitBranch": { "type": "string", "minLength": 1 },
+    "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceDigest": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "targetSetDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "predecessorInputMode": {
+      "enum": ["campaign_envelope", "direct_execution"]
+    },
+    "predecessorInputDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "modelBinding": {
+      "type": "object",
+      "required": [
+        "provider",
+        "authorModel",
+        "authorModelFamily",
+        "authorModelParameters",
+        "reviewerModel",
+        "reviewerModelFamily",
+        "reviewerModelParameters"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "const": "cursor_sdk" },
+        "authorModel": { "const": "grok-4.5" },
+        "authorModelFamily": { "const": "grok" },
+        "authorModelParameters": {
+          "type": "array",
+          "const": [
+            { "id": "effort", "value": "high" },
+            { "id": "fast", "value": "true" }
+          ]
+        },
+        "reviewerModel": { "type": "string", "minLength": 1 },
+        "reviewerModelFamily": { "type": "string", "minLength": 1 },
+        "reviewerModelParameters": { "type": "array" }
+      }
+    },
+    "modelReadinessDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "postReviewClosureDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "publishReceiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "sourceReadyCount": { "type": "integer", "minimum": 120 },
+    "sourceIneligibleCount": { "type": "integer", "minimum": 0 },
+    "candidateCount": { "type": "integer", "minimum": 180 },
+    "approvedQuota": { "const": 100 },
+    "qualifiedCount": { "type": "integer", "minimum": 100 },
+    "finalizedCount": { "type": "integer", "minimum": 100 },
+    "discardedCount": { "type": "integer", "minimum": 0 },
+    "shortfallCount": { "const": 0 },
+    "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "skillId": "health_wellness",
+  "displayName": "健康生活助手",
+  "description": "健康咨询、养生建议、运动指导、饮食营养、睡眠改善。",
+  "domainId": "health_wellness",
+  "problemClass": "evidence_lookup",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "健康",
+    "症状",
+    "饮食",
+    "睡眠",
+    "运动",
+    "减肥"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web3",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.evidence_lookup",
+  "replayAssetRef": "assistant.replay.health_wellness.v1"
+}

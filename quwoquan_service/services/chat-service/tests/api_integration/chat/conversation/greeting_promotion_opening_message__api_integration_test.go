@@ -6,8 +6,10 @@ package api_integration
 import (
 	"context"
 	"testing"
+	"time"
 
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
+	"quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
 
 func TestGreetingPromotion_StampsOriginAndSeedsOpeningMessage(t *testing.T) {
@@ -27,8 +29,22 @@ func TestGreetingPromotion_StampsOriginAndSeedsOpeningMessage(t *testing.T) {
 		opening    = "看你也去过老君山，下次同行？"
 	)
 
+	resolvedAt := time.Date(2026, time.July, 31, 8, 0, 0, 0, time.UTC)
+	intersection := &model.GreetingIntersectionSnapshot{
+		IntersectionID: "intersection_1",
+		EvidenceID:     "evidence_1",
+		SourceRef:      "coVisitedEntity",
+		ObjectTypeRef:  "user",
+		ObjectID:       replier,
+		PrimaryText:    "你们都去过老君山",
+		Dimension:      "destination",
+		ResolvedAt:     resolvedAt,
+	}
 	conv, err := convSvc.CreateOrReuseDirect(ctx, replier, requester,
-		application.DirectConversationPromotion{GreetingRequestID: greetingID})
+		application.DirectConversationPromotion{
+			GreetingRequestID: greetingID,
+			Intersection:      intersection,
+		})
 	if err != nil {
 		t.Fatalf("promote greeting to direct conversation: %v", err)
 	}
@@ -37,6 +53,11 @@ func TestGreetingPromotion_StampsOriginAndSeedsOpeningMessage(t *testing.T) {
 	}
 	if conv.OriginGreetingRequestID != greetingID {
 		t.Fatalf("originGreetingRequestId = %q, want %q", conv.OriginGreetingRequestID, greetingID)
+	}
+	if conv.OriginIntersectionSnapshot == nil ||
+		conv.OriginIntersectionSnapshot.PrimaryText != intersection.PrimaryText ||
+		!conv.OriginIntersectionSnapshot.ResolvedAt.Equal(resolvedAt) {
+		t.Fatalf("origin intersection snapshot was not frozen: %+v", conv.OriginIntersectionSnapshot)
 	}
 
 	if err := msgSvc.SendGreetingOpeningMessage(

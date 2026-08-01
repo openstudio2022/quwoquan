@@ -70,8 +70,13 @@ def write_environment_release_readiness(
     post_api_verification_path: Path,
     output_root: Path,
     output_path: Path,
+    readiness_phase: str = "commercial",
 ) -> Path:
     """Write append-only, release-bound proof for Ops readiness composition."""
+    if readiness_phase not in {"consumer", "commercial"}:
+        raise EnvironmentReleaseReadinessError(
+            "readiness_phase must be consumer or commercial"
+        )
 
     header_path = payload_file(release_root, "release.json")
     desired_path = payload_file(release_root, "desired_state.json")
@@ -164,6 +169,10 @@ def write_environment_release_readiness(
     )
     if post_report.get("passed") is not True or verified_post_ids != post_ids:
         raise EnvironmentReleaseReadinessError("post verification drifts from imported postIds")
+    if post_report.get("readinessPhase") != readiness_phase:
+        raise EnvironmentReleaseReadinessError(
+            "post verification readinessPhase drift"
+        )
     if any(
         not isinstance(row, Mapping)
         or not isinstance(row.get("mediaProbes"), list)
@@ -220,11 +229,12 @@ def write_environment_release_readiness(
         "typed_image",
         "typed_video",
         "homepage_recommend",
-        "premium_stream",
     }
+    if readiness_phase == "commercial":
+        required_query_names.add("premium_stream")
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
-            "feedQueries must prove discovery, every carrier, recommend and premium_stream"
+            "feedQueries do not match the declared readiness phase"
         )
     video_ids = {
         str(row.get("postId") or "")
@@ -244,10 +254,11 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if not premium_ids or not premium_ids.issubset(release_post_ids):
-        raise EnvironmentReleaseReadinessError(
-            "premium_stream does not prove a release-bound postId"
-        )
+    if readiness_phase == "commercial":
+        if not premium_ids or not premium_ids.issubset(release_post_ids):
+            raise EnvironmentReleaseReadinessError(
+                "premium_stream does not prove a release-bound postId"
+            )
     verified_playable_video_ids = {
         str(row.get("postId") or "")
         for row in post_report.get("posts") or []
@@ -258,7 +269,7 @@ def write_environment_release_readiness(
         and int(row.get("mediaProbeCount") or 0) >= 2
     }
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
-    if not premium_playable_video_ids:
+    if readiness_phase == "commercial" and not premium_playable_video_ids:
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )
@@ -307,6 +318,7 @@ def write_environment_release_readiness(
         "releaseId": release_id,
         "releaseKind": ReleaseKind.CONTENT,
         "sourceOwner": DataSourceOwner.QWQ_DATA,
+        "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,
         "importRunId": import_run_id,

@@ -39,18 +39,18 @@ void main() {
       final notifier = container.read(discoveryFeedMapProvider.notifier);
 
       await notifier.load('recommend', force: true);
-      for (var pageIndex = 1; pageIndex < 7; pageIndex += 1) {
+      for (var pageIndex = 1; pageIndex < 8; pageIndex += 1) {
         await notifier.appendNextPage('recommend');
       }
 
       final afterAppend = container
           .read(discoveryFeedMapProvider)['recommend']!
           .value!;
-      expect(query.callCount, 7);
+      expect(query.callCount, 8);
       expect(afterAppend.items, hasLength(80));
-      expect(afterAppend.items.first.id, 'page_3_post_0');
-      expect(afterAppend.items.last.id, 'page_6_post_19');
-      expect(afterAppend.seenItemIds, hasLength(140));
+      expect(afterAppend.items.first.id, 'page_4_post_0');
+      expect(afterAppend.items.last.id, 'page_7_post_19');
+      expect(afterAppend.seenItemIds, hasLength(160));
       expect(afterAppend.residentPageCount, 4);
       expect(afterAppend.retainedPageCount, 6);
       expect(afterAppend.canRestorePreviousPage, isTrue);
@@ -68,7 +68,7 @@ void main() {
       final backslid = container
           .read(discoveryFeedMapProvider)['recommend']!
           .value!;
-      expect(backslid.items.first.id, 'page_2_post_0');
+      expect(backslid.items.first.id, 'page_3_post_0');
       expect(backslid.hasBufferedNextPage, isTrue);
 
       await notifier.appendNextPage('recommend');
@@ -77,11 +77,11 @@ void main() {
           .value!;
       expect(
         query.callCount,
-        7,
+        8,
         reason: 'buffered forward restore must not issue Remote I/O',
       );
-      expect(restored.items.first.id, 'page_3_post_0');
-      expect(restored.nextCursor, 'cursor_7');
+      expect(restored.items.first.id, 'page_4_post_0');
+      expect(restored.nextCursor, 'cursor_8');
     },
   );
 

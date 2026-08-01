@@ -46,8 +46,13 @@ events:
   - contentType
   - contentIdentity
   - status
+  - visibility
+  - moderationStatus
   - primaryHomepageId
+  - tagRefs
+  - entityRefs
   - publishedAt
+  - updatedAt
   - lastActiveAt
   - sourceTaskId
   - sourcePostId
@@ -86,13 +91,19 @@ events:
   payload_entity: Post
   payload_fields:
   - _id
+  - authorId
+  - contentType
   - contentIdentity
+  - status
+  - visibility
+  - moderationStatus
   - title
   - body
   - semanticMentions
   - tagRefs
   - entityRefs
   - primaryHomepageId
+  - publishedAt
   - updatedAt
 - name: PostSettingsUpdated
   description: 发布后可变设置更新（可见性 / 小趣排除 / Homepage 引用）
@@ -106,10 +117,16 @@ events:
   payload_fields:
   - _id
   - authorId
+  - contentType
   - contentIdentity
+  - status
   - visibility
+  - moderationStatus
   - primaryHomepageId
   - assistantUsePolicy
+  - tagRefs
+  - entityRefs
+  - publishedAt
   - updatedAt
 - name: PostPromotedToWork
   description: 点滴原地升级为作品
@@ -132,9 +149,13 @@ events:
   - summary
   - tagRefs
   - entityRefs
+  - status
   - visibility
+  - moderationStatus
   - primaryHomepageId
   - assistantUsePolicy
+  - publishedAt
+  - updatedAt
   - promotedAt
 - name: PostDeleted
   description: 内容删除；content-comment-tombstone-projector 消费本事实将该 Post 全部评论级联 tombstoned。

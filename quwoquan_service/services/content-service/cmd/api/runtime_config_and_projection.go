@@ -21,6 +21,10 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
+func contentReleaseWorkload() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")), "content-release")
+}
+
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
 	serviceName = getenvOrDefault("SERVICE_NAME", "content-service")
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
@@ -169,7 +173,7 @@ func preflightConfig(cfg config, appEnv string) error {
 	if cfg.ES.Enabled && len(cfg.ES.Endpoints) == 0 {
 		return fmt.Errorf("%s content runtime enables search projection but has no es.endpoints/SEARCH_ES_ENDPOINTS", appEnv)
 	}
-	if appEnv != "alpha" && cfg.Embedding.Enabled {
+	if appEnv != "alpha" && cfg.Embedding.Enabled && !contentReleaseWorkload() {
 		if _, err := resolveContentEmbeddingGateway(appEnv); err != nil {
 			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
 		}
@@ -380,8 +384,10 @@ func applyEnvOverrides(cfg *config) {
 	if v := os.Getenv("REC_MODEL_SERVICE_URL"); v != "" {
 		cfg.RecModelService.URL = v
 	}
-	if v := os.Getenv("REC_MODEL_SERVICE_ENABLED"); v == "true" || v == "1" {
-		cfg.RecModelService.Enabled = true
+	if v := os.Getenv("REC_MODEL_SERVICE_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			cfg.RecModelService.Enabled = enabled
+		}
 	}
 	if v := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); v != "" {
 		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
@@ -431,7 +437,6 @@ func hostname() string {
 type projectorAdapter struct {
 	discovery *recinfra.DiscoveryFeedProjector
 	recommend *recinfra.RecommendFeatureProjector
-	premium   *recinfra.PremiumPoolProjector
 	embedding *recinfra.EmbeddingProjector
 	search    *searchindex.Projector
 	place     *placeindex.PlaceProjector
@@ -452,11 +457,6 @@ func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEve
 	}
 	if a.recommend != nil {
 		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
-	}
-	if a.premium != nil {
-		if err := a.premium.Project(ctx, projectorEvent); err != nil {
 			return err
 		}
 	}
@@ -574,12 +574,6 @@ func intersectionRecallRollbackDisabled() bool {
 	return parseBoolEnv("QWQ_DISABLE_INTERSECTION_RECALL_SOURCE", false) ||
 		parseBoolEnv("DISABLE_INTERSECTION_RECALL_SOURCE", false) ||
 		parseBoolEnv("disable_intersection_recall_source", false)
-}
-
-func premiumPoolSourceRollbackDisabled() bool {
-	return parseBoolEnv("QWQ_DISABLE_PREMIUM_POOL_SOURCE", false) ||
-		parseBoolEnv("DISABLE_PREMIUM_POOL_SOURCE", false) ||
-		parseBoolEnv("disable_premium_pool_source", false)
 }
 
 // dailyAffinityDecayCheckInterval is the replica check cadence; the per-day Redis lock makes the

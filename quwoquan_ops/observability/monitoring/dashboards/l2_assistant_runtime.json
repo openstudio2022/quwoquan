@@ -76,10 +76,76 @@
             "legendFormat": "{{ route }}"
           }
         ]
+      },
+      {
+        "title": "公开网页工具结果",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_public_web_tool_total[5m])) by (tool, outcome)",
+            "legendFormat": "{{ tool }} / {{ outcome }}"
+          }
+        ]
+      },
+      {
+        "title": "公开网页工具 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(assistant_public_web_tool_duration_seconds_bucket[5m])) by (le, tool))",
+            "legendFormat": "{{ tool }}"
+          }
+        ]
+      },
+      {
+        "title": "公开网页策略边界",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_public_web_policy_boundary_total[5m])) by (reason)",
+            "legendFormat": "{{ reason }}"
+          }
+        ]
+      },
+      {
+        "title": "持久 Run Worker claim",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+        "targets": [
+          {
+            "expr": "sum(rate(assistant_run_worker_claim_total[5m])) by (outcome)",
+            "legendFormat": "{{ outcome }}"
+          }
+        ]
+      },
+      {
+        "title": "Run 取消收敛 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome=\"succeeded\"}[5m])) by (le))",
+            "legendFormat": "cancel p95"
+          }
+        ]
+      },
+      {
+        "title": "恢复 Checkpoint 年龄 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(assistant_run_checkpoint_age_seconds_bucket[5m])) by (le))",
+            "legendFormat": "checkpoint age p95"
+          }
+        ]
       }
     ],
     "schemaVersion": 39,
-    "version": 1
+    "version": 2
   },
   "overwrite": true
 }

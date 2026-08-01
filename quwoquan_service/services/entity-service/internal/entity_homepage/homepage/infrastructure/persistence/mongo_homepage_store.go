@@ -196,10 +196,9 @@ type homepageDocument struct {
 	OfflineAt            *time.Time                        `bson:"offlineAt,omitempty"`
 }
 
-// geoJSONPoint 是 location 的落库形状。idx_homepages_location 是 2dsphere 索引，
-// 只接受 GeoJSON 或有序 legacy 坐标对；若直接落库 domain GeoPoint 的
-// {latitude, longitude} 嵌套文档，Mongo 会把它读成 legacy [x=latitude, y=longitude]，
-// 既交换了轴又会因纬度值超出 ±90 直接拒绝写入。因此存储层负责 GeoJSON 翻译，
+// geoJSONPoint 是 location 的唯一落库形状。idx_homepages_location 是 2dsphere
+// 索引；domain GeoPoint 的 {latitude, longitude} 不能直接落库，否则坐标轴语义错误。
+// 因此存储层负责 canonical GeoJSON 翻译，
 // wire/domain 仍保持 latitude/longitude 命名（contracts fields.yaml 真相源不变）。
 type geoJSONPoint struct {
 	Type        string    `bson:"type"`
@@ -477,7 +476,7 @@ func (s *MongoHomepageStore) FindExact(
 
 func (s *MongoHomepageStore) Search(
 	ctx context.Context,
-	query homepageports.SearchQuery,
+	query homepageports.SearchRequestFact,
 ) (homepageports.Page, error) {
 	filter := bson.M{}
 	if value := strings.TrimSpace(query.Query); value != "" {

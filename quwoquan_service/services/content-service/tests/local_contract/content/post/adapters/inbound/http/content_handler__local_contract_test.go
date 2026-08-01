@@ -83,15 +83,15 @@ func (readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 	context.Context,
 ) (feedapp.ActiveSupplySnapshot, error) {
 	return feedapp.ActiveSupplySnapshot{
-		Environment:           "local_contract",
-		SourceOwner:           "qwq_data",
-		Status:                "active",
-		ActiveReleaseID:       "rel_local_contract",
-		ManifestDigest:        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		ReadbackStatus:        "passed",
-		Posts:                 1,
-		DiscoveryPosts:        1,
-		PremiumPlayableVideos: 1,
+		Environment:     "local_contract",
+		SourceOwner:     "qwq_data",
+		Status:          "active",
+		ActiveReleaseID: "rel_local_contract",
+		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReadbackStatus:  "passed",
+		Posts:           1,
+		DiscoveryPosts:  1,
+		PlayableVideos:  1,
 	}, nil
 }
 

@@ -20,6 +20,13 @@ abstract final class AssistantText {
   static const String assistantMemorySectionTitle = '偏好与记忆';
   static const String assistantMemoryEmpty = '暂无已保存的显式偏好';
   static const String assistantMemoryUntitled = '未命名偏好';
+  static const String assistantMemoryFrequentLocations = '常用地点';
+  static const String assistantMemoryFamilyTerms = '家庭称谓';
+  static const String assistantMemoryDietaryRestrictions = '饮食禁忌';
+  static const String assistantMemoryTravelPreferences = '出行偏好';
+  static const String assistantMemorySourceConfirmedSession = '来自已确认会话';
+  static const String assistantMemorySourceManagement = '来自记忆管理';
+  static const String assistantMemorySourceExplicitRewrite = '来自回答偏好调整';
   static const String assistantPreferenceDefaultsTitle = '长期回答偏好';
   static const String assistantPreferenceConcise = '简洁';
   static const String assistantPreferenceDetailed = '详细';
@@ -114,7 +121,7 @@ abstract final class AssistantText {
   static const String assistantPromptFindSimilar = '可以让我帮你找类似风格的内容';
   static const String assistantPromptCreateCopyOrSchedule = '可以让我帮你配文案或定时发';
   static const String assistantPromptChooseOrDescribe = '说一句你想做的事，或选上面的推荐试试';
-  static const String assistantCloudConversationSummary = '找私助云端对话';
+  static const String assistantCloudSessionSummary = '找私助云端会话';
   static const String assistantFeedbackUsefulLabel = '有用';
   static const String assistantFeedbackIrrelevantLabel = '不相关';
   static const String assistantFeedbackTooFrequentLabel = '太频繁';
@@ -130,6 +137,8 @@ abstract final class AssistantText {
   static const String assistantActionNeedsMoreInfo = '我还需要你再补充一点信息，这样才能继续。';
   static const String assistantActionResultUnavailable =
       '这个操作我暂时还没拿到可展示结果，请再试一次。';
+  static const String assistantDeviceActionUnavailable =
+      '系统日历不可用或未获授权，本次没有创建日程。';
   static const String assistantCardCompare = '对比卡片';
   static const String assistantCardTrend = '趋势卡片';
   static const String assistantCardDiagram = '结构图';
@@ -137,9 +146,11 @@ abstract final class AssistantText {
   static const String assistantActionDeepThink = '深度思考';
   static const String assistantGenerationStopped = '已停止生成。';
   static const String assistantStopGenerating = '停止生成';
+  static const String assistantPauseRun = '暂停任务';
+  static const String assistantResumeRun = '继续任务';
   static const String assistantHistoryTitle = '历史会话';
   static const String assistantHistoryEmpty = '还没有历史会话';
-  static const String assistantNewConversation = '新对话';
+  static const String assistantNewSession = '新会话';
   static const String assistantHistoryDefaultTitle = '小趣对话';
   static const String assistantRegenerateStylePrefixConcise = '请更简洁地重新回答：';
   static const String assistantRegenerateStylePrefixDetailed = '请更详细地重新回答：';

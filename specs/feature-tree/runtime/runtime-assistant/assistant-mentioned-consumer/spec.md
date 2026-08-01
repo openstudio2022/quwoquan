@@ -57,4 +57,11 @@
 
 ## 7. 开放事项
 
-- 无。
+<a id="open-001"></a>
+### OPEN-001 被引用对象的授权事实 grounding 与环境证明
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺 assistant-service 按当前成员权限回查被引用对象 tagRefs、交集事实和可见性的 grounding，以及真实环境回答与引用 readback；durable consumer、幂等、DLQ、成员复核与经 Chat HTTP 回帖已有集成证据，当前会话窗口可提取消息卡 canonical objectRef。
+- 完成判定：被引用对象只经所属领域公开 Reader grounding，权限失败不注入；API integration 覆盖 objectRef→facts→prompt→reply，alpha/beta/gamma 取得真实身份、真实对象与回复引用证据

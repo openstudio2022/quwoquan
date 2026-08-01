@@ -64,7 +64,7 @@
 - canonical：`contracts/metadata/_shared/search_objects.yaml`
 - canonical：`contracts/metadata/_shared/search_contract.yaml`
 - canonical：`quwoquan_service/services/search-service/observability/slo/search_slo.yaml`
-- canonical：`quwoquan_service/services/search-service/contracts/search/search_query/storage.yaml`
+- canonical：`quwoquan_service/services/search-service/contracts/search/search_request_fact/storage.yaml`
 - canonical：`quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml`
 - canonical：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/feature_registry.yaml`
 

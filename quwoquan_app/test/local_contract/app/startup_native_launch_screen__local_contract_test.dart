@@ -940,23 +940,46 @@ void main() {
       expect(scheduler, isNot(contains('await prerequisites')));
     });
 
-    test('iOS 仅允许 canonical launcher 传入完整 Dart defines', () {
+    test('iOS 裸 Debug 与 canonical launcher 共用完整 runtime handoff', () {
       final script = _readAppFile('scripts/ios/prepare_dart_defines.sh');
       final logHygiene = _readAppFile(
         'scripts/ios/ios_shortcut_log_hygiene.py',
       );
       final wrapper = _readAppFile('scripts/ios/xcode_backend_build.sh');
       final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
+      final appDelegate = _readAppFile('ios/Runner/AppDelegate.swift');
+      final nativeBridge = _readAppFile(
+        'lib/core/platform/native_runtime_config_bridge.dart',
+      );
+      final runtimeConfig = _readAppFile(
+        'lib/cloud/runtime/cloud_runtime_config.dart',
+      );
+      final startupRuntime = _readAppFile('lib/app/app_startup_runtime.dart');
+      final bootstrap = _readAppFile('lib/app_bootstrap.dart');
       expect(script, contains('print_app_env_dart_defines.py'));
       expect(script, contains('use ./run.sh -d <device>'));
-      expect(script, isNot(contains('DIRECT_ALPHA_HANDOFF')));
-      expect(script, isNot(contains('xcode-direct-alpha')));
+      expect(script, contains('build_launcher_handoff.py'));
+      expect(script, contains('direct_flutter_run'));
+      expect(script, contains('DIRECT_RUNTIME_DEFINES_JSON'));
+      expect(script, contains('runtimeDefines'));
       expect(script, isNot(contains('export FLUTTER_TARGET=')));
       expect(script, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(wrapper, contains('runtime package preparation failed'));
       expect(wrapper, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(project, contains('xcode_backend_build.sh'));
       expect(project, isNot(contains('eval \\"')));
+      expect(appDelegate, contains('quwoquan/runtime/config'));
+      expect(appDelegate, contains('readRuntimeConfig'));
+      expect(nativeBridge, contains('quwoquan/runtime/config'));
+      expect(nativeBridge, contains('readRuntimePackage'));
+      expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage'));
+      expect(runtimeConfig, contains('shouldLoadNativeRuntimePackage'));
+      expect(
+        bootstrap,
+        contains('NativeRuntimeConfigBridge.readRuntimePackage'),
+      );
+      expect(runtimeConfig, contains("'configurationState': 'pending_native'"));
+      expect(startupRuntime, contains('startup_runtime_configured'));
       expect(logHygiene, contains('APP_ROOT / "run.sh"'));
       expect(logHygiene, isNot(contains('cmd = ["flutter", "run"')));
     });
@@ -1002,6 +1025,11 @@ void main() {
         lessThan(activity.indexOf('super.onCreate(savedInstanceState);')),
       );
       expect(activity, contains('android_dart_jni_class_loader_initialized'));
+      expect(
+        activity,
+        contains('Iterator<String> names = runtimeDefines.keys()'),
+      );
+      expect(activity, contains('android_runtime_configured'));
       expect(eagerRegistry, isNot(contains('FlutterWebRTCPlugin')));
       expect(eagerRegistry, isNot(contains('CameraAndroidCameraxPlugin')));
       expect(deferredRegistry, contains('FlutterWebRTCPlugin'));
@@ -1015,6 +1043,10 @@ void main() {
         isNot(contains('super.configureFlutterEngine(flutterEngine);')),
       );
       expect(gradle, contains('afterEvaluate {'));
+      expect(gradle, contains('buildCanonicalDirectDebugHandoff'));
+      expect(gradle, contains('direct_flutter_run'));
+      expect(gradle, contains('direct-debug'));
+      expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));
       expect(gradle, contains('QWQ_CONSUMER_LEASE_ACQUIRED'));
@@ -1052,6 +1084,9 @@ void main() {
         activity,
         contains('private CommercialAuthPlugin commercialAuthPlugin;'),
       );
+      expect(activity, contains('registerNativeRuntimeConfigChannel'));
+      expect(activity, contains('quwoquan/runtime/config'));
+      expect(activity, contains('readRuntimeConfig'));
       expect(
         activity,
         contains('private CommercialAuthPlugin commercialAuthPlugin()'),

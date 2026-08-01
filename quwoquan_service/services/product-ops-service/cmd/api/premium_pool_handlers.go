@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -309,12 +311,22 @@ func (s *productService) publishPremiumPoolEvent(r *http.Request, eventType stri
 		occurredAt = nowRFC3339()
 	}
 	return s.publisher.Publish(r.Context(), messaging.DomainEvent{
+		EventID:       premiumPoolEventID(eventType, entry),
 		Type:          eventType,
 		AggregateType: "PremiumPoolEntry",
 		AggregateID:   entry.ID,
 		Payload:       documentFromStruct(entry),
 		OccurredAt:    occurredAt,
 	})
+}
+
+func premiumPoolEventID(eventType string, entry premiumPoolEntry) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(eventType),
+		strings.TrimSpace(entry.ID),
+		strings.TrimSpace(entry.UpdatedAt),
+	}, "\x1f")))
+	return "premium_pool_" + fmt.Sprintf("%x", digest[:16])
 }
 
 func buildPremiumPoolEntry(body premiumPoolUpsertRequest, now time.Time) (premiumPoolEntry, error) {

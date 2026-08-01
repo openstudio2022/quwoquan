@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 	integrationMongoDB = integrationMongoClient.Database(
 		fmt.Sprintf("integration_service_api_integration_%d", time.Now().UnixNano()),
 	)
-	integrationReliableStore = reliabletaskmongo.New(integrationMongoDB)
+	integrationReliableStore = reliabletaskmongo.NewExternalInteraction(integrationMongoDB)
 	if err := integrationReliableStore.EnsureIndexes(startupCtx); err != nil {
 		panic("ensure integration-service reliable-task indexes: " + err.Error())
 	}
@@ -100,6 +100,8 @@ func resetReliableTaskCollections(t *testing.T) {
 		"notification_delivery_ledger",
 		"external_provider_attempt_ledger",
 		"external_interaction_result_outbox",
+		"integration_user_account_closed_inbox",
+		"integration_user_account_closed_failures",
 		"reliable_task_recovery_receipts",
 		"otp_code_reference_vault",
 		"reliable_task_leases",

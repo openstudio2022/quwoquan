@@ -176,10 +176,7 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
                   itemBuilder: (context, index) {
                     final step = steps[index];
                     return ListTile(
-                      title: Text(
-                        step.label,
-                        style: TextStyle(color: fg),
-                      ),
+                      title: Text(step.label, style: TextStyle(color: fg)),
                       trailing: CupertinoButton(
                         padding: EdgeInsets.symmetric(
                           horizontal: AppSpacing.sm,

@@ -10,12 +10,12 @@ enum MediaCategory { chatVoice, chatImage, chatVideo, chatFile }
 String? validateUpload({
   required MediaCategory category,
   required int fileSize,
-  required String contentType,
+  required String mimeType,
 }) {
   try {
     validateContentMediaUploadPolicy(
       mediaType: contentMediaTypeForCategory(category),
-      contentType: contentType,
+      mimeType: mimeType,
       fileSize: fileSize,
     );
     return null;

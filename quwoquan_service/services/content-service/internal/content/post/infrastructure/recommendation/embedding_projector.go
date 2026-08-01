@@ -15,8 +15,8 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
 )
 
 func EmbeddingTextSHA(text string) string {
@@ -96,7 +96,10 @@ func (p *EmbeddingProjector) Project(ctx context.Context, event ProjectorEvent) 
 	if strings.TrimSpace(event.Type) != postevent.PostPublished {
 		return nil
 	}
-	postID := firstNonEmpty(StrVal(event.Payload, "postId"), event.AggregateID)
+	postID := strings.TrimSpace(StrVal(event.Payload, "postId"))
+	if postID == "" {
+		postID = strings.TrimSpace(event.AggregateID)
+	}
 	if postID == "" {
 		return nil
 	}

@@ -43,12 +43,252 @@ enums:
         wire: process_commit
       - name: answerDelta
         wire: answer_delta
+      - name: runStateChanged
+        wire: run_state_changed
+      - name: taskGraphPatch
+        wire: task_graph_patch
+      - name: checkpointCommitted
+        wire: checkpoint_committed
+      - name: presentationSnapshot
+        wire: presentation_snapshot
+      - name: presentationPatch
+        wire: presentation_patch
+      - name: presentationCommit
+        wire: presentation_commit
+      - name: waitingInput
+        wire: waiting_input
+      - name: waitingApproval
+        wire: waiting_approval
       - name: completed
         wire: completed
       - name: failed
         wire: failed
       - name: cancelled
         wire: cancelled
+
+  - name: AssistantWebTargetKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: url
+        wire: url
+      - name: source
+        wire: source
+      - name: documentLink
+        wire: document_link
+
+  - name: AssistantContextAuthority
+    values:
+      - name: unknown
+        wire: ''
+      - name: userDeclared
+        wire: user_declared
+      - name: domainCanonical
+        wire: domain_canonical
+      - name: deviceObserved
+        wire: device_observed
+      - name: externalEvidence
+        wire: external_evidence
+
+  - name: AssistantContextSensitivity
+    values:
+      - name: public
+        wire: public
+      - name: internal
+        wire: internal
+      - name: private
+        wire: private
+      - name: restricted
+        wire: restricted
+
+  - name: AssistantTriggerKind
+    values:
+      - name: schedule
+        wire: schedule
+      - name: event
+        wire: event
+      - name: contextChange
+        wire: context_change
+      - name: followUp
+        wire: follow_up
+
+  - name: AssistantPresentationNodeKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: card
+        wire: card
+      - name: column
+        wire: column
+      - name: row
+        wire: row
+      - name: grid
+        wire: grid
+      - name: list
+        wire: list
+      - name: carousel
+        wire: carousel
+      - name: markdown
+        wire: markdown
+      - name: text
+        wire: text
+      - name: icon
+        wire: icon
+      - name: media
+        wire: media
+      - name: badge
+        wire: badge
+      - name: divider
+        wire: divider
+      - name: stat
+        wire: stat
+      - name: keyValue
+        wire: key_value
+      - name: entityReference
+        wire: entity_reference
+      - name: sourceReference
+        wire: source_reference
+      - name: timeline
+        wire: timeline
+      - name: comparisonTable
+        wire: comparison_table
+      - name: sourceList
+        wire: source_list
+      - name: mediaGallery
+        wire: media_gallery
+      - name: callout
+        wire: callout
+      - name: actionGroup
+        wire: action_group
+      - name: choiceChips
+        wire: choice_chips
+      - name: dateTimeInput
+        wire: date_time_input
+      - name: confirmationCard
+        wire: confirmation_card
+
+  - name: AssistantPresentationTone
+    values:
+      - name: neutral
+        wire: neutral
+      - name: informative
+        wire: informative
+      - name: positive
+        wire: positive
+      - name: caution
+        wire: caution
+      - name: critical
+        wire: critical
+
+  - name: AssistantPresentationDensity
+    values:
+      - name: compact
+        wire: compact
+      - name: standard
+        wire: standard
+      - name: immersive
+        wire: immersive
+
+  - name: AssistantRunState
+    values:
+      - name: accepted
+        wire: accepted
+      - name: orienting
+        wire: orienting
+      - name: planning
+        wire: planning
+      - name: executing
+        wire: executing
+      - name: observing
+        wire: observing
+      - name: reflecting
+        wire: reflecting
+      - name: checkpointing
+        wire: checkpointing
+      - name: waitingUser
+        wire: waiting_user
+      - name: waitingApproval
+        wire: waiting_approval
+      - name: waitingExternal
+        wire: waiting_external
+      - name: paused
+        wire: paused
+      - name: synthesizing
+        wire: synthesizing
+      - name: verifying
+        wire: verifying
+      - name: completed
+        wire: completed
+      - name: failed
+        wire: failed
+      - name: cancelled
+        wire: cancelled
+
+  - name: AssistantRunItemKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: userInput
+        wire: user_input
+      - name: plan
+        wire: plan
+      - name: task
+        wire: task
+      - name: decisionSummary
+        wire: decision_summary
+      - name: toolUse
+        wire: tool_use
+      - name: subagent
+        wire: subagent
+      - name: evidence
+        wire: evidence
+      - name: presentation
+        wire: presentation
+      - name: approval
+        wire: approval
+      - name: checkpoint
+        wire: checkpoint
+      - name: finalAnswer
+        wire: final_answer
+
+  - name: AssistantRunItemStatus
+    values:
+      - name: started
+        wire: started
+      - name: completed
+        wire: completed
+      - name: failed
+        wire: failed
+      - name: cancelled
+        wire: cancelled
+
+  - name: AssistantTaskStatus
+    values:
+      - name: pending
+        wire: pending
+      - name: ready
+        wire: ready
+      - name: running
+        wire: running
+      - name: waiting
+        wire: waiting
+      - name: completed
+        wire: completed
+      - name: failed
+        wire: failed
+      - name: cancelled
+        wire: cancelled
+
+  - name: AssistantReasoningProfile
+    values:
+      - name: fast
+        wire: fast
+      - name: balanced
+        wire: balanced
+      - name: deep
+        wire: deep
+      - name: backgroundLong
+        wire: background_long
 
   - name: SkillSubscriptionStatus
     values:
@@ -58,6 +298,13 @@ enums:
         wire: paused
       - name: archived
         wire: archived
+
+  - name: SkillSubscriptionDestinationType
+    values:
+      - name: user
+        wire: user
+      - name: chatConversation
+        wire: chat_conversation
 
   - name: AssistantLearningFactType
     values:
@@ -90,8 +337,8 @@ enums:
         wire: create
       - name: search
         wire: search
-      - name: assistantConversation
-        wire: assistant_conversation
+      - name: assistantSession
+        wire: assistant_session
       - name: service
         wire: service
 
@@ -199,6 +446,15 @@ enums:
         wire: medium
       - name: high
         wire: high
+
+  - name: AssistantRunIntentKind
+    values:
+      - name: answer
+        wire: answer
+      - name: search
+        wire: search
+      - name: creationAssistance
+        wire: creation_assistance
 
   - name: StopPolicy
     values:
@@ -713,8 +969,8 @@ enums:
         wire: explicit_rewrite
       - name: management
         wire: management
-      - name: conversationConfirmed
-        wire: conversation_confirmed
+      - name: sessionConfirmed
+        wire: session_confirmed
       - name: unknown
         wire: ''
 

@@ -16,7 +16,7 @@ func requireMessageTransport(
 	environment string,
 	router *rtredis.Router,
 	sceneModes map[string]string,
-) (runtimemessaging.MessageTransport, error) {
+) (*runtimemessaging.RedisMessageTransport, error) {
 	binding, found := bindingdescriptor.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,

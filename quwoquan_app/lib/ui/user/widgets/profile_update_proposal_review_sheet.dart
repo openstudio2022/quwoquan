@@ -339,10 +339,7 @@ List<Widget> _changeRows(ProfileChangeSet changes) {
   add(ProfileText.editProfileAvatarLabel, changes.avatarMediaAssetId);
   add(ProfileText.editProfileCoverLabel, changes.backgroundMediaAssetId);
   add(ProfileText.editProfileProposalPrivateField, changes.isPrivate);
-  add(
-    ProfileText.editProfileProposalIsolationField,
-    changes.isolationLevel,
-  );
+  add(ProfileText.editProfileProposalIsolationField, changes.isolationLevel);
   add(ProfileText.editProfileProposalPurposeField, changes.purposeHint);
   return rows;
 }

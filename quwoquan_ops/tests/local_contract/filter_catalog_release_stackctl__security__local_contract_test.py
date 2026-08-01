@@ -12,19 +12,85 @@ from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import filter_catalog_release
-from quwoquan_ops.cli.lib.local_environment_auth import LocalAcceptanceSession
-
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
 class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
-    def test_local_mutation_uses_ephemeral_service_profile_and_never_puts_token_in_argv(self) -> None:
-        session = LocalAcceptanceSession(
-            owner_id="filter-catalog-gamma-publisher",
-            persona_id="filter-catalog-gamma-publisher",
-            access_token="gamma-local-service-bearer",
+    def test_alpha_mutation_uses_the_same_protected_local_publish_plane(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"passed":true}',
+            stderr="",
         )
+        with (
+            mock.patch.dict(
+                filter_catalog_release.os.environ,
+                {"QWQ_FILTER_CATALOG_PUBLISH_TOKEN": "alpha-local-service-bearer"},
+            ),
+            mock.patch.object(
+                filter_catalog_release.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
+        ):
+            execution = filter_catalog_release.execute_filter_catalog_command(
+                repo_root=ROOT,
+                target_name="alpha-local",
+                environment="alpha",
+                api_base_url="https://api.alpha.quwoquan.com:17000",
+                action="stage-and-activate",
+                rollback_release_id="",
+                token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
+                prod_gray_activation=False,
+            )
+
+        self.assertEqual(execution.return_code, 0)
+        self.assertIn("alpha", execution.argv)
+        self.assertNotIn("alpha-local-service-bearer", execution.argv)
+        self.assertEqual(
+            run.call_args.kwargs["env"]["QWQ_FILTER_CATALOG_PUBLISH_TOKEN"],
+            "alpha-local-service-bearer",
+        )
+
+    def test_local_publish_injects_managed_ca_without_disabling_tls(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"passed":true}',
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            ca_file = Path(temporary) / "root.crt"
+            ca_file.write_text("managed-ca", encoding="utf-8")
+            with (
+                mock.patch.dict(
+                    filter_catalog_release.os.environ,
+                    {"QWQ_FILTER_CATALOG_PUBLISH_TOKEN": "local-service-bearer"},
+                ),
+                mock.patch.object(
+                    filter_catalog_release.subprocess,
+                    "run",
+                    return_value=completed,
+                ) as run,
+            ):
+                execution = filter_catalog_release.execute_filter_catalog_command(
+                    repo_root=ROOT,
+                    target_name="alpha-local",
+                    environment="alpha",
+                    api_base_url="https://api.alpha.quwoquan.com:17000",
+                    action="stage",
+                    rollback_release_id="",
+                    token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
+                    prod_gray_activation=False,
+                    ssl_cafile=str(ca_file),
+                )
+
+        self.assertEqual(execution.return_code, 0)
+        self.assertEqual(run.call_args.kwargs["env"]["SSL_CERT_FILE"], str(ca_file))
+        self.assertNotIn("--insecure-local-tls", execution.argv)
+
+    def test_local_mutation_uses_protected_service_token_and_never_puts_it_in_argv(self) -> None:
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -32,11 +98,10 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             stderr="",
         )
         with (
-            mock.patch.object(
-                filter_catalog_release,
-                "open_local_acceptance_session",
-                return_value=session,
-            ) as open_session,
+            mock.patch.dict(
+                filter_catalog_release.os.environ,
+                {"QWQ_FILTER_CATALOG_PUBLISH_TOKEN": "gamma-local-service-bearer"},
+            ),
             mock.patch.object(
                 filter_catalog_release.subprocess,
                 "run",
@@ -54,13 +119,6 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 prod_gray_activation=False,
             )
 
-        open_session.assert_called_once_with(
-            "https://api.gamma.quwoquan.com:19000",
-            environment="gamma",
-            target_name="gamma-local",
-            subject="filter-catalog-gamma-publisher",
-            profile="content-filter-catalog-publisher",
-        )
         self.assertEqual(execution.return_code, 0)
         self.assertNotIn("gamma-local-service-bearer", execution.argv)
         self.assertNotIn("--insecure-local-tls", execution.argv)
@@ -72,11 +130,6 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         )
 
     def test_failed_local_publish_writes_private_redacted_diagnostic(self) -> None:
-        session = LocalAcceptanceSession(
-            owner_id="filter-catalog-beta-publisher",
-            persona_id="filter-catalog-beta-publisher",
-            access_token="beta-local-secret-bearer",
-        )
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -86,10 +139,9 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             diagnostic_path = Path(temporary) / "stdout" / "filter-catalog.log"
             with (
-                mock.patch.object(
-                    filter_catalog_release,
-                    "open_local_acceptance_session",
-                    return_value=session,
+                mock.patch.dict(
+                    filter_catalog_release.os.environ,
+                    {"QWQ_FILTER_CATALOG_PUBLISH_TOKEN": "beta-local-secret-bearer"},
                 ),
                 mock.patch.object(
                     filter_catalog_release.subprocess,
@@ -121,7 +173,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
 
     def test_prod_mutation_requires_pre_provisioned_service_token(self) -> None:
         with mock.patch.dict(filter_catalog_release.os.environ, {}, clear=True):
-            with self.assertRaisesRegex(ValueError, "requires QWQ_FILTER_CATALOG_PUBLISH_TOKEN"):
+            with self.assertRaisesRegex(ValueError, "publisher token"):
                 filter_catalog_release.execute_filter_catalog_command(
                     repo_root=ROOT,
                     target_name="prod-hosted",
@@ -140,17 +192,11 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             stdout='{"active":{"releaseId":"filter-catalog-20260720-001"}}',
             stderr="",
         )
-        with (
-            mock.patch.object(
-                filter_catalog_release,
-                "open_local_acceptance_session",
-            ) as open_session,
-            mock.patch.object(
+        with mock.patch.object(
                 filter_catalog_release.subprocess,
                 "run",
                 return_value=completed,
-            ),
-        ):
+            ):
             execution = filter_catalog_release.execute_filter_catalog_command(
                 repo_root=ROOT,
                 target_name="beta-local",
@@ -162,7 +208,6 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 prod_gray_activation=False,
             )
 
-        open_session.assert_not_called()
         self.assertEqual(execution.return_code, 0)
         self.assertNotIn("--insecure-local-tls", execution.argv)
 
@@ -225,6 +270,55 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 "publish",
             ),
         )
+
+    def test_stackctl_mints_local_service_token_only_for_mutating_child_env(self) -> None:
+        execution = filter_catalog_release.FilterCatalogCommandExecution(
+            argv=("python3", "quwoquan_data/scripts/cli.py", "filter-catalog"),
+            return_code=0,
+            stdout=json.dumps(
+                {
+                    "passed": True,
+                    "releaseId": "filter-catalog-20260720-001",
+                    "canonicalDigest": "a" * 64,
+                }
+            ),
+            stderr="",
+        )
+        with (
+            mock.patch.object(
+                stackctl,
+                "resolve_report_dir",
+                return_value=Path("/tmp/filter-catalog-stackctl"),
+            ),
+            mock.patch.object(
+                stackctl,
+                "mint_local_filter_catalog_service_token",
+                return_value="ephemeral-local-service-token",
+            ) as mint,
+            mock.patch.object(
+                stackctl,
+                "execute_filter_catalog_command",
+                return_value=execution,
+            ) as execute,
+            mock.patch.object(stackctl, "_write_filter_catalog_command_report"),
+        ):
+            result = stackctl.command_filter_catalog(
+                argparse.Namespace(
+                    target="alpha-local",
+                    action="stage-and-activate",
+                    rollback_release_id="",
+                    token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
+                    prod_gray_activation=False,
+                )
+            )
+
+        self.assertEqual(result["exitCode"], 0)
+        mint.assert_called_once_with("alpha", "alpha-local")
+        self.assertEqual(
+            execute.call_args.kwargs["token_value"],
+            "ephemeral-local-service-token",
+        )
+        self.assertNotIn("ephemeral-local-service-token", json.dumps(result))
 
     def test_environment_profiles_bind_public_active_catalog_verification(self) -> None:
         commands = stackctl._selected_profile_commands(

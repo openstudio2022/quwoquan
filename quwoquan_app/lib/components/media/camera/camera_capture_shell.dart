@@ -273,7 +273,11 @@ class CameraBottomTextAction extends StatelessWidget {
 
 /// 拍照模式白色快门。
 class CameraShutterButton extends StatelessWidget {
-  const CameraShutterButton({super.key, required this.busy, required this.onTap});
+  const CameraShutterButton({
+    super.key,
+    required this.busy,
+    required this.onTap,
+  });
 
   final bool busy;
   final VoidCallback? onTap;

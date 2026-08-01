@@ -1,7 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/application/content/post/capture_photography_tag_deriver.dart';
 import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
@@ -67,13 +66,6 @@ class PublishSettings {
   /// 按当前披露设置裁剪后的拍摄事实。这是唯一允许离开端侧的形态。
   MediaCaptureMetadata get disclosedCaptureMetadata =>
       captureMetadata.discloseOnly(captureDisclosure);
-
-  /// 由拍摄事实派生的 `Topic/摄影/**` tagRef。
-  ///
-  /// 派生在 getter 而不是构造时完成：创作者拨动披露开关后必须立刻反映到候选标签上，
-  /// 缓存一份就会出现「关掉了开关但标签还在」。
-  List<String> get captureDerivedTagRefs =>
-      const CapturePhotographyTagDeriver().derive(disclosedCaptureMetadata);
 
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
@@ -191,6 +183,12 @@ class PublishSettings {
     if (geoTagRef.isNotEmpty) payload['geoTagRef'] = geoTagRef;
     if (hasPlaceAnchor && visitedAt != null) {
       payload['visitedAt'] = visitedAt!.toUtc().toIso8601String();
+    }
+    if (captureMetadata.isNotEmpty) {
+      payload['captureDisclosure'] = captureDisclosure
+          .intersection(captureMetadata.availableGroups)
+          .map((group) => group.wire)
+          .toList(growable: false);
     }
     if (locationPoi != null) {
       payload['location'] = <String, dynamic>{

@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
 	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 )
 
 // ModerationStore is test-only contract infrastructure for PostModerationCase.

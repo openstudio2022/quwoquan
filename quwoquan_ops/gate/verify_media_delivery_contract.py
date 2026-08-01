@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.media_delivery_manifest import load_media_delivery_manifest
+from quwoquan_ops.cli.lib.output_paths import DEFAULT_DEPLOY_TARGET_BY_ENV
 
 
 MEDIA_ROOT = (
@@ -638,6 +639,8 @@ def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
                     str(APP_RUNTIME_DEFINE_SCRIPT),
                     "--env",
                     env_name,
+                    "--target",
+                    DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
                     "--format",
                     "json",
                 ],

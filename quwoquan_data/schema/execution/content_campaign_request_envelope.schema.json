@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_campaign_request_envelope.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "scale",
+    "carrier",
+    "operation",
+    "vertical",
+    "familyRef",
+    "regionRef",
+    "selector",
+    "quota",
+    "count",
+    "targetNames",
+    "sourceProviders",
+    "retryOf",
+    "rootExecutionId",
+    "executionId",
+    "gitBranch",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "allowedStage",
+    "operatorPrompt",
+    "requestDigest",
+    "frozenAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.content_campaign_request_envelope" },
+    "scale": {
+      "type": "string",
+      "pattern": "^M[1-9][0-9]{0,5}$"
+    },
+    "carrier": { "enum": ["homepage", "article", "image", "video"] },
+    "operation": {
+      "enum": [
+        "homepage.generate",
+        "article.generate",
+        "image.generate",
+        "video.generate"
+      ]
+    },
+    "vertical": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "familyRef": { "type": "string", "minLength": 1 },
+    "regionRef": { "type": "string", "minLength": 1 },
+    "selector": { "type": "string", "minLength": 1 },
+    "quota": { "type": "integer", "minimum": 1, "maximum": 100000 },
+    "count": { "type": "integer", "minimum": 1 },
+    "topic": { "type": ["string", "null"] },
+    "targetNames": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "sourceProviders": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "retryOf": { "type": ["string", "null"] },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "executionId": { "type": "string", "minLength": 1 },
+    "gitBranch": { "type": "string", "minLength": 1 },
+    "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceDigest": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "entityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "imageScalePromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessorExecutionId",
+        "receiptDigest",
+        "gitBranch",
+        "gitCommitSha",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "qualifiedCount",
+        "finalizedCount"
+      ],
+      "properties": {
+        "predecessorExecutionId": { "type": "string", "minLength": 1 },
+        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "gitBranch": { "type": "string", "minLength": 1 },
+        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "sourceDigest": {
+          "type": "object",
+          "required": ["algorithm", "digest", "inputs"],
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": { "const": "sha256" },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "inputs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "qualifiedCount": { "type": "integer", "minimum": 100 },
+        "finalizedCount": { "type": "integer", "minimum": 100 }
+      }
+    },
+    "videoScalePromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessorExecutionId",
+        "receiptDigest",
+        "gitBranch",
+        "gitCommitSha",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "qualifiedCount",
+        "finalizedCount"
+      ],
+      "properties": {
+        "predecessorExecutionId": { "type": "string", "minLength": 1 },
+        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "gitBranch": { "type": "string", "minLength": 1 },
+        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "sourceDigest": {
+          "type": "object",
+          "required": ["algorithm", "digest", "inputs"],
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": { "const": "sha256" },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "inputs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "qualifiedCount": { "type": "integer", "minimum": 100 },
+        "finalizedCount": { "type": "integer", "minimum": 100 }
+      }
+    },
+    "allowedStage": { "const": "submit-only" },
+    "operatorPrompt": { "type": "string", "minLength": 1 },
+    "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "frozenAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scale": { "const": "M1000" },
+          "vertical": { "const": "travel" },
+          "carrier": { "const": "image" }
+        },
+        "required": ["scale", "vertical", "carrier"]
+      },
+      "then": {
+        "required": ["imageScalePromotion"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scale": { "const": "M1000" },
+          "vertical": { "const": "travel" },
+          "carrier": { "const": "video" }
+        },
+        "required": ["scale", "vertical", "carrier"]
+      },
+      "then": {
+        "required": ["videoScalePromotion"]
+      }
+    }
+  ]
+}

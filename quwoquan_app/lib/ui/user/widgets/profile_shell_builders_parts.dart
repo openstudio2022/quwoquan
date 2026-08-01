@@ -219,7 +219,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
       return;
     }
     try {
-      await notifier.sendGreeting(requestMessage: message.trim());
+      await notifier.sendGreeting(
+        requestMessage: message.trim(),
+        intersectionRef: widget.greetingIntersectionRef,
+      );
       if (!context.mounted) {
         return;
       }

@@ -48,6 +48,10 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 encoding="utf-8",
             )
             snapshot = {"baselineId": baseline_id}
+            release_bindings = {
+                "candidate": {"releaseId": "candidate"},
+                "rollback": {"releaseId": "rollback"},
+            }
 
             with (
                 mock.patch.object(
@@ -64,6 +68,16 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                     stackctl,
                     "can_reuse_package",
                     return_value=(True, "reuse ok"),
+                ) as reuse_package,
+                mock.patch.object(
+                    stackctl,
+                    "validate_release_attestations",
+                    return_value=release_bindings,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value={"release": release_bindings},
                 ),
                 mock.patch.object(
                     stackctl,
@@ -90,6 +104,8 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                         kind="runtime",
                         include_services=False,
                         service="",
+                        release_attestation="candidate.json",
+                        rollback_release_attestation="rollback.json",
                     )
                 )
 
@@ -99,6 +115,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 "env/alpha/runs/original-package",
             )
             self.assertEqual(result["baselineId"], baseline_id)
+            self.assertTrue(reuse_package.call_args.kwargs["include_services"])
 
     def test_verify_children_override_inherited_cross_environment_target(self) -> None:
         invocations: list[tuple[list[str], dict[str, str]]] = []
@@ -167,6 +184,12 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 for _argv, env in invocations
             )
         )
+        self.assertTrue(
+            all(
+                env["QWQ_APP_RUNTIME_ENV"] == "alpha"
+                for _argv, env in invocations
+            )
+        )
         self.assertEqual(invocations[1][1]["PROFILE_SENTINEL"], "preserved")
 
     def test_provider_readiness_clears_inherited_target(self) -> None:
@@ -192,7 +215,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(
             run.call_args.kwargs["env"],
-            {"QWQ_DEPLOY_TARGET": ""},
+            {"QWQ_DEPLOY_TARGET": "", "QWQ_APP_RUNTIME_ENV": ""},
         )
 
 

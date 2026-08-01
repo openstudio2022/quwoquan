@@ -1,0 +1,102 @@
+commercial_defaults:
+  status: blocked
+  block_reason: append sink 实现与三层测试完成后按环境证据翻 ready
+  gap_id: TAG_TAG_FEEDBACK_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: 'TagFeedbackFact 是 Persona/Device 对单个 tagRef 推荐的不可变反馈事实。
+
+  typed append + (actorId, idempotencyKey) 唯一约束去重；不修改 TagNodeView
+
+  或 TagTaxonomyRelease，消费方（recommendation-engine）经事实集合投影。
+
+'
+api_routes:
+  - method: POST
+    path: /tag/feedback
+    operation: ReportTagFeedback
+    actor: persona_or_device
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: TagFeedbackAppendFacet
+      method: appendTagFeedback
+      append_sink: TagFeedbackFact
+      mutation_target: TagFeedbackFact
+      invariant_target: TagFeedbackFact
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - TAG.USER.invalid_argument
+      - TAG.USER.tag_not_found
+      - TAG.USER.feedback_invalid_action
+      - TAG.USER.feedback_idempotency_conflict
+      - TAG.SYSTEM.feedback_storage_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: tag_feedback_fact_append
+      trace: true
+      attributes:
+        - action
+        - outcome
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: public
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    description: '追加一条标签反馈事实（action 引用 TagFeedbackAction canonical enum）。
+
+      同一 actor 的相同 Idempotency-Key 重放返回首次结果。
+
+'
+    request_entity: ReportTagFeedbackCommand
+    request_body_kind: object
+    response_entity: TagFeedbackResultView
+    response_fields:
+      - accepted
+    client_contract:
+      dart_import: ../tag/tag_feedback_fact_contracts.dart
+      response_type: TagFeedbackAck
+      response_decoder: decodeTagFeedbackAck
+consumers:
+  - name: app
+    capabilities:
+      - report_tag_feedback_fact
+  - name: recommendation-engine
+    capabilities:
+      - project_tag_feedback_fact
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: tag-service API
+      scenarios:
+        - name: feedback_append_accepted
+          route: POST /tag/feedback
+          assertions:
+            - status_200
+            - accepted_true
+    service_side:
+      description: 真实 Mongo 验证 (actorId, idempotencyKey) 唯一约束与重放
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      scenarios:
+        - name: feedback_dedupe_replay
+          route: POST /tag/feedback
+          assertions:
+            - 同 actor 同 Idempotency-Key 重放只落一条事实
+            - 同 key 不同 payload 返回 TAG.USER.feedback_idempotency_conflict

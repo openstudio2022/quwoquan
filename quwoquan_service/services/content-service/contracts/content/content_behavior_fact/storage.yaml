@@ -31,4 +31,8 @@ collections:
       keys:
         createdAt: 1
       expireAfterSeconds: 2592000
+  content_behavior_stream_checkpoints:
+    entity: ContentBehaviorStreamCheckpoint
+    role: checkpoint
+    description: rm_behavior_events 到 events.content.behavior_facts 的独立可靠投递水位与多副本租约；不得与本地投影共用 checkpoint。
 role: append_only

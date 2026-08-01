@@ -160,11 +160,9 @@ class MediaCaptureMetadata {
     if (lensModel != null) 'lensModel': lensModel,
     if (focalLengthMm != null) 'focalLengthMm': focalLengthMm,
     if (apertureFNumber != null) 'apertureFNumber': apertureFNumber,
-    if (shutterSpeedSeconds != null)
-      'shutterSpeedSeconds': shutterSpeedSeconds,
+    if (shutterSpeedSeconds != null) 'shutterSpeedSeconds': shutterSpeedSeconds,
     if (isoSensitivity != null) 'isoSensitivity': isoSensitivity,
-    if (capturedAt != null)
-      'capturedAt': capturedAt!.toUtc().toIso8601String(),
+    if (capturedAt != null) 'capturedAt': capturedAt!.toUtc().toIso8601String(),
     if (gpsLatitude != null) 'gpsLatitude': gpsLatitude,
     if (gpsLongitude != null) 'gpsLongitude': gpsLongitude,
   };

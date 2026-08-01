@@ -483,7 +483,8 @@ class ObjectIdentityAvatar extends StatelessWidget {
     final innerRadius = switch (kind) {
       ObjectIdentityKind.user => inner,
       ObjectIdentityKind.entity => inner,
-      ObjectIdentityKind.circle => inner * AppSpacing.avatarCircleBorderRadiusRatio,
+      ObjectIdentityKind.circle =>
+        inner * AppSpacing.avatarCircleBorderRadiusRatio,
     };
     return Container(
       decoration: BoxDecoration(
@@ -801,7 +802,10 @@ class ObjectRelationRibbon extends StatelessWidget {
     );
   }
 
-  static String _edgeLabel(ObjectRelationEdge edge, ObjectRelationEdgeType type) {
+  static String _edgeLabel(
+    ObjectRelationEdge edge,
+    ObjectRelationEdgeType type,
+  ) {
     // 穷举 switch 是这里的目的：新增边类型必须在此给出中文关系措辞，否则编译不过。
     final verb = switch (type) {
       ObjectRelationEdgeType.authorOf => '创作了',

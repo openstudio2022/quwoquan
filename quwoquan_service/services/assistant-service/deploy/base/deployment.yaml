@@ -49,7 +49,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.annotations['quwoquan.io/image-version']
             - name: ASSISTANT_RESOURCE_ROOT
-              value: /app/resources/skills/assistant/assistant_conversation
+              value: /app/resources/skills/assistant/assistant_session
             - name: ASSISTANT_POLICY_RESOURCE_ROOT
               value: /app/resources/policies
           volumeMounts:

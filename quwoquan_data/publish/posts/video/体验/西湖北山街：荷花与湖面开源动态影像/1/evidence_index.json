@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖_video",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:887ff0fd9317126badec2cefa53dbee0e35a58c3c516982716e3191207158d24"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:7f7aee6a8ccd373368c3bb9e3a18acafa219ecca1b28e960a2f94c6114a5ea3d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:a2d52753378b0b8fc0bdc88be45397f8aa33595e93e050a4f09319cf208d1351"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:5a4ffc0a3d6e82e7af9a7a6de3b790d6153ab46ec3bebc06104bfc69463deffb"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:733852f49a9bd4e2f7ff56a06f1548098d03569d658defaf0e1e4989550ff872"
+    }
+  ]
+}

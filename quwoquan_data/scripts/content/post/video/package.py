@@ -305,6 +305,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
         )
         else RightsAuditStatus.UNVERIFIED
     )
+    source_attribution = _image_sequence_source_attribution(request.source_frames)
     manifest = {
         "schema": "quwoquan_data.post_manifest",
         "vertical": identity.vertical,
@@ -317,6 +318,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
         "entityRefs": [request.entity_ref],
         "tagRefs": list(request.tag_refs),
         "sourceUrls": [frame.source_url for frame in request.source_frames],
+        "sourceAttribution": source_attribution,
         "authorId": request.author_id,
         "creatorProfileId": request.creator_profile_id,
         "generator": "agent",
@@ -383,6 +385,48 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
 def _video_codec(capture: cv2.VideoCapture) -> str:
     fourcc = int(capture.get(cv2.CAP_PROP_FOURCC))
     return "".join(chr((fourcc >> (8 * index)) & 0xFF) for index in range(4)).lower()
+
+
+def _image_sequence_source_attribution(
+    frames: list[VideoSourceFrame] | tuple[VideoSourceFrame, ...],
+) -> dict[str, object]:
+    """Project the primary cleared still into the consumer sourceAttribution wire."""
+    if not frames:
+        raise ValueError("image-sequence video requires at least one source frame")
+    primary = frames[0]
+    creator = str(primary.creator or "").strip() or "unknown"
+    license_name = str(primary.license or "").strip() or "unknown"
+    source_url = str(primary.source_url or "").strip()
+    platform = (
+        "Wikimedia Commons"
+        if "commons.wikimedia.org" in source_url
+        else "external"
+    )
+    attribution_text = " — ".join(
+        part for part in (creator, license_name, source_url) if part
+    )
+    return {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": creator,
+        "originalCreatorProfileUrl": None,
+        "platform": platform,
+        "sourcePostUrl": source_url,
+        "originalAssetUrl": source_url,
+        "attributionText": attribution_text,
+        "rightsBasis": license_name,
+        "commercialAuthorizationStatus": "verified",
+        "publicationAdmission": "commercial_release",
+        "authorizationProofUrl": source_url,
+        "termsUrl": "",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
 
 
 def validate_video_work_package(package_dir: Path) -> list[str]:
@@ -488,7 +532,10 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
         sources = provenance.get("sources") if isinstance(provenance, dict) else None
         if not isinstance(sources, list) or not sources:
             issues.append("video provenance sources are missing")
-        elif provenance.get("renderStrategy") == "sourced_video_transcode":
+        elif provenance.get("renderStrategy") in {
+            "sourced_video_transcode",
+            "rights_cleared_image_sequence",
+        }:
             attribution = manifest.get("sourceAttribution")
             required = (
                 "originalCreatorName",
@@ -501,23 +548,24 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
                 "publicationAdmission",
                 "watermarkStatus",
                 "audioRightsStatus",
-                "collectedAt",
                 "takedownPolicy",
             )
-            if len(sources) != 1 or not isinstance(sources[0], dict):
-                issues.append(
-                    "sourced video provenance must contain exactly one source"
-                )
-            elif any(not sources[0].get(field) for field in required):
-                issues.append(
-                    "sourced video provenance attribution is incomplete"
-                )
+            if provenance.get("renderStrategy") == "sourced_video_transcode":
+                required = (*required, "collectedAt")
+                if len(sources) != 1 or not isinstance(sources[0], dict):
+                    issues.append(
+                        "sourced video provenance must contain exactly one source"
+                    )
+                elif any(not sources[0].get(field) for field in required):
+                    issues.append(
+                        "sourced video provenance attribution is incomplete"
+                    )
             if not isinstance(attribution, dict) or any(
                 not attribution.get(field) for field in required
             ):
-                issues.append("sourced video manifest attribution is incomplete")
+                issues.append("video manifest sourceAttribution is incomplete")
             elif attribution.get("watermarkStatus") != "absent":
-                issues.append("sourced video manifest watermark is not absent")
+                issues.append("video manifest watermark is not absent")
         elif any(
             not isinstance(source, dict)
             or not source.get("rightsRef")

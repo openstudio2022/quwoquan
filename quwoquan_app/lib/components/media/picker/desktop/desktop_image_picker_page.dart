@@ -50,8 +50,7 @@ class _DesktopImagePickerPageState
   bool _bootstrapping = true;
   bool _scanning = false;
 
-  bool get _isDark =>
-      CupertinoTheme.brightnessOf(context) == Brightness.dark;
+  bool get _isDark => CupertinoTheme.brightnessOf(context) == Brightness.dark;
 
   @override
   void initState() {
@@ -144,29 +143,20 @@ class _DesktopImagePickerPageState
   }
 
   TextStyle _titleStyle() => TextStyle(
-        fontSize: AppTypography.lg,
-        fontWeight: AppTypography.semiBold,
-        color: AppColorsFunctional.getColor(
-          _isDark,
-          ColorType.foregroundPrimary,
-        ),
-      );
+    fontSize: AppTypography.lg,
+    fontWeight: AppTypography.semiBold,
+    color: AppColorsFunctional.getColor(_isDark, ColorType.foregroundPrimary),
+  );
 
   TextStyle _bodyStyle() => TextStyle(
-        fontSize: AppTypography.base,
-        color: AppColorsFunctional.getColor(
-          _isDark,
-          ColorType.foregroundPrimary,
-        ),
-      );
+    fontSize: AppTypography.base,
+    color: AppColorsFunctional.getColor(_isDark, ColorType.foregroundPrimary),
+  );
 
   TextStyle _subStyle() => TextStyle(
-        fontSize: AppTypography.sm,
-        color: AppColorsFunctional.getColor(
-          _isDark,
-          ColorType.foregroundSecondary,
-        ),
-      );
+    fontSize: AppTypography.sm,
+    color: AppColorsFunctional.getColor(_isDark, ColorType.foregroundSecondary),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -319,8 +309,7 @@ class _DesktopImagePickerPageState
                 children: <Widget>[
                   Flexible(
                     child: Text(
-                      album?.name ??
-                          MediaText.mediaPickerAlbumSelectionTitle,
+                      album?.name ?? MediaText.mediaPickerAlbumSelectionTitle,
                       style: _titleStyle(),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -394,12 +383,11 @@ class _DesktopImagePickerPageState
       builder: (context, constraints) {
         final crossAxisCount =
             constraints.maxWidth >= AppSpacing.webPageContentMaxWidth
-                ? 5
-                : (constraints.maxWidth >= AppSpacing.expandedBreakpoint
-                    ? 4
-                    : 3);
+            ? 5
+            : (constraints.maxWidth >= AppSpacing.expandedBreakpoint ? 4 : 3);
         final spacing = AppSpacing.intraGroupSm;
-        final tileWidth = (constraints.maxWidth -
+        final tileWidth =
+            (constraints.maxWidth -
                 spacing * 2 -
                 spacing * (crossAxisCount - 1)) /
             crossAxisCount;

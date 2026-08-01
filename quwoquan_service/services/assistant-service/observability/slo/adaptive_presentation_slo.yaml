@@ -1,0 +1,30 @@
+service: assistant-service
+domain: assistant
+capability: adaptive-presentation-runtime
+
+metrics:
+  projection_total: assistant_presentation_projection_total
+  app_fallback_total: ops_app_experience_events_total
+
+privacy:
+  permitted_labels: [phase, outcome, event_type, result]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, template_ref, node_id, action_payload, fallback_markdown]
+
+slis:
+  - id: assistant_presentation_projection_availability
+    description: presentation snapshot 与 commit 成功持久化比例。
+    sli: sum(rate(assistant_presentation_projection_total{outcome="succeeded"}[10m])) / clamp_min(sum(rate(assistant_presentation_projection_total[10m])), 0.001)
+    objective: 0.999
+  - id: assistant_presentation_fallback_rate
+    description: App 因未知节点、非法摘要、action 不可达或渲染失败采用非空 fallback 的比例。
+    sli: sum(rate(ops_app_experience_events_total{event_type="assistant_turn_quality",result="presentation_fallback"}[15m])) / clamp_min(sum(rate(assistant_presentation_projection_total{phase="commit",outcome="succeeded"}[15m])), 0.001)
+    objective_maximum: 0.01
+
+alerts:
+  projection_failure:
+    condition: sum(increase(assistant_presentation_projection_total{outcome="failed"}[10m])) > 0
+    severity: critical
+  fallback_rate:
+    condition: sum(rate(ops_app_experience_events_total{event_type="assistant_turn_quality",result="presentation_fallback"}[15m])) / clamp_min(sum(rate(assistant_presentation_projection_total{phase="commit",outcome="succeeded"}[15m])), 0.001) > 0.01
+    severity: warning

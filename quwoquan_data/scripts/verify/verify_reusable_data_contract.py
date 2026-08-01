@@ -30,6 +30,11 @@ _FORBIDDEN = (
     re.compile(r"(?:浙江|四川|普陀山|东钱湖|海螺沟)"),
     re.compile(r"\b(?:922|1977|2899)\b"),
 )
+_SCALE_CATALOG_PATH = Path("quwoquan_data/control_plane/campaigns/scale_catalog.yaml")
+_SCALE_CATALOG_FORBIDDEN = (
+    re.compile(r"\b(?:two[_ -]?province|canary|h10k)\b", re.IGNORECASE),
+    *_FORBIDDEN[1:],
+)
 _KNOWN_PROVIDER_KEY = re.compile(r"\bknown[A-Z][A-Za-z]*\s*:")
 _PROVIDER_TASK_KEY = re.compile(
     r"^\s*(?:expectedCount|minimumLaneCounts|maturity)\s*:",
@@ -92,7 +97,13 @@ def reusable_data_contract_issues() -> list[str]:
                 text = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            for pattern in _FORBIDDEN:
+            relative_path = path.relative_to(REPO_ROOT)
+            forbidden_patterns = (
+                _SCALE_CATALOG_FORBIDDEN
+                if relative_path == _SCALE_CATALOG_PATH
+                else _FORBIDDEN
+            )
+            for pattern in forbidden_patterns:
                 if pattern.search(text):
                     issues.append(
                         f"{path.relative_to(REPO_ROOT)}: reusable contract contains task-specific value {pattern.pattern}"

@@ -156,7 +156,7 @@ AccountClosureLocalDataPurger _createAccountClosureLocalDataPurger(
           ),
           Future<void>.sync(
             () => AssistantConsentStore(
-              actorScope: closureActorId,
+              accountId: actor.accountId,
             ).clearForTerminalAccountClosure(),
           ),
           Future<void>.sync(

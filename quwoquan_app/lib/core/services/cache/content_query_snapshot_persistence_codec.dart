@@ -63,6 +63,8 @@ int? _measureSnapshotWireBytes(
     return writer.byteLength;
   } on _JsonWireBudgetExceeded {
     return null;
+  } on _PostSnapshotFieldBudgetExceeded {
+    return null;
   }
 }
 
@@ -80,7 +82,9 @@ void _writeSnapshotJson(
     if (hasItem) {
       writer.writeRaw(',');
     }
-    writer.writeValue(_postSnapshotMap(post));
+    final postMap = _postSnapshotMap(post);
+    _validatePostSnapshotFieldByteLimits(postMap);
+    writer.writeValue(postMap);
     hasItem = true;
   }
   writer.writeRaw(']');
@@ -125,6 +129,21 @@ void _writeJsonField(_BoundedJsonWriter writer, String key, Object? value) {
 
 final class _JsonWireBudgetExceeded implements Exception {
   const _JsonWireBudgetExceeded();
+}
+
+final class _PostSnapshotFieldBudgetExceeded implements Exception {
+  const _PostSnapshotFieldBudgetExceeded();
+}
+
+void _validatePostSnapshotFieldByteLimits(Map<String, dynamic> post) {
+  for (final entry
+      in GeneratedPostRuntimeMetadata.postSnapshotFieldByteLimits.entries) {
+    final value = post[entry.key];
+    if (value is String &&
+        _utf8WireLength(value, stopAfter: entry.value) > entry.value) {
+      throw const _PostSnapshotFieldBudgetExceeded();
+    }
+  }
 }
 
 final class _BoundedJsonWriter {

@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite/sqflite.dart';
@@ -30,6 +32,13 @@ abstract interface class LocalChatSearchReader {
     required String query,
     String? conversationType,
     int limit = 20,
+  });
+
+  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+    required LocalSearchNamespace namespace,
+    required String conversationId,
+    int beforeSeq = 0,
+    int limit = 50,
   });
 }
 

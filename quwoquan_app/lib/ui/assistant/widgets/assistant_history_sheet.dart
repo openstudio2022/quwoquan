@@ -17,8 +17,8 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 历史会话抽屉（surface `assistantHistory`：私助记录抽屉与分页）。
 ///
-/// 数据源唯一：`ListAssistantConversations` keyset 分页（R-ASSIST-001 收口，
-/// 本地不再维护会话副本）。返回选中的 conversationId；返回空串表示新对话。
+/// 数据源唯一：`ListAssistantSessions` keyset 分页（R-ASSIST-001 收口，
+/// 本地不再维护会话副本）。返回选中的 sessionId；返回空串表示新对话。
 Future<String?> showAssistantHistorySheet(BuildContext context) {
   return showAppBottomModal<String>(
     context: context,
@@ -36,8 +36,7 @@ class _AssistantHistorySheet extends ConsumerStatefulWidget {
 
 class _AssistantHistorySheetState
     extends ConsumerState<_AssistantHistorySheet> {
-  final List<AssistantConversationWire> _conversations =
-      <AssistantConversationWire>[];
+  final List<AssistantSessionWire> _sessions = <AssistantSessionWire>[];
   String _nextCursor = '';
   bool _loading = true;
   bool _loadingMore = false;
@@ -56,11 +55,11 @@ class _AssistantHistorySheetState
     });
     try {
       final page = await ref
-          .read(assistantConversationRunFacetProvider)
-          .listAssistantConversations();
+          .read(assistantSessionRunFacetProvider)
+          .listAssistantSessions();
       if (!mounted) return;
       setState(() {
-        _conversations
+        _sessions
           ..clear()
           ..addAll(page.items);
         _nextCursor = page.nextCursor;
@@ -80,11 +79,11 @@ class _AssistantHistorySheetState
     setState(() => _loadingMore = true);
     try {
       final page = await ref
-          .read(assistantConversationRunFacetProvider)
-          .listAssistantConversations(cursor: _nextCursor);
+          .read(assistantSessionRunFacetProvider)
+          .listAssistantSessions(cursor: _nextCursor);
       if (!mounted) return;
       setState(() {
-        _conversations.addAll(page.items);
+        _sessions.addAll(page.items);
         _nextCursor = page.nextCursor;
         _loadingMore = false;
       });
@@ -119,7 +118,7 @@ class _AssistantHistorySheetState
             ),
             child: ConversationSheetPrimaryActionButton(
               isDark: isDark,
-              label: AssistantText.assistantNewConversation,
+              label: AssistantText.assistantNewSession,
               onTap: () => Navigator.of(context).pop(''),
             ),
           ),
@@ -159,7 +158,7 @@ class _AssistantHistorySheetState
         },
       );
     }
-    if (_conversations.isEmpty) {
+    if (_sessions.isEmpty) {
       return Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
         child: Text(
@@ -177,13 +176,13 @@ class _AssistantHistorySheetState
         isDark: isDark,
         child: ListView.separated(
           shrinkWrap: true,
-          itemCount: _conversations.length + (_nextCursor.isNotEmpty ? 1 : 0),
+          itemCount: _sessions.length + (_nextCursor.isNotEmpty ? 1 : 0),
           separatorBuilder: (_, _) => ConversationSheetDivider(
             isDark: isDark,
             dividerLeftInset: SettingsSemanticConstants.blockHorizontalPadding,
           ),
           itemBuilder: (context, index) {
-            if (index == _conversations.length) {
+            if (index == _sessions.length) {
               return CupertinoButton(
                 key: const ValueKey<String>('assistant_history_load_more'),
                 minimumSize: const Size.square(AppSpacing.minInteractiveSize),
@@ -199,33 +198,31 @@ class _AssistantHistorySheetState
                       ),
               );
             }
-            final conversation = _conversations[index];
-            return _conversationRow(isDark, conversation);
+            final session = _sessions[index];
+            return _sessionRow(isDark, session);
           },
         ),
       ),
     );
   }
 
-  Widget _conversationRow(bool isDark, AssistantConversationWire conversation) {
+  Widget _sessionRow(bool isDark, AssistantSessionWire session) {
     final primary =
         SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
     final secondary =
         SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
-    final title = conversation.summary.trim().isEmpty
+    final title = session.summary.trim().isEmpty
         ? AssistantText.assistantHistoryDefaultTitle
-        : conversation.summary.trim();
-    final updatedLabel = _relativeUpdatedLabel(conversation.updatedAt);
+        : session.summary.trim();
+    final updatedLabel = _relativeUpdatedLabel(session.updatedAt);
     return CupertinoButton(
-      key: ValueKey<String>(
-        'assistant_history_item_${conversation.conversationId}',
-      ),
+      key: ValueKey<String>('assistant_history_item_${session.sessionId}'),
       padding: EdgeInsets.symmetric(
         horizontal: SettingsSemanticConstants.blockHorizontalPadding,
         vertical: AppSpacing.intraGroupSm,
       ),
       minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-      onPressed: () => Navigator.of(context).pop(conversation.conversationId),
+      onPressed: () => Navigator.of(context).pop(session.sessionId),
       child: Row(
         children: [
           Expanded(

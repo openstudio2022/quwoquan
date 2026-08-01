@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/profile_update_proposal_contracts.dart';
 
@@ -33,6 +33,10 @@ final class ApplyProfileUpdateProposalCommand {
   }
 
   final String proposalId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "id": this.proposalId,
+  };
 }
 
 final class ConfirmProfileUpdateProposalCommand {
@@ -45,6 +49,10 @@ final class ConfirmProfileUpdateProposalCommand {
   }
 
   final String proposalId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "id": this.proposalId,
+  };
 }
 
 final class CreateProfileUpdateProposalCommand {
@@ -81,6 +89,16 @@ final class CreateProfileUpdateProposalCommand {
   final String reason;
   final List<String> evidenceRefs;
   final List<String> impactScope;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    "proposalId": this.proposalId,
+    "source": switch (this.source) { ProfileUpdateProposalSource.persona => "persona", ProfileUpdateProposalSource.assistant => "assistant", ProfileUpdateProposalSource.external => "external", },
+    "changes": this.changes.toWire(),
+    "reason": this.reason,
+    "evidenceRefs": this.evidenceRefs.map((value) => value).toList(growable: false),
+    "impactScope": this.impactScope.map((value) => value).toList(growable: false),
+  };
 }
 
 final class ProfileUpdateProposalListQuery {
@@ -99,6 +117,12 @@ final class ProfileUpdateProposalListQuery {
   final String personaId;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "personaId": this.personaId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 final class ProfileUpdateProposalQuery {
@@ -111,6 +135,10 @@ final class ProfileUpdateProposalQuery {
   }
 
   final String proposalId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "id": this.proposalId,
+  };
 }
 
 final class RejectProfileUpdateProposalCommand {
@@ -123,6 +151,10 @@ final class RejectProfileUpdateProposalCommand {
   }
 
   final String proposalId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "id": this.proposalId,
+  };
 }
 
 final class RollbackProfileUpdateProposalCommand {
@@ -135,6 +167,10 @@ final class RollbackProfileUpdateProposalCommand {
   }
 
   final String proposalId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "id": this.proposalId,
+  };
 }
 
 CloudOperationRequestPayload encodeUserProfileUpdateProposalApplyProposalGeneratedRequest(ApplyProfileUpdateProposalCommand request) {

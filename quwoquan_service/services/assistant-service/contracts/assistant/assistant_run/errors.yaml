@@ -6,13 +6,27 @@ description: 'assistant_run 域结构化错误码声明。格式：MODULE.KIND.R
 
   '
 errors:
+- code: ASSISTANT.USER.run_unauthorized
+  kind: USER
+  reason: run_unauthorized
+  http_status: 401
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun, GetAssistantRun, CancelAssistantRun, PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, StreamAssistantRunEvents, assistant.page_context.ReportPageContext, assistant.assistant_entry_view.GetAssistantEntry, assistant.assistant_task_view.ListAssistantTasks]
+  recovery_action: surface
+  dart_const: runUnauthorized
+  go_const: ErrRunUnauthorized
+  l10n_key: assistant.error.run_unauthorized
+  user_message:
+    zh: 请先登录后使用助手能力
+    en: Please sign in to use assistant capabilities
 - code: ASSISTANT.USER.run_not_found
   kind: USER
   reason: not_found
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [GetAssistantRun, CancelAssistantRun, StreamAssistantRunEvents]
+    operations: [GetAssistantRun, CancelAssistantRun, PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, StreamAssistantRunEvents]
   recovery_action: surface
   dart_const: runNotFound
   go_const: ErrRunNotFound
@@ -26,7 +40,7 @@ errors:
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [SearchXiaoquResults, StartAssistantRun, ListConversationTurns, StreamAssistantRunEvents, ReportPageContext, GetSuggestedActions, SuggestCreationAssistance]
+    operations: [StartAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, assistant.assistant_turn_view.ListSessionTurns, StreamAssistantRunEvents, assistant.page_context.ReportPageContext, assistant.assistant_entry_view.GetAssistantEntry]
   recovery_action: surface
   dart_const: runInvalidArgument
   go_const: ErrRunInvalidArgument
@@ -34,6 +48,20 @@ errors:
   user_message:
     zh: 执行请求参数有误
     en: Assistant run request is invalid
+- code: ASSISTANT.USER.run_state_conflict
+  kind: USER
+  reason: state_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse]
+  recovery_action: refresh
+  dart_const: runStateConflict
+  go_const: ErrRunStateConflict
+  l10n_key: assistant.error.run_state_conflict
+  user_message:
+    zh: 本次任务状态已经变化，请刷新后重试
+    en: The assistant run state has changed; refresh and try again
 - code: ASSISTANT.USER.intersection_evidence_not_found
   kind: USER
   reason: not_found
@@ -69,7 +97,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [ReportPageContext]
+    operations: [assistant.page_context.ReportPageContext]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: pageContextUnavailable
@@ -98,7 +126,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [StartAssistantRun, GetAssistantRun, ListConversationTurns, CancelAssistantRun, StreamAssistantRunEvents]
+    operations: [StartAssistantRun, GetAssistantRun, assistant.assistant_turn_view.ListSessionTurns, CancelAssistantRun, PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, StreamAssistantRunEvents]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: runStorageUnavailable
@@ -128,7 +156,7 @@ errors:
   http_status: 403
   emitted_by:
   - surface: http
-    operations: [StartAssistantRun, SuggestCreationAssistance]
+    operations: [StartAssistantRun]
   recovery_action: surface
   dart_const: skillConsentRequired
   go_const: ErrSkillConsentRequired
@@ -142,7 +170,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [SearchXiaoquResults, StreamAssistantRunEvents]
+    operations: [StreamAssistantRunEvents]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: streamUnavailable
@@ -154,10 +182,8 @@ errors:
 - code: ASSISTANT.MIDDLEWARE.upstream_timeout
   kind: MIDDLEWARE
   reason: timeout
-  http_status: 504
   emitted_by:
-  - surface: http
-    operations: [SearchXiaoquResults, SuggestCreationAssistance]
+  - surface: terminal_snapshot
   recovery_action: retry
   recovery_after_seconds: 8
   dart_const: upstreamTimeout
@@ -179,6 +205,19 @@ errors:
   user_message:
     zh: 助手模型服务暂不可用，请稍后重试
     en: Assistant model service is temporarily unavailable
+- code: ASSISTANT.SYSTEM.run_execution_failed
+  kind: SYSTEM
+  reason: run_execution_failed
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: runExecutionFailed
+  go_const: ErrRunExecutionFailed
+  l10n_key: assistant.error.run_execution_failed
+  user_message:
+    zh: 本次任务执行失败，请稍后重试
+    en: This assistant run failed; please try again later
 - code: ASSISTANT.MIDDLEWARE.public_search_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable
@@ -192,6 +231,69 @@ errors:
   user_message:
     zh: 公开信息检索暂不可用，请稍后重试
     en: Public search is temporarily unavailable
+- code: ASSISTANT.USER.web_target_rejected
+  kind: USER
+  reason: web_target_rejected
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: surface
+  dart_const: webTargetRejected
+  go_const: ErrWebTargetRejected
+  l10n_key: assistant.error.web_target_rejected
+  user_message:
+    zh: 该网页目标不符合公开只读访问规则
+    en: This web target is not allowed by the public read-only access policy
+- code: ASSISTANT.MIDDLEWARE.web_fetch_unavailable
+  kind: MIDDLEWARE
+  reason: web_fetch_unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: webFetchUnavailable
+  go_const: ErrWebFetchUnavailable
+  l10n_key: assistant.error.web_fetch_unavailable
+  user_message:
+    zh: 公开网页暂时无法读取，请稍后重试
+    en: The public web page cannot be read right now
+- code: ASSISTANT.MIDDLEWARE.web_budget_exhausted
+  kind: MIDDLEWARE
+  reason: web_budget_exhausted
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: surface
+  dart_const: webBudgetExhausted
+  go_const: ErrWebBudgetExhausted
+  l10n_key: assistant.error.web_budget_exhausted
+  user_message:
+    zh: 本次任务的网页探索预算已用完
+    en: This run has exhausted its public web exploration budget
+- code: ASSISTANT.SYSTEM.web_budget_unavailable
+  kind: SYSTEM
+  reason: web_budget_unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: webBudgetUnavailable
+  go_const: ErrWebBudgetUnavailable
+  l10n_key: assistant.error.web_budget_unavailable
+  user_message:
+    zh: 网页探索预算状态暂时不可用，请稍后重试
+    en: The public web budget state is temporarily unavailable
+- code: ASSISTANT.SYSTEM.web_evidence_unavailable
+  kind: SYSTEM
+  reason: web_evidence_unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: webEvidenceUnavailable
+  go_const: ErrWebEvidenceUnavailable
+  l10n_key: assistant.error.web_evidence_unavailable
+  user_message:
+    zh: 网页证据暂时无法安全保存或读取，请稍后重试
+    en: Web evidence cannot be safely stored or read right now
 - code: ASSISTANT.MIDDLEWARE.weather_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable

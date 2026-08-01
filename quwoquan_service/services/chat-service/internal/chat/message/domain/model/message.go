@@ -40,6 +40,7 @@ type Message struct {
 type MessageCard struct {
 	Kind         MessageCardKind        `json:"kind" bson:"kind"`
 	Title        string                 `json:"title" bson:"title"`
+	ObjectRef    *MessageCardObjectRef  `json:"objectRef,omitempty" bson:"objectRef,omitempty"`
 	Subtitle     string                 `json:"subtitle,omitempty" bson:"subtitle,omitempty"`
 	ThumbnailURL string                 `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
 	DeepLink     string                 `json:"deeplink,omitempty" bson:"deeplink,omitempty"`
@@ -50,7 +51,7 @@ type MessageCard struct {
 }
 
 // MessageCardKind is the closed, snake_case wire set owned by MessageCard.
-// Legacy camelCase and the ambiguous "post" value are intentionally rejected.
+// Non-canonical camelCase and the ambiguous "post" value are rejected.
 type MessageCardKind string
 
 const (
@@ -59,6 +60,7 @@ const (
 	MessageCardKindUserProfile   MessageCardKind = "user_profile"
 	MessageCardKindEntityProfile MessageCardKind = "entity_profile"
 	MessageCardKindCircle        MessageCardKind = "circle"
+	MessageCardKindGathering     MessageCardKind = "gathering"
 	MessageCardKindRTCCallLog    MessageCardKind = "rtc_call_log"
 )
 
@@ -69,11 +71,18 @@ func (kind MessageCardKind) Valid() bool {
 		MessageCardKindUserProfile,
 		MessageCardKindEntityProfile,
 		MessageCardKindCircle,
+		MessageCardKindGathering,
 		MessageCardKindRTCCallLog:
 		return true
 	default:
 		return false
 	}
+}
+
+type MessageCardObjectRef struct {
+	ObjectTypeRef string `json:"objectTypeRef" bson:"objectTypeRef"`
+	ObjectID      string `json:"objectId" bson:"objectId"`
+	RouteID       string `json:"routeId" bson:"routeId"`
 }
 
 type MessageCardAttribute struct {

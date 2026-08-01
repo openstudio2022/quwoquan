@@ -79,7 +79,7 @@
 - 交集曝光、点击、转化、清零全链路携带 intersectionId/dimension/intersectionClass/cohort 进入行为管道。
 
 <a id="req-005"></a>
-### REQ-005 v3 可行动交集与商用主轴 SIT
+### REQ-005 可行动交集与商用主轴 SIT
 
 - 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
 - 上下文 SVO 成立：explicit_link 必须有 typed object span；host_implicit/host_plain 必须由当前内容卡/视频书/搜索 hit/主页宿主对象证明，禁止可点击 self-target 和 reason 池随机附着。
@@ -89,7 +89,7 @@
 - 旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场，机器标识 `interest_match` / `impact` 保留。
 - 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合 `REQ-006` 的七触点统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
 - C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_gathering；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
-- deferred 的附近/实时/线下局（coPresentHere/nearbyAffinity/meet_nearby/gatheringDetail）不出现在正式可执行 UI；交集配对 launcher 不渲染伪候选。
+- 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不得进入 canonical registry、API 响应与正式 UI；交集配对 launcher 不渲染伪候选。
 - 北极星为可行动交集完成/关系形成（非 DAU），护栏反指标（骚扰率/拒绝率/举报率）与漏斗（曝光→证据展开→行动→完成→关系形成→回流）可观测。
 - 垂类扩展只走 [L2 DEC-002](./design.md#dec-002) 的四件套（`vertical` 值 + `objectKind` + taxonomy 子树 + 事实生产者），禁止新增 kind / dimension / actionKey，禁止端侧垂类分支；同一批端侧断言在换垂类后无需改端侧代码。
 
@@ -99,8 +99,8 @@
 - 合并排序：事实优先（`strength` + 新鲜度），概率其次（`score`）；统一经过推荐窗口/冷却过滤。
 - **七触点统一矩阵**（密度 + 行动重心，本条即唯一口径）：视频书底部单句 / 首页紧凑 chip / 用户主页证据组 / 我的主页收件箱 / 圈子主页证据卡 + 成员簇 / 实体主页证据卡 + 记录单句 / 交集配对 launcher（不产候选）。四主页表达仍复用 `ObjectIntersectionSection` / `ObjectIntersectionCard`，不新增第四套抽象。前台用户维度收敛为「交集 / 打动」、入口统一「交集配对」、收件箱统一「我的交集」；“今日”只作最小时间粒度的次级说明，机器标识 `interest_match` / `impact` 内部保留。
 - 七触点端侧必须消费同一交集表达与对象页行动分发契约；云侧只下发 canonical `actionHint`。
-- `IntersectionTargetNavigator.openActionHint` 按 `dispatch/targetAvailability` 分发，navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（口径见 `.cursor/rules/15-auth-entry-no-loop.mdc`），关注/加入/进入讨论/看共同来源等 login 门轻行动恢复可见可点（修复首版「login 门行动被系统性隐藏」P0）
-- `message/companion/connect` 无真实卡内 handler 时诚实不显示、deferred 不执行，死参数 gateResolver/gated 已移除（R26）
+- `IntersectionTargetNavigator.openActionHint` 只按当前生成闭集中的 `dispatch` 分发；navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（口径见 `.cursor/rules/15-auth-entry-no-loop.mdc`），关注/加入/进入讨论/看共同来源等 login 门轻行动保持可见可点
+- action dispatch 闭集仅为 `assistant/navigate/message/gathering`；未登记 dispatch 一律 fail-closed，死参数 gateResolver/gated 已移除（R26）
 - `ObjectIntersectionPreviewCard` 只能是 `ObjectIntersectionSection` 的薄包装；`start_gathering` 和 `message_person` 只有在真实承接页与权限门成立时才可展示。
 - `safetyGate`、moment 意图时态和行动阶梯以 metadata 模型为准，所有主页和交集入口必须消费同一模型。
 - 端云真实数据准出由 [`object-homepage-gamma-real-data-closure`](./object-homepage-gamma-real-data-closure/spec.md) 负责。
@@ -128,11 +128,11 @@
 
 - **到访语义**：`coVisitedEntity` 只能由可证到访事实（`post.visitedAt` + 地点同一性）产出，结论句说「都去过」。
 - 浏览行为归 `sharedEntityAttention`（「也看过」），意图归 `coWishlistedEntity`（「都想去」），三者不得互相替代。
-- **行动承诺一致**：`actionHint` 的按钮文案必须与 `dispatch` / `targetAvailability` 真实可完成的副作用一致。
+- **行动承诺一致**：`actionHint` 的按钮文案必须与当前 `dispatch` 真实可完成的副作用一致；未就绪行动不得进入 canonical registry 或响应。
 - `greet_person` 在打招呼状态机未接通前不得承诺「打招呼」却只 `navigate` 到主页——要么改文案要么改 dispatch。
 - **冷启动供给闸门**：`Feed` / `ListMyIntersections` / `ObjectIntersections` 三入口共用 `coldStartSupply`。
 - 某 kind 的候选池去重对象数低于 `minDistinctObjectsByKind` 时整 kind 不下发，防止 N=1 语料下「人人都有交集」稀释信息量。
-- 探针不可用时供给判定 fail-open，但 deferred kind 永不 fail-open。
+- 探针不可用时供给判定 fail-open；未进入 canonical registry 的 kind 永不生成或下发。
 
 ## 6. 契约与依赖
 
@@ -180,10 +180,10 @@
 - THEN 交集曝光、点击、转化、清零全链路携带 intersectionId/dimension/intersectionClass/cohort 进入行为管道。
 
 <a id="sit-005"></a>
-### SIT-005 v3 可行动交集与商用主轴 SIT
+### SIT-005 可行动交集与商用主轴 SIT
 
-- GIVEN 执行“v3 可行动交集与商用主轴”所需的身份、输入与上游事实均有效。
-- WHEN 参与者发起“v3 可行动交集与商用主轴”对应动作。
+- GIVEN 执行“可行动交集与商用主轴”所需的身份、输入与上游事实均有效。
+- WHEN 参与者发起“可行动交集与商用主轴”对应动作。
 - THEN 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
 - THEN 上下文 SVO 成立：explicit_link 必须有 typed object span；host_implicit/host_plain 必须由当前内容卡/视频书/搜索 hit/主页宿主对象证明，禁止可点击 self-target 和 reason 池随机附着。
 - THEN 主句禁止 raw stats、泛对象和旧术语：不出现 `2赞1评`、`这条记录`、`TA的内容`、`相关圈子`、`我的连接`。
@@ -192,7 +192,7 @@
 - AND 旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场，机器标识 `interest_match` / `impact` 保留。
 - THEN 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合 `REQ-006` 的七触点统一矩阵；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
 - THEN C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_gathering；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
-- THEN deferred 的附近/实时/线下局（coPresentHere/nearbyAffinity/meet_nearby/gatheringDetail）不出现在正式可执行 UI；交集配对 launcher 不渲染伪候选。
+- THEN 未同时具备真实 producer、当前契约和可兑现 handler 的候选或行动不进入 canonical registry、API 响应与正式 UI；交集配对 launcher 不渲染伪候选。
 - THEN 北极星为可行动交集完成/关系形成（非 DAU），护栏反指标（骚扰率/拒绝率/举报率）与漏斗（曝光→证据展开→行动→完成→关系形成→回流）可观测。
 - THEN 垂类扩展只走 [L2 DEC-002](./design.md#dec-002) 的四件套，`verticalExtensionContract` 的四条禁令由 `verify_intersection_kind_registry.py` 阻断，同一批端侧断言在换垂类后无需改端侧代码。
 

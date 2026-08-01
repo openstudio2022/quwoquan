@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from core.control_types import ContentType, ExecutionStage, ExecutionStateStatus
+import pytest
+
+from core.control_types import ContentType, ExecutionStage, ExecutionStateStatus, StageStatus
 from core.data_issue import (
     DataIssueCode,
     DataIssueLane,
@@ -11,11 +13,15 @@ from core.data_issue import (
 from content.execution.agent import auto_research
 from content.execution.context import ExecutionContext
 from content.execution.controller import completion as execution_completion
+from content.execution.controller import stage_download_build
 from content.execution.recovery import download_repair
 from content.execution.recovery import download_unresolved
 from content.execution.recovery import post_recovery
 from content.execution.recovery import stage_reset
 from content.execution import target_integrity
+from content.execution import source_ready_scope
+from content.homepage import homepage
+from core.io import write_json
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
@@ -138,6 +144,50 @@ def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, 
     assert report["ineligibleTargets"][0]["entityId"] == "测试实体甲"
 
 
+def test_download_plan_availability_ignores_pre_fetch_artifact_gate(monkeypatch, tmp_path):
+    ctx = _context(entity_ids=["计划就绪景区", "计划缺口景区"])
+    artifact_issue = data_issue(
+        DataIssueCode.SOURCE_MISSING,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        ref="计划就绪景区",
+        lane=DataIssueLane.VIDEO,
+        recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+        message="sources directory missing",
+    )
+    persisted: dict[str, object] = {}
+    monkeypatch.setattr(download_unresolved, "_pending_download_repair_unresolved", lambda _ctx: {})
+    monkeypatch.setattr(
+        download_unresolved,
+        "_download_plan_repair_exhausted_unresolved",
+        lambda *_args: {"计划缺口景区": {"video": ["video research shortfall"]}},
+    )
+    monkeypatch.setattr(
+        download_unresolved,
+        "_download_artifact_issues",
+        lambda _ctx: {
+            "计划就绪景区": (artifact_issue,),
+            "计划缺口景区": (artifact_issue,),
+        },
+    )
+    monkeypatch.setattr(download_unresolved, "execution_root", lambda _execution_id: tmp_path)
+    monkeypatch.setattr(
+        download_unresolved,
+        "write_json",
+        lambda path, data: persisted.update({"path": path, "data": data}),
+    )
+
+    report = download_unresolved._write_download_availability(
+        ctx,
+        {"计划缺口景区": {"video": ["video research shortfall"]}},
+        source="download_plan",
+    )
+
+    assert report["source"] == "download_plan"
+    assert report["readyTargets"] == ["计划就绪景区"]
+    assert report["readyTargetCount"] == 1
+    assert [row["entityId"] for row in report["ineligibleTargets"]] == ["计划缺口景区"]
+
+
 def test_download_availability_never_promotes_plan_only_target(monkeypatch, tmp_path):
     ctx = _context(entity_ids=["已抓取景区", "仅更新计划景区", "下载失败景区"])
     artifact_issue = data_issue(
@@ -208,6 +258,193 @@ def test_download_availability_does_not_overwrite_research_plan(monkeypatch, tmp
 
     assert read_json(plan_path) == research_plan
     assert read_json(tmp_path / "_shared" / "source_unavailable_targets.json") == report
+
+
+def test_download_fetch_resumes_an_audited_absorbed_homepage_shortfall(monkeypatch):
+    ctx = _context(entity_ids=["可用景区甲", "缺源景区乙"])
+    availability = {
+        "readyTargets": ["可用景区甲"],
+        "readyTargetCount": 1,
+        "ineligibleTargets": [{"entityId": "缺源景区乙"}],
+        "ineligibleTargetCount": 1,
+    }
+    calls: list[str] = []
+    monkeypatch.setattr(
+        download_unresolved,
+        "_write_download_availability",
+        lambda _ctx, _unresolved, *, source: calls.append(source) or availability,
+    )
+    from content.execution import spec_contract
+
+    monkeypatch.setattr(spec_contract, "approved_quota", lambda _execution_id: 1)
+
+    result = stage_download_build._run_download_fetch(ctx)
+
+    assert result.status is StageStatus.DONE
+    assert "过采候选源缺口已吸收为丢弃池" in result.message
+    assert calls == ["download_fetch_resume"]
+
+
+def test_homepage_runtime_spec_projects_only_audited_ready_targets(monkeypatch, tmp_path):
+    execution_id = "20260716--travel-homepage-coverage--test-region-a--pilot-102"
+    spec = ExecutionFixtureBuilder(
+        execution_id,
+        targets=(
+            {"name": "可用景区甲", "entityType": "地点/景区"},
+            {"name": "缺源景区乙", "entityType": "地点/景区"},
+            {"name": "可用博物馆丙", "entityType": "地点/博物馆"},
+        ),
+        approved_quota=2,
+    ).spec_payload()
+    availability_path = tmp_path / "_shared" / "source_unavailable_targets.json"
+    availability_path.parent.mkdir(parents=True)
+    write_json(
+        availability_path,
+        {
+            "schema": "quwoquan.content.source.source_availability",
+            "executionId": execution_id,
+            "readyTargets": ["可用景区甲", "可用博物馆丙"],
+            "readyTargetCount": 2,
+            "ineligibleTargets": [{"entityId": "缺源景区乙"}],
+            "ineligibleTargetCount": 1,
+        },
+    )
+    monkeypatch.setattr(
+        source_ready_scope, "execution_root", lambda _execution_id: tmp_path
+    )
+
+    runtime_spec = homepage.homepage_runtime_spec(execution_id, spec)
+
+    assert [
+        target["name"] for target in spec["scope"]["coverageTargets"]
+    ] == ["可用景区甲", "缺源景区乙", "可用博物馆丙"]
+    assert [
+        target["name"] for target in runtime_spec["scope"]["coverageTargets"]
+    ] == ["可用景区甲", "可用博物馆丙"]
+
+
+def test_homepage_pending_entities_skip_absorbed_ineligible_targets(monkeypatch, tmp_path):
+    from content.execution.controller import homepage_authoring
+
+    execution_id = "20260716--travel-homepage-coverage--test-region-a--pilot-105"
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=["可用景区甲", "缺源景区乙", "可用博物馆丙"],
+        spec=ExecutionFixtureBuilder(
+            execution_id,
+            targets=(
+                {"name": "可用景区甲", "entityType": "地点/景区"},
+                {"name": "缺源景区乙", "entityType": "地点/景区"},
+                {"name": "可用博物馆丙", "entityType": "地点/博物馆"},
+            ),
+            approved_quota=2,
+        ).spec(),
+        managed=True,
+    )
+    availability_path = tmp_path / "_shared" / "source_unavailable_targets.json"
+    availability_path.parent.mkdir(parents=True)
+    write_json(
+        availability_path,
+        {
+            "schema": "quwoquan.content.source.source_availability",
+            "executionId": execution_id,
+            "readyTargets": ["可用景区甲", "可用博物馆丙"],
+            "readyTargetCount": 2,
+            "ineligibleTargets": [{"entityId": "缺源景区乙"}],
+            "ineligibleTargetCount": 1,
+        },
+    )
+    monkeypatch.setattr(
+        source_ready_scope, "execution_root", lambda _execution_id: tmp_path
+    )
+    from content.homepage import homepage_release_validation
+
+    monkeypatch.setattr(
+        homepage_release_validation,
+        "validate_entity_page",
+        lambda *_args, **_kwargs: ["missing page"],
+    )
+    monkeypatch.setattr(
+        homepage_authoring,
+        "_homepage_independent_review_issues",
+        lambda *_args, **_kwargs: [],
+    )
+
+    pending = homepage_authoring._homepage_pending_entities(ctx)
+
+    assert pending == ["可用景区甲", "可用博物馆丙"]
+
+
+def test_video_source_ready_runtime_spec_projects_absorbed_ready_targets(
+    monkeypatch,
+    tmp_path,
+):
+    execution_id = "20260716--travel-video-m100--test-region-a--pilot-104"
+    spec = ExecutionFixtureBuilder(
+        execution_id,
+        targets=(
+            {"name": "可用景区甲", "entityType": "地点/景区"},
+            {"name": "缺源景区乙", "entityType": "地点/景区"},
+            {"name": "可用博物馆丙", "entityType": "地点/博物馆"},
+        ),
+        approved_quota=2,
+    ).spec_payload()
+    availability_path = tmp_path / "_shared" / "source_unavailable_targets.json"
+    availability_path.parent.mkdir(parents=True)
+    write_json(
+        availability_path,
+        {
+            "schema": "quwoquan.content.source.source_availability",
+            "executionId": execution_id,
+            "readyTargets": ["可用景区甲", "可用博物馆丙"],
+            "readyTargetCount": 2,
+            "ineligibleTargets": [{"entityId": "缺源景区乙"}],
+            "ineligibleTargetCount": 1,
+        },
+    )
+    monkeypatch.setattr(
+        source_ready_scope, "execution_root", lambda _execution_id: tmp_path
+    )
+
+    runtime_spec = source_ready_scope.source_ready_runtime_spec(execution_id, spec)
+
+    assert [
+        target["name"] for target in runtime_spec["scope"]["coverageTargets"]
+    ] == ["可用景区甲", "可用博物馆丙"]
+
+
+def test_homepage_runtime_spec_rejects_an_incomplete_availability_partition(
+    monkeypatch,
+    tmp_path,
+):
+    execution_id = "20260716--travel-homepage-coverage--test-region-a--pilot-103"
+    spec = ExecutionFixtureBuilder(
+        execution_id,
+        targets=(
+            {"name": "可用景区甲", "entityType": "地点/景区"},
+            {"name": "缺源景区乙", "entityType": "地点/景区"},
+        ),
+        approved_quota=1,
+    ).spec_payload()
+    availability_path = tmp_path / "_shared" / "source_unavailable_targets.json"
+    availability_path.parent.mkdir(parents=True)
+    write_json(
+        availability_path,
+        {
+            "schema": "quwoquan.content.source.source_availability",
+            "executionId": execution_id,
+            "readyTargets": ["可用景区甲"],
+            "readyTargetCount": 1,
+            "ineligibleTargets": [],
+            "ineligibleTargetCount": 0,
+        },
+    )
+    monkeypatch.setattr(
+        source_ready_scope, "execution_root", lambda _execution_id: tmp_path
+    )
+
+    with pytest.raises(ValueError, match="partition the frozen target set"):
+        homepage.homepage_runtime_spec(execution_id, spec)
 
 
 def test_inactive_homepage_artifact_prune_uses_frozen_execution_targets(monkeypatch, tmp_path):

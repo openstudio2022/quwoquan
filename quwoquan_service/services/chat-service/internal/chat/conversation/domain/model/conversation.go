@@ -33,24 +33,38 @@ type Conversation struct {
 	// OriginGreetingRequestID 是升级来源的 GreetingRequest.id，只在
 	// originType=greeting_reply 时有值（contracts/chat/conversation/fields.yaml）。
 	// 它让「打招呼被回复而成的会话」与冷启动私信可区分，是漏斗归因的唯一依据。
-	OriginGreetingRequestID string             `json:"originGreetingRequestId" bson:"originGreetingRequestId,omitempty"`
-	MaxSeq                  int64              `json:"maxSeq" bson:"maxSeq"`
-	MemberCount             int                `json:"memberCount" bson:"memberCount"`
-	MembersRosterRevision   int64              `json:"membersRosterRevision" bson:"membersRosterRevision"`
-	MaxGroupSize            int                `json:"maxGroupSize" bson:"maxGroupSize"`
-	ReceiptEnabled          bool               `json:"receiptEnabled" bson:"receiptEnabled"`
-	Announcement            string             `json:"announcement" bson:"announcement"`
-	AnnouncementUpdatedBy   string             `json:"announcementUpdatedBy" bson:"announcementUpdatedBy"`
-	AnnouncementUpdatedAt   *time.Time         `json:"announcementUpdatedAt,omitempty" bson:"announcementUpdatedAt,omitempty"`
-	NameEditableByAdminOnly bool               `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
-	LastMessageId           string             `json:"lastMessageId" bson:"lastMessageId"`
-	LastMessagePreview      string             `json:"lastMessagePreview" bson:"lastMessagePreview"`
-	LastMessageType         string             `json:"lastMessageType" bson:"lastMessageType"`
-	LastMessageTime         time.Time          `json:"lastMessageTime" bson:"lastMessageTime"`
-	MessageCount            int                `json:"messageCount" bson:"messageCount"`
-	Status                  ConversationStatus `json:"status" bson:"status"`
-	CreatedAt               time.Time          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt               time.Time          `json:"updatedAt" bson:"updatedAt"`
+	OriginGreetingRequestID    string                        `json:"originGreetingRequestId" bson:"originGreetingRequestId,omitempty"`
+	OriginIntersectionSnapshot *GreetingIntersectionSnapshot `json:"originIntersectionSnapshot,omitempty" bson:"originIntersectionSnapshot,omitempty"`
+	MaxSeq                     int64                         `json:"maxSeq" bson:"maxSeq"`
+	MemberCount                int                           `json:"memberCount" bson:"memberCount"`
+	MembersRosterRevision      int64                         `json:"membersRosterRevision" bson:"membersRosterRevision"`
+	MaxGroupSize               int                           `json:"maxGroupSize" bson:"maxGroupSize"`
+	ReceiptEnabled             bool                          `json:"receiptEnabled" bson:"receiptEnabled"`
+	Announcement               string                        `json:"announcement" bson:"announcement"`
+	AnnouncementUpdatedBy      string                        `json:"announcementUpdatedBy" bson:"announcementUpdatedBy"`
+	AnnouncementUpdatedAt      *time.Time                    `json:"announcementUpdatedAt,omitempty" bson:"announcementUpdatedAt,omitempty"`
+	NameEditableByAdminOnly    bool                          `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
+	LastMessageId              string                        `json:"lastMessageId" bson:"lastMessageId"`
+	LastMessagePreview         string                        `json:"lastMessagePreview" bson:"lastMessagePreview"`
+	LastMessageType            string                        `json:"lastMessageType" bson:"lastMessageType"`
+	LastMessageTime            time.Time                     `json:"lastMessageTime" bson:"lastMessageTime"`
+	MessageCount               int                           `json:"messageCount" bson:"messageCount"`
+	Status                     ConversationStatus            `json:"status" bson:"status"`
+	CreatedAt                  time.Time                     `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                  time.Time                     `json:"updatedAt" bson:"updatedAt"`
+}
+
+// GreetingIntersectionSnapshot 是 user-service 已重解析的不可变破冰依据。
+// Chat 只复制和展示，不重新计算或接受客户端直接写入。
+type GreetingIntersectionSnapshot struct {
+	IntersectionID string    `json:"intersectionId" bson:"intersectionId"`
+	EvidenceID     string    `json:"evidenceId" bson:"evidenceId"`
+	SourceRef      string    `json:"sourceRef" bson:"sourceRef"`
+	ObjectTypeRef  string    `json:"objectTypeRef" bson:"objectTypeRef"`
+	ObjectID       string    `json:"objectId" bson:"objectId"`
+	PrimaryText    string    `json:"primaryText" bson:"primaryText"`
+	Dimension      string    `json:"dimension,omitempty" bson:"dimension,omitempty"`
+	ResolvedAt     time.Time `json:"resolvedAt" bson:"resolvedAt"`
 }
 
 // ConversationStatus is the closed lifecycle set owned by Conversation.

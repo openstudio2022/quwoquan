@@ -4,8 +4,8 @@ package promptassets
 import (
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/assets"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/assets"
 )
 
 func MustResolver(t *testing.T) ports.PromptAssetResolver {

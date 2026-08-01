@@ -17,6 +17,8 @@ from typing import Any, Callable
 from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
 from core.runtime_policy import apply_runtime_policy, load_runtime_policy
 from core.control_types import ExecutionStage, TargetSelector
+from core.io import read_json, write_json
+from core.source_digest import current_source_digest
 from content.execution import store
 from content.execution.request import RuntimeExecutionRequest, resolve_candidate_pool
 from governance.provider_policy import load_provider_policy
@@ -26,6 +28,7 @@ from content.execution.workspace import (
     execution_root,
     load_frozen_target_set,
     load_execution_manifest,
+    entity_catalog_digest,
 )
 
 _CLI_PATH = Path(__file__).resolve().parents[2] / "cli.py"
@@ -35,10 +38,31 @@ SELECTION_QUOTA_FIELDS = (
     "imageWorksPerTarget", "videoWorksPerTarget",
 )
 
-
 def _default_invoke_cli(argv: list[str]) -> int:
     proc = subprocess.run([sys.executable, str(_CLI_PATH), *argv], check=False)
     return int(proc.returncode)
+
+
+def _current_git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _current_git_branch() -> str:
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
 
 
 def load_recipe(recipe_ref: str) -> dict[str, Any]:
@@ -301,6 +325,70 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
     except ValueError as exc:
         raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
+    scale_promotion_receipt: dict[str, Any] | None = None
+    scale_promotion_carrier: str | None = None
+    if (
+        identity.vertical == "travel"
+        and identity.content_type.value in {"image", "video"}
+        and identity.intent == "m1000"
+    ):
+        from content.execution.scale_promotion import (
+            load_scale_promotion,
+            require_m1000_promotion,
+        )
+
+        scale_promotion_carrier = identity.content_type.value
+        frozen_promotion_path = (
+            execution_root(identity.execution_id)
+            / "0.plan"
+            / f"{scale_promotion_carrier}_scale_promotion.json"
+        )
+        supplied_path = str(
+            getattr(args, f"{scale_promotion_carrier}_scale_promotion", "") or ""
+        ).strip()
+        try:
+            if frozen_promotion_path.is_file():
+                scale_promotion_receipt = load_scale_promotion(
+                    frozen_promotion_path,
+                    carrier=scale_promotion_carrier,
+                )
+            elif supplied_path:
+                scale_promotion_receipt = load_scale_promotion(
+                    Path(supplied_path),
+                    carrier=scale_promotion_carrier,
+                )
+            current_branch = _current_git_branch()
+            # A detached managed clone has no current branch. The predecessor
+            # receipt supplies its immutable dev1.0 branch while HEAD/source
+            # digest still have to match exactly.
+            receipt_branch = (
+                str(scale_promotion_receipt.get("gitBranch") or "")
+                if scale_promotion_receipt
+                else ""
+            )
+            require_m1000_promotion(
+                scale_promotion_receipt,
+                carrier=scale_promotion_carrier,
+                git_branch=current_branch or receipt_branch,
+                git_commit_sha=_current_git_commit(),
+                source_digest=current_source_digest().to_document(),
+                entity_catalog_digest=entity_catalog_digest(
+                    (
+                        REPO_ROOT
+                        / "quwoquan_data"
+                        / "reference"
+                        / identity.vertical
+                        / "entities"
+                        / runtime_request.region_ref
+                    )
+                    .relative_to(REPO_ROOT)
+                    .as_posix()
+                ),
+            )
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK {scale_promotion_carrier} scale promotion: {exc}"
+            ) from exc
     root_execution_id = str(
         getattr(args, "campaign_root_execution_id", "") or ""
     ).strip() or identity.execution_id
@@ -323,14 +411,17 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         return
     if campaign_bound and stage == "run":
         from content.execution.campaign_receipt import (
-            require_campaign_quota_barrier,
+            require_lane_review_receipt,
         )
 
         try:
-            require_campaign_quota_barrier(root_execution_id)
+            require_lane_review_receipt(
+                root_execution_id,
+                execution_id=identity.execution_id,
+            )
         except (OSError, TypeError, ValueError) as exc:
             raise SystemExit(
-                f"[task execute] GATE_BLOCK campaign quota barrier: {exc}"
+                f"[task execute] GATE_BLOCK campaign lane review: {exc}"
             ) from exc
     # A task-output purge between plan-only and run destroys its frozen input,
     from content.execution.agent.agent_conflicts import (
@@ -350,6 +441,11 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     execution_id = str(getattr(args, "execution_id", "") or "").strip()
     _apply_runtime_env(recipe)
     manifest_path = execution_manifest_path(execution_id)
+    if stage == "promote-scale" and not manifest_path.is_file():
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK execution={execution_id}: "
+            "promote-scale requires an existing frozen M100 execution"
+        )
     manifest_retry_of = str(getattr(args, "retry_of", "") or "") or None
     if manifest_path.is_file():
         existing_manifest = load_execution_manifest(execution_id)
@@ -398,6 +494,48 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             content_type=identity.content_type.value,
             intent=identity.intent,
         )
+    if stage == "promote-scale":
+        if (
+            identity.vertical != "travel"
+            or identity.content_type.value not in {"image", "video"}
+            or identity.intent != "m100"
+        ):
+            raise SystemExit(
+                "[task execute] GATE_BLOCK promote-scale only accepts "
+                "travel/image or travel/video M100"
+            )
+        envelope_value = str(getattr(args, "campaign_envelope", "") or "").strip()
+        payload: dict[str, Any] | None = None
+        if envelope_value:
+            envelope_path = Path(envelope_value).expanduser()
+            if not envelope_path.is_file():
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK promote-scale campaign envelope is missing"
+                )
+            payload = read_json(envelope_path)
+            if not isinstance(payload, dict):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK promote-scale campaign envelope must be an object"
+                )
+        from content.execution.scale_promotion import write_scale_promotion
+
+        try:
+            receipt_path = write_scale_promotion(
+                predecessor_execution_id=execution_id,
+                carrier=identity.content_type.value,
+                predecessor_envelope=payload,
+            )
+        except (OSError, ValueError) as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK {identity.content_type.value} "
+                f"scale promotion: {exc}"
+            ) from exc
+        print(
+            f"[task execute] {identity.content_type.value.upper()} SCALE "
+            "PROMOTION APPROVED "
+            f"executionId={execution_id} receipt={receipt_path}"
+        )
+        return
     from content.execution import create_execution_manifest
     from content.execution.identity import SelectionPolicy
     from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
@@ -427,6 +565,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             target_selector=runtime_request.selector,
             content_type=identity.content_type.value,
             target_names=runtime_request.target_names,
+            inherit_frozen_targets=bool(manifest_retry_of),
         )
     except DataIssueError as exc:
         raise SystemExit(
@@ -441,6 +580,23 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         target_set_digest=frozen_target_set_digest(execution_id),
         retry_of=manifest_retry_of,
     )
+    if (
+        scale_promotion_receipt is not None
+        and scale_promotion_carrier is not None
+    ):
+        frozen_promotion_path = (
+            execution_root(execution_id)
+            / "0.plan"
+            / f"{scale_promotion_carrier}_scale_promotion.json"
+        )
+        if frozen_promotion_path.is_file():
+            if read_json(frozen_promotion_path) != scale_promotion_receipt:
+                raise SystemExit(
+                    f"[task execute] GATE_BLOCK execution={execution_id}: "
+                    f"frozen {scale_promotion_carrier} scale promotion receipt drift"
+                )
+        else:
+            write_json(frozen_promotion_path, scale_promotion_receipt)
     if stage != "plan-only":
         write_execution_model_readiness(execution_id, model_readiness)
     _contract_gate(recipe, execution_spec_id)
@@ -567,6 +723,9 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         argparse.Namespace(
             execution_id=execution_id,
             retry_of=getattr(args, "retry_of", None),
+            video_scale_promotion=getattr(args, "video_scale_promotion", None),
+            image_scale_promotion=getattr(args, "image_scale_promotion", None),
+            campaign_envelope=getattr(args, "campaign_envelope", None),
             stage=getattr(args, "stage", "run"),
             campaign_root_execution_id=getattr(
                 args, "campaign_root_execution_id", None

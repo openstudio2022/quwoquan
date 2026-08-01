@@ -2,7 +2,9 @@
   "replayCaseId": "replay_tool_failure_min",
   "title": "Tool failure maps to runtime failure",
   "request": {
-    "conversationId": "acv_replay_failure",
+    "skillId": "fallback_general_search",
+    "domainId": "fallback_general_search",
+    "sessionId": "asn_replay_failure",
     "turnId": "atn_replay_failure",
     "userId": "u_replay",
     "inputText": "Search current market news.",
@@ -54,15 +56,15 @@
     }
   ],
   "expectations": {
-    "selectedSkillId": "general_qa",
-    "selectedDomainId": "assistant",
+    "selectedSkillId": "fallback_general_search",
+    "selectedDomainId": "fallback_general_search",
     "expectedToolNames": ["web_search"],
     "expectedClarificationSlotIds": [],
     "expectedReferenceUrls": [],
     "finalAnswerMode": "blocked"
   },
   "expectedRunResponse": {
-    "conversationId": "acv_replay_failure",
+    "sessionId": "asn_replay_failure",
     "turnId": "atn_replay_failure",
     "status": "failed",
     "finalText": "",

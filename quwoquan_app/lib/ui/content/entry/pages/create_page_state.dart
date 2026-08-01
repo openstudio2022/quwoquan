@@ -666,6 +666,34 @@ class _CreatePageState extends ConsumerState<CreatePage>
   Future<PublishSettings?> _showPublishConfirmationSheet(
     CreateEditorState state,
   ) async {
+    var settings = state.settings;
+    if (state.imagePaths.isNotEmpty) {
+      final firstImagePath = state.imagePaths.first.trim();
+      if (firstImagePath.isNotEmpty &&
+          !firstImagePath.startsWith('http://') &&
+          !firstImagePath.startsWith('https://') &&
+          !firstImagePath.startsWith('media:')) {
+        try {
+          final bytes = await File(firstImagePath).readAsBytes();
+          final captureMetadata = extractMediaCaptureMetadata(bytes);
+          final available = captureMetadata.availableGroups;
+          settings = settings.copyWith(
+            captureMetadata: captureMetadata,
+            captureDisclosure: settings.captureDisclosure.intersection(
+              available,
+            ),
+          );
+        } catch (error, stackTrace) {
+          unawaited(
+            AppExceptionTelemetryService.instance.recordHandledException(
+              source: 'content.create.capture_metadata_extract',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          );
+        }
+      }
+    }
     var joinedCircles = const <CreateCircleOption>[];
     var circleLoadUnavailable = false;
     try {
@@ -696,7 +724,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         // 推荐圈子位需要真实推荐 operation（规格增量走 /prd）；
         // 在此之前只展示已加入圈子，不再用本地合成推荐。
         builder: (_) => CreatePublishConfirmSheet(
-          initialSettings: state.settings,
+          initialSettings: settings,
           locationCoordinator: ref.read(createLocationCoordinatorProvider),
           joinedCircles: joinedCircles,
           recommendedCircles: const [],

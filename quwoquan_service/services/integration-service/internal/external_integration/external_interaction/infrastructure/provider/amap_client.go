@@ -97,7 +97,7 @@ func (c *AMapClient) Nearby(
 
 func (c *AMapClient) Search(
 	ctx context.Context,
-	q model.SearchQuery,
+	q model.SearchRequestFact,
 ) (_ []model.POI, err error) {
 	defer func() {
 		err = normalizeLocationProviderError(ctx, err)

@@ -33,7 +33,11 @@ extension _SearchNetworkResultsPageStateHelpers
             showSlowHint: true,
             slowLabel: SearchText.searchXiaoquLoading,
           )
-        else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
+        else if ((_xiaoquResult?.processes.any(
+                  (process) => process.acceptedReferences.isNotEmpty,
+                ) ??
+                false) ==
+            false)
           _StatusMessage(
             text: SearchText.searchNoNetworkReferences,
             isDark: isDark,

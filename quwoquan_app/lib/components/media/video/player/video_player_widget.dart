@@ -9,6 +9,7 @@ import 'package:chewie/chewie.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/core/media/adaptive_video_delivery.dart';
+import 'package:quwoquan_app/core/media/app_video_runtime_budget.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
@@ -54,7 +55,8 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     with WidgetsBindingObserver {
   /// Soft cap on concurrent ExoPlayer/MediaCodec instances (OEM hard-decode slots).
   static int _activeControllerCount = 0;
-  static const int _maxConcurrentControllers = 2;
+  static const int _maxConcurrentControllers =
+      AppVideoRuntimeBudget.maxConcurrentControllers;
   static const Duration _slotRetryInterval = Duration(milliseconds: 250);
   static const Duration _compactProgressDelay = Duration(milliseconds: 300);
   static const Duration _sourceSwitchTailSafety = Duration(milliseconds: 500);

@@ -46,9 +46,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
   late final TextEditingController _bodyController = TextEditingController(
     text: widget.initial?.body ?? '',
   );
-  late final Set<String> _selectedTags = <String>{
-    ...?widget.initial?.tagRefs,
-  };
+  late final Set<String> _selectedTags = <String>{...?widget.initial?.tagRefs};
   String? _validationMessage;
 
   bool get _isEditing => widget.initial != null;
@@ -68,7 +66,8 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
   void _submit() {
     if (_rating < 1) {
       setState(
-        () => _validationMessage = ObjectHomepageText.homepageReviewRatingRequired,
+        () => _validationMessage =
+            ObjectHomepageText.homepageReviewRatingRequired,
       );
       return;
     }
@@ -132,9 +131,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
                     _validationMessage = null;
                   }),
                   child: Icon(
-                    selected
-                        ? CupertinoIcons.star_fill
-                        : CupertinoIcons.star,
+                    selected ? CupertinoIcons.star_fill : CupertinoIcons.star,
                     size: AppSpacing.iconLarge,
                     color: selected
                         ? AppColors.warning
@@ -184,41 +181,43 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
               Wrap(
                 spacing: AppSpacing.intraGroupXs,
                 runSpacing: AppSpacing.intraGroupXs,
-                children: _tagOptions.map((tag) {
-                  final selected = _selectedTags.contains(tag);
-                  return CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: () => setState(() {
-                      if (!_selectedTags.remove(tag)) {
-                        _selectedTags.add(tag);
-                      }
-                    }),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.containerSm,
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.primaryColor.withValues(alpha: 0.14)
-                            : AppColors.iosSecondaryFill(context),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.circularBorderRadius,
+                children: _tagOptions
+                    .map((tag) {
+                      final selected = _selectedTags.contains(tag);
+                      return CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        onPressed: () => setState(() {
+                          if (!_selectedTags.remove(tag)) {
+                            _selectedTags.add(tag);
+                          }
+                        }),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.containerSm,
+                            vertical: AppSpacing.intraGroupXs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primaryColor.withValues(alpha: 0.14)
+                                : AppColors.iosSecondaryFill(context),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.circularBorderRadius,
+                            ),
+                          ),
+                          child: Text(
+                            tagRefDisplayLabel(tag),
+                            style: TextStyle(
+                              fontSize: AppTypography.iosFootnote,
+                              color: selected
+                                  ? AppColors.primaryColor
+                                  : AppColors.iosLabel(context),
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        tagRefDisplayLabel(tag),
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: selected
-                              ? AppColors.primaryColor
-                              : AppColors.iosLabel(context),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(growable: false),
+                      );
+                    })
+                    .toList(growable: false),
               ),
             ],
             SizedBox(height: AppSpacing.containerMd),

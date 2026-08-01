@@ -395,12 +395,34 @@ WHERE scope=$1 ORDER BY occurred_at DESC, sequence_id DESC`, s.scope)
 	return out, rows.Err()
 }
 
+func (s *PostgresStore) CommitMutation(
+	mutation controlplane.Mutation,
+) (controlplane.MutationReceipt, error) {
+	if err := controlplane.ValidateMutation(mutation); err != nil {
+		return controlplane.MutationReceipt{}, err
+	}
+	return s.commitMutation(controlplane.ApprovedMutation{
+		Namespace: mutation.Namespace, ObjectType: mutation.ObjectType,
+		ObjectID: mutation.ObjectID, Intent: mutation.Intent,
+		PayloadDigest: mutation.PayloadDigest, IdempotencyKey: mutation.IdempotencyKey,
+		Document: mutation.Document, Workflow: mutation.Workflow,
+		Audit: mutation.Audit, OutboxEvents: mutation.OutboxEvents,
+	}, false)
+}
+
 func (s *PostgresStore) CommitApprovedMutation(
 	mutation controlplane.ApprovedMutation,
 ) (controlplane.MutationReceipt, error) {
 	if err := controlplane.ValidateApprovedMutation(mutation); err != nil {
 		return controlplane.MutationReceipt{}, err
 	}
+	return s.commitMutation(mutation, true)
+}
+
+func (s *PostgresStore) commitMutation(
+	mutation controlplane.ApprovedMutation,
+	requireDualApproval bool,
+) (controlplane.MutationReceipt, error) {
 	ctx, cancel := s.operationContext()
 	defer cancel()
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -460,41 +482,43 @@ FOR UPDATE`,
 		return controlplane.MutationReceipt{}, err
 	}
 
-	// Approval rows are locked for the duration of the commit. Only two
-	// different verified actors approving the exact same digest/intent count.
-	rows, err := tx.Query(ctx, `
+	if requireDualApproval {
+		// Approval rows are locked for the duration of the commit. Only two
+		// different verified actors approving the exact same digest/intent count.
+		rows, err := tx.Query(ctx, `
 SELECT body FROM control_plane_approvals
 WHERE scope=$1 AND object_type=$2 AND object_id=$3
 FOR SHARE`, s.scope, mutation.ObjectType, mutation.ObjectID)
-	if err != nil {
-		return controlplane.MutationReceipt{}, err
-	}
-	actors := map[string]struct{}{}
-	for rows.Next() {
-		var raw []byte
-		var approval controlplane.ApprovalDecision
-		if err := rows.Scan(&raw); err != nil {
+		if err != nil {
+			return controlplane.MutationReceipt{}, err
+		}
+		actors := map[string]struct{}{}
+		for rows.Next() {
+			var raw []byte
+			var approval controlplane.ApprovalDecision
+			if err := rows.Scan(&raw); err != nil {
+				rows.Close()
+				return controlplane.MutationReceipt{}, err
+			}
+			if err := json.Unmarshal(raw, &approval); err != nil {
+				rows.Close()
+				return controlplane.MutationReceipt{}, err
+			}
+			actor := strings.TrimSpace(approval.Actor)
+			if approval.PayloadDigest == mutation.PayloadDigest &&
+				approval.Decision == mutation.ApprovalDecision &&
+				actor != "" && actor != "unverified" {
+				actors[actor] = struct{}{}
+			}
+		}
+		if err := rows.Err(); err != nil {
 			rows.Close()
 			return controlplane.MutationReceipt{}, err
 		}
-		if err := json.Unmarshal(raw, &approval); err != nil {
-			rows.Close()
-			return controlplane.MutationReceipt{}, err
-		}
-		actor := strings.TrimSpace(approval.Actor)
-		if approval.PayloadDigest == mutation.PayloadDigest &&
-			approval.Decision == mutation.ApprovalDecision &&
-			actor != "" && actor != "unverified" {
-			actors[actor] = struct{}{}
-		}
-	}
-	if err := rows.Err(); err != nil {
 		rows.Close()
-		return controlplane.MutationReceipt{}, err
-	}
-	rows.Close()
-	if len(actors) < 2 {
-		return controlplane.MutationReceipt{}, controlplane.ErrDualApprovalRequired
+		if len(actors) < 2 {
+			return controlplane.MutationReceipt{}, controlplane.ErrDualApprovalRequired
+		}
 	}
 
 	documentRaw, err := json.Marshal(mutation.Document)

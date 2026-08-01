@@ -124,7 +124,7 @@ Future<void> _drainUpload(
   Uri _,
   Stream<List<int>> body, {
   required int contentLength,
-  required String contentType,
+  required String mimeType,
   required String expectedSha256,
   Future<void>? abortTrigger,
 }) async {

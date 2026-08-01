@@ -7,8 +7,8 @@ import 'package:quwoquan_app/core/platform/platform_target.dart';
 /// 控制是否展示欢迎页。完成欢迎后设为 false，进入主框架。
 final welcomeCompletedProvider =
     NotifierProvider<WelcomeCompletedNotifier, bool>(
-  WelcomeCompletedNotifier.new,
-);
+      WelcomeCompletedNotifier.new,
+    );
 
 class WelcomeCompletedNotifier extends Notifier<bool> {
   @override

@@ -50,7 +50,7 @@ class SlotValueCodec {
     return null;
   }
 
-  /// 槽位合并/可用性判断用的单一字符串视图（与 [ConversationStateKernel] 记录行为一致）。
+  /// 槽位合并/可用性判断用的单一字符串视图，与 AssistantSession 状态记录行为一致。
   static String displayForSlotMerge(Object? value) =>
       asTrimmedString(value) ?? (value?.toString().trim() ?? '');
 }

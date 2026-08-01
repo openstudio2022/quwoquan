@@ -77,17 +77,18 @@ func NewConversationService(
 }
 
 type CreateConversationRequest struct {
-	Type                     string
-	Title                    string
-	CircleId                 string
-	CircleGroupId            string
-	EntityId                 string
-	OriginType               string
-	OriginGreetingRequestID  string
-	CircleGroupSourceEventID string
-	MaxGroupSize             int
-	CreatorId                string
-	InitialMemberIds         []string
+	Type                       string
+	Title                      string
+	CircleId                   string
+	CircleGroupId              string
+	EntityId                   string
+	OriginType                 string
+	OriginGreetingRequestID    string
+	OriginIntersectionSnapshot *model.GreetingIntersectionSnapshot
+	CircleGroupSourceEventID   string
+	MaxGroupSize               int
+	CreatorId                  string
+	InitialMemberIds           []string
 }
 
 // CreateConversation 是公开创建命令：direct/encrypted 会话按参与者对唯一
@@ -321,20 +322,21 @@ func (s *ConversationService) createDirectConversation(
 	receiptEnabled := maxGroupSize <= 50
 
 	conv := &model.Conversation{
-		ID:                      generateID(),
-		Type:                    req.Type,
-		Title:                   req.Title,
-		CreatorId:               req.CreatorId,
-		CircleId:                req.CircleId,
-		CircleGroupId:           req.CircleGroupId,
-		EntityId:                req.EntityId,
-		OriginType:              originType,
-		OriginGreetingRequestID: strings.TrimSpace(req.OriginGreetingRequestID),
-		MaxGroupSize:            maxGroupSize,
-		ReceiptEnabled:          receiptEnabled,
-		Status:                  "active",
-		CreatedAt:               now,
-		UpdatedAt:               now,
+		ID:                         generateID(),
+		Type:                       req.Type,
+		Title:                      req.Title,
+		CreatorId:                  req.CreatorId,
+		CircleId:                   req.CircleId,
+		CircleGroupId:              req.CircleGroupId,
+		EntityId:                   req.EntityId,
+		OriginType:                 originType,
+		OriginGreetingRequestID:    strings.TrimSpace(req.OriginGreetingRequestID),
+		OriginIntersectionSnapshot: req.OriginIntersectionSnapshot,
+		MaxGroupSize:               maxGroupSize,
+		ReceiptEnabled:             receiptEnabled,
+		Status:                     "active",
+		CreatedAt:                  now,
+		UpdatedAt:                  now,
 	}
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
@@ -804,6 +806,7 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 // 私信可区分。零值表示无升级来源（保持 direct_init）。
 type DirectConversationPromotion struct {
 	GreetingRequestID string
+	Intersection      *model.GreetingIntersectionSnapshot
 }
 
 // CreateOrReuseDirect 是 user-service 破冰升级的受信任入口：绕过关系门，
@@ -834,11 +837,12 @@ func (s *ConversationService) CreateOrReuseDirect(
 		originType = conversationOriginGreetingReply
 	}
 	return s.createDirectConversation(ctx, CreateConversationRequest{
-		Type:                    conversationTypeDirect,
-		CreatorId:               creatorID,
-		InitialMemberIds:        []string{peerID},
-		OriginType:              originType,
-		OriginGreetingRequestID: greetingID,
+		Type:                       conversationTypeDirect,
+		CreatorId:                  creatorID,
+		InitialMemberIds:           []string{peerID},
+		OriginType:                 originType,
+		OriginGreetingRequestID:    greetingID,
+		OriginIntersectionSnapshot: promotion.Intersection,
 	}, true, nil)
 }
 

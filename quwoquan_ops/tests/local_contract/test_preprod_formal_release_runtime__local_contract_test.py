@@ -91,6 +91,21 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     ),
                     mock.patch.object(
                         stackctl,
+                        "tls_profile",
+                        return_value=("local-managed", "local-managed", {}),
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "verify_certificate",
+                        return_value={"status": "passed"},
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "materialize_handoff",
+                        return_value={"status": "passed"},
+                    ),
+                    mock.patch.object(
+                        stackctl,
                         "load_product_telemetry_log_sink",
                         return_value=telemetry,
                     ),

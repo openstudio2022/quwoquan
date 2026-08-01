@@ -96,7 +96,7 @@ fields:
     role: authoritative_state
   - name: creatorDisclosure
     source: creatorDisclosure
-    type: object
+    type: PostCreatorDisclosure
     constraints:
       - NULLABLE
     classification: PUBLIC
@@ -129,7 +129,7 @@ fields:
     role: authoritative_state
   - name: authorQualitySignals
     source: authorQualitySignals
-    type: object
+    type: PostAuthorQualitySignals
     constraints:
       - NULLABLE
     classification: INTERNAL
@@ -254,7 +254,7 @@ fields:
     role: projection
   - name: semanticMentions
     source: semanticMentions
-    type: '[]object'
+    type: '[]PostSemanticMention'
     constraints:
       - NULLABLE
       - MAX_ITEMS_30
@@ -295,7 +295,7 @@ fields:
     role: projection
   - name: mediaItems
     source: mediaItems
-    type: '[]object'
+    type: '[]PostMediaItem'
     constraints:
       - NULLABLE
     classification: PUBLIC
@@ -369,7 +369,7 @@ fields:
     role: authoritative_state
   - name: articleAssetManifest
     source: articleAssetManifest
-    type: object
+    type: PostArticleAssetManifest
     constraints:
       - NULLABLE
     classification: PUBLIC
@@ -380,14 +380,14 @@ fields:
     role: owned_value
   - name: articleRenderProfile
     source: articleRenderProfile
-    type: object
+    type: PostArticleRenderProfile
     constraints:
       - NULLABLE
     classification: PUBLIC
     log_policy: allow
     api_exposure: read_write
     ops_exposure: read
-    description: '文章渲染画像。Work Browser V1.0 消费字段：
+    description: '文章渲染画像。作品浏览器消费字段：
 
       template/fontPreset、paperThemeMode(system|manual)、paperTexture
 
@@ -413,7 +413,7 @@ fields:
     role: authoritative_state
   - name: entityMentions
     source: entityMentions
-    type: '[]object'
+    type: '[]PostEntityMention'
     constraints:
       - NULLABLE
     classification: PUBLIC
@@ -564,6 +564,30 @@ fields:
     recommend_feature: true
     description: 作者声明的实际到访时间（出行时间），与 publishedAt/createdAt 正交：游记可以在 出行数月后发布。与 geoTagRef 组成「带定位发布」这一可证到访事实，供旅游时间维度交集 （同地同期到访）消费。未声明即为空，禁止用 publishedAt/createdAt 顶替，也不得取未来时间 （计划出行不是到访）。
     role: owned_value
+  - name: captureDisclosure
+    source: captureDisclosure
+    type: '[]string'
+    enum_ref: CaptureDisclosureGroup
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 作者确认披露的拍摄事实分组闭集，只允许 CaptureDisclosureGroup；服务端按该闭集投影或撤回器材、参数、地点与时间派生子树。
+    role: authoritative_state
+  - name: captureFeatureRefs
+    source: captureFeatureRefs
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: true
+    description: 服务端从已披露 MediaAsset 拍摄事实派生的内部推荐/解释特征；禁止进入可见交集文案、搜索筛选、Creator chip 或 App wire。
+    role: projection
   - name: primaryHomepageId
     source: primaryHomepageId
     type: string
@@ -590,7 +614,7 @@ fields:
     role: projection
   - name: primaryHomepageSnapshot
     source: primaryHomepageSnapshot
-    type: object
+    type: PostHomepageSnapshot
     constraints:
       - NULLABLE
     classification: PUBLIC
@@ -686,7 +710,7 @@ fields:
     reference: true
   - name: publishLocation
     source: publishLocation
-    type: object
+    type: PostPublishLocation
     constraints:
       - NULLABLE
     classification: PII
@@ -697,7 +721,7 @@ fields:
     role: owned_value
   - name: deviceInfo
     source: deviceInfo
-    type: object
+    type: PostDeviceInfo
     constraints:
       - NULLABLE
     classification: PII
@@ -878,6 +902,345 @@ fields:
     ops_exposure: read
     role: authoritative_state
 value_objects:
+  PostCreatorDisclosure:
+    description: Post 拥有的创作者身份披露快照；不授予登录身份或 AccountSession。
+    fields:
+      - name: type
+        type: string
+        constraints: [NOT_NULL]
+      - name: displayText
+        type: string
+        constraints: [NOT_NULL]
+      - name: visible
+        type: bool
+        constraints: [NOT_NULL]
+  PostAuthorQualitySignals:
+    description: Data creator 发布时绑定的内部质量信号快照。
+    fields:
+      - name: qualityScore
+        type: float64
+        constraints: [NULLABLE]
+      - name: fatigueScore
+        type: float64
+        constraints: [NULLABLE]
+      - name: riskTier
+        type: string
+        constraints: [NULLABLE]
+  PostSemanticMention:
+    description: Post 标题、正文或文章内的单个语义标注事实。
+    fields:
+      - name: mentionId
+        type: string
+        constraints: [NOT_NULL]
+      - name: kind
+        type: string
+        constraints: [NOT_NULL]
+      - name: surface
+        type: string
+        constraints: [NOT_NULL]
+      - name: location
+        type: string
+        constraints: [NOT_NULL]
+      - name: rangeStart
+        type: int64
+        constraints: [NULLABLE]
+      - name: rangeEnd
+        type: int64
+        constraints: [NULLABLE]
+      - name: status
+        type: string
+        constraints: [NOT_NULL]
+      - name: candidateId
+        type: string
+        constraints: [NULLABLE]
+      - name: targetRef
+        type: string
+        constraints: [NULLABLE]
+  PostMediaItem:
+    description: Post 统一媒体序列中的公开交付引用；只保存 canonical public slice。
+    fields:
+      - name: kind
+        type: string
+        constraints: [NOT_NULL]
+      - name: mediaAssetId
+        type: string
+        constraints: [NULLABLE]
+      - name: mediaAssetVersion
+        type: int64
+        constraints: [NULLABLE]
+      - name: url
+        type: string
+        constraints: [NOT_NULL]
+      - name: coverUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: thumbnailUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: durationMs
+        type: int64
+        constraints: [NULLABLE]
+      - name: width
+        type: int64
+        constraints: [NULLABLE]
+      - name: height
+        type: int64
+        constraints: [NULLABLE]
+      - name: previewTrackManifestUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: previewTrackVersion
+        type: int64
+        constraints: [NULLABLE]
+      - name: hlsCmafMasterManifestUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: hlsCmafDescriptorVersion
+        type: int64
+        constraints: [NULLABLE]
+      - name: title
+        type: string
+        constraints: [NULLABLE]
+      - name: coverStrategy
+        type: string
+        constraints: [NULLABLE]
+      - name: coverFrameTimeMs
+        type: int64
+        constraints: [NULLABLE]
+  PostArticleAsset:
+    description: 文章素材清单中的单个不可变媒体引用。
+    fields:
+      - name: assetId
+        type: string
+        constraints: [NOT_NULL]
+      - name: kind
+        type: string
+        constraints: [NULLABLE]
+      - name: publicSliceKey
+        type: string
+        constraints: [NULLABLE]
+      - name: sha256
+        type: string
+        constraints: [NULLABLE]
+      - name: mimeType
+        type: string
+        constraints: [NULLABLE]
+      - name: sourceOriginalSha256
+        type: string
+        constraints: [NULLABLE]
+      - name: caption
+        type: string
+        constraints: [NULLABLE]
+      - name: role
+        type: string
+        constraints: [NULLABLE]
+      - name: layout
+        type: string
+        constraints: [NULLABLE]
+      - name: width
+        type: int64
+        constraints: [NULLABLE]
+      - name: height
+        type: int64
+        constraints: [NULLABLE]
+      - name: durationMs
+        type: int64
+        constraints: [NULLABLE]
+      - name: thumbnailUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: coverUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: coverStrategy
+        type: string
+        constraints: [NULLABLE]
+      - name: coverFrameTimeMs
+        type: int64
+        constraints: [NULLABLE]
+      - name: sourceCollectionId
+        type: string
+        constraints: [NULLABLE]
+  PostArticleAssetInput:
+    description: 文章发布命令中的素材引用与呈现意图；不携带存储键或交付 URL。
+    fields:
+      - name: assetId
+        type: string
+        constraints: [NOT_NULL]
+      - name: role
+        type: string
+        constraints: [NULLABLE]
+      - name: layout
+        type: string
+        constraints: [NULLABLE]
+      - name: caption
+        type: string
+        constraints: [NULLABLE]
+  PostArticleAssetManifestInput:
+    description: 文章发布命令中的素材引用清单；服务端绑定后投影为 PostArticleAssetManifest。
+    fields:
+      - name: schema
+        type: string
+        constraints: [NOT_NULL]
+      - name: markdownVersion
+        type: string
+        constraints: [NULLABLE]
+      - name: assets
+        type: '[]PostArticleAssetInput'
+        constraints: [NOT_NULL]
+        client_wire: toJson
+  PostArticleAssetManifest:
+    description: Post 文章正文所引用素材的闭包与摘要。
+    fields:
+      - name: schema
+        type: string
+        constraints: [NOT_NULL]
+      - name: markdownVersion
+        type: string
+        constraints: [NULLABLE]
+      - name: markdownDialect
+        type: string
+        constraints: [NULLABLE]
+      - name: articleMarkdownDigest
+        type: string
+        constraints: [NOT_NULL]
+      - name: documentSha256
+        type: string
+        constraints: [NOT_NULL]
+      - name: assetManifestSha256
+        type: string
+        constraints: [NOT_NULL]
+      - name: documentVersionSha256
+        type: string
+        constraints: [NOT_NULL]
+      - name: assets
+        type: '[]PostArticleAsset'
+        constraints: [NOT_NULL]
+        client_wire: toJson
+  PostArticleRenderProfile:
+    description: Post 文章渲染配置；布局降级规则由强类型值对象表达。
+    fields:
+      - name: template
+        type: string
+        constraints: [NULLABLE]
+      - name: fontPreset
+        type: string
+        constraints: [NULLABLE]
+      - name: paperThemeMode
+        type: string
+        constraints: [NULLABLE]
+      - name: paperTexture
+        type: string
+        constraints: [NULLABLE]
+      - name: contentVertical
+        type: string
+        constraints: [NULLABLE]
+      - name: layoutPolicy
+        type: PostArticleLayoutPolicy
+        constraints: [NULLABLE]
+        client_wire: toJson
+      - name: width
+        type: int64
+        constraints: [NULLABLE]
+      - name: height
+        type: int64
+        constraints: [NULLABLE]
+      - name: durationMs
+        type: int64
+        constraints: [NULLABLE]
+  PostArticleLayoutPolicy:
+    description: Post 文章在紧凑宽度与画廊场景下的确定性布局降级规则。
+    fields:
+      - name: wrapDowngrade
+        type: string
+        constraints: [NULLABLE]
+      - name: galleryDowngrade
+        type: string
+        constraints: [NULLABLE]
+  PostEntityMention:
+    description: 文章内解析到 canonical Homepage 的实体标注。
+    fields:
+      - name: subjectType
+        type: string
+        constraints: [NOT_NULL]
+      - name: subjectId
+        type: string
+        constraints: [NOT_NULL]
+      - name: homepageId
+        type: string
+        constraints: [NOT_NULL]
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+      - name: rangeStart
+        type: int64
+        constraints: [NOT_NULL]
+      - name: rangeEnd
+        type: int64
+        constraints: [NOT_NULL]
+  PostHomepageSnapshot:
+    description: Post 绑定 canonical Homepage 时保留的轻量公开快照。
+    fields:
+      - name: canonicalEntityId
+        type: string
+        constraints: [NULLABLE]
+      - name: title
+        type: string
+        constraints: [NULLABLE]
+      - name: subtitle
+        type: string
+        constraints: [NULLABLE]
+      - name: coverUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: width
+        type: int64
+        constraints: [NULLABLE]
+      - name: height
+        type: int64
+        constraints: [NULLABLE]
+      - name: durationMs
+        type: int64
+        constraints: [NULLABLE]
+  PostPublishLocation:
+    description: 发布 IP 解析得到的国家、省、市级快照；禁止保存精确坐标。
+    fields:
+      - name: country
+        type: string
+        constraints: [NULLABLE]
+      - name: province
+        type: string
+        constraints: [NULLABLE]
+      - name: city
+        type: string
+        constraints: [NULLABLE]
+  PostDeviceInfo:
+    description: 发布设备的最小审计快照。
+    fields:
+      - name: manufacturer
+        type: string
+        constraints: [NULLABLE]
+      - name: brand
+        type: string
+        constraints: [NULLABLE]
+      - name: model
+        type: string
+        constraints: [NULLABLE]
+      - name: os
+        type: string
+        constraints: [NULLABLE]
+      - name: appVersion
+        type: string
+        constraints: [NULLABLE]
+      - name: width
+        type: int64
+        constraints: [NULLABLE]
+      - name: height
+        type: int64
+        constraints: [NULLABLE]
+      - name: durationMs
+        type: int64
+        constraints: [NULLABLE]
   SourceAttribution:
     fields:
       - name: isOriginal
@@ -1165,9 +1528,10 @@ types:
         constraints:
           - NULLABLE
       - name: primaryHomepageSnapshot
-        type: object
+        type: PostHomepageSnapshot
         constraints:
           - NULLABLE
+        client_wire: toJson
       - name: assistantUsePolicy
         type: string
         enum_ref: AssistantUsePolicy
@@ -1194,9 +1558,10 @@ types:
         constraints:
           - NULLABLE
       - name: semanticMentions
-        type: '[]object'
+        type: '[]PostSemanticMention'
         constraints:
           - NULLABLE
+        client_wire: toJson
       - name: coverUrl
         type: string
         constraints:
@@ -1210,13 +1575,15 @@ types:
         constraints:
           - NULLABLE
       - name: articleAssetManifest
-        type: object
+        type: PostArticleAssetManifestInput
         constraints:
           - NULLABLE
+        client_wire: toJson
       - name: articleRenderProfile
-        type: object
+        type: PostArticleRenderProfile
         constraints:
           - NULLABLE
+        client_wire: toJson
       - name: primaryHomepageId
         type: string
         constraints:
@@ -1227,9 +1594,10 @@ types:
         constraints:
           - NULLABLE
       - name: primaryHomepageSnapshot
-        type: object
+        type: PostHomepageSnapshot
         constraints:
           - NULLABLE
+        client_wire: toJson
       - name: visibility
         type: string
         enum_ref: Visibility
@@ -1292,11 +1660,10 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: semanticMentions
-        type: '[]object'
-        client_dart_type: List<ContentPostStructuredObject>
-        client_parameter_type: Iterable<ContentPostStructuredObject>
+        type: '[]PostSemanticMention'
+        client_parameter_type: Iterable<PostSemanticMention>
         client_default: const []
-        client_wire: structuredValue
+        client_wire: toJson
         client_omit_empty: true
       - name: mediaAssetIds
         type: '[]string'
@@ -1304,13 +1671,6 @@ types:
         client_parameter_type: Iterable<String>
         client_default: const []
         client_normalization: trim
-        client_omit_empty: true
-      - name: mediaItems
-        type: '[]object'
-        client_dart_type: List<ContentPostStructuredObject>
-        client_parameter_type: Iterable<ContentPostStructuredObject>
-        client_default: const []
-        client_wire: structuredValue
         client_omit_empty: true
       - name: articleMarkdown
         type: string
@@ -1323,17 +1683,15 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: articleAssetManifest
-        type: object
+        type: PostArticleAssetManifestInput
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: articleRenderProfile
-        type: object
+        type: PostArticleRenderProfile
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: coverStrategy
         type: string
         constraints:
@@ -1350,11 +1708,10 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: location
-        type: object
+        type: GeoPoint
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: locationName
         type: string
         constraints:
@@ -1370,6 +1727,13 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: DateTime?
+      - name: captureDisclosure
+        type: '[]string'
+        enum_ref: CaptureDisclosureGroup
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim
       - name: primaryHomepageId
         type: string
         constraints:
@@ -1381,11 +1745,10 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: primaryHomepageSnapshot
-        type: object
+        type: PostHomepageSnapshot
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: visibility
         type: string
         enum_ref: Visibility
@@ -1413,17 +1776,15 @@ types:
         client_dart_type: ContentPostSourceType?
         client_wire: canonicalEnum
       - name: deviceInfo
-        type: object
+        type: PostDeviceInfo
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: publishLocation
-        type: object
+        type: PostPublishLocation
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostStructuredObject?
-        client_wire: structuredValue
+        client_wire: toJson
       - name: authorDisplayNameSnapshot
         type: string
         constraints:

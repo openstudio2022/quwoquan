@@ -68,10 +68,7 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
           null,
         );
       });
-      AppToast.show(
-        context,
-        ContentText.addContactRecentDiscoveryDismissed,
-      );
+      AppToast.show(context, ContentText.addContactRecentDiscoveryDismissed);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)

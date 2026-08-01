@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 
 class LocalChatSearchMessageRecord {
-  static const int schema = 1;
+  static const int schema = 2;
 
   const LocalChatSearchMessageRecord({
     required this.messageId,
@@ -21,6 +21,7 @@ class LocalChatSearchMessageRecord {
     this.status = 'sent',
     this.recalledAt = '',
     this.deleted = false,
+    this.messagePayload = const <String, Object?>{},
     this.highlightText,
     this.matchedField,
   });
@@ -40,6 +41,9 @@ class LocalChatSearchMessageRecord {
   final String status;
   final String recalledAt;
   final bool deleted;
+
+  /// 完整 canonical ChatMessageDto 投影；搜索列只负责索引，不得代替时间线事实。
+  final Map<String, Object?> messagePayload;
   final String? highlightText;
   final String? matchedField;
 
@@ -67,6 +71,7 @@ class LocalChatSearchMessageRecord {
           dto.recalledAt != null ||
           dto.status == 'recalled' ||
           dto.status == 'deleted',
+      messagePayload: Map<String, Object?>.from(dto.toMap()),
     );
   }
 
@@ -91,6 +96,7 @@ class LocalChatSearchMessageRecord {
       'status',
       'recalledAt',
       'deleted',
+      'messagePayload',
       'highlightText',
       'matchedField',
     };
@@ -129,6 +135,7 @@ class LocalChatSearchMessageRecord {
       status: _requiredProjectionString(map, 'status'),
       recalledAt: _projectionString(map, 'recalledAt'),
       deleted: _requiredProjectionBool(map, 'deleted'),
+      messagePayload: _projectionMap(map, 'messagePayload'),
       matchedField: _nullableProjectionString(map, 'matchedField'),
       highlightText: _nullableProjectionString(map, 'highlightText'),
     );
@@ -170,6 +177,7 @@ class LocalChatSearchMessageRecord {
     String? status,
     String? recalledAt,
     bool? deleted,
+    Map<String, Object?>? messagePayload,
     String? highlightText,
     String? matchedField,
   }) {
@@ -190,6 +198,7 @@ class LocalChatSearchMessageRecord {
       status: status ?? this.status,
       recalledAt: recalledAt ?? this.recalledAt,
       deleted: deleted ?? this.deleted,
+      messagePayload: messagePayload ?? this.messagePayload,
       highlightText: highlightText ?? this.highlightText,
       matchedField: matchedField ?? this.matchedField,
     );
@@ -213,10 +222,47 @@ class LocalChatSearchMessageRecord {
       'status': status,
       'recalledAt': recalledAt,
       'deleted': deleted,
+      'messagePayload': messagePayload,
       if (highlightText != null) 'highlightText': highlightText,
       if (matchedField != null) 'matchedField': matchedField,
     };
   }
+
+  MessageDto toMessageDto() {
+    if (messagePayload.isNotEmpty) {
+      return MessageDto.fromMap(Map<String, dynamic>.from(messagePayload));
+    }
+    return MessageDto(
+      id: messageId,
+      conversationId: conversationId,
+      seq: seq,
+      clientMsgId: messageId,
+      senderId: senderPersonaId,
+      senderName: senderDisplayName.isEmpty ? null : senderDisplayName,
+      senderAvatar: senderAvatarUrl.isEmpty ? null : senderAvatarUrl,
+      type: messageType,
+      content: contentPreview,
+      status: status,
+      recalledAt: recalledAt.trim().isEmpty
+          ? null
+          : DateTime.tryParse(recalledAt.trim()),
+      timestamp: timestamp.trim().isEmpty
+          ? null
+          : DateTime.tryParse(timestamp.trim()),
+    );
+  }
+}
+
+Map<String, Object?> _projectionMap(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return const <String, Object?>{};
+  if (value is! Map) {
+    throw FormatException('$key must be an object');
+  }
+  return <String, Object?>{
+    for (final entry in value.entries)
+      if (entry.key is String) entry.key as String: entry.value,
+  };
 }
 
 String _requiredProjectionString(Map<String, Object?> map, String key) {

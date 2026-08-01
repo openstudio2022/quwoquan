@@ -702,7 +702,7 @@ class _WorksArticleCanvas extends StatelessWidget {
         AppSpacing.appChromeTopBarHeight(context) +
         AppSpacing.intraGroupSm;
     final palette = resolveArticlePaperPalette(context, paperTexture);
-    // Work Browser V1.0 Dark Paper：文章默认延续深色沉浸背景，
+    // 作品浏览器深色纸张：文章默认延续深色沉浸背景，
     // 翻页正面、背面、底页都消费同一 paperTexture。
     return CupertinoTheme(
       data: CupertinoTheme.of(context).copyWith(brightness: Brightness.dark),

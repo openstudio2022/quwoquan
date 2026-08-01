@@ -17,9 +17,7 @@ import (
 )
 
 type PGReportStore struct {
-	db                            *sql.DB
-	reporterAccountBackfills      map[string]string
-	reporterAccountBackfillResult ReporterAccountBackfillResult
+	db *sql.DB
 }
 
 type reportRecord struct {
@@ -45,14 +43,8 @@ type rowScanner interface {
 
 func NewPGReportStore(
 	db *sql.DB,
-	options ...PGReportStoreOption,
 ) (*PGReportStore, error) {
 	store := &PGReportStore{db: db}
-	for _, option := range options {
-		if err := option(store); err != nil {
-			return nil, err
-		}
-	}
 	if err := store.ensureSchema(context.Background()); err != nil {
 		return nil, err
 	}
@@ -160,12 +152,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_report_outbox_replay_order
 	if _, err := s.db.ExecContext(ctx, ddl); err != nil {
 		return err
 	}
-	backfillResult, err := s.applyReporterAccountBackfills(ctx)
-	if err != nil {
-		return err
-	}
-	s.reporterAccountBackfillResult = backfillResult
-	_, err = s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 DO $$
 BEGIN
   IF EXISTS (
@@ -174,18 +161,12 @@ BEGIN
     WHERE reporter_account_id IS NULL OR BTRIM(reporter_account_id) = ''
   ) THEN
     RAISE EXCEPTION
-      'reports.reporter_account_id requires a verified account backfill before startup';
+      'reports.reporter_account_id must be canonical before startup';
   END IF;
 END;
 $$;
 ALTER TABLE reports ALTER COLUMN reporter_account_id SET NOT NULL;`)
 	return err
-}
-
-// ReporterAccountBackfillResult exposes only row counts so startup logs can
-// audit an applied migration without recording persona or account identifiers.
-func (s *PGReportStore) ReporterAccountBackfillResult() ReporterAccountBackfillResult {
-	return s.reporterAccountBackfillResult
 }
 
 func (s *PGReportStore) Load(

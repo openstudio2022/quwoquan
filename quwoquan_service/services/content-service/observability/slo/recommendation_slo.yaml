@@ -150,9 +150,9 @@ metrics:
   behavior_ingest_dropped_total: recommendation_behavior_ingest_dropped_total
   behavior_by_attribution_total: recommendation_behavior_by_attribution_total
   hotpath_dropped_total: rec_hotpath_dropped_total
-  tag_feedback_consumer_total: content_tag_feedback_consumer_total
-  tag_feedback_consumer_lag_seconds: content_tag_feedback_consumer_lag_seconds
-  tag_feedback_consumer_last_success_unixtime: content_tag_feedback_consumer_last_success_unixtime
+  tag_feedback_fact_consumer_total: content_tag_feedback_fact_consumer_total
+  tag_feedback_fact_consumer_lag_seconds: content_tag_feedback_fact_consumer_lag_seconds
+  tag_feedback_fact_consumer_last_success_unixtime: content_tag_feedback_fact_consumer_last_success_unixtime
   exposure_redis_payload_bytes: recommendation_exposure_redis_payload_bytes
   model_score_cache_hit_total: rec_model_score_cache_hit_total
   model_score_batch_total: rec_model_score_batch_total
@@ -490,16 +490,16 @@ slis:
     objective_max: 0.01
     measured: true
 
-  - id: tag_feedback_delivery_lag
+  - id: tag_feedback_fact_delivery_lag
     description: TagFeedbackRecorded 从 tag-service 已提交事实到 content-service 显式标签亲和度提交的时延；消费者在 Mongo inbox 与特征更新原子成功后才 ACK。
-    source: content_tag_feedback_consumer_lag_seconds
+    source: content_tag_feedback_fact_consumer_lag_seconds
     objectives:
       p95_seconds: 30
     measured: true
 
-  - id: tag_feedback_consumer_failure_rate
+  - id: tag_feedback_fact_consumer_failure_rate
     description: TagFeedbackRecorded 消费扫描失败率；暂态故障保留 Redis PEL 以供 reclaim，持续失败必须告警。
-    source: content_tag_feedback_consumer_total{result="failed"} / content_tag_feedback_consumer_total
+    source: content_tag_feedback_fact_consumer_total{result="failed"} / content_tag_feedback_fact_consumer_total
     objective_max: 0
     measured: true
 
@@ -526,8 +526,6 @@ rollback_layers:
     mechanism: "policy 热更：exposureGovernance.dynamicBudget.enabled=false"
   - id: disable_collaborative_recall_sources
     mechanism: "env：QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES=1（装配级，重启）或 policy collaborativeRecall.enabled=false（热更）"
-  - id: disable_premium_pool_source
-    mechanism: "env：QWQ_DISABLE_PREMIUM_POOL_SOURCE=1（装配级，重启；premium 请求 fail-closed 空池）"
   - id: disable_intersection_recall_source
     mechanism: "env：QWQ_DISABLE_INTERSECTION_RECALL_SOURCE=1（装配级，重启；交集退回只解释不供给，recall_path=intersection_edge 消失，展示与排序边权特征不受影响）"
   - id: disable_ops_intervention_boost

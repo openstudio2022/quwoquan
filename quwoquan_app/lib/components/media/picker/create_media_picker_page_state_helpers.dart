@@ -227,8 +227,7 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
                   MediaPickerEntryMode.video => MediaText.videoNoVideo,
                   MediaPickerEntryMode.mixed =>
                     MediaText.mediaPickerMixedAlbumEmpty,
-                  MediaPickerEntryMode.image =>
-                    MediaText.mediaPickerAlbumEmpty,
+                  MediaPickerEntryMode.image => MediaText.mediaPickerAlbumEmpty,
                 },
                 style: TextStyle(
                   color: primary,

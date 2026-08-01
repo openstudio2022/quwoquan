@@ -11,7 +11,7 @@ def _download_plan_unresolved_entities(ctx: ExecutionContext) -> dict[str, dict[
     for entity in frozen_target_names(ctx):
         lane_issues = {
             lane: issue_messages(issues)
-            for lane in ("homepage", "article", "image")
+            for lane in ("homepage", "article", "image", "video")
             if (issues := _download_research_lane_issues(ctx, entity, etype, lane))
         }
         if lane_issues:
@@ -200,6 +200,62 @@ def _download_artifact_issues(ctx: ExecutionContext) -> dict[str, tuple[DataIssu
     }
 
 
+def absorb_download_shortfall_if_quota_met(
+    ctx: ExecutionContext,
+    availability: Mapping[str, Any] | None,
+    *,
+    stage: DataIssueStage,
+    stage_enum: Any,
+    auto_mode: Any,
+    done_status: Any,
+) -> Any | None:
+    """Absorb only non-article oversample shortfall once its quota is met.
+
+    Article authoring has no runtime replacement path: every frozen candidate
+    must already carry a retained, quality-receipted base source before author
+    work begins.  Treating an article source shortfall as a normal discard
+    would turn a source-ready M100/M1000 contract into an unbounded discovery
+    retry after the execution has been frozen.
+    """
+    from content.execution.spec_contract import approved_quota
+    from content.execution.support import StageResult
+
+    article_quota = int(
+        getattr(getattr(ctx.spec.content, "quotas", None), "entity_articles_per_target", 0)
+        or 0
+    )
+    if article_quota > 0:
+        return None
+    ready_count = int((availability or {}).get("readyTargetCount") or 0)
+    quota = approved_quota(ctx.execution_id)
+    if ready_count < quota:
+        return None
+    ineligible_count = int((availability or {}).get("ineligibleTargetCount") or 0)
+    return StageResult(
+        stage_enum,
+        auto_mode,
+        done_status,
+        (
+            f"{stage.value} 过采候选源缺口已吸收为丢弃池"
+            f"（ready={ready_count}/quota={quota}, ineligible={ineligible_count}）"
+        ),
+    )
+
+
+def _include_download_artifact_issues(source: str) -> bool:
+    """Artifact gate needs fetched ``source_refs``; download_plan must not use it.
+
+    ``gate_download`` fails every target before fetch because sources/ is absent.
+    Plan-stage availability therefore partitions only on research-plan unresolved
+    rows so oversample absorption can keep ready>=quota and advance to fetch.
+    """
+
+    normalized = str(source or "").strip()
+    if not normalized or normalized == "download_plan":
+        return False
+    return True
+
+
 def _write_download_availability(
     ctx: ExecutionContext,
     unresolved: Mapping[str, Mapping[str, list[str]]],
@@ -223,7 +279,11 @@ def _write_download_availability(
                 text = str(issue or "").strip()
                 if text and text not in entity_lanes[lane]:
                     entity_lanes[lane].append(text)
-    artifact_issues = _download_artifact_issues(ctx)
+    artifact_issues = (
+        _download_artifact_issues(ctx)
+        if _include_download_artifact_issues(source)
+        else {}
+    )
     ineligible: list[dict[str, Any]] = []
     deterministic: dict[str, dict[str, list[str]]] = {}
     exhausted = _download_plan_repair_exhausted_unresolved(ctx, merged_unresolved)

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 )
 
 func TestListFeedCursorIsOpaqueTamperSafeAndRequestBound(t *testing.T) {

@@ -643,34 +643,23 @@ func TestIntersectionService_ObjectIntersectionsEmptyObjectID(t *testing.T) {
 	}
 }
 
-// TestEvidenceKindRank_MatchesWP1AppendixA 把 WP1 附录 A（kind → rank 映射清单，
-// 交接 WP3 的正式交接物）固化为契约断言：rank 数值与清单同源，防止双方漂移。
-// 清单位置：specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md 附录 A。
-func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
-	appendixA := map[string]int{
-		// rank 5 · 联系人（最强人物锚点；kind 当前 deferred，rank 契约位仍需固化）
-		"commonContact": 5,
-		// rank 10 · 关注关系人物
+// TestEvidenceKindRank_MatchesCanonicalRegistry 固化当前 canonical kind 的排序口径。
+func TestEvidenceKindRank_MatchesCanonicalRegistry(t *testing.T) {
+	wantByKind := map[string]int{
 		"sharedFollowees": 10, "commonFollower": 10,
-		"followeeInObject": 10, "followeeVisited": 10, "followeeViewing": 10,
+		"followeeInObject": 10, "followeeVisited": 10, "followeeViewedObject": 10,
+		"followeeViewing":       10,
 		"followeeDiscussedThis": 10,
-		// rank 20 · 事物
-		"coMemberCircle": 20, "sharedCircle": 20, "sameCompany": 20, "sameTeam": 20,
-		"sameIndustry": 20, "sharedEntityAttention": 20, "coWishlistedEntity": 20,
-		// rank 30 · 地点
+		"sharedCircle":          20,
+		"sameIndustry":          20, "sharedEntityAttention": 20, "coWishlistedEntity": 20,
 		"coVisitedEntity": 30,
-		// rank 40 · 内容
-		"coCommented": 40, "coSharedContent": 40, "coCreatedContent": 40,
-		"sharedDiscussion": 40,
-		// rank 50 · 身份
-		"sameSchool": 50, "sameDepartment": 50, "sameMajor": 50, "sameCohort": 50,
-		"alumni": 50, "alumniHere": 50, "colleagueHere": 50,
-		// rank 60 · 兴趣 fact
+		"coCommented":     40, "coSharedContent": 40,
 		"sharedTagSample": 60,
+		"coLiked":         70,
 	}
-	for kind, want := range appendixA {
+	for kind, want := range wantByKind {
 		if got := EvidenceKindRank(kind, "fact"); got != want {
-			t.Fatalf("kind %s rank = %d, appendix A wants %d", kind, got, want)
+			t.Fatalf("kind %s rank = %d, registry wants %d", kind, got, want)
 		}
 	}
 	// 未知 kind 兜底 rank 500（开放字符串优雅降级，不写死闭集）。
@@ -1162,7 +1151,7 @@ func TestIntersectionService_ObjectSharedTagSampleVagueSubjectFailsClosed(t *tes
 		},
 		{
 			name:       "circle",
-			objectID:   "fixture_circle_photo",
+			objectID:   "circle_photo",
 			objectType: "circle",
 			objectKind: "circle",
 			tag:        "摄影",

@@ -3,9 +3,9 @@
   "canonicalArtifactRef": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/filter_catalog_release.json",
   "bootstrapReplicaRef": "quwoquan_app/assets/filters/filter_presets.json",
   "environmentManifestRefs": {
-    "alpha": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/alpha.seed.json",
-    "beta": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/beta.seed.json",
-    "gamma": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/gamma.seed.json",
+    "alpha": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/alpha.import.json",
+    "beta": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/beta.import.json",
+    "gamma": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/gamma.import.json",
     "prod": "quwoquan_data/reference/filter_catalog/releases/filter-catalog-20260720-001/environments/prod.import.json"
   }
 }

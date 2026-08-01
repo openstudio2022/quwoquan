@@ -7,7 +7,7 @@ description: 'Post 实体隐私与安全策略。
 
   - GDPR 数据生命周期（删除级联顺序与策略）
 
-  - API 层字段 alias（内部字段名 → 对外暴露名）
+  - 存储字段到 API 字段的 canonical 映射
 
   - 字段暴露范围（补充 api_exposure 的精细化 consumer 控制）
 

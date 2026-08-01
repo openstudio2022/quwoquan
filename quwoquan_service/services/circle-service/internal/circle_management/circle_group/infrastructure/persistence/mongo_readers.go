@@ -191,7 +191,7 @@ func (readers *MongoReaders) ListForSearch(
 	return groups, nil
 }
 
-func (readers *MongoReaders) SearchGroups(ctx context.Context, query groupports.SearchQuery) (groupports.GroupPageSlice, error) {
+func (readers *MongoReaders) SearchGroups(ctx context.Context, query groupports.SearchRequestFact) (groupports.GroupPageSlice, error) {
 	pattern := regexp.QuoteMeta(strings.TrimSpace(query.Query))
 	filter := bson.M{
 		"circleId": strings.TrimSpace(query.CircleID), "status": groupmodel.CircleGroupStatusActive,

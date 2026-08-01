@@ -336,6 +336,7 @@ class ExecutionPolicy:
     oversample_factor: float
     execution_branch: str
     git_commit_sha: str
+    article_commercial_closure: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.approved_quota <= self.target_entity_count:
@@ -351,6 +352,11 @@ class ExecutionPolicy:
         raw_factor = payload.get("oversampleFactor")
         if isinstance(raw_factor, bool) or not isinstance(raw_factor, (int, float)):
             raise ValueError("executionPolicy.oversampleFactor must be a number")
+        raw_article_closure = payload.get("articleCommercialClosure", False)
+        if not isinstance(raw_article_closure, bool):
+            raise ValueError(
+                "executionPolicy.articleCommercialClosure must be boolean"
+            )
         return cls(
             selection_policy=SelectionPolicy(_string(payload, "selectionPolicy")),
             target_entity_count=_non_negative_int(payload, "targetEntityCount"),
@@ -359,6 +365,7 @@ class ExecutionPolicy:
             oversample_factor=float(raw_factor),
             execution_branch=_string(payload, "executionBranch"),
             git_commit_sha=_string(payload, "gitCommitSha"),
+            article_commercial_closure=raw_article_closure,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -370,6 +377,7 @@ class ExecutionPolicy:
             "oversampleFactor": self.oversample_factor,
             "executionBranch": self.execution_branch,
             "gitCommitSha": self.git_commit_sha,
+            "articleCommercialClosure": self.article_commercial_closure,
         }
 
 

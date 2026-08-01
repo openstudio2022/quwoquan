@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""DNS-01 公共证书签发与本地 target 证书路径单一入口。"""
+"""Canonical TLS material facade for local targets and public DNS-01 targets."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import secrets
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +21,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
 
 
@@ -38,9 +45,57 @@ def load_policy() -> dict[str, Any]:
 def _profile_for_target(target: str) -> tuple[str, dict[str, Any]]:
     profiles = load_policy().get("tlsProfiles") or {}
     for profile_name, raw_profile in profiles.items():
-        if isinstance(raw_profile, dict) and raw_profile.get("target") == target:
+        if not isinstance(raw_profile, dict):
+            continue
+        targets = raw_profile.get("targets") or []
+        if raw_profile.get("target") == target or (
+            isinstance(targets, list) and target in targets
+        ):
             return str(profile_name), raw_profile
-    raise PublicDomainTlsError(f"GATE_BLOCK: no DNS-01 TLS profile for target {target}")
+    raise PublicDomainTlsError(f"GATE_BLOCK: no canonical TLS profile for target {target}")
+
+
+def _profile_kind(profile_name: str, profile: dict[str, Any]) -> str:
+    kind = str(profile.get("kind") or "").strip()
+    if kind:
+        return kind
+    if profile_name.startswith("acme-dns01-"):
+        return "dns-01-public-ca"
+    raise PublicDomainTlsError(
+        f"GATE_BLOCK: TLS profile {profile_name} has no canonical kind"
+    )
+
+
+def tls_profile(target: str) -> tuple[str, str, dict[str, Any]]:
+    profile_name, profile = _profile_for_target(target)
+    return profile_name, _profile_kind(profile_name, profile), profile
+
+
+def _required_names(target: str, profile: dict[str, Any]) -> list[str]:
+    if _profile_kind(_profile_for_target(target)[0], profile) == "local-managed":
+        resolved_roles = get_target(
+            load_environment_topology(), target
+        ).get("resolvedUrlRoles") or {}
+        names = sorted(
+            {
+                str(role.get("host") or "").strip()
+                for role in resolved_roles.values()
+                if isinstance(role, dict) and str(role.get("host") or "").strip()
+            }
+        )
+        if not names:
+            raise PublicDomainTlsError(
+                f"GATE_BLOCK: {target} topology has no TLS host names"
+            )
+        return names
+    return [
+        name
+        for name in (
+            str(profile.get("apex") or "").strip(),
+            str(profile.get("wildcard") or "").strip(),
+        )
+        if name
+    ]
 
 
 def certificate_dir(target: str) -> Path:
@@ -53,15 +108,71 @@ def certificate_paths(target: str, *, require_ready: bool = True) -> tuple[Path,
     key = root / "privkey.pem"
     if require_ready and (not cert.is_file() or not key.is_file()):
         raise PublicDomainTlsError(
-            "GATE_BLOCK: public DNS-01 certificate is missing for "
+            "GATE_BLOCK: canonical certificate is missing for "
             f"{target}; run `stackctl tls --target {target} --action prevalidate`"
         )
     return cert, key
 
 
+def root_certificate_path(target: str, *, require_ready: bool = True) -> Path:
+    path = certificate_dir(target) / "root.crt"
+    if require_ready and not path.is_file():
+        raise PublicDomainTlsError(
+            f"GATE_BLOCK: local-managed root certificate is missing for {target}"
+        )
+    return path
+
+
+def _openssl(command: list[str], *, failure: str) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        ["openssl", *command],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise PublicDomainTlsError(f"GATE_BLOCK: {failure}: {detail}")
+    return result
+
+
+def _public_key_digest(arguments: list[str]) -> str:
+    result = subprocess.run(
+        ["openssl", *arguments],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise PublicDomainTlsError("GATE_BLOCK: certificate public-key read failed")
+    return hashlib.sha256(result.stdout).hexdigest()
+
+
+def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
+    if not certificate.is_file() or not private_key.is_file():
+        return False
+    try:
+        certificate_public_key = _openssl(
+            ["x509", "-in", str(certificate), "-pubkey", "-noout"],
+            failure="certificate public-key read failed",
+        )
+        with tempfile.NamedTemporaryFile() as public_key:
+            public_key.write(certificate_public_key.stdout.encode("utf-8"))
+            public_key.flush()
+            certificate_digest = _public_key_digest(
+                ["pkey", "-pubin", "-in", public_key.name, "-outform", "DER"]
+            )
+        private_digest = _public_key_digest(
+            ["pkey", "-in", str(private_key), "-pubout", "-outform", "DER"]
+        )
+    except PublicDomainTlsError:
+        return False
+    return certificate_digest == private_digest
+
+
 def verify_certificate(target: str, *, renew_before_days: int | None = None) -> dict[str, Any]:
     policy = load_policy()
-    _, profile = _profile_for_target(target)
+    profile_name, profile = _profile_for_target(target)
+    profile_kind = _profile_kind(profile_name, profile)
     if profile.get("certificateAutomation") == "external":
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate is externally managed"
@@ -70,7 +181,8 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
     days = int(
         renew_before_days
         if renew_before_days is not None
-        else (policy.get("acme") or {}).get("renewBeforeDays", 30)
+        else profile.get("renewBeforeDays")
+        or (policy.get("acme") or {}).get("renewBeforeDays", 30)
     )
     check = subprocess.run(
         ["openssl", "x509", "-in", str(cert), "-checkend", str(days * 86400), "-noout"],
@@ -80,22 +192,9 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
     )
     if check.returncode != 0:
         raise PublicDomainTlsError(
-            f"GATE_BLOCK: {target} public certificate expires within {days} days"
+            f"GATE_BLOCK: {target} certificate expires within {days} days"
         )
-    key_match = subprocess.run(
-        [
-            "sh",
-            "-c",
-            f"test \"$(openssl x509 -in {shlex.quote(str(cert))} -pubkey -noout | "
-            "openssl pkey -pubin -outform der 2>/dev/null | openssl sha256)\" = "
-            f"\"$(openssl pkey -in {shlex.quote(str(key))} -pubout -outform der 2>/dev/null | "
-            "openssl sha256)\"",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if key_match.returncode != 0:
+    if not _certificate_key_pair_matches(cert, key):
         raise PublicDomainTlsError(f"GATE_BLOCK: {target} certificate/private-key mismatch")
     inspect = subprocess.run(
         ["openssl", "x509", "-in", str(cert), "-noout", "-ext", "subjectAltName"],
@@ -104,26 +203,121 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         check=False,
     )
     sans = inspect.stdout
-    for required_name in (str(profile.get("apex") or ""), str(profile.get("wildcard") or "")):
+    required_names = _required_names(target, profile)
+    for required_name in required_names:
         if required_name and required_name not in sans:
             raise PublicDomainTlsError(
                 f"GATE_BLOCK: {target} certificate SAN is missing {required_name}"
             )
+    root = None
+    if profile_kind == "local-managed":
+        root = root_certificate_path(target)
+        _openssl(
+            ["verify", "-CAfile", str(root), str(cert)],
+            failure=f"{target} local-managed certificate chain verification failed",
+        )
     return {
-        "schema": "quwoquan.public-domain-tls-evidence",
+        "schema": "quwoquan.tls-evidence",
         "target": target,
+        "profile": profile_name,
+        "kind": profile_kind,
         "certificate": str(cert),
         "privateKey": str(key),
-        "apex": profile["apex"],
-        "wildcard": profile["wildcard"],
+        "rootCertificate": str(root) if root is not None else "system",
+        "sans": required_names,
         "renewBeforeDays": days,
         "status": "ready",
     }
 
 
+def _issue_local_managed_certificate(
+    target: str,
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    if shutil.which("openssl") is None:
+        raise PublicDomainTlsError(
+            "GATE_BLOCK: openssl is required for local-managed TLS"
+        )
+    output_root = certificate_dir(target)
+    output_root.mkdir(parents=True, exist_ok=True)
+    root_key = output_root / "root.key"
+    root_cert = root_certificate_path(target, require_ready=False)
+    if not _certificate_key_pair_matches(root_cert, root_key):
+        with tempfile.TemporaryDirectory(dir=output_root) as temporary:
+            temporary_root = Path(temporary)
+            next_root_key = temporary_root / "root.key"
+            next_root_cert = temporary_root / "root.crt"
+            _openssl(
+                [
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:2048",
+                    "-out",
+                    str(next_root_key),
+                ],
+                failure=f"{target} local-managed root key generation failed",
+            )
+            _openssl(
+                [
+                    "req", "-x509", "-new", "-sha256", "-days", "3650",
+                    "-key", str(next_root_key), "-out", str(next_root_cert),
+                    "-subj", f"/CN=Quwoquan local-managed CA ({target})",
+                    "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
+                    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+                ],
+                failure=f"{target} local-managed root certificate generation failed",
+            )
+            next_root_key.chmod(0o600)
+            next_root_key.replace(root_key)
+            next_root_cert.replace(root_cert)
+
+    cert, key = certificate_paths(target, require_ready=False)
+    names = _required_names(target, profile)
+    with tempfile.TemporaryDirectory(dir=output_root) as temporary:
+        temporary_root = Path(temporary)
+        csr = temporary_root / "leaf.csr"
+        leaf = temporary_root / "leaf.crt"
+        extensions = temporary_root / "leaf.ext"
+        _openssl(
+            ["genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(key)],
+            failure=f"{target} local-managed leaf key generation failed",
+        )
+        _openssl(
+            ["req", "-new", "-key", str(key), "-out", str(csr), "-subj", f"/CN={names[0]}"],
+            failure=f"{target} local-managed certificate request failed",
+        )
+        extensions.write_text(
+            "basicConstraints=critical,CA:FALSE\n"
+            "keyUsage=critical,digitalSignature,keyEncipherment\n"
+            "extendedKeyUsage=serverAuth\n"
+            + "subjectAltName="
+            + ",".join(f"DNS:{name}" for name in names)
+            + "\n",
+            encoding="utf-8",
+        )
+        serial = secrets.token_hex(16)
+        _openssl(
+            [
+                "x509", "-req", "-sha256",
+                "-days", str(int(profile.get("certificateDays") or 90)),
+                "-in", str(csr), "-CA", str(root_cert), "-CAkey", str(root_key),
+                "-set_serial", f"0x{serial}", "-extfile", str(extensions),
+                "-out", str(leaf),
+            ],
+            failure=f"{target} local-managed leaf certificate signing failed",
+        )
+        cert.write_bytes(leaf.read_bytes() + root_cert.read_bytes())
+    key.chmod(0o600)
+    return verify_certificate(target)
+
+
 def issue_certificate(target: str) -> dict[str, Any]:
     policy = load_policy()
-    _, profile = _profile_for_target(target)
+    profile_name, profile = _profile_for_target(target)
+    if _profile_kind(profile_name, profile) == "local-managed":
+        return _issue_local_managed_certificate(target, profile)
     if profile.get("certificateAutomation") == "external":
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate issuance is externally managed"
@@ -213,6 +407,18 @@ def main(argv: list[str] | None = None) -> int:
                 "certificate": str(cert),
                 "privateKey": str(key),
             }
+            try:
+                profile_name, profile = _profile_for_target(args.target)
+                if _profile_kind(profile_name, profile) == "local-managed":
+                    payload["rootCertificate"] = str(
+                        root_certificate_path(
+                            args.target,
+                            require_ready=not args.allow_missing,
+                        )
+                    )
+            except PublicDomainTlsError:
+                if not args.allow_missing:
+                    raise
             if args.format == "shell":
                 print(
                     "export QWQ_PUBLIC_TLS_CERT_FILE="
@@ -222,6 +428,11 @@ def main(argv: list[str] | None = None) -> int:
                     "export QWQ_PUBLIC_TLS_KEY_FILE="
                     + shlex.quote(str(key))
                 )
+                if "rootCertificate" in payload:
+                    print(
+                        "export QWQ_LOCAL_MANAGED_CA_FILE="
+                        + shlex.quote(str(payload["rootCertificate"]))
+                    )
                 return 0
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0

@@ -1,39 +1,21 @@
 part of 'app_router.dart';
 
-List<GoRoute> _chatRoutes(Ref ref) => <GoRoute>[
+List<GoRoute> _chatRoutes(Ref _) => <GoRoute>[
   GoRoute(
     path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
     pageBuilder: (context, state) {
       final id = state.pathParameters['id'] ?? '';
-      final assistantOpenContext = state.extra is AssistantOpenContext
-          ? state.extra as AssistantOpenContext
-          : null;
       final searchAnchorContext = state.extra is SearchConversationAnchorContext
           ? state.extra as SearchConversationAnchorContext
           : null;
-      final isAssistant = id == AppConceptConstants.assistantConversationId;
       void handleBack() {
         if (context.canPop()) {
           context.pop();
-        } else if (isAssistant) {
-          final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
-          ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-          final route = lastTab?.routePath ?? AppRoutePaths.chat;
-          context.go(route);
         } else {
           context.go(AppRoutePaths.chat);
         }
       }
 
-      if (isAssistant) {
-        return appRoutePage<void>(
-          state: state,
-          child: PersonalAssistantConversationPage(
-            onBack: handleBack,
-            assistantOpenContext: assistantOpenContext,
-          ),
-        );
-      }
       return appRoutePage<void>(
         state: state,
         child: ChatConversationPage(

@@ -379,7 +379,7 @@ func (facade *QueryFacade) List(ctx context.Context, query groupports.ListQuery)
 	return newPageResult(page), nil
 }
 
-func (facade *QueryFacade) Search(ctx context.Context, query groupports.SearchQuery) (PageResult, error) {
+func (facade *QueryFacade) Search(ctx context.Context, query groupports.SearchRequestFact) (PageResult, error) {
 	if _, _, err := facade.requireReaderActor(ctx, query.CircleID); err != nil {
 		return PageResult{}, err
 	}

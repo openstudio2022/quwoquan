@@ -1,12 +1,60 @@
 commercial_defaults:
-  block_reason: 生命周期命令（Stage/Activate/Rollback）V1 deferred：模型晋升/回滚/灰度由 model_registry_cli + CI promotion
-    gate + AB policy 承载，零 API 调用方；恢复公开命令前须先建立 operator 消费面与 PG packet。评分 Reader 两条路由已按拓扑门禁与双侧契约测试放行。
-  gap_id: RECOMMENDATION_MODEL_RELEASE_LIFECYCLE_DEFERRED
+  block_reason: 未声明的模型发布操作默认阻断；只允许 Stage、CAS Activate 与评分 Reader。
+  gap_id: RECOMMENDATION_MODEL_RELEASE_UNDECLARED_OPERATION
   status: blocked
   target_story: app-cloud-business-object-commercial-closure
-description: RecommendationModelRelease 按已激活发布评分的 named Reader packet。生命周期命令 V1 deferred（见 aggregate.yaml
-  deferred 注记）。
+description: RecommendationModelRelease 的 Stage、CAS Activate 与按当前激活发布评分的唯一对象 Facade；CLI/CI 只调用这些内部操作。
 api_routes:
+- actor: none
+  application:
+    facet: RecommendationModelReleaseCommandFacade
+    kind: command
+    method: stage
+    aggregate_owner: RecommendationModelRelease
+    mutation_target: RecommendationModelRelease
+    invariant_target: RecommendationModelRelease
+  authorization: {ownership_policy: internal_model_release_plane, principal: service, scopes: [recommendation.model.manage]}
+  commercial: {status: ready}
+  method: POST
+  operation: StageRecommendationModelRelease
+  path: /internal/recommendation/model-releases:stage
+  reliability: {cancellation: supported, idempotency: required, max_attempts: 2, retry_mode: idempotent, timeout_ms: 3000}
+  request_entity: StageRecommendationModelReleaseCommand
+  request_body_kind: object
+  request_bindings:
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: RecommendationModelReleaseCommandResult
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  error_codes: [RECOMMENDATION.USER.unauthorized, RECOMMENDATION.USER.forbidden, RECOMMENDATION.USER.invalid_argument, RECOMMENDATION.USER.model_release_conflict, RECOMMENDATION.SYSTEM.model_registry_write_failed]
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  telemetry: {metric: recommendation_model_release_stage, trace: true, attributes: [scenario, outcome, replayed]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+- actor: none
+  application:
+    facet: RecommendationModelReleaseCommandFacade
+    kind: command
+    method: activate
+    aggregate_owner: RecommendationModelRelease
+    mutation_target: RecommendationModelRelease
+    invariant_target: RecommendationModelRelease
+  authorization: {ownership_policy: internal_model_release_plane, principal: service, scopes: [recommendation.model.manage]}
+  commercial: {status: ready}
+  method: POST
+  operation: ActivateRecommendationModelRelease
+  path: /internal/recommendation/model-releases:activate
+  reliability: {cancellation: supported, idempotency: required, max_attempts: 2, retry_mode: idempotent, timeout_ms: 3000}
+  request_entity: ActivateRecommendationModelReleaseCommand
+  request_body_kind: object
+  request_bindings:
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: RecommendationModelReleaseCommandResult
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  error_codes: [RECOMMENDATION.USER.unauthorized, RECOMMENDATION.USER.forbidden, RECOMMENDATION.USER.invalid_argument, RECOMMENDATION.USER.model_release_conflict, RECOMMENDATION.SYSTEM.model_registry_write_failed]
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  telemetry: {metric: recommendation_model_release_activate, trace: true, attributes: [scenario, outcome, replayed]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
 - actor: none
   application:
     facet: RecommendationScoringQueryFacade

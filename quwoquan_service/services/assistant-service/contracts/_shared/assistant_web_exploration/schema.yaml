@@ -1,0 +1,75 @@
+dart_class: AssistantWebDocumentWire
+library_path: assistant/generated/contracts/assistant_web_exploration.g.dart
+output_path: assistant/generated/contracts/assistant_web_exploration.g.dart
+contract: assistant_web_exploration
+kind: shared_wire_contract
+fields:
+  - { name: documentId, type: string, required: true }
+  - { name: targetId, type: string, default: '' }
+  - { name: target, type: object, ref: web_target, required: true }
+  - { name: source, type: object, ref: source_ledger_entry, required: true }
+  - { name: title, type: string, default: '' }
+  - { name: contentText, type: string, default: '' }
+  - { name: contentDigest, type: string, required: true }
+  - { name: contentType, type: string, default: '' }
+  - { name: fetchedAt, type: string, required: true }
+  - { name: links, type: list<object>, ref: document_link, default: [] }
+  - { name: artifactRef, type: string, default: '' }
+  - { name: untrusted, type: bool, default: true }
+subcontracts:
+  web_target:
+    class_name: AssistantWebTargetWire
+    fields:
+      - { name: kind, type: enum, enum_ref: AssistantWebTargetKind, required: true }
+      - { name: value, type: string, required: true }
+  target_ledger_entry:
+    class_name: AssistantWebTargetLedgerEntryWire
+    fields:
+      - { name: targetId, type: string, required: true }
+      - { name: runId, type: string, required: true }
+      - { name: requestedTarget, type: object, ref: web_target, required: true }
+      - { name: resolvedUrl, type: string, required: true }
+      - { name: origin, type: string, required: true }
+      - { name: parentSourceId, type: string, default: '' }
+      - { name: resolvedAt, type: string, required: true }
+  source_ledger_entry:
+    class_name: AssistantSourceLedgerEntryWire
+    fields:
+      - { name: sourceId, type: string, required: true }
+      - { name: targetId, type: string, default: '' }
+      - { name: origin, type: string, required: true }
+      - { name: parentSourceId, type: string, default: '' }
+      - { name: runId, type: string, required: true }
+      - { name: skillId, type: string, default: '' }
+      - { name: normalizedUrl, type: string, required: true }
+      - { name: redirectChain, type: list<string>, default: [] }
+      - { name: contentDigest, type: string, required: true }
+      - { name: fetchedAt, type: string, required: true }
+  web_artifact:
+    class_name: AssistantWebArtifactWire
+    fields:
+      - { name: artifactId, type: string, required: true }
+      - { name: artifactRef, type: string, required: true }
+      - { name: runId, type: string, required: true }
+      - { name: contentDigest, type: string, required: true }
+      - { name: contentType, type: string, required: true }
+      - { name: byteLength, type: int, required: true }
+      - { name: fetchedAt, type: string, required: true }
+      - { name: untrusted, type: bool, default: true }
+  evidence_assessment:
+    class_name: AssistantWebEvidenceAssessmentWire
+    fields:
+      - { name: status, type: string, required: true }
+      - { name: evidenceSufficient, type: bool, required: true }
+      - { name: replanRequired, type: bool, required: true }
+      - { name: reason, type: string, required: true }
+      - { name: targetIds, type: list<string>, default: [] }
+      - { name: documentIds, type: list<string>, default: [] }
+      - { name: artifactRefs, type: list<string>, default: [] }
+      - { name: sourceIds, type: list<string>, default: [] }
+  document_link:
+    class_name: AssistantDocumentLinkWire
+    fields:
+      - { name: linkId, type: string, required: true }
+      - { name: title, type: string, default: '' }
+      - { name: target, type: object, ref: web_target, required: true }

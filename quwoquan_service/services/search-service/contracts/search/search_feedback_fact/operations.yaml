@@ -1,0 +1,64 @@
+commercial_defaults:
+  status: blocked
+  block_reason: canonical operation awaits object-centered commercial migration
+  gap_id: SEARCH_FEEDBACK_FACT_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: SearchFeedbackFact 对象专属 append packet。
+api_routes:
+  - method: POST
+    path: /search/feedback
+    operation: ReportSearchFeedback
+    actor: persona_or_device
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: SearchFeedbackCommandFacade
+      method: reportFeedback
+      append_sink: SearchFeedbackFact
+      mutation_target: SearchFeedbackFact
+      invariant_target: SearchFeedbackFact
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.feedback_invalid_argument
+      - SEARCH.USER.feedback_conflict
+      - SEARCH.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: search_feedback_report
+      trace: true
+      attributes:
+        - event_type
+        - target
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    description: '上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade）， 驱动排序信号与 relevance 评测。Idempotency-Key 与 canonical payload digest 组成命令幂等边界：同 key 同负载返回首次结果，同 key 异负载返回 SEARCH.USER.feedback_conflict；命令回执以 applying/completed/conflict 持久化， 崩溃重试可继续收敛；(searchRequestId, eventType, objectId) 继续作为事实语义唯一键， 完全相同的跨 key 重放不重复追加且每个已受理 key 均保留独立回执。'
+    request_entity: ReportSearchFeedbackCommand
+    client_contract:
+      dart_import: ../search/search_feedback_contracts.dart
+      response_type: SearchFeedbackAck
+      response_decoder: decodeSearchFeedbackAck
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_body_kind: object
+consumers:
+  - name: app
+    capabilities:
+      - report_feedback

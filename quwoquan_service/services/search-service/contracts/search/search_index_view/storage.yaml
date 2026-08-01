@@ -1,2 +1,43 @@
-backend: elasticsearch
+backend: elasticsearch+mongodb
 role: projection
+collections:
+  search_user_account_restrictions:
+    entity: SearchAccountRestrictionView
+    role: projection
+    description: SearchIndexView 的可逆主体可见性阻断投影。
+    indexes:
+      - name: idx_search_account_restriction_subject_state
+        keys: {subjects: 1, restricted: 1}
+      - name: idx_search_account_restriction_version
+        keys: {accountVersion: -1}
+  search_user_account_restriction_inbox:
+    entity: SearchAccountRestrictionInbox
+    role: append_only
+    description: UserSuspended/UserRestored 事件的幂等应用凭据。
+    indexes:
+      - name: uq_search_account_restriction_account_version
+        keys: {accountDigest: 1, accountVersion: 1}
+        unique: true
+      - name: idx_search_account_restriction_applied
+        keys: {appliedAt: -1}
+  search_user_account_restriction_watermarks:
+    entity: SearchAccountRestrictionWatermark
+    role: projection
+    description: 单调账号版本与关闭终态水位，禁止恢复事件越过关闭终态。
+    indexes:
+      - name: idx_search_account_restriction_terminal_version
+        keys: {terminal: 1, accountVersion: -1}
+  rm_search_experiment_policy:
+    entity: SearchExperimentPolicyView
+    role: projection
+    description: Product Ops ExperimentPolicyActivated 的单调本地投影；Search 不从 service config 维护私有分桶策略。
+    indexes:
+      - name: idx_search_experiment_policy_revision
+        keys: {revision: -1, updatedAt: -1}
+streams:
+  events.ops.experiment_policy_activated.search.dlq:
+    entity: SearchExperimentPolicyView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Search 无法解释的 ExperimentPolicyActivated typed contract 消息。

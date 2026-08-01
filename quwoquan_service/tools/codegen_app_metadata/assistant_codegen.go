@@ -145,7 +145,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
-	if err := os.Remove(filepath.Join(appDir, "lib", "assistant", "generated", "contracts", "conversation_state_decision.g.dart")); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(appDir, "lib", "assistant", "generated", "contracts", "session_state_decision.g.dart")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -297,8 +297,8 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 
 	assistantSharedWireSchemas := []string{
 		"runtime_failure",
-		"assistant_conversation",
-		"assistant_turn_envelope",
+		"assistant_session",
+		"assistant_run_envelope",
 		"skill_subscription",
 		"device_context",
 		"tool_use",
@@ -309,12 +309,19 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		"assistant_skill_manifest",
 		"assistant_tool_metadata",
 		"assistant_replay_case",
+		"assistant_web_exploration",
+		"assistant_skill_context",
+		"assistant_presentation_node",
+		"assistant_presentation_template",
+		"assistant_presentation_document",
+		"assistant_surface_capabilities",
+		"assistant_run_runtime",
 	}
 	for _, schemaName := range assistantSharedWireSchemas {
 		schemaPath := filepath.Join(baseDir, schemaName, "schema.yaml")
 		source := filepath.Join("assistant", schemaName, "schema.yaml")
 		switch schemaName {
-		case "assistant_conversation", "skill_subscription":
+		case "assistant_session", "skill_subscription":
 			schemaPath = filepath.Join(
 				baseDir,
 				"assistant",
@@ -849,12 +856,15 @@ func renderPreferenceFactDart(schema *assistantSimpleSchema) string {
 	b.WriteString("class PreferenceFact {\n")
 	b.WriteString("  const PreferenceFact({\n")
 	b.WriteString("    required this.factId,\n    required this.scope,\n    required this.key,\n    required this.value,\n")
-	b.WriteString("    this.source = '',\n    this.createdAt = '',\n    this.revoked = false,\n  });\n\n")
+	b.WriteString("    this.source = '',\n    this.sourceSessionId = '',\n    this.confirmedAt = '',\n")
+	b.WriteString("    this.createdAt = '',\n    this.revoked = false,\n  });\n\n")
 	b.WriteString("  final String factId;\n  final String scope;\n  final String key;\n  final String value;\n")
-	b.WriteString("  final String source;\n  final String createdAt;\n  final bool revoked;\n\n")
+	b.WriteString("  final String source;\n  final String sourceSessionId;\n  final String confirmedAt;\n")
+	b.WriteString("  final String createdAt;\n  final bool revoked;\n\n")
 	b.WriteString("  Map<String, dynamic> toJson() => <String, dynamic>{\n")
 	b.WriteString("    'factId': factId,\n    'scope': scope,\n    'key': key,\n    'value': value,\n")
-	b.WriteString("    'source': source,\n    'createdAt': createdAt,\n    'revoked': revoked,\n  };\n\n")
+	b.WriteString("    'source': source,\n    'sourceSessionId': sourceSessionId,\n")
+	b.WriteString("    'confirmedAt': confirmedAt,\n    'createdAt': createdAt,\n    'revoked': revoked,\n  };\n\n")
 	b.WriteString("  factory PreferenceFact.fromJson(Map<String, dynamic> json) {\n")
 	b.WriteString("    return PreferenceFact(\n")
 	b.WriteString("      factId: (json['factId'] as String?)?.trim() ?? '',\n")
@@ -862,6 +872,8 @@ func renderPreferenceFactDart(schema *assistantSimpleSchema) string {
 	b.WriteString("      key: (json['key'] as String?)?.trim() ?? '',\n")
 	b.WriteString("      value: (json['value'] as String?)?.trim() ?? '',\n")
 	b.WriteString("      source: (json['source'] as String?)?.trim() ?? '',\n")
+	b.WriteString("      sourceSessionId: (json['sourceSessionId'] as String?)?.trim() ?? '',\n")
+	b.WriteString("      confirmedAt: (json['confirmedAt'] as String?)?.trim() ?? '',\n")
 	b.WriteString("      createdAt: (json['createdAt'] as String?)?.trim() ?? '',\n")
 	b.WriteString("      revoked: json['revoked'] == true,\n")
 	b.WriteString("    );\n")

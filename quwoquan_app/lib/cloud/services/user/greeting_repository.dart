@@ -9,6 +9,8 @@ class GreetingRequestDto {
     required this.requesterPersonaId,
     required this.targetPersonaId,
     this.requestMessage,
+    this.intersectionRef,
+    this.intersectionSnapshot,
     required this.status,
     required this.source,
     this.promotedConversationId,
@@ -22,6 +24,8 @@ class GreetingRequestDto {
   final String requesterPersonaId;
   final String targetPersonaId;
   final String? requestMessage;
+  final GreetingIntersectionRef? intersectionRef;
+  final GreetingIntersectionSnapshot? intersectionSnapshot;
 
   /// pending / replied / ignored / blocked / cancelled / expired
   final String status;
@@ -46,6 +50,8 @@ class GreetingRequestDto {
       requesterPersonaId: requesterPersonaId,
       targetPersonaId: targetPersonaId,
       requestMessage: requestMessage,
+      intersectionRef: intersectionRef,
+      intersectionSnapshot: intersectionSnapshot,
       status: status ?? this.status,
       source: source,
       promotedConversationId:
@@ -63,6 +69,8 @@ class GreetingRequestDto {
       requesterPersonaId: (map['requesterPersonaId'] as String?) ?? '',
       targetPersonaId: (map['targetPersonaId'] as String?) ?? '',
       requestMessage: map['requestMessage'] as String?,
+      intersectionRef: null,
+      intersectionSnapshot: null,
       status: (map['status'] as String?) ?? 'pending',
       source: (map['source'] as String?) ?? 'profile',
       promotedConversationId: map['promotedConversationId'] as String?,
@@ -87,6 +95,8 @@ class GreetingRequestDto {
       requesterPersonaId: record.requesterPersonaId,
       targetPersonaId: record.targetPersonaId,
       requestMessage: record.requestMessage,
+      intersectionRef: record.intersectionRef,
+      intersectionSnapshot: record.intersectionSnapshot,
       status: record.status,
       source: record.source,
       promotedConversationId: record.promotedConversationId,
@@ -112,6 +122,7 @@ abstract class GreetingRepository {
     required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
+    GreetingIntersectionRef? intersectionRef,
   });
 
   Future<List<GreetingRequestDto>> listInbox({
@@ -148,12 +159,14 @@ class RemoteGreetingRepository implements GreetingRepository {
     required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
+    GreetingIntersectionRef? intersectionRef,
   }) async {
     final record = await commandWriter.sendGreeting(
       SendGreetingCommand(
         targetPersonaId: targetPersonaId,
         requestMessage: requestMessage,
         source: source,
+        intersectionRef: intersectionRef,
       ),
     );
     return GreetingRequestDto.fromContract(record);

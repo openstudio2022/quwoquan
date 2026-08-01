@@ -16,6 +16,7 @@ import (
 	asseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	uploaderrors "quwoquan_service/services/content-service/generated/media/media_upload_session"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 	mediaassetapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
 	"quwoquan_service/services/content-service/internal/media/media_upload_session/domain/model"
 	"quwoquan_service/services/content-service/internal/media/media_upload_session/domain/ports"
@@ -71,9 +72,10 @@ type InitCommand struct {
 }
 
 type CompleteCommand struct {
-	SessionID    string
-	OwnerID      string
-	AccessPolicy string
+	SessionID       string
+	OwnerID         string
+	AccessPolicy    string
+	CaptureMetadata mediamodel.CaptureMetadata
 }
 
 type AbortCommand struct {
@@ -246,6 +248,7 @@ func (s *UseCases) Complete(ctx context.Context, command CompleteCommand) (Comma
 			MediaType:       session.MediaType(),
 			MimeType:        session.MimeType(),
 			FileSize:        session.FileSize(),
+			CaptureMetadata: command.CaptureMetadata,
 			AccessPolicy:    command.AccessPolicy,
 			Now:             now,
 		},

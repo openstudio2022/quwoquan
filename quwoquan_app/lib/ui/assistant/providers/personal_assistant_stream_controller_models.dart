@@ -1,8 +1,6 @@
 part of 'personal_assistant_stream_controller.dart';
 
-enum PersonalAssistantTranscriptRole { user, assistant, system }
-
-enum _PersonalAssistantRetryKind { send, openTurn, history, switchConversation }
+enum _PersonalAssistantRetryKind { send, openRun, history, switchSession }
 
 const Object _unsetAssistantFailure = Object();
 
@@ -17,48 +15,11 @@ const String _assistantTurnResultSuccess = 'success';
 const String _assistantTurnResultFailure = 'failure';
 const String _assistantTurnResultCancelled = 'cancelled';
 
-class PersonalAssistantTranscriptItem {
-  const PersonalAssistantTranscriptItem({
-    required this.id,
-    required this.role,
-    required this.text,
-    this.turnId = '',
-    this.eventType = '',
-    this.proactive = false,
-    this.streaming = false,
-  });
-
-  final String id;
-  final PersonalAssistantTranscriptRole role;
-  final String text;
-  final String turnId;
-  final String eventType;
-  final bool proactive;
-  final bool streaming;
-
-  PersonalAssistantTranscriptItem copyWith({
-    String? text,
-    String? turnId,
-    String? eventType,
-    bool? proactive,
-    bool? streaming,
-  }) {
-    return PersonalAssistantTranscriptItem(
-      id: id,
-      role: role,
-      text: text ?? this.text,
-      turnId: turnId ?? this.turnId,
-      eventType: eventType ?? this.eventType,
-      proactive: proactive ?? this.proactive,
-      streaming: streaming ?? this.streaming,
-    );
-  }
-}
-
 class PersonalAssistantStreamState {
   const PersonalAssistantStreamState({
-    this.conversationId = '',
-    this.turnId = '',
+    this.sessionId = '',
+    this.runId = '',
+    this.runStatus = '',
     this.answer = '',
     this.transcript = const <AssistantTranscriptTimelineRow>[],
     this.processSummary = const PersonalAssistantProcessSummary(),
@@ -76,8 +37,9 @@ class PersonalAssistantStreamState {
     this.historyLoading = false,
   });
 
-  final String conversationId;
-  final String turnId;
+  final String sessionId;
+  final String runId;
+  final String runStatus;
   final String answer;
   final List<AssistantTranscriptTimelineRow> transcript;
   final PersonalAssistantProcessSummary processSummary;
@@ -95,8 +57,9 @@ class PersonalAssistantStreamState {
   final bool historyLoading;
 
   PersonalAssistantStreamState copyWith({
-    String? conversationId,
-    String? turnId,
+    String? sessionId,
+    String? runId,
+    String? runStatus,
     String? answer,
     List<AssistantTranscriptTimelineRow>? transcript,
     PersonalAssistantProcessSummary? processSummary,
@@ -114,8 +77,9 @@ class PersonalAssistantStreamState {
     bool? historyLoading,
   }) {
     return PersonalAssistantStreamState(
-      conversationId: conversationId ?? this.conversationId,
-      turnId: turnId ?? this.turnId,
+      sessionId: sessionId ?? this.sessionId,
+      runId: runId ?? this.runId,
+      runStatus: runStatus ?? this.runStatus,
       answer: answer ?? this.answer,
       transcript: transcript ?? this.transcript,
       processSummary: processSummary ?? this.processSummary,

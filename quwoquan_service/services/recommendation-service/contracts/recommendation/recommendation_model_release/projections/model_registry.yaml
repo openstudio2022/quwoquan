@@ -1,9 +1,5 @@
 read_model: ModelRegistry
-description: '推荐模型版本元信息。训练管线写入版本、scenario、指标、存储路径等；
-
-  模型文件存 OSS/TOS，推理服务按 production 标记热加载。
-
-  '
+description: RecommendationModelRelease 的当前生命周期投影；仅对象 Facade 写入，推理 Reader 只解析 status=active 的不可变 artifact。
 storage_backend: mongodb
 collection: rec_model_registry
 producers:
@@ -12,31 +8,39 @@ consumers:
 - recommendation-service
 fields:
 - name: _id
-  type: ObjectId
+  type: string
 - name: scenario
   type: string
-- name: version
+- name: modelDigest
   type: string
-- name: metrics
+- name: featureContractDigest
+  type: string
+- name: artifactUri
+  type: string
+- name: verificationDigest
+  type: string
+- name: evaluationMetrics
   type: object
-  description: 评估指标
-- name: artifactPath
+- name: status
   type: string
-  description: OSS/TOS 路径
-- name: production
-  type: bool
-  description: 是否当前生产流量
+- name: version
+  type: int64
 - name: createdAt
+  type: timestamp
+- name: activatedAt
+  type: timestamp
+- name: retiredAt
   type: timestamp
 - name: updatedAt
   type: timestamp
 indexes:
-- name: idx_scenario_production
+- name: idx_scenario_status_updated
   keys:
     scenario: 1
-    production: 1
-- name: idx_scenario_version
+    status: 1
+    updatedAt: -1
+- name: idx_scenario_model_digest
   keys:
     scenario: 1
-    version: 1
+    modelDigest: 1
   unique: true

@@ -1,6 +1,8 @@
 @file:Suppress("DEPRECATION")
 
 import com.flutter.gradle.tasks.FlutterTask
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -11,31 +13,142 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
+    val output =
+        providers.exec {
+            commandLine(
+                "python3",
+                rootProject.file("../scripts/device/build_launcher_handoff.py").absolutePath,
+                "--env",
+                "alpha",
+                "--target",
+                "alpha-local",
+                "--launch-mode",
+                "direct_flutter_run",
+                "--app-instance-id",
+                "direct-flutter-run",
+                "--app-instance-namespace",
+                "direct-flutter-run",
+            )
+            environment("PYTHONDONTWRITEBYTECODE", "1")
+        }.standardOutput.asText.get()
+    @Suppress("UNCHECKED_CAST")
+    return JsonSlurper().parseText(output) as Map<String, Any?>
+}
+
+fun handoffString(handoff: Map<String, Any?>?, key: String): String =
+    handoff?.get(key)?.toString()?.trim().orEmpty()
+
+fun handoffStringMap(handoff: Map<String, Any?>?, key: String): Map<String, String> =
+    (handoff?.get(key) as? Map<*, *>)
+        ?.entries
+        ?.associate { entry -> entry.key.toString() to entry.value.toString() }
+        .orEmpty()
+
 val googleServicesConfig = projectDir.resolve("google-services.json")
 val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.trim().orEmpty()
 val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
 val releaseKeyAlias = System.getenv("QWQ_ANDROID_RELEASE_KEY_ALIAS")?.trim().orEmpty()
 val releaseKeyPassword = System.getenv("QWQ_ANDROID_RELEASE_KEY_PASSWORD")?.trim().orEmpty()
-val appRuntimeEnvironment = System.getenv("QWQ_APP_RUNTIME_ENV")?.trim().orEmpty()
-val effectiveAppRuntimeEnvironment = appRuntimeEnvironment.ifEmpty { "alpha" }
-val appLaunchTarget = System.getenv("QWQ_LAUNCH_TARGET")?.trim().orEmpty()
-val appBuildContext = System.getenv("QWQ_APP_BUILD_CONTEXT")?.trim().orEmpty()
-val dartDefinesDigest = System.getenv("QWQ_DART_DEFINES_DIGEST")?.trim().orEmpty()
-val expectedRuntimeConfigDigest =
+val explicitAppRuntimeEnvironment = System.getenv("QWQ_APP_RUNTIME_ENV")?.trim().orEmpty()
+val explicitAppLaunchTarget = System.getenv("QWQ_LAUNCH_TARGET")?.trim().orEmpty()
+val explicitAppLaunchMode = System.getenv("QWQ_APP_LAUNCH_MODE")?.trim().orEmpty()
+val explicitAppBuildContext = System.getenv("QWQ_APP_BUILD_CONTEXT")?.trim().orEmpty()
+val explicitDartDefinesDigest = System.getenv("QWQ_DART_DEFINES_DIGEST")?.trim().orEmpty()
+val explicitRuntimeConfigDigest =
     System.getenv("QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST")?.trim().orEmpty()
-val effectiveLaunchManifestDigest =
+val explicitEffectiveLaunchManifestDigest =
     System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")?.trim().orEmpty()
+val directDebugHandoff =
+    if (
+        listOf(
+            explicitAppRuntimeEnvironment,
+            explicitAppLaunchTarget,
+            explicitAppLaunchMode,
+            explicitAppBuildContext,
+            explicitDartDefinesDigest,
+            explicitRuntimeConfigDigest,
+            explicitEffectiveLaunchManifestDigest,
+        ).all { it.isEmpty() }
+    ) {
+        buildCanonicalDirectDebugHandoff()
+    } else {
+        null
+    }
+val isDirectDebugHandoff = directDebugHandoff != null
+val appRuntimeEnvironment =
+    explicitAppRuntimeEnvironment.ifEmpty {
+        handoffString(directDebugHandoff, "environment")
+    }
+val effectiveAppRuntimeEnvironment = appRuntimeEnvironment.ifEmpty { "alpha" }
+val appLaunchTarget =
+    explicitAppLaunchTarget.ifEmpty { handoffString(directDebugHandoff, "target") }
+val appBuildContext =
+    explicitAppBuildContext.ifEmpty {
+        if (isDirectDebugHandoff) "direct-debug" else ""
+    }
+val dartDefinesDigest =
+    explicitDartDefinesDigest.ifEmpty {
+        handoffString(directDebugHandoff, "dartDefinesDigest")
+    }
+val expectedRuntimeConfigDigest =
+    explicitRuntimeConfigDigest.ifEmpty {
+        handoffString(directDebugHandoff, "runtimeConfigDigest")
+    }
+val effectiveLaunchManifestDigest =
+    explicitEffectiveLaunchManifestDigest.ifEmpty {
+        handoffString(directDebugHandoff, "effectiveLaunchManifestDigest")
+    }
 require(effectiveAppRuntimeEnvironment in setOf("alpha", "beta", "gamma", "prod")) {
     "QWQ_APP_RUNTIME_ENV must be alpha|beta|gamma|prod"
 }
 val runNativeStartupInstrumentation =
     providers.gradleProperty("qwq.nativeStartupInstrumentation").orNull == "true"
 val nativeRecoveryBaseUrl =
-    System.getenv("QWQ_APP_RECOVERY_BASE_URL")?.trim().orEmpty()
+    System.getenv("QWQ_APP_RECOVERY_BASE_URL")?.trim().orEmpty().ifEmpty {
+        handoffString(directDebugHandoff, "recoveryBaseUrl")
+    }
 val nativePublicWebUrl =
-    System.getenv("QWQ_APP_PUBLIC_WEB_URL")?.trim().orEmpty()
+    System.getenv("QWQ_APP_PUBLIC_WEB_URL")?.trim().orEmpty().ifEmpty {
+        handoffString(directDebugHandoff, "publicWebBaseUrl")
+    }
 val nativeAppDownloadBaseUrl =
-    System.getenv("QWQ_APP_DOWNLOAD_BASE_URL")?.trim().orEmpty()
+    System.getenv("QWQ_APP_DOWNLOAD_BASE_URL")?.trim().orEmpty().ifEmpty {
+        handoffString(directDebugHandoff, "appDownloadBaseUrl")
+    }
+val nativeRuntimeDefineKeys =
+    setOf(
+        "APP_RUNTIME_ENV",
+        "CLOUD_GATEWAY_BASE_URL",
+        "APP_LEGAL_BASE_URL",
+        "PUBLIC_WEB_BASE_URL",
+        "APP_DOWNLOAD_BASE_URL",
+        "REALTIME_CONNECTION_URL",
+        "MEDIA_AVATAR_CDN_BASE_URL",
+        "MEDIA_IMAGE_CDN_BASE_URL",
+        "MEDIA_VIDEO_CDN_BASE_URL",
+        "MEDIA_UPLOAD_BASE_URL",
+        "RTC_MEDIA_CONNECTION_URL",
+        "QWQ_APP_LAUNCH_MODE",
+    )
+val suppliedRuntimeDefines =
+    decodeDartDefines(providers.gradleProperty("dart-defines").orNull)
+        .mapNotNull { define ->
+            val separator = define.indexOf("=")
+            if (separator <= 0) {
+                null
+            } else {
+                define.substring(0, separator) to define.substring(separator + 1)
+            }
+        }
+        .toMap()
+val nativeRuntimeDefines =
+    (if (isDirectDebugHandoff) {
+        handoffStringMap(directDebugHandoff, "dartDefines")
+    } else {
+        suppliedRuntimeDefines
+    }).filterKeys { it in nativeRuntimeDefineKeys }
+val nativeRuntimeDefinesJson = JsonOutput.toJson(nativeRuntimeDefines.toSortedMap())
 val releaseSigningConfigured =
     releaseKeystorePath.isNotEmpty() &&
         releaseKeystorePassword.isNotEmpty() &&
@@ -81,7 +194,7 @@ gradle.taskGraph.whenReady {
                 "QWQ_ANDROID_RELEASE_KEY_PASSWORD; debug signing is forbidden",
         )
     }
-    if (shipsProductionBinary && appRuntimeEnvironment.isEmpty()) {
+    if (shipsProductionBinary && explicitAppRuntimeEnvironment.isEmpty()) {
         throw GradleException(
             "production Android release requires explicit QWQ_APP_RUNTIME_ENV",
         )
@@ -117,13 +230,14 @@ val flutterTargetAndroidAbis =
         }
         ?.distinct()
         .orEmpty()
-fun escapedBuildConfigString(name: String): String {
-    val value = System.getenv(name)?.trim().orEmpty()
+fun escapedBuildConfigValue(value: String): String {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
+fun escapedBuildConfigString(name: String): String =
+    escapedBuildConfigValue(System.getenv(name)?.trim().orEmpty())
 fun escapedBuildConfigString(name: String, defaultValue: String): String {
     val value = System.getenv(name)?.trim().takeUnless { it.isNullOrEmpty() } ?: defaultValue
-    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    return escapedBuildConfigValue(value)
 }
 android {
     namespace = "com.quwoquan.quwoquan_app"
@@ -166,17 +280,17 @@ android {
         buildConfigField(
             "String",
             "QWQ_RECOVERY_BASE_URL",
-            escapedBuildConfigString("QWQ_APP_RECOVERY_BASE_URL"),
+            escapedBuildConfigValue(nativeRecoveryBaseUrl),
         )
         buildConfigField(
             "String",
             "QWQ_PUBLIC_WEB_URL",
-            escapedBuildConfigString("QWQ_APP_PUBLIC_WEB_URL"),
+            escapedBuildConfigValue(nativePublicWebUrl),
         )
         buildConfigField(
             "String",
             "QWQ_APP_DOWNLOAD_BASE_URL",
-            escapedBuildConfigString("QWQ_APP_DOWNLOAD_BASE_URL"),
+            escapedBuildConfigValue(nativeAppDownloadBaseUrl),
         )
         buildConfigField(
             "String",
@@ -202,6 +316,11 @@ android {
             "String",
             "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
             "\"${effectiveLaunchManifestDigest.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
+        )
+        buildConfigField(
+            "String",
+            "QWQ_RUNTIME_DART_DEFINES_JSON",
+            escapedBuildConfigValue(nativeRuntimeDefinesJson),
         )
         // Patrol remains the default runner for Dart tests. Native Gate tests
         // explicitly select AndroidJUnitRunner so they can validate recovery
@@ -332,14 +451,10 @@ fun requireCompleteRuntimeDartDefines(
 
 val verifyAndroidLocalLauncherContract by tasks.registering {
     doLast {
-        val runtimeEnvironment =
-            providers.environmentVariable("QWQ_APP_RUNTIME_ENV").orElse("").get().trim()
-        val launchTarget =
-            providers.environmentVariable("QWQ_LAUNCH_TARGET").orElse("").get().trim()
-        val buildContext =
-            providers.environmentVariable("QWQ_APP_BUILD_CONTEXT").orElse("").get().trim()
-        val defineDigest =
-            providers.environmentVariable("QWQ_DART_DEFINES_DIGEST").orElse("").get().trim()
+        val runtimeEnvironment = appRuntimeEnvironment
+        val launchTarget = appLaunchTarget
+        val buildContext = appBuildContext
+        val defineDigest = dartDefinesDigest
         val deviceID =
             providers.environmentVariable("QWQ_RUN_DEVICE_ID").orElse("").get().trim()
         val serial =
@@ -384,6 +499,39 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
             effectiveLaunchManifestDigest.matches(Regex("sha256:[0-9a-f]{64}")),
         ) {
             "GATE_BLOCK: canonical effective launch manifest digest is missing."
+        }
+        if (buildContext == "direct-debug") {
+            check(
+                isDirectDebugHandoff &&
+                    runtimeEnvironment == "alpha" &&
+                    launchTarget == "alpha-local",
+            ) {
+                "GATE_BLOCK: direct Flutter Debug must use the canonical alpha-local handoff."
+            }
+            val trustCommand =
+                mutableListOf(
+                    "python3",
+                    rootProject.file("../../quwoquan_ops/cli/stackctl.py").absolutePath,
+                    "--output-format",
+                    "json",
+                    "device-trust",
+                    "--target",
+                    "alpha-local",
+                    "--platform",
+                    "android-emulator",
+                    "--action",
+                    "install",
+                    "--lease-id",
+                    "direct-flutter-run:${serial.ifEmpty { "auto" }}",
+                )
+            if (serial.isNotEmpty()) {
+                trustCommand.addAll(listOf("--device", serial))
+            }
+            exec {
+                commandLine(trustCommand)
+                standardOutput = ByteArrayOutputStream()
+            }
+            return@doLast
         }
         if (buildContext == "package-only") {
             return@doLast
@@ -462,11 +610,29 @@ afterEvaluate {
         ) {
             dependsOn(verifyAndroidLocalLauncherContract)
             doFirst {
-                requireCompleteRuntimeDartDefines(
-                    dartDefines,
-                    name,
-                    expectedEnvironment = effectiveAppRuntimeEnvironment,
-                )
+                if (isDirectDebugHandoff) {
+                    check(name.contains("Debug", ignoreCase = true)) {
+                        "GATE_BLOCK: direct Flutter handoff is supported only for Debug; " +
+                            "Profile requires an explicit canonical launcher handoff."
+                    }
+                    val suppliedKeys =
+                        decodeDartDefines(dartDefines)
+                            .mapNotNull { define -> define.substringBefore("=", "").ifEmpty { null } }
+                            .filter { it in nativeRuntimeDefineKeys }
+                    check(suppliedKeys.isEmpty()) {
+                        "GATE_BLOCK: direct Flutter Debug cannot mix synthesized Alpha " +
+                            "with explicit runtime dart-defines: " + suppliedKeys.joinToString(", ")
+                    }
+                    logger.lifecycle(
+                        "[android-runtime] direct Debug uses canonical alpha-local handoff.",
+                    )
+                } else {
+                    requireCompleteRuntimeDartDefines(
+                        dartDefines,
+                        name,
+                        expectedEnvironment = effectiveAppRuntimeEnvironment,
+                    )
+                }
             }
         }
         if (name.contains("Release", ignoreCase = true)) {

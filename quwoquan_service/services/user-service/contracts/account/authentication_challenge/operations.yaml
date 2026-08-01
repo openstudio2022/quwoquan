@@ -1,4 +1,10 @@
 description: AuthenticationChallenge 对象专属 command packet。
+externalDependencies:
+  - role: use
+    capability: identity.sms.otp
+    port: SmsDeliveryPort
+    operations: [sendOtp]
+    scenes: [phone_otp_delivery]
 commercial_defaults:
   status: blocked
   block_reason: operation must carry explicit commercial evidence before enablement

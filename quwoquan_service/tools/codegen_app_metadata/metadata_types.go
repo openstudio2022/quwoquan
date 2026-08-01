@@ -43,6 +43,7 @@ type fieldDef struct {
 	ClientOmitEmpty     bool              `yaml:"client_omit_empty"`
 	ClientSpreadBody    bool              `yaml:"client_spread_body"`
 	ItemEntity          string            `yaml:"item_entity"`
+	MaxUTF8Bytes        int               `yaml:"max_utf8_bytes"`
 }
 
 type entityDef struct {
@@ -144,6 +145,7 @@ type integrationLocationServiceFile struct {
 
 type projectionFieldDef struct {
 	Name        string `yaml:"name"`
+	WireName    string `yaml:"wire_name"`
 	DartType    string `yaml:"dart_type"`
 	WireType    string `yaml:"type"`
 	EnumRef     string `yaml:"enum_ref"`

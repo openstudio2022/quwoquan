@@ -8,13 +8,19 @@ import 'package:hive/hive.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    show AssistantDeviceActionExecutionReceipt;
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
     show actorQueueStorageProvider;
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/platform/assistant_device_action_bridge.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -39,7 +45,7 @@ class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
     return null;
   }
@@ -86,7 +92,7 @@ void main() {
       addTearDown(container.dispose);
 
       expect(
-        container.read(assistantConversationRunFacetProvider),
+        container.read(assistantSessionRunFacetProvider),
         isA<AlphaAssistantFacets>(),
       );
 
@@ -95,7 +101,7 @@ void main() {
           .send(scenario.question);
 
       final state = container.read(personalAssistantStreamControllerProvider);
-      expect(state.turnId, 'atn_fixture_${scenario.id}');
+      expect(state.runId, 'arn_fixture_${scenario.id}');
       expect(state.answer, scenario.alphaMockStream.finalAnswer);
       expect(state.transcript, hasLength(2));
       expect(state.transcript.first, isA<UserTranscriptTimelineRow>());
@@ -153,12 +159,12 @@ void main() {
       expect(assistantRow.content, '你好，我是找私助。');
       expect(assistantRow.streaming, isFalse);
       expect(state.events.map((event) => event.seq), <int>[1, 2, 3]);
-      expect(state.conversationId, 'acv_test_personal');
-      expect(state.turnId, 'atn_test_personal');
+      expect(state.sessionId, 'asn_test_personal');
+      expect(state.runId, 'arn_test_personal');
     });
 
     test(
-      'retries one command identity without creating a second conversation',
+      'retries one command identity without creating a second session',
       () async {
         final repository = _FakeAssistantRepository(
           events: <AssistantStreamEventWire>[
@@ -186,14 +192,12 @@ void main() {
 
         await controller.retryLastFailedAction();
 
-        expect(repository.createdConversationRequestIds, hasLength(1));
+        expect(repository.createdSessionRequestIds, hasLength(1));
         expect(repository.startedRunClientRequestIds, hasLength(2));
         expect(repository.startedRunClientRequestIds.toSet(), hasLength(1));
         expect(
-          container
-              .read(personalAssistantStreamControllerProvider)
-              .conversationId,
-          'acv_test_personal',
+          container.read(personalAssistantStreamControllerProvider).sessionId,
+          'asn_test_personal',
         );
         expect(
           container
@@ -205,7 +209,7 @@ void main() {
     );
 
     test(
-      'retries an unacknowledged conversation creation with the same intent',
+      'retries an unacknowledged session creation with the same intent',
       () async {
         final repository = _FakeAssistantRepository(
           events: <AssistantStreamEventWire>[
@@ -216,7 +220,7 @@ void main() {
               payload: const <String, dynamic>{'text': '会话重试成功'},
             ),
           ],
-        )..createConversationFailuresRemaining = 1;
+        )..createSessionFailuresRemaining = 1;
         final container = _containerWith(assistantRepository: repository);
         addTearDown(container.dispose);
         final controller = container.read(
@@ -233,14 +237,12 @@ void main() {
 
         await controller.retryLastFailedAction();
 
-        expect(repository.createdConversationRequestIds, hasLength(2));
-        expect(repository.createdConversationRequestIds.toSet(), hasLength(1));
+        expect(repository.createdSessionRequestIds, hasLength(2));
+        expect(repository.createdSessionRequestIds.toSet(), hasLength(1));
         expect(repository.startedRunClientRequestIds, hasLength(1));
         expect(
-          container
-              .read(personalAssistantStreamControllerProvider)
-              .conversationId,
-          'acv_test_personal',
+          container.read(personalAssistantStreamControllerProvider).sessionId,
+          'asn_test_personal',
         );
         expect(
           container
@@ -333,7 +335,7 @@ void main() {
       );
       expect(repository.reportedPageContext?.source, AssistantSource.search);
       expect(repository.reportedPageContextActions, <String>[
-        'open_assistant_conversation',
+        'open_assistant_session',
       ]);
     });
 
@@ -941,11 +943,11 @@ void main() {
 
       await container
           .read(personalAssistantStreamControllerProvider.notifier)
-          .openTurnFromAppMessage('atn_test_personal');
+          .openRunFromAppMessage('arn_test_personal');
 
       final state = container.read(personalAssistantStreamControllerProvider);
-      expect(state.turnId, 'atn_test_personal');
-      expect(state.conversationId, 'acv_mock_personal_assistant');
+      expect(state.runId, 'arn_test_personal');
+      expect(state.sessionId, 'asn_mock_personal_assistant');
       expect(state.answer, contains('已打开主动提醒'));
       expect(
         state.transcript.map(
@@ -1034,12 +1036,12 @@ void main() {
 
       expect(repository.learningFacts, hasLength(1));
       final fact = repository.learningFacts.single;
-      expect(fact.eventId, 'fb:atn_test_personal:useful');
-      expect(fact.assistantTurnId, 'atn_test_personal');
+      expect(fact.eventId, 'fb:arn_test_personal:useful');
+      expect(fact.assistantTurnId, 'arn_test_personal');
       expect(fact.factType, AssistantLearningFactType.userFeedback.wireName);
       expect(
         fact.referralSource,
-        AssistantReferralSource.assistantConversation.wireName,
+        AssistantReferralSource.assistantSession.wireName,
       );
       expect(fact.domainId, 'assistant');
       expect(fact.feedbackType, FeedbackType.useful.wireName);
@@ -1096,7 +1098,7 @@ void main() {
       expect(controller.pendingFeedbackEventCount, 0);
       expect(
         repository.learningFacts.map((fact) => fact.eventId),
-        contains('fb:atn_test_personal:irrelevant'),
+        contains('fb:arn_test_personal:irrelevant'),
       );
       state = container.read(personalAssistantStreamControllerProvider);
       expect(state.feedbackMessage, isEmpty);
@@ -1127,7 +1129,7 @@ void main() {
 
       repository
         ..failLearningFactAppend = false
-        ..rejectedLearningFactIds.add('fb:atn_test_personal:irrelevant');
+        ..rejectedLearningFactIds.add('fb:arn_test_personal:irrelevant');
       await controller.send('第二轮');
       await _flushLearningFactOutbox(container);
       await pumpEventQueue();
@@ -1136,8 +1138,8 @@ void main() {
       expect(
         repository.learningFacts.map((fact) => fact.eventId),
         containsAll(<String>[
-          'fb:atn_test_personal:useful',
-          'fb:atn_test_personal:irrelevant',
+          'fb:arn_test_personal:useful',
+          'fb:arn_test_personal:irrelevant',
         ]),
       );
 
@@ -1149,7 +1151,7 @@ void main() {
       expect(controller.pendingFeedbackEventCount, 0);
       expect(
         repository.learningFacts.last.eventId,
-        'fb:atn_test_personal:irrelevant',
+        'fb:arn_test_personal:irrelevant',
       );
     });
 
@@ -1320,7 +1322,7 @@ void main() {
       expect(assistantRow.streaming, isFalse);
     });
 
-    test('switchConversation 经 loader 恢复指定会话并绑定 conversationId', () async {
+    test('switchSession 经 loader 恢复指定会话并绑定 sessionId', () async {
       final historyLoader = _SwitchRecordingHistoryLoader(
         snapshot: await _buildAssistantHistorySnapshot(),
       );
@@ -1335,19 +1337,17 @@ void main() {
         personalAssistantStreamControllerProvider.notifier,
       );
 
-      await notifier.switchConversation('conv_target_001');
+      await notifier.switchSession('asn_target_001');
 
       final state = container.read(personalAssistantStreamControllerProvider);
-      expect(historyLoader.requestedConversationIds, <String>[
-        'conv_target_001',
-      ]);
-      expect(state.conversationId, 'conv_target_001');
+      expect(historyLoader.requestedSessionIds, <String>['asn_target_001']);
+      expect(state.sessionId, 'asn_target_001');
       expect(state.historyInitialized, isTrue);
       expect(state.historyLoading, isFalse);
       expect(state.transcript, isNotEmpty);
     });
 
-    test('startNewConversation 清空会话状态供下次 send 新建云端会话', () async {
+    test('startNewSession 清空会话状态供下次 send 新建云端会话', () async {
       final historyLoader = _FakeAssistantHistoryLoader(
         snapshot: await _buildAssistantHistorySnapshot(),
       );
@@ -1364,22 +1364,20 @@ void main() {
 
       await notifier.ensureHistoryInitialized();
       expect(
-        container
-            .read(personalAssistantStreamControllerProvider)
-            .conversationId,
-        'restored_conversation_001',
+        container.read(personalAssistantStreamControllerProvider).sessionId,
+        'restored_session_001',
       );
 
-      notifier.startNewConversation();
+      notifier.startNewSession();
 
       final state = container.read(personalAssistantStreamControllerProvider);
-      expect(state.conversationId, isEmpty);
-      expect(state.turnId, isEmpty);
+      expect(state.sessionId, isEmpty);
+      expect(state.runId, isEmpty);
       expect(state.transcript, isEmpty);
       expect(state.historyInitialized, isTrue);
     });
 
-    test('ensureHistoryInitialized 绑定最近云端会话 conversationId 供续聊', () async {
+    test('ensureHistoryInitialized 绑定最近云端会话 sessionId 供续聊', () async {
       final container = _containerWith(
         assistantRepository: _FakeAssistantRepository(
           events: const <AssistantStreamEventWire>[],
@@ -1395,10 +1393,8 @@ void main() {
           .ensureHistoryInitialized();
 
       expect(
-        container
-            .read(personalAssistantStreamControllerProvider)
-            .conversationId,
-        'restored_conversation_001',
+        container.read(personalAssistantStreamControllerProvider).sessionId,
+        'restored_session_001',
       );
     });
 
@@ -1441,25 +1437,236 @@ void main() {
           .toList();
       expect(regenerated, isNotEmpty);
     });
+
+    test('presentation typed action 只续接 allowlisted tool use', () async {
+      final repository = _FakeAssistantRepository(
+        events: const <AssistantStreamEventWire>[],
+      );
+      final deviceActions = _RecordingAssistantDeviceActionBridge();
+      final container = _containerWith(
+        assistantRepository: repository,
+        deviceActionBridge: deviceActions,
+        platformCapabilities: CapabilityProfile.mobile,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      const validAction = AssistantActionIntentWire(
+        intentId: 'continue_calendar',
+        operation: 'ContinueAssistantToolUse',
+        objectTypeRef: 'assistant_tool_use',
+        objectId: 'tool_calendar',
+        payload: <String, dynamic>{
+          'decision': 'approved',
+          'continuationToken': 'continuation_calendar',
+          'deviceAction': <String, dynamic>{
+            'kind': 'calendar_create_reminder',
+            'idempotencyKey': 'tool_calendar',
+            'input': <String, dynamic>{
+              'title': '产品评审',
+              'startsAt': '2026-08-01T09:00:00+08:00',
+              'durationMinutes': 60,
+              'reminderMinutes': 10,
+              'notes': '确认 M0 准出',
+            },
+          },
+        },
+        requiresConfirmation: true,
+      );
+
+      expect(notifier.canHandlePresentationAction(validAction), isTrue);
+      await notifier.handlePresentationAction(
+        runId: 'arn_action',
+        action: validAction,
+      );
+      expect(repository.continuedToolUses, hasLength(1));
+      expect(repository.continuedToolUses.single.runId, 'arn_action');
+      expect(repository.continuedToolUses.single.toolUseId, 'tool_calendar');
+      expect(repository.continuedToolUses.single.decision, 'approved');
+      expect(
+        repository.continuedToolUses.single.executionReceipt?.outcome,
+        'completed',
+      );
+      expect(
+        repository.continuedToolUses.single.executionReceipt?.deviceObjectId,
+        'calendar_event_1',
+      );
+      expect(deviceActions.requests.single.title, '产品评审');
+
+      const unknownAction = AssistantActionIntentWire(
+        intentId: 'unknown_action',
+        operation: 'OpenUnknownRoute',
+        objectTypeRef: 'assistant_tool_use',
+        objectId: 'tool_unknown',
+        payload: <String, dynamic>{
+          'decision': 'approved',
+          'continuationToken': 'continuation_unknown',
+        },
+      );
+      expect(notifier.canHandlePresentationAction(unknownAction), isFalse);
+      await notifier.handlePresentationAction(
+        runId: 'arn_action',
+        action: unknownAction,
+      );
+      expect(repository.continuedToolUses, hasLength(1));
+    });
+
+    test('device action capability 不可用时拒绝续接且不伪成功', () async {
+      final repository = _FakeAssistantRepository(
+        events: const <AssistantStreamEventWire>[],
+      );
+      final deviceActions = _RecordingAssistantDeviceActionBridge();
+      final container = _containerWith(
+        assistantRepository: repository,
+        deviceActionBridge: deviceActions,
+        platformCapabilities: CapabilityProfile.web,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      const action = AssistantActionIntentWire(
+        intentId: 'continue_calendar_unavailable',
+        operation: 'ContinueAssistantToolUse',
+        objectTypeRef: 'assistant_tool_use',
+        objectId: 'tool_calendar_unavailable',
+        payload: <String, dynamic>{
+          'decision': 'approved',
+          'continuationToken': 'continuation_calendar_unavailable',
+          'deviceAction': <String, dynamic>{
+            'kind': 'calendar_create_reminder',
+            'idempotencyKey': 'tool_calendar_unavailable',
+            'input': <String, dynamic>{
+              'title': '产品评审',
+              'startsAt': '2026-08-01T09:00:00+08:00',
+            },
+          },
+        },
+        requiresConfirmation: true,
+      );
+
+      await notifier.handlePresentationAction(
+        runId: 'arn_action_unavailable',
+        action: action,
+      );
+
+      expect(deviceActions.requests, isEmpty);
+      expect(repository.continuedToolUses.single.decision, 'rejected');
+      expect(
+        repository.continuedToolUses.single.executionReceipt?.outcome,
+        'unavailable',
+      );
+      expect(
+        repository.continuedToolUses.single.executionReceipt?.failureCode,
+        'ASSISTANT.SYSTEM.device_action_unavailable',
+      );
+      expect(
+        container.read(personalAssistantStreamControllerProvider).errorMessage,
+        AssistantText.assistantDeviceActionUnavailable,
+      );
+    });
+
+    test('事实候选仅在 typed confirmation 批准后写入长期记忆', () async {
+      final repository = _FakeAssistantRepository(
+        events: const <AssistantStreamEventWire>[],
+      );
+      final container = _containerWith(assistantRepository: repository);
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      const approved = AssistantActionIntentWire(
+        intentId: 'confirm_memory_hangzhou',
+        operation: 'SetAssistantPreference',
+        objectTypeRef: 'assistant_preference_candidate',
+        objectId: 'memory_candidate_hangzhou',
+        payload: <String, dynamic>{
+          'decision': 'approved',
+          'kind': 'frequent_locations',
+          'value': '杭州',
+          'sourceSessionId': 'asn_memory_source',
+        },
+        requiresConfirmation: true,
+      );
+      expect(notifier.canHandlePresentationAction(approved), isTrue);
+      await notifier.handlePresentationAction(
+        runId: 'arn_memory_confirmation',
+        action: approved,
+      );
+
+      final memories = await repository.listAssistantPreferences(
+        scope: AssistantPreferenceScope.longTerm,
+      );
+      expect(memories, hasLength(1));
+      expect(memories.single.kind, AssistantPreferenceKind.frequentLocations);
+      expect(
+        memories.single.sourceType,
+        AssistantPreferenceSourceType.sessionConfirmed,
+      );
+      expect(memories.single.sourceSessionId, 'asn_memory_source');
+      expect(memories.single.confirmedAt, isNotNull);
+
+      const rejected = AssistantActionIntentWire(
+        intentId: 'reject_memory_beijing',
+        operation: 'SetAssistantPreference',
+        objectTypeRef: 'assistant_preference_candidate',
+        objectId: 'memory_candidate_beijing',
+        payload: <String, dynamic>{
+          'decision': 'rejected',
+          'kind': 'frequent_locations',
+          'value': '北京',
+          'sourceSessionId': 'asn_memory_source',
+        },
+        requiresConfirmation: true,
+      );
+      await notifier.handlePresentationAction(
+        runId: 'arn_memory_confirmation',
+        action: rejected,
+      );
+      expect(
+        await repository.listAssistantPreferences(
+          scope: AssistantPreferenceScope.longTerm,
+        ),
+        hasLength(1),
+      );
+    });
   });
 }
 
-/// 记录 switchConversation 请求的 loader 桩。
+/// 记录 switchSession 请求的 loader 桩。
 class _SwitchRecordingHistoryLoader implements AssistantHistoryLoader {
   _SwitchRecordingHistoryLoader({this.snapshot});
 
   final AssistantHistorySnapshot? snapshot;
-  final List<String> requestedConversationIds = <String>[];
+  final List<String> requestedSessionIds = <String>[];
 
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
-    if (conversationId.isNotEmpty) {
-      requestedConversationIds.add(conversationId);
+    if (sessionId.isNotEmpty) {
+      requestedSessionIds.add(sessionId);
     }
     return snapshot;
+  }
+}
+
+class _RecordingAssistantDeviceActionBridge
+    implements AssistantDeviceActionBridge {
+  final List<AssistantCalendarReminderRequest> requests =
+      <AssistantCalendarReminderRequest>[];
+
+  @override
+  Future<AssistantDeviceActionResult> createCalendarReminder(
+    AssistantCalendarReminderRequest request,
+  ) async {
+    requests.add(request);
+    return const AssistantDeviceActionResult(
+      status: AssistantDeviceActionStatus.created,
+      deviceObjectId: 'calendar_event_1',
+    );
   }
 }
 
@@ -1469,6 +1676,8 @@ ProviderContainer _containerWith({
   AssistantHistoryLoader? historyLoader,
   BehaviorRepository? behaviorRepository,
   RecordingAppTelemetryRecorder? telemetryRecorder,
+  AssistantDeviceActionBridge? deviceActionBridge,
+  PlatformCapabilities? platformCapabilities,
 }) {
   return ProviderContainer(
     overrides: [
@@ -1477,6 +1686,12 @@ ProviderContainer _containerWith({
       assistantLearningFactOutboxEnvironmentProvider.overrideWithValue('alpha'),
       currentUserIdProvider.overrideWithValue('persona_test'),
       resolvedOwnerUserIdProvider.overrideWithValue('user_test'),
+      if (deviceActionBridge != null)
+        assistantDeviceActionBridgeProvider.overrideWithValue(
+          deviceActionBridge,
+        ),
+      if (platformCapabilities != null)
+        platformCapabilitiesProvider.overrideWithValue(platformCapabilities),
       appMessageQueryProvider.overrideWithValue(
         appMessageQuery ?? _FakeAppMessageQuery(),
       ),
@@ -1503,13 +1718,13 @@ Future<void> _flushLearningFactOutbox(ProviderContainer container) =>
     container.read(assistantLearningFactOutboxProvider.notifier).flush();
 
 Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
-  // 云端历史恢复真相源：CloudAssistantHistoryLoader 消费 List conversations/turns
+  // 云端历史恢复真相源：CloudAssistantHistoryLoader 消费 List sessions/turns
   // 查询面（与 api_integration 断言的服务端行为同源）。
-  const conversationId = 'restored_conversation_001';
+  const sessionId = 'restored_session_001';
   final loader = CloudAssistantHistoryLoader(
     _HistoryFacetStub(
-      conversation: AssistantConversationWire(
-        conversationId: conversationId,
+      session: AssistantSessionWire(
+        sessionId: sessionId,
         userId: 'user_test',
         summary: '深圳天气',
         createdAt: '2026-07-20T10:00:00Z',
@@ -1518,7 +1733,7 @@ Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
       turns: const <AssistantTurnSummaryView>[
         AssistantTurnSummaryView(
           turnId: 'turn_restored_001',
-          conversationId: conversationId,
+          sessionId: sessionId,
           status: 'completed',
           inputText: '旧问题：深圳天气',
           terminalSnapshot: AssistantRunTerminalSnapshotView(
@@ -1535,27 +1750,25 @@ Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
   return snapshot!;
 }
 
-/// 只服务历史恢复断言的最小 Facet 桩：List conversations/turns 返回预置数据，
+/// 只服务历史恢复断言的最小 Facet 桩：List sessions/turns 返回预置数据，
 /// 其余方法不应被 loader 触达。
 class _HistoryFacetStub extends AlphaAssistantFacets {
-  _HistoryFacetStub({required this.conversation, required this.turns});
+  _HistoryFacetStub({required this.session, required this.turns});
 
-  final AssistantConversationWire conversation;
+  final AssistantSessionWire session;
   final List<AssistantTurnSummaryView> turns;
 
   @override
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    return AssistantConversationListPage(
-      items: <AssistantConversationWire>[conversation],
-    );
+    return AssistantSessionListPage(items: <AssistantSessionWire>[session]);
   }
 
   @override
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
@@ -1578,8 +1791,8 @@ AssistantStreamEventWire _event({
   return AssistantStreamEventWire(
     schema: 'assistant_stream_event',
     eventId: 'evt_$seq',
-    conversationId: 'acv_test_personal',
-    turnId: 'atn_test_personal',
+    sessionId: 'asn_test_personal',
+    runId: 'arn_test_personal',
     seq: seq,
     eventType: parseAssistantStreamEventTypeStrict(eventType),
     payload: wirePayload,
@@ -1593,17 +1806,17 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
 
   final List<AssistantStreamEventWire> events;
   int _turnCounter = 0;
-  int createConversationFailuresRemaining = 0;
+  int createSessionFailuresRemaining = 0;
   int startRunFailuresRemaining = 0;
   bool failPageContextReport = false;
-  final List<String> createdConversationRequestIds = <String>[];
+  final List<String> createdSessionRequestIds = <String>[];
   final List<String> startedRunClientRequestIds = <String>[];
   final List<String> callOrder = <String>[];
   final List<String> reportedPageContextActions = <String>[];
   AssistantOpenContext? reportedPageContext;
 
   @override
-  Future<PageContextAck> reportPageContext({
+  Future<PageContextReceipt> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
   }) async {
@@ -1613,7 +1826,11 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
     if (failPageContextReport) {
       throw StateError('page context unavailable (test)');
     }
-    return const PageContextAck(accepted: true, contextKey: 'ctx_test');
+    return const PageContextReceipt(
+      accepted: true,
+      contextKey: 'ctx_test',
+      expiresAt: null,
+    );
   }
 
   /// 记录单轨学习事实 command；可按 eventId 模拟失败以覆盖重试语义。
@@ -1643,17 +1860,17 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
   }
 
   @override
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   }) async {
-    createdConversationRequestIds.add(clientRequestId);
-    if (createConversationFailuresRemaining > 0) {
-      createConversationFailuresRemaining -= 1;
-      throw StateError('assistant conversation unavailable (test)');
+    createdSessionRequestIds.add(clientRequestId);
+    if (createSessionFailuresRemaining > 0) {
+      createSessionFailuresRemaining -= 1;
+      throw StateError('assistant session unavailable (test)');
     }
-    return const AssistantConversationWire(
-      conversationId: 'acv_test_personal',
+    return const AssistantSessionWire(
+      sessionId: 'asn_test_personal',
       userId: 'user_test',
       createdAt: '2026-04-29T00:00:00Z',
       updatedAt: '2026-04-29T00:00:00Z',
@@ -1666,8 +1883,8 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
       const <AssistantIntersectionEvidenceRef>[];
 
   @override
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
     String turnType = 'user',
@@ -1688,13 +1905,12 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
       startRunFailuresRemaining -= 1;
       throw StateError('assistant start unavailable (test)');
     }
-    return AssistantTurnEnvelopeWire(
-      turnId: _turnCounter == 1
-          ? 'atn_test_personal'
-          : 'atn_test_personal_$_turnCounter',
-      conversationId: conversationId,
-      turnType: turnType,
-      input: AssistantTurnInputWire(text: text),
+    return AssistantRunEnvelopeWire(
+      runId: _turnCounter == 1
+          ? 'arn_test_personal'
+          : 'arn_test_personal_$_turnCounter',
+      sessionId: sessionId,
+      goal: text,
       traceId: 'trace_test',
       createdAt: '2026-04-29T00:00:00Z',
     );
@@ -1702,16 +1918,52 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
 
   /// 记录 CancelAssistantRun 调用（stopGeneration 合同断言消费）。
   final List<String> cancelledRunIds = <String>[];
+  final List<
+    ({
+      String runId,
+      String toolUseId,
+      String decision,
+      String continuationToken,
+      AssistantDeviceActionExecutionReceipt? executionReceipt,
+    })
+  >
+  continuedToolUses = [];
 
   @override
-  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({
+  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
     required String runId,
+    required String commandRequestId,
   }) async {
     cancelledRunIds.add(runId);
-    return AssistantTurnEnvelopeWire(
-      turnId: runId,
-      conversationId: 'acv_test_personal',
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_test_personal',
       status: 'cancelled',
+      traceId: 'trace_test',
+      createdAt: '2026-04-29T00:00:00Z',
+    );
+  }
+
+  @override
+  Future<AssistantRunEnvelopeWire> continueAssistantToolUse({
+    required String runId,
+    required String toolUseId,
+    required String commandRequestId,
+    required String decision,
+    required String continuationToken,
+    AssistantDeviceActionExecutionReceipt? executionReceipt,
+  }) async {
+    continuedToolUses.add((
+      runId: runId,
+      toolUseId: toolUseId,
+      decision: decision,
+      continuationToken: continuationToken,
+      executionReceipt: executionReceipt,
+    ));
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_test_personal',
+      status: 'executing',
       traceId: 'trace_test',
       createdAt: '2026-04-29T00:00:00Z',
     );
@@ -1720,8 +1972,20 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
   @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
-  }) {
-    return Stream<AssistantStreamEventWire>.fromIterable(events);
+    String lastEventId = '',
+  }) async* {
+    if (lastEventId.isNotEmpty && events.isEmpty) {
+      yield _event(
+        seq: (int.tryParse(lastEventId) ?? 0) + 1,
+        eventType: 'completed',
+        payload: <String, dynamic>{
+          'status': 'completed',
+          'finalAnswer': '设备上的系统日程已创建。',
+        },
+      );
+      return;
+    }
+    yield* Stream<AssistantStreamEventWire>.fromIterable(events);
   }
 }
 
@@ -1737,13 +2001,13 @@ class _FakeAppMessageQuery implements AppMessageQuery {
       userId: 'user_test',
       messageType: 'assistant',
       source: 'assistant_turn',
-      sourceId: 'atn_test_personal',
+      sourceId: 'arn_test_personal',
       destination: const AppMessageDestination(type: 'user', id: 'user_test'),
       title: '找私助提醒',
       summary: '测试消息',
       target: const AppMessageTarget(
         targetType: 'assistant_turn',
-        targetId: 'atn_test_personal',
+        targetId: 'arn_test_personal',
       ),
       read: false,
       createdAt: DateTime.utc(2026, 4, 29),
@@ -1779,7 +2043,7 @@ class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
   @override
   Future<AssistantHistorySnapshot?> load({
     required String personaId,
-    String conversationId = '',
+    String sessionId = '',
   }) async {
     loadCount += 1;
     final failure = error;

@@ -5,12 +5,10 @@ e2e_learning_loop_verify.py — End-to-end verification of the online learning l
 Steps verified:
 1. Behavior events exist in rec_learning_events (with scenario field)
 2. Training samples exist in rec_training_samples
-3. A model version exists in rec_model_registry
-4. recommendation-service can score a request through the ModelRelease Reader
+3. recommendation-service can score through the active ModelRelease Reader
 5. rec_learning_events contain both impression and engagement types
 6. Seed data bootstrap produces expected collections
-7. Model registry has valid metrics (non-zero)
-8. Feature store has user profiles
+7. Feature store has user profiles
 
 Usage:
   python3 e2e_learning_loop_verify.py --mongodb-uri mongodb://localhost:27017
@@ -82,32 +80,6 @@ def check_training_samples(db, scenario: str) -> tuple[bool, str]:
     return True, f"samples: total={total}, has_labels={has_labels}, has_item={has_item}, has_user={has_user}"
 
 
-def check_model_registry(db, scenario: str) -> tuple[bool, str]:
-    coll = db["rec_model_registry"]
-    total = coll.count_documents({"scenario": scenario})
-    if total == 0:
-        return False, f"No model versions for scenario={scenario}"
-    latest = coll.find_one({"scenario": scenario}, sort=[("createdAt", -1)])
-    metrics = latest.get("metrics", {}) if latest else {}
-    auc = metrics.get("auc", 0)
-    prod = coll.find_one({"scenario": scenario, "production": True})
-    prod_info = f"prod={prod['version']}" if prod else "no production model"
-    return True, f"registry: total={total}, latest_auc={auc}, {prod_info}"
-
-
-def check_model_registry_metrics(db, scenario: str) -> tuple[bool, str]:
-    """Verify the latest model has non-zero metrics."""
-    coll = db["rec_model_registry"]
-    latest = coll.find_one({"scenario": scenario}, sort=[("createdAt", -1)])
-    if not latest:
-        return False, "No model in registry"
-    metrics = latest.get("metrics", {})
-    auc = metrics.get("auc", 0)
-    if auc == 0:
-        return False, f"Model has zero AUC: {metrics}"
-    return True, f"metrics valid: auc={auc}"
-
-
 def check_user_feature_store(db) -> tuple[bool, str]:
     """Verify user feature profiles exist in rm_recommend_feature."""
     coll = db["rm_recommend_feature"]
@@ -149,7 +121,7 @@ def check_score_endpoint(rec_model_url: str) -> tuple[bool, str]:
             "scenario": "content_feed",
             "sessionId": "e2e_verify_sess",
             "userId": "loop_verify_user",
-            "candidates": [{"contentId": "test_1", "features": {"viewCount": 100}}],
+            "candidates": [{"contentId": "test_1", "viewCount": 100}],
             "userFeatures": {},
             "context": {},
         }).encode()
@@ -190,8 +162,8 @@ def check_model_score_loop(rec_model_url: str) -> tuple[bool, str]:
             "sessionId": "e2e_model_verify_sess",
             "userId": "loop_verify_user",
             "candidates": [
-                {"contentId": "test_1", "features": {"viewCount": 100, "contentType": "photo"}},
-                {"contentId": "test_2", "features": {"viewCount": 50, "contentType": "video"}},
+                {"contentId": "test_1", "viewCount": 100, "contentType": "image"},
+                {"contentId": "test_2", "viewCount": 50, "contentType": "video"},
             ],
             "userFeatures": {},
             "context": {},
@@ -206,7 +178,10 @@ def check_model_score_loop(rec_model_url: str) -> tuple[bool, str]:
         model_field = first_detail.get("model", "")
         if model_field == "rule" or model_field == "":
             return False, f"model→score loop: using rule fallback (model={model_field})"
-        return True, f"model→score loop ok: model={model_field}, {len(scores)} candidates scored"
+        release_id = str(data.get("modelReleaseId") or "").strip()
+        if not release_id:
+            return False, "model→score loop: active release identity is missing"
+        return True, f"model→score loop ok: release={release_id}, model={model_field}, {len(scores)} candidates scored"
     except Exception as e:
         return False, f"model→score loop failed: {e}"
 
@@ -241,7 +216,7 @@ def main():
     p = argparse.ArgumentParser(description="E2E learning loop verification")
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default="quwoquan_recommendation")
     p.add_argument("--rec-model", default="http://localhost:18090")
     p.add_argument("--full-pipeline", action="store_true",
                    help="Run seed → train → verify (requires MongoDB running)")
@@ -270,9 +245,6 @@ def main():
         ("Learning Events", lambda: check_learning_events(db, args.scenario)),
         ("Training Samples", lambda: check_training_samples(db, args.scenario)),
         ("Seed→Train Loop", lambda: check_seed_train_loop(db, args.scenario)),
-        ("Model Registry (single)", lambda: check_model_registry(db, args.scenario)),
-        ("Model Registry (multi-obj)", lambda: check_model_registry(db, f"{args.scenario}_multiobjective")),
-        ("Model Metrics Valid", lambda: check_model_registry_metrics(db, args.scenario)),
     ]
 
     if not args.skip_service:

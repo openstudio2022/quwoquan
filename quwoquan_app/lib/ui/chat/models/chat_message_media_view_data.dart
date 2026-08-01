@@ -6,7 +6,7 @@ final class ChatMessageMediaViewData {
     required String assetId,
     required String deliveryUrl,
     required String mediaType,
-    required String contentType,
+    required String mimeType,
     required this.fileSizeBytes,
     this.durationMs,
     Iterable<double> waveform = const <double>[],
@@ -15,7 +15,7 @@ final class ChatMessageMediaViewData {
   }) : assetId = _required(assetId, 'assetId'),
        deliveryUrl = _required(deliveryUrl, 'deliveryUrl'),
        mediaType = _required(mediaType, 'mediaType'),
-       contentType = _required(contentType, 'contentType'),
+       mimeType = _required(mimeType, 'mimeType'),
        waveform = List<double>.unmodifiable(
          waveform.map((sample) => sample.clamp(0, 1).toDouble()),
        ),
@@ -32,7 +32,7 @@ final class ChatMessageMediaViewData {
   final String assetId;
   final String deliveryUrl;
   final String mediaType;
-  final String contentType;
+  final String mimeType;
   final int fileSizeBytes;
   final int? durationMs;
   final List<double> waveform;

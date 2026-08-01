@@ -71,9 +71,9 @@ DATA_RELEASE_MODES = {"projection-only", "local-import", "hosted-import"}
 DATA_RELEASE_ENV_KEY_RE = re.compile(r"^QWQ_[A-Z0-9_]+$")
 WORKLOAD_PLANES = {"edge", "media", "service", "data"}
 LOCAL_TLS_PROFILE_BY_TARGET = {
-    "alpha-local": "acme-dns01-alpha",
-    "beta-local": "acme-dns01-beta",
-    "gamma-local": "acme-dns01-gamma",
+    "alpha-local": "local-managed",
+    "beta-local": "local-managed",
+    "gamma-local": "local-managed",
     "prod-sim": "acme-dns01-sim",
 }
 PROD_TLS_PROFILE = "public-ca-prod"
@@ -594,12 +594,25 @@ def validate_environment_topology(
                         issues.append(
                             f"{target_name}: dataRelease.publicReadyTimeoutSeconds must be a positive integer"
                         )
-                    for field in ("mongoPortRole",):
+                    for field in (
+                        "mongoPortRole",
+                        "redisPortRole",
+                        "userPostgresPortRole",
+                    ):
                         role = str(data_release.get(field) or "")
                         if not role or role not in role_ports:
                             issues.append(
                                 f"{target_name}: dataRelease.{field} must reference a port role"
                             )
+                    redis_database = data_release.get("redisDatabase")
+                    if (
+                        isinstance(redis_database, bool)
+                        or not isinstance(redis_database, int)
+                        or redis_database < 0
+                    ):
+                        issues.append(
+                            f"{target_name}: dataRelease.redisDatabase must be a non-negative integer"
+                        )
                     media_ref = str(data_release.get("mediaLocalRef") or "")
                     if not media_ref or Path(media_ref).is_absolute() or ".." in Path(media_ref).parts:
                         issues.append(
@@ -610,6 +623,8 @@ def validate_environment_topology(
                         issues.append(f"{target_name}: hosted-import requires ssh-hosted backend")
                     for field in (
                         "mongoUriEnv",
+                        "redisAddrEnv",
+                        "userPostgresDsnEnv",
                         "mediaRootEnv",
                     ):
                         env_key = str(data_release.get(field) or "")
@@ -617,6 +632,15 @@ def validate_environment_topology(
                             issues.append(
                                 f"{target_name}: dataRelease.{field} must be an environment key name"
                             )
+                    redis_database = data_release.get("redisDatabase")
+                    if (
+                        isinstance(redis_database, bool)
+                        or not isinstance(redis_database, int)
+                        or redis_database < 0
+                    ):
+                        issues.append(
+                            f"{target_name}: dataRelease.redisDatabase must be a non-negative integer"
+                        )
         if target_name == "prod-hosted" and env_name != "prod":
             issues.append("prod-hosted target must map to prod environment")
         if target_name == "prod-hosted" and backend != "ssh-hosted":

@@ -5,10 +5,12 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/application"
 	"sync"
 	"testing"
+	"time"
 
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	contentgenerated "quwoquan_service/services/content-service/generated/media/media_asset"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -181,6 +183,101 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 		stored.MediaUrls[0] != "media/image/public/asset-image" ||
 		media.materializeCalls != 1 {
 		t.Fatalf("media publication was not atomically projected: post=%+v media=%+v", stored, media)
+	}
+}
+
+func TestSubmitPostPublicationProjectsOnlyDisclosedCaptureMetadata(t *testing.T) {
+	focal := 24.0
+	aperture := 1.8
+	latitude, longitude := 31.0, 102.0
+	capturedAt := time.Date(2026, 5, 2, 10, 0, 0, 0, time.UTC)
+	store := testsupport.NewPostStore(nil)
+	media := &publicationMediaReader{
+		assets: map[string]MediaAssetBindingSlice{
+			"asset-capture": {
+				AssetID: "asset-capture", OwnerID: "persona-capture", Ready: true,
+				MediaType: "image", PublicSliceKey: "media/image/public/asset-capture",
+				CaptureMetadata: mediamodel.CaptureMetadata{
+					CameraMake: "SONY", CameraModel: "ILCE-7M4",
+					LensModel: "FE 24-70mm F2.8 GM II", FocalLengthMM: &focal,
+					ApertureFNumber: &aperture, CapturedAt: &capturedAt,
+					GPSLatitude: &latitude, GPSLongitude: &longitude,
+				},
+			},
+		},
+	}
+	service := NewPostService(
+		WithMediaAssetBindingReader(BindDataPorts(store), media),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
+	command := SubmitPostPublicationCommand{
+		PublishIntentID: "intent-capture", LocalDraftID: "draft-capture",
+		AuthorID: "persona-capture",
+		Content: postmodel.Post{
+			ContentType: "image", MediaAssetIds: []string{"asset-capture"},
+			Visibility: "public", CaptureDisclosure: []string{"parameters"},
+			CaptureFeatureRefs: []string{"client-must-not-own-this-projection"},
+		},
+	}
+	receipt, err := service.SubmitPostPublication(
+		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
+		command,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, found := store.FindByID(context.Background(), receipt.PostID)
+	if !found {
+		t.Fatal("published post was not stored")
+	}
+	want := map[string]bool{
+		"Topic/摄影/拍摄参数/焦段/广角":    true,
+		"Topic/摄影/拍摄参数/光圈/大光圈虚化": true,
+	}
+	if len(stored.CaptureFeatureRefs) != len(want) {
+		t.Fatalf("capture features=%v, want only disclosed parameter features", stored.CaptureFeatureRefs)
+	}
+	for _, tag := range stored.CaptureFeatureRefs {
+		if !want[tag] {
+			t.Fatalf("unexpected undisclosed capture tag %q", tag)
+		}
+	}
+}
+
+func TestSubmitPostPublicationRejectsUnknownCaptureDisclosureBeforeMaterialize(t *testing.T) {
+	store := testsupport.NewPostStore(nil)
+	media := &publicationMediaReader{assets: map[string]MediaAssetBindingSlice{
+		"asset-capture": {
+			AssetID: "asset-capture", OwnerID: "persona-capture", Ready: true,
+			MediaType: "image", PublicSliceKey: "media/image/public/asset-capture",
+		},
+	}}
+	service := NewPostService(
+		WithMediaAssetBindingReader(BindDataPorts(store), media),
+		WithPublicationAdmission(
+			testsupport.AllowPublicationRateGate{},
+			testsupport.FixedPublicationSafetyGate{},
+		),
+	)
+	command := SubmitPostPublicationCommand{
+		PublishIntentID: "intent-capture-invalid", LocalDraftID: "draft-capture-invalid",
+		AuthorID: "persona-capture",
+		Content: postmodel.Post{
+			ContentType: "image", MediaAssetIds: []string{"asset-capture"},
+			Visibility: "public", CaptureDisclosure: []string{"raw_exif"},
+		},
+	}
+	if _, err := service.SubmitPostPublication(
+		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
+		command,
+	); err == nil {
+		t.Fatal("unknown capture disclosure must be rejected")
+	}
+	if media.materializeCalls != 0 {
+		t.Fatalf("invalid disclosure materialized media %d time(s)", media.materializeCalls)
 	}
 }
 

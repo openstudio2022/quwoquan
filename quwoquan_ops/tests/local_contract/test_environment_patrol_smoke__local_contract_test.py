@@ -340,6 +340,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "DART_DEFINES": encoded,
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "QWQ_APP_RUNTIME_ENV": "gamma",
+                "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
                 "QWQ_LAUNCH_TARGET": "gamma-local",
                 "QWQ_DART_DEFINES_DIGEST": "sha256:" + ("0" * 64),
                 "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": "sha256:" + ("1" * 64),
@@ -1493,7 +1494,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             {"status": "skipped", "reason": "not-required"},
         )
 
-    def test_alpha_uses_stackctl_content_release_entrypoint(self) -> None:
+    def test_alpha_uses_the_shared_packaged_local_runtime_entrypoint(self) -> None:
         retired = ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
         stackctl_source = (
             ROOT / "quwoquan_ops/cli/stackctl.py"
@@ -1501,13 +1502,15 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertFalse(retired.exists())
         self.assertIn(
-            "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
+            'requested_target in {"alpha-local", "beta-local", "gamma-local"}',
             stackctl_source,
         )
         self.assertIn(
-            "alpha-local only provides the real content-release workload",
+            "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
             stackctl_source,
         )
+        self.assertNotIn("start_beta_stack.sh", stackctl_source)
+        self.assertNotIn("start_alpha_content_release_stack.sh", stackctl_source)
 
     def test_local_launchers_and_tls_stacks_use_public_ca_helper(self) -> None:
         app_instance = (
@@ -1643,12 +1646,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "beta_manual_require_content_embedding_binding",
             beta_manual,
         )
+        self.assertNotIn("local_provider_credentials", beta_manual)
         self.assertIn(
-            "prepare_local_provider_credentials",
-            beta_manual,
-        )
-        self.assertIn(
-            "beta content embedding provider materialization failed",
+            "stackctl did not inject protected Beta content embedding Provider material",
             beta_manual,
         )
         self.assertLess(
@@ -1670,7 +1670,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'recommendation-service) export RECOMMENDATION_CONFIG_VERSION="$config_version"',
             beta_manual,
         )
-        self.assertIn("--write-report-account-backfill", beta_manual)
+        self.assertNotIn("--write-report-account-backfill", beta_manual)
         self.assertIn(
             "recommendation_policy.yaml",
             beta_manual,
@@ -1783,7 +1783,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("export_service_compose_environment", gamma_start)
         self.assertIn('export "$source_name"', gamma_start)
         self.assertIn("QWQ_COMPOSE_${source_name#LOCAL_GAMMA_}", gamma_start)
-        self.assertIn("--write-report-account-backfill", gamma_start)
+        self.assertNotIn("--write-report-account-backfill", gamma_start)
 
     def test_video_range_mime_preflight_precedes_patrol(self) -> None:
         commands = stackctl._selected_profile_commands(
@@ -1954,6 +1954,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     "VIDEO_PLAYBACK_QOE_READBACK_PATH": "qoe.json",
                     "VIDEO_PLAYBACK_PERFETTO_TRACE_PATH": "perfetto.trace",
                     "VIDEO_PLAYBACK_PERFETTO_SUMMARY_PATH": "perfetto-summary.json",
+                    "VIDEO_PLAYBACK_IOS_PERFORMANCE_TRACE_PATH": (
+                        "ios-performance.trace"
+                    ),
+                    "VIDEO_PLAYBACK_IOS_PERFORMANCE_SUMMARY_PATH": (
+                        "ios-performance-summary.json"
+                    ),
                 },
                 clear=False,
             ):
@@ -1991,6 +1997,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             evidence["uiEvidence"]["nativeEvidenceFromPhysicalAndroidDevice"],
         )
         self.assertTrue(evidence["uiEvidence"]["physicalIosPatrolPassed"])
+        self.assertEqual(
+            evidence["uiEvidence"]["iosPerformanceSummaryPath"],
+            "ios-performance-summary.json",
+        )
         self.assertEqual(evidence["uiEvidence"]["playerState"], "ready")
 
     def test_stackctl_t4_evidence_rejects_emulator_native_signal_claim(self) -> None:
@@ -2320,14 +2330,19 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(payload["exitCode"], 2)
         self.assertIn("No such file", "\n".join(payload["details"]))
 
-    def test_gamma_runtime_readiness_only_requires_declared_gamma_planes(self) -> None:
+    def test_three_nonprod_full_runtimes_share_one_required_role_set(self) -> None:
         roles = stackctl._expected_local_roles("gamma-local")
 
         self.assertIn("api-edge", roles)
         self.assertIn("product-ops-edge", roles)
         self.assertIn("media-edge", roles)
+        self.assertIn("object-storage-edge", roles)
+        self.assertIn("rtc-service", roles)
+        self.assertIn("livekit-http", roles)
         self.assertNotIn("platform-ops-edge", roles)
         self.assertNotIn("ops-portal", roles)
+        self.assertEqual(roles, stackctl._expected_local_roles("alpha-local"))
+        self.assertEqual(roles, stackctl._expected_local_roles("beta-local"))
 
     def test_beta_runtime_readiness_requires_real_report_dependencies(self) -> None:
         roles = stackctl._expected_local_roles("beta-local")
@@ -2360,8 +2375,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn("notification-service", roles)
         self.assertNotIn("fixture-gateway", roles)
 
-    def test_alpha_content_release_readiness_matches_started_data_plane(self) -> None:
-        roles = set(stackctl._expected_local_roles("alpha-local"))
+    def test_alpha_content_release_diagnostic_profile_is_not_full_green(self) -> None:
+        roles = set(
+            stackctl._expected_local_roles(
+                "alpha-local",
+                workload="content-release",
+            )
+        )
 
         self.assertEqual(
             roles,

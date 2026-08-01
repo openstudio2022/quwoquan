@@ -113,6 +113,48 @@ def article_url_allowed(url: str, site: Mapping[str, object]) -> bool:
     )
 
 
+def resolve_article_source_binding(
+    url: str,
+    *,
+    site_id: str,
+    profile_digest: str,
+) -> dict[str, object]:
+    """Revalidate a frozen article candidate before its body is fetched.
+
+    A crawler discovery record is only reusable while it remains bound to the
+    same registry-admitted site profile.  URL host matching alone is not enough:
+    a broader registry entry could otherwise silently replace the site whose
+    robots, terms, allowed-path and rate policy admitted the candidate.
+    """
+    normalized_site_id = str(site_id or "").strip()
+    expected_digest = str(profile_digest or "").strip()
+    if not normalized_site_id or not expected_digest:
+        raise ValueError(
+            "commercial article source requires articleSiteId and "
+            "sourceDiscoveryProfileDigest"
+        )
+    admitted = {
+        str(site.get("siteId") or "").strip(): site
+        for site in article_search_sites(site_ids=frozenset({normalized_site_id}))
+    }
+    site = admitted.get(normalized_site_id)
+    if site is None:
+        raise ValueError(
+            f"article site is not currently admitted for commercial crawl: "
+            f"{normalized_site_id}"
+        )
+    if article_profile_digest(site) != expected_digest:
+        raise ValueError(
+            f"article site crawl profile drift: {normalized_site_id}"
+        )
+    if not article_url_allowed(url, site):
+        raise ValueError(
+            f"article source URL is outside the frozen site's allowed paths: "
+            f"{normalized_site_id}"
+        )
+    return site
+
+
 def template_contexts(
     template: str,
     *,
@@ -177,5 +219,6 @@ __all__ = [
     "article_url_allowed",
     "canonicalize_article_url",
     "formatted_declared_urls",
+    "resolve_article_source_binding",
     "template_contexts",
 ]

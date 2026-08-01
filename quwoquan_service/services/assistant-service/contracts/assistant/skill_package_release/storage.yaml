@@ -1,0 +1,37 @@
+backend: mongodb
+collections:
+  assistant_skill_package_releases:
+    entity: SkillPackageRelease
+    role: authoritative
+    description: 不可变 Skill Package release descriptor；资产正文留在 digest 寻址 artifact storage。
+    indexes:
+    - name: uq_assistant_skill_package_release_identity
+      keys: {packageId: 1, releaseDigest: 1}
+      unique: true
+    - name: idx_assistant_skill_package_release_status
+      keys: {packageId: 1, status: 1, stagedAt: -1}
+  assistant_skill_package_activations:
+    entity: SkillPackageActivation
+    role: authoritative
+    description: 每个 packageId 唯一的 active/previous digest CAS 指针。
+    indexes:
+    - name: uq_assistant_skill_package_activation
+      keys: {packageId: 1}
+      unique: true
+  assistant_skill_package_command_receipts:
+    entity: SkillPackageActivation
+    role: authoritative
+    description: Stage、Activate 与 Rollback 的幂等命令回执。
+    indexes:
+    - name: uq_assistant_skill_package_command_receipt
+      keys: {commandId: 1}
+      unique: true
+  assistant_skill_package_outbox:
+    entity: SkillPackageActivation
+    role: append_only
+    description: 与 active 指针原子提交的激活/回滚审计事件。
+    indexes:
+    - name: uq_assistant_skill_package_outbox_revision
+      keys: {packageId: 1, revision: 1}
+      unique: true
+role: authoritative

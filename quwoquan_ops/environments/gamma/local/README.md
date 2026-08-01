@@ -42,20 +42,22 @@ upload.gamma.quwoquan.com
 
 建议：
 
-- macOS / iOS Simulator：直接使用 topology 生成的 canonical authority；公网 DNS 将非生产环境解析到 loopback。
-- Android 模拟器与真机：保留 canonical authority，由 launcher / Patrol runner 对 target 端口执行 `adb reverse`；禁止改写为私有 IP 或 `.localhost`。
-- DNS 或公共 CA 未就绪时 fail-fast，不通过 `/etc/hosts`、私有 CA 或关闭证书校验绕过。
+- macOS / iOS Simulator：直接使用 topology 生成的 canonical authority，由 stackctl 生成 target-scoped resolver handoff。
+- Android 模拟器与受管真机：保留 canonical authority，由 stackctl/launcher 安装 resolver handoff、信任材料并对 target 端口执行 `adb reverse`；禁止改写为私有 IP、`.localhost` 或 App 内 fallback。
+- resolver 或 local-managed CA 未就绪时 fail-fast；禁止人工修改 App/test URL、关闭证书校验或在源码中打包 CA。
 
 ## TLS
 
-本地公开入口必须使用 `*.gamma.quwoquan.com` 的 DNS-01 公共 CA 证书。禁止
-Caddy internal CA、`mkcert`、关闭证书校验或临时 HTTP runtime define。
+本地公开入口使用 topology 声明的 `local-managed` profile。stackctl 在
+`QWQ_DEPLOY_WORK_ROOT/gamma-local/` 生成并验证 target-scoped CA、叶证书、SAN
+和受管设备信任回执；Prod package 必须拒绝这些材料。禁止 Caddy 自发签发、
+`mkcert`、关闭证书校验或临时 HTTP runtime define。
 
 ## 本地覆盖边界
 
 本地 mirror 覆盖提交前 `T1 -> T4` 左移：
 
-- `T1`：静态、metadata、拓扑、环境包、seed manifest。
+- `T1`：静态、metadata、拓扑、不可变环境包与 immutable release 绑定。
 - `T2`：模块、Widget、Provider/Journey。
 - `T3`：真实 API、真实存储副作用、错误响应与 generated client/typed Remote Facet。
 - `T4`：模拟器/真机 Patrol 核心旅程。

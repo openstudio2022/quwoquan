@@ -107,19 +107,37 @@ void main() {
           'hits': <Object?>[
             <String, Object?>{
               'target': 'article',
+              'objectType': 'content.post',
               'objectId': 'post-1',
               'title': '西湖摄影',
-              'payload': <String, Object?>{'likeCount': 3},
+              'score': 1,
+              'matchedTerms': <String>['西湖'],
+              'matchedTags': <String>[],
+              'evidence': <Object?>[],
+              'rankReasons': <Object?>[],
+              'content': <String, Object?>{
+                'postId': 'post-1',
+                'contentType': 'article',
+                'contentIdentity': 'work',
+                'title': '西湖摄影',
+                'likeCount': 3,
+              },
             },
           ],
+          'citations': <Object?>[],
+          'facets': <Object?>[],
           'requestId': 'search-request-1',
           'relatedTerms': <Object?>[],
           'degradeSignals': <Object?>[],
+          'provenance': <String, Object?>{
+            'provider': 'elasticsearch',
+            'generatedAt': '2026-07-31T00:00:00Z',
+          },
         },
       );
       final client = GeneratedCloudOperationClient(executor);
 
-      final result = await client.searchSearchQuerySearchQuery(
+      final result = await client.searchSearchIndexViewSearch(
         CanonicalSearchQuery(
           query: '西湖',
           objectTypes: const <String>['article'],
@@ -134,7 +152,7 @@ void main() {
 
       expect(
         executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.searchSearchQuerySearchQuery,
+        AppCloudOperationIds.searchSearchIndexViewSearch,
       );
       expect(executor.body, <String, Object?>{
         'query': '西湖',
@@ -359,13 +377,9 @@ void main() {
         contentIdentity: ContentPostIdentity.work,
         title: '对象闭环',
         articleMarkdown: '# 对象闭环',
-        articleAssetManifest: ContentPostStructuredObject(
-          <String, ContentPostStructuredValue>{
-            'schema': const ContentPostStructuredText('article-asset-manifest'),
-            'assets': ContentPostStructuredArray(
-              const <ContentPostStructuredValue>[],
-            ),
-          },
+        articleAssetManifest: PostArticleAssetManifestInput(
+          schema: 'article-asset-manifest',
+          assets: const <PostArticleAssetInput>[],
         ),
         mediaAssetIds: const <String>['asset-1'],
         visibility: ContentPostVisibility.public,
@@ -395,6 +409,7 @@ void main() {
         'schema': 'article-asset-manifest',
         'assets': <Object?>[],
       },
+      'captureDisclosure': <String>[],
       'visibility': 'public',
     });
     expect(result.postId, 'post-created');

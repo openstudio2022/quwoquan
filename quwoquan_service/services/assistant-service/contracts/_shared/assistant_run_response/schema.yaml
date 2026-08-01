@@ -7,14 +7,18 @@ imports:
   - package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart
   - package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart
   - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart
 fields:
-  - { name: conversationId, type: string, required: true }
+  - { name: sessionId, type: string, required: true }
   - { name: turnId, type: string, required: true }
   - { name: status, type: string, default: completed }
   - { name: finalText, type: string, default: '' }
   - { name: summary, type: string, default: '' }
   - { name: journey, type: object, ref: AssistantJourney, default: {} }
   - { name: runArtifacts, type: object, ref: RunArtifacts, default: {} }
+  - { name: runtime, type: object, ref: AssistantRunRuntimeWire }
+  - { name: presentation, type: object, ref: AssistantPresentationDocumentWire }
   - { name: observability, type: object, ref: observability_payload, default: {} }
   - { name: runtimeFailure, type: object, ref: RuntimeFailureWire }
   - { name: completedAt, type: string, default: '' }

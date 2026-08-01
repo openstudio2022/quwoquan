@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from .environment_topology import get_target, load_environment_topology
 from .output_paths import deployment_target_path, deployment_work_root, remove_deployment_tree
-from .public_domain_tls import certificate_paths
+from .public_domain_tls import certificate_paths, root_certificate_path
 
 
 _SECRET_KEYS = ("access_key_id", "access_key_secret", "cdn_sign_key")
@@ -29,6 +29,7 @@ class LocalEnvironmentObjectStorage:
     secret_path: Path
     certificate_path: Path
     private_key_path: Path
+    root_certificate_path: Path
 
 
 def prepare_local_environment_object_storage(
@@ -40,7 +41,7 @@ def prepare_local_environment_object_storage(
     bucket: str = "chat-media",
     region: str = "cn-local-1",
 ) -> LocalEnvironmentObjectStorage:
-    """Prepare MinIO credentials and the target's public DNS-01 certificate."""
+    """Prepare MinIO credentials and the target's canonical TLS material."""
     if environment not in {"alpha", "beta", "gamma"}:
         raise ValueError(f"unsupported local object-storage environment: {environment}")
     if not target_name.endswith("-local"):
@@ -68,6 +69,7 @@ def prepare_local_environment_object_storage(
     )
     secret_values = _load_or_create_secrets(secret_path)
     source_certificate, source_private_key = certificate_paths(target_name)
+    source_root_certificate = root_certificate_path(target_name)
     certificate_path, private_key_path = _materialize_public_tls(
         certificate_root,
         target_name=target_name,
@@ -82,6 +84,7 @@ def prepare_local_environment_object_storage(
             f"{prefix}_OBJECT_STORAGE_BUCKET": bucket,
             f"{prefix}_OBJECT_STORAGE_REGION": region,
             f"{prefix}_OBJECT_STORAGE_TLS_DIR": str(certificate_root / "minio"),
+            f"{prefix}_OBJECT_STORAGE_CA_FILE": str(source_root_certificate),
             f"{prefix}_OBJECT_STORAGE_ENDPOINT": endpoint,
             f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": secret_values["access_key_id"],
             f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": secret_values[
@@ -94,6 +97,7 @@ def prepare_local_environment_object_storage(
         secret_path=secret_path,
         certificate_path=certificate_path,
         private_key_path=private_key_path,
+        root_certificate_path=source_root_certificate,
     )
 
 

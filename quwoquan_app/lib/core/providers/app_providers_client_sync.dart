@@ -338,14 +338,13 @@ final clientStateSyncOutboxProvider =
 /// [RemoteAssistantRepository]（一个类实现多个窄面，与 content 域同构）。
 final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
   final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
-  final personaId = ref.watch(currentUserIdProvider).trim();
-  final consentActorScope = '$accountId/$personaId';
+  final consentAccountId = accountId;
   return RemoteAssistantRepository(
     httpClient: ref.watch(cloudHttpClientProvider),
     operationClient: ref.watch(generatedCloudOperationClientProvider),
-    conversationInvocationContext: (clientPageId) =>
+    sessionInvocationContext: (clientPageId) =>
         _assistantOperationInvocationContext(ref, clientPageId: clientPageId),
-    consentActorScope: consentActorScope,
+    consentAccountId: consentAccountId,
   );
 });
 
@@ -370,10 +369,13 @@ CloudOperationInvocationContext _assistantOperationInvocationContext(
 
 /// Production composition is Remote-only. Alpha/test adapters must override
 /// these Facets from their physically separate composition root.
-final assistantConversationRunFacetProvider =
-    Provider<AssistantConversationRunFacet>(
-      (ref) => ref.watch(_assistantRemoteProvider),
-    );
+final assistantSessionRunFacetProvider = Provider<AssistantSessionRunFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
+
+final assistantRunControlFacetProvider = Provider<AssistantRunControlFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
 
 final assistantSkillSubscriptionFacetProvider =
     Provider<AssistantSkillSubscriptionFacet>(
@@ -525,19 +527,17 @@ final assistantPersonalDataFacetProvider = Provider<AssistantPersonalDataFacet>(
   (ref) => ref.watch(_assistantRemoteProvider),
 );
 
-final assistantPreferenceFactFacetProvider =
-    Provider<AssistantPreferenceFactFacet>(
-      (ref) => ref.watch(_assistantRemoteProvider),
-    );
-
-final assistantXiaoquSearchFacetProvider = Provider<AssistantXiaoquSearchFacet>(
+final assistantPreferenceFactFacetProvider = Provider<AssistantPreferenceFacet>(
   (ref) => ref.watch(_assistantRemoteProvider),
 );
 
-final assistantCreationSuggestFacetProvider =
-    Provider<AssistantCreationSuggestFacet>(
-      (ref) => ref.watch(_assistantRemoteProvider),
-    );
+final assistantSearchRunFacetProvider = Provider<AssistantSearchRunFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
+
+final assistantCreationRunFacetProvider = Provider<AssistantCreationRunFacet>(
+  (ref) => ref.watch(_assistantRemoteProvider),
+);
 
 final _remoteAppMessageAdapterProvider = Provider<RemoteAppMessageAdapter>((
   ref,
@@ -599,14 +599,32 @@ final assistantContentIdentityIndexEnabledProvider = Provider<bool>((ref) {
 });
 
 final cacheTelemetrySinkProvider = Provider<CacheTelemetrySink>((ref) {
-  return const _AppLogCacheTelemetrySink();
+  return _AppCacheTelemetrySink(ref.watch(appTelemetryReporterProvider));
 });
 
-class _AppLogCacheTelemetrySink implements CacheTelemetrySink {
-  const _AppLogCacheTelemetrySink();
+class _AppCacheTelemetrySink implements CacheTelemetrySink {
+  const _AppCacheTelemetrySink(this._telemetry);
+
+  final AppTelemetryRecorder _telemetry;
 
   @override
   void record(String eventName, Map<String, Object?> attributes) {
+    if (eventName == 'cache.hit.source') {
+      final source = (attributes['source'] ?? '').toString().trim();
+      final cacheClass = (attributes['cacheClass'] ?? '').toString().trim();
+      unawaited(
+        _telemetry.record(
+          AppTelemetryPayload.homeFeedCacheReadOutcome(
+            cacheSource: AppTelemetryValueCacheSource.values.contains(source)
+                ? source
+                : AppTelemetryValueCacheSource.unknown,
+            cacheClass: cacheClass.isEmpty ? 'unknown' : cacheClass,
+            result: 'hit',
+            surfaceId: 'home_feed',
+          ),
+        ),
+      );
+    }
     final traceStore = AppTraceContextStore.instance;
     unawaited(
       AppLogService.instance.writeEvent(

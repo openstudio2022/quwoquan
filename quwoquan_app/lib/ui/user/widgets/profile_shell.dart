@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,8 +49,6 @@ import 'package:quwoquan_app/components/object_page/profile_ios_components.dart'
 import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_footprint_tab.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-
 part 'profile_shell_builders.dart';
 part 'profile_shell_builders_parts.dart';
 part 'profile_shell_builders_more.dart';
@@ -68,6 +67,7 @@ class ProfileShell extends ConsumerStatefulWidget {
     this.initialBackgroundUrl,
     this.onBack,
     this.openMessageComposerOnOpen = false,
+    this.greetingIntersectionRef,
   });
 
   final ProfileMode mode;
@@ -79,6 +79,7 @@ class ProfileShell extends ConsumerStatefulWidget {
 
   /// 进入主页后一次性执行「私信 / 打招呼」分流（交集卡 `dispatch: message` 的承接）。
   final bool openMessageComposerOnOpen;
+  final GreetingIntersectionRef? greetingIntersectionRef;
 
   @override
   ConsumerState<ProfileShell> createState() => _ProfileShellState();

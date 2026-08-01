@@ -9,89 +9,95 @@ class AssistantApiMetadata {
   static const String domain = 'assistant';
   static const List<String> apiPrefixes = <String>[
     '/assistant/consents',
-    '/assistant/conversations',
+    '/assistant/entry',
     '/assistant/learning',
     '/assistant/ops',
     '/assistant/page-context',
-    '/assistant/personalization',
     '/assistant/preferences',
     '/assistant/runs',
-    '/assistant/search',
+    '/assistant/sessions',
     '/assistant/skill-subscriptions',
     '/assistant/skills',
-    '/assistant/suggested-actions',
     '/assistant/tasks',
     '/internal/assistant',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'ActivateAssistantPolicyRollout': '/internal/assistant/policy-rollouts/{policyId}/activate',
+    'ActivateAssistantSkillPackageRelease': '/internal/assistant/skill-package-releases:activate',
     'AppendAssistantLearningFact': '/assistant/learning/facts',
     'AppendAssistantServiceLearningFact': '/internal/assistant/learning/facts',
     'CancelAssistantRun': '/assistant/runs/{runId}/cancel',
-    'CreateAssistantConversation': '/assistant/conversations',
+    'ContinueAssistantToolUse': '/assistant/runs/{runId}/tool-uses/{toolUseId}/continue',
+    'CreateAssistantSession': '/assistant/sessions',
     'CreateSkillSubscription': '/assistant/skill-subscriptions',
-    'GetAssistantConversation': '/assistant/conversations/{conversationId}',
+    'GetAssistantEntry': '/assistant/entry',
     'GetAssistantRun': '/assistant/runs/{runId}',
-    'GetEntryPersonalization': '/assistant/personalization',
+    'GetAssistantSession': '/assistant/sessions/{sessionId}',
     'GetLearningOpsSummary': '/assistant/ops/learning-summary',
     'GetSkillSubscription': '/assistant/skill-subscriptions/{subscriptionId}',
-    'GetSuggestedActions': '/assistant/suggested-actions',
     'GrantSkillConsent': '/assistant/skills/{skillId}/consent',
-    'ListAssistantConversations': '/assistant/conversations',
     'ListAssistantPreferences': '/assistant/preferences',
+    'ListAssistantSessions': '/assistant/sessions',
     'ListAssistantTasks': '/assistant/tasks',
     'ListConsents': '/assistant/consents',
-    'ListConversationTurns': '/assistant/conversations/{conversationId}/turns',
+    'ListSessionTurns': '/assistant/sessions/{sessionId}/turns',
     'ListSkillSubscriptions': '/assistant/skill-subscriptions',
     'ListSkills': '/assistant/skills',
+    'PauseAssistantRun': '/assistant/runs/{runId}/pause',
     'ReportPageContext': '/assistant/page-context',
     'RestoreAssistantPreference': '/assistant/preferences/{preferenceId}/restore',
+    'ResumeAssistantRun': '/assistant/runs/{runId}/resume',
     'RevokeAssistantPreference': '/assistant/preferences/{preferenceId}/revoke',
     'RevokeSkillConsent': '/assistant/skills/{skillId}/consent',
     'RollbackAssistantPolicyRollout': '/internal/assistant/policy-rollouts/{policyId}/rollback',
-    'SearchXiaoquResults': '/assistant/search/xiaoqu',
+    'RollbackAssistantSkillPackageRelease': '/internal/assistant/skill-package-releases:rollback',
     'SetAssistantPreference': '/assistant/preferences',
     'StageAssistantPolicyRelease': '/internal/assistant/policy-releases',
-    'StartAssistantRun': '/assistant/conversations/{conversationId}/runs',
+    'StageAssistantSkillPackageRelease': '/internal/assistant/skill-package-releases',
+    'StartAssistantRun': '/assistant/sessions/{sessionId}/runs',
+    'SteerAssistantRun': '/assistant/runs/{runId}/steer',
     'StreamAssistantRunEvents': '/assistant/runs/{runId}/events',
-    'SuggestCreationAssistance': '/assistant/skills/creation-suggest',
     'TickSkillSubscriptionCron': '/internal/assistant/skill-subscriptions:tick',
     'UpdateSkillSubscriptionStatus': '/assistant/skill-subscriptions/{subscriptionId}/status',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'ActivateAssistantPolicyRollout': 'POST',
+    'ActivateAssistantSkillPackageRelease': 'POST',
     'AppendAssistantLearningFact': 'POST',
     'AppendAssistantServiceLearningFact': 'POST',
     'CancelAssistantRun': 'POST',
-    'CreateAssistantConversation': 'POST',
+    'ContinueAssistantToolUse': 'POST',
+    'CreateAssistantSession': 'POST',
     'CreateSkillSubscription': 'POST',
-    'GetAssistantConversation': 'GET',
+    'GetAssistantEntry': 'GET',
     'GetAssistantRun': 'GET',
-    'GetEntryPersonalization': 'GET',
+    'GetAssistantSession': 'GET',
     'GetLearningOpsSummary': 'GET',
     'GetSkillSubscription': 'GET',
-    'GetSuggestedActions': 'GET',
     'GrantSkillConsent': 'POST',
-    'ListAssistantConversations': 'GET',
     'ListAssistantPreferences': 'GET',
+    'ListAssistantSessions': 'GET',
     'ListAssistantTasks': 'GET',
     'ListConsents': 'GET',
-    'ListConversationTurns': 'GET',
+    'ListSessionTurns': 'GET',
     'ListSkillSubscriptions': 'GET',
     'ListSkills': 'GET',
+    'PauseAssistantRun': 'POST',
     'ReportPageContext': 'POST',
     'RestoreAssistantPreference': 'POST',
+    'ResumeAssistantRun': 'POST',
     'RevokeAssistantPreference': 'POST',
     'RevokeSkillConsent': 'DELETE',
     'RollbackAssistantPolicyRollout': 'POST',
-    'SearchXiaoquResults': 'POST',
+    'RollbackAssistantSkillPackageRelease': 'POST',
     'SetAssistantPreference': 'POST',
     'StageAssistantPolicyRelease': 'POST',
+    'StageAssistantSkillPackageRelease': 'POST',
     'StartAssistantRun': 'POST',
+    'SteerAssistantRun': 'POST',
     'StreamAssistantRunEvents': 'GET',
-    'SuggestCreationAssistance': 'POST',
     'TickSkillSubscriptionCron': 'POST',
     'UpdateSkillSubscriptionStatus': 'PATCH',
   };
@@ -99,36 +105,40 @@ class AssistantApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'ActivateAssistantPolicyRollout': 'required',
+    'ActivateAssistantSkillPackageRelease': 'required',
     'AppendAssistantLearningFact': 'required',
     'AppendAssistantServiceLearningFact': 'required',
     'CancelAssistantRun': 'required',
-    'CreateAssistantConversation': 'required',
+    'ContinueAssistantToolUse': 'required',
+    'CreateAssistantSession': 'required',
     'CreateSkillSubscription': 'required',
-    'GetAssistantConversation': 'required',
+    'GetAssistantEntry': 'required',
     'GetAssistantRun': 'required',
-    'GetEntryPersonalization': 'required',
+    'GetAssistantSession': 'required',
     'GetLearningOpsSummary': 'required',
     'GetSkillSubscription': 'required',
-    'GetSuggestedActions': 'required',
     'GrantSkillConsent': 'required',
-    'ListAssistantConversations': 'required',
     'ListAssistantPreferences': 'required',
+    'ListAssistantSessions': 'required',
     'ListAssistantTasks': 'required',
     'ListConsents': 'required',
-    'ListConversationTurns': 'required',
+    'ListSessionTurns': 'required',
     'ListSkillSubscriptions': 'required',
     'ListSkills': 'required',
+    'PauseAssistantRun': 'required',
     'ReportPageContext': 'required',
     'RestoreAssistantPreference': 'required',
+    'ResumeAssistantRun': 'required',
     'RevokeAssistantPreference': 'required',
     'RevokeSkillConsent': 'required',
     'RollbackAssistantPolicyRollout': 'required',
-    'SearchXiaoquResults': 'required',
+    'RollbackAssistantSkillPackageRelease': 'required',
     'SetAssistantPreference': 'required',
     'StageAssistantPolicyRelease': 'required',
+    'StageAssistantSkillPackageRelease': 'required',
     'StartAssistantRun': 'required',
+    'SteerAssistantRun': 'required',
     'StreamAssistantRunEvents': 'required',
-    'SuggestCreationAssistance': 'required',
     'TickSkillSubscriptionCron': 'required',
     'UpdateSkillSubscriptionStatus': 'required',
   };
@@ -142,36 +152,40 @@ class AssistantApiMetadata {
   };
 
   static const String activateAssistantPolicyRolloutOperation = 'ActivateAssistantPolicyRollout';
+  static const String activateAssistantSkillPackageReleaseOperation = 'ActivateAssistantSkillPackageRelease';
   static const String appendAssistantLearningFactOperation = 'AppendAssistantLearningFact';
   static const String appendAssistantServiceLearningFactOperation = 'AppendAssistantServiceLearningFact';
   static const String cancelAssistantRunOperation = 'CancelAssistantRun';
-  static const String createAssistantConversationOperation = 'CreateAssistantConversation';
+  static const String continueAssistantToolUseOperation = 'ContinueAssistantToolUse';
+  static const String createAssistantSessionOperation = 'CreateAssistantSession';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
-  static const String getAssistantConversationOperation = 'GetAssistantConversation';
+  static const String getAssistantEntryOperation = 'GetAssistantEntry';
   static const String getAssistantRunOperation = 'GetAssistantRun';
-  static const String getEntryPersonalizationOperation = 'GetEntryPersonalization';
+  static const String getAssistantSessionOperation = 'GetAssistantSession';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
-  static const String getSuggestedActionsOperation = 'GetSuggestedActions';
   static const String grantSkillConsentOperation = 'GrantSkillConsent';
-  static const String listAssistantConversationsOperation = 'ListAssistantConversations';
   static const String listAssistantPreferencesOperation = 'ListAssistantPreferences';
+  static const String listAssistantSessionsOperation = 'ListAssistantSessions';
   static const String listAssistantTasksOperation = 'ListAssistantTasks';
   static const String listConsentsOperation = 'ListConsents';
-  static const String listConversationTurnsOperation = 'ListConversationTurns';
+  static const String listSessionTurnsOperation = 'ListSessionTurns';
   static const String listSkillSubscriptionsOperation = 'ListSkillSubscriptions';
   static const String listSkillsOperation = 'ListSkills';
+  static const String pauseAssistantRunOperation = 'PauseAssistantRun';
   static const String reportPageContextOperation = 'ReportPageContext';
   static const String restoreAssistantPreferenceOperation = 'RestoreAssistantPreference';
+  static const String resumeAssistantRunOperation = 'ResumeAssistantRun';
   static const String revokeAssistantPreferenceOperation = 'RevokeAssistantPreference';
   static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
   static const String rollbackAssistantPolicyRolloutOperation = 'RollbackAssistantPolicyRollout';
-  static const String searchXiaoquResultsOperation = 'SearchXiaoquResults';
+  static const String rollbackAssistantSkillPackageReleaseOperation = 'RollbackAssistantSkillPackageRelease';
   static const String setAssistantPreferenceOperation = 'SetAssistantPreference';
   static const String stageAssistantPolicyReleaseOperation = 'StageAssistantPolicyRelease';
+  static const String stageAssistantSkillPackageReleaseOperation = 'StageAssistantSkillPackageRelease';
   static const String startAssistantRunOperation = 'StartAssistantRun';
+  static const String steerAssistantRunOperation = 'SteerAssistantRun';
   static const String streamAssistantRunEventsOperation = 'StreamAssistantRunEvents';
-  static const String suggestCreationAssistanceOperation = 'SuggestCreationAssistance';
   static const String tickSkillSubscriptionCronOperation = 'TickSkillSubscriptionCron';
   static const String updateSkillSubscriptionStatusOperation = 'UpdateSkillSubscriptionStatus';
 
@@ -181,6 +195,7 @@ class AssistantApiMetadata {
       'policyId': policyId,
     });
   }
+  static const String activateAssistantSkillPackageReleasePath = '/internal/assistant/skill-package-releases:activate';
   static const String appendAssistantLearningFactPath = '/assistant/learning/facts';
   static const String appendAssistantServiceLearningFactPath = '/internal/assistant/learning/facts';
   static const String cancelAssistantRunPathTemplate = '/assistant/runs/{runId}/cancel';
@@ -189,21 +204,28 @@ class AssistantApiMetadata {
       'runId': runId,
     });
   }
-  static const String createAssistantConversationPath = '/assistant/conversations';
-  static const String createSkillSubscriptionPath = '/assistant/skill-subscriptions';
-  static const String getAssistantConversationPathTemplate = '/assistant/conversations/{conversationId}';
-  static String getAssistantConversationPath({required String conversationId}) {
-    return _fillPath(getAssistantConversationPathTemplate, <String, String>{
-      'conversationId': conversationId,
+  static const String continueAssistantToolUsePathTemplate = '/assistant/runs/{runId}/tool-uses/{toolUseId}/continue';
+  static String continueAssistantToolUsePath({required String runId, required String toolUseId}) {
+    return _fillPath(continueAssistantToolUsePathTemplate, <String, String>{
+      'runId': runId,
+      'toolUseId': toolUseId,
     });
   }
+  static const String createAssistantSessionPath = '/assistant/sessions';
+  static const String createSkillSubscriptionPath = '/assistant/skill-subscriptions';
+  static const String getAssistantEntryPath = '/assistant/entry';
   static const String getAssistantRunPathTemplate = '/assistant/runs/{runId}';
   static String getAssistantRunPath({required String runId}) {
     return _fillPath(getAssistantRunPathTemplate, <String, String>{
       'runId': runId,
     });
   }
-  static const String getEntryPersonalizationPath = '/assistant/personalization';
+  static const String getAssistantSessionPathTemplate = '/assistant/sessions/{sessionId}';
+  static String getAssistantSessionPath({required String sessionId}) {
+    return _fillPath(getAssistantSessionPathTemplate, <String, String>{
+      'sessionId': sessionId,
+    });
+  }
   static const String getLearningOpsSummaryPath = '/assistant/ops/learning-summary';
   static const String getSkillSubscriptionPathTemplate = '/assistant/skill-subscriptions/{subscriptionId}';
   static String getSkillSubscriptionPath({required String subscriptionId}) {
@@ -211,30 +233,41 @@ class AssistantApiMetadata {
       'subscriptionId': subscriptionId,
     });
   }
-  static const String getSuggestedActionsPath = '/assistant/suggested-actions';
   static const String grantSkillConsentPathTemplate = '/assistant/skills/{skillId}/consent';
   static String grantSkillConsentPath({required String skillId}) {
     return _fillPath(grantSkillConsentPathTemplate, <String, String>{
       'skillId': skillId,
     });
   }
-  static const String listAssistantConversationsPath = '/assistant/conversations';
   static const String listAssistantPreferencesPath = '/assistant/preferences';
+  static const String listAssistantSessionsPath = '/assistant/sessions';
   static const String listAssistantTasksPath = '/assistant/tasks';
   static const String listConsentsPath = '/assistant/consents';
-  static const String listConversationTurnsPathTemplate = '/assistant/conversations/{conversationId}/turns';
-  static String listConversationTurnsPath({required String conversationId}) {
-    return _fillPath(listConversationTurnsPathTemplate, <String, String>{
-      'conversationId': conversationId,
+  static const String listSessionTurnsPathTemplate = '/assistant/sessions/{sessionId}/turns';
+  static String listSessionTurnsPath({required String sessionId}) {
+    return _fillPath(listSessionTurnsPathTemplate, <String, String>{
+      'sessionId': sessionId,
     });
   }
   static const String listSkillSubscriptionsPath = '/assistant/skill-subscriptions';
   static const String listSkillsPath = '/assistant/skills';
+  static const String pauseAssistantRunPathTemplate = '/assistant/runs/{runId}/pause';
+  static String pauseAssistantRunPath({required String runId}) {
+    return _fillPath(pauseAssistantRunPathTemplate, <String, String>{
+      'runId': runId,
+    });
+  }
   static const String reportPageContextPath = '/assistant/page-context';
   static const String restoreAssistantPreferencePathTemplate = '/assistant/preferences/{preferenceId}/restore';
   static String restoreAssistantPreferencePath({required String preferenceId}) {
     return _fillPath(restoreAssistantPreferencePathTemplate, <String, String>{
       'preferenceId': preferenceId,
+    });
+  }
+  static const String resumeAssistantRunPathTemplate = '/assistant/runs/{runId}/resume';
+  static String resumeAssistantRunPath({required String runId}) {
+    return _fillPath(resumeAssistantRunPathTemplate, <String, String>{
+      'runId': runId,
     });
   }
   static const String revokeAssistantPreferencePathTemplate = '/assistant/preferences/{preferenceId}/revoke';
@@ -255,13 +288,20 @@ class AssistantApiMetadata {
       'policyId': policyId,
     });
   }
-  static const String searchXiaoquResultsPath = '/assistant/search/xiaoqu';
+  static const String rollbackAssistantSkillPackageReleasePath = '/internal/assistant/skill-package-releases:rollback';
   static const String setAssistantPreferencePath = '/assistant/preferences';
   static const String stageAssistantPolicyReleasePath = '/internal/assistant/policy-releases';
-  static const String startAssistantRunPathTemplate = '/assistant/conversations/{conversationId}/runs';
-  static String startAssistantRunPath({required String conversationId}) {
+  static const String stageAssistantSkillPackageReleasePath = '/internal/assistant/skill-package-releases';
+  static const String startAssistantRunPathTemplate = '/assistant/sessions/{sessionId}/runs';
+  static String startAssistantRunPath({required String sessionId}) {
     return _fillPath(startAssistantRunPathTemplate, <String, String>{
-      'conversationId': conversationId,
+      'sessionId': sessionId,
+    });
+  }
+  static const String steerAssistantRunPathTemplate = '/assistant/runs/{runId}/steer';
+  static String steerAssistantRunPath({required String runId}) {
+    return _fillPath(steerAssistantRunPathTemplate, <String, String>{
+      'runId': runId,
     });
   }
   static const String streamAssistantRunEventsPathTemplate = '/assistant/runs/{runId}/events';
@@ -270,7 +310,6 @@ class AssistantApiMetadata {
       'runId': runId,
     });
   }
-  static const String suggestCreationAssistancePath = '/assistant/skills/creation-suggest';
   static const String tickSkillSubscriptionCronPath = '/internal/assistant/skill-subscriptions:tick';
   static const String updateSkillSubscriptionStatusPathTemplate = '/assistant/skill-subscriptions/{subscriptionId}/status';
   static String updateSkillSubscriptionStatusPath({required String subscriptionId}) {

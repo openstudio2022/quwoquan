@@ -635,7 +635,8 @@ func dataContentTestEnvironment(
 		"QWQ_PUBLISH_ROOT":        publishRoot,
 	}
 	if repoRoot := strings.TrimSpace(os.Getenv("TEST_REPO_ROOT")); repoRoot != "" {
-		overrides["PYTHONPATH"] = filepath.Join(repoRoot, "quwoquan_data", "scripts")
+		scriptsRoot := filepath.Join(repoRoot, "quwoquan_data", "scripts")
+		overrides["PYTHONPATH"] = scriptsRoot + string(os.PathListSeparator) + repoRoot
 	}
 	return dataContentEnvironment(current, overrides)
 }

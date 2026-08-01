@@ -1,0 +1,26 @@
+dart_class: AssistantRunEnvelopeWire
+library_path: assistant/generated/contracts/assistant_run_envelope.g.dart
+output_path: assistant/generated/contracts/assistant_run_envelope.g.dart
+contract: assistant_run_envelope
+kind: entity_wire_contract
+imports:
+  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+fields:
+  - { name: runId, type: string, required: true }
+  - { name: sessionId, type: string, required: true }
+  - { name: status, type: string, default: queued }
+  - { name: reasoningProfile, type: string, default: balanced }
+  - { name: goal, type: string, default: '' }
+  - { name: terminalSnapshot, type: object, ref: AssistantRunTerminalSnapshotView }
+  - { name: traceId, type: string, default: '' }
+  - { name: revision, type: int, default: 0 }
+  - { name: streamState, type: object, ref: run_stream_state, default: {} }
+  - { name: createdAt, type: string, required: true }
+  - { name: completedAt, type: string, default: '' }
+subcontracts:
+  run_stream_state:
+    class_name: AssistantRunStreamStateWire
+    fields:
+      - { name: lastSeq, type: int, default: 0 }
+      - { name: completed, type: bool, default: false }
+      - { name: resumeToken, type: string, default: '' }

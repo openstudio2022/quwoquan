@@ -26,12 +26,11 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     LocalAcceptanceSession,
-    open_local_acceptance_session,
+    open_reference_acceptance_session,
 )
 
 
 LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
-_LOCAL_CANARY_TARGETS = {"prod": "prod-sim"}
 
 
 class ProbeFailure(RuntimeError):
@@ -48,15 +47,8 @@ def reporter_session(
     target_name: str = "",
 ) -> LocalAcceptanceSession:
     local_target = LOCAL_TARGETS.get(environment)
-    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
-        local_target = _LOCAL_CANARY_TARGETS["prod"]
-    # prod 只有显式 prod-sim 才能使用本地受控 canary 凭据；prod-hosted 保持
-    # hosted bearer-token 路径，绝不能降级为本地签发令牌。
-    use_local_target = local_target is not None and (
-        environment != "prod" or target_name == _LOCAL_CANARY_TARGETS["prod"]
-    )
-    if use_local_target:
-        return open_local_acceptance_session(
+    if local_target is not None:
+        return open_reference_acceptance_session(
             base_url,
             environment=environment,
             target_name=local_target,
@@ -69,23 +61,20 @@ def media_viewer_session(
     environment: str,
     base_url: str,
     target_name: str,
-    subject: str,
 ) -> LocalAcceptanceSession:
     """创建与发布者隔离的本地 viewer，用真实 Post 可见性验证原图授权。"""
 
     local_target = LOCAL_TARGETS.get(environment)
-    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
-        local_target = _LOCAL_CANARY_TARGETS["prod"]
     if local_target is None:
         raise ProbeFailure(
             "unsafe_mode",
             "media viewer session is only available to local lifecycle targets",
         )
-    return open_local_acceptance_session(
+    return open_reference_acceptance_session(
         base_url,
         environment=environment,
         target_name=local_target,
-        subject=subject,
+        actor_index=1,
     )
 
 
@@ -97,20 +86,9 @@ def moderation_operator_session(
 ) -> LocalAcceptanceSession:
     """签发仅能审核 Post 的本地 operator，用于走完真实人工审核状态机。"""
 
-    local_target = LOCAL_TARGETS.get(environment)
-    if environment == "prod" and target_name == _LOCAL_CANARY_TARGETS["prod"]:
-        local_target = _LOCAL_CANARY_TARGETS["prod"]
-    if local_target is None:
-        raise ProbeFailure(
-            "unsafe_mode",
-            "moderation operator session is only available to local lifecycle targets",
-        )
-    return open_local_acceptance_session(
-        base_url,
-        environment=environment,
-        target_name=local_target,
-        profile="content-moderation-operator",
-        subject="fixture_content_moderation_operator",
+    return _hosted_session(
+        "CONTENT_MODERATION_OPERATOR_TOKEN",
+        "content-moderation-operator",
     )
 
 
@@ -121,12 +99,9 @@ def operator_session(
     hosted_token_env: str,
 ) -> LocalAcceptanceSession:
     if environment in LOCAL_TARGETS:
-        return open_local_acceptance_session(
-            base_url,
-            environment=environment,
-            target_name=LOCAL_TARGETS[environment],
-            profile="content-report-operator",
-            subject="fixture_content_report_operator",
+        return _hosted_session(
+            "CONTENT_REPORT_OPERATOR_TOKEN",
+            "content-report-operator",
         )
     return _hosted_session(hosted_token_env, "report-operator")
 

@@ -1,0 +1,18 @@
+dart_class: AssistantPresentationDocumentWire
+library_path: assistant/generated/contracts/assistant_presentation_document.g.dart
+output_path: assistant/generated/contracts/assistant_presentation_document.g.dart
+contract: assistant_presentation_document
+kind: shared_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart
+fields:
+  - { name: templateRef, type: string, required: true }
+  - { name: templateDigest, type: string, required: true }
+  - { name: revision, type: int, required: true }
+  - { name: rootNodeId, type: string, required: true }
+  - { name: nodes, type: list<object>, ref: AssistantPresentationNodeWire, default: [] }
+  - { name: dataDigest, type: string, required: true }
+  - { name: selectedVariant, type: string, default: standard }
+  - { name: fallbackMarkdown, type: string, required: true }
+  - { name: fallbackPlainText, type: string, required: true }
+  - { name: committedAt, type: string, required: true }

@@ -7,9 +7,9 @@
 本模块提供两件事，专治该脆弱点：
 
 - `resolve_cursor_api_key()`：每次 agent 调用前从**单一真相源**动态读取最新 key
-  （默认 `~/.config/quwoquan/cursor_api_key`），并只在当前进程内回写 SDK 需要的
-  `CURSOR_API_KEY`。文件按行解析，`#` 注释行与空行被跳过，只有首个有效行是现行 key，
-  因此轮换可以把旧 key 注释留档而不污染凭据。
+  （默认 `~/.config/quwoquan/cursor_api_key`），只把值返回给 SDK 的显式
+  `AgentOptions.api_key`，绝不回写 `CURSOR_API_KEY`。文件按行解析，`#` 注释行与空行
+  被跳过，只有首个有效行是现行 key，因此轮换可以把旧 key 注释留档而不污染凭据。
   运营/daemon
   轮换时只需原子更新该文件，无需重启长进程。
 - `is_cursor_auth_error()`：把 401/403/unauthorized/invalid api key/plan_required 等
@@ -73,6 +73,14 @@ def parse_cursor_api_key(content: str) -> str | None:
     return None
 
 
+def redact_cursor_api_key(value: object, *, api_key: str | None = None) -> str:
+    """Redact the actually resolved key, regardless of its provider-specific shape."""
+    text = str(value or "")
+    if api_key:
+        text = text.replace(api_key, "<redacted-cursor-key>")
+    return text
+
+
 def cursor_key_file_issues() -> list[str]:
     """Return redacted contract failures for the sole supported credential source."""
     key_file = cursor_api_key_file()
@@ -98,21 +106,21 @@ def cursor_key_file_issues() -> list[str]:
 def resolve_cursor_api_key(*, refresh: bool = True) -> str | None:
     """Resolve the freshest Cursor API key from the single source of truth.
 
-    Only the key file is accepted.  ``CURSOR_API_KEY`` is populated transiently
-    for the SDK after a successful file read and is never a configuration source.
+    Only the key file is accepted.  The legacy environment variable is neither
+    read nor populated: nested bridge processes must receive no credential and
+    all SDK calls pass this return value explicitly.
     """
+    del refresh  # Kept for source compatibility; key-file reads are never cached.
+    os.environ.pop(CURSOR_API_KEY_ENV, None)
     key_file = cursor_api_key_file()
     if cursor_key_file_issues():
         return None
-    if not refresh:
-        return str(os.environ.get(CURSOR_API_KEY_ENV) or "").strip() or None
     try:
         file_key = parse_cursor_api_key(key_file.read_text(encoding="utf-8"))
     except OSError:
         return None
     if not file_key:
         return None
-    os.environ[CURSOR_API_KEY_ENV] = file_key
     return file_key
 
 

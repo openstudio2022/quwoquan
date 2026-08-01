@@ -1,0 +1,98 @@
+commercial_defaults:
+  status: blocked
+  block_reason: canonical operation awaits object-centered commercial migration
+  gap_id: SEARCH_QUERY_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+description: SearchRequestFact 的查询热力读模型入口；不拥有搜索执行与结果生命周期。
+externalDependencies:
+  - role: use
+    capability: runtime.message.transport
+    port: MessageTransportPort
+    operations: [appendDurable, consumeDurable]
+    scenes: [general]
+api_routes:
+  - method: GET
+    path: /search/hot-queries
+    operation: ListHotQueries
+    actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_search_discovery
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    pagination:
+      default_items: 10
+      maximum_items: 20
+    error_codes:
+      - SEARCH.USER.hot_query_invalid_argument
+      - SEARCH.MIDDLEWARE.hot_query_unavailable
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: search_hot_queries
+      trace: true
+      attributes:
+        - outcome
+        - result_count
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.5
+    application:
+      kind: query
+      facet: SearchHotQueryFacade
+      method: listHotQueries
+      reader: TermHeatReader
+      slice: HotQuerySlice
+    description: 返回 search term-heat 读模型中全局 relevance 最高的搜索词，供默认页「猜你想搜」展示
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+    response_entity: SearchTermHeatView
+    response_fields:
+      - query
+      - relevance
+    client_contract:
+      dart_import: ../search/hot_query_contracts.dart
+      response_type: HotQuerySlice
+      response_decoder: decodeHotQuerySlice
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: ListHotQueriesQuery
+    request_body_kind: none
+consumers:
+  - name: app
+    capabilities:
+      - hot_queries
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: search-service API
+      scenarios:
+        - name: list_hot_queries
+          route: GET /search/hot-queries
+          assertions:
+            - status_200
+            - items_match_schema
+    service_side:
+      description: 使用 Mongo 真实读模型验证 term-heat 查询与有界返回。
+      real_engines:
+        mongodb: required
+      scenarios:
+        - name: list_hot_queries
+          command: ListHotQueries
+          assertions:
+            - relevance_order_is_stable
+            - limit_is_bounded

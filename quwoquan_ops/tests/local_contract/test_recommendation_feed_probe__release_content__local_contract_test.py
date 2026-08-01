@@ -31,3 +31,37 @@ def test_release_recommendation_probe__rejects_empty_items__local_contract() -> 
     assert probe.check_non_empty_items({"items": []}, required=True)
     assert probe.check_non_empty_items({"items": [{"postId": "video-1"}]}, required=True) == []
     assert probe.check_non_empty_items({"items": []}, required=False) == []
+
+
+def test_feed_outcome_contract_rejects_ambiguous_empty_and_content() -> None:
+    probe = _probe_module()
+    digest = "sha256:" + "a" * 64
+    base = {"feedRequestId": "feed-1", "policyDigest": digest}
+
+    assert probe.check_envelope(
+        {
+            **base,
+            "items": [{"postId": "post-1"}],
+            "outcome": "content",
+            "emptyReason": None,
+        }
+    ) == []
+    assert probe.check_envelope(
+        {
+            **base,
+            "items": [],
+            "outcome": "empty",
+            "emptyReason": "no_eligible_content",
+        }
+    ) == []
+    assert "empty outcome requires a canonical emptyReason" in probe.check_envelope(
+        {**base, "items": [], "outcome": "empty"}
+    )
+    assert "non-empty items require outcome=content" in probe.check_envelope(
+        {
+            **base,
+            "items": [{"postId": "post-1"}],
+            "outcome": "empty",
+            "emptyReason": "no_eligible_content",
+        }
+    )

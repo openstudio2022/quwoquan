@@ -1,0 +1,41 @@
+backend: mongodb
+role: projection
+collections:
+  rm_recommend_feature:
+    entity: RecommendationFeatureProfileView
+    role: projection
+    indexes:
+    - {name: uq_recommendation_feature_subject, keys: {subjectId: 1}, unique: true}
+  rm_author_impact:
+    entity: RecommendationAuthorImpactProjection
+    role: projection
+    indexes:
+    - {name: uq_recommendation_author_impact, keys: {authorId: 1}, unique: true}
+  rm_author_impact_evidence:
+    entity: RecommendationAuthorImpactEvidenceProjection
+    role: projection
+    description: 只保留不可反查 viewer 的事件、作者、内容和动作证据；可识别 viewer 只存在于可清理的 subject profile/u2i。
+    indexes:
+    - {name: uq_recommendation_author_impact_evidence, keys: {eventId: 1, authorId: 1}, unique: true}
+  rm_collaborative_i2i:
+    entity: RecommendationItemSimilarityProjection
+    role: projection
+    indexes:
+    - {name: uq_recommendation_collaborative_i2i_pair, keys: {leftContentId: 1, rightContentId: 1}, unique: true}
+  rm_collaborative_u2i:
+    entity: RecommendationSubjectSimilarityProjection
+    role: projection
+    indexes:
+    - {name: uq_recommendation_collaborative_u2i_pair, keys: {subjectId: 1, contentId: 1}, unique: true}
+    - {name: idx_recommendation_collaborative_u2i_subject_score, keys: {subjectId: 1, score: -1, updatedAt: -1}}
+  rm_intersection_feature:
+    entity: RecommendationIntersectionFeatureProjection
+    role: projection
+    indexes:
+    - {name: uq_recommendation_intersection_subject_feature, keys: {subjectId: 1, feature: 1}, unique: true}
+  recommendation_feature_projection_checkpoints:
+    entity: RecommendationFeatureProjectionCheckpoint
+    role: inbox
+    description: 每个 source eventId 与 subjectId 的永久幂等收据及本地主体 revision；不同上游 sequence 不做错误的大小比较。
+    indexes:
+    - {name: idx_recommendation_feature_checkpoint_subject, keys: {subjectId: 1, appliedAt: -1}}

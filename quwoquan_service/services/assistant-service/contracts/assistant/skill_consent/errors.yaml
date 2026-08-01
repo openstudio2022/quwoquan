@@ -4,9 +4,9 @@ description: 'SkillConsent 聚合的可信身份与 owner 授权错误。
 
   '
 errors:
-- code: ASSISTANT.USER.unauthorized
+- code: ASSISTANT.USER.consent_unauthorized
   kind: USER
-  reason: unauthorized
+  reason: consent_unauthorized
   http_status: 401
   emitted_by:
   - surface: http
@@ -14,32 +14,10 @@ errors:
     - GrantSkillConsent
     - RevokeSkillConsent
     - ListConsents
-    - assistant.assistant_conversation.CreateAssistantConversation
-    - assistant.assistant_conversation.GetAssistantConversation
-    - assistant.assistant_conversation.ListAssistantConversations
-    - assistant.assistant_preference_fact.ListAssistantPreferences
-    - assistant.assistant_preference_fact.RestoreAssistantPreference
-    - assistant.assistant_preference_fact.RevokeAssistantPreference
-    - assistant.assistant_preference_fact.SetAssistantPreference
-    - assistant.assistant_run.CancelAssistantRun
-    - assistant.assistant_run.GetAssistantRun
-    - assistant.assistant_run.GetEntryPersonalization
-    - assistant.assistant_run.GetSuggestedActions
-    - assistant.assistant_run.ListAssistantTasks
-    - assistant.assistant_run.ListConversationTurns
-    - assistant.assistant_run.ReportPageContext
-    - assistant.assistant_run.SearchXiaoquResults
-    - assistant.assistant_run.StartAssistantRun
-    - assistant.assistant_run.StreamAssistantRunEvents
-    - assistant.assistant_run.SuggestCreationAssistance
-    - assistant.skill_subscription.CreateSkillSubscription
-    - assistant.skill_subscription.GetSkillSubscription
-    - assistant.skill_subscription.ListSkillSubscriptions
-    - assistant.skill_subscription.UpdateSkillSubscriptionStatus
   recovery_action: surface
-  dart_const: unauthorized
-  go_const: ErrUnauthorized
-  l10n_key: assistant.error.unauthorized
+  dart_const: consentUnauthorized
+  go_const: ErrConsentUnauthorized
+  l10n_key: assistant.error.consent_unauthorized
   user_message:
     zh: 请先登录
     en: Please sign in first
@@ -67,6 +45,7 @@ errors:
     - GrantSkillConsent
     - RevokeSkillConsent
     - ListConsents
+    - assistant.assistant_run.StartAssistantRun
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: consentUnavailable
@@ -75,3 +54,17 @@ errors:
   user_message:
     zh: 授权服务暂不可用，敏感能力已按未授权处理
     en: Consent service is unavailable; sensitive capabilities are treated as not granted
+- code: ASSISTANT.USER.consent_idempotency_conflict
+  kind: USER
+  reason: consent_idempotency_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [GrantSkillConsent, RevokeSkillConsent]
+  recovery_action: surface
+  dart_const: consentIdempotencyConflict
+  go_const: ErrConsentIdempotencyConflict
+  l10n_key: assistant.error.consent_idempotency_conflict
+  user_message:
+    zh: 请勿将同一请求标识用于不同授权操作
+    en: Do not reuse the same request identity for another consent command

@@ -66,10 +66,7 @@ class IoFileStorageGateway implements FileStorageGateway {
     final entries = <FileSystemEntry>[];
     await for (final entity in dir.list(followLinks: false)) {
       entries.add(
-        FileSystemEntry(
-          path: entity.path,
-          isDirectory: entity is Directory,
-        ),
+        FileSystemEntry(path: entity.path, isDirectory: entity is Directory),
       );
     }
     return entries;

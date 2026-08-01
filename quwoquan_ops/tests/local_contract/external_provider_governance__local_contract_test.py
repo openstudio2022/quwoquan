@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import tempfile
 import unittest
+from unittest import mock
 
 import yaml
 
@@ -13,6 +15,18 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class ExternalProviderGovernanceContractTest(unittest.TestCase):
+    def test_generated_output_directory_is_not_a_service_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            services_root = Path(temporary)
+            (services_root / "user-service").mkdir()
+            (services_root / ".qwq_output").mkdir()
+
+            with mock.patch.object(governance, "SERVICES_ROOT", services_root):
+                self.assertEqual(
+                    governance._service_roots(),
+                    [services_root / "user-service"],
+                )
+
     def test_governance_is_derived_without_registry_files(self) -> None:
         for relative in (
             "docs/external_service_registry.yaml",
@@ -84,17 +98,17 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                     (service_id, capability_id, adapter),
                 )
 
-    def test_all_non_prod_environments_use_local_substitutes(self) -> None:
+    def test_non_prod_bindings_are_enabled_and_prod_forbids_substitutes(self) -> None:
         bindings = governance.load_bindings()
         self.assertEqual(
-            governance.SUBSTITUTE_ENVIRONMENTS,
+            governance.NONPROD_ENVIRONMENTS,
             ("alpha", "beta", "gamma"),
         )
         self.assertEqual(
             governance.RELEASE_ADAPTER_ENVIRONMENTS,
             ("prod",),
         )
-        for environment in governance.SUBSTITUTE_ENVIRONMENTS:
+        for environment in governance.NONPROD_ENVIRONMENTS:
             for service_id, service_bindings in bindings["environments"][environment].items():
                 for capability_id, binding in service_bindings.items():
                     if binding.get("state") == "not_required":
@@ -105,10 +119,6 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                         binding["state"],
                         "enabled",
                         (environment, service_id, capability_id),
-                    )
-                    self.assertTrue(
-                        governance.is_local_substitute_adapter(binding["adapter"]),
-                        (environment, service_id, capability_id, binding["adapter"]),
                     )
 
         for environment in governance.RELEASE_ADAPTER_ENVIRONMENTS:
@@ -244,11 +254,64 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             any("consumer local state must match" in issue.message for issue in issues)
         )
 
+    def test_phone_otp_consumer_is_bound_to_integration_owner_in_every_environment(self) -> None:
+        registry = governance.load_registry()
+        sms_otp = next(
+            capability
+            for capability in registry["capabilities"]
+            if capability["capability_id"] == "identity.sms.otp"
+        )
+        self.assertEqual(
+            sms_otp["owner"],
+            "integration.external_integration.external_interaction",
+        )
+        self.assertEqual(
+            {
+                root["root_id"]
+                for root in sms_otp["binding_roots"]
+            },
+            {
+                "integration.external_integration.external_interaction",
+                "user.account.authentication_challenge",
+            },
+        )
+        self.assertEqual(
+            [
+                {
+                    "port": "SmsDeliveryPort",
+                    "operations": ["sendOtp"],
+                    "scenes": ["phone_otp_delivery"],
+                    "source": (
+                        "quwoquan_service/services/user-service/contracts/"
+                        "account/authentication_challenge/operations.yaml"
+                    ),
+                    "root": sms_otp["consumer_uses"][0]["root"],
+                    "role": "use",
+                }
+            ],
+            sms_otp["consumer_uses"],
+        )
+
+        bindings = governance.load_bindings()
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            self.assertEqual(
+                bindings["environments"][environment]["user-service"]["identity.sms.otp"],
+                {"state": "enabled"},
+            )
+            self.assertEqual(
+                bindings["environments"][environment]["user-service"]["identity.sms.otp"][
+                    "state"
+                ],
+                bindings["environments"][environment]["integration-service"][
+                    "identity.sms.otp"
+                ]["state"],
+            )
+
     def test_compiler_and_composition_are_closed(self) -> None:
         compiled, issues = governance.load_and_compile()
         self.assertEqual(issues, [])
         self.assertEqual(compiled["capabilityCount"], 14)
-        self.assertEqual(compiled["adapterCount"], 29)
+        self.assertEqual(compiled["adapterCount"], 17)
         self.assertEqual(
             governance.composition_issues(governance.load_registry(), compiled), []
         )
@@ -266,7 +329,7 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         assistant_transport = governance.render_go_bindings(
             compiled,
             descriptor_owner="assistant-service",
-            descriptor_root_id="assistant.assistant.assistant_conversation",
+            descriptor_root_id="assistant.assistant.assistant_session",
         )
         self.assertIn('"runtime.message.transport"', assistant_transport)
         self.assertIn('RequiredRedisScenes: []string{', assistant_transport)

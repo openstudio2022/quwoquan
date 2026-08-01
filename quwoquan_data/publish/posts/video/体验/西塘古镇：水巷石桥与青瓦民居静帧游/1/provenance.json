@@ -1,0 +1,32 @@
+{
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "agentRunId": "run-ec457087-ac74-4ad7-879f-0e6e96a89ee1",
+  "agentModel": "grok-4.5",
+  "renderStrategy": "rights_cleared_image_sequence",
+  "sources": [
+    {
+      "assetRef": "sources/西塘古镇__image_collection__829651c1/assets/001_西塘古镇_1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%E5%98%89%E5%85%B4%E8%A5%BF%E5%A1%98%E5%8F%A4%E9%95%8720180607-1.jpg",
+      "rightsRef": "sources/西塘古镇__image_collection__829651c1/assets/index.json#001_001",
+      "creator": "WFan",
+      "license": "CC BY-SA 4.0",
+      "basis": "rights_cleared",
+      "sourceUseMode": "licensed_adaptation",
+      "rightsAuditStatus": "verified",
+      "rightsAuditIssues": [],
+      "sha256": "sha256:af81567d5f9aeb6ce31198b8da5509bb9c4f7bb7eae69db885e5e21d071f61a4"
+    },
+    {
+      "assetRef": "sources/西塘古镇__image_collection__829651c1/assets/002_西塘古镇_2.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%E5%98%89%E5%85%B4%E8%A5%BF%E5%A1%98%E5%8F%A4%E9%95%8720180607-2.jpg",
+      "rightsRef": "sources/西塘古镇__image_collection__829651c1/assets/index.json#002_002",
+      "creator": "WFan",
+      "license": "CC BY-SA 4.0",
+      "basis": "rights_cleared",
+      "sourceUseMode": "licensed_adaptation",
+      "rightsAuditStatus": "verified",
+      "rightsAuditIssues": [],
+      "sha256": "sha256:38ec9f3de44edfb854cbeb69b02b5bb8f65eecdb32ba56f4507ef102f34756aa"
+    }
+  ]
+}

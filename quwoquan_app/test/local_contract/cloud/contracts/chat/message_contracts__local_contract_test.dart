@@ -69,6 +69,11 @@ void main() {
           card: ChatMessageCardCommand(
             kind: 'content_post',
             title: '城市漫步',
+            objectRef: ChatMessageCardObjectRef(
+              objectTypeRef: 'post',
+              objectId: 'post_001',
+              routeId: 'contentDetail',
+            ),
             attributes: <ChatMessageCardAttribute>[
               ChatMessageCardAttribute(name: 'postId', value: 'post_001'),
             ],
@@ -80,6 +85,11 @@ void main() {
       expect(body['card'], <String, Object?>{
         'kind': 'content_post',
         'title': '城市漫步',
+        'objectRef': <String, Object?>{
+          'objectTypeRef': 'post',
+          'objectId': 'post_001',
+          'routeId': 'contentDetail',
+        },
         'attributes': <Map<String, String>>[
           <String, String>{'name': 'postId', 'value': 'post_001'},
         ],
@@ -91,6 +101,13 @@ void main() {
           content: 'removed',
           clientMsgId: 'client-card-removed',
           card: ChatMessageCardCommand(kind: 'content_post', title: 'removed'),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ChatMessageCardCommand(
+          kind: 'content_post',
+          title: 'missing object ref',
         ),
         throwsArgumentError,
       );

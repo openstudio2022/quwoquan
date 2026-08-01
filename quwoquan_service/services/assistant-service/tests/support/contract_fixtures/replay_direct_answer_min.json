@@ -1,8 +1,10 @@
 {
   "replayCaseId": "replay_direct_answer_min",
-  "title": "Direct answer without tool",
+  "title": "Answer using production manifest tool policy",
   "request": {
-    "conversationId": "acv_replay_direct",
+    "skillId": "social_companion_chat",
+    "domainId": "social_companion_chat",
+    "sessionId": "asn_replay_direct",
     "turnId": "atn_replay_direct",
     "userId": "u_replay",
     "inputText": "What can XiaoQu do for daily planning?",
@@ -20,12 +22,32 @@
       "finishReason": "stop"
     },
     {
+      "stage": "evidence_processing",
+      "text": "Reviewed the returned capability evidence.",
+      "structuredDelta": {
+        "retrievalProcessing": {
+          "processingSummary": "Reviewed the returned capability evidence.",
+          "acceptedReferences": []
+        },
+        "evidenceSufficient": true
+      },
+      "finishReason": "stop"
+    },
+    {
       "stage": "final",
       "text": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
       "finishReason": "stop"
     }
   ],
-  "fakeToolScript": [],
+  "fakeToolScript": [
+    {
+      "toolName": "web_search",
+      "result": {
+        "kind": "tool_result",
+        "summary": "XiaoQu can help with daily planning, calendars, routines, and study goals."
+      }
+    }
+  ],
   "expectedStreamEvents": [
     {
       "eventType": "run_started"
@@ -38,15 +60,15 @@
     }
   ],
   "expectations": {
-    "selectedSkillId": "general_qa",
-    "selectedDomainId": "assistant",
-    "expectedToolNames": [],
+    "selectedSkillId": "social_companion_chat",
+    "selectedDomainId": "social_companion_chat",
+    "expectedToolNames": ["web_search"],
     "expectedClarificationSlotIds": [],
     "expectedReferenceUrls": [],
     "finalAnswerMode": "full"
   },
   "expectedRunResponse": {
-    "conversationId": "acv_replay_direct",
+    "sessionId": "asn_replay_direct",
     "turnId": "atn_replay_direct",
     "status": "completed",
     "finalText": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",

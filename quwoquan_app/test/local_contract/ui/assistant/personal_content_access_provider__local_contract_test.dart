@@ -18,6 +18,7 @@ class _FakeAssistantConsentFacet implements AssistantSkillConsentFacet {
   Future<AssistantSkillConsent> grantSkillConsent({
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
+    required String clientRequestId,
   }) async {
     _items.removeWhere((item) => item.skillId == skillId);
     final next = AssistantSkillConsent(
@@ -31,7 +32,10 @@ class _FakeAssistantConsentFacet implements AssistantSkillConsentFacet {
   }
 
   @override
-  Future<void> revokeSkillConsent({required String skillId}) async {
+  Future<void> revokeSkillConsent({
+    required String skillId,
+    required String clientRequestId,
+  }) async {
     _items.removeWhere((item) => item.skillId == skillId);
   }
 }

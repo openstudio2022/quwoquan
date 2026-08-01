@@ -97,9 +97,14 @@ type acceptingActiveTaxonomyLeafValidationPort struct{}
 
 func (acceptingActiveTaxonomyLeafValidationPort) ValidateActiveTaxonomyLeaves(
 	_ context.Context,
-	_ string,
+	expectedTaxonomyReleaseID string,
 	tagRefs []string,
 ) error {
+	if strings.TrimSpace(expectedTaxonomyReleaseID) != "tag-taxonomy-test-001" {
+		return contentgenerated.AppErrorFromInvalidArgument(
+			"controlled active taxonomy release mismatch",
+		)
+	}
 	for _, tagRef := range tagRefs {
 		if tagRef == "Topic/dependency-unavailable" {
 			return contentgenerated.AppErrorFromRequiredDependencyUnavailable(
@@ -450,15 +455,6 @@ func TestMain(m *testing.M) {
 		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
 		panic(fmt.Errorf("seed api integration active supply discovery post: %w", err))
 	}
-	if _, err := activeSupplyDB.Collection("rm_premium_pool").UpdateOne(ctx,
-		bson.M{"contentId": integrationSupplyPostID},
-		bson.M{"$set": bson.M{
-			"scope": "global", "status": "active", "eligibilityState": "eligible",
-			"qualityAdmission": "approved", "qualityScore": 0.95,
-			"expiresAt": activeSupplyNow.Add(24 * time.Hour), "takedownEjected": false,
-		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
-		panic(fmt.Errorf("seed api integration active supply premium video: %w", err))
-	}
 	feedService := feedapp.NewFeedService(
 		engine,
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
@@ -466,9 +462,6 @@ func TestMain(m *testing.M) {
 		feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
 			activeSupplyDB,
 			integrationEnvironment,
-			persistence.WithPremiumPlayableSupplyReader(
-				recinfra.NewMongoPremiumPoolCandidateReader(activeSupplyDB),
-			),
 		)),
 		feedapp.WithFeedDeliveryPageStore(
 			deliveryredis.NewStore(testRouter.Scene("rec")),

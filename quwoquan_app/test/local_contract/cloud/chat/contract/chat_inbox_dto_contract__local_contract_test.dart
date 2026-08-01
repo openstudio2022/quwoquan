@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('ChatInboxDto — 常规契约', () {
@@ -25,7 +26,7 @@ void main() {
       expect(dto.type, equals('group'));
       expect(dto.title, equals('产品共创群'));
       expect(dto.avatarUrl, equals('https://cdn.example.com/group.png'));
-      expect(dto.lastMessageType, equals('text'));
+      expect(dto.lastMessageType, equals(MessageType.text));
       expect(dto.lastSeq, equals(512));
       expect(dto.unreadCount, equals(4));
       expect(dto.mentionUnreadCount, equals(2));
@@ -85,6 +86,26 @@ void main() {
   group('ChatInboxDto — 异常/边界契约', () {
     test('缺失必填字段立即失败', () {
       expect(() => ChatInboxDto.fromMap(const {}), throwsFormatException);
+    });
+
+    test('拒绝 canonical MessageType 以外的历史别名', () {
+      final wire = <String, dynamic>{
+        'id': 'conv_legacy_type',
+        'type': 'direct',
+        'title': '历史类型',
+        'avatarUrl': '',
+        'groupAvatarVersion': 0,
+        'lastMessagePreview': '[语音]',
+        'lastMessageType': 'voice',
+        'lastMessageTime': null,
+        'lastSeq': 1,
+        'unreadCount': 0,
+        'mentionUnreadCount': 0,
+        'muted': false,
+        'pinned': false,
+        'circleId': '',
+      };
+      expect(() => ChatInboxDto.fromMap(wire), throwsFormatException);
     });
   });
 }

@@ -1,0 +1,37 @@
+events:
+- name: GatheringCreated
+  producer: circle-service
+  consumers: [gathering-conversation-binding, recommendation-engine]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, creatorPersonaId, targetRef, startAt, endAt, capacity, joinPolicy, status, createdAt]
+- name: GatheringConversationBound
+  producer: circle-service
+  consumers: [recommendation-engine]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, conversationId, status, updatedAt]
+- name: GatheringConversationBindingFailed
+  producer: circle-service
+  consumers: [gathering-conversation-binding]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, conversationBindingStatus, status, updatedAt]
+- name: GatheringParticipantStateChanged
+  producer: circle-service
+  consumers: [gathering-conversation-membership, recommendation-engine]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, status, participants, updatedAt]
+- name: GatheringCancelled
+  producer: circle-service
+  consumers: [gathering-conversation-membership, recommendation-engine]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, conversationId, status, updatedAt]
+- name: GatheringCompleted
+  producer: circle-service
+  consumers: [gathering-conversation-membership, recommendation-engine]
+  channel: transactional_outbox
+  payload_entity: Gathering
+  payload_fields: [_id, conversationId, status, updatedAt]

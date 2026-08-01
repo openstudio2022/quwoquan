@@ -4688,15 +4688,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "fixed_test",
-      "key": "sys.user-service.integration.otp.mode",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": "../../../contracts/metadata",
       "key": "sys.user-service.metadata.dir",
       "reload": "restart",

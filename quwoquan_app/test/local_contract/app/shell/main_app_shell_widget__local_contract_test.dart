@@ -500,6 +500,62 @@ void main() {
   });
 
   group('MainAppShell', () {
+    testWidgets('壳卸载后认证状态更新不读取已卸载的 ref', (tester) async {
+      final store = _MutableAuthSessionStore();
+      final container = ProviderContainer(
+        overrides: _shellTestOverrides(
+          authenticated: false,
+          store: store,
+          flippable: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              home: const MainAppShell(
+                currentLocation: AppRoutePaths.home,
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await container
+          .read(authSessionControllerProvider.notifier)
+          .applyLoginGrant(
+            const AuthSessionGrant(
+              accessToken: 'access-token',
+              refreshToken: 'refresh-token',
+              ownerId: 'user_001',
+              accountState: 'active',
+              identityOrigin: 'phone',
+              activePersona: ActivePersonaEnvelope(personaId: 'user_001'),
+              logicalShard: 0,
+              anonymousRetentionPolicy: '',
+              personaCount: 1,
+              sessionRememberTtlSeconds: 0,
+            ),
+          );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      container.dispose();
+    });
+
     testWidgets('底部导航展示五栏，视频书成为独立一级入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));

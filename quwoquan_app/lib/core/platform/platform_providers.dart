@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:quwoquan_app/core/platform/assistant_device_action_bridge.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/incoming_call_native_bridge.dart';
@@ -24,6 +25,20 @@ final platformTargetProvider = Provider<AppPlatform>(
 final platformCapabilitiesProvider = Provider<PlatformCapabilities>(
   (ref) => platformCapabilitiesFor(ref.watch(platformTargetProvider)),
 );
+
+final assistantDeviceActionBridgeProvider =
+    Provider<AssistantDeviceActionBridge>((ref) {
+      final platform = ref.watch(platformTargetProvider);
+      switch (platform) {
+        case AppPlatform.android:
+        case AppPlatform.ios:
+          return const MethodChannelAssistantDeviceActionBridge();
+        case AppPlatform.web:
+        case AppPlatform.ohos:
+        case AppPlatform.desktop:
+          return const UnsupportedAssistantDeviceActionBridge();
+      }
+    });
 
 /// Stable observability label assembled inside the platform boundary.
 ///

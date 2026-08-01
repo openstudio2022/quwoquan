@@ -32,7 +32,6 @@ description: |
     summaryAction   作者影响力卡（summary）主行动建议 {key,label}（author_impact_language.impactActionHints）。
     evidenceAction  影响力证据明细行（evidence drill-down）主行动建议 {key,label}（author_impact_evidence_view）。
     behaviorActions 行为信号 action 反查来源闭集（behavior_service action→helpType；空=无行为源，仅 seed/投影产出）。
-    status          active | deferred（deferred = 已登记但当前无数据源，不得产出）。
 
 # 端低饱和语义 tone 闭集（与交集 visualTone 同色板，端按 iconKey 查 tone）。
 toneLegend:
@@ -59,42 +58,36 @@ helpTypes:
     summaryAction: { key: open_content, label: 查看带来连接的内容 }
     evidenceAction: { key: open_content, label: 查看内容 }
     behaviorActions: [follow, add_contact]
-    status: active
 
   - helpType: community
     iconKey: communityJoin
     summaryAction: { key: open_discussion, label: 进入相关讨论 }
     evidenceAction: { key: open_discussion, label: 进入讨论 }
     behaviorActions: [join_circle]
-    status: active
 
   - helpType: decision
     iconKey: decisionCompass
     summaryAction: { key: open_route, label: 查看被影响的路线 }
     evidenceAction: { key: open_route, label: 查看路线 }
     behaviorActions: [author_view, entity_page_view, content_depth, play_progress, like, comment]
-    status: active
 
   - helpType: knowledge
     iconKey: knowledgeRead
     summaryAction: { key: create_followup, label: 写续篇 }
     evidenceAction: { key: create_followup, label: 写续篇 }
     behaviorActions: [assistant_interest]
-    status: active
 
   - helpType: spread
     iconKey: spreadShare
     summaryAction: { key: open_discussion, label: 查看传播路径 }
     evidenceAction: { key: open_discussion, label: 查看传播路径 }
     behaviorActions: [share]
-    status: active
 
   - helpType: audience
     iconKey: audienceReach
     summaryAction: { key: create_followup, label: 发布跟进 }
     evidenceAction: { key: open_content, label: 查看内容 }
     behaviorActions: []
-    status: active
 
 # 未登记 helpType 防御默认（消费方兜底，不属于任何登记 helpType；对齐既有 cascadePath/stone 兜底行为）。
 defaults:

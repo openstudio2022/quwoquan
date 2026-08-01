@@ -16,7 +16,7 @@ func TestAggregateRejectsNestedAggregateRoot(t *testing.T) {
 		ID: "assistant.assistant_run", Domain: "assistant", Name: "AssistantRun",
 		Kind: ast.ObjectKindAggregateRoot, KindExplicit: true,
 		SourcePath: "assistant/assistant/assistant_run/object.yaml",
-		Members:    []ast.Member{{Name: "AssistantConversation", Kind: ast.ObjectKindAggregateRoot, Cardinality: "1:1"}},
+		Members:    []ast.Member{{Name: "AssistantSession", Kind: ast.ObjectKindAggregateRoot, Cardinality: "1:1"}},
 	}}}
 	if issues := validate.Run(contractGraph, validate.ProfileCommercial); !hasIssueCode(issues, "CONTRACT.MEMBER.INVALID_KIND") {
 		t.Fatalf("nested aggregate root accepted: %+v", issues)

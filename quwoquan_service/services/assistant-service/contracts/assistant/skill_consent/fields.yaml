@@ -9,8 +9,8 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: userId
-  source: userId
+- name: accountId
+  source: accountId
   type: string
   constraints:
   - NOT_NULL
@@ -61,9 +61,20 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
+- name: granted
+  source: revokedAt IS NULL
+  type: boolean
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: 仅由 revokedAt 是否为空推导的生效性 projection，不持久化。
+  role: projection
 unique_constraints:
 - columns:
-  - userId
+  - accountId
   - skillId
   condition: revokedAt IS NULL
-  description: 每用户每 Skill 只有一个生效授权
+  description: 每账号每 Skill 只有一个生效授权

@@ -30,3 +30,17 @@ def test_credential_gate_accepts_repo_without_retired_alias(tmp_path: Path) -> N
     subprocess.run(["git", "add", "good.py"], cwd=tmp_path, check=True)
 
     assert cursor_credential_contract_issues(repo_root=tmp_path) == []
+
+
+def test_credential_gate_rejects_sdk_environment_fallback(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    scripts = tmp_path / "quwoquan_data" / "scripts"
+    scripts.mkdir(parents=True)
+    fallback = "allow_api_key_env_fallback" + "=True"
+    (scripts / "bad.py").write_text(f"Client.launch_bridge({fallback})\n", encoding="utf-8")
+    subprocess.run(["git", "add", "quwoquan_data/scripts/bad.py"], cwd=tmp_path, check=True)
+
+    issues = cursor_credential_contract_issues(repo_root=tmp_path)
+
+    assert len(issues) == 1
+    assert "forbidden Cursor credential environment fallback" in issues[0]

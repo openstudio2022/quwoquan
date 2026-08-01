@@ -123,8 +123,7 @@ class HomePrimaryTabStrip extends StatelessWidget {
     recommendedChannelId => DiscoveryText.homeTabRecommended,
     featuredChannelId => DiscoveryText.homeTabFeatured,
     circlesChannelId => DiscoveryText.homeTabCircles,
-    travelPhotographyChannelId =>
-      DiscoveryText.circleScenarioTravelPhotography,
+    travelPhotographyChannelId => DiscoveryText.circleScenarioTravelPhotography,
     campusChannelId => DiscoveryText.circleScenarioCampus,
     travelChannelId => DiscoveryText.homeTabTravel,
     photographyChannelId => DiscoveryText.homeTabPhotography,

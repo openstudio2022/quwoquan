@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 他人主页入口；壳内档案统一为Persona资料视图（`UserProfileViewData` 别名）。
 ///
@@ -21,6 +22,7 @@ class OtherProfilePage extends ConsumerStatefulWidget {
     this.onBack,
     this.referralSource = ReferralSource.authorProfile,
     this.openMessageComposerOnOpen = false,
+    this.greetingIntersectionRef,
   });
 
   final String userHandle;
@@ -31,6 +33,7 @@ class OtherProfilePage extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
   final ReferralSource referralSource;
   final bool openMessageComposerOnOpen;
+  final GreetingIntersectionRef? greetingIntersectionRef;
 
   @override
   ConsumerState<OtherProfilePage> createState() => _OtherProfilePageState();
@@ -85,6 +88,7 @@ class _OtherProfilePageState extends ConsumerState<OtherProfilePage> {
       initialDisplayName: widget.initialDisplayName,
       initialBackgroundUrl: widget.initialBackgroundImageUrl,
       openMessageComposerOnOpen: widget.openMessageComposerOnOpen,
+      greetingIntersectionRef: widget.greetingIntersectionRef,
       onBack: widget.onBack ?? () => context.pop(),
     );
   }

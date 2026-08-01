@@ -8,21 +8,29 @@ class GeneratedPostRuntimeMetadata {
   // Field defaults derived from post/fields.yaml constraints.
   static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{
     'assistantUsePolicy': 'inherit',
+    'captureDisclosure': <String>[],
+    'captureFeatureRefs': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
-    'entityMentions': <Map<String, dynamic>>[],
+    'entityMentions': <String>[],
     'entityRefs': <String>[],
     'likeCount': 0,
     'mediaAssetIds': <String>[],
-    'mediaItems': <Map<String, dynamic>>[],
+    'mediaItems': <String>[],
     'mediaUrls': <String>[],
     'moderationStatus': 'pending',
-    'semanticMentions': <Map<String, dynamic>>[],
+    'semanticMentions': <String>[],
     'shareCount': 0,
     'tagRefs': <String>[],
     'version': 1,
     'viewCount': 0,
     'visibility': 'public',
+  };
+
+  // Canonical max_utf8_bytes projected onto persisted Post DTO fields.
+  static const Map<String, int> postSnapshotFieldByteLimits = <String, int>{
+    'authorId': 128,
+    'title': 320,
   };
 
   // Current feed projection defaults (use FeedItemDto for new code).

@@ -53,58 +53,6 @@ api_routes:
     - name: experimentId
       field: experimentId
   response_entity: ExperimentAssignmentFact
-- actor: persona_or_device
-  security:
-    auth_mode: required
-  application:
-    append_sink: ExperimentAssignmentFact
-    mutation_target: ExperimentAssignmentFact
-    invariant_target: ExperimentAssignmentFact
-    facet: ExperimentAssignmentCommandFacade
-    kind: command
-    method: appendAssignment
-  authorization:
-    principal: public
-    ownership_policy: trusted_persona_or_device_subject
-  reliability:
-    timeout_ms: 1200
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - OPS.USER.experiment_assignment_unauthorized
-  - OPS.USER.experiment_assignment_invalid_argument
-  - OPS.USER.experiment_assignment_experiment_not_found
-  - OPS.USER.experiment_assignment_not_running
-  - OPS.SYSTEM.experiment_assignment_storage_read_failed
-  - OPS.SYSTEM.experiment_assignment_storage_write_failed
-  privacy:
-    request_classification: PUBLIC
-    response_classification: SENSITIVE
-    log_policy: redacted
-  telemetry:
-    metric: ops_experiment_assignment_append
-    trace: true
-    attributes:
-    - operation
-    - experiment_id
-    - actor_dimension
-    - outcome
-  slo:
-    latency_p95_ms: 600
-    availability_percent: 99.9
-  description: 以 (experimentId, experimentRevision, trustedSubjectKey) 幂等追加事实；subject 不接受客户端输入
-  method: POST
-  operation: AssignExperimentVariant
-  path: /ops/experiments/{experimentId}/assignment
-  request_entity: AssignExperimentVariantRequest
-  request_body_kind: none
-  request_bindings:
-    path:
-    - name: experimentId
-      field: experimentId
-  response_entity: ExperimentAssignmentFact
 - actor: account
   security:
     auth_mode: required
@@ -154,7 +102,6 @@ api_routes:
   response_entity: ExperimentStatsSlice
 consumers:
 - capabilities:
-  - assign_experiment_variant
   - read_experiment_assignment
   - read_stats
   name: platform-ops

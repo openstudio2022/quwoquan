@@ -180,7 +180,7 @@ TaskGraph resolvePersistedAssistantTaskGraph(Map<String, dynamic> message) {
   return TaskGraph.fromJson(raw);
 }
 
-ConversationOrchestratorState resolvePersistedAssistantOrchestratorState(
+SessionOrchestratorState resolvePersistedAssistantOrchestratorState(
   Map<String, dynamic> message,
 ) {
   final raw = _resolvePersistedStructuredMap(
@@ -188,9 +188,9 @@ ConversationOrchestratorState resolvePersistedAssistantOrchestratorState(
     assistantOrchestratorStateField,
   );
   if (raw.isEmpty) {
-    return const ConversationOrchestratorState();
+    return const SessionOrchestratorState();
   }
-  return ConversationOrchestratorState.fromJson(raw);
+  return SessionOrchestratorState.fromJson(raw);
 }
 
 TurnSynthesisState resolvePersistedAssistantTurnSynthesisState(

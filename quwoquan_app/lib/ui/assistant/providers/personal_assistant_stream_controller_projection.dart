@@ -183,32 +183,34 @@ String _processLineForProcess(AssistantRunVisibleProcess process) {
 String _visibleProcessSummary(AssistantRunVisibleProcess process) =>
     process.summary.trim();
 
-String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {
-  final text = turn.input.text.trim();
-  if (text.isNotEmpty) {
-    return AssistantText.assistantProactiveReminderOpened(text);
+String _openedRunAnswer(AssistantRunEnvelopeWire run) {
+  final goal = run.goal.trim();
+  if (goal.isNotEmpty) {
+    return AssistantText.assistantProactiveReminderOpened(goal);
   }
   return AssistantText.assistantProactiveReminderOpenedDefault;
 }
 
-List<AssistantTranscriptTimelineRow> _appendOpenedTurnTranscript(
+List<AssistantTranscriptTimelineRow> _appendOpenedRunTranscript(
   List<AssistantTranscriptTimelineRow> current,
-  AssistantTurnEnvelopeWire turn,
+  AssistantRunEnvelopeWire run,
 ) {
-  final answer = _openedTurnAnswer(turn);
+  final answer = _openedRunAnswer(run);
   return <AssistantTranscriptTimelineRow>[
     ...current,
     _personalAssistantAssistantRow(
-      id: 'proactive_source_${turn.turnId}',
+      id: 'proactive_source_${run.runId}',
+      sessionId: run.sessionId,
       text: AssistantText.assistantProactiveReminderSource,
-      turnId: turn.turnId,
+      runId: run.runId,
       proactive: true,
     ),
     _personalAssistantAssistantRow(
-      id: 'proactive_${turn.turnId}',
+      id: 'proactive_${run.runId}',
+      sessionId: run.sessionId,
       text: answer,
-      turnId: turn.turnId,
-      traceId: turn.traceId,
+      runId: run.runId,
+      traceId: run.traceId,
       proactive: true,
     ),
   ];
@@ -218,26 +220,29 @@ List<AssistantTranscriptTimelineRow> _upsertAssistantTranscript(
   List<AssistantTranscriptTimelineRow> current,
   String id, {
   required String text,
-  String turnId = '',
+  String runId = '',
   String traceId = '',
   String sourceQuery = '',
   String eventType = '',
   bool streaming = false,
   PersonalAssistantProcessSummary processSummary =
       const PersonalAssistantProcessSummary(),
+  AssistantPresentationDocumentWire? presentationDocument,
 }) {
   return current
       .map(
         (item) => item.id == id && item is AssistantAnswerTranscriptRow
             ? _personalAssistantAssistantRow(
                 id: id,
+                sessionId: item.sessionId,
                 text: text,
-                turnId: turnId,
+                runId: runId,
                 traceId: traceId,
                 sourceQuery: sourceQuery,
                 eventType: eventType,
                 streaming: streaming,
                 processSummary: processSummary,
+                presentationDocument: presentationDocument,
               )
             : item,
       )
@@ -246,11 +251,12 @@ List<AssistantTranscriptTimelineRow> _upsertAssistantTranscript(
 
 UserTranscriptTimelineRow _personalAssistantUserRow({
   required String id,
+  required String sessionId,
   required String text,
 }) {
   return UserTranscriptTimelineRow(
     id: id,
-    conversationId: AppConceptConstants.assistantConversationId,
+    sessionId: sessionId,
     type: 'text',
     content: text,
     senderId: 'current_user',
@@ -263,8 +269,9 @@ UserTranscriptTimelineRow _personalAssistantUserRow({
 
 AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
   required String id,
+  required String sessionId,
   required String text,
-  String turnId = '',
+  String runId = '',
   String traceId = '',
   String sourceQuery = '',
   String eventType = '',
@@ -272,13 +279,16 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
   bool proactive = false,
   PersonalAssistantProcessSummary processSummary =
       const PersonalAssistantProcessSummary(),
+  AssistantPresentationDocumentWire? presentationDocument,
 }) {
   final projection = _personalAssistantTurnProjection(
     processSummary: processSummary,
   );
-  final runArtifacts = projection.toRuntimeDiagnosticsJson(
-    eventType: eventType,
-  );
+  final runArtifacts = <String, dynamic>{
+    ...projection.toRuntimeDiagnosticsJson(eventType: eventType),
+    if (presentationDocument != null)
+      'presentationDocument': presentationDocument.toJson(),
+  };
   final persisted = PersistedAssistantTimelinePayload.empty()
       .copyWithMerged(<String, Object?>{
         assistantDisplayMarkdownField: text,
@@ -295,7 +305,7 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
       });
   return AssistantAnswerTranscriptRow(
     id: id,
-    conversationId: AppConceptConstants.assistantConversationId,
+    sessionId: sessionId,
     type: 'text',
     content: text,
     senderId: AppConceptConstants.assistantSenderId,
@@ -304,7 +314,7 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
     isRead: true,
     streaming: streaming,
     anchor: AssistantAnswerAnchor(
-      runId: turnId,
+      runId: runId,
       traceId: traceId,
       sourceQuery: sourceQuery,
       domainId: 'assistant',
@@ -312,7 +322,6 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
     persisted: persisted,
     runArtifacts: runArtifacts,
     extra: <String, Object?>{
-      if (turnId.isNotEmpty) 'turnId': turnId,
       if (eventType.isNotEmpty) 'eventType': eventType,
       if (proactive) 'proactive': true,
     },

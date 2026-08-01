@@ -11,9 +11,9 @@
 /// `lib/core/providers/app_providers_client_sync.dart`（Remote-only）。
 library;
 
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_session.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_envelope.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
@@ -27,52 +27,48 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
+        AssistantAnswerRunIntent,
+        AssistantCreationRunIntent,
+        AssistantEntryAction,
+        AssistantEntryChip,
+        AssistantEntryResponse,
         AssistantIntersectionEvidenceRef,
-        AssistantPreferenceFact,
-        AssistantPreferenceFactListView,
-        AssistantEntryPersonalizationChipView,
-        AssistantEntryPersonalizationView,
+        AssistantPreference,
+        AssistantPreferenceListView,
         AssistantContextSnapshot,
-        AssistantCreationSuggestRequest,
-        AssistantCreationSuggestResponse,
-        AssistantCreateConversationRequest,
+        AssistantCreateSessionRequest,
         AssistantConsentMatrix,
         AssistantObjectGroundingView,
-        AssistantReportPageContextRequestWire,
+        AssistantRunIntent,
         AssistantRunTerminalFailureView,
         AssistantRunTerminalSnapshotView,
         AssistantRunVisibleProcessView,
         AssistantRunVisibleReferenceView,
+        AssistantSearchRunIntent,
         AssistantSelectedPolicyRefView,
-        AssistantRunTextInput,
-        AssistantRunTrigger,
-        AssistantSearchCitationView,
-        AssistantSearchResultView,
         AssistantStartRunRequest,
-        AssistantSearchXiaoquRequestWire,
-        AssistantSuggestedHomepageView,
+        AssistantTaskItemView,
+        AssistantTaskSlice,
         AssistantTurnListView,
         AssistantTurnSummaryView,
         AssistantUserActionGroundingView,
-        AssistantUserTaskView,
         CitationDestination,
-        PageContextAck,
-        SuggestedAction,
-        SuggestedActionListView;
+        PageContextAction,
+        PageContextObjectRef,
+        PageContextReceipt,
+        PageContextSnapshot,
+        ReportPageContextCommand;
 export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantLearningFactAppendCommand,
         AssistantLearningFactAppendReceipt,
         AssistantSkillCatalogItemProjection;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
-    show AssistantConversationWire;
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_session.g.dart'
+    show AssistantSessionWire;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
     show AssistantStreamEventWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart'
-    show
-        AssistantTurnEnvelopeWire,
-        AssistantTurnInputWire,
-        AssistantTurnTriggerWire;
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_run_envelope.g.dart'
+    show AssistantRunEnvelopeWire, AssistantRunStreamStateWire;
 export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
     show
         SkillSubscriptionDeliveryStateWire,
@@ -105,6 +101,8 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
         FeedbackTypeX,
         InteractionEventType,
         InteractionEventTypeX,
+        SkillSubscriptionDestinationType,
+        SkillSubscriptionDestinationTypeX,
         SkillSubscriptionStatus,
         SkillSubscriptionStatusX,
         parseAssistantLearningFactTypeStrict,
@@ -112,6 +110,7 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
         parseAssistantStreamEventTypeStrict,
         parseFeedbackTypeStrict,
         parseInteractionEventTypeStrict,
+        parseSkillSubscriptionDestinationTypeStrict,
         parseSkillSubscriptionStatusStrict;
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
@@ -139,17 +138,34 @@ class AssistantSkillConsent {
   final DateTime updatedAt;
 
   factory AssistantSkillConsent.fromJson(Map<String, dynamic> json) {
-    final revokedAt = (json['revokedAt'] ?? '').toString().trim();
+    final skillId = json['skillId'];
+    final grantedScope = json['grantedScope'];
+    final granted = json['granted'];
+    final grantedAt = json['grantedAt'];
+    final revokedAt = json['revokedAt'];
+    if (skillId is! String || skillId.trim().isEmpty) {
+      throw const FormatException('skill consent requires skillId');
+    }
+    if (grantedScope is! String || grantedScope.trim().isEmpty) {
+      throw const FormatException('skill consent requires grantedScope');
+    }
+    if (granted is! bool) {
+      throw const FormatException('skill consent requires granted');
+    }
+    if (grantedAt is! String || DateTime.tryParse(grantedAt) == null) {
+      throw const FormatException('skill consent requires grantedAt');
+    }
+    if (revokedAt != null &&
+        (revokedAt is! String ||
+            revokedAt.trim().isEmpty ||
+            DateTime.tryParse(revokedAt) == null)) {
+      throw const FormatException('skill consent revokedAt is invalid');
+    }
     return AssistantSkillConsent(
-      skillId: (json['skillId'] ?? '').toString().trim(),
-      grantedScope: (json['grantedScope'] ?? kPersonalContentAccessSkillId)
-          .toString()
-          .trim(),
-      // 服务端必须显式确认 granted=true；字段缺失、false 或已有撤回时间均失败关闭。
-      granted: json['granted'] == true && revokedAt.isEmpty,
-      updatedAt:
-          DateTime.tryParse((json['grantedAt'] ?? '').toString()) ??
-          DateTime.now(),
+      skillId: skillId.trim(),
+      grantedScope: grantedScope.trim(),
+      granted: granted && revokedAt == null,
+      updatedAt: DateTime.parse(grantedAt).toUtc(),
     );
   }
 
@@ -193,30 +209,54 @@ AssistantContextSnapshot assistantContextSnapshotFromOpenContext(
   );
 }
 
-/// ListAssistantConversations 响应切片（items + 不透明 keyset nextCursor）。
-///
-/// items 复用 generated [AssistantConversationWire]，信封字段与
-/// `assistant_conversation/fields.yaml` 的 `AssistantConversationListView`
-/// 契约逐字对齐；本类只做薄解码，不承载第二套业务字段。
-class AssistantConversationListPage {
-  const AssistantConversationListPage({
-    required this.items,
-    this.nextCursor = '',
-  });
+/// 将端侧页面上下文映射到 [PageContext] 对象的唯一 generated wire。
+PageContextSnapshot pageContextSnapshotFromOpenContext(
+  AssistantOpenContext context, {
+  String? userAction,
+}) {
+  final now = DateTime.now().toUtc();
+  final objectType = context.objectType?.trim() ?? '';
+  final objectId = context.entityId?.trim() ?? '';
+  final normalizedAction = userAction?.trim() ?? '';
+  return PageContextSnapshot(
+    capturedAt: now.toIso8601String(),
+    pageType: assistantPageTypeForSource(context.source),
+    pageObjects: <PageContextObjectRef>[
+      if (objectType.isNotEmpty && objectId.isNotEmpty)
+        PageContextObjectRef(objectTypeRef: objectType, objectId: objectId),
+    ],
+    userActions: <PageContextAction>[
+      if (normalizedAction.isNotEmpty)
+        PageContextAction(
+          actionType: normalizedAction,
+          objectTypeRef: objectType.isEmpty ? null : objectType,
+          objectId: objectId.isEmpty ? null : objectId,
+        ),
+    ],
+    consentGranted: true,
+  );
+}
 
-  final List<AssistantConversationWire> items;
+/// ListAssistantSessions 响应切片（items + 不透明 keyset nextCursor）。
+///
+/// items 复用 generated [AssistantSessionWire]，信封字段与
+/// `assistant_session/fields.yaml` 的 `AssistantSessionListView`
+/// 契约逐字对齐；本类只做薄解码，不承载第二套业务字段。
+class AssistantSessionListPage {
+  const AssistantSessionListPage({required this.items, this.nextCursor = ''});
+
+  final List<AssistantSessionWire> items;
 
   /// 空字符串表示无更多数据。
   final String nextCursor;
 
-  factory AssistantConversationListPage.fromJson(Map<String, dynamic> json) {
-    return AssistantConversationListPage(
+  factory AssistantSessionListPage.fromJson(Map<String, dynamic> json) {
+    return AssistantSessionListPage(
       items: ((json['items'] as List?) ?? const <dynamic>[])
           .whereType<Map>()
           .map(
-            (item) => AssistantConversationWire.fromJson(
-              item.cast<String, dynamic>(),
-            ),
+            (item) =>
+                AssistantSessionWire.fromJson(item.cast<String, dynamic>()),
           )
           .toList(growable: false),
       nextCursor: (json['nextCursor'] as String?)?.trim() ?? '',
@@ -225,52 +265,79 @@ class AssistantConversationListPage {
 }
 
 /// 私助会话与 run 生命周期（含 SSE 事件流、历史查询面与取消）。
-abstract class AssistantConversationRunFacet {
+abstract class AssistantSessionRunFacet {
   /// [clientRequestId] 与 HTTP `Idempotency-Key` 必须是同一稳定 intent；
   /// 网络重试必须复用它，禁止由 Remote 或服务端随机补齐。
-  Future<AssistantConversationWire> createAssistantConversation({
+  Future<AssistantSessionWire> createAssistantSession({
     String summary = '',
     required String clientRequestId,
   });
 
-  /// GET /assistant/conversations：owner 会话列表（updatedAt desc keyset 分页）。
+  /// GET /assistant/sessions：owner 助手会话列表（updatedAt desc keyset 分页）。
   /// 历史抽屉与最近会话的唯一数据源；本地不得维护第二套会话存储。
-  Future<AssistantConversationListPage> listAssistantConversations({
+  Future<AssistantSessionListPage> listAssistantSessions({
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   });
 
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
-  });
+  Future<AssistantSessionWire> getAssistantSession({required String sessionId});
 
-  /// GET /assistant/conversations/{conversationId}/turns：终态轮次摘要
+  /// GET /assistant/sessions/{sessionId}/turns：终态轮次摘要
   /// （createdAt desc keyset 分页），transcript 恢复与续聊的唯一数据源。
-  Future<AssistantTurnListView> listConversationTurns({
-    required String conversationId,
+  Future<AssistantTurnListView> listSessionTurns({
+    required String sessionId,
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   });
 
-  Future<AssistantTurnEnvelopeWire> startAssistantRun({
-    required String conversationId,
+  Future<AssistantRunEnvelopeWire> startAssistantRun({
+    required String sessionId,
     required String text,
     required String clientRequestId,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
     List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
         const <AssistantIntersectionEvidenceRef>[],
   });
 
-  Future<AssistantTurnEnvelopeWire> getAssistantRun({required String runId});
+  Future<AssistantRunEnvelopeWire> getAssistantRun({required String runId});
 
   /// POST /assistant/runs/{runId}/cancel：取消运行中的 run；
   /// 已终态取消幂等返回当前信封。
-  Future<AssistantTurnEnvelopeWire> cancelAssistantRun({required String runId});
+  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
+    required String runId,
+    required String commandRequestId,
+  });
 
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
+    String lastEventId = '',
+  });
+}
+
+abstract class AssistantRunControlFacet {
+  Future<AssistantRunEnvelopeWire> pauseAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    String reason = '',
+  });
+
+  Future<AssistantRunEnvelopeWire> resumeAssistantRun({
+    required String runId,
+    required String commandRequestId,
+  });
+
+  Future<AssistantRunEnvelopeWire> steerAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    required String instruction,
+  });
+
+  Future<AssistantRunEnvelopeWire> continueAssistantToolUse({
+    required String runId,
+    required String toolUseId,
+    required String commandRequestId,
+    required String decision,
+    required String continuationToken,
+    AssistantDeviceActionExecutionReceipt? executionReceipt,
   });
 }
 
@@ -309,9 +376,13 @@ abstract class AssistantSkillConsentFacet {
   Future<AssistantSkillConsent> grantSkillConsent({
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
+    required String clientRequestId,
   });
 
-  Future<void> revokeSkillConsent({required String skillId});
+  Future<void> revokeSkillConsent({
+    required String skillId,
+    required String clientRequestId,
+  });
 }
 
 /// 用户学习事实的单轨 append command。
@@ -323,16 +394,12 @@ abstract class AssistantLearningFactAppendFacet {
 
 /// 入口个性化（页面上下文上报、欢迎语与建议动作）。
 abstract class AssistantPersonalizationFacet {
-  Future<PageContextAck> reportPageContext({
+  Future<PageContextReceipt> reportPageContext({
     required AssistantOpenContext context,
     String? userAction,
   });
 
-  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
-    required AssistantOpenContext context,
-  });
-
-  Future<SuggestedActionListView> getSuggestedActions({
+  Future<AssistantEntryResponse> getAssistantEntry({
     required AssistantOpenContext context,
   });
 }
@@ -340,7 +407,7 @@ abstract class AssistantPersonalizationFacet {
 /// 私助个人数据只读列表（任务/记忆/技能目录）。
 abstract class AssistantPersonalDataFacet {
   /// GET /assistant/tasks
-  Future<List<AssistantUserTaskView>> listAssistantTasks({
+  Future<List<AssistantTaskItemView>> listAssistantTasks({
     int limit = kAssistantListPageDefaultLimit,
     String? status,
   });
@@ -352,42 +419,49 @@ abstract class AssistantPersonalDataFacet {
 }
 
 /// 用户显式偏好事实（即时设置、可见、遗忘与撤销恢复）。
-abstract class AssistantPreferenceFactFacet {
-  Future<AssistantPreferenceFact> setAssistantPreference({
+abstract class AssistantPreferenceFacet {
+  Future<AssistantPreference> setAssistantPreference({
     required AssistantPreferenceScope scope,
-    String conversationId = '',
+    String sessionId = '',
     required AssistantPreferenceKind kind,
     required String value,
     required AssistantPreferenceSourceType sourceType,
+    String sourceSessionId = '',
+    bool confirmed = false,
   });
 
-  Future<List<AssistantPreferenceFact>> listAssistantPreferences({
+  Future<List<AssistantPreference>> listAssistantPreferences({
     AssistantPreferenceScope? scope,
-    String conversationId = '',
+    String sessionId = '',
     AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
   });
 
-  Future<AssistantPreferenceFact> revokeAssistantPreference({
+  Future<AssistantPreference> revokeAssistantPreference({
     required String preferenceId,
   });
 
-  Future<AssistantPreferenceFact> restoreAssistantPreference({
+  Future<AssistantPreference> restoreAssistantPreference({
     required String preferenceId,
   });
 }
 
 /// 小趣搜（全网结果综合）。
-abstract class AssistantXiaoquSearchFacet {
-  Future<AssistantSearchResultView> searchXiaoquResults({
+abstract class AssistantSearchRunFacet {
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   });
 }
 
-/// 创作助手建议（标签/主页/标题摘要）。
-abstract class AssistantCreationSuggestFacet {
-  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
-    required AssistantCreationSuggestRequest request,
+/// 创作辅助同样只创建 [AssistantRun]，不拥有独立模型执行路由。
+abstract class AssistantCreationRunFacet {
+  Future<AssistantRunEnvelopeWire> startCreationRun({
+    required String sessionId,
+    required String clientRequestId,
+    required AssistantCreationRunIntent intent,
+    AssistantContextSnapshot? contextSnapshot,
   });
 }

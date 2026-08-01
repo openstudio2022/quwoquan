@@ -25,7 +25,8 @@ const (
 
 func isAuthorizedAccountSecurityAuthorityCaller(accountID string) bool {
 	switch strings.TrimSpace(accountID) {
-	case "service:assistant-service",
+	case "service:api-edge",
+		"service:assistant-service",
 		"service:chat-service",
 		"service:circle-service",
 		"service:content-service",

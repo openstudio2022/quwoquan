@@ -1,0 +1,36 @@
+dart_class: AssistantSessionWire
+library_path: assistant/generated/contracts/assistant_session.g.dart
+output_path: assistant/generated/contracts/assistant_session.g.dart
+contract: assistant_session
+kind: entity_wire_contract
+fields:
+- name: sessionId
+  type: string
+  required: true
+- name: userId
+  type: string
+  required: true
+- name: state
+  type: string
+  default: active
+- name: activeTurnId
+  type: string
+  default: ''
+- name: lastTurnId
+  type: string
+  default: ''
+- name: summary
+  type: string
+  default: ''
+- name: summarySourceSequence
+  type: int
+  default: 0
+- name: summaryVersion
+  type: int
+  default: 0
+- name: createdAt
+  type: string
+  required: true
+- name: updatedAt
+  type: string
+  required: true

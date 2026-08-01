@@ -849,7 +849,7 @@ contract_test:
   coverage_requirements:
     - all visibility/joinPolicy combinations covered
     - member role transitions (member → admin → owner) tested
-    - circle default public group compatibility link tested
+    - circle default public group canonical link tested
     - circle-group kernel and application flow tested
     - section config CRUD + event tested
     - feed pin/feature operations tested

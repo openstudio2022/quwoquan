@@ -3,6 +3,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 from typing import Any
+
+import yaml
+from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
 from core.tree_integrity import tree_integrity_stats
 from core.schema import assert_valid
 from content.release.canonical.object_transaction_contract import (
@@ -11,6 +14,39 @@ from content.release.canonical.object_transaction_contract import (
     _write_json, _safe_id, _safe_rel, _files, _copy_tree, collect_canonical_tag_refs,
     refresh_canonical_tag_snapshots, _collect_object_keys, _verify_package,
 )
+
+
+def _system_creator_seed_closure() -> tuple[set[str], set[str]]:
+    """Return system-builtin creator ids and avatar CAS keys allowed as publish seed.
+
+    Avatar CAS must exist in publish before the first post transaction projects the
+    creator. Until consumer objects reference them, closure must not treat those
+    seed creators / avatar bytes as orphans.
+    """
+    profiles = (
+        CONTROL_PLANE_CREATOR_POOL_ROOT / "profiles" / "system_builtin"
+    )
+    creator_ids: set[str] = set()
+    avatar_keys: set[str] = set()
+    if not profiles.is_dir():
+        return creator_ids, avatar_keys
+    for path in sorted(profiles.glob("*.creator.yaml")):
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(payload, dict) or payload.get("isSystemBuiltin") is not True:
+            continue
+        creator_id = str(payload.get("creatorProfileId") or "").strip()
+        avatar = payload.get("avatarAsset")
+        if not creator_id or not isinstance(avatar, dict):
+            continue
+        object_key = str(avatar.get("objectKey") or "").strip()
+        if not object_key.startswith("media/objects/sha256/"):
+            continue
+        creator_ids.add(creator_id)
+        avatar_keys.add(object_key)
+    return creator_ids, avatar_keys
 
 def _transaction_root(output_root: Path, transaction_id: str) -> Path:
     return output_root / "data/local/workspace/object-transactions" / transaction_id
@@ -138,8 +174,14 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
         if rel not in expected_tag_files:
             issues.append({"code": "orphan_tag_snapshot", "ref": rel})
 
+    seed_creators, seed_avatar_keys = _system_creator_seed_closure()
+    referenced_media.update(seed_avatar_keys)
+
     media_root = root / "media" / "objects"
     for asset in _files(media_root):
+        # Ignore directory placeholders (e.g. .gitkeep); they are not CAS objects.
+        if asset.name.startswith("."):
+            continue
         object_key = asset.relative_to(root).as_posix()
         if object_key not in referenced_media:
             issues.append({"code": "orphan_media", "ref": object_key})
@@ -151,7 +193,10 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
     if creators_root.is_dir():
         for manifest in sorted(creators_root.glob("*/_creator.json")):
             creator_id = manifest.parent.name
-            if creator_id not in referenced_creators:
+            if (
+                creator_id not in referenced_creators
+                and creator_id not in seed_creators
+            ):
                 issues.append({"code": "orphan_creator", "ref": creator_id})
     return {
         "status": "passed" if not issues else "failed",
@@ -238,7 +283,9 @@ def audit_object_transaction(
             return {**persisted, "idempotent": True}
         raise ObjectTransactionError("已有 audit 与当前事务输入不一致")
     if staging.exists():
-        raise ObjectTransactionError(f"stale staging 已存在：{staging}")
+        # Abandoned dry-runs leave staging behind after handler crashes; drop the
+        # incomplete tree so an idempotent retry can rebuild from current publish.
+        shutil.rmtree(staging)
     _copy_tree(publish_root, staging)
     for creator in package["creatorObjects"]:
         target_creator = staging / "creators" / creator["creatorRef"]

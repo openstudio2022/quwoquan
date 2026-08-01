@@ -238,6 +238,8 @@ def _validate_single_report(
         "qoeReadbackPath",
         "perfettoTracePath",
         "perfettoSummaryPath",
+        "iosPerformanceTracePath",
+        "iosPerformanceSummaryPath",
     ):
         _require_string(ui, artifact_field, issues, prefix=ui_prefix)
     if ui.get("seekTargetsVerified") is not True:

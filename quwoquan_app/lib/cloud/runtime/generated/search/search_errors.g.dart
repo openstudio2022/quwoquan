@@ -2,8 +2,9 @@
 // ignore_for_file: constant_identifier_names
 
 enum SearchErrorCode {
-  searchInvalidArgument('SEARCH.USER.invalid_argument', '搜索请求格式不正确', 400),
-  searchUnavailable('SEARCH.MIDDLEWARE.unavailable', '搜索暂时不可用，请稍后再试', 503),
+  searchHotQueryInvalidArgument('SEARCH.USER.hot_query_invalid_argument', '搜索请求格式不正确', 400),
+  searchHotQueryUnavailable('SEARCH.MIDDLEWARE.hot_query_unavailable', '搜索暂时不可用，请稍后再试', 503),
+  searchRecentInvalidArgument('SEARCH.USER.recent_invalid_argument', '最近搜索请求格式不正确', 400),
   searchInternalError('SEARCH.SYSTEM.internal_error', '搜索服务暂时无法完成该操作', 500),
   recentEntryNotFound('SEARCH.USER.recent_entry_not_found', '最近搜索记录不存在或已删除', 404),
   recentVersionConflict('SEARCH.USER.recent_version_conflict', '最近搜索已更新，请刷新后重试', 409),
@@ -30,8 +31,9 @@ class SearchErrorMessages {
   const SearchErrorMessages._();
 
   static const Map<SearchErrorCode, String> zh = <SearchErrorCode, String>{
-    SearchErrorCode.searchInvalidArgument: '搜索请求格式不正确',
-    SearchErrorCode.searchUnavailable: '搜索暂时不可用，请稍后再试',
+    SearchErrorCode.searchHotQueryInvalidArgument: '搜索请求格式不正确',
+    SearchErrorCode.searchHotQueryUnavailable: '搜索暂时不可用，请稍后再试',
+    SearchErrorCode.searchRecentInvalidArgument: '最近搜索请求格式不正确',
     SearchErrorCode.searchInternalError: '搜索服务暂时无法完成该操作',
     SearchErrorCode.recentEntryNotFound: '最近搜索记录不存在或已删除',
     SearchErrorCode.recentVersionConflict: '最近搜索已更新，请刷新后重试',
@@ -40,8 +42,9 @@ class SearchErrorMessages {
   };
 
   static const Map<SearchErrorCode, String> en = <SearchErrorCode, String>{
-    SearchErrorCode.searchInvalidArgument: 'Invalid search request',
-    SearchErrorCode.searchUnavailable: 'Search is temporarily unavailable, please retry later',
+    SearchErrorCode.searchHotQueryInvalidArgument: 'Invalid search request',
+    SearchErrorCode.searchHotQueryUnavailable: 'Search is temporarily unavailable, please retry later',
+    SearchErrorCode.searchRecentInvalidArgument: 'Invalid recent search request',
     SearchErrorCode.searchInternalError: 'Search service could not complete the operation',
     SearchErrorCode.recentEntryNotFound: 'Recent search entry not found',
     SearchErrorCode.recentVersionConflict: 'Recent searches changed, refresh and retry',

@@ -324,9 +324,7 @@ mixin _CreateEditorDocumentOperations on Notifier<CreateEditorState> {
               pages,
               activePageId ?? state.activeArticlePageId,
             ),
-      activeArticleBlockId: clearActiveBlockId
-          ? null
-          : resolvedActiveNodeId,
+      activeArticleBlockId: clearActiveBlockId ? null : resolvedActiveNodeId,
       clearActiveArticlePageId: clearActivePageId,
       clearActiveArticleBlockId: clearActiveBlockId,
     );

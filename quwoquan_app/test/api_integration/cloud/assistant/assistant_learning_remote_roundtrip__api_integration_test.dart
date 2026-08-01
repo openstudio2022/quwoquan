@@ -53,13 +53,13 @@ void main() {
     if (_accessToken.isEmpty) {
       fail(
         'Assistant learning Remote API verification requires TEST_AUTH_TOKEN. '
-        'Use the local Gamma acceptance-session issuer.',
+        'Use the candidate-bound nonprod phone identity pool.',
       );
     }
     if (_personaId.trim().isEmpty) {
       fail(
         'Assistant learning Remote API verification requires TEST_PERSONA_ID. '
-        'Use the local Gamma acceptance-session issuer.',
+        'Use the candidate-bound nonprod phone identity pool.',
       );
     }
   });
@@ -79,10 +79,10 @@ void main() {
           gatewayBaseUri: Uri.parse(_gatewayUrl),
         ),
       );
-      final conversationFacet = RemoteAssistantRepository(
+      final sessionFacet = RemoteAssistantRepository(
         httpClient: httpClient,
         operationClient: generatedClient,
-        conversationInvocationContext: (clientPageId) =>
+        sessionInvocationContext: (clientPageId) =>
             CloudOperationInvocationContext(
               surfaceId: AppUiSurfaces.personalAssistantDialog.id,
               routeId: AppUiSurfaces.personalAssistantDialog.routeId,
@@ -92,7 +92,7 @@ void main() {
                 deviceActorId: 'gamma-assistant-learning-device',
               ),
             ),
-        consentActorScope: 'gamma-assistant-learning-api-integration',
+        consentAccountId: 'gamma-assistant-learning-api-integration',
       );
       final learningFacet = RemoteAssistantLearningFactAppendAdapter(
         client: generatedClient,
@@ -110,20 +110,20 @@ void main() {
       );
 
       final identity = const Uuid().v4();
-      final conversation = await conversationFacet.createAssistantConversation(
+      final session = await sessionFacet.createAssistantSession(
         summary: 'Gamma learning verification',
-        clientRequestId: 'conversation-$identity',
+        clientRequestId: 'session-$identity',
       );
-      final run = await conversationFacet.startAssistantRun(
-        conversationId: conversation.conversationId,
+      final run = await sessionFacet.startAssistantRun(
+        sessionId: session.sessionId,
         text: '请给出一句简短的商用验证回复',
         clientRequestId: 'run-$identity',
       );
       final request = AssistantLearningFactAppendCommand(
         eventId: 'learning-$identity',
         factType: AssistantLearningFactType.userFeedback.wireName,
-        assistantTurnId: run.turnId,
-        referralSource: AssistantReferralSource.assistantConversation.wireName,
+        assistantTurnId: run.runId,
+        referralSource: AssistantReferralSource.assistantSession.wireName,
         domainId: 'assistant',
         feedbackType: FeedbackType.useful.wireName,
         queryText: '该原始文本只能留在受控事实中',
@@ -134,8 +134,8 @@ void main() {
       final first = await learningFacet.appendUserFact(request: request);
       final replay = await learningFacet.appendUserFact(request: request);
 
-      expect(conversation.conversationId, isNotEmpty);
-      expect(run.turnId, isNotEmpty);
+      expect(session.sessionId, isNotEmpty);
+      expect(run.runId, isNotEmpty);
       expect(first.accepted, isTrue);
       expect(first.deduplicated, isFalse);
       expect(first.payloadDigest, isNotEmpty);
@@ -149,8 +149,8 @@ void main() {
       await _writeRemoteEvidence(<String, Object?>{
         'schema': 'assistant-learning-remote-api-evidence',
         'status': 'passed',
-        'conversationId': conversation.conversationId,
-        'turnId': run.turnId,
+        'sessionId': session.sessionId,
+        'runId': run.runId,
         'eventId': first.eventId,
         'appendSequence': first.appendSequence,
         'payloadDigest': first.payloadDigest,

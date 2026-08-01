@@ -131,8 +131,22 @@ def _download_content_capacity_preflight(ctx: ExecutionContext) -> list[DataIssu
         "generatedBy": "download_fetch_content_capacity_preflight",
         "targets": {},
     }
+    ready_ids = set(ctx.entity_ids)
+    availability_path = (
+        execution_root(ctx.execution_id) / "_shared" / "source_unavailable_targets.json"
+    )
+    if availability_path.is_file():
+        availability = read_json(availability_path)
+        if isinstance(availability, dict) and availability.get("readyTargets"):
+            ready_ids = {
+                str(entity_id).strip()
+                for entity_id in availability.get("readyTargets") or []
+                if str(entity_id).strip()
+            }
     issues: list[DataIssue] = []
     for entity_id in ctx.entity_ids:
+        if entity_id not in ready_ids:
+            continue
         ok, entity_issues, row = _content_capacity_gate_for_entity(
             ctx,
             entity_id,

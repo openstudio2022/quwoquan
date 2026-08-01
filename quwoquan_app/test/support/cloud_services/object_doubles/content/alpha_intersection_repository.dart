@@ -470,7 +470,6 @@ class AlphaIntersectionRepository
         priority: 1,
         actionTier: metadata?.tier ?? 'light',
         requiredGates: metadata?.requiredGates ?? const <String>[],
-        targetAvailability: metadata?.targetAvailability ?? 'available',
         dispatch: metadata?.dispatch ?? 'assistant',
       ),
     ];
@@ -484,7 +483,6 @@ class AlphaIntersectionRepository
     return hint.copyWith(
       actionTier: metadata.tier,
       requiredGates: metadata.requiredGates,
-      targetAvailability: metadata.targetAvailability,
       dispatch: metadata.dispatch,
     );
   }
@@ -530,39 +528,22 @@ const Map<String, String> _fixtureActionLabels = <String, String>{
   'open_route': '查看路线',
   'create_followup': '写续篇',
   'ask_assistant': '解释这条交集',
-  'join_topic_room': '进话题群',
   'start_gathering': '发起结伴',
-  'join_gathering': '加入同行',
-  'meet_nearby': '附近碰头',
-  'express_interest': '打个招呼',
-  'view_official_deals': '看官方优惠',
-  'book_ticket': '订门票',
-  'book_hotel': '订住宿',
 };
 
 String _fixtureActionLabel(String actionKey) =>
-    _fixtureActionLabels[actionKey.trim()] ?? _fixtureActionLabels['ask_assistant']!;
+    _fixtureActionLabels[actionKey.trim()] ??
+    _fixtureActionLabels['ask_assistant']!;
 
 /// 替身自持的 kind → 主行动映射：模拟云侧按注册表 `actionHintsByKind` 选出的首个
 /// actionKey。端侧 production 树不再编译逐 kind 行动表——那份表在线上随 reason 下发。
 const Map<String, String> _fixturePrimaryActionKeys = <String, String>{
   'sharedFollowees': 'follow_person',
   'commonFollower': 'follow_person',
-  'commonContact': 'greet_person',
-  'sameSchool': 'greet_person',
-  'sameDepartment': 'greet_person',
-  'sameMajor': 'greet_person',
-  'sameCohort': 'greet_person',
-  'alumni': 'greet_person',
-  'sameCompany': 'message_person',
-  'sameTeam': 'message_person',
   'sameIndustry': 'message_person',
   'sharedCircle': 'join_circle',
-  'sharedDiscussion': 'open_discussion',
-  'coMemberCircle': 'join_circle',
   'coCommented': 'open_content',
   'coSharedContent': 'open_content',
-  'coCreatedContent': 'open_content',
   'coLiked': 'open_content',
   'coVisitedEntity': 'open_object',
   'sharedEntityAttention': 'open_object',
@@ -572,11 +553,5 @@ const Map<String, String> _fixturePrimaryActionKeys = <String, String>{
   'followeeVisited': 'open_object',
   'followeeViewedObject': 'open_object',
   'followeeViewing': 'open_content',
-  'alumniHere': 'open_object',
-  'colleagueHere': 'open_object',
   'followeeDiscussedThis': 'open_discussion',
-  'coPresentHere': 'meet_nearby',
-  'nearbyAffinity': 'meet_nearby',
-  'coPlannedTrip': 'join_gathering',
-  'wantToMeetSameInterest': 'express_interest',
 };

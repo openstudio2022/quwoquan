@@ -89,6 +89,32 @@ func TestUserContractEnumGenerationUsesSharedFollowSubjectKind(t *testing.T) {
 	}
 }
 
+func TestChatContractEnumGenerationUsesSharedMessageType(t *testing.T) {
+	content, err := renderSharedContractEnumsDart(
+		map[string][]string{
+			"MessageType": {
+				"text", "image", "video", "audio", "file", "card",
+				"system_call_log", "system_announcement",
+			},
+		},
+		[]string{"MessageType"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"enum MessageType",
+		"systemCallLog(\"system_call_log\")",
+		"systemAnnouncement(\"system_announcement\")",
+		"static MessageType fromWire(Object? raw)",
+		"throw FormatException('invalid MessageType: $raw')",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("generated Chat enum missing %q:\n%s", expected, content)
+		}
+	}
+}
+
 func TestCircleContractEnumGenerationRejectsUnownedProjectionEnum(t *testing.T) {
 	_, err := personaCircleSliceEnumRefs(
 		&fieldsFile{Entities: map[string]entityDef{

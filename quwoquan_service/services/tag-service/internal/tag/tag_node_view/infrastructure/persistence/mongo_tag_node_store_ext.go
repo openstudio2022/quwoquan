@@ -37,49 +37,6 @@ func NewMongoTagNodeStore(coll *mongo.Collection) *MongoTagNodeStore {
 	}
 }
 
-// EnsureIndexes creates the release-scoped snapshot indexes declared in storage.yaml.
-// The generated base remains embedded for Create and generic helpers, but its legacy
-// global tagRef index must never be recreated before codegen catches up.
-func (s *MongoTagNodeStore) EnsureIndexes(ctx context.Context) error {
-	_, err := s.coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "releaseId", Value: 1}, {Key: "tagRef", Value: 1}},
-			Options: options.Index().SetName("uq_tag_nodes_release_tag_ref").SetUnique(true),
-		},
-		{
-			Keys: bson.D{
-				{Key: "releaseId", Value: 1},
-				{Key: "lifecycleStatus", Value: 1},
-				{Key: "group", Value: 1},
-				{Key: "depth", Value: 1},
-				{Key: "tagRef", Value: 1},
-			},
-			Options: options.Index().SetName("idx_tag_nodes_release_lifecycle_group_depth_tagref"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "releaseId", Value: 1},
-				{Key: "parentTagRef", Value: 1},
-				{Key: "lifecycleStatus", Value: 1},
-				{Key: "tagRef", Value: 1},
-			},
-			Options: options.Index().SetName("idx_tag_nodes_release_parent_lifecycle_tagref"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "releaseId", Value: 1},
-				{Key: "lifecycleStatus", Value: 1},
-				{Key: "nodeKind", Value: 1},
-				{Key: "group", Value: 1},
-				{Key: "tagRef", Value: 1},
-			},
-			Options: options.Index().
-				SetName("idx_tag_nodes_release_kind_group_tagref"),
-		},
-	})
-	return err
-}
-
 // FindByReleaseAndTagRef reads a tag definition from one immutable taxonomy snapshot.
 func (s *MongoTagNodeStore) FindByReleaseAndTagRef(ctx context.Context, releaseID, tagRef string) (*model.TagNode, error) {
 	var node model.TagNode
@@ -244,7 +201,7 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 	return complete == int64(expectedNodeCount), nil
 }
 
-// ValidateReleaseProjection rejects incomplete legacy snapshots instead of
+// ValidateReleaseProjection rejects incomplete non-canonical snapshots instead of
 // silently falling back to an application-owned taxonomy catalog.
 func (s *MongoTagNodeStore) ValidateReleaseProjection(
 	ctx context.Context,

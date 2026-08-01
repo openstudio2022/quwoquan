@@ -1,0 +1,8 @@
+backend: redis
+role: runtime
+redis_cache:
+- key: assistant:page-context:{accountId}
+  type: string
+  ttl_seconds: 300
+  scene: assistant
+  description: 可信主体派生 accountId 的唯一页面上下文；SET 时固定 EX 300，GET 禁止刷新 TTL。

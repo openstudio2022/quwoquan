@@ -155,6 +155,113 @@ def test_prod_hosted_content_service_has_a_real_import_scope_probe__local_contra
     ]
 
 
+def test_media_edge_health_uses_edge_root_not_carrier_path_base__local_contract() -> (
+    None
+):
+    topology = stackctl.load_environment_topology()
+    for target_name in ("alpha-local", "beta-local", "gamma-local"):
+        checks = stackctl._health_checks_for_target(
+            topology,
+            target_name,
+            "content-import",
+            workload="content-release",
+        )
+        media = next(item for item in checks if item["name"] == "media-edge-health")
+        assert media["url"].endswith("/healthz")
+        assert not media["url"].endswith("/media/image/healthz")
+        assert "/media/image/" not in media["url"]
+        assert "/media/avatar/" not in media["url"]
+        assert "/media/video/" not in media["url"]
+
+
+def test_content_release_import_plane_excludes_tag_and_search__local_contract() -> (
+    None
+):
+    topology = stackctl.load_environment_topology()
+    checks = stackctl._health_checks_for_target(
+        topology,
+        "alpha-local",
+        "content-import",
+        workload="content-release",
+    )
+    names = {str(item["name"]) for item in checks}
+    assert "content-service" in names
+    assert "entity-service" in names
+    assert "tag-service" not in names
+    assert "search-service" not in names
+
+    full_plane = {
+        str(item["name"])
+        for item in stackctl._content_data_plane_health_checks(
+            "alpha-local",
+            workload="full",
+        )
+    }
+    assert "tag-service" in full_plane
+    assert "search-service" in full_plane
+
+
+def test_content_consumer_feed_health_includes_session_id__local_contract() -> None:
+    topology = stackctl.load_environment_topology()
+    checks = stackctl._health_checks_for_target(
+        topology,
+        "alpha-local",
+        "content-consumer",
+        workload="content-release",
+    )
+    feed = next(item for item in checks if item["name"] == "content-feed")
+    assert "sessionId=" in str(feed["url"])
+    assert str(feed["url"]).endswith("sessionId=stackctl-content-consumer-health") or (
+        "sessionId=stackctl-content-consumer-health" in str(feed["url"])
+    )
+
+
+def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_probe(
+        topology,
+        target_name,
+        report_dir,
+        *,
+        require_non_empty_content_feed=False,
+        release_post_expectations=None,
+        release_readiness_path=None,
+        only_checks=(),
+        probe_name="integration-readonly",
+        timeout_seconds=None,
+    ):
+        captured["only_checks"] = only_checks
+        captured["require_non_empty_content_feed"] = require_non_empty_content_feed
+        return (
+            {"name": probe_name, "ok": True, "scope": "content-consumer"},
+            "ok",
+            [],
+        )
+
+    monkeypatch.setattr(stackctl, "_run_environment_integration_probe", _fake_probe)
+    topology = stackctl.load_environment_topology()
+    statuses, _, findings = stackctl._script_probes_for_target(
+        topology,
+        "alpha-local",
+        "content-consumer",
+        tmp_path,
+        require_non_empty_content_feed=True,
+    )
+    assert findings == []
+    assert statuses
+    assert captured["require_non_empty_content_feed"] is True
+    assert captured["only_checks"] == (
+        "content_feed",
+        "video_book_feed",
+    )
+    assert "premium_feed" not in captured["only_checks"]
+    assert "global_search" not in captured["only_checks"]
+
+
 def test_baseline_verify__does_not_read_disposable_release_output__local_contract() -> (
     None
 ):
@@ -429,6 +536,82 @@ def test_content_release_readiness__gamma_controls_elasticsearch_log_sink(
     ]
 
 
+def test_content_release_readiness__consumer_skips_commercial_video_delivery(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        stackctl,
+        "command_health",
+        lambda _args: {"exitCode": 0, "details": [], "reportDir": "health"},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_read_json_object",
+        lambda _path: {
+            "checks": list(_IMPORT_SCOPE_CHECKS)
+            + [{"name": "content-feed", "scope": "content-consumer"}]
+        },
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_load_data_release_readiness",
+        lambda **_kwargs: (
+            {
+                "schema": "quwoquan_data.environment_release_readiness",
+                "releaseId": "release-001",
+                "readinessPhase": "consumer",
+                "passed": True,
+            },
+            tmp_path / "release-readiness.json",
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_run_release_feed_readback_probe",
+        lambda **_kwargs: (
+            {
+                "schema": "environment-integration-probe-report",
+                "status": "passed",
+                "checks": [],
+            },
+            tmp_path / "feed-readback" / "integration-probe.json",
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_run_release_video_delivery_probe",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("consumer must not require commercial video delivery")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "command_doctor",
+        lambda _args: (_ for _ in ()).throw(
+            AssertionError("consumer must not call commercial doctor")
+        ),
+    )
+
+    result = stackctl.command_content_readiness(
+        argparse.Namespace(
+            phase="consumer",
+            env="alpha",
+            release_id="release-001",
+            verify_run_id="verify-001",
+            manifest_digest="sha256:" + "1" * 64,
+            report_dir=str(tmp_path),
+            output_format="json",
+        )
+    )
+
+    assert result["exitCode"] == 0
+    assert "release-bound-feed-readback" in result["probes"]
+    assert "release-video-delivery" not in result["probes"]
+    assert result["dataRelease"]["videoDeliveryEvidenceRef"] == ""
+    assert result["dataRelease"]["videoDelivery"] is None
+
+
 def _write_data_readiness_fixture(
     *,
     output_root: Path,
@@ -583,6 +766,7 @@ def _write_data_readiness_fixture(
         "releaseId": release_id,
         "releaseKind": "content",
         "sourceOwner": "qwq_data",
+        "readinessPhase": "commercial",
         "manifestDigest": manifest_digest,
         "mediaManifestDigest": "sha256:"
         + hashlib.sha256(media_path.read_bytes()).hexdigest(),
@@ -633,6 +817,7 @@ def test_data_release_readiness__binds_digest_exact_queries_and_evidence__local_
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
     )
 
     assert loaded_path == receipt_path
@@ -656,6 +841,7 @@ def test_data_release_readiness__rejects_tampered_receipt__local_contract(
             release_id="pilot-002",
             verify_run_id="verify-001",
             manifest_digest=manifest_digest,
+            readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
         )
     except ValueError as exc:
         assert "verificationChecksum" in str(exc)
@@ -675,12 +861,60 @@ def test_data_release_readiness__projects_live_exact_query_expectations__local_c
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
     )
 
-    assert stackctl._release_feed_post_expectations(receipt) == {
+    assert stackctl._release_feed_post_expectations(
+        receipt,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+    ) == {
         "content_feed": {"post-article", "post-image", "post-video"},
         "video_book_feed": {"post-video"},
         "premium_feed": {"post-video"},
+    }
+
+
+def test_data_release_readiness__consumer_does_not_require_premium_supply(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["readinessPhase"] = "consumer"
+    receipt["feedQueries"] = [
+        row
+        for row in receipt["feedQueries"]
+        if row["name"] != "premium_stream"
+    ]
+    receipt["counts"]["premiumPlayableVideos"] = 0
+    post_path = tmp_path / receipt["postApiVerificationRef"]
+    post = json.loads(post_path.read_text(encoding="utf-8"))
+    post["feedQueries"] = list(receipt["feedQueries"])
+    post_path.write_text(json.dumps(post), encoding="utf-8")
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
+        unsigned
+    )
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    loaded, _ = stackctl._load_data_release_readiness(
+        environment="gamma",
+        release_id="pilot-002",
+        verify_run_id="verify-001",
+        manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.CONSUMER,
+    )
+
+    assert stackctl._release_feed_post_expectations(
+        loaded,
+        readiness_phase=stackctl.ReadinessPhase.CONSUMER,
+    ) == {
+        "content_feed": {"post-article", "post-image", "post-video"},
+        "video_book_feed": {"post-video"},
     }
 
 
@@ -804,6 +1038,7 @@ def test_data_lifecycle_exit__binds_original_readiness_and_same_digest_replay(
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
     )
     ref = _write_lifecycle_exit_fixture(
         output_root=tmp_path,
@@ -836,6 +1071,7 @@ def test_data_lifecycle_exit__rejects_replay_digest_drift(
         release_id="pilot-002",
         verify_run_id="verify-001",
         manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
     )
     ref = _write_lifecycle_exit_fixture(
         output_root=tmp_path,

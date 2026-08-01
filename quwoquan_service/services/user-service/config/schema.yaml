@@ -70,13 +70,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: https://integration-service.local
-- key: sys.user-service.integration.otp.mode
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: fixed_test
 - key: sys.user-service.metadata.dir
   type: string
   scope: workload

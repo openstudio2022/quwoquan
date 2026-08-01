@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../chat/conversation_membership_contracts.dart';
 
@@ -39,6 +39,11 @@ final class ChatAddConversationMembersCommand {
 
   final String conversationId;
   final List<String> userIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "userIds": this.userIds.map((value) => value).toList(growable: false),
+  };
 }
 
 final class ChatInviteConversationAssistantCommand {
@@ -54,6 +59,11 @@ final class ChatInviteConversationAssistantCommand {
 
   final String conversationId;
   final String? skillId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    if (this.skillId != null) "skillId": this.skillId!,
+  };
 }
 
 final class ChatLeaveConversationCommand {
@@ -66,6 +76,10 @@ final class ChatLeaveConversationCommand {
   }
 
   final String conversationId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
 }
 
 final class ChatListConversationMembersQuery {
@@ -96,6 +110,15 @@ final class ChatListConversationMembersQuery {
   final String? role;
   final String sort;
   final String? query;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+    if (this.role != null) "role": this.role!,
+    "sort": this.sort,
+    if (this.query != null) "query": this.query!,
+  };
 }
 
 final class ChatRemoveConversationAssistantCommand {
@@ -108,6 +131,10 @@ final class ChatRemoveConversationAssistantCommand {
   }
 
   final String conversationId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
 }
 
 final class ChatRemoveConversationMemberCommand {
@@ -126,6 +153,11 @@ final class ChatRemoveConversationMemberCommand {
 
   final String conversationId;
   final String userId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "userId": this.userId,
+  };
 }
 
 final class ChatTransferConversationOwnershipCommand {
@@ -144,6 +176,11 @@ final class ChatTransferConversationOwnershipCommand {
 
   final String conversationId;
   final String newOwnerId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "newOwnerId": this.newOwnerId,
+  };
 }
 
 final class ChatUpdateConversationAdminsCommand {
@@ -162,6 +199,11 @@ final class ChatUpdateConversationAdminsCommand {
 
   final String conversationId;
   final List<String> adminIds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "adminIds": this.adminIds.map((value) => value).toList(growable: false),
+  };
 }
 
 CloudOperationRequestPayload encodeChatConversationMembershipAddMembersGeneratedRequest(ChatAddConversationMembersCommand request) {

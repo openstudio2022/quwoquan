@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
@@ -17,6 +18,18 @@ final class RealtimeConnectionCredential {
 
   final String? _accessToken;
   final String? _ticket;
+
+  /// Stable only for the lifetime of the current bearer token and never
+  /// exposes that credential to local storage. Token rotation safely starts a
+  /// new cursor partition and may replay retained events; event/message/seq
+  /// idempotency absorbs that replay.
+  String get cursorPartition {
+    final accessToken = _accessToken;
+    if (accessToken == null) {
+      throw StateError('cursor partition requires a bearer credential');
+    }
+    return sha256.convert(utf8.encode(accessToken)).toString();
+  }
 
   static Future<RealtimeConnectionCredential?> resolveHttp(
     CloudAuthTokenProvider provider,
@@ -42,7 +55,10 @@ final class RealtimeConnectionCredential {
     final http.Response response;
     try {
       response = await client
-          .post(uri, headers: <String, String>{'Authorization': 'Bearer $token'})
+          .post(
+            uri,
+            headers: <String, String>{'Authorization': 'Bearer $token'},
+          )
           .timeout(const Duration(seconds: 5));
     } catch (_) {
       return null;
@@ -79,9 +95,6 @@ final class RealtimeConnectionCredential {
     if (accessToken == null) {
       throw StateError('http credential requires a bearer access token');
     }
-    return <String, String>{
-      ...headers,
-      'Authorization': 'Bearer $accessToken',
-    };
+    return <String, String>{...headers, 'Authorization': 'Bearer $accessToken'};
   }
 }

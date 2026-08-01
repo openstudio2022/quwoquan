@@ -44,20 +44,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('ObjectCacheStore', () {
-    test(
-      'maxMemoryEntries constrains hot memory while rebuildable bucket remains available',
-      () {
-        final store = ObjectCacheStore<String>(maxMemoryEntries: 1);
+    test('maxMemoryEntries constrains the only in-memory object LRU', () {
+      final store = ObjectCacheStore<String>(maxMemoryEntries: 1);
 
-        store.put('post_1', 'one');
-        store.put('post_2', 'two');
+      store.put('post_1', 'one');
+      store.put('post_2', 'two');
 
-        expect(store.memoryCount, 1);
-        expect(store.diskCount, 2);
-        expect(store.get('post_1')?.value, 'one');
-        expect(store.memoryCount, 1);
-      },
-    );
+      expect(store.count, 1);
+      expect(store.get('post_1'), isNull);
+      expect(store.get('post_2')?.source, CacheReadSource.memory);
+    });
   });
 
   group('CachedContentRepository', () {
@@ -847,6 +843,47 @@ void main() {
       expect(unreachableItemEncodeCount, 0);
     });
 
+    test('query snapshot 在持久化前拒绝超过 canonical UTF-8 字段上限的 Post', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey =
+          'qwq.content_query_snapshots.field_byte_admission.test';
+      final queryKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: null,
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await store.ensureHydrated();
+      store.put(
+        key: queryKey,
+        items: <PostBaseDto>[
+          _postDto(
+            'oversized_author',
+            authorId: List<String>.filled(43, '人').join(),
+          ),
+        ],
+      );
+      await store.flushPersistence();
+
+      final persisted = (await SharedPreferences.getInstance()).getString(
+        storageKey,
+      );
+      expect(persisted, isNot(contains('oversized_author')));
+
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await restored.ensureHydrated();
+      expect(restored.get(queryKey), isNull);
+    });
+
     test('query snapshot 不截断超 item 预算首屏且不持久化后续 cursor 页', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const storageKey = 'qwq.content_query_snapshots.atomic_page.test';
@@ -1048,7 +1085,7 @@ void main() {
       expect(service.estimateUsage().totalTrackedObjects, 0);
       expect(conversationCache.totalEntryCount, 0);
       expect(userCache.memoryCount, 0);
-      expect(userCache.diskCount, 0);
+      expect(userCache.entryCount, 0);
       expect(
         (await SharedPreferences.getInstance()).containsKey(
           'qwq.user_profile_cache',
@@ -1211,6 +1248,7 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
 
 PostBaseDto _postDto(
   String id, {
+  String authorId = 'user_1',
   String avatarUrl = '',
   String body = '缓存内容',
   List<Map<String, dynamic>>? intersectionReasons,
@@ -1219,7 +1257,7 @@ PostBaseDto _postDto(
     'id': id,
     'type': 'micro',
     'identity': 'moment',
-    'authorId': 'user_1',
+    'authorId': authorId,
     'displayName': '用户一',
     'avatarUrl': avatarUrl,
     'body': body,

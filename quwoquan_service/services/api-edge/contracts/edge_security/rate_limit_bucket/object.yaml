@@ -17,3 +17,11 @@ local_identity_reasons:
 capabilities: [admission]
 taggable: false
 vector_enabled: false
+business_rules:
+- bucketKeyDigest 只能由 environment、可信 subject 与 canonical operationId 派生，客户端不得指定。
+- admission 必须使用 Redis 原子计数与过期，任何副本不得持有第二份本地限流真相。
+- 请求结束、取消或重试不得延长 bucket 的固定过期边界。
+lifecycle:
+  ttl_seconds: 60
+  expiry_semantics: fixed_window_delete
+  renewal: forbidden

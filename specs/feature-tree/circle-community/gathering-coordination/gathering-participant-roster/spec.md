@@ -60,8 +60,9 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/fields.yaml`
-- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/operations.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/fields.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/operations.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering/errors.yaml`
 - 父能力公开契约：[`L2 spec`](../spec.md)
 
 ## 5. 验收场景
@@ -91,10 +92,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 参与者名单尚不存在
+### OPEN-001 参与者名单尚未进入真实会话同步链
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前没有参与者聚合，加入类行动全部处于不可承接状态，用户无法确认自己是否加入，也看不到同行的人。
+- 影响或价值：尚缺真实 Chat durable membership projector、Circle API composition 与 App 名单页；参与者值对象、容量/幂等/审批/退出裁决和事务 Store 已落地，本地 saga 测试证明 Chat 写失败不会伪造 joined。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

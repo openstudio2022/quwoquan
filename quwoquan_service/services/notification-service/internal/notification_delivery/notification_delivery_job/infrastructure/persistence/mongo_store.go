@@ -81,34 +81,6 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) e
 	if err := s.Store.EnsureIndexes(ctx); err != nil {
 		return err
 	}
-	// Provider attempt/result truth belongs to integration.ExternalInteractionAttemptFact.
-	// Remove the former denormalized job fields before accepting traffic so an old
-	// document cannot silently remain a second authority after the model migration.
-	if _, err := s.jobs.UpdateMany(
-		ctx,
-		bson.M{"$or": bson.A{
-			bson.M{"provider": bson.M{"$exists": true}},
-			bson.M{"providerRequestDigest": bson.M{"$exists": true}},
-			bson.M{"providerResultStatus": bson.M{"$exists": true}},
-			bson.M{"providerResultAt": bson.M{"$exists": true}},
-			bson.M{"cancellationProvider": bson.M{"$exists": true}},
-			bson.M{"cancellationProviderRequestDigest": bson.M{"$exists": true}},
-			bson.M{"cancellationProviderResultStatus": bson.M{"$exists": true}},
-			bson.M{"cancellationProviderResultAt": bson.M{"$exists": true}},
-		}},
-		bson.M{"$unset": bson.M{
-			"provider":                          "",
-			"providerRequestDigest":             "",
-			"providerResultStatus":              "",
-			"providerResultAt":                  "",
-			"cancellationProvider":              "",
-			"cancellationProviderRequestDigest": "",
-			"cancellationProviderResultStatus":  "",
-			"cancellationProviderResultAt":      "",
-		}},
-	); err != nil {
-		return fmt.Errorf("remove legacy notification provider state: %w", err)
-	}
 	if _, err := s.jobs.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{

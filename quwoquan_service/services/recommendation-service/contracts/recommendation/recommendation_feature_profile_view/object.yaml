@@ -1,0 +1,21 @@
+kind: projection
+description: 行为、交付曝光与关系事件构建的推荐长期特征视图，唯一拥有用户候选特征、影响力、协同与交集投影。
+identity:
+  fields: [subjectId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: feedback, target_object: recommendation.RecommendationFeedbackFact, reference_fields: [lastFeedbackFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+- {name: exposure, target_object: recommendation.RecommendationExposureFact, reference_fields: [lastExposureFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+business_rules:
+- 特征只从 typed 事实和公开关系事件投影，任何在线排序调用不得回写长期特征。
+- 相同 source eventId 与 subjectId 仅应用一次；不同上游 sequence 不比较大小，成功应用后递增本地主体 revision，并在同一 Mongo 事务写入 profile、协同、交集、影响证据与幂等收据。
+- 账号关闭阻断后必须删除可识别特征，并由 closure fact 阻止旧事件重建。
+lifecycle:
+  source_events: [RecommendationExposureRecorded, RecommendationFeedbackRecorded, PersonaRelationshipChanged, IntersectionSnapshotPublished, RecommendationSubjectClosed]
+  checkpoint: per_subject_applied_event_revision_with_source_event_receipt
+  rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
+  tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint

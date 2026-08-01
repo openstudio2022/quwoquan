@@ -21,7 +21,7 @@ class SearchApiMetadata {
     'ListRecentSearches': '/search/recent',
     'RecoverSearchAccountClosureDeadLetter': '/internal/search/account-closure/dead-letters:recover',
     'ReportSearchFeedback': '/search/feedback',
-    'SearchQuery': '/search',
+    'Search': '/search',
     'UpsertRecentSearch': '/search/recent',
   };
 
@@ -32,7 +32,7 @@ class SearchApiMetadata {
     'ListRecentSearches': 'GET',
     'RecoverSearchAccountClosureDeadLetter': 'POST',
     'ReportSearchFeedback': 'POST',
-    'SearchQuery': 'POST',
+    'Search': 'POST',
     'UpsertRecentSearch': 'POST',
   };
 
@@ -44,7 +44,7 @@ class SearchApiMetadata {
     'ListRecentSearches': 'required',
     'RecoverSearchAccountClosureDeadLetter': 'required',
     'ReportSearchFeedback': 'optional',
-    'SearchQuery': 'optional',
+    'Search': 'optional',
     'UpsertRecentSearch': 'required',
   };
 
@@ -62,7 +62,7 @@ class SearchApiMetadata {
   static const String listRecentSearchesOperation = 'ListRecentSearches';
   static const String recoverSearchAccountClosureDeadLetterOperation = 'RecoverSearchAccountClosureDeadLetter';
   static const String reportSearchFeedbackOperation = 'ReportSearchFeedback';
-  static const String searchQueryOperation = 'SearchQuery';
+  static const String searchOperation = 'Search';
   static const String upsertRecentSearchOperation = 'UpsertRecentSearch';
 
   static const String clearRecentSearchesPath = '/search/recent';
@@ -76,7 +76,7 @@ class SearchApiMetadata {
   static const String listRecentSearchesPath = '/search/recent';
   static const String recoverSearchAccountClosureDeadLetterPath = '/internal/search/account-closure/dead-letters:recover';
   static const String reportSearchFeedbackPath = '/search/feedback';
-  static const String searchQueryPath = '/search';
+  static const String searchPath = '/search';
   static const String upsertRecentSearchPath = '/search/recent';
 
   static String _fillPath(String template, Map<String, String> params) {

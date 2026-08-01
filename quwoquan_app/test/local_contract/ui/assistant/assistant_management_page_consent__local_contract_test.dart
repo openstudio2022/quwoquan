@@ -31,6 +31,7 @@ class _AssistantConsentFacet implements AssistantSkillConsentFacet {
   Future<AssistantSkillConsent> grantSkillConsent({
     required String skillId,
     String grantedScope = kPersonalContentAccessSkillId,
+    required String clientRequestId,
   }) async {
     _granted = true;
     return AssistantSkillConsent(
@@ -62,26 +63,29 @@ class _AssistantConsentFacet implements AssistantSkillConsentFacet {
   }
 
   @override
-  Future<void> revokeSkillConsent({required String skillId}) async {
+  Future<void> revokeSkillConsent({
+    required String skillId,
+    required String clientRequestId,
+  }) async {
     _granted = false;
   }
 }
 
-class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
+class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
   _AssistantPreferenceFacet({
-    List<AssistantPreferenceFact> initial = const <AssistantPreferenceFact>[],
+    List<AssistantPreference> initial = const <AssistantPreference>[],
     this.listFailuresRemaining = 0,
-  }) : _items = <AssistantPreferenceFact>[...initial];
+  }) : _items = <AssistantPreference>[...initial];
 
-  final List<AssistantPreferenceFact> _items;
+  final List<AssistantPreference> _items;
   int listFailuresRemaining;
   final List<AssistantPreferenceStatus> requestedStatuses =
       <AssistantPreferenceStatus>[];
 
   @override
-  Future<List<AssistantPreferenceFact>> listAssistantPreferences({
+  Future<List<AssistantPreference>> listAssistantPreferences({
     AssistantPreferenceScope? scope,
-    String conversationId = '',
+    String sessionId = '',
     AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
   }) async {
     if (listFailuresRemaining > 0) {
@@ -98,21 +102,25 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
   }
 
   @override
-  Future<AssistantPreferenceFact> setAssistantPreference({
+  Future<AssistantPreference> setAssistantPreference({
     required AssistantPreferenceScope scope,
-    String conversationId = '',
+    String sessionId = '',
     required AssistantPreferenceKind kind,
     required String value,
     required AssistantPreferenceSourceType sourceType,
+    String sourceSessionId = '',
+    bool confirmed = false,
   }) async {
-    final fact = AssistantPreferenceFact(
+    final fact = AssistantPreference(
       preferenceId: 'preference_${_items.length + 1}',
       userId: 'owner',
       scope: scope,
-      conversationId: conversationId.isEmpty ? null : conversationId,
+      sessionId: sessionId.isEmpty ? null : sessionId,
       kind: kind,
       value: value,
       sourceType: sourceType,
+      sourceSessionId: sourceSessionId.isEmpty ? null : sourceSessionId,
+      confirmedAt: confirmed ? '2026-07-20T08:00:00Z' : null,
       status: AssistantPreferenceStatus.active,
       createdAt: '2026-07-20T08:00:00Z',
       updatedAt: '2026-07-20T08:00:00Z',
@@ -122,7 +130,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
       ..removeWhere(
         (item) =>
             item.scope == fact.scope &&
-            item.conversationId == fact.conversationId &&
+            item.sessionId == fact.sessionId &&
             item.kind == fact.kind,
       )
       ..add(fact);
@@ -130,18 +138,18 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
   }
 
   @override
-  Future<AssistantPreferenceFact> revokeAssistantPreference({
+  Future<AssistantPreference> revokeAssistantPreference({
     required String preferenceId,
   }) async {
     final index = _items.indexWhere(
       (item) => item.preferenceId == preferenceId,
     );
     final current = _items[index];
-    final revoked = AssistantPreferenceFact(
+    final revoked = AssistantPreference(
       preferenceId: current.preferenceId,
       userId: current.userId,
       scope: current.scope,
-      conversationId: current.conversationId,
+      sessionId: current.sessionId,
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
@@ -157,18 +165,18 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFactFacet {
   }
 
   @override
-  Future<AssistantPreferenceFact> restoreAssistantPreference({
+  Future<AssistantPreference> restoreAssistantPreference({
     required String preferenceId,
   }) async {
     final index = _items.indexWhere(
       (item) => item.preferenceId == preferenceId,
     );
     final current = _items[index];
-    final restored = AssistantPreferenceFact(
+    final restored = AssistantPreference(
       preferenceId: current.preferenceId,
       userId: current.userId,
       scope: current.scope,
-      conversationId: current.conversationId,
+      sessionId: current.sessionId,
       kind: current.kind,
       value: current.value,
       sourceType: current.sourceType,
@@ -252,8 +260,8 @@ void main() {
         consentFacet: _AssistantConsentFacet(false),
         visitRecorder: _CapturingVisitRecorder(),
         preferenceFacet: _AssistantPreferenceFacet(
-          initial: const <AssistantPreferenceFact>[
-            AssistantPreferenceFact(
+          initial: const <AssistantPreference>[
+            AssistantPreference(
               preferenceId: 'preference_1',
               userId: 'owner',
               scope: AssistantPreferenceScope.longTerm,
@@ -282,6 +290,49 @@ void main() {
     );
     expect(find.text('preference_1'), findsNothing);
     expect(find.text('owner'), findsNothing);
+  });
+
+  testWidgets('事实记忆展示用户确认内容、类型、来源与生效范围', (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        consentFacet: _AssistantConsentFacet(false),
+        visitRecorder: _CapturingVisitRecorder(),
+        preferenceFacet: _AssistantPreferenceFacet(
+          initial: const <AssistantPreference>[
+            AssistantPreference(
+              preferenceId: 'preference_memory_location',
+              userId: 'owner',
+              scope: AssistantPreferenceScope.longTerm,
+              kind: AssistantPreferenceKind.frequentLocations,
+              value: '常从深圳北站出发',
+              sourceType: AssistantPreferenceSourceType.sessionConfirmed,
+              sourceSessionId: 'asn_private_source',
+              confirmedAt: '2026-07-20T07:59:00Z',
+              status: AssistantPreferenceStatus.active,
+              createdAt: '2026-07-20T08:00:00Z',
+              updatedAt: '2026-07-20T08:00:00Z',
+              version: 1,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('常从深圳北站出发'), findsOneWidget);
+    expect(
+      find.textContaining(AssistantText.assistantMemoryFrequentLocations),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(AssistantText.assistantMemorySourceConfirmedSession),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(AssistantText.assistantPreferenceLongTermScope),
+      findsOneWidget,
+    );
+    expect(find.text('asn_private_source'), findsNothing);
   });
 
   testWidgets('管理页记忆空态明确', (tester) async {
@@ -344,8 +395,8 @@ void main() {
 
   testWidgets('管理页遗忘偏好后可撤销恢复', (tester) async {
     final preferenceFacet = _AssistantPreferenceFacet(
-      initial: const <AssistantPreferenceFact>[
-        AssistantPreferenceFact(
+      initial: const <AssistantPreference>[
+        AssistantPreference(
           preferenceId: 'preference_undo',
           userId: 'owner',
           scope: AssistantPreferenceScope.longTerm,
@@ -374,7 +425,7 @@ void main() {
 
     await tester.tap(find.text(AssistantText.assistantPreferenceForget));
     await tester.pumpAndSettle();
-    // 已撤销的事实不进入管理列表；仅当前操作保留临时恢复入口。
+    // 撤销状态由 Remote 重新查询，刷新或重启后仍保留恢复入口。
     expect(find.text(AssistantText.assistantPreferenceConcise), findsOneWidget);
     expect(
       find.textContaining(AssistantText.assistantPreferenceForgot),
@@ -383,8 +434,11 @@ void main() {
     expect(find.text(AssistantText.assistantPreferenceUndo), findsOneWidget);
     expect(find.text(AssistantText.assistantPreferenceForget), findsNothing);
     expect(
-      preferenceFacet.requestedStatuses,
-      everyElement(AssistantPreferenceStatus.active),
+      preferenceFacet.requestedStatuses.toSet(),
+      containsAll(<AssistantPreferenceStatus>{
+        AssistantPreferenceStatus.active,
+        AssistantPreferenceStatus.revoked,
+      }),
     );
 
     await tester.tap(find.text(AssistantText.assistantPreferenceUndo));

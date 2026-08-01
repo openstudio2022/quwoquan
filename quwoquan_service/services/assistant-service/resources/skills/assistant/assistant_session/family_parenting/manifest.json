@@ -1,0 +1,24 @@
+{
+  "skillId": "family_parenting",
+  "displayName": "家庭育儿助手",
+  "description": "家庭教育、亲子沟通、儿童成长、育儿方法与青春期陪伴。",
+  "domainId": "family_parenting",
+  "problemClass": "general",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "育儿",
+    "孩子",
+    "亲子",
+    "家庭教育",
+    "青春期",
+    "陪伴",
+    "早教",
+    "叛逆"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web3",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.general",
+  "replayAssetRef": "assistant.replay.family_parenting.v1"
+}

@@ -20,7 +20,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"runtime.message.transport": {
 			State:                   "enabled",
-			AdapterID:               "infra.redis.message_transport_fixture",
+			AdapterID:               "infra.redis.message_transport",
 			EndpointRef:             "",
 			EndpointEnvironmentKeys: map[string]string{},
 			SecretEnvironmentKeys:   []string{},

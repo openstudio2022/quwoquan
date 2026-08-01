@@ -193,8 +193,6 @@ func main() {
 	}
 	var roomAdapter application.MediaRoomProvider
 	switch mediaBinding.AdapterID {
-	case livekit.ProtocolFixtureAdapterID:
-		roomAdapter = livekit.NewProtocolFixtureRoomAdapter()
 	case livekit.AdapterID:
 		livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
 		livekitClient := rtgov.WrapClientWithCB(

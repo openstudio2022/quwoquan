@@ -21,18 +21,6 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
-	assistantdomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
-	conversationports "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/creationgrounding"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/intersectionclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/notificationclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/scheduling"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/userprofile"
 	learninghttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/adapters/inbound/http"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
@@ -43,11 +31,28 @@ import (
 	policymessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/messaging"
 	policyrollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
 	policyrolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
-	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
+	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	assistantdomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/creationgrounding"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/intersectionclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/notificationclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/scheduling"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/searchclient"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/userprofile"
+	turnviewhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/adapters/inbound/http"
+	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	skillcataloghttp "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/adapters/inbound/http"
 	skillcatalogapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
 	skillcatalogports "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/ports"
 	skillcatalogresource "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	consenthttp "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/adapters/inbound/http"
+	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
 )
 
 const (
@@ -347,12 +352,28 @@ func run() error {
 	if err != nil {
 		return dependencyError("content-service", "intersection-reader", err)
 	}
+	var interestReader sessionports.ProactiveInterestReader
+	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
+		interestReader = userprofile.NewClient(
+			searchHTTPClient(cfg.UserProfile.TimeoutMs),
+			userProfileBase,
+		)
+		log.Printf("assistant-service context interest resolver enabled base=%s", userProfileBase)
+	} else {
+		log.Printf("assistant-service context interest resolver disabled (no user_profile.base_url)")
+	}
 	agentLoop, err := buildAgentLoop(
 		appEnv,
 		canonicalSearch,
 		cfg.Model,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 		newObservedEgressClient,
+		deps.publicWebEvidence,
+		deps.publicWebBudget,
+		deps.sessionRunStore,
+		deps.subscriptionStore,
+		interestReader,
+		deps.consentStore,
 	)
 	if err != nil {
 		return dependencyError("assistant-agent-loop", "initialization", err)
@@ -360,43 +381,110 @@ func run() error {
 
 	if deps.preferenceStore == nil || deps.preferenceReader == nil {
 		return dependencyError(
-			"mongodb.assistant_preference_facts",
+			"mongodb.assistant_preferences",
 			"wiring",
 			errors.New("preference store and reader are required"),
 		)
 	}
-	conversationOwnerReader, ok := deps.conversationRunStore.(preferencefact.ConversationOwnerReader)
+	sessionOwnerReader, ok := deps.sessionRunStore.(preferencefact.SessionOwnerReader)
 	if !ok {
 		return dependencyError(
-			"mongodb.assistant_conversations",
+			"mongodb.assistant_sessions",
 			"wiring",
-			errors.New("conversation owner reader is required"),
+			errors.New("session owner reader is required"),
 		)
 	}
 	preferenceCommands := preferencefact.NewCommandFacade(
 		deps.preferenceStore,
-		conversationOwnerReader,
+		sessionOwnerReader,
 	)
 	preferenceQueries := preferencefact.NewQueryFacade(deps.preferenceReader)
+	policyReleaseService := policyreleaseapplication.NewService(
+		deps.policyReleaseStore,
+		nil,
+	)
+	policyRolloutService := policyrolloutapplication.NewService(
+		deps.policyRolloutStore,
+		policyReleaseService,
+		nil,
+	)
+	frozenPolicyResolver := sessionports.FrozenPolicyResolverFunc(
+		func(
+			ctx context.Context,
+			policyID string,
+			personaID string,
+			skillID string,
+			domainID string,
+		) (assistantdomain.AssistantFrozenPolicySelection, error) {
+			resolved, resolveErr := policyRolloutService.ResolveFrozenSelection(
+				ctx,
+				policyID,
+				personaID,
+				skillID,
+				domainID,
+			)
+			if resolveErr != nil {
+				return assistantdomain.AssistantFrozenPolicySelection{}, resolveErr
+			}
+			return projectFrozenPolicySelection(resolved), nil
+		},
+	)
+	durableExecutor := runruntime.NewManagedRunExecutor(
+		orchestration.NewDurableRunExecutorWithPolicyResolver(
+			agentLoop,
+			func(
+				ctx context.Context,
+				request runruntime.ExecutionRequest,
+			) (assistantdomain.AssistantFrozenPolicySelection, error) {
+				return frozenPolicyResolver.ResolveFrozenPolicy(
+					ctx,
+					"assistant-default",
+					request.UserID,
+					request.RequestedSkillID,
+					request.RequestedDomainID,
+				)
+			},
+		),
+	)
+	runCancellation := runruntime.NewCancellationCoordinator(
+		durableExecutor,
+		10*time.Second,
+	)
+	runCommands := runruntime.NewCommandService(
+		deps.runRepository,
+		runruntime.SessionAuthorizerFunc(func(
+			ctx context.Context,
+			userID string,
+			sessionID string,
+		) error {
+			session, found, readErr := deps.sessionRunStore.GetSession(
+				ctx,
+				sessionID,
+			)
+			if readErr != nil {
+				return readErr
+			}
+			if !found || session.UserID != strings.TrimSpace(userID) {
+				return runruntime.ErrRunNotFound
+			}
+			return nil
+		}),
+		time.Now,
+		runCancellation,
+	)
 	assistantOpts := []orchestration.AssistantServiceOption{
 		orchestration.WithLearningProjectionReader(deps.learningProjection),
 		orchestration.WithNotificationAppMessageCommandWriter(notificationWriter),
 		orchestration.WithSkillSubscriptionStore(deps.subscriptionStore),
 		orchestration.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
-		orchestration.WithConversationRunStore(deps.conversationRunStore),
+		orchestration.WithSessionRunStore(deps.sessionRunStore),
 		orchestration.WithPreferenceSnapshotReader(preferenceQueries),
 		orchestration.WithCreationSuggestGrounding(creationGroundingClient),
 		orchestration.WithXiaoquSearchReader(canonicalSearch),
 		orchestration.WithIntersectionInboxReader(intersectionInbox),
 		orchestration.WithIntersectionEvidenceReader(intersectionInbox),
 		orchestration.WithAgentLoop(agentLoop),
-	}
-	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
-		interestReader := userprofile.NewClient(searchHTTPClient(cfg.UserProfile.TimeoutMs), userProfileBase)
-		assistantOpts = append(assistantOpts, orchestration.WithProactiveInterestReader(interestReader))
-		log.Printf("assistant-service proactive interest profile reader enabled base=%s", userProfileBase)
-	} else {
-		log.Printf("assistant-service proactive interest profile reader disabled (no user_profile.base_url)")
+		orchestration.WithRunCommandService(runCommands),
 	}
 	chatBase := strings.TrimSpace(cfg.ChatService.BaseURL)
 	if chatBase == "" {
@@ -440,15 +528,6 @@ func run() error {
 		return checkServiceHealth(ctx, chatHTTPClient, chatBase)
 	})
 	log.Printf("assistant-service chat grounding client enabled base=%s", chatBase)
-	policyReleaseService := policyreleaseapplication.NewService(
-		deps.policyReleaseStore,
-		nil,
-	)
-	policyRolloutService := policyrolloutapplication.NewService(
-		deps.policyRolloutStore,
-		policyReleaseService,
-		nil,
-	)
 	learningFactService := learningapplication.NewService(
 		deps.learningFactStore,
 		deps.learningRunOwners,
@@ -460,9 +539,9 @@ func run() error {
 	assistantOpts = append(
 		assistantOpts,
 		orchestration.WithLearningFactWriter(
-			conversationports.LearningFactWriterFunc(func(
+			sessionports.LearningFactWriterFunc(func(
 				ctx context.Context,
-				command conversationports.ServiceScorecardFactCommand,
+				command sessionports.ServiceScorecardFactCommand,
 			) error {
 				_, appendErr := learningFactService.AppendServiceFact(
 					ctx,
@@ -486,7 +565,7 @@ func run() error {
 	assistantOpts = append(
 		assistantOpts,
 		orchestration.WithPolicySkillCandidateResolver(
-			conversationports.PolicySkillCandidateResolverFunc(
+			sessionports.PolicySkillCandidateResolverFunc(
 				func(
 					ctx context.Context,
 					policyID string,
@@ -496,60 +575,18 @@ func run() error {
 				},
 			),
 		),
-		orchestration.WithFrozenPolicyResolver(
-			conversationports.FrozenPolicyResolverFunc(
-				func(
-					ctx context.Context,
-					policyID string,
-					personaID string,
-					skillID string,
-					domainID string,
-				) (assistantdomain.AssistantFrozenPolicySelection, error) {
-					resolved, resolveErr :=
-						policyRolloutService.ResolveFrozenSelection(
-							ctx,
-							policyID,
-							personaID,
-							skillID,
-							domainID,
-						)
-					if resolveErr != nil {
-						return assistantdomain.AssistantFrozenPolicySelection{},
-							resolveErr
-					}
-					return assistantdomain.AssistantFrozenPolicySelection{
-						PolicyID:        resolved.PolicyID,
-						ReleaseDigest:   resolved.ReleaseDigest,
-						Cohort:          resolved.Cohort,
-						RolloutRevision: resolved.RolloutRevision,
-						RuleID:          resolved.RuleID,
-						Template: assistantdomain.AssistantFrozenPolicyTemplate{
-							TemplateID:      resolved.Template.TemplateID,
-							SkillID:         resolved.Template.SkillID,
-							DomainID:        resolved.Template.DomainID,
-							PromptPolicy:    resolved.Template.PromptPolicy,
-							AllowedTools:    append([]string(nil), resolved.Template.AllowedTools...),
-							SearchIntensity: resolved.Template.SearchIntensity,
-						},
-						LearningContextPolicy: assistantdomain.AssistantFrozenLearningContextPolicy{
-							Enabled:                  resolved.LearningContextPolicy.Enabled,
-							AllowedSignals:           append([]string(nil), resolved.LearningContextPolicy.AllowedSignals...),
-							AllowedMetricIDs:         append([]string(nil), resolved.LearningContextPolicy.AllowedMetricIDs...),
-							AllowedReasonCodes:       append([]string(nil), resolved.LearningContextPolicy.AllowedReasonCodes...),
-							MinimumFeedbackSamples:   resolved.LearningContextPolicy.MinimumFeedbackSamples,
-							WindowDays:               resolved.LearningContextPolicy.WindowDays,
-							SnapshotTrainingEligible: resolved.LearningContextPolicy.SnapshotTrainingEligible,
-						},
-					}, nil
-				},
-			),
-		),
+		orchestration.WithFrozenPolicyResolver(frozenPolicyResolver),
 	)
 	service := orchestration.NewAssistantService(
 		deps.consentStore,
 		router.Scene("general"),
 		assistantOpts...,
 	)
+	consentCommands := consentapplication.NewCommandFacade(
+		deps.consentStore,
+		func() time.Time { return time.Now().UTC() },
+	)
+	consentQueries := consentapplication.NewQueryFacade(deps.consentStore)
 	serviceCtx, serviceCancel := context.WithCancel(context.Background())
 	defer serviceCancel()
 	subscriptionScheduler, err := scheduling.NewSkillSubscriptionScheduler(
@@ -704,12 +741,24 @@ func run() error {
 	)
 	go consumer.Run(serviceCtx, 500*time.Millisecond)
 	log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
+	runWorker := runruntime.NewDurableWorker(
+		deps.runRepository,
+		deps.runRepository,
+		durableExecutor,
+		instanceID,
+	)
+	go runWorker.Run(serviceCtx)
+	log.Printf(
+		"assistant-service durable AssistantRun worker enabled workerId=%s",
+		instanceID,
+	)
 	baseHandler := httpadapter.NewHandler(
 		service,
 		httpadapter.WithPreferenceFacades(
 			preferenceCommands,
 			preferenceQueries,
 		),
+		httpadapter.WithRunCommandService(runCommands),
 	).Routes()
 	skillCatalogQueries := skillcatalogapplication.NewQueryService(
 		skillcatalogresource.NewCatalogSource(),
@@ -732,8 +781,12 @@ func run() error {
 		}),
 	)
 	serviceMux := http.NewServeMux()
+	consenthttp.NewHandler(consentCommands, consentQueries).RegisterRoutes(serviceMux)
 	policyreleasehttp.NewHandler(policyReleaseService).RegisterRoutes(serviceMux)
 	policyrollouthttp.NewHandler(policyRolloutService).RegisterRoutes(serviceMux)
+	turnviewhttp.NewHandler(
+		turnviewapplication.NewQueryFacade(deps.turnViewReader),
+	).RegisterRoutes(serviceMux)
 	learninghttp.NewHandler(
 		learningFactService,
 		learningOpsQueries,
@@ -753,6 +806,7 @@ func run() error {
 		Direction:         robs.DirectionInbound,
 		SourceID:          "assistant-service",
 		Src:               "assistant-service",
+		EndpointResolver:  httpadapter.GeneratedOperationPathTemplateResolver(),
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 	server := &http.Server{
@@ -821,4 +875,46 @@ func logStartupFailure(err error) {
 		)
 	}
 	logger.Error("assistant-service startup failed", attributes...)
+}
+
+func projectFrozenPolicySelection(
+	resolved policyrolloutapplication.FrozenSelection,
+) assistantdomain.AssistantFrozenPolicySelection {
+	return assistantdomain.AssistantFrozenPolicySelection{
+		PolicyID:        resolved.PolicyID,
+		ReleaseDigest:   resolved.ReleaseDigest,
+		Cohort:          resolved.Cohort,
+		RolloutRevision: resolved.RolloutRevision,
+		RuleID:          resolved.RuleID,
+		Template: assistantdomain.AssistantFrozenPolicyTemplate{
+			TemplateID:   resolved.Template.TemplateID,
+			SkillID:      resolved.Template.SkillID,
+			DomainID:     resolved.Template.DomainID,
+			PromptPolicy: resolved.Template.PromptPolicy,
+			AllowedTools: append(
+				[]string(nil),
+				resolved.Template.AllowedTools...,
+			),
+			SearchIntensity: resolved.Template.SearchIntensity,
+		},
+		LearningContextPolicy: assistantdomain.AssistantFrozenLearningContextPolicy{
+			Enabled: resolved.LearningContextPolicy.Enabled,
+			AllowedSignals: append(
+				[]string(nil),
+				resolved.LearningContextPolicy.AllowedSignals...,
+			),
+			AllowedMetricIDs: append(
+				[]string(nil),
+				resolved.LearningContextPolicy.AllowedMetricIDs...,
+			),
+			AllowedReasonCodes: append(
+				[]string(nil),
+				resolved.LearningContextPolicy.AllowedReasonCodes...,
+			),
+			MinimumFeedbackSamples: resolved.LearningContextPolicy.MinimumFeedbackSamples,
+			WindowDays:             resolved.LearningContextPolicy.WindowDays,
+			SnapshotTrainingEligible: resolved.LearningContextPolicy.
+				SnapshotTrainingEligible,
+		},
+	}
 }

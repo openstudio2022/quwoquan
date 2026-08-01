@@ -10,21 +10,34 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	testsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 const terminalManifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
+func newTerminalFeedService(
+	engine *rtrec.Engine,
+	reader postports.PostFeedReader,
+	options ...FeedServiceOption,
+) *FeedService {
+	return NewFeedService(
+		engine,
+		reader,
+		testsupport.RankedRecommendationOptions(engine, options...)...,
+	)
+}
+
 type terminalActiveSupplyReader struct {
-	active         bool
-	err            error
-	calls          int
-	releaseID      string
-	manifestDigest string
-	zeroPremium    bool
+	active            bool
+	err               error
+	calls             int
+	releaseID         string
+	manifestDigest    string
+	zeroPlayableVideo bool
 }
 
 func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (ActiveSupplySnapshot, error) {
@@ -40,20 +53,20 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 	if manifestDigest == "" {
 		manifestDigest = terminalManifestDigest
 	}
-	premiumPlayableVideos := int64(1)
-	if r.zeroPremium {
-		premiumPlayableVideos = 0
+	playableVideos := int64(1)
+	if r.zeroPlayableVideo {
+		playableVideos = 0
 	}
 	return ActiveSupplySnapshot{
-		Environment:           "local_contract",
-		SourceOwner:           "qwq_data",
-		Status:                "active",
-		ActiveReleaseID:       releaseID,
-		ManifestDigest:        manifestDigest,
-		ReadbackStatus:        "passed",
-		Posts:                 1,
-		DiscoveryPosts:        1,
-		PremiumPlayableVideos: premiumPlayableVideos,
+		Environment:     "local_contract",
+		SourceOwner:     "qwq_data",
+		Status:          "active",
+		ActiveReleaseID: releaseID,
+		ManifestDigest:  manifestDigest,
+		ReadbackStatus:  "passed",
+		Posts:           1,
+		DiscoveryPosts:  1,
+		PlayableVideos:  playableVideos,
 	}, nil
 }
 
@@ -209,7 +222,7 @@ func requireAppErrorCodeAndStage(
 
 func TestListFeedInitialRecommendWithoutActiveReleaseReturnsCanonicalEmpty(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: false}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{{
 			ContentID: "post-active", ContentType: "image", AuthorID: "author-active",
 		}}),
@@ -234,7 +247,7 @@ func TestListFeedInitialRecommendWithoutActiveReleaseReturnsCanonicalEmpty(t *te
 }
 
 func TestListFeedInitialRecommendDoesNotAllowMissingSupplyReader(t *testing.T) {
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{{
 			ContentID: "post-active", ContentType: "image", AuthorID: "author-active",
 		}}),
@@ -254,7 +267,7 @@ func TestListFeedInitialRecommendDoesNotAllowMissingSupplyReader(t *testing.T) {
 
 func TestListFeedActiveSupplyReadFailureIsCanonicalDependencyFailure(t *testing.T) {
 	active := &terminalActiveSupplyReader{err: errors.New("release state unavailable")}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{{
 			ContentID: "post-active", ContentType: "image", AuthorID: "author-active",
 		}}),
@@ -274,8 +287,8 @@ func TestListFeedActiveSupplyReadFailureIsCanonicalDependencyFailure(t *testing.
 }
 
 func TestListFeedPremiumInitialHealthyEmptyIsCanonicalEmpty(t *testing.T) {
-	active := &terminalActiveSupplyReader{active: true, zeroPremium: true}
-	service := NewFeedService(
+	active := &terminalActiveSupplyReader{active: true, zeroPlayableVideo: true}
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -303,7 +316,7 @@ func TestListFeedHardExclusionReadFailureIsCanonicalDependencyFailure(t *testing
 			ContentID: "post-hard-filter", ContentType: "image", AuthorID: "author-hard-filter",
 		}}}},
 	)
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		engine,
 		fixtureFeedReader{},
 		WithActiveSupplyReader(&terminalActiveSupplyReader{active: true}),
@@ -322,7 +335,7 @@ func TestListFeedHardExclusionReadFailureIsCanonicalDependencyFailure(t *testing
 
 func TestListFeedFollowingBypassesActiveSupplyGuardAndMayBeEmpty(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: false}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -378,7 +391,7 @@ func TestListFeedRecommendAndPremiumContinuationReadActiveSupplyEveryPage(t *tes
 	for _, channelID := range []string{"recommend", "premium"} {
 		t.Run(channelID, func(t *testing.T) {
 			active := &terminalActiveSupplyReader{active: true}
-			service := NewFeedService(
+			service := newTerminalFeedService(
 				newTerminalFeedEngine(candidates),
 				fixtureFeedReader{posts: posts},
 				WithActiveSupplyReader(active),
@@ -435,7 +448,7 @@ func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T
 		},
 	}
 	active := &terminalActiveSupplyReader{active: false}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
 			{
 				ContentID: posts[0].ID, ContentType: "image",
@@ -473,7 +486,7 @@ func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T
 
 func TestListFeedInitialVideoBookHealthyEmptyIsCanonicalEmpty(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -504,7 +517,7 @@ func TestListFeedInitialVideoBookRequiresPlayableActiveReleaseItem(t *testing.T)
 		ManifestDigest: terminalManifestDigest,
 		VideoURL:       "https://media.example.test/video-active.mp4", DurationMS: 5000, CreatedAt: now,
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		releaseHydrationFeedReader{post: post},
 		readyActiveSupplyOption(),
@@ -524,7 +537,7 @@ func TestListFeedInitialVideoBookRequiresPlayableActiveReleaseItem(t *testing.T)
 
 func TestListFeedVideoBookPaginationMayEndEmpty(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -555,7 +568,7 @@ func TestListFeedVideoBookPaginationMayEndEmpty(t *testing.T) {
 func TestListFeedRejectsVideoBookCursorAfterActiveReleaseSwitch(t *testing.T) {
 	const oldDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -597,7 +610,7 @@ func TestListFeedRejectsHydrationFromDifferentCanonicalRelease(t *testing.T) {
 		SourceOwner: "qwq_data", ReleaseID: "rel_stale",
 		ManifestDigest: terminalManifestDigest, LifecycleStatus: "active",
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngineWithSource(
 			terminalRawRecallSource{candidates: []rtrec.ContentCandidate{candidate}},
 		),
@@ -617,7 +630,7 @@ func TestListFeedRejectsHydrationFromDifferentCanonicalRelease(t *testing.T) {
 
 	post.ReleaseID = "rel_local_contract"
 	post.ManifestDigest = terminalManifestDigest
-	service = NewFeedService(
+	service = newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{candidate}),
 		releaseHydrationFeedReader{post: post},
 		readyActiveSupplyOption(),
@@ -649,7 +662,7 @@ func TestListFeedRejectsHydrationFromDifferentManifestDigest(t *testing.T) {
 		ManifestDigest:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		LifecycleStatus: "active",
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngineWithSource(
 			terminalRawRecallSource{candidates: []rtrec.ContentCandidate{candidate}},
 		),
@@ -677,7 +690,7 @@ func TestListFeedInitialRecommendUGCOnlyIsCanonicalEmpty(t *testing.T) {
 		PostID: postports.NewPostID(candidate.ContentID), AuthorPersonaID: postports.NewPersonaID(candidate.AuthorID),
 		ContentType: "image", ContentIdentity: "work", Visibility: "public", CreatedAt: now,
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngineWithSource(
 			terminalRawRecallSource{candidates: []rtrec.ContentCandidate{candidate}},
 		),
@@ -699,7 +712,7 @@ func TestListFeedInitialRecommendUGCOnlyIsCanonicalEmpty(t *testing.T) {
 
 func TestListFeedInvalidContinuationIsNotAHealthyEmptyTerminal(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
 		fixtureFeedReader{},
 		WithActiveSupplyReader(active),
@@ -721,7 +734,7 @@ func TestListFeedInvalidContinuationIsNotAHealthyEmptyTerminal(t *testing.T) {
 
 func TestListFeedFullHydrationMissIsCanonicalDependencyFailure(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{{
 			ContentID: "post-missing", ContentType: "image", AuthorID: "author-missing",
 		}}),
@@ -742,7 +755,7 @@ func TestListFeedFullHydrationMissIsCanonicalDependencyFailure(t *testing.T) {
 
 func TestListFeedPartialHydrationStillDeliversRealContent(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: true}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
 			{ContentID: "post-delivered", ContentType: "image", AuthorID: "author-delivered"},
 			{ContentID: "post-stale", ContentType: "image", AuthorID: "author-stale"},
@@ -752,6 +765,7 @@ func TestListFeedPartialHydrationStillDeliversRealContent(t *testing.T) {
 			Status: "published", Visibility: "public",
 		}}},
 		WithActiveSupplyReader(active),
+		feedDeliveryPageStoreOption(),
 	)
 
 	response, err := service.ListFeed(context.Background(), ListFeedRequest{
@@ -766,7 +780,7 @@ func TestListFeedPartialHydrationStillDeliversRealContent(t *testing.T) {
 }
 
 func TestListFeedStorageReaderFailureKeepsStorageReadFailed(t *testing.T) {
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{{
 			ContentID: "post-reader-error", ContentType: "image", AuthorID: "author-reader-error",
 		}}),

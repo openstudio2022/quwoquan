@@ -39,7 +39,9 @@ import (
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
 	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
+	experimentmessaging "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/messaging"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
+	assignmentstream "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/stream"
 	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
 	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
@@ -307,8 +309,28 @@ func main() {
 	})
 	healthChecker.Register("account-enforcement-delivery", accountEnforcementDispatcher.CheckReadiness)
 	go accountEnforcementDispatcher.Run(ctx)
+	assignmentConsumer, err := assignmentstream.NewConsumer(
+		messageTransport,
+		experimentFacade.AssignmentFacts(),
+		serviceName+"-"+instanceID,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service experiment assignment consumer invalid: %v", err)
+	}
+	if err := assignmentConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("product-ops-service experiment assignment consumer group failed: %v", err)
+	}
+	healthChecker.Register("experiment-assignment-consumer", func(context.Context) error {
+		return assignmentConsumer.Healthy(10 * time.Second)
+	})
+	go assignmentConsumer.Run(ctx)
 	publisher := messaging.NewRedisEventPublisherWithTransport(messageTransport, serviceName, nil)
-	outboxDispatcher, err := pgoutbox.NewDispatcher(postgresPool, publisher, "product_ops_outbox")
+	experimentPublisher, err := experimentmessaging.NewPublisher(messageTransport)
+	if err != nil {
+		log.Fatalf("product-ops-service Experiment policy publisher invalid: %v", err)
+	}
+	outboxDispatcher, err := pgoutbox.NewDispatcher(postgresPool, experimentPublisher, "product_ops_outbox")
 	if err != nil {
 		log.Fatalf("product-ops-service outbox dispatcher invalid: %v", err)
 	}

@@ -1,5 +1,5 @@
 kind: projection
-description: HomepageSearchItemView 的领域对象契约。
+description: Homepage 公开主档事件构建的可重建搜索条目，作为 search-service 消费共享主页事实的唯一 typed projection。
 identity:
   fields:
   - homepageId
@@ -21,3 +21,12 @@ relationships:
 local_identity_reasons:
   canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
     projection port
+business_rules:
+- 只投影 Homepage 已公开且可搜索的 canonical 字段，不复制审核草稿或外部原始载荷。
+- 同一 homepageId 仅保留最高聚合版本，重复或乱序事件不得回退条目。
+- Homepage 下线或删除必须产生 tombstone 并从搜索结果移除。
+lifecycle:
+  source_events: [HomepageCreated, HomepageUpdated, HomepagePublished, HomepageRetired]
+  checkpoint: homepage_outbox_sequence
+  rebuild: replay_homepage_public_outbox
+  tombstone: delete_search_item_keep_checkpoint

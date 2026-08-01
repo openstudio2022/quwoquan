@@ -8,20 +8,20 @@ collections:
       keys:
         userId: 1
         createdAt: -1
-    - name: idx_runs_conversation
+    - name: idx_runs_session
       keys:
-        conversationId: 1
+        sessionId: 1
         createdAt: -1
     - name: idx_runs_context_window
       keys:
-        conversationId: 1
+        sessionId: 1
         userId: 1
         status: 1
         createdAt: -1
     - name: uq_runs_client_request
       keys:
         userId: 1
-        conversationId: 1
+        sessionId: 1
         clientRequestId: 1
       unique: true
       sparse: true
@@ -47,6 +47,73 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
+  assistant_run_command_receipts:
+    entity: AssistantRun
+    description: 非 Start 命令的持久幂等回执；同一 runId/commandId 同载荷不重复执行，异载荷冲突。
+    indexes:
+    - name: uq_run_command_receipt
+      unique: true
+      keys:
+        runId: 1
+        commandId: 1
+  assistant_run_worker_leases:
+    entity: AssistantRun
+    description: Worker claim、heartbeat 与 fencing token 的短租约；过期后允许其他实例接管，旧 token 永远不能继续提交。
+    indexes:
+    - name: idx_run_worker_lease_expiry
+      keys:
+        expiresAt: 1
+  assistant_run_web_evidence:
+    entity: AssistantRun
+    description: Public Web Fetch Runtime 提交的 authoritative Target、Source、Document 与 Artifact ledger；四类不可变记录单次抓取事务写入，所有回查均由 runId 约束。
+    indexes:
+    - name: uq_web_evidence_run_target
+      keys:
+        runId: 1
+        targetId: 1
+      unique: true
+      partial_filter:
+        targetId:
+          $type: string
+    - name: uq_web_evidence_run_document
+      keys:
+        runId: 1
+        documentId: 1
+      unique: true
+      partial_filter:
+        documentId:
+          $type: string
+    - name: uq_web_evidence_run_source
+      keys:
+        runId: 1
+        sourceId: 1
+      unique: true
+      partial_filter:
+        sourceId:
+          $type: string
+    - name: uq_web_evidence_run_artifact
+      keys:
+        runId: 1
+        artifactId: 1
+      unique: true
+      partial_filter:
+        artifactId:
+          $type: string
+    - name: idx_web_evidence_run_link
+      keys:
+        runId: 1
+        linkIds: 1
+    - name: idx_web_evidence_run_fetched
+      keys:
+        runId: 1
+        fetchedAt: -1
+  assistant_run_web_budgets:
+    entity: AssistantRun
+    description: Public Web Fetch Runtime 的持久页面、字节与在途 reservation 预算；服务重启不得重置已消费预算，过期 reservation 只能回收为未消费额度。
+    indexes:
+    - name: idx_web_budgets_updated
+      keys:
+        updatedAt: -1
 redis_cache:
 - key: page_ctx:{userId}
   ttl_seconds: 300
@@ -56,10 +123,6 @@ redis_cache:
   ttl_seconds: 300
   type: string
   description: Suggested Actions 缓存
-- key: assistant:run:execution:{runId}
-  ttl_seconds: 190
-  type: string
-  description: AssistantRun 跨实例执行 single-flight lease
 - key: assistant:run:cancel:{runId}
   ttl_seconds: 600
   type: string

@@ -132,10 +132,16 @@ def _prepare_homepage_author_jobs(
             entity_type,
             entity,
         )
-        packet = read_json(draft_dir / "author_job_packet.json")
-        compose = read_json(
-            draft_dir.parent / "3.compose" / "entity_page_input.json"
-        )
+        packet_path = draft_dir / "author_job_packet.json"
+        compose_path = draft_dir.parent / "3.compose" / "entity_page_input.json"
+        if not packet_path.is_file() or not compose_path.is_file():
+            raise ValueError(
+                "ReliableTask homepage author artefacts missing for "
+                f"{object_ref}: require author_job_packet.json and "
+                "entity_page_input.json from build_prepare"
+            )
+        packet = read_json(packet_path)
+        compose = read_json(compose_path)
         source_revision = str(compose.get("sourceRevision") or "").strip()
         if not source_revision:
             source_revision = canonical_sha256(compose)

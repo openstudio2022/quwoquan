@@ -406,7 +406,7 @@ func mapPersonaProfileCommandError(err error) error {
 
 // ProfileCredentialView 是资料编辑快照所需的最小凭据切片。
 // Adapter 从 CredentialBinding 对象的 query view 显式映射，避免 Profile
-// application service 依赖另一个对象的 aggregate 或 legacy generated model。
+// application service 依赖另一个对象的 aggregate 或 generated persistence model。
 type ProfileCredentialView struct {
 	CredentialType string
 	DisplayLabel   string

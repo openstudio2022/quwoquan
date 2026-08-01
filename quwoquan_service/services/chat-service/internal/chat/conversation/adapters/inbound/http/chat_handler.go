@@ -809,7 +809,16 @@ func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Reque
 			if filter == "mutual" && stringFromMap(contact, "relationState") != "mutual" {
 				continue
 			}
-			rows = append(rows, contactHomeUserRowToWire(contact))
+			intersections, err := h.memberService.ListContactIntersectionSummaries(
+				r.Context(),
+				userID,
+				stringFromMap(contact, "userId"),
+			)
+			if err != nil {
+				writeHTTPError(w, r, err)
+				return
+			}
+			rows = append(rows, contactHomeUserRowToWire(contact, intersections))
 			if len(rows) >= limit {
 				writeJSON(w, http.StatusOK, map[string]any{"items": rows})
 				return

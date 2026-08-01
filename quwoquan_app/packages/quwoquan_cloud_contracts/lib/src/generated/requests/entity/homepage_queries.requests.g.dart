@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../entity/homepage_queries.dart';
 
@@ -9,6 +9,10 @@ final class HomepageByIdQuery {
   }) : homepageId = homepageId;
 
   final String homepageId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+  };
 }
 
 final class HomepageObjectPageBundleQuery {
@@ -32,6 +36,15 @@ final class HomepageObjectPageBundleQuery {
   final String? recommendationTraceId;
   final String? experimentBucket;
   final String? rolloutCohort;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "homepageId": this.homepageId,
+    if (this.referralSource != null) "referralSource": this.referralSource!,
+    if (this.feedRequestId != null) "feedRequestId": this.feedRequestId!,
+    if (this.recommendationTraceId != null) "recommendationTraceId": this.recommendationTraceId!,
+    if (this.experimentBucket != null) "experimentBucket": this.experimentBucket!,
+    if (this.rolloutCohort != null) "rolloutCohort": this.rolloutCohort!,
+  };
 }
 
 final class HomepageSearchQuery {
@@ -55,6 +68,15 @@ final class HomepageSearchQuery {
   final String? status;
   final String? cursor;
   final int limit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "query": this.query,
+    if (this.homepageType != null) "homepageType": this.homepageType!,
+    if (this.city != null) "city": this.city!,
+    if (this.status != null) "status": this.status!,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
 }
 
 CloudOperationRequestPayload encodeEntityHomepageGetEntityImpactGeneratedRequest(HomepageByIdQuery request) {

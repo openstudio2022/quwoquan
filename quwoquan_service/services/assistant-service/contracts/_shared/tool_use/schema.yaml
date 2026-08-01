@@ -13,6 +13,8 @@ fields:
   - { name: input, type: map, default: {} }
   - { name: status, type: string, default: requested }
   - { name: requiresConfirmation, type: bool, default: false }
+  - { name: confirmationState, type: string, default: not_required }
+  - { name: continuationToken, type: string, default: '' }
   - { name: result, type: map, default: {} }
   - { name: failure, type: object, ref: RuntimeFailureWire }
   - { name: createdAt, type: string, required: true }

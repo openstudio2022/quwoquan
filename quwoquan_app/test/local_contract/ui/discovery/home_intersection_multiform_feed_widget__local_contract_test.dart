@@ -788,6 +788,45 @@ void main() {
     expect(notifier.prependCalls, 1);
   });
 
+  testWidgets('生产滚动容器经 provider 驱动八页并越过 retained 边界', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final notifier = _EightPageScrollFeedMapNotifier();
+
+    await tester.pumpWidget(
+      _buildFeedScope(
+        notifier: () => notifier,
+        scopeId: 'eight-page-long-scroll',
+      ),
+    );
+    await tester.pump();
+
+    final scrollView = find.byType(CustomScrollView);
+    expect(scrollView, findsOneWidget);
+    for (
+      var attempt = 0;
+      attempt < 12 && notifier.loadedPageCount < 8;
+      attempt += 1
+    ) {
+      await tester.fling(scrollView, const Offset(0, -8000), 6000);
+      await tester.pumpAndSettle();
+    }
+
+    expect(notifier.loadedPageCount, 8);
+    expect(notifier.appendCalls, 7);
+    final feed = notifier.currentFeed;
+    expect(feed.items, hasLength(80));
+    expect(feed.items.first.id, 'widget_page_4_post_0');
+    expect(feed.items.last.id, 'widget_page_7_post_19');
+    expect(feed.seenItemIds, hasLength(160));
+    expect(feed.residentPageCount, 4);
+    expect(feed.retainedPageCount, 6);
+
+    WidgetsBinding.instance.handleMemoryPressure();
+    await tester.pump();
+    expect(find.byType(CustomScrollView), findsOneWidget);
+  });
+
   testWidgets('关注空态准确说明尚无动态且没有插画或错误重试', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1880,6 +1919,80 @@ class _PreviousPageRecoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
   Future<bool> prependPreviousPage(String channelId) async {
     prependCalls += 1;
     return true;
+  }
+}
+
+class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  int loadedPageCount = 1;
+  int appendCalls = 0;
+  final List<String> _seenItemIds = <String>[];
+
+  DiscoveryFeedState get currentFeed => state['recommend']!.value!;
+
+  List<PostBaseDto> _page(int pageIndex) => List<PostBaseDto>.generate(
+    20,
+    (index) => _microPost(
+      id: 'widget_page_${pageIndex}_post_$index',
+      imageUrls: const <String>[],
+    ),
+    growable: false,
+  );
+
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    final firstPage = _page(0);
+    _seenItemIds.addAll(firstPage.map((post) => post.id));
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': AsyncData(
+        DiscoveryFeedState(
+          items: firstPage,
+          seenItemIds: List<String>.unmodifiable(_seenItemIds),
+          nextCursor: 'widget_cursor_1',
+          residentPageCount: 1,
+          retainedPageCount: 1,
+        ),
+      ),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+
+  @override
+  Future<void> appendNextPage(String channelId) async {
+    if (loadedPageCount >= 8) return;
+    final current = state[channelId]?.value;
+    if (current == null || current.isAppending) return;
+    appendCalls += 1;
+    state = <String, AsyncValue<DiscoveryFeedState>>{
+      ...state,
+      channelId: AsyncData(current.copyWith(isAppending: true)),
+    };
+    await Future<void>.delayed(Duration.zero);
+
+    final nextPage = _page(loadedPageCount);
+    _seenItemIds.addAll(nextPage.map((post) => post.id));
+    loadedPageCount += 1;
+    final combined = <PostBaseDto>[...current.items, ...nextPage];
+    final visible = combined.length <= 80
+        ? combined
+        : combined.sublist(combined.length - 80);
+    state = <String, AsyncValue<DiscoveryFeedState>>{
+      ...state,
+      channelId: AsyncData(
+        current.copyWith(
+          items: List<PostBaseDto>.unmodifiable(visible),
+          seenItemIds: List<String>.unmodifiable(_seenItemIds),
+          nextCursor: loadedPageCount < 8
+              ? 'widget_cursor_$loadedPageCount'
+              : null,
+          canRestorePreviousPage: loadedPageCount > 4,
+          residentPageCount: loadedPageCount > 4 ? 4 : loadedPageCount,
+          retainedPageCount: loadedPageCount > 6 ? 6 : loadedPageCount,
+          isAppending: false,
+        ),
+      ),
+    };
   }
 }
 

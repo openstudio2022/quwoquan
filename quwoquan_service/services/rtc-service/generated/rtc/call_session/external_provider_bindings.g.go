@@ -20,21 +20,21 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"rtc.room.transport": {
 			State:       "enabled",
-			AdapterID:   "infra.livekit_protocol_fixture",
-			EndpointRef: "environment_binding:rtc.livekit_fixture",
+			AdapterID:   "infra.livekit_sfu",
+			EndpointRef: "environment_binding:rtc.livekit",
 			EndpointEnvironmentKeys: map[string]string{
-				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
+				"connection": "RTC_MEDIA_CONNECTION_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"RTC_MEDIA_FIXTURE_API_KEY",
-				"RTC_MEDIA_FIXTURE_API_SECRET",
+				"RTC_MEDIA_API_KEY",
+				"RTC_MEDIA_API_SECRET",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
-			AdapterID:               "infra.redis.message_transport_fixture",
+			AdapterID:               "infra.redis.message_transport",
 			EndpointRef:             "",
 			EndpointEnvironmentKeys: map[string]string{},
 			SecretEnvironmentKeys:   []string{},
@@ -48,16 +48,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"beta": {
 		"rtc.room.transport": {
 			State:       "enabled",
-			AdapterID:   "infra.livekit_protocol_fixture",
-			EndpointRef: "environment_binding:rtc.livekit_fixture",
+			AdapterID:   "infra.livekit_sfu",
+			EndpointRef: "environment_binding:rtc.livekit",
 			EndpointEnvironmentKeys: map[string]string{
-				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
+				"connection": "RTC_MEDIA_CONNECTION_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"RTC_MEDIA_FIXTURE_API_KEY",
-				"RTC_MEDIA_FIXTURE_API_SECRET",
+				"RTC_MEDIA_API_KEY",
+				"RTC_MEDIA_API_SECRET",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
@@ -76,16 +76,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"gamma": {
 		"rtc.room.transport": {
 			State:       "enabled",
-			AdapterID:   "infra.livekit_protocol_fixture",
-			EndpointRef: "environment_binding:rtc.livekit_fixture",
+			AdapterID:   "infra.livekit_sfu",
+			EndpointRef: "environment_binding:rtc.livekit",
 			EndpointEnvironmentKeys: map[string]string{
-				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
+				"connection": "RTC_MEDIA_CONNECTION_URL",
 			},
 			SecretEnvironmentKeys: []string{
-				"RTC_MEDIA_FIXTURE_API_KEY",
-				"RTC_MEDIA_FIXTURE_API_SECRET",
+				"RTC_MEDIA_API_KEY",
+				"RTC_MEDIA_API_SECRET",
 			},
-			TimeoutMilliseconds: 1000,
+			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {

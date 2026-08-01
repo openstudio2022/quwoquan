@@ -63,7 +63,7 @@ class QualityMetricsGate {
     for (final item in structuredResponses) {
       final quality =
           (item['qualityMetrics'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+          const <String, dynamic>{};
       if (quality['decisionParseSuccess'] == true) parseSuccess += 1;
       if (quality['renderFallback'] == true) renderFallback += 1;
       if (quality['heuristicFallbackUsed'] == true) heuristicFallback += 1;

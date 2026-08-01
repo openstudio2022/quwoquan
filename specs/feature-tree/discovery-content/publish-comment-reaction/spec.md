@@ -15,7 +15,7 @@
 - 照片选择/拍摄、纯端侧像素编辑、MediaAsset 上传与发布回流。
 - 内容详情、沉浸式内容和个人主页评论入口组合验证。
 - 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
-- Comment metadata、App Config、Mock/Remote、content-service contract 和 seed manifest 对齐。
+- Comment metadata、App Remote Facet、content-service contract 与 user_acceptance typed operation recipe 对齐；运行环境不读取 seed manifest。
 
 ### Out of Scope
 
@@ -61,7 +61,7 @@
 - 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
 - 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
 - postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
-- alpha/beta/gamma seed 与 verifiedEndpoints 覆盖 comments、replies、reaction、attachment、mentions。
+- Alpha/Beta/Gamma 经真实测试账号和公开 API 生成 comments、replies、reaction、attachment、mentions，派生计数只由事件投影产生。
 
 <a id="req-002"></a>
 ### REQ-002 写文字发布、安全准入、分发回流与运营观测组合 SIT
@@ -168,12 +168,3 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-006"></a>
-### OPEN-006 Post 聚合寄生账号注销 saga 与行为采集契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：存在聚合归属错位。`content/post/fields.yaml` 1496 行中约 420 行是一整套跨服务账号注销 saga 的 inbox/死信/补偿工作项/审计类型（8 个），它们有自己的 pending→running→failed→dead_letter→recovered 生命周期与重试语义，与 Post 的不变量零交集，`PostCommandFacade` 也不可能是它们的命令入口。另有 `behaviors.yaml` 790 行——它本身是合理的契约收敛（把散在三处的枚举、路由、ML schema 合并为单一真相源），但主语不是 Post：`intersection_expand` 事件的 payload 里没有 postId，`wire_schema.common_fields` 全是推荐系统概念，且 `post/object.yaml` 的 `counter_strategy.sources.view` 引用的 `content.BehaviorFact` 并不存在为独立对象，是一个悬空引用。
-- 完成判定：saga 类型迁出为独立对象，`behaviors.yaml` 连同 `POST /content/behaviors` 路由迁入新的 `content_behavior_fact` 对象使悬空引用可解析；新增门禁——`counter_strategy.sources.*` 与 `relationships[].target_object` 必须解析到存在的 `object.yaml`。

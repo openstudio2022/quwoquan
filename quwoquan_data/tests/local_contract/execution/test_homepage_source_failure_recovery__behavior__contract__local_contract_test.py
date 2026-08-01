@@ -82,10 +82,73 @@ def test_source_failure_is_typed_and_rewinds_before_another_author_attempt(
             discarded={f"地点/自然景观/{entity}": ("page missing",)},
         ),
     )
+    # 唯一候选已是 source-failure → remaining_authorable=0 < gap=1 → 必须 rewind。
+    monkeypatch.setattr(
+        homepage_authoring,
+        "_homepage_pending_entities",
+        lambda _ctx: [entity],
+    )
     result = checkpoints._checkpoint_build_homepage(ctx)
     assert result.status == "failed"
     assert result.fallback_stage == "download_plan"
     assert "source_entity_mismatch" in result.issues[0]
+
+
+def test_source_failure_is_absorbed_when_oversample_still_covers_quota(
+    tmp_path,
+    monkeypatch,
+):
+    """过采池里仍有足够非 failure 候选时，个别 source-failure 不得烧 ReAct 回退。"""
+    failed = "南雁荡山"
+    healthy = "雁荡山"
+    ctx = SimpleNamespace(execution_id="execution")
+    monkeypatch.setattr(checkpoints, "_entity_homepages_per_target", lambda _ctx: 1)
+    monkeypatch.setattr(checkpoints, "_active_spec", lambda _ctx: {"scope": {"coverageTargets": []}})
+    monkeypatch.setattr(homepage_authoring, "_homepages_done", lambda _ctx: (False, ["page missing"]))
+    monkeypatch.setattr(
+        homepage_authoring,
+        "homepage_quota_verdict",
+        lambda _ctx: homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=1,
+            qualified_refs=(),
+            discarded={
+                f"地点/自然景观/{failed}": ("source_entity_mismatch",),
+                f"地点/自然景观/{healthy}": ("page missing",),
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        download_unresolved,
+        "_homepage_source_failure_entities",
+        lambda _ctx: {failed: {"homepage": ["entity_page_failure:source_entity_mismatch: bad"]}},
+    )
+    monkeypatch.setattr(
+        homepage_authoring,
+        "_homepage_pending_entities",
+        lambda _ctx: [failed, healthy],
+    )
+    monkeypatch.setattr(
+        "content.homepage.homepage.homepage_runtime_spec",
+        lambda *_args, **_kwargs: {"scope": {"coverageTargets": []}},
+    )
+    monkeypatch.setattr(
+        "content.homepage.homepage_release.materialize_entity_pages",
+        lambda *_args, **_kwargs: [],
+    )
+    prepared: list[str] = []
+
+    def _prepare(ctx_arg, checkpoint):
+        prepared.append(checkpoint)
+        return []
+
+    monkeypatch.setattr(
+        "content.execution.reliabletask_jobs.prepare_reliable_author_jobs",
+        _prepare,
+    )
+    result = checkpoints._checkpoint_build_homepage(ctx)
+    assert result.status == "waiting"
+    assert result.fallback_stage is None
+    assert prepared == ["build_homepage"]
 
 
 def test_source_failure_does_not_rewind_once_the_quota_is_met(tmp_path, monkeypatch):

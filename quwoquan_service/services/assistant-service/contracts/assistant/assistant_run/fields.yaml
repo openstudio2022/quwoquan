@@ -44,8 +44,8 @@ fields:
   ops_exposure: read
   description: 助手会话读取到的 persona 上下文版本，用于 drift 检测与回放恢复
   role: authoritative_state
-- name: conversationId
-  source: conversationId
+- name: sessionId
+  source: sessionId
   type: string
   constraints:
   - NOT_NULL
@@ -55,6 +55,17 @@ fields:
   ops_exposure: read
   role: authoritative_state
   reference: true
+- name: clientRequestId
+  source: clientRequestId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: read
+  description: StartAssistantRun 的稳定幂等身份；同一 owner/session 下唯一。
+  role: authoritative_state
 - name: skillId
   source: skillId
   type: string
@@ -145,17 +156,6 @@ fields:
   api_exposure: read
   ops_exposure: mask
   role: authoritative_state
-- name: contextSnapshot
-  source: contextSnapshot
-  type: object
-  constraints:
-  - NULLABLE
-  classification: SENSITIVE
-  log_policy: drop
-  api_exposure: drop
-  ops_exposure: drop
-  description: 三层上下文快照
-  role: authoritative_state
 - name: requestContext
   source: requestContext
   type: AssistantRunRequestContext
@@ -211,16 +211,6 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: responsePayload
-  source: responsePayload
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
 - name: responseMarkdown
   source: responseMarkdown
   type: string
@@ -231,61 +221,6 @@ fields:
   api_exposure: read
   ops_exposure: read
   description: 助手统一 Markdown 输出正文（专业级结构化排版主载体）
-  role: authoritative_state
-- name: responseBlocks
-  source: responseBlocks
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Markdown 结构块（compare/trend/diagram 等）解析后的标准块数组
-  role: authoritative_state
-- name: decision
-  source: decision
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前回合的结构化决策通道（nextAction/slotState/askUser 等）
-  role: authoritative_state
-- name: toolObservations
-  source: toolObservations
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 工具观测标准化数组；只接受当前 canonical 结构，不携带格式版本身份。
-  role: authoritative_state
-- name: subagentRuns
-  source: subagentRuns
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 子代理任务计划与结果摘要
-  role: authoritative_state
-- name: subagentPlan
-  source: subagentPlan
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 多 skill 正式子任务计划（含 domainId/problemClass/stopPolicy/searchIntensity 等）
   role: authoritative_state
 - name: problemShape
   source: problemShape
@@ -320,83 +255,6 @@ fields:
   api_exposure: read
   ops_exposure: read
   description: 首轮导引识别出的次级 skill 列表
-  role: authoritative_state
-- name: understandingResult
-  source: understandingResult
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 模型理解阶段产出的结构化意图与对话转换决策
-  role: authoritative_state
-- name: taskGraph
-  source: taskGraph
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 从 intents 编译出的可执行任务图
-  role: authoritative_state
-- name: orchestratorState
-  source: orchestratorState
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 会话编排状态，包含阶段、交互指令和运行决策
-  role: authoritative_state
-- name: turnSynthesisState
-  source: turnSynthesisState
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前轮回答综合状态与证据/输出约束
-  role: authoritative_state
-- name: skillRuns
-  source: skillRuns
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 正式编排的 skillRun 列表
-  role: authoritative_state
-- name: aggregationState
-  source: aggregationState
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 全局聚合出口状态
-  role: authoritative_state
-- name: journey
-  source: journey
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 用户可见的 canonical 助理旅程（阶段轨道 + 流式条目 + readiness）
   role: authoritative_state
 - name: renderMode
   source: renderMode
@@ -488,7 +346,7 @@ fields:
 - name: status
   source: status
   type: enum
-  enum_ref: RunStatus
+  enum_ref: AssistantRunState
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -496,6 +354,99 @@ fields:
   api_exposure: read
   ops_exposure: read
   observe_metric: run_status_gauge
+  role: authoritative_state
+- name: runRevision
+  source: runRevision
+  type: int64
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: AssistantRun 状态、TaskGraph、Checkpoint 与控制命令的单调 CAS revision。
+  role: authoritative_state
+- name: goalRevision
+  source: goalRevision
+  type: int64
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  description: SteerAssistantRun 在安全边界生效后的目标修订序号。
+  role: authoritative_state
+- name: reasoningProfile
+  source: reasoningProfile
+  type: enum
+  enum_ref: AssistantReasoningProfile
+  constraints: [NOT_NULL]
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: definitionOfDone
+  source: definitionOfDone
+  type: AssistantRunDefinitionOfDone
+  constraints: [NOT_NULL]
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: taskGraph
+  source: taskGraph
+  type: AssistantRunTaskGraph
+  constraints: [NOT_NULL]
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: checkpoint
+  source: checkpoint
+  type: AssistantRunCheckpoint
+  constraints: [NULLABLE]
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: runItems
+  source: runItems
+  type: '[]AssistantRunItem'
+  constraints: [NULLABLE]
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: presentationDocument
+  source: presentationDocument
+  type: AssistantPresentationDocument
+  constraints: [NULLABLE]
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: triggerEnvelope
+  source: triggerEnvelope
+  type: AssistantTriggerEnvelope
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: workerLease
+  source: workerLease
+  type: AssistantRunWorkerLease
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
   role: authoritative_state
 - name: satisfactionScore
   source: satisfactionScore
@@ -531,8 +482,8 @@ types:
   AssistantRunRequestContext:
     description: StartAssistantRun 由服务端可信 transport metadata 归一化后的审计上下文；禁止由请求 body 写入或向 App response 回显。
     fields:
-    - name: sessionId
-      source: sessionId
+    - name: clientSessionId
+      source: clientSessionId
       type: string
       constraints:
       - NULLABLE
@@ -988,128 +939,47 @@ types:
       log_policy: allow
       api_exposure: write
       ops_exposure: read
+  AssistantAnswerRunIntent:
+    description: 普通回答意图的唯一强类型载荷。
+    fields:
+    - {name: text, source: text, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
+  AssistantSearchRunIntent:
+    description: 搜索意图的唯一强类型载荷；与普通回答共用同一 Run 生命周期和终态信封。
+    fields:
+    - {name: query, source: query, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
+    - {name: searchIntensity, source: searchIntensity, type: enum, enum_ref: SearchIntensity, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: sourceSurfaceId, source: sourceSurfaceId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: fromGlobalSearch, source: fromGlobalSearch, type: bool, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  AssistantCreationRunIntent:
+    description: 创作辅助意图的唯一强类型载荷；只上传草稿摘要与 canonical 关联引用。
+    fields:
+    - {name: draftTitle, source: draftTitle, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: draftSummary, source: draftSummary, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: bodyDigest, source: bodyDigest, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: boundCircleIds, source: boundCircleIds, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: primaryHomepageId, source: primaryHomepageId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  AssistantRunIntent:
+    description: 由 kind 判别的生成 wire 联合；只能存在与 kind 对应的一份载荷，未知 kind 或多载荷必须拒绝。
+    discriminator: kind
+    variants:
+      answer: AssistantAnswerRunIntent
+      search: AssistantSearchRunIntent
+      creation_assistance: AssistantCreationRunIntent
+    fields:
+    - {name: kind, source: kind, type: enum, enum_ref: AssistantRunIntentKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: answer, source: answer, type: AssistantAnswerRunIntent, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
+    - {name: search, source: search, type: AssistantSearchRunIntent, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
+    - {name: creationAssistance, source: creationAssistance, type: AssistantCreationRunIntent, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
   AssistantStartRunRequest:
-    description: StartAssistantRun 的唯一公开 command 输入；conversationId 只从 path 绑定，clientRequestId 是同一用户意图的稳定重放身份。
+    description: StartAssistantRun 的唯一公开 command 输入；sessionId 只从 path 绑定，clientRequestId 是同一用户意图的稳定重放身份。
     fields:
-    - name: conversationId
-      source: conversationId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: turnType
-      source: turnType
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: skillId
-      source: skillId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: domainId
-      source: domainId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: input
-      source: input
-      type: AssistantRunTextInput
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: mask
-      api_exposure: write
-      ops_exposure: drop
-    - name: trigger
-      source: trigger
-      type: AssistantRunTrigger
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: clientRequestId
-      source: clientRequestId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: contextSnapshot
-      source: contextSnapshot
-      type: AssistantContextSnapshot
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: drop
-      api_exposure: write
-      ops_exposure: drop
-  CitationDestination:
-    description: '助手与搜索引用的唯一跳转目标。internal 只由 canonical object type/id
-
-      组成并在 App 以 link_templates codegen 解析；external 仅允许校验后的 HTTPS URL。
-
-      未知对象、缺失目标或非 HTTPS 外链不得构造成可点击引用。
-
-      '
-    fields:
-    - name: kind
-      source: kind
-      type: enum
-      enum_ref: CitationDestinationKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectTypeRef
-      source: objectTypeRef
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectId
-      source: objectId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: read
-    - name: url
-      source: url
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: external destination 仅允许规范化 HTTPS URL。
+    - {name: sessionId, source: sessionId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: clientRequestId, source: clientRequestId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: intent, source: intent, type: AssistantRunIntent, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: drop}
+    - {name: contextSnapshot, source: contextSnapshot, type: AssistantContextSnapshot, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: write, ops_exposure: drop}
+    - {name: reasoningProfile, source: reasoningProfile, type: enum, enum_ref: AssistantReasoningProfile, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: definitionOfDone, source: definitionOfDone, type: AssistantRunDefinitionOfDoneInput, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+    - {name: surfaceCapabilities, source: surfaceCapabilities, type: AssistantSurfaceCapabilities, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
   AssistantSearchCitationView:
     description: 小趣搜结果中的引用条目
     fields:
@@ -1131,7 +1001,7 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-      description: post/circle/conversation/message/user 等业务对象类型
+      description: post/circle/chatConversation/message/user 等业务对象类型
     - name: objectId
       source: objectId
       type: string
@@ -1335,8 +1205,8 @@ types:
       log_policy: allow
       api_exposure: read_write
       ops_exposure: read
-  AssistantConversationGroundingMessage:
-    description: 会话 grounding 最近消息窗口中的单条消息摘要。
+  ChatConversationGroundingMessage:
+    description: Chat 会话 grounding 最近消息窗口中的单条消息摘要。
     fields:
     - name: messageId
       source: messageId
@@ -1410,8 +1280,8 @@ types:
       log_policy: allow
       api_exposure: read_write
       ops_exposure: read
-  AssistantConversationGroundingMember:
-    description: 会话 grounding 成员摘要。
+  ChatConversationGroundingMember:
+    description: Chat 会话 grounding 成员摘要。
     fields:
     - name: userId
       source: userId
@@ -1458,8 +1328,8 @@ types:
       log_policy: allow
       api_exposure: read_write
       ops_exposure: read
-  AssistantConversationGroundingView:
-    description: 小趣在群聊/会话中回答时使用的强类型上下文视图。
+  ChatConversationGroundingView:
+    description: 小趣在 Chat 群聊/会话中回答时使用的强类型上下文视图。
     fields:
     - name: conversationId
       source: conversationId
@@ -1526,7 +1396,7 @@ types:
       ops_exposure: read
     - name: members
       source: members
-      type: '[]AssistantConversationGroundingMember'
+      type: '[]ChatConversationGroundingMember'
       constraints:
       - NULLABLE
       classification: PUBLIC
@@ -1535,7 +1405,7 @@ types:
       ops_exposure: read
     - name: recentMessages
       source: recentMessages
-      type: '[]AssistantConversationGroundingMessage'
+      type: '[]ChatConversationGroundingMessage'
       constraints:
       - NULLABLE
       classification: SENSITIVE
@@ -1768,380 +1638,6 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-  AssistantRunVisibleReferenceView:
-    description: AssistantRun 终态快照中的可点击引用；destination 必须先通过 canonical 引用校验。
-    fields:
-    - name: title
-      source: title
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: destination
-      source: destination
-      type: CitationDestination
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: source
-      source: source
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: snippet
-      source: snippet
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-  AssistantRunVisibleProcessView:
-    description: AssistantRun 唯一可公开的过程条目；禁止包含模型原始推理、检索 query、tool input 或 provider 诊断。
-    fields:
-    - name: processId
-      source: processId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: scope
-      source: scope
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: stage
-      source: stage
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: actionCode
-      source: actionCode
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: status
-      source: status
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: order
-      source: order
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: summary
-      source: summary
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: skillId
-      source: skillId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: domainId
-      source: domainId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: searchedDocumentCount
-      source: searchedDocumentCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: processedDocumentCount
-      source: processedDocumentCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: acceptedDocumentCount
-      source: acceptedDocumentCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: acceptedReferences
-      source: acceptedReferences
-      type: '[]AssistantRunVisibleReferenceView'
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-  AssistantRunTerminalFailureView:
-    description: AssistantRun 终态公开失败的脱敏投影；不包含内部 location、cause、context 或 provider 原文。
-    fields:
-    - name: code
-      source: code
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: origin
-      source: origin
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: kind
-      source: kind
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nature
-      source: nature
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  AssistantSelectedPolicyRefView:
-    description: Run 创建时冻结的 immutable policy release 选择；release 变更或回滚不得改写既有 Run。
-    fields:
-    - name: policyId
-      source: policyId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: releaseDigest
-      source: releaseDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: cohort
-      source: cohort
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-  AssistantRunTerminalSnapshotView:
-    description: 无 TTL 的 AssistantRun 终态用户可见快照；GetRun、SSE 终态重放与历史恢复只消费该事实。
-    fields:
-    - name: answerText
-      source: answerText
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: processes
-      source: processes
-      type: '[]AssistantRunVisibleProcessView'
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: failure
-      source: failure
-      type: AssistantRunTerminalFailureView
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: selectedPolicyRef
-      source: selectedPolicyRef
-      type: AssistantSelectedPolicyRefView
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-  AssistantTurnSummaryView:
-    description: 会话轮次摘要（transcript 与过程/引用恢复主体）
-    fields:
-    - name: turnId
-      source: turnId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: conversationId
-      source: conversationId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: status
-      source: status
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: completed/failed/cancelled 终态
-    - name: inputText
-      source: inputText
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: terminalSnapshot
-      source: terminalSnapshot
-      type: AssistantRunTerminalSnapshotView
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: deny
-      api_exposure: read
-      ops_exposure: none
-    - name: skillId
-      source: skillId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: domainId
-      source: domainId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: completedAt
-      source: completedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  AssistantTurnListView:
-    description: ListConversationTurns 响应体（createdAt desc keyset 分页切片）
-    fields:
-    - name: items
-      source: items
-      type: '[]AssistantTurnSummaryView'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nextCursor
-      source: nextCursor
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 不透明 keyset 游标；空表示无更多数据
   AssistantSuggestedHomepageView:
     description: 创作辅助建议的关联主页候选；前台不暴露「实体」词。
     fields:
@@ -2639,3 +2135,151 @@ types:
     - {name: actionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: pageType, type: enum, enum_ref: AssistantPageContextType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: pageObjectId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read}
+  AssistantRunDefinitionOfDoneInput:
+    description: 用户目标进入 Run 前可声明的结果、约束和验证意图；服务端补齐后冻结为 DefinitionOfDone。
+    fields:
+    - {name: outcome, source: outcome, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+    - {name: constraints, source: constraints, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+    - {name: verificationRequirements, source: verificationRequirements, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+  AssistantRunDefinitionOfDone:
+    description: Run 创建时冻结且不能被上下文压缩丢弃的完成合同。
+    fields:
+    - {name: outcome, source: outcome, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: constraints, source: constraints, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: verificationRequirements, source: verificationRequirements, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: frozenAt, source: frozenAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  AssistantRunTaskGraph:
+    description: 可恢复长任务的依赖图；graphRevision 与 Run CAS revision 同步推进。
+    fields:
+    - {name: graphRevision, source: graphRevision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: tasks, source: tasks, type: '[]AssistantRunTaskNode', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  AssistantRunTaskNode:
+    description: TaskGraph 中一个有依赖、有预算、有验收的任务节点。
+    fields:
+    - {name: taskId, source: taskId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: goal, source: goal, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: dependencies, source: dependencies, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: status, source: status, type: enum, enum_ref: AssistantTaskStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: ownerAgent, source: ownerAgent, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: attempt, source: attempt, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: budget, source: budget, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: artifactRefs, source: artifactRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: verification, source: verification, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: blockReason, source: blockReason, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+  AssistantRunCheckpoint:
+    description: 可重启恢复的压缩状态；canonical policy、consent 与 DefinitionOfDone 不进入可丢弃摘要。
+    fields:
+    - {name: checkpointId, source: checkpointId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: revision, source: revision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: goalSummary, source: goalSummary, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: decisionSummary, source: decisionSummary, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: completedTaskIds, source: completedTaskIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: openTaskIds, source: openTaskIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: evidenceRefs, source: evidenceRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: pendingApprovalRef, source: pendingApprovalRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: deviceActionReceipts, source: deviceActionReceipts, type: '[]AssistantDeviceActionExecutionReceipt', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: remainingBudget, source: remainingBudget, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantRunItem:
+    description: Run journal 的公开可恢复 Item；payload 禁止包含模型原始思维链。
+    fields:
+    - {name: itemId, source: itemId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: kind, source: kind, type: enum, enum_ref: AssistantRunItemKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: status, source: status, type: enum, enum_ref: AssistantRunItemStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: sequence, source: sequence, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: taskId, source: taskId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: summary, source: summary, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: payload, source: payload, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: artifactRefs, source: artifactRefs, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: startedAt, source: startedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: completedAt, source: completedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantTriggerEnvelope:
+    description: 响应式与主动式运行共享的触发信封。
+    fields:
+    - {name: kind, source: kind, type: enum, enum_ref: AssistantTriggerKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: triggerId, source: triggerId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: subscriptionRef, source: subscriptionRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: signalRefs, source: signalRefs, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: reason, source: reason, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: dedupeKey, source: dedupeKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: deliveryPolicyRef, source: deliveryPolicyRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantSurfaceCapabilities:
+    description: App 当前 surface 的语义展示能力，不包含客户端版本号。
+    fields:
+    - {name: surfaceId, source: surfaceId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: supportedNodeKinds, source: supportedNodeKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: viewportClass, source: viewportClass, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: platform, source: platform, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: theme, source: theme, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: textScale, source: textScale, type: float, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: reducedMotion, source: reducedMotion, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: offline, source: offline, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  AssistantPresentationDocument:
+    description: Skill 模板经服务端校验和解析后的唯一终态展示事实。
+    fields:
+    - {name: templateRef, source: templateRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: templateDigest, source: templateDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: revision, source: revision, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: rootNodeId, source: rootNodeId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: nodes, source: nodes, type: '[]AssistantPresentationNode', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: dataDigest, source: dataDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: selectedVariant, source: selectedVariant, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: fallbackMarkdown, source: fallbackMarkdown, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: fallbackPlainText, source: fallbackPlainText, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: committedAt, source: committedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AssistantPresentationNode:
+    description: 以 parentNodeId 组成安全语义树的扁平节点；data 按 kind 对应的模板 schema 校验。
+    fields:
+    - {name: nodeId, source: nodeId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: parentNodeId, source: parentNodeId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: order, source: order, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: kind, source: kind, type: enum, enum_ref: AssistantPresentationNodeKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: title, source: title, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: body, source: body, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: read}
+    - {name: data, source: data, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: style, source: style, type: object, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: action, source: action, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  AssistantRunWorkerLease:
+    description: 后台 Worker 对 Run 的短租约与心跳，永不暴露给 App。
+    fields:
+    - {name: leaseId, source: leaseId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: workerId, source: workerId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: acquiredAt, source: acquiredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: heartbeatAt, source: heartbeatAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  AssistantRunCommandRequest:
+    description: 无 body 的 AssistantRun 控制命令；runId 来自 path，idempotencyKey 来自可信请求头。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+  AssistantPauseRunRequest:
+    description: 用户暂停长任务的唯一公开 command 输入；runId 只从 path 绑定。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: reason, source: reason, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+  AssistantSteerRunRequest:
+    description: 在安全任务边界应用的新约束；runId 只从 path 绑定，调用方不提交版本号。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: instruction, source: instruction, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: write, ops_exposure: read}
+  AssistantDeviceActionExecutionReceipt:
+    description: App 在 capability 检查和原生调用后提交的强类型设备动作执行回执；服务端不得从用户批准推导执行成功。
+    fields:
+    - {name: actionKind, source: actionKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: outcome, source: outcome, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: executedAt, source: executedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: deviceObjectId, source: deviceObjectId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  AssistantContinueToolUseRequest:
+    description: 用户对待确认设备或外部动作的显式决定；批准设备动作时必须携带原生执行回执，runId 与 toolUseId 只从 path 绑定。
+    fields:
+    - {name: runId, source: runId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: toolUseId, source: toolUseId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: decision, source: decision, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: continuationToken, source: continuationToken, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: executionReceipt, source: executionReceipt, type: AssistantDeviceActionExecutionReceipt, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}

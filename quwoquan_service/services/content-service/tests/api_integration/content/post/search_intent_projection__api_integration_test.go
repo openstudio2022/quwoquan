@@ -37,7 +37,7 @@ func TestSearchIntentProjectionUsesPhysicalTTLAndRealClickOnly(t *testing.T) {
 	if err := projector.Project(ctx, recommendation.ProjectorEvent{
 		ID:            "query:req-search-intent",
 		Type:          "SearchRecommendationSignalPublished",
-		AggregateType: "SearchQuery",
+		AggregateType: "SearchRequestFact",
 		AggregateID:   "req-search-intent",
 		OccurredAt:    occurredAt,
 		Payload: map[string]any{
@@ -76,7 +76,7 @@ func TestSearchIntentProjectionUsesPhysicalTTLAndRealClickOnly(t *testing.T) {
 	if err := projector.Project(ctx, recommendation.ProjectorEvent{
 		ID:            "feedback:click-1",
 		Type:          "SearchRecommendationSignalPublished",
-		AggregateType: "SearchQuery",
+		AggregateType: "SearchRequestFact",
 		AggregateID:   "req-search-intent",
 		OccurredAt:    occurredAt.Add(time.Minute),
 		Payload: map[string]any{

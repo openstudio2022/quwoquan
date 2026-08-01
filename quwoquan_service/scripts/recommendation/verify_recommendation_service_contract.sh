@@ -44,17 +44,13 @@ python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_behavior_action_co
 python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_experiment_single_track.py"
 
 # 交集 kind 注册表单一真相源（Phase 0 §20d）：注册表结构 + Go evidenceKindRank 对齐。
-if command -v python3 >/dev/null 2>&1; then
-  python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py" || exit 1
-else
-  echo "[verify] WARN: python3 not found — skipping verify_intersection_kind_registry.py"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "[verify] FAIL: python3 not found — intersection registry gate is mandatory"
+  exit 1
 fi
+python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py" || exit 1
 
 # 影响力 helpType 注册表单一真相源（§23 去桥接）：registry ↔ Go 表 ↔ Dart 产物 ↔ resolver ↔ 消费方 ↔ fixtures。
-if command -v python3 >/dev/null 2>&1; then
-  python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py" || exit 1
-else
-  echo "[verify] WARN: python3 not found — skipping verify_impact_help_type_registry.py"
-fi
+python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py" || exit 1
 
 echo "[verify] OK: recommendation-service contract checked"

@@ -1,8 +1,80 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
+Map<String, String> _nativeRuntimePackageFor(String environment) {
+  return <String, String>{
+    'APP_RUNTIME_ENV': environment,
+    'CLOUD_GATEWAY_BASE_URL': 'https://api.$environment.example.test',
+    'REALTIME_CONNECTION_URL': 'wss://realtime.$environment.example.test',
+    'PUBLIC_WEB_BASE_URL': 'https://www.$environment.example.test',
+    'APP_DOWNLOAD_BASE_URL': 'https://download.$environment.example.test/app',
+    'APP_LEGAL_BASE_URL': 'https://legal.$environment.example.test/terms',
+    'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.$environment.example.test/avatar',
+    'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.$environment.example.test/image',
+    'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.$environment.example.test/video',
+    'MEDIA_UPLOAD_BASE_URL': 'https://upload.$environment.example.test',
+    'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.$environment.example.test',
+    'QWQ_APP_LAUNCH_MODE': 'stackctl_$environment',
+  };
+}
+
 void main() {
   group('CloudRuntimeConfig environment package', () {
+    setUp(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+    tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+
+    test('裸 Flutter Debug 从 native manifest 恢复 canonical Alpha 包', () {
+      expect(CloudRuntimeConfig.shouldLoadNativeRuntimePackage, isTrue);
+      expect(
+        CloudRuntimeConfig.runtimeDefineSummary['configurationState'],
+        'pending_native',
+      );
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+        'APP_RUNTIME_ENV': 'alpha',
+        'CLOUD_GATEWAY_BASE_URL': 'https://api.example.test',
+        'REALTIME_CONNECTION_URL': 'wss://api.example.test',
+        'PUBLIC_WEB_BASE_URL': 'https://example.test',
+        'APP_DOWNLOAD_BASE_URL': 'https://cdn.example.test/download',
+        'APP_LEGAL_BASE_URL': 'https://example.test/legal',
+        'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
+        'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
+        'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
+        'MEDIA_UPLOAD_BASE_URL': 'https://upload.example.test',
+        'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.example.test',
+        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+      });
+
+      expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
+      expect(CloudRuntimeConfig.launchMode, 'direct_flutter_run');
+      expect(
+        CloudRuntimeConfig.runtimeDefineSummary['configurationState'],
+        'complete',
+      );
+      expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
+      expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
+    });
+
+    test('Alpha、Beta、Gamma native 包不会混合 endpoint 或启动上下文', () {
+      for (final environment in <String>['alpha', 'beta', 'gamma']) {
+        CloudRuntimeConfig.clearNativeRuntimePackageForTest();
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          _nativeRuntimePackageFor(environment),
+        );
+
+        expect(CloudRuntimeConfig.appRuntimeEnv, environment);
+        expect(
+          CloudRuntimeConfig.gatewayBaseUrl,
+          'https://api.$environment.example.test',
+        );
+        expect(
+          CloudRuntimeConfig.mediaUploadBaseUrl,
+          'https://upload.$environment.example.test',
+        );
+        expect(CloudRuntimeConfig.launchMode, 'stackctl_$environment');
+        expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
+      }
+    });
+
     test('完整业务 endpoint 包通过且不要求 SLS 配置', () {
       expect(
         () => CloudRuntimeConfig.validateRuntimePackage(

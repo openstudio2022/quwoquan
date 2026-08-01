@@ -202,7 +202,6 @@ IntersectionActionHint _toActionHint(
     priority: projection.priority,
     actionTier: projection.actionTier,
     requiredGates: projection.requiredGates,
-    targetAvailability: projection.targetAvailability,
     dispatch: projection.dispatch,
   );
 }

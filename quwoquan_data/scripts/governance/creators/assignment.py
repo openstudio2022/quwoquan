@@ -265,11 +265,15 @@ def creator_assignment_issues(
 
 def creator_assignment_from_profile(profile: Mapping[str, Any]) -> dict[str, Any]:
     """Project a registry profile into content-object creator assignment fields."""
+    digest = creator_profile_digest(profile)
     return {
         "authorId": profile.get("authorId") or profile.get("personaId"),
         "creatorProfileId": profile.get("creatorProfileId"),
         "creatorArchetype": profile.get("creatorArchetype"),
-        "creatorProfileDigest": creator_profile_digest(profile),
+        # Content-addressed digest is the canonical profile binding; emit the
+        # same value as creatorProfileVersion for content-service import wire.
+        "creatorProfileDigest": digest,
+        "creatorProfileVersion": digest,
         "creatorDisclosure": profile.get("disclosure") if isinstance(profile.get("disclosure"), Mapping) else DEFAULT_CREATOR_DISCLOSURE,
         "experienceClaimMode": _experience_claim_mode(profile),
         "authorQualitySignals": {

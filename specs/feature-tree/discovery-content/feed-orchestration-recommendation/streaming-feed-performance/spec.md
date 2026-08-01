@@ -196,7 +196,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍缺真机长滚动像素/QoE、trim 后跨 surface 互动/viewer 组合证据和同候选版本 product-ops readback，因此本 OPEN 继续阻断 READY。超出 retained 页后的稳定远端反向回补已落地。content-service 在返回 next cursor 前原子追加 `FeedDeliveryPage`，下一页返回 previous cursor 与 `paginationExpiresAt`。AEAD scope 已绑定 `pageSize`，回放不调用 recall/list，只原序 bulk hydrate 当前可见 Post，删除项不补位，对象卡使用已交付快照重基准。App 的 4 页 resident/6 页 retained deque 在 leading 耗尽后以独立 prepend generation 回取，远端页只与 retained identity 去重。QuerySnapshot 持久化 previous/next/expiry/session，过期或跨 session 仅回显内容。Contract decoder 强制 cursor 与 expiry 成对，append 也会在用户动作入口从 resident window 重读 live cursor，长时间空闲后不会发送状态快照里的过期 continuation。六页边界回退再前进、删除缩页、篡改/跨 actor/session/route/pageSize、原子 quota/payload/TTL 均有 local_contract。
+- 影响或价值：仍缺真机长滚动像素/QoE、trim 后跨 surface 互动/viewer 组合证据和同候选版本 product-ops readback，因此本 OPEN 继续阻断 READY。typed 首屏/翻页、清洁/卡顿帧批次、图片缓存、视频 controller/队列与 QoE、ANR/内存压力的生产 reporter 已接入；真实生产滚动容器已由 Provider 驱动 8 页并实际越过 6 页 retained 边界，相关 Provider/Widget local_contract 已通过。超出 retained 页后的稳定远端反向回补已落地。content-service 在返回 next cursor 前原子追加 `FeedDeliveryPage`，下一页返回 previous cursor 与 `paginationExpiresAt`。AEAD scope 已绑定 `pageSize`，回放不调用 recall/list，只原序 bulk hydrate 当前可见 Post，删除项不补位，对象卡使用已交付快照重基准。App 的 4 页 resident/6 页 retained deque 在 leading 耗尽后以独立 prepend generation 回取，远端页只与 retained identity 去重。QuerySnapshot 持久化 previous/next/expiry/session，过期或跨 session 仅回显内容。Contract decoder 强制 cursor 与 expiry 成对，append 也会在用户动作入口从 resident window 重读 live cursor，长时间空闲后不会发送状态快照里的过期 continuation。六页边界回退再前进、删除缩页、篡改/跨 actor/session/route/pageSize、原子 quota/payload/TTL 均有 local_contract。
 - 当前边界：首页 `GetFeed` operation 已声明 default/max=20 与 2 MiB live response admission，ContractGraph 已生成到服务 binder、App policy 与 transport；stream chunk 越界在完整缓冲/JSON decode 前取消。成功与非 2xx JSON 共用有界 decoder，logical active、不可取消 physical work、pending task 与 queued bytes 分别有硬限。legacy 非 generated JSON verbs 不属于本 Story 的首页主链，但其治理仍由 runtime-client-foundation 跟踪。
 - 完成判定：`GWT-002`、`GWT-003` 与 `GWT-006` 的窗口/锚点 local_contract、长滚动 widget 及 product-ops readback 证据通过。
 
@@ -215,7 +215,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仍缺统一入口跨副本按主体/operation 限流、Redis/Mongo 故障注入和同 release 峰值/长会话压力 readback。当前 per-instance operation admission 不能冒充网关主体级治理。viewer/visit/频道/session 状态预算、App operation retry/deadline/cancel、服务端 generated deadline、模型 timeout/circuit fallback、feed operation rate/inflight admission、曝光/fallback/行为窗口、token proactive refresh singleflight 与 realtime 全抖动恢复已闭环。recall deadline 已改为 orchestrator 强制终态，不再等待忽略 context 的 source；每 source 迟到调用由 canonical feed max_inflight 限制。超量 source 只复制主窗口，active-release handoff 也只检查第二个同尺寸窗口，总扫描上限为 `2 * RecallRequest.limit`，每 32 项检查 context 并保留 budget failure。
+- 影响或价值：尚缺目标环境的绕过检查、Redis/Mongo 故障注入和同 release 峰值/长会话压力 readback，当前 per-instance operation admission 也不能冒充环境级网关治理。api-edge 复用同一 Redis Lua 的 stable/gray 双副本主体/operation 原子限流、canonical 429/retry 与 TTL api_integration 已通过。viewer/visit/频道/session 状态预算、App operation retry/deadline/cancel、服务端 generated deadline、模型 timeout/circuit fallback、feed operation rate/inflight admission、曝光/fallback/行为窗口、token proactive refresh singleflight 与 realtime 全抖动恢复已闭环，媒体上传恢复也已改为有界全抖动。recall deadline 已改为 orchestrator 强制终态，不再等待忽略 context 的 source。每 source 迟到调用由 canonical feed max_inflight 限制。超量 source 只复制主窗口，active-release handoff 也只检查第二个同尺寸窗口，总扫描上限为 `2 * RecallRequest.limit`，每 32 项检查 context 并保留 budget failure。
 - 完成判定：`GWT-004` 与 `GWT-005` 的 fault injection、api_integration 和 user_acceptance 通过。
 
 <a id="open-005"></a>
@@ -224,7 +224,7 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：仍缺单 snapshot 内 Post 字段级 canonical byte 上限与真机磁盘压力定标。长窗口双向续填、cursor session/expiry 约束和主动 expiry 已闭环：QuerySnapshot `freshFor=5m`、最大可恢复 24 小时，超过 24 小时在内存读取和持久恢复时删除。分页 cursor 只有在同 session 且 `paginationExpiresAt` 尚未到期时才可复用。四环境启用、CDN/弱网/真机 ABR、网关压力组合证据仍须以当前候选版本验证。QuerySnapshot 继续提供首屏 cache-first SWR、续页 remote-first 失败回退、从首屏 cursor 连续可达的最多 4 页离线链，以及 2 MiB UTF-8 persisted payload 硬限。写入按完整 snapshot/page 原子选择，首页连续链优先，单 active drain 合并并发变更并保证最新状态最终落盘。整页编码先用无输出有界 writer 精确预检，再逐字段、逐 item 写最终 payload，字符串临时分块为 1024 code units，因此不先物化整页 Map/List/局部 JSON String，超预算时保持 page/cursor 原子。HLS/CMAF 与物理命令 admission 的既有边界不变。
+- 影响或价值：仍缺无网重启、主动 LRU/TTL 与真机磁盘压力组合证据。单 snapshot 内 Post 字段级 canonical UTF-8 byte admission 已从 ContractGraph 生成到 App，并在编码调度前按完整 snapshot fail-closed。长窗口双向续填、cursor session/expiry 约束和主动 expiry 已闭环：QuerySnapshot `freshFor=5m`、最大可恢复 24 小时，超过 24 小时在内存读取和持久恢复时删除。分页 cursor 只有在同 session 且 `paginationExpiresAt` 尚未到期时才可复用。四环境启用、CDN/弱网/真机 ABR、网关压力组合证据仍须以当前候选版本验证。QuerySnapshot 继续提供首屏 cache-first SWR、续页 remote-first 失败回退、从首屏 cursor 连续可达的最多 4 页离线链，以及 2 MiB UTF-8 persisted payload 硬限。写入按完整 snapshot/page 原子选择，首页连续链优先，单 active drain 合并并发变更并保证最新状态最终落盘。整页编码先用无输出有界 writer 精确预检，再逐字段、逐 item 写最终 payload，字符串临时分块为 1024 code units，因此不先物化整页 Map/List/局部 JSON String，超预算时保持 page/cursor 原子。HLS/CMAF 与物理命令 admission 的既有边界不变。
 - 完成判定：`GWT-003` 与 `GWT-004` 对应三层证据通过，且不新建第二套实现。
 
 <a id="open-006"></a>
@@ -233,5 +233,5 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：需同一候选版本的 iOS/Android 真机长滚动/Perfetto、受控弱网、并发峰值、长会话与 alpha/beta/gamma/prod Remote readback；本地或模拟结果不得代替。当前两份首页推荐/视频 Patrol user_acceptance 入口可加载，但未启用真实 T4 时 7 个场景全部 `skip`，退出码 0 不得记为 UAT 通过。
+- 影响或价值：需同一候选版本的 iOS/Android 真机长滚动/Android Perfetto/iOS performance trace、受控弱网、并发峰值、长会话与 alpha/beta/gamma/prod Remote readback。本地或模拟结果不得代替。当前工作机只有 Android emulator、iOS Simulator、macOS 与 Chrome，没有 Android/iPhone 物理设备。当前两份首页推荐/视频 Patrol user_acceptance 入口可加载，但未启用真实 T4 时 7 个场景全部 `skip`，退出码 0 不得记为 UAT 通过。性能门禁现已对 release/commit/device/platform、样本/分子分母、build/raster、内存、controller/队列、媒体 QoE 与双端物理证据 fail-closed，缺候选证据不能再以文件存在或源码断言空通过。
 - 完成判定：`GWT-006` 的 local_contract、api_integration、user_acceptance、SLO/readback 与回滚证据绑定同一 release digest，Exit Report 无未解释性能阻断。

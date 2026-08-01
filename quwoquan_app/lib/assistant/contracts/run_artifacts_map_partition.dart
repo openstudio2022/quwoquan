@@ -35,22 +35,18 @@ abstract final class RunArtifactsMapPartition {
   static Map<String, dynamic> mergeSlices(
     Map<String, dynamic> stablePart,
     Map<String, dynamic> extensionPart,
-  ) =>
-      <String, dynamic>{...stablePart, ...extensionPart};
+  ) => <String, dynamic>{...stablePart, ...extensionPart};
 
   static Map<String, dynamic> answerDecisionStable(Map<String, dynamic> full) =>
       stableSlice(full, RunArtifactsMapStableKeys.answerDecision);
 
   static Map<String, dynamic> answerDecisionExtension(
     Map<String, dynamic> full,
-  ) =>
-      extensionSlice(full, RunArtifactsMapStableKeys.answerDecision);
+  ) => extensionSlice(full, RunArtifactsMapStableKeys.answerDecision);
 
   static Map<String, dynamic> diagnosticsStable(Map<String, dynamic> full) =>
       stableSlice(full, RunArtifactsMapStableKeys.diagnostics);
 
-  static Map<String, dynamic> diagnosticsExtension(
-    Map<String, dynamic> full,
-  ) =>
+  static Map<String, dynamic> diagnosticsExtension(Map<String, dynamic> full) =>
       extensionSlice(full, RunArtifactsMapStableKeys.diagnostics);
 }

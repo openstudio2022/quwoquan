@@ -41,6 +41,7 @@ business_rules:
 - scopeHash 必须覆盖 actor/session/route/pageSize，记录另行绑定 feedRequestId、release 与 expiry
 - 回放只按 items.postId 原顺序执行当前可见性 hydration；缺失或不可见 Post 只删除，不补替代内容
 - 对象卡只回放已交付快照并按仍可见 Post 重基准 anchor，禁止重新召回对象卡
+- 每个非空成功响应都必须追加 FeedDeliveryPage，包括没有 nextCursor 的终页和单页；终页 outboundCursor 为空，不得因无法继续翻页而丢失交付身份。
 lifecycle:
   states:
   - recorded

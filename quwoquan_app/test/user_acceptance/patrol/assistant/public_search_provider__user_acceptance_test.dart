@@ -12,8 +12,9 @@ void main() {
     skip: !kRunPatrolT4,
     ($) => runAssistantProviderJourney(
       $,
-      prompt: '请搜索 OpenAI 官方网站，并在答案中明确写出 OpenAI。',
-      expectedAnswerFragment: 'OpenAI',
+      prompt: '请打开公开 HTTPS 页面 https://example.com ，仅根据读到的网页内容说明页面标题，并附可回查引用。',
+      expectedAnswerFragment: 'Example Domain',
+      expectedCitationHost: 'example.com',
     ),
   );
 }

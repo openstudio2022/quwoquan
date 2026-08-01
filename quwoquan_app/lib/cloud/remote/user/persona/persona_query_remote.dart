@@ -18,9 +18,7 @@ final class RemotePersonaQuery implements PersonaQuery {
 
   @override
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
-    final result = await managementQuery.listPersonas(
-      ListPersonasQuery(),
-    );
+    final result = await managementQuery.listPersonas(ListPersonasQuery());
     return result.items
         .map(PersonaManagementItemViewData.fromPersonaManagementItemProjection)
         .toList(growable: false);

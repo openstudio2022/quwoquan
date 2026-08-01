@@ -53,7 +53,14 @@ class PetalMark extends StatelessWidget {
   ];
 
   static const List<double> _petalRotations = [
-    0, 45, 90, 135, 180, 225, 270, 315,
+    0,
+    45,
+    90,
+    135,
+    180,
+    225,
+    270,
+    315,
   ];
 
   double get _scale => size / _welcomeBaseSize;
@@ -69,9 +76,9 @@ class PetalMark extends StatelessWidget {
   double get _shadowBlur => _welcomeShadowBlur * _scale;
 
   Offset get _shadowOffset => Offset(
-        _welcomeShadowOffset.dx * _scale,
-        _welcomeShadowOffset.dy * _scale,
-      );
+    _welcomeShadowOffset.dx * _scale,
+    _welcomeShadowOffset.dy * _scale,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -154,10 +161,7 @@ class PetalMark extends StatelessWidget {
           ],
           stops: const [0.0, 0.65, 1.0],
         ),
-        border: Border.all(
-          color: borderColor,
-          width: coreBorderWidth,
-        ),
+        border: Border.all(color: borderColor, width: coreBorderWidth),
         boxShadow: [
           BoxShadow(
             color: AppColors.black.withValues(alpha: isDarkMode ? 0.16 : 0.08),

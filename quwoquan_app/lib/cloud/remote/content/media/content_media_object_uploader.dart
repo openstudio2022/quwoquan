@@ -7,12 +7,12 @@ import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart
 /// Object-storage data-plane adapter. Authentication headers are intentionally
 /// absent because authorization is carried only by the server-issued URL.
 final class RemoteContentMediaObjectUploader {
-  RemoteContentMediaObjectUploader({
-    http.Client? client,
-    String uploadBaseUrl = CloudRuntimeConfig.mediaUploadBaseUrl,
-  }) : _uploadBaseUri = Uri.tryParse(uploadBaseUrl),
-       _client = client ?? http.Client(),
-       _ownsClient = client == null;
+  RemoteContentMediaObjectUploader({http.Client? client, String? uploadBaseUrl})
+    : _uploadBaseUri = Uri.tryParse(
+        uploadBaseUrl ?? CloudRuntimeConfig.mediaUploadBaseUrl,
+      ),
+      _client = client ?? http.Client(),
+      _ownsClient = client == null;
 
   final http.Client _client;
   final bool _ownsClient;
@@ -24,7 +24,7 @@ final class RemoteContentMediaObjectUploader {
     Uri uploadUri,
     Stream<List<int>> bytes, {
     required int contentLength,
-    required String contentType,
+    required String mimeType,
     required String expectedSha256,
     Future<void>? abortTrigger,
   }) async {
@@ -36,7 +36,7 @@ final class RemoteContentMediaObjectUploader {
       );
     }
     final uploadHeaders = ContentAddressedUploadHeaders(
-      contentType: contentType,
+      mimeType: mimeType,
       expectedSha256: expectedSha256,
     );
     final request =

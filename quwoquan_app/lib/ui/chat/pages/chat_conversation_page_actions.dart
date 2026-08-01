@@ -435,7 +435,7 @@ abstract class _ChatConversationPageActionsState
     return MediaCategory.chatFile;
   }
 
-  String _attachmentContentType(ChatInputAttachment item) {
+  String _attachmentMimeType(ChatInputAttachment item) {
     final ext = _attachmentExtension(item);
     switch (ext) {
       case 'jpg':
@@ -544,7 +544,7 @@ abstract class _ChatConversationPageActionsState
       UploadTask(
         localPath: localPath,
         category: category,
-        contentType: _attachmentContentType(item),
+        mimeType: _attachmentMimeType(item),
         fileSize: await file.length(),
       ),
     );
@@ -565,7 +565,7 @@ abstract class _ChatConversationPageActionsState
       deliveryUrl: localPath,
       mediaType: messageType,
       fileName: item.name,
-      contentType: _attachmentContentType(item),
+      mimeType: _attachmentMimeType(item),
       fileSizeBytes: uploaded.fileSize,
       thumbnailUrl: messageType == 'image' || messageType == 'video'
           ? localPath

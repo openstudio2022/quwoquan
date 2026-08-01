@@ -311,8 +311,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
               label: CreationText.addHomepageVehicleSeriesLabel,
               child: IosSelectionTextField(
                 controller: _vehicleSeriesController,
-                placeholder:
-                    CreationText.addHomepageVehicleSeriesPlaceholder,
+                placeholder: CreationText.addHomepageVehicleSeriesPlaceholder,
               ),
             ),
             _buildDivider(),

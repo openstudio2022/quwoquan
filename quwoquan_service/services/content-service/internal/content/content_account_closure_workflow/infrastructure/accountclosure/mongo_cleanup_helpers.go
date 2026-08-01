@@ -23,6 +23,11 @@ type reactionClosureRow struct {
 	TargetID   string `bson:"targetId"`
 }
 
+type shareClosureRow struct {
+	ID     string `bson:"_id"`
+	PostID string `bson:"postId"`
+}
+
 type activityClosureRow struct {
 	ID         string `bson:"_id"`
 	ActivityID string `bson:"activityId"`
@@ -167,6 +172,37 @@ func collectReactionClosureRows(
 	return rows, nil
 }
 
+func collectShareClosureRows(
+	ctx context.Context,
+	collection *mongo.Collection,
+	subjectIDs []string,
+	postIDs []string,
+) ([]shareClosureRow, error) {
+	orFilters := bson.A{
+		bson.M{"actorId": bson.M{"$in": subjectIDs}},
+	}
+	if len(postIDs) > 0 {
+		orFilters = append(
+			orFilters,
+			bson.M{"postId": bson.M{"$in": postIDs}},
+		)
+	}
+	cursor, err := collection.Find(
+		ctx,
+		bson.M{"$or": orFilters},
+		options.Find().SetProjection(bson.M{"_id": 1, "postId": 1}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var rows []shareClosureRow
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func collectActivityClosureRows(
 	ctx context.Context,
 	collection *mongo.Collection,
@@ -252,7 +288,7 @@ func uniqueStrings(values ...[]string) []string {
 }
 
 func rowIDs[T interface {
-	commentClosureRow | reactionClosureRow | activityClosureRow
+	commentClosureRow | reactionClosureRow | shareClosureRow | activityClosureRow
 }](rows []T) []string {
 	ids := make([]string, 0, len(rows))
 	for _, row := range rows {
@@ -260,6 +296,8 @@ func rowIDs[T interface {
 		case commentClosureRow:
 			ids = append(ids, value.ID)
 		case reactionClosureRow:
+			ids = append(ids, value.ID)
+		case shareClosureRow:
 			ids = append(ids, value.ID)
 		case activityClosureRow:
 			ids = append(ids, value.ID)

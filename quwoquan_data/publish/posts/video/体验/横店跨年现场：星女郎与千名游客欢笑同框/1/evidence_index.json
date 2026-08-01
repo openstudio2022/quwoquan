@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "横店影视城_video",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:01588defd63af24d393a67841efa4e645948c397b82482639fbf9cca655fc97b"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:26f2ba8fc43d22b67c0941ae8a61023879c033397e6dc322990dc33d2051c2db"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:91f731ba4d50308a33352d8bbaeda556dbe5f3f0dcd931bb80b772ca971841ee"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:a3e7669f3a62b9fe1bf1352b91f63b5dfa201470ec25ef016142f4f4c81211ce"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:1311fec1f8de9608fe631ff4a93a99158e5fbc368791a749ea313e71b8b961ae"
+    }
+  ]
+}

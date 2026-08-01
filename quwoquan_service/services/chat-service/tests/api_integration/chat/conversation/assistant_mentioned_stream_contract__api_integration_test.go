@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/assistant-in-conversation/spec.md#gwt-001
 package api_integration
 
 import (
@@ -105,5 +106,43 @@ func TestAssistantGeneratedMessageDoesNotWriteMentionStream(t *testing.T) {
 	}
 	if len(messages) != 0 {
 		t.Fatalf("assistant generated message should not trigger stream, got %d", len(messages))
+	}
+}
+
+func TestRemovedAssistantDoesNotWriteMentionStream(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	ctx := context.Background()
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, mqpkg.AssistantMentionedStream, "test-consumer", "0"); err != nil {
+		t.Fatalf("create stream group: %v", err)
+	}
+	conv := createConversation(t, `{"type":"group","title":"assistant removed guard"}`)
+	convID := conv["id"].(string)
+	doPost(t, "/chat/conversations/"+convID+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+	doDelete(t, "/chat/conversations/"+convID+"/assistant", "user_test_001")
+
+	rejected := doPost(
+		t,
+		"/chat/conversations/"+convID+"/messages",
+		`{"type":"text","content":"@小趣 还在吗","mentions":["assistant"],"clientMsgId":"assistant-removed-mention-1"}`,
+		"user_test_001",
+		http.StatusBadRequest,
+	)
+	if rejected["code"] != "CHAT.USER.message_invalid" {
+		t.Fatalf("removed assistant mention must be rejected: %#v", rejected)
+	}
+	messages, err := redisRouter.Scene("general").XReadGroup(
+		ctx,
+		"test-consumer",
+		"worker-1",
+		map[string]string{mqpkg.AssistantMentionedStream: ">"},
+		1,
+		100*time.Millisecond,
+	)
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("removed assistant mention must not reach stream: %+v", messages)
 	}
 }

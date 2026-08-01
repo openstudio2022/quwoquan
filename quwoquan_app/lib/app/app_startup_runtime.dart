@@ -147,6 +147,10 @@ final class AppStartupRuntime {
       StartupTelemetryPhase.configurationValidation,
       outcome: 'validated',
     );
+    _recordPlatformStartupEvent(
+      eventName: 'startup_runtime_configured',
+      properties: _snapshotProperties(phase: 'configuration_validation'),
+    );
   }
 
   /// Bootstrap 尚未装配 Provider/Analytics 时也必须留下脱敏终态。

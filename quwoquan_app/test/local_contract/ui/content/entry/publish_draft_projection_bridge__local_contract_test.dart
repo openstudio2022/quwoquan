@@ -95,17 +95,8 @@ void main() {
         expect(payload['coverStrategy'], 'manual');
         expect(payload['coverFrameTimeMs'], 420);
         expect(payload['durationMs'], 12000);
-        expect(payload['mediaItems'], [
-          <String, Object?>{
-            'kind': 'video',
-            'url': '/tmp/video.mp4',
-            'thumbnailUrl': '/tmp/cover.jpg',
-            'coverUrl': '/tmp/cover.jpg',
-            'coverStrategy': 'manual',
-            'coverFrameTimeMs': 420,
-            'durationMs': 12000,
-          },
-        ]);
+        expect(payload, isNot(contains('mediaItems')));
+        expect(payload, isNot(contains('deviceInfo')));
 
         final command = submitContentPostPublicationCommandFromPreparedPayload(
           payload,
@@ -113,14 +104,15 @@ void main() {
           mediaAssetIds: const <String>['video-asset-contract'],
         );
         final wire = Map<String, Object?>.from(
-          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body! as Map,
+          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
+              as Map,
         );
         expect(wire, isNot(contains('thumbnailUrl')));
         expect(wire, isNot(contains('coverUrl')));
         expect(wire['coverStrategy'], 'manual');
         expect(wire['coverFrameTimeMs'], 420);
         expect(wire['mediaAssetIds'], const <String>['video-asset-contract']);
-        expect(wire['mediaItems'], isA<List>());
+        expect(wire, isNot(contains('mediaItems')));
       },
     );
 
@@ -136,8 +128,14 @@ void main() {
         expect(payload['contentType'], 'article');
         expect(payload['articleMarkdown'], isA<String>());
         expect(payload['markdownDialect'], 'qwq-rich-md');
-        expect(payload['articleAssetManifest'], isA<Map>());
-        expect(payload['articleRenderProfile'], isA<Map>());
+        expect(
+          payload['articleAssetManifest'],
+          isA<PostArticleAssetManifestInput>(),
+        );
+        expect(
+          payload['articleRenderProfile'],
+          isA<PostArticleRenderProfile>(),
+        );
         expect(payload.containsKey('articleDocument'), isFalse);
       },
     );
@@ -291,13 +289,15 @@ void main() {
       );
 
       final manifest = buildArticleAssetManifestForPayload(state);
-      final assets = manifest['assets'] as List<Object?>;
-      final cover = assets.cast<Map<Object?, Object?>>().firstWhere(
-        (asset) => asset['assetId'] == 'cover',
+      final cover = manifest.assets.firstWhere(
+        (asset) => asset.assetId == 'cover',
       );
-      expect(cover['role'], 'cover');
-      expect(cover.keys, unorderedEquals(<Object?>['assetId', 'kind', 'role']));
-      expect('${manifest['assets']}', isNot(contains('/tmp/')));
+      expect(cover.role, 'cover');
+      expect(
+        cover.toJson().keys,
+        unorderedEquals(<Object?>['assetId', 'role']),
+      );
+      expect('${manifest.toJson()['assets']}', isNot(contains('/tmp/')));
     });
 
     test('article markdown is serialized directly from document nodes', () {
@@ -385,18 +385,21 @@ void main() {
 
         final mentions = semanticMentionsForPayload(state);
         final tagRefs = mentions
-            .where((m) => m['kind'] == 'tag')
-            .map((m) => m['targetRef'])
+            .where((mention) => mention.kind == 'tag')
+            .map((mention) => mention.targetRef)
             .toList();
         final entityRefs = mentions
-            .where((m) => m['kind'] == 'entity')
-            .map((m) => m['targetRef'])
+            .where((mention) => mention.kind == 'entity')
+            .map((mention) => mention.targetRef)
             .toList();
 
         expect(tagRefs, contains('Topic/旅行/城市漫步'));
         expect(entityRefs, contains('entity:sight:lingyin'));
-        for (final row in mentions) {
-          expect(row['status'], 'published');
+        for (final mention in mentions) {
+          expect(mention.status, 'published');
+          expect(mention.mentionId, isNotEmpty);
+          expect(mention.surface, isNotEmpty);
+          expect(mention.location, isNotEmpty);
         }
       },
     );
@@ -419,12 +422,12 @@ void main() {
 
         final mentions = semanticMentionsForPayload(state);
         final tagRefs = mentions
-            .where((m) => m['kind'] == 'tag')
-            .map((m) => m['targetRef'] as String)
+            .where((mention) => mention.kind == 'tag')
+            .map((mention) => mention.targetRef ?? '')
             .toList();
         final entityRefs = mentions
-            .where((m) => m['kind'] == 'entity')
-            .map((m) => m['targetRef'] as String)
+            .where((mention) => mention.kind == 'entity')
+            .map((mention) => mention.targetRef ?? '')
             .toList();
 
         expect(
@@ -489,7 +492,8 @@ void main() {
           mediaAssetIds: const <String>[],
         );
         final body = Map<String, Object?>.from(
-          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body! as Map,
+          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
+              as Map,
         );
         expect(
           body['semanticMentions'],

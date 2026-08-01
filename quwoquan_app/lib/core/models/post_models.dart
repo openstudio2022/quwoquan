@@ -4,14 +4,9 @@ class Post {
   final String? authorId;
   final String? content;
   final Map<String, dynamic>? metadata;
-  
-  const Post({
-    required this.id,
-    this.authorId,
-    this.content,
-    this.metadata,
-  });
-  
+
+  const Post({required this.id, this.authorId, this.content, this.metadata});
+
   factory Post.fromJson(Map<String, dynamic> json) {
     return Post(
       id: json['id']?.toString() ?? '',
@@ -20,7 +15,7 @@ class Post {
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

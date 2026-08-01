@@ -37,10 +37,7 @@ class StPageFlipBoundsRect {
 
 @immutable
 class StPageFlipLayout {
-  const StPageFlipLayout({
-    required this.orientation,
-    required this.bounds,
-  });
+  const StPageFlipLayout({required this.orientation, required this.bounds});
 
   final StPageFlipOrientation orientation;
   final StPageFlipBoundsRect bounds;

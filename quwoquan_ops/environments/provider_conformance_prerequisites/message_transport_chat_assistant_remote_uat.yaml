@@ -8,7 +8,7 @@ required_harness:
   composition: production_remote
   endpoint: stackctl_managed_environment_topology
   auth: ci_injected_remote_test_session
-  seed: environment_managed_assistant_conversation_seed
+  seed: environment_managed_assistant_session_seed
 required_assertions:
 - invite_assistant
 - mention_assistant_in_conversation

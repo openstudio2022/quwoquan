@@ -6,12 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/prompting"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
 	"strings"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/skill"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
 // DeterministicModelProvider 以固定文本回应每个 ReAct stage，使测试无需真实模型即可

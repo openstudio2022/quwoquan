@@ -9,9 +9,9 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtrec "quwoquan_service/runtime/recommendation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
 

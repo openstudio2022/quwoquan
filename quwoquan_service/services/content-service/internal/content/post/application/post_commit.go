@@ -9,8 +9,8 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -92,7 +92,7 @@ func postContentDigest(post *postmodel.Post) string {
 		Summary          string
 		MediaAssetIDs    []string
 		ArticleMarkdown  string
-		SemanticMentions any
+		SemanticMentions []postmodel.PostSemanticMention
 	}{
 		ContentType:      post.ContentType,
 		Title:            post.Title,

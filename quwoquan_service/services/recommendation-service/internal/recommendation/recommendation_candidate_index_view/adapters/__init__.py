@@ -1,0 +1,1 @@
+"""RecommendationCandidateIndexView adapters."""

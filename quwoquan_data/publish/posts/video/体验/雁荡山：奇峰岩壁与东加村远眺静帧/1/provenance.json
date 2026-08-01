@@ -1,0 +1,32 @@
+{
+  "executionId": "20260731--travel-video-copy-ready--zhejiang-six--scale-017",
+  "agentRunId": "run-799e6d9d-474f-4123-8d06-ec73661bee0e",
+  "agentModel": "grok-4.5",
+  "renderStrategy": "rights_cleared_image_sequence",
+  "sources": [
+    {
+      "assetRef": "sources/雁荡山__image_collection__f2d859d7/assets/001_雁荡山_1.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:China2011_Zhejiang_YandangShan.jpg",
+      "rightsRef": "sources/雁荡山__image_collection__f2d859d7/assets/index.json#001_001",
+      "creator": "Glasreifen",
+      "license": "CC BY-SA 4.0",
+      "basis": "rights_cleared",
+      "sourceUseMode": "licensed_adaptation",
+      "rightsAuditStatus": "verified",
+      "rightsAuditIssues": [],
+      "sha256": "sha256:98d68cdd0882bcfb56771c367dc165023714c957eb02bb9a26662cc1908f28ed"
+    },
+    {
+      "assetRef": "sources/雁荡山__image_collection__f2d859d7/assets/002_雁荡山_2.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%E4%B8%9C%E5%8A%A0%E6%9D%91%E7%9C%8B%E9%9B%81%E8%8D%A1%E5%B1%B1%E5%A5%87%E5%B3%B0_-_panoramio.jpg",
+      "rightsRef": "sources/雁荡山__image_collection__f2d859d7/assets/index.json#002_002",
+      "creator": "江上清风1961",
+      "license": "CC BY 3.0",
+      "basis": "rights_cleared",
+      "sourceUseMode": "licensed_adaptation",
+      "rightsAuditStatus": "verified",
+      "rightsAuditIssues": [],
+      "sha256": "sha256:35cab4dc8de358e2482999763b80042ac82d78624d73e9cfaa6838aaa37062af"
+    }
+  ]
+}

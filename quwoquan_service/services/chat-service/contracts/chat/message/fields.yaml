@@ -222,6 +222,16 @@ value_objects:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+      - name: objectRef
+        source: objectRef
+        type: MessageCardObjectRef
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 可行动对象的稳定强类型引用；交集本身不是可转发对象
       - name: subtitle
         source: subtitle
         type: string
@@ -299,6 +309,36 @@ value_objects:
         ops_exposure: read
       - name: value
         source: value
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+  MessageCardObjectRef:
+    description: 消息卡引用的 canonical 对象；服务端按 kind 校验类型和路由类别
+    fields:
+      - name: objectTypeRef
+        source: objectTypeRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: objectId
+        source: objectId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: routeId
+        source: routeId
         type: string
         constraints:
           - NOT_NULL

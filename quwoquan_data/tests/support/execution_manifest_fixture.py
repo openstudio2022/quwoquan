@@ -159,6 +159,9 @@ class ExecutionFixtureBuilder:
                 "targetObjectCount": len(targets),
                 "approvedQuota": quota,
                 "oversampleFactor": len(targets) / quota,
+                "articleCommercialClosure": (
+                    identity.content_type is ContentType.ARTICLE
+                ),
                 "executionBranch": "dev1.0",
                 "gitCommitSha": "local-contract-fixture",
             },

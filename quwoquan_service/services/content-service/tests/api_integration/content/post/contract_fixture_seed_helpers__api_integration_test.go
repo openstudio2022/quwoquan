@@ -10,12 +10,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/contractfixture"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 

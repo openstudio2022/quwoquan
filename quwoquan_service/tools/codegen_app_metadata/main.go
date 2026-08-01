@@ -168,6 +168,10 @@ func main() {
 	}
 
 	defaults := buildPostDefaults(post.Fields)
+	postSnapshotFieldByteLimits := buildPostSnapshotFieldByteLimits(
+		post.Fields,
+		projection.ClientProjection.Fields,
+	)
 	feedDefaults := buildFeedDefaults(defaults)
 	contentTypes := shared.Enums["ContentType"]
 	if len(contentTypes) == 0 {
@@ -184,6 +188,7 @@ func main() {
 	// 1. 生成 content_metadata.g.dart（原 post_runtime_metadata.g.dart）
 	metaOut := renderContentMetadataDart(
 		defaults,
+		postSnapshotFieldByteLimits,
 		feedDefaults,
 		contentTypeMapping,
 		feedCategoryToType,
@@ -298,7 +303,7 @@ func main() {
 		renderSimpleErrorsDart("OpsEventRecordErrorCode", "ops/product_ops/event_record/errors.yaml", "启动诊断暂时不可用，请稍后重试", opsEventErrs),
 	)
 	if searchErrs, err := readMergedErrors([]string{
-		filepath.Join(metadataDir, "search", "search", "search_query", "errors.yaml"),
+		filepath.Join(metadataDir, "search", "search", "search_request_fact", "errors.yaml"),
 		filepath.Join(metadataDir, "search", "search", "recent_search_state", "errors.yaml"),
 	}); err == nil {
 		writeFile(
@@ -308,7 +313,7 @@ func main() {
 	}
 	if tagErrs, err := readMergedErrors([]string{
 		filepath.Join(metadataDir, "tag", "tag", "tag_node_view", "errors.yaml"),
-		filepath.Join(metadataDir, "tag", "tag", "tag_feedback", "errors.yaml"),
+		filepath.Join(metadataDir, "tag", "tag", "tag_feedback_fact", "errors.yaml"),
 		filepath.Join(metadataDir, "tag", "tag", "tag_taxonomy_release", "errors.yaml"),
 	}); err == nil {
 		writeFile(
@@ -704,6 +709,47 @@ func main() {
 			),
 			userContractEnums,
 		)
+	}
+	if chatContractEnums, renderErr := renderSharedContractEnumsDart(
+		shared.Enums,
+		[]string{"MessageType"},
+	); renderErr != nil {
+		exitErr(renderErr)
+	} else {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"chat_contract_enums.g.dart",
+			),
+			chatContractEnums,
+		)
+	}
+	if contentContractEnums, renderErr := renderSharedContractEnumsDart(
+		shared.Enums,
+		[]string{"ContentType", "ContentIdentity"},
+	); renderErr != nil {
+		exitErr(renderErr)
+	} else {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"content_contract_enums.g.dart",
+			),
+			contentContractEnums,
+		)
+	}
+	if err := generateCanonicalSearchClientModels(metadataDir, appDir); err != nil {
+		exitErr(err)
 	}
 	if searchObjects != nil {
 		writeFile(

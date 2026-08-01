@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 void main() {
@@ -114,7 +114,7 @@ Future<PersonalAssistantStreamState> _runPromptCase(
   Future<PersonalAssistantStreamState> sendOnce() async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(home: PersonalAssistantConversationPage()),
+        child: MaterialApp(home: PersonalAssistantSessionPage()),
       ),
     );
     await _pumpFrames(tester, count: 8);
@@ -133,9 +133,7 @@ Future<PersonalAssistantStreamState> _runPromptCase(
     );
     await _tapSend(tester, promptCase.prompt);
     await _pumpUntilSettled(tester);
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     return ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
@@ -170,9 +168,7 @@ Future<void> _tapSend(WidgetTester tester, String question) async {
       return;
     }
   }
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
+  final context = tester.element(find.byType(PersonalAssistantSessionPage));
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(question);
@@ -181,9 +177,7 @@ Future<void> _tapSend(WidgetTester tester, String question) async {
 Future<void> _pumpUntilSettled(WidgetTester tester) async {
   for (var i = 0; i < 1800; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
-    );
+    final context = tester.element(find.byType(PersonalAssistantSessionPage));
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

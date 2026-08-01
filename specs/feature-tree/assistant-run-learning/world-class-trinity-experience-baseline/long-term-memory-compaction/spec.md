@@ -32,6 +32,7 @@
 - 用户在对话中陈述的稳定事实必须在用户确认后才写入长期记忆，并在后续运行中注入。
 - 长期记忆必须复用既有授权、遗忘与撤销窗口内恢复语义，非所有者不可见。
 - 遗忘后运行时召回必须立即排除该事实，不得依赖缓存过期。
+- AssistantRun 创建时必须固化会话级与长期 active 事实快照，公开 Run 信封不得回显内部记忆内容。
 
 <a id="req-002"></a>
 ### REQ-002 长会话按滚动摘要压缩且不丢目标
@@ -39,6 +40,7 @@
 - 会话历史超过注入预算时必须以滚动摘要压缩，保留当前目标、已确认槽位与未完成事项。
 - 不得以固定长度截断丢弃早期轮次的关键事实。
 - 压缩结果必须可追溯到被压缩的轮次范围。
+- 摘要必须以完成序列和版本 CAS 持久增量推进；重复完成、并发更新与服务重启不得重复压缩或遗失既有摘要。
 
 <a id="req-003"></a>
 ### REQ-003 记忆生效范围对用户可见
@@ -48,7 +50,7 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_preference_fact/operations.yaml`
+- canonical：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_preference/operations.yaml`
 - object：`quwoquan_service/services/assistant-service/contracts/_shared/preference_fact/schema.yaml`
 - object：`quwoquan_service/services/assistant-service/contracts/_shared/context_continuity_policy/schema.yaml`
 
@@ -62,6 +64,7 @@
 - THEN 该事实进入模型请求并影响回答
 - THEN 用户遗忘该事实后运行时召回立即排除它
 - THEN 撤销窗口内恢复后重新纳入，非所有者始终不可见
+- THEN Run 快照随创建持久化但不通过公开信封泄漏
 
 <a id="gwt-002"></a>
 ### GWT-002 长会话压缩后仍延续原目标
@@ -71,6 +74,7 @@
 - THEN 注入内容为滚动摘要且保留当前目标与已确认槽位
 - THEN 早期轮次的关键事实未被固定长度截断丢弃
 - THEN 压缩结果可追溯到被压缩的轮次范围
+- THEN 并发 CAS 仅一个写入者成功，重启后继续复用同一持久摘要
 
 ## 6. 依赖
 
@@ -79,13 +83,3 @@
 - 下游结果：本 Story 声明的 GWT 可观察结果，供上下文装配按渠道记忆范围消费。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
-## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 事实型长期记忆与会话压缩尚未实现
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺事实型长期记忆与会话压缩。现有记忆只覆盖回答风格、长度、语气与语言四类文风偏好，无法承载常用地点、称谓、禁忌与出行偏好等稳定事实；会话历史按固定长度逐轮截断注入，长对话会丢失早期目标与已确认槽位。
-- 完成判定：`GWT-001` 与 `GWT-002` 由真实测试直接 `spec_ref`。

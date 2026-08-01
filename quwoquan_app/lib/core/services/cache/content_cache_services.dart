@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
@@ -97,9 +98,9 @@ class PostObjectCacheService {
         _projectionStore.clearAllRebuildable();
   }
 
-  int get detailCount => _detailStore.diskCount;
+  int get detailCount => _detailStore.count;
 
-  int get projectionCount => _projectionStore.diskCount;
+  int get projectionCount => _projectionStore.count;
 }
 
 class ContentQuerySnapshot {

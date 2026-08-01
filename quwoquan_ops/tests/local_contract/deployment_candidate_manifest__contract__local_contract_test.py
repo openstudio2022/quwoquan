@@ -53,6 +53,7 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         (self.app / "package-fingerprint.json").write_text(
             json.dumps(
                 {
+                    "candidateType": subject.RUNTIME_CANDIDATE_TYPE,
                     "includeServices": True,
                     "deploymentInputs": {"digest": digest},
                     "packageContent": {"digest": digest},
@@ -123,7 +124,12 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         payload = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(payload["schema"], subject.CANDIDATE_MANIFEST_SCHEMA)
+        self.assertEqual(payload["candidateType"], subject.RUNTIME_CANDIDATE_TYPE)
         self.assertEqual(payload["baselineId"], self.snapshot["baselineId"])
+        self.assertEqual(
+            payload["runtimeSchemaVersion"],
+            "environment-runtime-package",
+        )
         self.assertEqual(
             payload["release"]["candidate"]["releaseId"],
             "west-lake-canonical-20260729",

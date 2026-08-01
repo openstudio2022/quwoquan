@@ -318,7 +318,6 @@ class _ObjectImpactLine {
       priority: hint.priority,
       actionTier: hint.actionTier,
       requiredGates: hint.requiredGates,
-      targetAvailability: hint.targetAvailability,
       dispatch: hint.dispatch,
     );
   }

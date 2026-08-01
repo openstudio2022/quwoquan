@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../search/recent_search_contracts.dart';
 
@@ -15,6 +15,10 @@ final class ClearRecentSearchesCommand {
   }
 
   final String? scope;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.scope != null) "scope": this.scope!,
+  };
 }
 
 final class DeleteRecentSearchCommand {
@@ -27,6 +31,10 @@ final class DeleteRecentSearchCommand {
   }
 
   final String entryId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "entryId": this.entryId,
+  };
 }
 
 final class ListRecentSearchesQuery {
@@ -36,6 +44,10 @@ final class ListRecentSearchesQuery {
   }
 
   final String? scope;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.scope != null) "scope": this.scope!,
+  };
 }
 
 final class UpsertRecentSearchCommand {
@@ -57,6 +69,12 @@ final class UpsertRecentSearchCommand {
   final String query;
   final String scope;
   final String? facet;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "query": this.query,
+    "scope": this.scope,
+    if (this.facet != null) "facet": this.facet!,
+  };
 }
 
 CloudOperationRequestPayload encodeSearchRecentSearchStateClearRecentSearchesGeneratedRequest(ClearRecentSearchesCommand request) {

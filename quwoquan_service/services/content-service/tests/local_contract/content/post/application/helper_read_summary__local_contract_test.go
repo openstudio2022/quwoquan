@@ -9,8 +9,8 @@ import (
 	"unicode/utf8"
 
 	rterr "quwoquan_service/runtime/errors"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )

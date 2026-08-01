@@ -23,7 +23,7 @@ type MongoActiveSupplyReader struct {
 	stateCollection *mongo.Collection
 	postsCollection *mongo.Collection
 	feedCollection  *mongo.Collection
-	premiumPlayable postports.PremiumPlayableSupplyReader
+	playableVideos  postports.PlayableVideoSupplyReader
 	environment     string
 	cache           *activeSupplySnapshotCache
 }
@@ -38,11 +38,11 @@ type activeSupplyReleaseState struct {
 	ManifestDigest  string `bson:"manifestDigest"`
 }
 
-func WithPremiumPlayableSupplyReader(
-	reader postports.PremiumPlayableSupplyReader,
+func WithPlayableVideoSupplyReader(
+	reader postports.PlayableVideoSupplyReader,
 ) MongoActiveSupplyReaderOption {
 	return func(active *MongoActiveSupplyReader) {
-		active.premiumPlayable = reader
+		active.playableVideos = reader
 	}
 }
 
@@ -67,6 +67,7 @@ func NewMongoActiveSupplyReader(
 		stateCollection: db.Collection("data_release_state"),
 		postsCollection: db.Collection("posts"),
 		feedCollection:  db.Collection("rm_discovery_feed"),
+		playableVideos:  mongoPlayableVideoSupplyReader{posts: db.Collection("posts")},
 		environment:     strings.TrimSpace(environment),
 		cache: newActiveSupplySnapshotCache(
 			DefaultActiveSupplyCacheTTL,
@@ -89,8 +90,8 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		r.feedCollection == nil || r.environment == "" {
 		return empty, fmt.Errorf("active supply reader is not fully configured")
 	}
-	if r.premiumPlayable == nil {
-		return empty, fmt.Errorf("premium playable supply reader is not configured")
+	if r.playableVideos == nil {
+		return empty, fmt.Errorf("playable video supply reader is not configured")
 	}
 	state, found, err := r.readActiveSupplyReleaseState(ctx)
 	if err != nil {
@@ -192,26 +193,54 @@ func (r *MongoActiveSupplyReader) readActiveSupplyProjectionCounts(
 	if err != nil {
 		return empty, fmt.Errorf("count active release discovery posts: %w", err)
 	}
-	premiumVideos, err := r.premiumPlayable.CountActiveReleasePlayableVideos(
+	playableVideos, err := r.playableVideos.CountActiveReleasePlayableVideos(
 		ctx,
 		releaseID,
 		manifestDigest,
 	)
 	if err != nil {
-		return empty, fmt.Errorf("count active release premium playable videos: %w", err)
+		return empty, fmt.Errorf("count active release playable videos: %w", err)
 	}
 	return postports.ActiveSupplySnapshot{
-		Environment:           strings.TrimSpace(environment),
-		SourceOwner:           strings.TrimSpace(sourceOwner),
-		Status:                strings.TrimSpace(status),
-		ActiveReleaseID:       releaseID,
-		ManifestDigest:        manifestDigest,
-		ReadbackStatus:        "passed",
-		Posts:                 posts,
-		DiscoveryPosts:        discoveryPosts,
-		PremiumPlayableVideos: premiumVideos,
+		Environment:     strings.TrimSpace(environment),
+		SourceOwner:     strings.TrimSpace(sourceOwner),
+		Status:          strings.TrimSpace(status),
+		ActiveReleaseID: releaseID,
+		ManifestDigest:  manifestDigest,
+		ReadbackStatus:  "passed",
+		Posts:           posts,
+		DiscoveryPosts:  discoveryPosts,
+		PlayableVideos:  playableVideos,
 	}, nil
 }
+
+type mongoPlayableVideoSupplyReader struct {
+	posts *mongo.Collection
+}
+
+func (reader mongoPlayableVideoSupplyReader) CountActiveReleasePlayableVideos(
+	ctx context.Context,
+	activeReleaseID string,
+	manifestDigest string,
+) (int64, error) {
+	if reader.posts == nil {
+		return 0, fmt.Errorf("Post collection is unavailable")
+	}
+	return reader.posts.CountDocuments(ctx, bson.M{
+		"sourceOwner":      "qwq_data",
+		"releaseId":        strings.TrimSpace(activeReleaseID),
+		"manifestDigest":   strings.TrimSpace(manifestDigest),
+		"lifecycleStatus":  "active",
+		"status":           "published",
+		"visibility":       "public",
+		"moderationStatus": "approved",
+		"contentType":      "video",
+		"videoUrl":         bson.M{"$type": "string", "$ne": ""},
+		"durationMs":       bson.M{"$gt": 0},
+	})
+}
+
+var _ postports.PlayableVideoSupplyReader = mongoPlayableVideoSupplyReader{}
 
 func cloneBSONMap(source bson.M) bson.M {
 	cloned := make(bson.M, len(source))

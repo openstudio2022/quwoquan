@@ -51,6 +51,17 @@ from core.wiki_wikitext import parse_wikitext_placements
 _OPENVERSE_HTTP_TIMEOUT_SECONDS = active_runtime_policy().provider_timeouts.openverse_seconds
 
 
+def _commons_bitmap_search_term(term: str) -> str:
+    """Prefer raster files so Chinese scenic-name queries are not drowned by djvu/pdf books."""
+
+    cleaned = str(term or "").strip()
+    if not cleaned:
+        return cleaned
+    if "filetype:" in cleaned.lower():
+        return cleaned
+    return f"{cleaned} filetype:bitmap"
+
+
 def _commons_images(
     entity_id: str,
     *,
@@ -66,7 +77,7 @@ def _commons_images(
                 "action": "query",
                 "generator": "search",
                 "gsrnamespace": 6,
-                "gsrsearch": term,
+                "gsrsearch": _commons_bitmap_search_term(term),
                 "gsrlimit": limit,
                 "prop": "imageinfo",
                 "iiprop": "url|size|extmetadata",

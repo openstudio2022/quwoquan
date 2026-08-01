@@ -20,6 +20,29 @@ externalDependencies:
   operations: [appendDurable]
   scenes: [general]
 response_list_key: items
+privacy_contract:
+  user_account_closed_consumer:
+    source_event_contract: user.UserAccountClosed
+    failure_persistence: irreversible_event_and_error_digests_only
+    dead_letter_retained:
+    - dead_letter_id
+    - source_stream
+    - source_stream_id
+    - event_class
+    - irreversible_event_digest
+    - irreversible_content_digest
+    - attempt
+    - controlled_error_class
+    - irreversible_error_digest
+    - dead_lettered_at
+    dead_letter_prohibited:
+    - account_id
+    - user_id
+    - persona_ids
+    - raw_payload
+    - raw_error
+    recovery: source_stream_pending_reference_only
+    logs: digest_only
 api_routes:
 - method: POST
   path: /integrations/external-requests

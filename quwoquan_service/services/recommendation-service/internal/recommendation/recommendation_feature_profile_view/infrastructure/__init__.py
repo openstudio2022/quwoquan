@@ -1,0 +1,1 @@
+"""RecommendationFeatureProfileView persistence adapters."""

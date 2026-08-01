@@ -53,7 +53,7 @@ tables:
     - name: avatar_url
       type: TEXT
     - name: avatar_asset_id
-      type: VARCHAR(64)
+      type: VARCHAR(96)
     - name: avatar_version
       type: INTEGER
       constraints:
@@ -62,7 +62,7 @@ tables:
     - name: background_url
       type: TEXT
     - name: background_asset_id
-      type: VARCHAR(64)
+      type: VARCHAR(96)
     - name: bio
       type: VARCHAR(500)
     - name: identity_tags

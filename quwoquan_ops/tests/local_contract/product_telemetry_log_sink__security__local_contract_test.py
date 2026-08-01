@@ -210,36 +210,20 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             )
             self.assertNotIn("elasticsearch:9200", serialized)
 
-    def test_gamma_query_control_issues_least_privilege_local_session(self) -> None:
-        query_session = stackctl.LocalAcceptanceSession(
-            owner_id="fixture_telemetry_operator",
-            persona_id="fixture_telemetry_operator",
-            access_token="must-not-be-serialized",
-        )
-        with (
-            mock.patch.dict(
-                stackctl.os.environ,
-                {"PRODUCT_TELEMETRY_QUERY_TOKEN": ""},
-            ),
-            mock.patch.object(
-                stackctl,
-                "open_local_acceptance_session",
-                return_value=query_session,
-            ) as issue_session,
+    def test_gamma_query_control_requires_protected_operator_token(self) -> None:
+        with mock.patch.dict(
+            stackctl.os.environ,
+            {"PRODUCT_TELEMETRY_QUERY_TOKEN": ""},
         ):
-            resolved = stackctl._log_sink_control_query_session(
-                api_base="https://api.gamma.quwoquan.com:19000",
-                environment="gamma",
-                target_name="gamma-local",
-            )
-
-        self.assertIs(resolved, query_session)
-        issue_session.assert_called_once_with(
-            "https://api.gamma.quwoquan.com:19000",
-            environment="gamma",
-            target_name="gamma-local",
-            profile="product-telemetry-query",
-        )
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "query authorization is unavailable",
+            ):
+                stackctl._log_sink_control_query_session(
+                    api_base="https://api.gamma.quwoquan.com:19000",
+                    environment="gamma",
+                    target_name="gamma-local",
+                )
 
     def test_cold_start_reuses_package_bound_images(self) -> None:
         with (

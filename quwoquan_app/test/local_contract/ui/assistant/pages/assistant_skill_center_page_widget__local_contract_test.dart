@@ -28,8 +28,7 @@ Widget _buildApp(
   AlphaAssistantFacets repository, {
   required VisitRecorderService visitRecorder,
   List<Override> extraOverrides = const <Override>[],
-  List<AssistantConversationWire> recentSessions =
-      const <AssistantConversationWire>[],
+  List<AssistantSessionWire> recentSessions = const <AssistantSessionWire>[],
 }) {
   return ProviderScope(
     overrides: [
@@ -95,17 +94,19 @@ void main() {
         visitRecorder: recorder,
         extraOverrides: <Override>[
           assistantScheduleTasksProvider.overrideWith(
-            (ref) async => const <AssistantUserTaskView>[
-              AssistantUserTaskView(
+            (ref) async => const <AssistantTaskItemView>[
+              AssistantTaskItemView(
                 taskId: 'task_pending',
                 title: '整理真实任务',
                 description: '来自云端任务',
                 status: 'pending',
+                updatedAt: null,
               ),
-              AssistantUserTaskView(
+              AssistantTaskItemView(
                 taskId: 'task_done',
                 title: '已完成任务',
                 status: 'completed',
+                updatedAt: null,
               ),
             ],
           ),
@@ -170,12 +171,12 @@ void main() {
           assistantScheduleTasksProvider.overrideWith((ref) {
             taskLoadCount += 1;
             if (taskLoadCount == 1) {
-              return Future<List<AssistantUserTaskView>>.error(
+              return Future<List<AssistantTaskItemView>>.error(
                 StateError('tasks unavailable'),
               );
             }
-            return Future<List<AssistantUserTaskView>>.value(
-              const <AssistantUserTaskView>[],
+            return Future<List<AssistantTaskItemView>>.value(
+              const <AssistantTaskItemView>[],
             );
           }),
         ],
@@ -229,11 +230,11 @@ void main() {
   });
 
   testWidgets('最近会话来自云端会话列表且可展开收起', (tester) async {
-    // R-ASSIST-001：最近会话唯一数据源是 ListAssistantConversations 云端查询面。
-    final sessions = List<AssistantConversationWire>.generate(
+    // R-ASSIST-001：最近会话唯一数据源是 ListAssistantSessions 云端查询面。
+    final sessions = List<AssistantSessionWire>.generate(
       5,
-      (index) => AssistantConversationWire(
-        conversationId: 'conv_$index',
+      (index) => AssistantSessionWire(
+        sessionId: 'conv_$index',
         userId: 'user_test',
         summary: '真实会话 ${index + 1}',
         createdAt: '2026-07-20T09:00:00Z',

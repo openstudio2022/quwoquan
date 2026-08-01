@@ -6315,18 +6315,6 @@ export const platformConfig = {
       "sensitive": false
     },
     {
-      "key": "sys.user-service.integration.otp.mode",
-      "type": "string",
-      "owner": "",
-      "default": "fixed_test",
-      "scope": "workload",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "",
-      "ui_editable": false,
-      "sensitive": false
-    },
-    {
       "key": "sys.user-service.metadata.dir",
       "type": "string",
       "owner": "",

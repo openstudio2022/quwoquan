@@ -57,11 +57,11 @@ class SystemTimeContext {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'referenceNowIso': referenceNowIso,
-        'timezone': timezone,
-        'locale': locale,
-        'granularity': granularity.wireName,
-      };
+    'referenceNowIso': referenceNowIso,
+    'timezone': timezone,
+    'locale': locale,
+    'granularity': granularity.wireName,
+  };
 
   factory SystemTimeContext.fromJson(Map<String, dynamic> json) {
     return SystemTimeContext(
@@ -89,11 +89,11 @@ class DeviceSummary {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'os': os,
-        'model': model,
-        'appVersion': appVersion,
-        'granularity': granularity.wireName,
-      };
+    'os': os,
+    'model': model,
+    'appVersion': appVersion,
+    'granularity': granularity.wireName,
+  };
 
   factory DeviceSummary.fromJson(Map<String, dynamic> json) {
     return DeviceSummary(
@@ -125,13 +125,13 @@ class PermissionSummary {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'locationGranted': locationGranted,
-        'contactsGranted': contactsGranted,
-        'photosGranted': photosGranted,
-        'cameraGranted': cameraGranted,
-        'notificationsGranted': notificationsGranted,
-        'granularity': granularity.wireName,
-      };
+    'locationGranted': locationGranted,
+    'contactsGranted': contactsGranted,
+    'photosGranted': photosGranted,
+    'cameraGranted': cameraGranted,
+    'notificationsGranted': notificationsGranted,
+    'granularity': granularity.wireName,
+  };
 
   factory PermissionSummary.fromJson(Map<String, dynamic> json) {
     return PermissionSummary(
@@ -178,16 +178,16 @@ class SystemLocationContext {
       adminAreaLevel4.trim().isNotEmpty;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'countryCode': countryCode,
-        'countryName': countryName,
-        'adminAreaLevel1': adminAreaLevel1,
-        'adminAreaLevel2': adminAreaLevel2,
-        'adminAreaLevel3': adminAreaLevel3,
-        'adminAreaLevel4': adminAreaLevel4,
-        'formattedAddress': formattedAddress,
-        'timezone': timezone,
-        'granularity': granularity.wireName,
-      };
+    'countryCode': countryCode,
+    'countryName': countryName,
+    'adminAreaLevel1': adminAreaLevel1,
+    'adminAreaLevel2': adminAreaLevel2,
+    'adminAreaLevel3': adminAreaLevel3,
+    'adminAreaLevel4': adminAreaLevel4,
+    'formattedAddress': formattedAddress,
+    'timezone': timezone,
+    'granularity': granularity.wireName,
+  };
 
   factory SystemLocationContext.fromJson(Map<String, dynamic> json) {
     return SystemLocationContext(
@@ -195,12 +195,12 @@ class SystemLocationContext {
           ? (json['countryCode'] as String).trim()
           : (json['country'] as String?)?.trim() ?? '',
       countryName: (json['countryName'] as String?)?.trim() ?? '',
-      adminAreaLevel1: (json['adminAreaLevel1'] as String?)?.trim().isNotEmpty ==
-              true
+      adminAreaLevel1:
+          (json['adminAreaLevel1'] as String?)?.trim().isNotEmpty == true
           ? (json['adminAreaLevel1'] as String).trim()
           : (json['region'] as String?)?.trim() ?? '',
-      adminAreaLevel2: (json['adminAreaLevel2'] as String?)?.trim().isNotEmpty ==
-              true
+      adminAreaLevel2:
+          (json['adminAreaLevel2'] as String?)?.trim().isNotEmpty == true
           ? (json['adminAreaLevel2'] as String).trim()
           : (json['city'] as String?)?.trim() ?? '',
       adminAreaLevel3: (json['adminAreaLevel3'] as String?)?.trim() ?? '',
@@ -230,12 +230,12 @@ class SystemContextEnvelope {
   final SystemLocationContext location;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'time': time.toJson(),
-        'device': device.toJson(),
-        'permissions': permissions.toJson(),
-        'location': location.toJson(),
-      };
+    'contractId': contractId,
+    'time': time.toJson(),
+    'device': device.toJson(),
+    'permissions': permissions.toJson(),
+    'location': location.toJson(),
+  };
 
   factory SystemContextEnvelope.fromJson(Map<String, dynamic> json) {
     return SystemContextEnvelope(
@@ -247,7 +247,9 @@ class SystemContextEnvelope {
             )
           : const SystemTimeContext(),
       device: json['device'] is Map
-          ? DeviceSummary.fromJson((json['device'] as Map).cast<String, dynamic>())
+          ? DeviceSummary.fromJson(
+              (json['device'] as Map).cast<String, dynamic>(),
+            )
           : const DeviceSummary(),
       permissions: json['permissions'] is Map
           ? PermissionSummary.fromJson(

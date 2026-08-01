@@ -86,7 +86,7 @@ import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 import 'package:quwoquan_app/cloud/remote/search/recent_search_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_feedback_remote.dart';
-import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_remote.dart';
+import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_fact_remote.dart';
 import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';

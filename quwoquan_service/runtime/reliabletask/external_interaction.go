@@ -63,6 +63,7 @@ type ProviderAttemptRecord struct {
 	AttemptID             string            `bson:"_id" json:"attemptId"`
 	RequestID             string            `bson:"requestId" json:"requestId"`
 	TaskID                string            `bson:"taskId" json:"taskId"`
+	SubjectDigest         string            `bson:"subjectDigest,omitempty" json:"-"`
 	Operation             string            `bson:"operation" json:"operation"`
 	Provider              string            `bson:"provider" json:"provider"`
 	ProviderRequestID     string            `bson:"providerRequestId,omitempty" json:"providerRequestId,omitempty"`
@@ -80,6 +81,7 @@ type ProviderAttemptRecord struct {
 type ExternalInteractionResultOutboxRecord struct {
 	EventID               string     `bson:"_id" json:"eventId"`
 	RequestID             string     `bson:"requestId" json:"requestId"`
+	SubjectDigest         string     `bson:"subjectDigest,omitempty" json:"-"`
 	Operation             string     `bson:"operation" json:"operation"`
 	ResultStatus          string     `bson:"resultStatus" json:"resultStatus"`
 	Provider              string     `bson:"provider" json:"provider"`
@@ -227,6 +229,7 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 			AttemptID:         NewRecordID("attempt"),
 			RequestID:         req.RequestID,
 			TaskID:            task.TaskID,
+			SubjectDigest:     req.Payload["subjectDigest"],
 			Operation:         req.Operation,
 			Provider:          result.Provider,
 			ProviderRequestID: result.ProviderRequestID,
@@ -332,6 +335,7 @@ func (r ExternalInteractionRequest) Validate() error {
 
 func (r ExternalInteractionRequest) TaskPayload() map[string]string {
 	payload := CloneStringMap(r.Payload)
+	payload["subjectDigest"] = ExternalInteractionSubjectDigest(r.Payload)
 	payload["requestId"] = r.RequestID
 	payload["operation"] = r.Operation
 	payload["tenant"] = r.Tenant
@@ -376,6 +380,7 @@ func DefaultExternalInteractionPayloadAllowlist() []string {
 		"payloadDigest",
 		"sensitivity",
 		"expiresAt",
+		"subjectDigest",
 		"challengeId",
 		"phoneHash",
 		"maskedRecipient",
@@ -385,4 +390,24 @@ func DefaultExternalInteractionPayloadAllowlist() []string {
 		"providerHint",
 		"deeplink",
 	}
+}
+
+// ExternalInteractionSubjectDigest returns the single privacy-cleanup locator
+// for an external interaction. Raw account/persona identifiers remain in the
+// owning caller and are never copied into the provider-attempt ledger.
+func ExternalInteractionSubjectDigest(payload map[string]string) string {
+	for _, key := range []string{
+		"targetPersonaId",
+		"personaId",
+		"recipientId",
+		"userId",
+		"accountId",
+		"subjectId",
+	} {
+		if value := strings.TrimSpace(payload[key]); value != "" {
+			sum := sha256.Sum256([]byte("external-interaction-subject\n" + value))
+			return hex.EncodeToString(sum[:])
+		}
+	}
+	return ""
 }

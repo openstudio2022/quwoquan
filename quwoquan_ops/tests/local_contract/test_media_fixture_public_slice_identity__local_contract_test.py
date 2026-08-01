@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,9 +16,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.gate import verify_media_delivery_contract as gate
-from quwoquan_ops.tests.support.environment_seeds import (
-    shared_pool_real_asset_pipeline as fixture_pipeline,
-)
 
 
 class PublicFixtureSliceIdentityTest(unittest.TestCase):
@@ -145,18 +145,36 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
             )
         )
 
-    def test_fixture_generator_normalizes_to_the_only_v1_track(self) -> None:
-        self.assertEqual(
-            fixture_pipeline.canonical_media_object_key(
-                "media/avatar/s/archived-avatar/circle/fixture_circle_example/avatar.png"
-            ),
-            "media/avatar/s/archived-avatar/circle/fixture_circle_example/v1/avatar.png",
-        )
-        with self.assertRaisesRegex(ValueError, "canonical version must be v1"):
-            fixture_pipeline.canonical_media_object_key(
-                "media/avatar/s/archived-avatar/circle/fixture_circle_example/v2/avatar.png"
+    def test_runtime_config_parity_uses_each_environment_target(self) -> None:
+        topology = gate.load_environment_topology()
+
+        def resolve_defines(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            env_name = command[command.index("--env") + 1]
+            target_name = command[command.index("--target") + 1]
+            self.assertEqual(
+                target_name,
+                gate.DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
+            )
+            public_bases = topology["environments"][env_name]["publicBases"]
+            defines = {
+                define_key: public_bases[topology_field]
+                for topology_field, define_key in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()
+            }
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(defines),
+                stderr="",
             )
 
+        issues: list[str] = []
+        with mock.patch.dict(os.environ, {"QWQ_DEPLOY_TARGET": "alpha-local"}), mock.patch.object(
+            gate.subprocess,
+            "run",
+            side_effect=resolve_defines,
+        ):
+            gate._validate_runtime_config_authority_parity(issues)
+        self.assertEqual(issues, [])
 
 if __name__ == "__main__":
     unittest.main()

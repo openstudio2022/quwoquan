@@ -1,0 +1,1 @@
+"""RankedRecommendationWindow domain model."""

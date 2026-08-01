@@ -1,0 +1,24 @@
+{
+  "skillId": "work_productivity",
+  "displayName": "工作效率助手",
+  "description": "工作效率提升、项目管理、求职面试、职业规划、复盘汇报。",
+  "domainId": "work_productivity",
+  "problemClass": "complex_reasoning",
+  "executionTarget": "hybrid",
+  "routingHints": [
+    "效率",
+    "任务拆解",
+    "项目推进",
+    "里程碑",
+    "复盘",
+    "面试",
+    "简历",
+    "职业"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.app_web3_device",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.complex_reasoning",
+  "replayAssetRef": "assistant.replay.work_productivity.v1"
+}

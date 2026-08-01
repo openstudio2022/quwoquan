@@ -14,7 +14,7 @@
 
 - tagRef 发布物。
 - canonical entity 与 entityRef。
-- relationEdge 候选事实。
+- 内容语义 relationEdge 候选事实；不包含关注、圈成员或会话成员等在线交易关系。
 - canonical publish、immutable release、环境 activation receipt 与数据隔离。
 
 ### Out of Scope
@@ -44,7 +44,7 @@
 <a id="req-001"></a>
 ### REQ-001 数据工程同源输入验收
 
-- tagRef、canonicalEntityId、entityRef、relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源。
+- tagRef、canonicalEntityId、entityRef、内容语义 relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源。
 - alpha/beta/gamma/prod 只激活 immutable release，数据策略不漂移且无环境 fixture/self-seed 旁路。
 - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
 
@@ -59,7 +59,7 @@
 - `release discard` 除进程互斥外还必须保护长期验收引用；passed `release-readiness.json` 是永久保护证据，UAT 则由 Data-owned、append-only `release_acceptance_lease_event` acquire/revoke 显式包围。只有已绑定 acquire 的 revoke 才能关闭 lease，revoke 不得撤销 passed readiness 的保护。
 - 同一 environment 同一时刻只允许一份未 revoke acceptance lease；该 lease 必须阻断该 environment 对任意 release 的 apply、rollback、verify 或另一份 lease acquire，环境级进程锁覆盖“检查 active lease → 写事件/执行 ship”的完整临界区，不同 environment 的锁相互独立。
 - 新增数据发布物必须提供可执行 schema 校验或 canonical contract fixture，且失败时不得进入发布包。
-- 第一方 App 可见业务数据禁止由 T3/UAT、API 脚本、数据库脚本或环境 bootstrap 创建；基础设施灰度探针不得进入业务 query/projection。
+- 内容、Creator、实体、标签与发布媒体禁止由 T3/UAT、领域 API、数据库脚本或环境 bootstrap 创建；用户账号、评论、圈子、会话与消息由各领域公开 command/event 拥有，不属于 Data release。基础设施灰度探针不得进入业务 query/projection。
 - 单元/合约测试只写 tempfile 临时根，pytest 不得向仓内根或 `QWQ_OUTPUT_ROOT` 落盘（conftest 落盘隔离门）。
 
 <a id="req-003"></a>
@@ -84,7 +84,7 @@
 
 - GIVEN 执行“数据工程同源输入验收”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“数据工程同源输入验收”对应动作。
-- THEN tagRef、canonicalEntityId、entityRef、relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源。
+- THEN tagRef、canonicalEntityId、entityRef、内容语义 relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源，在线交易关系不存在于 Data release。
 - THEN 同一 release digest 在 alpha/beta/gamma/prod 产生独立 activation/import/API/media/rollback receipt，且无 fixture/self-seed 旁路。
 - THEN importer、public feed/media 与 Ops/UAT readiness 均绑定同一 immutable payload digest。
 - THEN 每个环境具备 original→rollback→same-digest replay Exit receipt。

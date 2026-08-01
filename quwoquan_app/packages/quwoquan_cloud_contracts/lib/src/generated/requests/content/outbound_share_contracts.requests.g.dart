@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../content/outbound_share_contracts.dart';
 
@@ -42,6 +42,16 @@ final class CreateContentOutboundShareCommand {
   final String referralId;
   final String providerReceiptId;
   final DateTime clientConfirmedAt;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "postId": this.postId,
+    "channel": switch (this.channel) { OutboundShareChannel.systemShare => "system_share", OutboundShareChannel.wechatFriend => "wechat_friend", OutboundShareChannel.wechatMoments => "wechat_moments", },
+    "destinationKind": switch (this.destinationKind) { OutboundShareDestinationKind.externalApp => "external_app", },
+    if (this.destination != null) "destination": this.destination!,
+    "referralId": this.referralId,
+    "providerReceiptId": this.providerReceiptId,
+    "clientConfirmedAt": this.clientConfirmedAt.toUtc().toIso8601String(),
+  };
 }
 
 CloudOperationRequestPayload encodeContentOutboundShareFactCreateOutboundShareGeneratedRequest(CreateContentOutboundShareCommand request) {

@@ -18,9 +18,9 @@ func TestNewLocationProviderBuildsOnlyTheSelectedAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLocationProvider() error = %v", err)
 	}
-	if _, ok := resolved.(ProtocolFixtureLocationProvider); !ok {
+	if _, ok := resolved.(*BaiduClient); !ok {
 		t.Fatalf(
-			"selected provider type = %T, want ProtocolFixtureLocationProvider",
+			"selected provider type = %T, want *BaiduClient",
 			resolved,
 		)
 	}

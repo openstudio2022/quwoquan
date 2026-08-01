@@ -1,0 +1,77 @@
+domain: ASSISTANT
+aggregate: SkillPackageRelease
+description: Skill Package 校验、资产读取、签名与 active 指针 CAS 错误。
+errors:
+- code: ASSISTANT.USER.skill_package_invalid
+  kind: USER
+  reason: skill_package_invalid
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantSkillPackageRelease, ActivateAssistantSkillPackageRelease, RollbackAssistantSkillPackageRelease]
+  recovery_action: surface
+  dart_const: skillPackageInvalid
+  go_const: ErrSkillPackageInvalid
+  l10n_key: assistant.error.skill_package_invalid
+  user_message: {zh: 技能包格式无效, en: Skill package is invalid}
+- code: ASSISTANT.USER.skill_package_digest_mismatch
+  kind: USER
+  reason: skill_package_digest_mismatch
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantSkillPackageRelease, ActivateAssistantSkillPackageRelease, RollbackAssistantSkillPackageRelease]
+  recovery_action: surface
+  dart_const: skillPackageDigestMismatch
+  go_const: ErrSkillPackageDigestMismatch
+  l10n_key: assistant.error.skill_package_digest_mismatch
+  user_message: {zh: 技能包完整性校验失败, en: Skill package integrity verification failed}
+- code: ASSISTANT.USER.skill_package_revision_conflict
+  kind: USER
+  reason: skill_package_revision_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [ActivateAssistantSkillPackageRelease, RollbackAssistantSkillPackageRelease]
+  recovery_action: refresh
+  dart_const: skillPackageRevisionConflict
+  go_const: ErrSkillPackageRevisionConflict
+  l10n_key: assistant.error.skill_package_revision_conflict
+  user_message: {zh: 技能包激活状态已更新，请刷新后重试, en: Skill package activation changed; refresh and retry}
+- code: ASSISTANT.USER.skill_package_capability_denied
+  kind: USER
+  reason: skill_package_capability_denied
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantSkillPackageRelease, ActivateAssistantSkillPackageRelease]
+  recovery_action: surface
+  dart_const: skillPackageCapabilityDenied
+  go_const: ErrSkillPackageCapabilityDenied
+  l10n_key: assistant.error.skill_package_capability_denied
+  user_message: {zh: 技能包请求了未授权能力, en: Skill package requested an ungranted capability}
+- code: ASSISTANT.DEPENDENCY.skill_package_asset_unavailable
+  kind: DEPENDENCY
+  reason: skill_package_asset_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantSkillPackageRelease, ActivateAssistantSkillPackageRelease, RollbackAssistantSkillPackageRelease]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: skillPackageAssetUnavailable
+  go_const: ErrSkillPackageAssetUnavailable
+  l10n_key: assistant.error.skill_package_asset_unavailable
+  user_message: {zh: 技能包资产暂时无法读取，请稍后重试, en: Skill package assets are temporarily unavailable}
+- code: ASSISTANT.SYSTEM.skill_package_signature_invalid
+  kind: SYSTEM
+  reason: skill_package_signature_invalid
+  http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantSkillPackageRelease, ActivateAssistantSkillPackageRelease, RollbackAssistantSkillPackageRelease]
+  recovery_action: surface
+  dart_const: skillPackageSignatureInvalid
+  go_const: ErrSkillPackageSignatureInvalid
+  l10n_key: assistant.error.skill_package_signature_invalid
+  user_message: {zh: 技能包签名校验失败, en: Skill package signature verification failed}

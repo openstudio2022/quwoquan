@@ -85,7 +85,6 @@ var collections = []string{
 	"reliable_async_task",
 	"notification_outbox",
 	"notification_delivery_ledger",
-	"external_provider_attempt_ledger",
 	"reliable_task_leases",
 }
 

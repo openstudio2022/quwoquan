@@ -27,15 +27,7 @@ abstract final class IntersectionActionKeys {
   static const String createFollowup = 'create_followup';
   static const String askAssistant = 'ask_assistant';
 
-  // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯（与 registry actionHintLegend 同源）。
-  static const String joinTopicRoom = 'join_topic_room';
   static const String startGathering = 'start_gathering';
-  static const String joinGathering = 'join_gathering';
-  static const String meetNearby = 'meet_nearby';
-  static const String expressInterest = 'express_interest';
-  static const String viewOfficialDeals = 'view_official_deals';
-  static const String bookTicket = 'book_ticket';
-  static const String bookHotel = 'book_hotel';
 
   /// 助手类动作（dispatch==assistant，即 ask_assistant / create_followup）：
   /// 点击该交集行打开小艺解释 / 追问 / 续写，而非导航到对象页。
@@ -44,17 +36,8 @@ abstract final class IntersectionActionKeys {
     return IntersectionActionKeyMeta.of(actionKey)?.isAssistant ?? false;
   }
 
-  /// 同行 / 线下约伴类动作（dispatch==gathering，即 start_gathering /
-  /// join_gathering / meet_nearby）：唯一驱动「有人同行」徽标与约伴专属落点。
-  /// 真相源为 codegen `IntersectionActionKeyMeta.dispatch`（M0.7）；话题房 / 语音房 /
-  /// 心动（dispatch==connect）与私信（dispatch==message）不属此类，不再误标为同行。
+  /// 聚集类动作（dispatch==gathering）：驱动聚集入口与专属落点。
   static bool isGatheringAction(String actionKey) {
     return IntersectionActionKeyMeta.of(actionKey)?.isGathering ?? false;
-  }
-
-  /// 商用转化动作（dispatch==commerce）：真实渠道和法务条款未就绪时必须保持
-  /// targetAvailability=deferred 或被端侧 feature flag 拦截，不得伪造交易。
-  static bool isCommerce(String actionKey) {
-    return IntersectionActionKeyMeta.of(actionKey)?.dispatch == 'commerce';
   }
 }

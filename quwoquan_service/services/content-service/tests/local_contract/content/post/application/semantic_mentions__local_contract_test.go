@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
@@ -22,12 +22,12 @@ func TestApplySemanticMentionGovernanceEventReprojectsActiveRefs(t *testing.T) {
 		Visibility:  "public",
 		CreatedAt:   now,
 		PublishedAt: now,
-		SemanticMentions: []any{map[string]any{
-			"mentionId":   "mention_1",
-			"kind":        "entity",
-			"surface":     "九寨沟",
-			"status":      "pending_review",
-			"candidateId": "candidate_entity_1",
+		SemanticMentions: []postmodel.PostSemanticMention{{
+			MentionId:   "mention_1",
+			Kind:        "entity",
+			Surface:     "九寨沟",
+			Status:      "pending_review",
+			CandidateId: "candidate_entity_1",
 		}},
 	}})
 	service := NewPostService(

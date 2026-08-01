@@ -112,12 +112,3 @@
 - 完成判定：`cross_domain_search_remote_journey` 在真实设备通过并产出 CaseResult；
   有效搜索成功率、首个可操作结果 P95、结果到有效行动率达到 `SIT-001` 阈值，
   且证据可回溯到同一 requestId/traceId。
-
-<a id="open-002"></a>
-### OPEN-002 搜索响应形状的真相源在 App 而非服务契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：存在真相源方向倒置。`search-service` 的 `search_query/projections/search_response_view.yaml` 声明"content.post 命中由 `CanonicalSearchHit.content` typed slice 承载"，但 `CanonicalSearchHit` 在服务端契约中根本不存在，只定义在 `quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/search/search_query_contracts.dart`，服务端 `hits` 仍是 `[]object`——契约引用了一个只存在于端侧的类型，方向反了。连带结果是 content 域已完成的"SearchItemView 折叠进 CanonicalSearchHit"收敛，circle 与 homepage 并未跟进，形成三种并存形态。另外 `search_index_view/object.yaml` 是 `kind: projection` 却 `relationships: []`，没有任何 `projection_source`，投影来源不可追溯，其 `payload: object` 与 `visibility: string` 也未 typed。需要说明的是三个搜索读模型（`search_index_view`、`circle_search_item_view`、`homepage_search_item_view`）的边界本身是清晰的、不构成重复投影同一份数据，问题只在响应形状真相源与投影来源声明。
-- 完成判定：在 `search_query/projections/` 补 `canonical_search_hit.yaml` 作为服务端真相源并让 `hits` 引用它，端侧改为消费生成产物；`search_index_view` 补 `projection_source` 关系。`verify_metadata` 断言 `kind: projection` 的对象必须至少有一个 `projection_source` 关系。

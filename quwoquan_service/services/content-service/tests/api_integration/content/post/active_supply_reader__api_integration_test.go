@@ -4,12 +4,10 @@ package api_integration
 import (
 	"context"
 	"testing"
-	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T) {
@@ -22,7 +20,6 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	collection := db.Collection("data_release_state")
 	posts := db.Collection("posts")
 	feed := db.Collection("rm_discovery_feed")
-	premium := db.Collection("rm_premium_pool")
 	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
 		t.Fatalf("delete release state: %v", err)
 	}
@@ -30,16 +27,9 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 		_, _ = collection.DeleteMany(context.Background(), bson.M{"environment": environment})
 		_, _ = posts.DeleteMany(context.Background(), bson.M{"_id": contentID})
 		_, _ = feed.DeleteMany(context.Background(), bson.M{"postId": contentID})
-		_, _ = premium.DeleteMany(context.Background(), bson.M{"contentId": contentID})
 	})
 
-	reader := persistence.NewMongoActiveSupplyReader(
-		db,
-		environment,
-		persistence.WithPremiumPlayableSupplyReader(
-			recinfra.NewMongoPremiumPoolCandidateReader(db),
-		),
-	)
+	reader := persistence.NewMongoActiveSupplyReader(db, environment)
 	snapshot, err := reader.ActiveSupplySnapshot(ctx)
 	if err != nil {
 		t.Fatalf("ActiveSupplySnapshot missing: %v", err)
@@ -81,7 +71,6 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	); err != nil {
 		t.Fatalf("activate non-empty release: %v", err)
 	}
-	now := time.Now().UTC()
 	if _, err := posts.InsertOne(ctx, bson.M{
 		"_id": contentID, "sourceOwner": "qwq_data", "releaseId": releaseID,
 		"manifestDigest":  manifestDigest,
@@ -99,14 +88,6 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}); err != nil {
 		t.Fatalf("seed active release discovery projection: %v", err)
 	}
-	if _, err := premium.InsertOne(ctx, bson.M{
-		"contentId": contentID, "scope": "global", "status": "active",
-		"eligibilityState": "eligible", "qualityAdmission": "approved",
-		"qualityScore": 0.95, "expiresAt": now.Add(time.Hour), "takedownEjected": false,
-	}); err != nil {
-		t.Fatalf("seed active release premium projection: %v", err)
-	}
-
 	snapshot, err = reader.ActiveSupplySnapshot(ctx)
 	if err != nil {
 		t.Fatalf("ActiveSupplySnapshot active: %v", err)
@@ -117,7 +98,7 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
 		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
 		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 ||
-		snapshot.DiscoveryPosts != 1 || snapshot.PremiumPlayableVideos != 1 {
+		snapshot.DiscoveryPosts != 1 || snapshot.PlayableVideos != 1 {
 		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
 	}
 }

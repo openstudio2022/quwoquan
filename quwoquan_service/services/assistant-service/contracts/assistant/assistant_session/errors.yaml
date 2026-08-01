@@ -1,0 +1,82 @@
+domain: ASSISTANT
+aggregate: AssistantSession
+description: 'AssistantSession 聚合错误码。格式：MODULE.KIND.REASON。
+
+  覆盖 AssistantSession 创建、归属校验与幂等重放冲突。
+
+  '
+errors:
+- code: ASSISTANT.USER.session_unauthorized
+  kind: USER
+  reason: session_unauthorized
+  http_status: 401
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantSession, GetAssistantSession, ListAssistantSessions]
+  recovery_action: surface
+  dart_const: sessionUnauthorized
+  go_const: ErrSessionUnauthorized
+  l10n_key: assistant.error.session_unauthorized
+  user_message:
+    zh: 请先登录后使用助手会话
+    en: Please sign in to use assistant sessions
+- code: ASSISTANT.USER.session_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  emitted_by:
+  - surface: http
+    operations:
+    - GetAssistantSession
+    - assistant.assistant_turn_view.ListSessionTurns
+    - assistant.assistant_run.StartAssistantRun
+  recovery_action: surface
+  dart_const: sessionNotFound
+  go_const: ErrSessionNotFound
+  l10n_key: assistant.error.session_not_found
+  user_message:
+    zh: 小趣 Session 不存在或已失效
+    en: Assistant session not found or expired
+- code: ASSISTANT.USER.session_invalid_argument
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantSession, ListAssistantSessions]
+  recovery_action: surface
+  dart_const: sessionInvalidArgument
+  go_const: ErrSessionInvalidArgument
+  l10n_key: assistant.error.session_invalid_argument
+  user_message:
+    zh: 小趣 Session 请求参数有误
+    en: Assistant session request is invalid
+- code: ASSISTANT.USER.session_idempotency_conflict
+  kind: USER
+  reason: idempotency_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantSession]
+  recovery_action: refresh
+  dart_const: sessionIdempotencyConflict
+  go_const: ErrSessionIdempotencyConflict
+  l10n_key: assistant.error.session_idempotency_conflict
+  user_message:
+    zh: 请求重复提交，请刷新后重试
+    en: Duplicate request, please refresh and retry
+- code: ASSISTANT.SYSTEM.session_storage_unavailable
+  kind: SYSTEM
+  reason: unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantSession, ListAssistantSessions, GetAssistantSession]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: sessionStorageUnavailable
+  go_const: ErrSessionStorageUnavailable
+  l10n_key: assistant.error.session_storage_unavailable
+  user_message:
+    zh: 小趣 Session 服务暂不可用，请稍后重试
+    en: Assistant session service is temporarily unavailable

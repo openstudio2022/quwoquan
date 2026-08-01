@@ -14,8 +14,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	confighttp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
-	configapp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer"
+	confighttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
+	configapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer"
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"

@@ -66,7 +66,7 @@ Map<String, dynamic> _assistantMessage({
       : buildProcessTimelineFramesFromJourneyFallback(effectiveJourney);
   return <String, dynamic>{
     'id': id,
-    'conversationId': AppConceptConstants.assistantConversationId,
+    'sessionId': 'asn_assistant_message_bubble_regression',
     'type': 'text',
     'content': content,
     'senderId': AppConceptConstants.assistantSenderId,
@@ -114,7 +114,7 @@ Map<String, dynamic> _journeyPayload({
     'readiness': <String, dynamic>{
       'nextAction': 'answer',
       'finalAnswerMode': 'full',
-      'answerEligibility': finalAnswerReady ? 'eligible' : 'draft',
+      'answerEligibility': finalAnswerReady ? 'eligible' : 'unknown',
       'finalAnswerReady': finalAnswerReady,
     },
   };

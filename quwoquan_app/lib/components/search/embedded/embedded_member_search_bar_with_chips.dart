@@ -33,7 +33,8 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chipSize = SearchSemanticConstants.embeddedMemberSearchChipAvatarSize;
-    final rowMinH = SearchSemanticConstants.embeddedMemberSearchChipsRowMinHeight;
+    final rowMinH =
+        SearchSemanticConstants.embeddedMemberSearchChipsRowMinHeight;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -65,10 +66,10 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
             builder: (context, constraints) {
               final maxW = constraints.maxWidth;
               return AnimatedSize(
-                duration:
-                    SearchSemanticConstants.embeddedMemberSearchChipsLayoutDuration,
-                curve:
-                    SearchSemanticConstants.embeddedMemberSearchChipsLayoutCurve,
+                duration: SearchSemanticConstants
+                    .embeddedMemberSearchChipsLayoutDuration,
+                curve: SearchSemanticConstants
+                    .embeddedMemberSearchChipsLayoutCurve,
                 alignment: Alignment.topLeft,
                 child: _ChipsInlineSearchLayout(
                   maxWidth: maxW,
@@ -78,9 +79,9 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
                   selectedMembers: selectedMembers,
                   onSelectedMemberTap: onSelectedMemberTap,
                   input: CupertinoTheme(
-                    data: CupertinoTheme.of(context).copyWith(
-                      primaryColor: AppColors.iosAccent(context),
-                    ),
+                    data: CupertinoTheme.of(
+                      context,
+                    ).copyWith(primaryColor: AppColors.iosAccent(context)),
                     child: CupertinoTextField(
                       controller: controller,
                       focusNode: focusNode,
@@ -88,8 +89,10 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
                       onChanged: onChanged,
                       autocorrect: false,
                       style: SearchSemanticConstants.inputTextStyle(context),
-                      placeholderStyle: SearchSemanticConstants
-                          .embeddedMemberSearchChipsPlaceholderStyle(context),
+                      placeholderStyle:
+                          SearchSemanticConstants.embeddedMemberSearchChipsPlaceholderStyle(
+                            context,
+                          ),
                       padding: EdgeInsets.fromLTRB(
                         AppSpacing.two,
                         AppSpacing.sm,
@@ -181,21 +184,11 @@ class _ChipsInlineSearchLayout extends StatelessWidget {
 
     if (remainingOnLine >= inputMin) {
       line.add(
-        SizedBox(
-          width: remainingOnLine,
-          height: rowMinHeight,
-          child: input,
-        ),
+        SizedBox(width: remainingOnLine, height: rowMinHeight, child: input),
       );
     } else {
       commitLine();
-      line.add(
-        SizedBox(
-          width: maxWidth,
-          height: rowMinHeight,
-          child: input,
-        ),
-      );
+      line.add(SizedBox(width: maxWidth, height: rowMinHeight, child: input));
     }
     commitLine();
 

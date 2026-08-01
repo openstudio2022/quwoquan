@@ -7,7 +7,7 @@ errors:
   reason: unauthorized
   http_status: 401
   emitted_by:
-  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
+  - {surface: http, operations: [StageRecommendationModelRelease, ActivateRecommendationModelRelease, ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: unauthorized
   go_const: ErrUnauthorized
@@ -19,7 +19,7 @@ errors:
   reason: forbidden
   http_status: 403
   emitted_by:
-  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
+  - {surface: http, operations: [StageRecommendationModelRelease, ActivateRecommendationModelRelease, ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: forbidden
   go_const: ErrForbidden
@@ -31,13 +31,38 @@ errors:
   reason: invalid_argument
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
+  - {surface: http, operations: [StageRecommendationModelRelease, ActivateRecommendationModelRelease, ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 评分请求参数无效
     en: Invalid scoring request
+- code: RECOMMENDATION.USER.model_release_conflict
+  kind: USER
+  reason: model_release_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [StageRecommendationModelRelease, ActivateRecommendationModelRelease]}
+  recovery_action: refresh
+  dart_const: modelReleaseConflict
+  go_const: ErrModelReleaseConflict
+  user_message:
+    zh: 模型发布状态已变化，请刷新后重试
+    en: Model release state changed; refresh and retry
+- code: RECOMMENDATION.SYSTEM.model_registry_write_failed
+  kind: SYSTEM
+  reason: model_registry_write_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [StageRecommendationModelRelease, ActivateRecommendationModelRelease]}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  dart_const: modelRegistryWriteFailed
+  go_const: ErrModelRegistryWriteFailed
+  user_message:
+    zh: 模型发布暂时不可用
+    en: Model release is temporarily unavailable
 - code: RECOMMENDATION.SYSTEM.scoring_failed
   kind: SYSTEM
   reason: scoring_failed

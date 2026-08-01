@@ -9,8 +9,8 @@ class AssistantStreamEventWire {
   const AssistantStreamEventWire({
     required this.schema,
     required this.eventId,
-    required this.conversationId,
-    required this.turnId,
+    required this.sessionId,
+    required this.runId,
     required this.seq,
     required this.eventType,
     this.traceId = "",
@@ -21,8 +21,8 @@ class AssistantStreamEventWire {
 
   final String schema;
   final String eventId;
-  final String conversationId;
-  final String turnId;
+  final String sessionId;
+  final String runId;
   final int seq;
   final AssistantStreamEventType eventType;
   final String traceId;
@@ -33,8 +33,8 @@ class AssistantStreamEventWire {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'schema': schema,
         'eventId': eventId,
-        'conversationId': conversationId,
-        'turnId': turnId,
+        'sessionId': sessionId,
+        'runId': runId,
         'seq': seq,
         'eventType': eventType.wireName,
         'traceId': traceId,
@@ -47,8 +47,8 @@ class AssistantStreamEventWire {
     return AssistantStreamEventWire(
       schema: (json['schema'] as String?)?.trim() ?? "",
       eventId: (json['eventId'] as String?)?.trim() ?? "",
-      conversationId: (json['conversationId'] as String?)?.trim() ?? "",
-      turnId: (json['turnId'] as String?)?.trim() ?? "",
+      sessionId: (json['sessionId'] as String?)?.trim() ?? "",
+      runId: (json['runId'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       eventType: parseAssistantStreamEventTypeStrict((json['eventType'] as String?)?.trim() ?? ''),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
@@ -63,8 +63,8 @@ class AssistantStreamEventWire {
 class AssistantStreamEventWireFields {
   static const String schema = 'schema';
   static const String eventId = 'eventId';
-  static const String conversationId = 'conversationId';
-  static const String turnId = 'turnId';
+  static const String sessionId = 'sessionId';
+  static const String runId = 'runId';
   static const String seq = 'seq';
   static const String eventType = 'eventType';
   static const String traceId = 'traceId';

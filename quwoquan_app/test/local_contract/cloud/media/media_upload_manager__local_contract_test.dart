@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,30 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../support/recording_content_media_facet.dart';
 
 void main() {
+  test('retry 只使用有界全抖动，不存在确定性指数延迟', () {
+    expect(
+      mediaUploadFullJitterDelay(
+        retryCount: 1,
+        random: _BoundaryRandom(useUpperBound: false),
+      ),
+      Duration.zero,
+    );
+    expect(
+      mediaUploadFullJitterDelay(
+        retryCount: 1,
+        random: _BoundaryRandom(useUpperBound: true),
+      ),
+      const Duration(seconds: 1),
+    );
+    expect(
+      mediaUploadFullJitterDelay(
+        retryCount: 99,
+        random: _BoundaryRandom(useUpperBound: true),
+      ),
+      const Duration(seconds: 32),
+    );
+  });
+
   group('MediaUploadManager typed Media Facet', () {
     test('Chat 复用 MediaUploadSession 聚合与统一数据面', () async {
       final tempDir = Directory.systemTemp.createTempSync('qwq-chat-upload-');
@@ -35,12 +60,12 @@ void main() {
               uri,
               body, {
               required contentLength,
-              required contentType,
+              required mimeType,
               required expectedSha256,
               Future<void>? abortTrigger,
             }) async {
               uploadedUri = uri;
-              uploadedContentType = contentType;
+              uploadedContentType = mimeType;
               final collected = <int>[];
               await for (final chunk in body) {
                 collected.addAll(chunk);
@@ -54,7 +79,7 @@ void main() {
       final task = UploadTask(
         localPath: filePath,
         category: MediaCategory.chatVideo,
-        contentType: 'video/mp4',
+        mimeType: 'video/mp4',
         fileSize: bytes.length,
       );
       final completed = Completer<UploadTask>();
@@ -72,7 +97,7 @@ void main() {
 
       final init = media.initCommands.single;
       expect(init.mediaType, ContentMediaType.video);
-      expect(init.contentType, 'video/mp4');
+      expect(init.mimeType, 'video/mp4');
       expect(init.fileSize, bytes.length);
       expect(init.expectedSha256, '${sha256.convert(bytes)}');
       expect(media.completedSessions, <String>['session_1']);
@@ -98,7 +123,7 @@ void main() {
               _,
               _, {
               required contentLength,
-              required contentType,
+              required mimeType,
               required expectedSha256,
               Future<void>? abortTrigger,
             }) async {
@@ -120,7 +145,7 @@ void main() {
         UploadTask(
           localPath: filePath,
           category: MediaCategory.chatVideo,
-          contentType: 'video/mp4',
+          mimeType: 'video/mp4',
           fileSize: 4,
         ),
       );
@@ -143,7 +168,7 @@ void main() {
               _,
               _, {
               required contentLength,
-              required contentType,
+              required mimeType,
               required expectedSha256,
               Future<void>? abortTrigger,
             }) async {},
@@ -156,7 +181,7 @@ void main() {
           UploadTask(
             localPath: '/tmp/closed.jpg',
             category: MediaCategory.chatImage,
-            contentType: 'image/jpeg',
+            mimeType: 'image/jpeg',
             fileSize: 4,
           ),
         ),
@@ -166,4 +191,19 @@ void main() {
       expect(manager.activeCount, 0);
     });
   });
+}
+
+final class _BoundaryRandom implements Random {
+  const _BoundaryRandom({required this.useUpperBound});
+
+  final bool useUpperBound;
+
+  @override
+  bool nextBool() => useUpperBound;
+
+  @override
+  double nextDouble() => useUpperBound ? 0.999999 : 0;
+
+  @override
+  int nextInt(int max) => useUpperBound ? max - 1 : 0;
 }

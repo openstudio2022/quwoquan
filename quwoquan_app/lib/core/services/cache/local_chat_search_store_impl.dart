@@ -11,7 +11,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
 
   static final LocalChatSearchStore shared = LocalChatSearchStore();
   static bool _ffiInitialized = false;
-  static const int _schemaVersion = 1;
+  static const int _schemaVersion = 2;
 
   final String? _databasePath;
   final DatabaseFactory? _databaseFactory;
@@ -235,6 +235,59 @@ class LocalChatSearchStore implements LocalChatSearchReader {
         )
         .where((item) => item.id.isNotEmpty)
         .toList(growable: false);
+  }
+
+  @override
+  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+    required LocalSearchNamespace namespace,
+    required String conversationId,
+    int beforeSeq = 0,
+    int limit = 50,
+  }) async {
+    final normalizedConversationId = conversationId.trim();
+    if (normalizedConversationId.isEmpty || limit <= 0) {
+      return const CacheReadResult<List<MessageDto>>(
+        value: <MessageDto>[],
+        source: CacheReadSource.disk,
+        freshness: CacheFreshness.unknown,
+        syncState: CacheSyncState.idle,
+        cacheClass: CacheClass.recent,
+        diagnostics: CacheDiagnostics(hitLayer: 'disk'),
+      );
+    }
+    final database = await _database;
+    final where = StringBuffer(
+      'namespace_key = ? AND conversation_id = ? AND seq > 0',
+    );
+    final whereArgs = <Object?>[namespace.key, normalizedConversationId];
+    if (beforeSeq > 0) {
+      where.write(' AND seq < ?');
+      whereArgs.add(beforeSeq);
+    }
+    final rows = await database.query(
+      'chat_messages',
+      columns: const <String>['payload_json'],
+      where: where.toString(),
+      whereArgs: whereArgs,
+      orderBy: 'seq DESC',
+      limit: limit,
+    );
+    final messages = rows
+        .map((row) => _decodePayload(row['payload_json']))
+        .map(LocalChatSearchMessageRecord.fromProjectionMap)
+        .map((record) => record.toMessageDto())
+        .toList(growable: false)
+        .reversed
+        .toList(growable: false);
+    return CacheReadResult<List<MessageDto>>(
+      value: messages,
+      source: CacheReadSource.disk,
+      freshness: CacheFreshness.unknown,
+      syncState: CacheSyncState.idle,
+      cacheClass: CacheClass.recent,
+      objectVersion: messages.isEmpty ? null : messages.last.seq.toString(),
+      diagnostics: const CacheDiagnostics(hitLayer: 'disk'),
+    );
   }
 
   @override
@@ -785,10 +838,39 @@ class LocalChatSearchStore implements LocalChatSearchReader {
         options: OpenDatabaseOptions(
           version: _schemaVersion,
           onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
         ),
       );
     }
-    return openDatabase(path, version: _schemaVersion, onCreate: _onCreate);
+    return openDatabase(
+      path,
+      version: _schemaVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<void> _onUpgrade(
+    Database database,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion >= newVersion) return;
+    // 搜索/时间线库是可重建投影。shape 变化时清除旧 schema，禁止长期双读。
+    const tables = <String>[
+      'chat_contacts_fts',
+      'chat_messages_fts',
+      'chat_conversations_fts',
+      'chat_sync_state',
+      'chat_messages',
+      'chat_conversations',
+      'chat_contacts',
+      'search_namespaces',
+    ];
+    for (final table in tables) {
+      await database.execute('DROP TABLE IF EXISTS $table');
+    }
+    await _onCreate(database, newVersion);
   }
 
   Future<String> _resolveDatabasePath() async {

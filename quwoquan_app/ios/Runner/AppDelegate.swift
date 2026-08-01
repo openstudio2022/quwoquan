@@ -4,6 +4,7 @@ import CoreTelephony
 import CoreGraphics
 import CoreLocation
 import CryptoKit
+import EventKit
 import Foundation
 import Flutter
 import MetricKit
@@ -459,6 +460,7 @@ private final class RecoveryFailureEncryptedStore {
   private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
+  private let assistantDeviceActionPlugin = AssistantDeviceActionPlugin()
   private let commercialAuthPlugin = CommercialAuthPlugin()
   private let aliyunOneTapPlugin = AliyunOneTapPlugin()
   let incomingCallPushCoordinator = IncomingCallPushCoordinator()
@@ -614,6 +616,29 @@ private final class RecoveryFailureEncryptedStore {
       registerStartupTimingsChannel(binaryMessenger: binaryMessenger)
     }
 
+    let runtimeConfigChannel = FlutterMethodChannel(
+      name: "quwoquan/runtime/config",
+      binaryMessenger: binaryMessenger
+    )
+    runtimeConfigChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "readRuntimeConfig" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let rawValues = self?.nativeRuntimeManifest["runtimeDefines"]
+              as? [String: Any]
+      else {
+        result([String: String]())
+        return
+      }
+      let values = rawValues.reduce(into: [String: String]()) { output, entry in
+        if let value = entry.value as? String, !value.isEmpty {
+          output[entry.key] = value
+        }
+      }
+      result(values)
+    }
+
     let videoEditingChannel = FlutterMethodChannel(
       name: "quwoquan/video_editing",
       binaryMessenger: binaryMessenger
@@ -628,6 +653,14 @@ private final class RecoveryFailureEncryptedStore {
     )
     assistantChannel.setMethodCallHandler { [weak self] call, result in
       self?.personalAssistantNativeApiPlugin.handle(call: call, result: result)
+    }
+
+    let assistantDeviceActionChannel = FlutterMethodChannel(
+      name: "quwoquan/assistant/device_action",
+      binaryMessenger: binaryMessenger
+    )
+    assistantDeviceActionChannel.setMethodCallHandler { [weak self] call, result in
+      self?.assistantDeviceActionPlugin.handle(call: call, result: result)
     }
 
     let nativeAuthChannel = FlutterMethodChannel(
@@ -1877,6 +1910,136 @@ private enum StartupTransitionBackground {
     blue: 1.0,
     alpha: 1
   )
+}
+
+final class AssistantDeviceActionPlugin {
+  private static let idempotencyPrefix = "qwq.assistant.calendar."
+  let eventStore: EKEventStore
+
+  init(eventStore: EKEventStore = EKEventStore()) {
+    self.eventStore = eventStore
+  }
+
+  func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "createCalendarReminder" else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    guard let request = CalendarReminderRequest(call.arguments) else {
+      result(response(status: "failed"))
+      return
+    }
+    let preferenceKey = Self.idempotencyPrefix + request.idempotencyKey
+    if let existing = UserDefaults.standard.string(forKey: preferenceKey),
+       eventStore.event(withIdentifier: existing) != nil
+    {
+      result(response(status: "created", objectId: existing))
+      return
+    }
+    requestCalendarAccess { [weak self] granted in
+      guard let self else {
+        result(["status": "failed", "deviceObjectId": ""])
+        return
+      }
+      guard granted else {
+        result(self.response(status: "denied"))
+        return
+      }
+      guard let calendar = self.eventStore.defaultCalendarForNewEvents else {
+        result(self.response(status: "unavailable"))
+        return
+      }
+      let event = EKEvent(eventStore: self.eventStore)
+      event.calendar = calendar
+      event.title = request.title
+      event.notes = request.notes
+      event.startDate = request.startsAt
+      event.endDate = request.startsAt.addingTimeInterval(
+        TimeInterval(request.durationMinutes * 60)
+      )
+      event.addAlarm(
+        EKAlarm(relativeOffset: TimeInterval(-request.reminderMinutes * 60))
+      )
+      do {
+        try self.eventStore.save(event, span: .thisEvent, commit: true)
+        let identifier = event.eventIdentifier ?? ""
+        guard !identifier.isEmpty else {
+          result(self.response(status: "failed"))
+          return
+        }
+        UserDefaults.standard.set(identifier, forKey: preferenceKey)
+        result(self.response(status: "created", objectId: identifier))
+      } catch {
+        result(self.response(status: "failed"))
+      }
+    }
+  }
+
+  private func requestCalendarAccess(
+    completion: @escaping (Bool) -> Void
+  ) {
+    if #available(iOS 17.0, *) {
+      eventStore.requestFullAccessToEvents { granted, _ in
+        DispatchQueue.main.async { completion(granted) }
+      }
+    } else {
+      eventStore.requestAccess(to: .event) { granted, _ in
+        DispatchQueue.main.async { completion(granted) }
+      }
+    }
+  }
+
+  private func response(
+    status: String,
+    objectId: String = ""
+  ) -> [String: Any] {
+    [
+      "status": status,
+      "deviceObjectId": objectId,
+    ]
+  }
+}
+
+struct CalendarReminderRequest {
+  init?(_ rawArguments: Any?) {
+    guard let arguments = rawArguments as? [String: Any],
+          let idempotencyKey = arguments["idempotencyKey"] as? String,
+          !idempotencyKey.isEmpty,
+          idempotencyKey.count <= 128,
+          let title = arguments["title"] as? String,
+          !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          title.count <= 200,
+          let startsAtEpochMs = arguments["startsAtEpochMs"] as? NSNumber,
+          startsAtEpochMs.int64Value > 0
+    else {
+      return nil
+    }
+    self.idempotencyKey = idempotencyKey
+    self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    startsAt = Date(
+      timeIntervalSince1970: TimeInterval(startsAtEpochMs.int64Value) / 1000
+    )
+    durationMinutes = min(
+      max((arguments["durationMinutes"] as? NSNumber)?.intValue ?? 60, 1),
+      1440
+    )
+    reminderMinutes = min(
+      max((arguments["reminderMinutes"] as? NSNumber)?.intValue ?? 10, 0),
+      10080
+    )
+    notes = String(
+      ((arguments["notes"] as? String) ?? "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .prefix(2000)
+    )
+  }
+
+  let idempotencyKey: String
+  let title: String
+  let startsAt: Date
+  let durationMinutes: Int
+  let reminderMinutes: Int
+  let notes: String
 }
 
 private final class PersonalAssistantNativeApiPlugin {

@@ -15,7 +15,7 @@ events:
   - triggerMessageId
   - referralSource
   - traceId
-  - sessionId
+  - clientSessionId
   - pageVisitId
   - pageId
   - surfaceId

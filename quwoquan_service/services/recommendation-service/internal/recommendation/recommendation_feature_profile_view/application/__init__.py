@@ -1,0 +1,1 @@
+"""RecommendationFeatureProfileView projection boundary."""

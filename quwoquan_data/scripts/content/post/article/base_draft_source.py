@@ -99,6 +99,32 @@ def _first_heading_title(body: str) -> str:
             return heading.group(1).strip()
     return ""
 
+
+def _first_document_title_line(body: str) -> str:
+    """Use the first non-heading prose line when markdown headings are too short.
+
+    Qunar scrapes often put the usable page title on line 1 and a short
+    ``# 1日游`` heading later; prefer that document title over the short heading.
+    """
+    for line in (body or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.match(r"^#{1,4}\s+", stripped):
+            continue
+        return stripped
+    return ""
+
+
+def _usable_source_title(raw: str, *, source_id: str) -> str:
+    candidate = _clean_source_title(raw)
+    if _looks_like_source_id(candidate, source_id=source_id):
+        return ""
+    if len(re.sub(r"\s+", "", candidate)) < SOURCE_TITLE_MIN_CHARS:
+        return ""
+    return candidate
+
+
 def extract_source_title(execution_id: str, base_source_ref: str | None) -> str:
     """从单一底稿（来源单元）派生发布标题：meta.title → 正文首标题，剥平台痕迹 + 长度约束。
 
@@ -108,16 +134,11 @@ def extract_source_title(execution_id: str, base_source_ref: str | None) -> str:
         return ""
     meta = base_source_unit_meta(execution_id, base_source_ref)
     source_id = str(meta.get("sourceId") or "").strip()
-    candidate = _clean_source_title(str(meta.get("title") or ""))
-    if not _looks_like_source_id(candidate, source_id=source_id) and len(
-        re.sub(r"\s+", "", candidate)
-    ) >= SOURCE_TITLE_MIN_CHARS:
+    candidate = _usable_source_title(str(meta.get("title") or ""), source_id=source_id)
+    if candidate:
         return candidate
-    # 回退：底稿正文首个 markdown 标题。
     body = load_base_draft_text(execution_id, base_source_ref)
-    heading = _clean_source_title(_first_heading_title(body))
-    if not _looks_like_source_id(heading, source_id=source_id) and len(
-        re.sub(r"\s+", "", heading)
-    ) >= SOURCE_TITLE_MIN_CHARS:
+    heading = _usable_source_title(_first_heading_title(body), source_id=source_id)
+    if heading:
         return heading
-    return ""
+    return _usable_source_title(_first_document_title_line(body), source_id=source_id)

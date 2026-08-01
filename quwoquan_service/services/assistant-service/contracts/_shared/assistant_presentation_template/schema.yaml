@@ -1,0 +1,26 @@
+dart_class: AssistantPresentationTemplateWire
+library_path: assistant/generated/contracts/assistant_presentation_template.g.dart
+output_path: assistant/generated/contracts/assistant_presentation_template.g.dart
+contract: assistant_presentation_template
+kind: shared_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart
+fields:
+  - { name: templateId, type: string, required: true }
+  - { name: skillId, type: string, required: true }
+  - { name: inputSchema, type: map, required: true }
+  - { name: rootNodeId, type: string, required: true }
+  - { name: nodes, type: list<object>, ref: AssistantPresentationNodeWire, default: [] }
+  - { name: responsiveVariants, type: list<object>, ref: responsive_variant, default: [] }
+  - { name: allowedActionIntents, type: list<string>, default: [] }
+  - { name: fallbackMarkdown, type: string, required: true }
+  - { name: accessibility, type: map, default: {} }
+  - { name: assetDigest, type: string, required: true }
+subcontracts:
+  responsive_variant:
+    class_name: AssistantPresentationResponsiveVariantWire
+    fields:
+      - { name: variantId, type: string, required: true }
+      - { name: requiredNodeKinds, type: list<string>, default: [] }
+      - { name: viewportClass, type: string, default: any }
+      - { name: density, type: enum, enum_ref: AssistantPresentationDensity, default: standard }

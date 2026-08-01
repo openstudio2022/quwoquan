@@ -15,6 +15,8 @@ import (
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
+	deliverymessaging "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/messaging"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
@@ -52,6 +54,7 @@ type contentHTTPHandlerInput struct {
 	activeSupplyReader        feedapp.ActiveSupplyReader
 	feedCursorCodec           *feedapp.FeedCursorCodec
 	feedRuntimeConfig         feedRuntimeConfig
+	rankedRecommendation      deliveryapp.RankedRecommendationGateway
 	viewerBlockReader         *recinfra.PersonaBlockReader
 	reactionStore             *persistence.MongoContentReactionStore
 	reactionService           *reactionapp.Service
@@ -93,6 +96,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	postQueryReader := input.postQueryReader
 	activeSupplyReader := input.activeSupplyReader
 	feedCursorCodec := input.feedCursorCodec
+	rankedRecommendation := input.rankedRecommendation
 	viewerBlockReader := input.viewerBlockReader
 	reactionStore := input.reactionStore
 	reactionServiceCore := input.reactionService
@@ -142,16 +146,25 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	if feedCursorCodec == nil {
 		log.Fatal("content-service feed cursor codec is not configured")
 	}
+	if rankedRecommendation == nil {
+		log.Fatal("content-service ranked recommendation gateway is not configured")
+	}
 	feedServiceOpts = append(
 		feedServiceOpts,
 		feedapp.WithActiveSupplyReader(activeSupplyReader),
 		feedapp.WithFeedCursorCodec(feedCursorCodec),
+		feedapp.WithRankedRecommendationGateway(rankedRecommendation),
 		feedapp.WithFeedDeliveryPageStore(
 			deliveryredis.NewStore(
 				router.Scene("rec"),
 				deliveryredis.WithQuotaPolicy(
 					input.feedRuntimeConfig.deliveryPageQuotaPolicy(),
 				),
+			),
+		),
+		feedapp.WithFeedPageDeliveredPublisher(
+			deliverymessaging.NewFeedPageDeliveredPublisher(
+				router.Scene("general"),
 			),
 		),
 	)

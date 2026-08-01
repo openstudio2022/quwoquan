@@ -8,32 +8,20 @@ import (
 	"quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/application/importmanifest"
 )
 
-func TestSeedManifestImportsOnlyExplicitRefs(t *testing.T) {
+func TestImmutableReleaseManifestImportsFlatObjectTagIndex(t *testing.T) {
 	t.Parallel()
 
 	raw := []byte(`{
-		"seedSets": {
-			"declared": {
-				"tag_nodes": [{"tagRef": "Topic/摄影"}],
-				"object_tag_index": [{
-					"objectId": "user-1",
-					"objectType": "user",
-					"tagRefs": ["Topic/旅行", "Topic/摄影", "Topic/摄影"]
-				}]
-			},
-			"undeclared": {
-				"object_tag_index": [{
-					"objectId": "user-2",
-					"objectType": "user",
-					"tagRefs": ["Topic/旅行"]
-				}]
-			}
-		}
+		"object_tag_index": [{
+			"objectId": "user-1",
+			"objectType": "user",
+			"tagRefs": ["Topic/旅行", "Topic/摄影", "Topic/摄影"]
+		}]
 	}`)
 
-	entries, err := importmanifest.Decode(raw, []string{"declared"})
+	entries, err := importmanifest.Decode(raw)
 	if err != nil {
-		t.Fatalf("decode declared seed ref: %v", err)
+		t.Fatalf("decode immutable release manifest: %v", err)
 	}
 	if len(entries) != 1 || entries[0].ObjectID != "user-1" {
 		t.Fatalf("unexpected selected entries: %+v", entries)
@@ -48,7 +36,7 @@ func TestSeedManifestImportsOnlyExplicitRefs(t *testing.T) {
 	}
 }
 
-func TestSeedManifestRequiresExplicitExistingRefs(t *testing.T) {
+func TestEnvironmentSeedManifestIsRejected(t *testing.T) {
 	t.Parallel()
 
 	raw := []byte(`{
@@ -63,13 +51,9 @@ func TestSeedManifestRequiresExplicitExistingRefs(t *testing.T) {
 		}
 	}`)
 
-	if _, err := importmanifest.Decode(raw, nil); err == nil ||
-		!strings.Contains(err.Error(), "requires explicit seed refs") {
-		t.Fatalf("missing seed refs must fail closed, got %v", err)
-	}
-	if _, err := importmanifest.Decode(raw, []string{"missing"}); err == nil ||
-		!strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("unknown seed ref must fail closed, got %v", err)
+	if _, err := importmanifest.Decode(raw); err == nil ||
+		!strings.Contains(err.Error(), "no importable entries") {
+		t.Fatalf("environment seed manifest must fail closed, got %v", err)
 	}
 }
 
@@ -80,7 +64,7 @@ func TestObjectTagManifestRejectsInvalidOrDuplicateIdentity(t *testing.T) {
 		{"objectId":"same","objectType":"user","tagRefs":["Topic/摄影"]},
 		{"objectId":"same","objectType":"user","tagRefs":["Topic/旅行"]}
 	]`)
-	if _, err := importmanifest.Decode(duplicate, nil); err == nil ||
+	if _, err := importmanifest.Decode(duplicate); err == nil ||
 		!strings.Contains(err.Error(), "is duplicated") {
 		t.Fatalf("duplicate identity must fail, got %v", err)
 	}
@@ -88,7 +72,7 @@ func TestObjectTagManifestRejectsInvalidOrDuplicateIdentity(t *testing.T) {
 	unsupported := []byte(`[
 		{"objectId":"same","objectType":"unknown","tagRefs":["Topic/摄影"]}
 	]`)
-	if _, err := importmanifest.Decode(unsupported, nil); err == nil ||
+	if _, err := importmanifest.Decode(unsupported); err == nil ||
 		!strings.Contains(err.Error(), "unsupported objectType") {
 		t.Fatalf("unsupported object type must fail, got %v", err)
 	}
@@ -96,7 +80,7 @@ func TestObjectTagManifestRejectsInvalidOrDuplicateIdentity(t *testing.T) {
 	invalidTag := []byte(`[
 		{"objectId":"same","objectType":"user","tagRefs":["legacy-interest"]}
 	]`)
-	if _, err := importmanifest.Decode(invalidTag, nil); err == nil ||
+	if _, err := importmanifest.Decode(invalidTag); err == nil ||
 		!strings.Contains(err.Error(), "outside the canonical taxonomy") {
 		t.Fatalf("invalid tag ref must fail, got %v", err)
 	}

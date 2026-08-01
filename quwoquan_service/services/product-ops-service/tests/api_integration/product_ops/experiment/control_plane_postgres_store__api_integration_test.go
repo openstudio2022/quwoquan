@@ -16,6 +16,7 @@ import (
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
+	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
 )
 
 func TestPostgresControlPlaneStorePersistsAndIsolatesScopes(t *testing.T) {
@@ -119,13 +120,12 @@ func TestExperimentAggregateAndAssignmentUseAtomicPostgresOutbox(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	_, err = controlPlanePGPool.Exec(ctx, `
 INSERT INTO experiments(
-  id, key, version, status, variants, audience_rule, allocation_seed, created_at, updated_at
-) VALUES ($1,$2,1,'running',$3,$4,$5,$6,$6)`,
+  id, key, version, status, variants, audience_rule, created_at, updated_at
+) VALUES ($1,$2,1,'running',$3,$4,$5,$5)`,
 		experimentID,
 		experimentID,
 		`[{"key":"control","allocationBasisPoints":2500},{"key":"treatment","allocationBasisPoints":7500}]`,
 		`{"kind":"all"}`,
-		"integration-seed",
 		now,
 	)
 	if err != nil {
@@ -136,11 +136,23 @@ INSERT INTO experiments(
 		t.Fatalf("build experiment facade: %v", err)
 	}
 
-	first, inserted, err := facade.Assign(ctx, experimentID, "persona-1")
-	if err != nil || !inserted {
-		t.Fatalf("assign experiment: inserted=%v fact=%+v err=%v", inserted, first, err)
+	experiment, err := facade.Get(ctx, experimentID)
+	if err != nil {
+		t.Fatalf("load experiment for observed assignment: %v", err)
 	}
-	replayed, inserted, err := facade.Assign(ctx, experimentID, "persona-1")
+	expected, err := experiment.Assign("persona-1", now)
+	if err != nil {
+		t.Fatalf("derive canonical assignment: %v", err)
+	}
+	observation := assignmentapp.AssignmentObservation{
+		ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
+		SubjectKey: expected.SubjectKey, Variant: expected.Variant, ObservedAt: now,
+	}
+	first, inserted, err := facade.AssignmentFacts().AppendObserved(ctx, observation)
+	if err != nil || !inserted {
+		t.Fatalf("append observed assignment: inserted=%v fact=%+v err=%v", inserted, first, err)
+	}
+	replayed, inserted, err := facade.AssignmentFacts().AppendObserved(ctx, observation)
 	if err != nil || inserted || replayed.ID != first.ID || replayed.AssignedAt != first.AssignedAt {
 		t.Fatalf("replay assignment: inserted=%v first=%+v replay=%+v err=%v", inserted, first, replayed, err)
 	}
@@ -158,6 +170,22 @@ INSERT INTO experiments(
 	)
 	if err != nil || receipt.Version != 2 || receipt.Replayed {
 		t.Fatalf("commit rollout: receipt=%+v err=%v", receipt, err)
+	}
+	lateObservedAt := now.Add(time.Second)
+	lateExpected, err := experiment.Assign("persona-late", lateObservedAt)
+	if err != nil {
+		t.Fatalf("derive delayed revision assignment: %v", err)
+	}
+	lateFact, inserted, err := facade.AssignmentFacts().AppendObserved(
+		ctx,
+		assignmentapp.AssignmentObservation{
+			ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
+			SubjectKey: lateExpected.SubjectKey, Variant: lateExpected.Variant,
+			ObservedAt: lateObservedAt,
+		},
+	)
+	if err != nil || !inserted || lateFact.ExperimentRevision != 1 {
+		t.Fatalf("append delayed revision assignment: inserted=%v fact=%+v err=%v", inserted, lateFact, err)
 	}
 	replayedReceipt, err := facade.UpdateRollout(
 		ctx,
@@ -204,7 +232,7 @@ SELECT COUNT(*) FROM experiment_assignment_facts WHERE experiment_id=$1`, experi
 SELECT COUNT(*) FROM product_ops_outbox WHERE aggregate_id IN ($1,$2)`, experimentID, first.ID).Scan(&outboxCount); err != nil {
 		t.Fatalf("count outbox events: %v", err)
 	}
-	if factCount != 1 || outboxCount != 1 {
+	if factCount != 2 || outboxCount != 1 {
 		t.Fatalf("atomic persistence mismatch: facts=%d outbox=%d", factCount, outboxCount)
 	}
 	publisher := &captureOutboxPublisher{}
@@ -244,7 +272,7 @@ func TestProductOpsOutboxFailureReleasesLeaseAndSchedulesRetry(t *testing.T) {
 	_, err = controlPlanePGPool.Exec(ctx, `
 INSERT INTO product_ops_outbox(
   event_id, event_type, aggregate_type, aggregate_id, payload, occurred_at
-) VALUES ($1,'ExperimentRolloutUpdated','Experiment',$1,'{}',NOW())`, eventID)
+) VALUES ($1,'ExperimentPolicyActivated','Experiment',$1,'{}',NOW())`, eventID)
 	if err != nil {
 		t.Fatalf("seed pending outbox: %v", err)
 	}

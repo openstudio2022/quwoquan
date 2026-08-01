@@ -9,9 +9,9 @@ import (
 
 func TestGenerateAndValidateDefaultPrefixes(t *testing.T) {
 	prefixes := []Prefix{
-		PrefixAssistantConversation,
+		PrefixAssistantSession,
 		PrefixAssistantTurn,
-		PrefixAssistantPreferenceFact,
+		PrefixAssistantPreference,
 		PrefixSkillSubscription,
 		PrefixDeviceContext,
 		PrefixToolUse,
@@ -42,7 +42,7 @@ func TestGenerateWithDeterministicEntropy(t *testing.T) {
 	fixedTime := time.UnixMilli(1710000000123).UTC()
 	entropy := bytes.NewReader([]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 	g := MustNewGenerator(
-		PrefixAssistantConversation,
+		PrefixAssistantSession,
 		WithClock(func() time.Time { return fixedTime }),
 		WithEntropy(entropy),
 	)
@@ -50,7 +50,7 @@ func TestGenerateWithDeterministicEntropy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if raw != "acv_01HRHZ2K3V000G40R40M30E209" {
+	if raw != "asn_01HRHZ2K3V000G40R40M30E209" {
 		t.Fatalf("Generate() = %q", raw)
 	}
 }
@@ -58,10 +58,10 @@ func TestGenerateWithDeterministicEntropy(t *testing.T) {
 func TestValidateRejectsMalformedIDs(t *testing.T) {
 	cases := []string{
 		"",
-		"acv",
+		"asn",
 		"bad_01HRJ41Q3V000G40R40M30E209",
-		"acv_short",
-		"acv_01HRJ41Q3V000G40R40M30E20I",
+		"asn_short",
+		"asn_01HRJ41Q3V000G40R40M30E20I",
 	}
 	for _, raw := range cases {
 		t.Run(raw, func(t *testing.T) {

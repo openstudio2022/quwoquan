@@ -12,6 +12,7 @@ Future<void> runAssistantProviderJourney(
   PatrolIntegrationTester $, {
   required String prompt,
   required String expectedAnswerFragment,
+  String expectedCitationHost = '',
 }) async {
   await launchPatrolAppOnce($);
   await patrolGoTo($, AppRoutePaths.assistant);
@@ -26,18 +27,37 @@ Future<void> runAssistantProviderJourney(
   while (DateTime.now().isBefore(deadline)) {
     await $.pump(const Duration(milliseconds: 500));
     final answers = _completedAnswers();
-    if (answers.length > answerCountBefore &&
-        answers.any(
+    final matchingAnswer = answers
+        .where(
           (row) => _answerText(
             row,
           ).toLowerCase().contains(expectedAnswerFragment.toLowerCase()),
-        )) {
+        )
+        .where(
+          (row) =>
+              expectedCitationHost.isEmpty ||
+              _hasCitationHost(row, expectedCitationHost),
+        );
+    if (answers.length > answerCountBefore && matchingAnswer.isNotEmpty) {
       return;
     }
   }
   fail(
     'assistant Provider journey did not produce a completed answer containing '
-    '$expectedAnswerFragment',
+    '$expectedAnswerFragment with citation host $expectedCitationHost',
+  );
+}
+
+bool _hasCitationHost(
+  AssistantAnswerTranscriptRow row,
+  String expectedCitationHost,
+) {
+  final host = expectedCitationHost.trim().toLowerCase();
+  if (host.isEmpty) return true;
+  return row.uiReferences.any(
+    (reference) => reference.values.any(
+      (value) => value.toString().toLowerCase().contains(host),
+    ),
   );
 }
 

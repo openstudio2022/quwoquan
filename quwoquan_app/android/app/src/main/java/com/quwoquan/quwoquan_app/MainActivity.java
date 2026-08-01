@@ -18,6 +18,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -64,6 +65,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private CommercialAuthPlugin commercialAuthPlugin;
   private AliyunOneTapPlugin aliyunOneTapPlugin;
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
+  private AssistantDeviceActionPlugin assistantDeviceActionPlugin;
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
   private FlutterEngine startupFlutterEngine;
@@ -124,6 +126,7 @@ public class MainActivity extends FlutterFragmentActivity {
             + flutterEngineConfiguredElapsedMs
             + startupAttemptLogSuffix());
     registerStartupTimingsChannel(flutterEngine);
+    registerNativeRuntimeConfigChannel(flutterEngine);
     observeNativeFlutterFirstFrame(flutterEngine);
     // 由应用自有注册器明确装配启动必需插件；GeneratedPluginRegistrant 保持 Flutter
     // 原样生成且不参与此引擎装配，重插件继续由 StartupDeferredPluginRegistry 按需注册。
@@ -169,6 +172,12 @@ public class MainActivity extends FlutterFragmentActivity {
         .setMethodCallHandler(
             (MethodCall call, MethodChannel.Result result) ->
                 cellularNetworkProbePlugin().handle(call, result));
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
+            "quwoquan/assistant/device_action")
+        .setMethodCallHandler(
+            (MethodCall call, MethodChannel.Result result) ->
+                assistantDeviceActionPlugin().handle(call, result));
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             RUNTIME_CRASH_MARKER_CHANNEL)
@@ -286,6 +295,35 @@ public class MainActivity extends FlutterFragmentActivity {
             });
   }
 
+  private void registerNativeRuntimeConfigChannel(@NonNull FlutterEngine flutterEngine) {
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
+            "quwoquan/runtime/config")
+        .setMethodCallHandler(
+            (MethodCall call, MethodChannel.Result result) -> {
+              if (!"readRuntimeConfig".equals(call.method)) {
+                result.notImplemented();
+                return;
+              }
+              Map<String, Object> values = new HashMap<>();
+              try {
+                JSONObject runtimeDefines =
+                    new JSONObject(BuildConfig.QWQ_RUNTIME_DART_DEFINES_JSON);
+                Iterator<String> names = runtimeDefines.keys();
+                while (names.hasNext()) {
+                  String name = names.next();
+                  String value = runtimeDefines.optString(name, "");
+                  if (!value.isEmpty()) {
+                    values.put(name, value);
+                  }
+                }
+              } catch (Exception ignored) {
+                // Dart 侧会把空配置收敛为既有 runtime configuration failure。
+              }
+              result.success(values);
+            });
+  }
+
   private void completeDeferredPluginRegistration(
       MethodChannel.Result result, String group, boolean attached) {
     if (attached) {
@@ -328,6 +366,13 @@ public class MainActivity extends FlutterFragmentActivity {
       cellularNetworkProbePlugin = new CellularNetworkProbePlugin(this);
     }
     return cellularNetworkProbePlugin;
+  }
+
+  private AssistantDeviceActionPlugin assistantDeviceActionPlugin() {
+    if (assistantDeviceActionPlugin == null) {
+      assistantDeviceActionPlugin = new AssistantDeviceActionPlugin(this);
+    }
+    return assistantDeviceActionPlugin;
   }
 
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore() {
@@ -601,6 +646,25 @@ public class MainActivity extends FlutterFragmentActivity {
                 + (missingDefineKeys.isEmpty() ? "" : " missingDefineKeys=" + missingDefineKeys));
       } catch (Exception ignored) {
         Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid");
+      }
+      return;
+    }
+    if ("startup_runtime_configured".equals(eventName)) {
+      try {
+        JSONObject payload = new JSONObject(event);
+        currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
+        String configurationState =
+            safeStartupIdentifier(payload.optString("configurationState", "unknown"));
+        Log.i(
+            STARTUP_TAG,
+            "android_runtime_configured launchMode="
+                + currentLaunchMode
+                + " configurationState="
+                + configurationState
+                + " effectiveLaunchManifestDigest="
+                + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
+      } catch (Exception ignored) {
+        Log.i(STARTUP_TAG, "android_runtime_configured_invalid");
       }
       return;
     }
@@ -957,6 +1021,16 @@ public class MainActivity extends FlutterFragmentActivity {
       return;
     }
     super.onActivityResult(requestCode, resultCode, data);
+  }
+
+  @Override
+  public void onRequestPermissionsResult(
+      int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    if (assistantDeviceActionPlugin != null
+        && assistantDeviceActionPlugin.onRequestPermissionsResult(requestCode, grantResults)) {
+      return;
+    }
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
   }
 
   private String stringArgument(MethodCall call, String key) {

@@ -15,7 +15,7 @@ errors:
   reason: invalid_argument
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [RecoverRealtimeAccountClosureDeadLetter]}
+  - {surface: http, operations: [LongPoll, RecoverRealtimeAccountClosureDeadLetter]}
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument

@@ -11,6 +11,7 @@ import (
 	"quwoquan_service/runtime/operation"
 	usergenerated "quwoquan_service/services/user-service/generated/account/user_account"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
+	greetingmodel "quwoquan_service/services/user-service/internal/relationship/greeting_request/domain/model"
 )
 
 type Handler struct {
@@ -55,12 +56,31 @@ func (handler *Handler) handleSendGreeting(w http.ResponseWriter, r *http.Reques
 		RequestMessage:     anyString(body["requestMessage"]),
 		Source:             anyString(body["source"]),
 		IdempotencyKey:     idempotencyKey(r),
+		IntersectionRef:    decodeIntersectionRef(body["intersectionRef"]),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, greeting)
+}
+
+func decodeIntersectionRef(value any) *greetingmodel.GreetingIntersectionRef {
+	raw, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	ref := greetingmodel.GreetingIntersectionRef{
+		IntersectionID: anyString(raw["intersectionId"]),
+		EvidenceID:     anyString(raw["evidenceId"]),
+		SourceRef:      anyString(raw["sourceRef"]),
+		ObjectTypeRef:  anyString(raw["objectTypeRef"]),
+		ObjectID:       anyString(raw["objectId"]),
+	}
+	if !ref.Complete() {
+		return nil
+	}
+	return &ref
 }
 
 func actorPersonaID(r *http.Request) (string, error) {

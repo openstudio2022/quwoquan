@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 )
 
 // RecommendFeatureProjector maintains the rm_recommend_feature read model.
@@ -509,8 +509,7 @@ func DeriveIntersectionFeatures(kindCounts map[string]int) IntersectionFeatureVa
 		case "coCommented":
 			out.CoCommentedCount += count
 		case "coVisitedEntity", "sharedEntityAttention":
-			// 共同实体注意力：coVisitedEntity 为 deferred 的可证到访通道，
-			// sharedEntityAttention 为当前在产的浏览通道，二者共用同一排序特征位。
+			// 可证到访与共同实体浏览共用同一排序特征位。
 			out.CoVisitedEntityCount += count
 		case "followeeInObject":
 			out.FolloweeInObjectActive = 1
@@ -959,8 +958,7 @@ const maxViewerIntersectionEdges = 200
 // viewerIntersectionEdges 把 viewer 的事实交集快照压成「对象 ID → 边权/新鲜度」。
 //
 // 只取物化好的值：边权来自交集图物化器，新鲜度按同一半衰期公式从 freshAt 派生，
-// 在线不重算图谱。deferred kind 一律丢弃：注册表标 deferred 表示可证数据源缺位，
-// 展示侧已经拦住，排序侧也不能借历史快照把它变成隐性权重。
+// 在线不重算图谱；canonical registry 只包含已有生产链的 kind。
 func (s *FeatureStore) viewerIntersectionEdges(
 	ctx context.Context,
 	viewerID string,
@@ -978,9 +976,6 @@ func (s *FeatureStore) viewerIntersectionEdges(
 		kind := strings.TrimSpace(reason.Kind)
 		if kind == "" {
 			kind = strings.TrimSpace(reason.Source)
-		}
-		if IsDeferredIntersectionKind(kind) {
-			continue
 		}
 		if reason.EdgeWeight <= 0 {
 			continue

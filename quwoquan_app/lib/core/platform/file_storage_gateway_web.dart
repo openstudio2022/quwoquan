@@ -14,14 +14,14 @@ class WebFileStorageGateway implements FileStorageGateway {
   @override
   bool get isSupported => false;
 
-  Never _unavailable(String op) =>
-      throw PlatformCapabilityUnavailableException(
-        capability: 'hasLocalFileSystem',
-        detail: 'FileStorageGateway.$op is not available on web',
-      );
+  Never _unavailable(String op) => throw PlatformCapabilityUnavailableException(
+    capability: 'hasLocalFileSystem',
+    detail: 'FileStorageGateway.$op is not available on web',
+  );
 
   @override
-  Future<String> applicationSupportPath() async => _unavailable('applicationSupportPath');
+  Future<String> applicationSupportPath() async =>
+      _unavailable('applicationSupportPath');
 
   @override
   Future<String> temporaryPath() async => _unavailable('temporaryPath');
@@ -30,14 +30,16 @@ class WebFileStorageGateway implements FileStorageGateway {
   Future<bool> exists(String path) async => false;
 
   @override
-  Future<String> readAsString(String path) async => _unavailable('readAsString');
+  Future<String> readAsString(String path) async =>
+      _unavailable('readAsString');
 
   @override
   Future<void> writeAsString(String path, String contents) async =>
       _unavailable('writeAsString');
 
   @override
-  Future<List<int>> readAsBytes(String path) async => _unavailable('readAsBytes');
+  Future<List<int>> readAsBytes(String path) async =>
+      _unavailable('readAsBytes');
 
   @override
   Future<void> writeAsBytes(String path, List<int> bytes) async =>

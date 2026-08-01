@@ -49,3 +49,11 @@ capabilities:
 - queryable
 taggable: false
 vector_enabled: false
+business_rules:
+- connectionId 只在一次已验签 WebSocket 连接中有效，断开后不得复用或续期。
+- accountId、personaId 与 deviceId 必须来自同一可信 principal，客户端 payload 不得覆盖。
+- 业务消息只路由 typed channel，不在 Connection 保存业务聚合或通知可靠任务状态。
+lifecycle:
+  ttl_seconds: 120
+  expiry_semantics: disconnect_or_heartbeat_timeout_delete
+  renewal: authenticated_heartbeat_only

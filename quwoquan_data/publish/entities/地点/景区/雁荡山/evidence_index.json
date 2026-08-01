@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260731--travel-homepage-copy-ready--zhejiang-six--scale-017",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/雁荡山",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:8250ca5a1ee1cc78bef54d97248fb6c31067d94eb7597247df71e7bef1ceb53d"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:683f0b6fa2533e4311bfb1fec95809fbe3df7a6c99abe189ded17fb7e55f2a7e"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:5195005b6c845782deaf6f5e9653fcd6783296f659c21bf988c10482c4cf885d"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:26585c62236e89633e4450cc3b2dd0cf1dd31a7889f29ca0f9350f19f91875bd"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:66e6c41233797f40203940b1a559c04d0e268c148cc03b05afc844f7e6d1a3b2"
+    }
+  ]
+}

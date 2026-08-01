@@ -1105,7 +1105,7 @@ def _write_caddyfile(
 \t\tAccess-Control-Allow-Methods "GET, HEAD, OPTIONS"
 \t\tAccess-Control-Allow-Headers "*"
 \t\tCross-Origin-Resource-Policy "cross-origin"
-\t\tCache-Control "no-store"
+\t\t?Cache-Control "no-store"
 \t}
 \t@immutable_public_media {
 \t\tpath_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$

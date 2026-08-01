@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Feature drift monitor: computes Population Stability Index (PSI) between
-baseline feature distributions (from training data) and current production
+baseline feature distributions (from training data) and the current active release
 feature distributions (from rm_recommend_feature).
 
 PSI < 0.1: no significant change

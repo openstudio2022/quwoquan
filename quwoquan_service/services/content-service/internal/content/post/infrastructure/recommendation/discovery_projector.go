@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 )
 
 // DiscoveryFeedProjector maintains the rm_discovery_feed read model.

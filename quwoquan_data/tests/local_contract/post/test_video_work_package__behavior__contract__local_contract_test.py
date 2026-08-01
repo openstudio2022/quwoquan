@@ -311,6 +311,63 @@ def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def test_prepare_video_brief_shortfall_uses_post_compose_stage() -> None:
+    """Frame shortfall must emit a typed issue, not crash on a removed stage enum."""
+    from content.execution.stage_reports import stage_result_path
+
+    execution_id = "20260716--travel-video-supply--test-region-a--pilot-905"
+    ref = "测试实体甲_video_shortfall"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": "测试实体甲", "entityType": "地点/景区"}],
+    )
+    write_execution_runtime_state(execution_id, command="post")
+    write_brief_object(
+        execution_id,
+        ref,
+        {
+            "titleHint": "帧不足短视频",
+            "carrier": "video",
+            "entityRefs": ["/entity/地点/景区/测试实体甲"],
+            "tagRefs": ["Topic/旅行/玩法/摄影旅拍", "Format/内容载体/视频/短视频"],
+            "templateId": "travel.entity.short_video",
+            "sourceFrames": [],
+            "authorId": "builtin_travel_landscape_photographer",
+            "creatorProfileId": "qwq_creator_landscape_photographer_001",
+            "creatorArchetype": "landscape_photographer",
+            "creatorProfileDigest": LANDSCAPE_CREATOR_PROFILE_DIGEST,
+            "creatorDisclosure": {
+                "type": "platform_virtual_creator",
+                "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+                "visible": True,
+            },
+            "experienceClaimMode": "visual_discovery",
+            "authorQualitySignals": {
+                "qualityScore": 0.87,
+                "fatigueScore": 0.2,
+                "riskTier": "low",
+            },
+        },
+        content_type="video",
+    )
+
+    pack = prepare_video_brief(execution_id, ref)
+    assert pack["sourceFrames"] == []
+
+    envelope = read_json(
+        stage_result_path(execution_id, "post", "compose_brief_gate", ref)
+    )
+    gate = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else envelope
+    assert gate["passed"] is False
+    issues = gate.get("issues") or []
+    assert any(
+        isinstance(issue, dict)
+        and issue.get("code") == "DATA.MEDIA.PUBLISHABLE_SHORTFALL"
+        and issue.get("stage") == "post_compose"
+        for issue in issues
+    ), issues
+
+
 def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
     execution_id = "20260716--travel-video-supply--test-region-a--pilot-902"
     ref = "测试实体甲_video"

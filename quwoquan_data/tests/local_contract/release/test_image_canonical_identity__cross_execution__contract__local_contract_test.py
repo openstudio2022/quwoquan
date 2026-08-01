@@ -16,7 +16,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from core.io import write_json  # noqa: E402
-from core.image_deduplication import perceptual_hash, perceptual_hash_distance  # noqa: E402
+from core.image_deduplication import perceptual_hash_distance  # noqa: E402
 from content.release.canonical.image_identity import (  # noqa: E402
     canonical_asset_manifest_row,
 )
@@ -130,23 +130,19 @@ def test_commercial_image_requires_perceptual_identity(
         )
 
 
-def test_legacy_image_manifest_is_included_in_perceptual_deduplication(
+def test_existing_image_manifest_without_perceptual_hash_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     publish = tmp_path / "publish"
     package = tmp_path / "package"
-    legacy_asset = publish / "media/objects/sha256/aa/bb/legacy.jpg"
-    legacy_asset.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (32, 32), color=(32, 96, 160)).save(legacy_asset)
     write_json(
         publish / "posts/image/摄影/旧图片/1/manifest.json",
         {
             "contentType": "image",
             "assets": [
                 {
-                    "assetId": "legacy-image",
-                    "objectKey": legacy_asset.relative_to(publish).as_posix(),
+                    "assetId": "image-without-perceptual-hash",
                     "sha256": "sha256:" + "a" * 64,
                 }
             ],
@@ -156,12 +152,12 @@ def test_legacy_image_manifest_is_included_in_perceptual_deduplication(
         package / "object/manifest.json",
         _manifest(
             digest="sha256:" + "b" * 64,
-            perceptual_hash=perceptual_hash(legacy_asset),
+            perceptual_hash="0" * 16,
         ),
     )
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
 
-    with pytest.raises(ObjectTransactionError, match="duplicated by perceptualHash"):
+    with pytest.raises(ObjectTransactionError, match="requires perceptualHash"):
         subject._assert_cross_publish_image_unique(
             package_root=package,
             canonical_post=publish / "posts/image/摄影/新图片/1",

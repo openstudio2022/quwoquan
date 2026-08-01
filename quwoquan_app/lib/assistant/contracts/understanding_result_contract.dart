@@ -34,10 +34,10 @@ class IntentEntityRef {
   final String displayText;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'entityType': entityType,
-        'canonicalKey': canonicalKey,
-        'displayText': displayText,
-      };
+    'entityType': entityType,
+    'canonicalKey': canonicalKey,
+    'displayText': displayText,
+  };
 
   factory IntentEntityRef.fromJson(Map<String, dynamic> json) {
     return IntentEntityRef(
@@ -49,18 +49,15 @@ class IntentEntityRef {
 }
 
 class IntentConstraint {
-  const IntentConstraint({
-    required this.key,
-    this.value = '',
-  });
+  const IntentConstraint({required this.key, this.value = ''});
 
   final String key;
   final String value;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'key': key,
-        'value': value,
-      };
+    'key': key,
+    'value': value,
+  };
 
   factory IntentConstraint.fromJson(Map<String, dynamic> json) {
     return IntentConstraint(
@@ -88,14 +85,17 @@ class IntentNode {
   final bool requiresEvidence;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'intentId': intentId,
-        'intentType': intentType,
-        'goal': goal,
-        'entityRefs': entityRefs.map((item) => item.toJson()).toList(growable: false),
-        'constraints':
-            constraints.map((item) => item.toJson()).toList(growable: false),
-        'requiresEvidence': requiresEvidence,
-      };
+    'intentId': intentId,
+    'intentType': intentType,
+    'goal': goal,
+    'entityRefs': entityRefs
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'constraints': constraints
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'requiresEvidence': requiresEvidence,
+  };
 
   factory IntentNode.fromJson(Map<String, dynamic> json) {
     return IntentNode(
@@ -123,16 +123,17 @@ class DialogueTransitionDecision {
   final bool canAnswerPartially;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'nextTurnMode': nextTurnMode.wireName,
-        'needsClarification': needsClarification,
-        'clarificationTargetIntentId': clarificationTargetIntentId,
-        'canAnswerPartially': canAnswerPartially,
-      };
+    'nextTurnMode': nextTurnMode.wireName,
+    'needsClarification': needsClarification,
+    'clarificationTargetIntentId': clarificationTargetIntentId,
+    'canAnswerPartially': canAnswerPartially,
+  };
 
   factory DialogueTransitionDecision.fromJson(Map<String, dynamic> json) {
     return DialogueTransitionDecision(
-      nextTurnMode:
-          parseNextTurnMode((json['nextTurnMode'] as String?)?.trim() ?? ''),
+      nextTurnMode: parseNextTurnMode(
+        (json['nextTurnMode'] as String?)?.trim() ?? '',
+      ),
       needsClarification: json['needsClarification'] == true,
       clarificationTargetIntentId:
           (json['clarificationTargetIntentId'] as String?)?.trim() ?? '',
@@ -153,10 +154,10 @@ class UnderstandingResult {
   final DialogueTransitionDecision dialogueTransitionDecision;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'intents': intents.map((item) => item.toJson()).toList(growable: false),
-        'dialogueTransitionDecision': dialogueTransitionDecision.toJson(),
-      };
+    'contractId': contractId,
+    'intents': intents.map((item) => item.toJson()).toList(growable: false),
+    'dialogueTransitionDecision': dialogueTransitionDecision.toJson(),
+  };
 
   factory UnderstandingResult.fromJson(Map<String, dynamic> json) {
     return UnderstandingResult(

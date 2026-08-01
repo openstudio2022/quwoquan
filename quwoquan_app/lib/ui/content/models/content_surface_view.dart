@@ -31,10 +31,7 @@ class ContentAuthorRef {
 
 /// 图片媒体引用。
 class ContentImageRef {
-  const ContentImageRef({
-    required this.delivery,
-    this.aspectRatio,
-  });
+  const ContentImageRef({required this.delivery, this.aspectRatio});
 
   final MediaDeliveryReference delivery;
   final double? aspectRatio;
@@ -44,10 +41,7 @@ class ContentImageRef {
 
 /// 封面媒体引用（article 封面 / video 首帧）。
 class ContentCoverRef {
-  const ContentCoverRef({
-    required this.delivery,
-    this.aspectRatio,
-  });
+  const ContentCoverRef({required this.delivery, this.aspectRatio});
 
   final MediaDeliveryReference delivery;
   final double? aspectRatio;

@@ -1,0 +1,14 @@
+{
+  "skillId": "daily_assistant",
+  "displayName": "每日助手",
+  "description": "管理待办、日历、会议、作息和学习计划。",
+  "domainId": "life",
+  "problemClass": "general",
+  "executionTarget": "cloud",
+  "activationProfileRef": "activation.proactive",
+  "contextProfileRef": "context.proactive",
+  "capabilityProfileRef": "capability.app2",
+  "presentationProfileRef": "presentation.checkmark",
+  "evaluationProfileRef": "evaluation.general",
+  "replayAssetRef": "assistant.replay.daily_assistant.v1"
+}

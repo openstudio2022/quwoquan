@@ -44,6 +44,9 @@ class EnvironmentReleaseTarget:
     media_delivery_base_url: str
     api_base_url: str
     missing_requirements: tuple[str, ...]
+    ssl_cafile: str = ""
+    redis_addr: str = ""
+    redis_database: int = 0
 
     @property
     def import_ready(self) -> bool:
@@ -53,6 +56,32 @@ class EnvironmentReleaseTarget:
         return (
             f"{self.media_delivery_base_url.rstrip('/')}/media/{media_slice.value}"
         )
+
+
+def _local_managed_ssl_cafile(target_name: str) -> str:
+    """Return the local-managed root CA path when the target uses private TLS."""
+    try:
+        from quwoquan_ops.cli.lib.public_domain_tls import (
+            PublicDomainTlsError,
+            root_certificate_path,
+            tls_profile,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "Ops local-managed TLS resolver is unavailable"
+        ) from exc
+    try:
+        _profile_name, kind, _profile = tls_profile(target_name)
+    except PublicDomainTlsError as exc:
+        if not target_name.endswith("-local"):
+            return ""
+        raise RuntimeError(str(exc)) from exc
+    if kind != "local-managed":
+        return ""
+    try:
+        return str(root_certificate_path(target_name))
+    except PublicDomainTlsError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def _mapping(value: Any, *, label: str) -> Mapping[str, Any]:
@@ -99,6 +128,7 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
             media_delivery_base_url=media_delivery_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
+            ssl_cafile=_local_managed_ssl_cafile(target_name),
         )
 
     if mode is EnvironmentReleaseMode.LOCAL_IMPORT:
@@ -109,6 +139,11 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
             ports,
             profile,
             str(release.get("userPostgresPortRole") or ""),
+        )
+        redis_port = _local_port(
+            ports,
+            profile,
+            str(release.get("redisPortRole") or ""),
         )
         media_ref = Path(str(release.get("mediaLocalRef") or ""))
         return EnvironmentReleaseTarget(
@@ -123,20 +158,30 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
             media_delivery_base_url=media_delivery_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
+            ssl_cafile=_local_managed_ssl_cafile(target_name),
+            redis_addr=f"127.0.0.1:{redis_port}",
+            redis_database=int(release.get("redisDatabase") or 0),
         )
 
     mongo_env = str(release.get("mongoUriEnv") or "")
+    redis_env = str(release.get("redisAddrEnv") or "")
     user_postgres_env = str(release.get("userPostgresDsnEnv") or "")
     media_env = str(release.get("mediaRootEnv") or "")
-    mongo_uri = str(os.environ.get(mongo_env) or "").strip()
-    user_postgres_dsn = str(os.environ.get(user_postgres_env) or "").strip()
-    media_root = str(os.environ.get(media_env) or "").strip()
-    for env_key, value in (
-        (mongo_env, mongo_uri),
-        (user_postgres_env, user_postgres_dsn),
-        (media_env, media_root),
+    mongo_uri = str(os.environ.get(mongo_env) or "").strip() if mongo_env else ""
+    redis_addr = str(os.environ.get(redis_env) or "").strip() if redis_env else ""
+    user_postgres_dsn = (
+        str(os.environ.get(user_postgres_env) or "").strip() if user_postgres_env else ""
+    )
+    media_root = str(os.environ.get(media_env) or "").strip() if media_env else ""
+    for field, env_key, value in (
+        ("mongoUriEnv", mongo_env, mongo_uri),
+        ("redisAddrEnv", redis_env, redis_addr),
+        ("userPostgresDsnEnv", user_postgres_env, user_postgres_dsn),
+        ("mediaRootEnv", media_env, media_root),
     ):
-        if env_key and not value:
+        if not env_key:
+            missing.append(field)
+        elif not value:
             missing.append(env_key)
     return EnvironmentReleaseTarget(
         environment=environment,
@@ -148,6 +193,9 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
         media_delivery_base_url=media_delivery_base_url,
         api_base_url=api_base_url,
         missing_requirements=tuple(missing),
+        ssl_cafile=_local_managed_ssl_cafile(target_name),
+        redis_addr=redis_addr,
+        redis_database=int(release.get("redisDatabase") or 0),
     )
 
 

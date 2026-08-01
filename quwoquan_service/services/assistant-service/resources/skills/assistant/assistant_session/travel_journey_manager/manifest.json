@@ -1,0 +1,14 @@
+{
+  "skillId": "travel_journey_manager",
+  "displayName": "出行旅程管家",
+  "description": "结合天气、路况和景点拥堵提醒行程风险。",
+  "domainId": "travel",
+  "problemClass": "realtime_info",
+  "executionTarget": "hybrid",
+  "activationProfileRef": "activation.proactive",
+  "contextProfileRef": "context.proactive",
+  "capabilityProfileRef": "capability.web_app3",
+  "presentationProfileRef": "presentation.airplane",
+  "evaluationProfileRef": "evaluation.realtime_info",
+  "replayAssetRef": "assistant.replay.travel_journey_manager.v1"
+}

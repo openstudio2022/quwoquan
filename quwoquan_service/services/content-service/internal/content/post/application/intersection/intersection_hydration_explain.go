@@ -249,15 +249,14 @@ func actionHintsForReason(r IntersectionReasonView, target *IntersectionTargetVi
 	out := make([]IntersectionActionHintView, 0, len(keys))
 	for i, key := range keys {
 		out = append(out, IntersectionActionHintView{
-			ActionKey:          key,
-			Label:              actionLabelForKey(key),
-			Target:             target,
-			IsPrimary:          i == 0,
-			Priority:           i + 1,
-			ActionTier:         actionTierForKey(key),
-			RequiredGates:      requiredGatesForKey(key),
-			TargetAvailability: actionTargetAvailabilityForKey(key),
-			Dispatch:           actionDispatchForKey(key),
+			ActionKey:     key,
+			Label:         actionLabelForKey(key),
+			Target:        target,
+			IsPrimary:     i == 0,
+			Priority:      i + 1,
+			ActionTier:    actionTierForKey(key),
+			RequiredGates: requiredGatesForKey(key),
+			Dispatch:      actionDispatchForKey(key),
 		})
 	}
 	return out
@@ -304,16 +303,6 @@ func requiredGatesForKey(key string) []string {
 	out := make([]string, len(gates))
 	copy(out, gates)
 	return out
-}
-
-// actionTargetAvailabilityForKey 查 actionKey → available|deferred
-// （generated.IntersectionActionTargetAvailabilityByKey，源 registry.actionKeyMeta.targetAvailability）。
-// 未登记 key 兜底 available：未知轻行动只可按 target 尝试导航，不会被误判为规划态。
-func actionTargetAvailabilityForKey(key string) string {
-	if v, ok := generated.IntersectionActionTargetAvailabilityByKey[strings.TrimSpace(key)]; ok && strings.TrimSpace(v) != "" {
-		return v
-	}
-	return "available"
 }
 
 // actionDispatchForKey 查 actionKey → 端交互 handler 路由类别

@@ -16,6 +16,7 @@ from quwoquan_ops.cli.lib.output_paths import (
 
 
 CANDIDATE_MANIFEST_SCHEMA = "stackctl-deployment-candidate"
+RUNTIME_CANDIDATE_TYPE = "runtime-full"
 SPEC_REFS = (
     "AppRoot/JNY-002/SCN-005/UAT-003",
     "runtime/runtime-config/environment-topology-and-packaging/GWT-001",
@@ -62,11 +63,27 @@ def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
     }
 
 
+def validate_release_attestations(
+    release_attestation: str,
+    rollback_release_attestation: str,
+) -> dict[str, dict[str, str]]:
+    """Fail before package/build work when immutable release inputs are absent."""
+
+    return {
+        "candidate": _release_binding(release_attestation, label="candidate"),
+        "rollback": _release_binding(
+            rollback_release_attestation,
+            label="rollback",
+        ),
+    }
+
+
 def write_candidate_manifest(
     env_name: str,
     target_name: str,
     *,
     package_snapshot: dict[str, object],
+    candidate_type: str = RUNTIME_CANDIDATE_TYPE,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
 ) -> Path:
@@ -84,8 +101,11 @@ def write_candidate_manifest(
         environment_runtime_path,
         label="packaged environment runtime",
     )
+    runtime_schema_version = str(environment_runtime.get("schema") or "").strip()
     if (
-        environment_runtime.get("environment") != env_name
+        not runtime_schema_version
+        or re.fullmatch(r"[a-z][a-z0-9-]*", runtime_schema_version) is None
+        or environment_runtime.get("environment") != env_name
         or environment_runtime.get("target") != target_name
     ):
         raise ValueError("packaged environment runtime identity mismatch")
@@ -100,6 +120,12 @@ def write_candidate_manifest(
     )
     oci = _read_object(oci_path, label="package OCI image manifest") if oci_path.is_file() else None
     include_services = bool(fingerprint.get("includeServices"))
+    if (
+        candidate_type != RUNTIME_CANDIDATE_TYPE
+        or fingerprint.get("candidateType") != RUNTIME_CANDIDATE_TYPE
+        or not include_services
+    ):
+        raise ValueError("runtime candidate must be a full service package")
     legal_static_root = legal_static_deployment_package_dir(
         env_name,
         target=target_name,
@@ -112,20 +138,16 @@ def write_candidate_manifest(
     )
     if any(not path.is_file() for path in legal_static_required):
         raise ValueError("deployment candidate has no complete legal-static package")
-    if include_services and oci is None:
+    if oci is None:
         raise ValueError("full candidate has no package-bound OCI image manifest")
-    release: dict[str, Any] | None = None
-    if include_services:
-        release = {
-            "candidate": _release_binding(release_attestation, label="candidate"),
-            "rollback": _release_binding(
-                rollback_release_attestation,
-                label="rollback",
-            ),
-        }
+    release = validate_release_attestations(
+        release_attestation,
+        rollback_release_attestation,
+    )
 
     payload = {
         "schema": CANDIDATE_MANIFEST_SCHEMA,
+        "candidateType": candidate_type,
         "environment": env_name,
         "target": target_name,
         "baselineId": package_snapshot["baselineId"],
@@ -135,6 +157,7 @@ def write_candidate_manifest(
         "packageDigest": package_content.get("digest"),
         "buildInputDigest": oci.get("buildInputDigest") if oci else None,
         "imageDigest": oci.get("imageDigest") if oci else None,
+        "runtimeSchemaVersion": runtime_schema_version,
         "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
         "environmentRuntimeDigest": _sha256_file(environment_runtime_path),
         "release": release,
@@ -144,7 +167,7 @@ def write_candidate_manifest(
         payload,
         expected_environment=env_name,
         expected_target=target_name,
-        require_full=include_services,
+        require_full=True,
     )
     path = candidate_root / "manifest.json"
     temporary = path.with_name(f".{path.name}.tmp")
@@ -165,6 +188,7 @@ def validate_candidate_manifest(
 ) -> dict[str, Any]:
     required = {
         "schema",
+        "candidateType",
         "environment",
         "target",
         "baselineId",
@@ -174,6 +198,7 @@ def validate_candidate_manifest(
         "packageDigest",
         "buildInputDigest",
         "imageDigest",
+        "runtimeSchemaVersion",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
         "release",
@@ -183,6 +208,8 @@ def validate_candidate_manifest(
         raise ValueError("deployment candidate manifest fields mismatch")
     if payload.get("schema") != CANDIDATE_MANIFEST_SCHEMA:
         raise ValueError("deployment candidate manifest schema mismatch")
+    if payload.get("candidateType") != RUNTIME_CANDIDATE_TYPE:
+        raise ValueError("deployment candidate type mismatch")
     if (
         payload.get("environment") != expected_environment
         or payload.get("target") != expected_target
@@ -190,6 +217,11 @@ def validate_candidate_manifest(
         raise ValueError("deployment candidate manifest target identity mismatch")
     if re.fullmatch(r"[0-9a-f]{40}", str(payload.get("sourceRevision") or "")) is None:
         raise ValueError("deployment candidate sourceRevision is invalid")
+    if re.fullmatch(
+        r"[a-z][a-z0-9-]*",
+        str(payload.get("runtimeSchemaVersion") or ""),
+    ) is None:
+        raise ValueError("deployment candidate runtimeSchemaVersion is invalid")
     for field in (
         "baselineId",
         "workspaceDigest",
@@ -202,33 +234,30 @@ def validate_candidate_manifest(
             raise ValueError(f"deployment candidate {field} is invalid")
     if payload.get("specRefs") != list(SPEC_REFS):
         raise ValueError("deployment candidate specRefs mismatch")
-    if require_full:
-        for field in ("buildInputDigest", "imageDigest"):
-            if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
-                raise ValueError(f"full deployment candidate {field} is invalid")
-        release = payload.get("release")
-        if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
-            raise ValueError("full deployment candidate release binding mismatch")
-        for label in ("candidate", "rollback"):
-            binding = release.get(label)
-            if not isinstance(binding, dict) or set(binding) != {
-                "releaseId",
-                "releaseDigest",
-                "attestationRef",
-                "attestationDigest",
-            }:
-                raise ValueError(f"deployment candidate {label} release fields mismatch")
-            if not str(binding.get("releaseId") or ""):
-                raise ValueError(f"deployment candidate {label} releaseId is invalid")
-            for field in ("releaseDigest", "attestationDigest"):
-                if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
-                    raise ValueError(
-                        f"deployment candidate {label} {field} is invalid"
-                    )
-    elif any(payload.get(field) is not None for field in ("buildInputDigest", "imageDigest")):
-        raise ValueError("App-only deployment candidate cannot carry OCI identity")
-    elif payload.get("release") is not None:
-        raise ValueError("App-only deployment candidate cannot carry release binding")
+    if not require_full:
+        raise ValueError("runtime deployment candidate cannot be loaded as App-only")
+    for field in ("buildInputDigest", "imageDigest"):
+        if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
+            raise ValueError(f"full deployment candidate {field} is invalid")
+    release = payload.get("release")
+    if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
+        raise ValueError("full deployment candidate release binding mismatch")
+    for label in ("candidate", "rollback"):
+        binding = release.get(label)
+        if not isinstance(binding, dict) or set(binding) != {
+            "releaseId",
+            "releaseDigest",
+            "attestationRef",
+            "attestationDigest",
+        }:
+            raise ValueError(f"deployment candidate {label} release fields mismatch")
+        if not str(binding.get("releaseId") or ""):
+            raise ValueError(f"deployment candidate {label} releaseId is invalid")
+        for field in ("releaseDigest", "attestationDigest"):
+            if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
+                raise ValueError(
+                    f"deployment candidate {label} {field} is invalid"
+                )
     return payload
 
 

@@ -51,6 +51,11 @@ def candidate_image_urls(url: str) -> list[str]:
         if item and item not in candidates:
             candidates.append(item)
 
+    # Wikimedia originals are frequently rate-limited while their same-file
+    # 1280px rendition is cached and still exceeds the video-frame pixel
+    # floor. Prefer that rendition without changing provenance: the original
+    # file page and requested URL remain the rights evidence.
+    _add(_wikimedia_rendition_url(raw, width=1280))
     _add(raw)
     parsed = urllib.parse.urlparse(raw)
     if parsed.query:

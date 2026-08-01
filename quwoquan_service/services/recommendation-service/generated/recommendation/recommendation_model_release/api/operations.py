@@ -2,6 +2,10 @@
 
 """Operation descriptors generated from ContractGraph metadata."""
 
+STAGE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/recommendation/model-releases:stage"
+STAGE_RECOMMENDATION_MODEL_RELEASE_METHOD = "POST"
+ACTIVATE_RECOMMENDATION_MODEL_RELEASE_PATH = "/internal/recommendation/model-releases:activate"
+ACTIVATE_RECOMMENDATION_MODEL_RELEASE_METHOD = "POST"
 SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/recommendation/model-releases:score"
 SCORE_RECOMMENDATION_CANDIDATES_METHOD = "POST"
 BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH = "/internal/recommendation/model-releases:batch-score"

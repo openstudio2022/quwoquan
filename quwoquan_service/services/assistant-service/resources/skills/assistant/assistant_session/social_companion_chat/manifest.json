@@ -1,0 +1,23 @@
+{
+  "skillId": "social_companion_chat",
+  "displayName": "轻松闲聊助手",
+  "description": "自然闲聊、陪伴聊天、轻松互动、无聊解闷。",
+  "domainId": "social_companion_chat",
+  "problemClass": "general",
+  "executionTarget": "cloud",
+  "routingHints": [
+    "闲聊",
+    "聊天",
+    "在吗",
+    "哈哈",
+    "随便聊",
+    "无聊",
+    "陪我"
+  ],
+  "activationProfileRef": "activation.reactive",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.web2",
+  "presentationProfileRef": "presentation.default",
+  "evaluationProfileRef": "evaluation.general",
+  "replayAssetRef": "assistant.replay.social_companion_chat.v1"
+}

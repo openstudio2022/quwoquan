@@ -406,7 +406,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     _reportTagFeedback(tagRef: tagRef, action: TagFeedbackAction.click);
   }
 
-  /// 标签添加/移除动作产出 TagFeedback 事实（fire-and-forget，不阻断编辑）。
+  /// 标签添加/移除动作产出 TagFeedbackFact 事实（fire-and-forget，不阻断编辑）。
   void _reportTagFeedback({
     required String tagRef,
     required TagFeedbackAction action,

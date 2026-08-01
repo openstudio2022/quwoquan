@@ -1,0 +1,72 @@
+package runruntime
+
+import (
+	"context"
+	"time"
+)
+
+type JournalEvent struct {
+	EventID   string         `bson:"eventId"`
+	RunID     string         `bson:"runId"`
+	Sequence  int64          `bson:"sequence"`
+	Revision  int64          `bson:"revision"`
+	Kind      string         `bson:"kind"`
+	Payload   map[string]any `bson:"payload"`
+	CreatedAt time.Time      `bson:"createdAt"`
+	ExpiresAt time.Time      `bson:"expiresAt"`
+}
+
+type CommandReceipt struct {
+	RunID         string    `bson:"runId"`
+	CommandID     string    `bson:"commandId"`
+	CommandKind   string    `bson:"commandKind"`
+	PayloadDigest string    `bson:"payloadDigest"`
+	Revision      int64     `bson:"revision"`
+	CreatedAt     time.Time `bson:"createdAt"`
+}
+
+// Repository atomically persists an aggregate snapshot and ordered journal
+// events with optimistic CAS. Stream reconnect replays EventsAfter before
+// returning the latest snapshot.
+type Repository interface {
+	Load(context.Context, string) (Run, error)
+	LoadByRequest(context.Context, string, string, string) (Run, error)
+	LoadCommandReceipt(context.Context, string, string) (CommandReceipt, error)
+	Commit(context.Context, int64, Run, []JournalEvent, *CommandReceipt) error
+	EventsAfter(context.Context, string, int64, int) ([]JournalEvent, error)
+}
+
+type WorkerRepository interface {
+	Repository
+	LatestSequence(context.Context, string) (int64, error)
+}
+
+type WorkClaim struct {
+	RunID        string
+	WorkerID     string
+	FencingToken int64
+	ClaimedAt    time.Time
+	ExpiresAt    time.Time
+}
+
+type WorkQueue interface {
+	ClaimNext(context.Context, string, time.Duration) (WorkClaim, error)
+	HeartbeatClaim(context.Context, WorkClaim, time.Duration) (WorkClaim, error)
+	CompleteClaim(context.Context, WorkClaim, bool, time.Time) error
+}
+
+type WorkerLease struct {
+	LeaseID      string    `bson:"leaseId"`
+	RunID        string    `bson:"runId"`
+	WorkerID     string    `bson:"workerId"`
+	FencingToken int64     `bson:"fencingToken"`
+	AcquiredAt   time.Time `bson:"acquiredAt"`
+	HeartbeatAt  time.Time `bson:"heartbeatAt"`
+	ExpiresAt    time.Time `bson:"expiresAt"`
+}
+
+type LeaseRepository interface {
+	Acquire(context.Context, string, string, time.Duration) (WorkerLease, error)
+	Heartbeat(context.Context, WorkerLease, time.Duration) (WorkerLease, error)
+	Release(context.Context, WorkerLease) error
+}

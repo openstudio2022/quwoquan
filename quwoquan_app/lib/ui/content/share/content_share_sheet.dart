@@ -159,6 +159,11 @@ class _ConnectedContentShareSheetState
         widget.template.shareSummary,
         widget.template.landingUrl,
       ].where((value) => value.trim().isNotEmpty).join('\n'),
+      objectRef: ChatMessageCardObjectRef(
+        objectTypeRef: 'post',
+        objectId: widget.template.postId,
+        routeId: 'contentDetail',
+      ),
       extra: <String, Object?>{
         'postId': widget.template.postId,
         'shareId': widget.template.shareId,

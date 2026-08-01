@@ -1,4 +1,4 @@
-description: 推荐点击、停留、隐藏等不可变反馈事实（rec_engagement 信封投影）； 与曝光经 requestId+targetId 最终一致关联，不持有曝光行主键。
+description: 推荐点击、停留、隐藏等不可变反馈事实；只接受能解析到已持久化 exposure 的 ContentBehaviorFact。
 fields:
 - name: id
   source: eventId
@@ -7,6 +7,18 @@ fields:
   - PK
   - NOT_NULL
   role: append_only_fact
+- name: sourceEventId
+  source: sourceEventId
+  type: string
+  constraints: [NOT_NULL]
+  description: ContentBehaviorFact 的 clientEventId/source eventId
+  role: append_only_fact
+- name: exposureId
+  source: exposureId
+  type: string
+  constraints: [NOT_NULL]
+  role: append_only_fact
+  reference: true
 - name: requestId
   source: context.feedRequestId
   type: string
@@ -35,6 +47,7 @@ fields:
   constraints:
   - NOT_NULL
   role: append_only_fact
+  reference: true
 - name: targetId
   source: targetId
   type: string
@@ -60,4 +73,9 @@ fields:
   type: timestamp
   constraints:
   - NOT_NULL
+  role: append_only_fact
+- name: recordedAt
+  source: recordedAt
+  type: timestamp
+  constraints: [NOT_NULL]
   role: append_only_fact

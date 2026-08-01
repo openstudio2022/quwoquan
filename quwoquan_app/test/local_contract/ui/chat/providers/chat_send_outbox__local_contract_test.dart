@@ -174,7 +174,7 @@ void main() {
       content: '',
       clientMsgId: 'client-msg-card',
       card: ChatMessageCardCommand(
-        kind: 'post',
+        kind: 'profile_qr',
         title: '分享卡片',
         attributes: const <ChatMessageCardAttribute>[],
       ),

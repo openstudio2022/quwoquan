@@ -366,8 +366,17 @@ def write_auto_research_plans(
             message="auto research completed for all entities",
         )
     else:
+        resolved_types = resolve_research_entity_types(
+            execution_id,
+            entity_ids,
+            fallback_type=entity_type,
+        )
         entities = [
-            {"entityId": entity_id, "canonicalName": entity_id, "entityType": entity_type}
+            {
+                "entityId": entity_id,
+                "canonicalName": entity_id,
+                "entityType": resolved_types[entity_id],
+            }
             for entity_id in entity_ids
         ]
         prepare_source_plan(execution_id, entities)

@@ -22,10 +22,12 @@ subcontracts:
   request:
     class_name: AssistantReplayRequestWire
     fields:
-      - { name: conversationId, type: string, required: true }
+      - { name: sessionId, type: string, required: true }
       - { name: turnId, type: string, required: true }
       - { name: userId, type: string, default: '' }
       - { name: inputText, type: string, default: '' }
+      - { name: skillId, type: string, required: true }
+      - { name: domainId, type: string, required: true }
       - { name: clientContext, type: map, default: {} }
   model_step:
     class_name: AssistantReplayModelStepWire

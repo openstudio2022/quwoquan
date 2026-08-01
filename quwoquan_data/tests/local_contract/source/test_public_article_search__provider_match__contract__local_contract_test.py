@@ -7,6 +7,7 @@ import json
 import pytest
 
 from content.source.fetch_text import extract_page_text
+from content.source.handler_fetch_contract import require_source_candidate_admission
 from content.source.research import network_io
 from content.source.research import auto_plan_article
 from content.source.research import article_frontier_profile
@@ -157,6 +158,16 @@ def test_frontier_canonical_dedupe_and_entity_alias_relevance(monkeypatch):
     assert [source.canonical_url for source in outcome.candidates] == [relevant]
     assert outcome.candidates[0].relevance_score == 0.99
     assert outcome.source_documents()[0]["sourceUseMode"] == "factual_reference_only"
+    assert outcome.source_documents()[0]["articleSiteId"] == "frontier_test"
+    assert article_frontier_profile.resolve_article_source_binding(
+        relevant,
+        site_id="frontier_test",
+        profile_digest=outcome.candidates[0].profile_digest,
+    )["siteId"] == "frontier_test"
+    require_source_candidate_admission(
+        outcome.source_documents()[0],
+        require_commercial_article_binding=True,
+    )
     assert any(
         row.reason == "entity_alias_topic_relevance_failed"
         for row in outcome.sites[0].frontier
@@ -165,6 +176,53 @@ def test_frontier_canonical_dedupe_and_entity_alias_relevance(monkeypatch):
     assert outcome.as_evidence()["schema"] == (
         "quwoquan.content.article_source_discovery_evidence"
     )
+
+
+def test_commercial_article_fetch_binding_rejects_registry_profile_drift(monkeypatch):
+    site = _site()
+    _install_registry(monkeypatch, site)
+    digest = article_frontier_profile.article_profile_digest(site)
+    site["siteCrawlProfile"]["allowedPaths"] = [
+        "https://guide.example.test/renamed/*"
+    ]
+
+    with pytest.raises(ValueError, match="profile drift"):
+        article_frontier_profile.resolve_article_source_binding(
+            "https://guide.example.test/article/200.html",
+            site_id="frontier_test",
+            profile_digest=digest,
+        )
+
+
+def test_commercial_article_fetch_binding_rejects_missing_site_identity(monkeypatch):
+    _install_registry(monkeypatch, _site())
+    source = {
+        "source_id": "frontier_test_001",
+        "url": "https://guide.example.test/article/200.html",
+        "platform": "测试旅行指南",
+        "category": "travelogue",
+        "sourceKind": "travelogue",
+        "researchLane": "article",
+        "relevance": "覆盖测试山景区",
+        "match": {
+            "accepted": True,
+            "reason": "entity_alias_topic_relevance",
+            "matchedEntityName": "测试山景区",
+            "matchedAlias": "测试山景区",
+            "matchedFields": ["title"],
+            "relevanceScore": 0.99,
+        },
+        "articleCommercialAdmission": "commercial_release",
+        "sourceDiscoveryProfileDigest": article_frontier_profile.article_profile_digest(
+            _site()
+        ),
+    }
+
+    with pytest.raises(ValueError, match="articleSiteId"):
+        require_source_candidate_admission(
+            source,
+            require_commercial_article_binding=True,
+        )
 
 
 def test_frontier_robots_deny_discards_without_fetching_page(monkeypatch):

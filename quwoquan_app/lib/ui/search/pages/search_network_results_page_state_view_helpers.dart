@@ -21,22 +21,23 @@ extension _SearchNetworkResultsPageStateViewHelpers
     required Color fgSecondary,
   }) {
     final citations =
-        _xiaoquResult?.citations ?? const <AssistantSearchCitationView>[];
+        _xiaoquResult?.processes
+            .expand((process) => process.acceptedReferences)
+            .toList(growable: false) ??
+        const <AssistantRunVisibleReferenceView>[];
     return <Widget>[
       for (var i = 0; i < citations.length; i++) ...[
         PostPreviewListTile(
           isDark: isDark,
           title: citations[i].title,
-          supportingText:
-              citations[i].snippet ?? SearchText.searchOpenRelatedClue,
-          coverUrl: citations[i].coverUrl ?? '',
-          eyebrowText:
-              citations[i].badgeLabel ??
-              citations[i].sourceDomain ??
-              citations[i].objectType,
-          showVideoBadge: citations[i].contentType == 'video',
+          supportingText: citations[i].snippet.trim().isEmpty
+              ? SearchText.searchOpenRelatedClue
+              : citations[i].snippet,
+          coverUrl: '',
+          eyebrowText: citations[i].source,
+          showVideoBadge: false,
           footer: Text(
-            citations[i].sourceDomain ?? citations[i].objectType,
+            citations[i].source,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(

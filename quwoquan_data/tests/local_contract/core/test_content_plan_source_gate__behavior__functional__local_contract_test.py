@@ -284,6 +284,16 @@ def test_content_plan_quotas_required_includes_image_works():
     spec = {"content": {"modalityContract": "separated_research", "quotas": {"imageWorksPerTarget": 2}}}
     assert cp.content_plan_quotas_required(spec) is True
 
+
+def test_content_plan_quotas_required_includes_video_works():
+    spec = {
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {"videoWorksPerTarget": 1},
+        }
+    }
+    assert cp.content_plan_quotas_required(spec) is True
+
 def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
     entity = "九寨沟"
     source_dir = (

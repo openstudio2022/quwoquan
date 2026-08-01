@@ -13,9 +13,9 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 

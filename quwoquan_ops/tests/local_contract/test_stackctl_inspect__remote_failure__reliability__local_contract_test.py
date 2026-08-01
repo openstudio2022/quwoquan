@@ -58,6 +58,10 @@ class StackctlInspectRemoteFailureTest(unittest.TestCase):
                 stackctl,
                 "_prod_plane_runtime_report",
                 return_value=runtime_failure,
+            ), mock.patch.object(
+                stackctl,
+                "_candidate_workspace_report",
+                return_value={"status": "current", "drifted": False},
             ):
                 result = stackctl.command_inspect(args)
 

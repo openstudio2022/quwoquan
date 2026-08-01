@@ -40,7 +40,7 @@
 ### REQ-003 禁止直接驱动用户可见过程文案、最终答案文本或动效分支
 
 - **禁止**直接驱动用户可见过程文案、最终答案文本或动效分支。
-- 每个事件必须携带 `schema`、`eventId`、`conversationId`、`turnId`、`seq`、`eventType` 与 `createdAt`；不得另造未声明的 `scope` 字段。
+- 每个事件必须携带 `schema`、`eventId`、`sessionId`、`turnId`、`seq`、`eventType` 与 `createdAt`；不得另造未声明的 `scope` 字段。
 - 过程事件正文必须使用用户语言，围绕“已经为你做了什么 / 正在为你核对什么”表达，禁止携带内部推理、prompt、credential 或 secret。
 - `answer_delta` 不得复用于过程抽屉，也不得被 `process_*` 事件反向回填。
 - completed 终态必须携带可展示 answer 或可重放的结构化 journey 之一。

@@ -5,8 +5,8 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	messaging "quwoquan_service/runtime/messaging"
 	rtrec "quwoquan_service/runtime/recommendation"
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
-	postmodel "quwoquan_service/services/content-service/internal/content/post/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 	"strings"
@@ -184,7 +184,15 @@ func applySemanticMentionPayload(post *postmodel.Post, payload map[string]any) e
 		return nil
 	}
 	if semanticMentions, exists := payload["semanticMentions"]; exists {
-		post.SemanticMentions = semanticMentions
+		decoded, err := decodePostSemanticMentions(semanticMentions)
+		if err != nil {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"语义标注格式不合法",
+				err.Error(),
+			)
+		}
+		post.SemanticMentions = decoded
 	}
 	if err := postsemantic.ValidateSuppliedRefs(
 		post.SemanticMentions,

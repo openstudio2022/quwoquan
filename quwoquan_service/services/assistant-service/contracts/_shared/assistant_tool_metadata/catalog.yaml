@@ -1,0 +1,210 @@
+catalog: assistant_tool_metadata
+description: Assistant Tool Fabric 的唯一工具目录；运行时注册表由本文件生成，不允许在 Go 中复制工具 schema。
+tools:
+  - toolName: app_search
+    displayName: 应用信息检索
+    description: 通过 search-service 检索趣我圈站内公开对象，并返回可核验引用。
+    namespace: app
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        query: {type: string, minLength: 1, description: 站内检索词。}
+      required: [query]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        provider: {type: string}
+        summary: {type: string}
+        results: {type: array}
+        citations: {type: array}
+        provenance: {type: object}
+      required: [provider, summary, results, citations, provenance]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: calendar_create_reminder
+    displayName: 创建系统日程提醒
+    description: 在用户设备的系统日历中创建带提醒的日程；必须先展示完整提案并取得用户明确确认。
+    namespace: device
+    placement: device_action
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200, description: 日程标题。}
+        startsAt: {type: string, minLength: 1, description: 带时区的 ISO-8601 开始时间。}
+        durationMinutes: {type: integer, minimum: 1, maximum: 1440}
+        reminderMinutes: {type: integer, minimum: 0, maximum: 10080}
+        notes: {type: string, maxLength: 2000}
+      required: [title, startsAt]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        status: {type: string, enum: [created, rejected, unavailable, failed]}
+        deviceObjectId: {type: string}
+      required: [status]
+    requiresConfirmation: true
+    idempotency: idempotency_key
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: false
+    resilience: {timeoutMs: 30000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 1}
+    recovery: {action: ask_user, disruptionLevel: partial}
+
+  - toolName: web_search
+    displayName: 网络搜索
+    description: 检索公开网络信息并返回可核验引用；也用于天气与行情等实时公共事实。
+    namespace: public_web
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        query: {type: string, minLength: 1, description: 检索主查询词。}
+        searchQueries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              dimension: {type: string}
+              query: {type: string}
+            required: [dimension, query]
+        location: {type: string}
+        locationSearchName: {type: string}
+        symbol: {type: string}
+        symbols: {type: array, items: {type: string}}
+      required: [query]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        references: {type: array}
+        reliable: {type: boolean}
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [summary, references, reliable]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    resilience: {timeoutMs: 12000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
+    recovery: {action: degrade_answer, disruptionLevel: partial}
+
+  - toolName: web_open
+    displayName: 公开网页读取
+    description: 读取公开 HTTPS URL、搜索来源或已读文档链接，并提交不可伪造的来源血缘。
+    namespace: public_web
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        target:
+          type: object
+          additionalProperties: false
+          properties:
+            kind: {type: string, enum: [url, source, document_link]}
+            value: {type: string, minLength: 1}
+          required: [kind, value]
+      required: [runId, target]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        document: {type: object}
+        reference: {type: object}
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [document, reference, evidenceAssessment]
+    requiresConfirmation: false
+    idempotency: content_addressed
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    resilience: {timeoutMs: 15000, maxAttempts: 2, retryBackoffMs: 250, loopDetectionWindow: 3}
+    recovery: {action: degrade_answer, disruptionLevel: partial}
+
+  - toolName: web_find
+    displayName: 网页内容查找
+    description: 在当前 Run 已读取并持久化的网页文档中查找文本，不发起新的网络请求。
+    namespace: public_web
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        documentId: {type: string, minLength: 1}
+        pattern: {type: string, minLength: 1, maxLength: 256}
+        maxMatches: {type: integer, minimum: 1, maximum: 20}
+      required: [runId, documentId, pattern]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        result: {type: object}
+        reference: {type: object}
+        evidenceAssessment:
+          type: object
+          additionalProperties: false
+          properties:
+            status: {type: string, enum: [accepted, insufficient, rejected]}
+            evidenceSufficient: {type: boolean}
+            replanRequired: {type: boolean}
+            reason: {type: string}
+            targetIds: {type: array, items: {type: string}}
+            documentIds: {type: array, items: {type: string}}
+            artifactRefs: {type: array, items: {type: string}}
+            sourceIds: {type: array, items: {type: string}}
+          required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
+      required: [result, reference, evidenceAssessment]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId]
+    readOnly: true
+    resilience: {timeoutMs: 2000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: degrade_answer, disruptionLevel: partial}

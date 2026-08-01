@@ -1,0 +1,1 @@
+"""RecommendationModelRelease adapters."""

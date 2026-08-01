@@ -49,13 +49,11 @@ class AggregationState extends AggregationStateDto {
 
   String get finalAnswerModeWireName => finalAnswerMode.wireName;
 
-  Map<String, String> get blockedByReasons => blockedBy.map(
-    (key, value) => MapEntry(key, value.stopReason.wireName),
-  );
+  Map<String, String> get blockedByReasons =>
+      blockedBy.map((key, value) => MapEntry(key, value.stopReason.wireName));
 
-  Map<String, List<String>> get dependencyRunIds => dependencies.map(
-    (key, value) => MapEntry(key, value.runIds),
-  );
+  Map<String, List<String>> get dependencyRunIds =>
+      dependencies.map((key, value) => MapEntry(key, value.runIds));
 
   static Map<String, dynamic> _normalizeBlockedBy(Object? raw) {
     if (raw is! Map) {
@@ -90,12 +88,10 @@ class AggregationState extends AggregationStateDto {
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
           const <String>[],
-      'policy':
-          (raw['policy'] as String?)?.trim().isNotEmpty == true
+      'policy': (raw['policy'] as String?)?.trim().isNotEmpty == true
           ? (raw['policy'] as String).trim()
           : ContextScopeExpansionPolicy.none.wireName,
-      'reasonCode':
-          (raw['reasonCode'] as String?)?.trim().isNotEmpty == true
+      'reasonCode': (raw['reasonCode'] as String?)?.trim().isNotEmpty == true
           ? (raw['reasonCode'] as String).trim()
           : PlannerReasonCode.needMoreEvidence.wireName,
     };

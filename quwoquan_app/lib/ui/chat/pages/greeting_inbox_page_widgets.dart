@@ -27,6 +27,7 @@ class _GreetingRequestCard extends StatelessWidget {
         ? request.requesterPersonaId
         : request.targetPersonaId;
     final message = request.requestMessage?.trim();
+    final intersectionText = request.intersectionSnapshot?.primaryText.trim();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: SettingsSemanticConstants.blockBackground(isDark),
@@ -64,6 +65,19 @@ class _GreetingRequestCard extends StatelessWidget {
                 fontSize: AppTypography.iosSubheadline,
               ),
             ),
+            if (intersectionText != null &&
+                intersectionText.isNotEmpty) ...<Widget>[
+              SizedBox(height: AppSpacing.intraGroupSm),
+              Text(
+                intersectionText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.iosLabel(context),
+                  fontSize: AppTypography.iosFootnote,
+                ),
+              ),
+            ],
             if (request.isPending) ...<Widget>[
               SizedBox(height: AppSpacing.interGroupMd),
               if (box == _GreetingBox.received)

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 80b68db6b546ae955959cb31a73c5fdfb60da766b906dc9529a837191ea4a01e
+// ContractGraph SHA256: 07b120d8c226ad653523b7a2965cf1f9e0f43704e848966de103c40df7ab319a
 
 part of '../../../user/authentication_challenge_contracts.dart';
 
@@ -12,6 +12,11 @@ final class CreateAlipayAuthorizationRequestCommand {
 
   final String? platform;
   final String? appVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (this.platform != null) "platform": this.platform!,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+  };
 }
 
 final class ResolveOneTapLoginHintCommand {
@@ -45,6 +50,14 @@ final class ResolveOneTapLoginHintCommand {
   final String deviceId;
   final String platform;
   final String? appVersion;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "vendor": this.vendor,
+    "carrierToken": this.carrierToken,
+    "deviceId": this.deviceId,
+    "platform": this.platform,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+  };
 }
 
 final class SendOtpCommand {
@@ -72,6 +85,15 @@ final class SendOtpCommand {
   final String? appVersion;
   final String? sourceOperation;
   final String? bindingTicket;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    "phone": this.phone,
+    if (this.deviceId != null) "deviceId": this.deviceId!,
+    if (this.platform != null) "platform": this.platform!,
+    if (this.appVersion != null) "appVersion": this.appVersion!,
+    if (this.sourceOperation != null) "sourceOperation": this.sourceOperation!,
+    if (this.bindingTicket != null) "bindingTicket": this.bindingTicket!,
+  };
 }
 
 CloudOperationRequestPayload encodeUserAuthenticationChallengeCreateAlipayAuthorizationRequestGeneratedRequest(CreateAlipayAuthorizationRequestCommand request) {

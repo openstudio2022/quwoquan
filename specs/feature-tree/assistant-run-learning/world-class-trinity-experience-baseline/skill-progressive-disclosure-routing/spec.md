@@ -58,13 +58,13 @@
 ### REQ-005 技能目录由独立对象单轨拥有
 
 - `SkillCatalog` 必须独立拥有 fields、`ListSkills` operation、typed errors、application query、catalog source 与 SkillConsent Reader port。
-- `AssistantRun`、`AssistantConversation` 不得保留目录 response type、operation、HTTP route、查询方法或错误 emitted_by；HTTP path `/assistant/skills` 保持不变。
+- `AssistantRun`、`AssistantSession` 不得保留目录 response type、operation、HTTP route、查询方法或错误 emitted_by；HTTP path `/assistant/skills` 保持不变。
 - canonical manifest 只负责运行技能展示元数据，非运行技能的平台能力入口只在 SkillCatalog source 内声明；不得在查询服务或 handler 追加第二套目录。
 
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/_shared/assistant_skill_manifest/schema.yaml`
-- object：`quwoquan_service/services/assistant-service/resources/skills/assistant/assistant_conversation/schema.yaml`
+- object：`quwoquan_service/services/assistant-service/resources/skills/assistant/assistant_session/schema.yaml`
 - operation：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_policy_release/operations.yaml`
 - catalog object：`quwoquan_service/services/assistant-service/contracts/assistant/skill_catalog/object.yaml`
 - catalog operation：`quwoquan_service/services/assistant-service/contracts/assistant/skill_catalog/operations.yaml`
@@ -103,7 +103,7 @@
 - GIVEN metadata、服务实现与测试树已加载
 - WHEN 检查 `ListSkills` 的契约与路由归属
 - THEN canonical operation 只有 `assistant.skill_catalog.ListSkills`
-- AND AssistantRun/AssistantConversation 不再包含目录 fields、operation、handler 或 query
+- AND AssistantRun/AssistantSession 不再包含目录 fields、operation、handler 或 query
 - AND catalog source 或 SkillConsent Reader 任一不可用时返回 SkillCatalog 对象拥有的 typed unavailable
 
 ## 6. 依赖

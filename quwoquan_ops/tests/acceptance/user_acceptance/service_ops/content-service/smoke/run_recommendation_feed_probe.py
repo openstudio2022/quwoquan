@@ -50,7 +50,13 @@ REPO_ROOT = _find_repo_root()
 SCENARIO = "content.recommendation.feed_surfaces_probe"
 REPORT_SCHEMA = "recommendation-feed-probe-report"
 # GetFeed 契约 envelope 必备字段（feedRequestId 服务端权威生成，必须非空）。
-REQUIRED_ENVELOPE_FIELDS = ("items", "feedRequestId", "policyDigest")
+REQUIRED_ENVELOPE_FIELDS = ("items", "feedRequestId", "policyDigest", "outcome")
+CANONICAL_EMPTY_REASONS = {
+    "no_active_release",
+    "no_eligible_content",
+    "following_empty",
+    "continuation_end",
+}
 
 
 def utc_now() -> str:
@@ -142,6 +148,19 @@ def check_envelope(payload: dict[str, Any]) -> list[str]:
     policy_digest = str(payload.get("policyDigest") or "").strip()
     if re.fullmatch(r"sha256:[0-9a-f]{64}", policy_digest) is None:
         errors.append("policyDigest must be a canonical sha256 digest")
+    if isinstance(items, list):
+        outcome = payload.get("outcome")
+        empty_reason = payload.get("emptyReason")
+        if items:
+            if outcome != "content":
+                errors.append("non-empty items require outcome=content")
+            if empty_reason not in (None, ""):
+                errors.append("content outcome cannot carry emptyReason")
+        else:
+            if outcome != "empty":
+                errors.append("empty items require outcome=empty")
+            if empty_reason not in CANONICAL_EMPTY_REASONS:
+                errors.append("empty outcome requires a canonical emptyReason")
     return errors
 
 
@@ -243,6 +262,8 @@ def main() -> int:
             surface_report["itemCount"] = len(payload.get("items") or [])
             surface_report["objectCardCount"] = len(payload.get("objectCards") or [])
             surface_report["policyDigest"] = payload.get("policyDigest", "")
+            surface_report["outcome"] = payload.get("outcome")
+            surface_report["emptyReason"] = payload.get("emptyReason")
             if errors:
                 failures.extend(f"{name}: {e}" for e in errors)
         report["surfaces"][name] = surface_report

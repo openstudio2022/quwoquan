@@ -281,6 +281,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "runId": VERIFY_RUN_ID,
+            "readinessPhase": "commercial",
             "sourceImportReportRef": (
                 f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/{IMPORT_RUN_ID}/import.json"
             ),
@@ -424,7 +425,7 @@ def _fixture(root: Path) -> dict[str, Path]:
     return paths
 
 
-def _write(root: Path) -> Path:
+def _write(root: Path, *, readiness_phase: str = "commercial") -> Path:
     paths = _paths(root)
     return write_environment_release_readiness(
         environment=ENVIRONMENT,
@@ -439,6 +440,7 @@ def _write(root: Path) -> Path:
         post_api_verification_path=paths["verify"] / "post-api-verification.json",
         output_root=root,
         output_path=paths["verify"] / "release-readiness.json",
+        readiness_phase=readiness_phase,
     )
 
 
@@ -464,6 +466,36 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
     assert receipt["guestLogin"]["pageId"] == "user.login.anonymous"
     premium = next(row for row in receipt["feedQueries"] if row["name"] == "premium_stream")
     assert premium["matchedPostIds"] == ["post-video-a"]
+
+
+def test_environment_release_readiness__consumer_excludes_commercial_premium_gate__local_contract(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(tmp_path)
+    post_path = paths["verify"] / "post-api-verification.json"
+    post_report = json.loads(post_path.read_text(encoding="utf-8"))
+    post_report["readinessPhase"] = "consumer"
+    post_report["feedQueries"] = [
+        row
+        for row in post_report["feedQueries"]
+        if row["name"] != "premium_stream"
+    ]
+    write_json(post_path, post_report)
+
+    report = _write(tmp_path, readiness_phase="consumer")
+    receipt = json.loads(report.read_text(encoding="utf-8"))
+
+    assert receipt["readinessPhase"] == "consumer"
+    assert receipt["counts"]["premiumPlayableVideos"] == 0
+    assert {
+        row["name"] for row in receipt["feedQueries"]
+    } == {
+        "discovery_work",
+        "typed_article",
+        "typed_image",
+        "typed_video",
+        "homepage_recommend",
+    }
 
 
 def test_environment_release_readiness__premium_must_bind_release_post__local_contract(

@@ -304,9 +304,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       }
       final rotatedPath = await _applyRotateToCurrentImage();
       if (rotatedPath == null) {
-        await _showEditorActionFailure(
-          title: MediaText.imageEditorRotate,
-        );
+        await _showEditorActionFailure(title: MediaText.imageEditorRotate);
         return;
       }
       _commitBakedStep(
@@ -339,9 +337,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       if (preset != null && _hasFilterAdjustments) {
         final filteredPath = await _applyFilterToCurrentImage();
         if (filteredPath == null) {
-          await _showEditorActionFailure(
-            title: MediaText.imageEditorFilter,
-          );
+          await _showEditorActionFailure(title: MediaText.imageEditorFilter);
           return;
         }
         _commitBakedStep(
@@ -361,9 +357,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       if (_mosaicStrokes.isNotEmpty) {
         final mosaicPath = await _applyMosaicToCurrentImage();
         if (mosaicPath == null) {
-          await _showEditorActionFailure(
-            title: MediaText.imageEditorMosaic,
-          );
+          await _showEditorActionFailure(title: MediaText.imageEditorMosaic);
           return;
         }
         _commitBakedStep(
@@ -384,9 +378,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       if (_textItems.isNotEmpty) {
         final textPath = await _applyTextToCurrentImage();
         if (textPath == null) {
-          await _showEditorActionFailure(
-            title: MediaText.imageEditorText,
-          );
+          await _showEditorActionFailure(title: MediaText.imageEditorText);
           return;
         }
         _commitBakedStep(

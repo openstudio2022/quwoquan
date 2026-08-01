@@ -15,6 +15,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	postgenerated "quwoquan_service/services/content-service/generated/content/post"
 	contentgenerated "quwoquan_service/services/content-service/generated/media/media_upload_session"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 )
@@ -146,10 +147,9 @@ func TestPostBindAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 			http.MethodPost,
 			"/content/posts:publish",
 			strings.NewReader(fmt.Sprintf(
-				`{"publishIntentId":"media-fence-publish-%s","localDraftId":"media-fence-draft-%s","mimeType":"image","body":"并发引用围栏","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
+				`{"publishIntentId":"media-fence-publish-%s","localDraftId":"media-fence-draft-%s","contentType":"image","body":"并发引用围栏","visibility":"public","mediaAssetIds":["%s"]}`,
 				suffix,
 				suffix,
-				mediaID,
 				mediaID,
 			)),
 		)
@@ -513,6 +513,13 @@ func TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersist
 		expectedCode   string
 	}{
 		{
+			name: "retired_content_type_key",
+			body: `{"mediaType":"image","contentType":"image/jpeg","fileSize":1024,` +
+				`"expectedSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   postgenerated.ErrInvalidArgument.Error(),
+		},
+		{
 			name: "oversized_video",
 			body: `{"mediaType":"video","mimeType":"video/mp4","fileSize":52428801,` +
 				`"expectedSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}`,
@@ -520,7 +527,7 @@ func TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersist
 			expectedCode:   contentgenerated.ErrMediaFileTooLarge.Error(),
 		},
 		{
-			name: "mismatched_content_type",
+			name: "mismatched_mime_type",
 			body: `{"mediaType":"video","mimeType":"image/png","fileSize":1024,` +
 				`"expectedSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}`,
 			expectedStatus: http.StatusUnsupportedMediaType,

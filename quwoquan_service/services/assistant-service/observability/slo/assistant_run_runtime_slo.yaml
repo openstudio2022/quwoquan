@@ -1,0 +1,56 @@
+service: assistant-service
+domain: assistant
+capability: durable-assistant-run-runtime
+
+metrics:
+  start_duration_seconds: http_server_duration_seconds
+  first_visible_response_ms: assistant_first_visible_response_ms
+  worker_claim_total: assistant_run_worker_claim_total
+  worker_execution_seconds: assistant_run_worker_execution_seconds
+  checkpoint_age_seconds: assistant_run_checkpoint_age_seconds
+  cancel_duration_seconds: assistant_run_cancel_duration_seconds
+  state_transition_total: assistant_run_state_transition_total
+  terminal_outcome_total: assistant_run_terminal_outcome_total
+  item_closure_total: assistant_run_item_closure_total
+  lease_contention_total: assistant_run_lease_contention_total
+  completion_rejected_total: assistant_run_completion_rejected_total
+
+privacy:
+  permitted_labels: [outcome, route, method, status]
+  prohibited_labels:
+    [account_id, session_id, run_id, skill_id, tool_use_id, instruction, answer, checkpoint_id]
+
+slis:
+  - id: assistant_run_start_latency
+    description: StartAssistantRun 从收到命令到持久化 accepted Run 与 journal 的 P95。
+    sli: histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service="assistant-service",route="/assistant/sessions/{sessionId}/runs",method="POST"}[5m])) by (le))
+    objective_seconds: 1.5
+  - id: assistant_run_first_visible_response
+    description: Run 创建到首个 answer_delta 或最终可见答案的 P95。
+    sli: histogram_quantile(0.95, sum(rate(assistant_first_visible_response_ms_bucket[5m])) by (le))
+    objective_milliseconds: 3000
+  - id: assistant_run_worker_recovery
+    description: 过期 claim 被新 fencing token 接管后成功处理的比例。
+    sli: sum(rate(assistant_run_worker_claim_total{outcome="recovered"}[15m])) / clamp_min(sum(rate(assistant_run_worker_claim_total{outcome=~"recovered|failed"}[15m])), 0.001)
+    objective: 0.99
+  - id: assistant_run_cancel_convergence
+    description: CancelAssistantRun 停止 AgentLoop、工具和 Subagent 并提交 cancelled 终态的 P95。
+    sli: histogram_quantile(0.95, sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome="succeeded"}[5m])) by (le))
+    objective_seconds: 10
+
+alerts:
+  worker_recovery_failed:
+    condition: increase(assistant_run_worker_claim_total{outcome="failed"}[10m]) > 0
+    severity: critical
+  checkpoint_stale:
+    condition: histogram_quantile(0.95, sum(rate(assistant_run_checkpoint_age_seconds_bucket[15m])) by (le)) > 30
+    severity: warning
+  cancel_slow:
+    condition: histogram_quantile(0.95, sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome="succeeded"}[15m])) by (le)) > 10
+    severity: critical
+  lease_contention:
+    condition: sum(rate(assistant_run_lease_contention_total[10m])) > 0.05
+    severity: warning
+  completion_rejected:
+    condition: sum(rate(assistant_run_completion_rejected_total[10m])) > 0.1
+    severity: warning

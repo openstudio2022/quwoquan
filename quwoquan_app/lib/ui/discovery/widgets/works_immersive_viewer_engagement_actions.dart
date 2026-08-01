@@ -633,7 +633,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   /// Opens the post-level more-options sheet for the currently visible post.
   ///
-  /// Work Browser V1.0：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）。
+  /// 作品浏览器：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）。
   void _showWorksMoreSheet(BuildContext context) {
     final posts = _buildFeed();
     final post = posts.isEmpty
