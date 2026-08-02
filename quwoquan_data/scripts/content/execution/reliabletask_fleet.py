@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -423,27 +424,35 @@ def run_reliabletask_fleet(
 
     policy = active_runtime_policy()
     environment["QWQ_DATA_FLEET_MAX_ATTEMPTS"] = str(policy.queue_max_attempts)
-    restart_limit = policy.queue_max_startup_failures
+    startup_failure_limit = policy.queue_max_startup_failures
+    restart_deadline = time.monotonic() + min(
+        batch_timeout_seconds,
+        policy.campaign_lane_timeout_seconds,
+    )
 
-    def wait_for_backend(attempt: int) -> None:
+    def wait_for_backend(startup_failures: int) -> None:
         print(
             "[data fleet] waiting for Mongo/Redis recovery before worker restart; "
-            f"attempt {attempt + 1}/{restart_limit} for {execution_id}"
+            f"consecutive startup failures {startup_failures}/"
+            f"{startup_failure_limit} for {execution_id}"
         )
         recovered = _wait_for_fleet_transport(
             transport,
             timeout_seconds=policy.startup_timeout_seconds,
             retry_delay_seconds=policy.preflight_retry_delay_seconds,
             socket_timeout_seconds=policy.preflight_network_timeout_seconds,
+            required_ready_probes=policy.preflight_startup_attempts,
         )
         if not recovered:
             print(
                 "[data fleet] Mongo/Redis recovery window elapsed; "
-                f"continuing bounded restart {attempt + 1}/{restart_limit} "
-                f"for {execution_id}"
+                f"continuing deadline-bounded recovery for {execution_id}"
             )
 
-    for attempt in range(1, restart_limit + 1):
+    run_attempt = 0
+    consecutive_startup_failures = 0
+    while time.monotonic() < restart_deadline:
+        run_attempt += 1
         # A previous process may have left a valid nonterminal receipt.  Never
         # mistake it for the receipt of the new invocation.
         report_path.unlink(missing_ok=True)
@@ -453,16 +462,20 @@ def run_reliabletask_fleet(
             environment=environment,
         )
         if not report_path.is_file():
-            if attempt >= restart_limit:
+            consecutive_startup_failures += 1
+            if consecutive_startup_failures >= startup_failure_limit:
                 raise RuntimeError(
                     "ReliableTask fleet 未产出报告"
-                    f"（exit={returncode}, attempts={attempt}, executionId={execution_id}）"
+                    "（exit="
+                    f"{returncode}, consecutiveStartupFailures="
+                    f"{consecutive_startup_failures}, executionId={execution_id}）"
                 )
             print(
                 "[data fleet] worker exited without a receipt; "
-                f"restart {attempt}/{restart_limit} for {execution_id}"
+                f"consecutive startup failures {consecutive_startup_failures}/"
+                f"{startup_failure_limit} for {execution_id}"
             )
-            wait_for_backend(attempt)
+            wait_for_backend(consecutive_startup_failures)
             continue
         report = read_json(report_path)
         assert_valid(
@@ -476,23 +489,25 @@ def run_reliabletask_fleet(
             outcome.status in {"succeeded", "dead"}
             for outcome in decoded.outcomes
         )
-        if returncode == 0 or decoded.passed or all_terminal:
+        if decoded.passed or all_terminal:
             return decoded
         attempt_report_path = evidence_dir / (
-            f"{stage.value}_fleet_report.attempt-{attempt:03d}.json"
+            f"{stage.value}_fleet_report.attempt-{run_attempt:03d}.json"
         )
         write_json(attempt_report_path, report)
-        if attempt >= restart_limit:
-            raise RuntimeError(
-                "ReliableTask fleet 后端中断后仍有非终态任务"
-                f"（exit={returncode}, attempts={attempt}, executionId={execution_id}）"
-            )
+        # A worker that lived long enough to produce a valid durable-queue
+        # receipt was not a startup failure.  Runtime interruptions may recur
+        # during a long Auto batch, so only the campaign deadline bounds them.
+        consecutive_startup_failures = 0
         print(
             "[data fleet] nonterminal receipt after worker interruption; "
-            f"restart {attempt}/{restart_limit} for {execution_id}"
+            f"runtime restart {run_attempt} for {execution_id}"
         )
-        wait_for_backend(attempt)
-    raise AssertionError("ReliableTask fleet restart loop exhausted unexpectedly")
+        wait_for_backend(consecutive_startup_failures)
+    raise RuntimeError(
+        "ReliableTask fleet recovery exceeded campaign deadline"
+        f"（executionId={execution_id}）"
+    )
 
 
 __all__ = [

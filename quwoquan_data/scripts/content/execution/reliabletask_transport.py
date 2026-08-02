@@ -152,26 +152,32 @@ def _wait_for_fleet_transport(
     timeout_seconds: float,
     retry_delay_seconds: float,
     socket_timeout_seconds: float,
+    required_ready_probes: int = 1,
 ) -> bool:
     """Wait for a bounded backend recovery window before restarting a worker."""
-    if _fleet_transport_ready(
-        transport,
-        socket_timeout_seconds=socket_timeout_seconds,
-    ):
-        return True
-    try:
-        _ensure_reliabletask_fleet_transport(transport)
-    except RuntimeError:
-        # Docker may itself still be restarting.  Preserve the bounded socket
-        # wait, then let the caller's next restart attempt reconcile again.
-        pass
+    if required_ready_probes < 1:
+        raise ValueError("ReliableTask fleet ready probe count must be positive")
+    ready_streak = 0
+    reconciled = False
     deadline = time.monotonic() + timeout_seconds
     while True:
         if _fleet_transport_ready(
             transport,
             socket_timeout_seconds=socket_timeout_seconds,
         ):
-            return True
+            ready_streak += 1
+            if ready_streak >= required_ready_probes:
+                return True
+        else:
+            ready_streak = 0
+            if not reconciled:
+                try:
+                    _ensure_reliabletask_fleet_transport(transport)
+                except RuntimeError:
+                    # Docker may itself still be restarting.  Preserve the
+                    # bounded socket wait and keep probing the frozen endpoint.
+                    pass
+                reconciled = True
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return False

@@ -295,3 +295,167 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     assert decoded.passed is True
     archived = tmp_path / "evidence/reliabletask/author_fleet_report.attempt-001.json"
     assert archived.is_file()
+
+
+def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    interrupted = _report(
+        passed=False,
+        required_quota=1,
+        commercial_accepted=0,
+    )
+    interrupted.update(
+        {
+            "succeeded": 0,
+            "stageCompletedCount": 0,
+            "publishTaskCount": 0,
+            "objectTransactionResultCount": 0,
+            "finalizedObjectCount": 0,
+            "taskOutcomes": [
+                {
+                    "jobId": f"job-{index}",
+                    "status": "processing" if index == 0 else "ready",
+                    "attempts": 0,
+                }
+                for index in range(10)
+            ],
+        }
+    )
+    resumed = _report(
+        passed=True,
+        required_quota=1,
+        commercial_accepted=10,
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "resolve_reliabletask_fleet_transport",
+        lambda: ReliableTaskFleetTransport(
+            target="test",
+            mongo_uri="mongodb://127.0.0.1:27017/quwoquan",
+            redis_addr="127.0.0.1:6379",
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "build_fleet_request",
+        lambda _execution_id, _stage: {
+            "objectTimeoutMilliseconds": 1_000,
+            "jobs": [{} for _index in range(10)],
+        },
+    )
+    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_command",
+        lambda: (["fleet"], tmp_path),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_agent_python",
+        lambda: Path("/usr/bin/python3"),
+    )
+    recovery_waits: list[str] = []
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_wait_for_fleet_transport",
+        lambda transport, **_kwargs: recovery_waits.append(transport.target) or True,
+    )
+    invocations: list[int] = []
+
+    def _run(command: list[str], **_kwargs: object) -> int:
+        invocation = len(invocations) + 1
+        invocations.append(invocation)
+        if invocation <= 3:
+            write_json(Path(command[-1]), interrupted)
+            return 1
+        if invocation == 4:
+            return 1
+        write_json(Path(command[-1]), resumed)
+        return 0
+
+    monkeypatch.setattr(reliabletask_fleet, "_run_fleet_process", _run)
+
+    decoded = reliabletask_fleet.run_reliabletask_fleet(
+        "20260728--travel-homepage-supply--test-region-a--pilot-001",
+        QueueJobStage.AUTHOR,
+        workers=1,
+        completion_grace_seconds=1,
+    )
+
+    assert invocations == [1, 2, 3, 4, 5]
+    assert recovery_waits == ["test", "test", "test", "test"]
+    assert decoded.passed is True
+    for attempt in range(1, 4):
+        assert (
+            tmp_path
+            / f"evidence/reliabletask/author_fleet_report.attempt-{attempt:03d}.json"
+        ).is_file()
+
+
+def test_zero_exit_nonterminal_receipt_is_not_false_completion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    interrupted = _report(
+        passed=False,
+        required_quota=1,
+        commercial_accepted=0,
+    )
+    interrupted["taskOutcomes"] = [
+        {
+            "jobId": f"job-{index}",
+            "status": "processing" if index == 0 else "ready",
+            "attempts": 0,
+        }
+        for index in range(10)
+    ]
+    resumed = _report(passed=True, required_quota=1, commercial_accepted=10)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "resolve_reliabletask_fleet_transport",
+        lambda: ReliableTaskFleetTransport(
+            target="test",
+            mongo_uri="mongodb://127.0.0.1:27017/quwoquan",
+            redis_addr="127.0.0.1:6379",
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "build_fleet_request",
+        lambda _execution_id, _stage: {
+            "objectTimeoutMilliseconds": 1_000,
+            "jobs": [{} for _index in range(10)],
+        },
+    )
+    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
+    monkeypatch.setattr(reliabletask_fleet, "_fleet_command", lambda: (["fleet"], tmp_path))
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_agent_python",
+        lambda: Path("/usr/bin/python3"),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_wait_for_fleet_transport",
+        lambda _transport, **_kwargs: True,
+    )
+    invocations: list[int] = []
+
+    def _run(command: list[str], **_kwargs: object) -> int:
+        invocations.append(len(invocations) + 1)
+        write_json(Path(command[-1]), interrupted if len(invocations) == 1 else resumed)
+        return 0
+
+    monkeypatch.setattr(reliabletask_fleet, "_run_fleet_process", _run)
+
+    decoded = reliabletask_fleet.run_reliabletask_fleet(
+        "20260728--travel-homepage-supply--test-region-a--pilot-001",
+        QueueJobStage.AUTHOR,
+        workers=1,
+        completion_grace_seconds=1,
+    )
+
+    assert invocations == [1, 2]
+    assert decoded.passed is True
