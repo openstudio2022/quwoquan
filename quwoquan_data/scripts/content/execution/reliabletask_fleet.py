@@ -3,13 +3,10 @@ from __future__ import annotations
 
 import os
 import signal
-import socket
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
-from urllib.parse import urlparse
 
 from core.control_types import QueueBackend, QueueJobStage, QueueJobState
 from core.io import read_json, write_json
@@ -18,6 +15,12 @@ from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
 from content.execution.identity import parse_execution_id
 from content.execution.queue.core import _load_jobs
+from content.execution.reliabletask_transport import (
+    ReliableTaskFleetTransport,
+    _wait_for_fleet_transport,
+    reliabletask_fleet_preflight,
+    resolve_reliabletask_fleet_transport,
+)
 
 
 _FLEET_TASK_STATUSES = frozenset(
@@ -30,7 +33,6 @@ _FLEET_ACCEPTED_CONTENT_STATUSES = frozenset(
         "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH",
     }
 )
-_STACKCTL_PATH = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
     QueueJobStage.AUTHOR: frozenset({"build_homepage", "post_author"}),
     QueueJobStage.PUBLISH: frozenset({"publish"}),
@@ -109,37 +111,6 @@ class ReliableTaskFleetReport:
             accepted_content_throughput_status=accepted_status,
             finalized_object_count=finalized_object_count,
         )
-
-
-@dataclass(frozen=True, slots=True)
-class ReliableTaskFleetTransport:
-    target: str
-    mongo_uri: str
-    redis_addr: str
-
-    @classmethod
-    def from_document(cls, value: object) -> "ReliableTaskFleetTransport":
-        if not isinstance(value, Mapping):
-            raise ValueError("ReliableTask fleet transport must be an object")
-        expected_fields = {"target", "mongoUri", "redisAddr"}
-        if set(value) != expected_fields:
-            raise ValueError("ReliableTask fleet transport fields are invalid")
-        target = str(value.get("target") or "").strip()
-        mongo_uri = str(value.get("mongoUri") or "").strip()
-        redis_addr = str(value.get("redisAddr") or "").strip()
-        parsed = urlparse(mongo_uri)
-        host, separator, port = redis_addr.rpartition(":")
-        if (
-            not target
-            or parsed.scheme != "mongodb"
-            or not parsed.hostname
-            or parsed.port is None
-            or not host
-            or not separator
-            or not port.isdecimal()
-        ):
-            raise ValueError("ReliableTask fleet transport values are invalid")
-        return cls(target=target, mongo_uri=mongo_uri, redis_addr=redis_addr)
 
 
 def _fleet_job_document(job: object) -> dict[str, str]:
@@ -300,76 +271,6 @@ def build_fleet_request(
     return payload
 
 
-def resolve_reliabletask_fleet_transport() -> ReliableTaskFleetTransport:
-    """Resolve runtime endpoints only through the Ops-owned topology facade."""
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(_STACKCTL_PATH),
-            "--output-format",
-            "json",
-            "data-execution-fleet",
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout).strip() or "no diagnostic output"
-        raise RuntimeError(f"ReliableTask fleet topology is unavailable: {detail}")
-    try:
-        document = read_json_text(completed.stdout)
-    except ValueError as exc:
-        raise RuntimeError("ReliableTask fleet topology returned invalid JSON") from exc
-    if not isinstance(document, Mapping):
-        raise RuntimeError("ReliableTask fleet topology result must be an object")
-    exit_code = document.get("exitCode")
-    if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
-        raise RuntimeError("ReliableTask fleet topology reported failure")
-    return ReliableTaskFleetTransport.from_document(document.get("fleet"))
-
-
-def _transport_socket_parts(transport: ReliableTaskFleetTransport) -> tuple[tuple[str, int], tuple[str, int]]:
-    mongo = urlparse(transport.mongo_uri)
-    redis_host, _, redis_port = transport.redis_addr.rpartition(":")
-    if mongo.hostname is None or mongo.port is None:
-        raise ValueError("ReliableTask fleet Mongo endpoint is invalid")
-    return (mongo.hostname, mongo.port), (redis_host, int(redis_port))
-
-
-def reliabletask_fleet_preflight() -> dict[str, object]:
-    """Probe the resolved fleet control plane before expensive source work starts."""
-    transport = resolve_reliabletask_fleet_transport()
-    from core.runtime_policy import active_runtime_policy
-
-    timeout = float(active_runtime_policy().preflight_network_timeout_seconds)
-    mongo, redis = _transport_socket_parts(transport)
-    checks: list[tuple[str, tuple[str, int]]] = [("mongo", mongo), ("redis", redis)]
-    outcomes: dict[str, bool] = {}
-    issues: list[str] = []
-    for name, address in checks:
-        try:
-            with socket.create_connection(address, timeout=timeout):
-                outcomes[name] = True
-        except OSError as exc:
-            outcomes[name] = False
-            issues.append(f"{name} endpoint unavailable: {type(exc).__name__}")
-    return {
-        "ready": not issues,
-        "target": transport.target,
-        "mongo": outcomes["mongo"],
-        "redis": outcomes["redis"],
-        "issues": issues,
-    }
-
-
-def read_json_text(text: str) -> object:
-    import json
-
-    return json.loads(text)
-
-
 def _fleet_command() -> tuple[list[str], Path]:
     binary = str(os.environ.get("QWQ_DATA_FLEET_BINARY") or "").strip()
     service_root = REPO_ROOT / "quwoquan_service"
@@ -520,28 +421,78 @@ def run_reliabletask_fleet(
     }
     from core.runtime_policy import active_runtime_policy
 
-    environment["QWQ_DATA_FLEET_MAX_ATTEMPTS"] = str(
-        active_runtime_policy().queue_max_attempts
-    )
-    returncode = _run_fleet_process(
-        [*command, "--request", str(request_path), "--report", str(report_path)],
-        cwd=cwd,
-        environment=environment,
-    )
-    if not report_path.is_file():
-        raise RuntimeError(
-            "ReliableTask fleet 未产出报告"
-            f"（exit={returncode}, executionId={execution_id}）"
+    policy = active_runtime_policy()
+    environment["QWQ_DATA_FLEET_MAX_ATTEMPTS"] = str(policy.queue_max_attempts)
+    restart_limit = policy.queue_max_startup_failures
+
+    def wait_for_backend(attempt: int) -> None:
+        print(
+            "[data fleet] waiting for Mongo/Redis recovery before worker restart; "
+            f"attempt {attempt + 1}/{restart_limit} for {execution_id}"
         )
-    report = read_json(report_path)
-    assert_valid(
-        report,
-        "release",
-        "reliabletask_fleet_report",
-        label="reliabletask_fleet_report",
-    )
-    decoded = ReliableTaskFleetReport.from_document(report)
-    return decoded
+        recovered = _wait_for_fleet_transport(
+            transport,
+            timeout_seconds=policy.startup_timeout_seconds,
+            retry_delay_seconds=policy.preflight_retry_delay_seconds,
+            socket_timeout_seconds=policy.preflight_network_timeout_seconds,
+        )
+        if not recovered:
+            print(
+                "[data fleet] Mongo/Redis recovery window elapsed; "
+                f"continuing bounded restart {attempt + 1}/{restart_limit} "
+                f"for {execution_id}"
+            )
+
+    for attempt in range(1, restart_limit + 1):
+        # A previous process may have left a valid nonterminal receipt.  Never
+        # mistake it for the receipt of the new invocation.
+        report_path.unlink(missing_ok=True)
+        returncode = _run_fleet_process(
+            [*command, "--request", str(request_path), "--report", str(report_path)],
+            cwd=cwd,
+            environment=environment,
+        )
+        if not report_path.is_file():
+            if attempt >= restart_limit:
+                raise RuntimeError(
+                    "ReliableTask fleet 未产出报告"
+                    f"（exit={returncode}, attempts={attempt}, executionId={execution_id}）"
+                )
+            print(
+                "[data fleet] worker exited without a receipt; "
+                f"restart {attempt}/{restart_limit} for {execution_id}"
+            )
+            wait_for_backend(attempt)
+            continue
+        report = read_json(report_path)
+        assert_valid(
+            report,
+            "release",
+            "reliabletask_fleet_report",
+            label="reliabletask_fleet_report",
+        )
+        decoded = ReliableTaskFleetReport.from_document(report)
+        all_terminal = all(
+            outcome.status in {"succeeded", "dead"}
+            for outcome in decoded.outcomes
+        )
+        if returncode == 0 or decoded.passed or all_terminal:
+            return decoded
+        attempt_report_path = evidence_dir / (
+            f"{stage.value}_fleet_report.attempt-{attempt:03d}.json"
+        )
+        write_json(attempt_report_path, report)
+        if attempt >= restart_limit:
+            raise RuntimeError(
+                "ReliableTask fleet 后端中断后仍有非终态任务"
+                f"（exit={returncode}, attempts={attempt}, executionId={execution_id}）"
+            )
+        print(
+            "[data fleet] nonterminal receipt after worker interruption; "
+            f"restart {attempt}/{restart_limit} for {execution_id}"
+        )
+        wait_for_backend(attempt)
+    raise AssertionError("ReliableTask fleet restart loop exhausted unexpectedly")
 
 
 __all__ = [

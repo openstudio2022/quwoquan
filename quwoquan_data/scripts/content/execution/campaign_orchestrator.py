@@ -129,18 +129,65 @@ def run_campaign(
                 source_digest=str(plan["sourceDigest"]),
             )
             final_phase = "review"
-            review = run_phase(
-                clones,
-                submissions,
-                stage=_REVIEW_STAGE,
-                runtime=runtime,
-                root_execution_id=root_id,
-                timeout_seconds=effective_lane_timeout,
-                worker_count=policy.campaign_lane_workers,
-                lane_runner=lane_runner,
-            )
-            publishable: list[str] = []
-            for carrier, (code, error) in review.items():
+
+            def publish_reviewed_lane(carrier: str) -> None:
+                assert_frozen_main_tree(
+                    runtime.repo_root,
+                    git_branch=str(plan["gitBranch"]),
+                    commit_sha=str(plan["gitCommitSha"]),
+                    source_digest=str(plan["sourceDigest"]),
+                )
+                # Publish stays single-writer because all carriers share the
+                # canonical PUBLISH_ROOT.  It starts as soon as this lane's
+                # review closes instead of waiting for sibling reviews.
+                published = run_phase(
+                    clones,
+                    submissions,
+                    stage=_PUBLISH_STAGE,
+                    runtime=runtime,
+                    root_execution_id=root_id,
+                    timeout_seconds=effective_lane_timeout,
+                    worker_count=1,
+                    lane_runner=lane_runner,
+                    carriers=(carrier,),
+                )
+                code, error = published[carrier]
+                lanes[carrier].update(
+                    {
+                        "publishReturnCode": code,
+                        "phase": "publish",
+                        "error": error if code != 0 else None,
+                    }
+                )
+                if code != 0:
+                    lanes[carrier]["status"] = "blocked"
+                    return
+                try:
+                    receipt = load_lane_receipt(
+                        root_id,
+                        carrier,
+                        "publish",
+                        root=runtime.campaigns_root,
+                    )
+                except (OSError, ValueError) as exc:
+                    lanes[carrier]["status"] = "blocked"
+                    lanes[carrier]["error"] = str(exc)
+                    return
+                if str(receipt.get("executionId") or "") != str(
+                    submissions[carrier]["executionId"]
+                ):
+                    lanes[carrier]["status"] = "blocked"
+                    lanes[carrier]["error"] = (
+                        f"{carrier} publish receipt executionId drift"
+                    )
+                    return
+                apply_receipt_fields(lanes, carrier, receipt, phase="publish")
+
+            def handle_review_result(
+                carrier: str,
+                result: tuple[int, str | None],
+            ) -> None:
+                code, error = result
                 lanes[carrier].update(
                     {
                         "reviewReturnCode": code,
@@ -150,7 +197,7 @@ def run_campaign(
                 )
                 if code != 0:
                     lanes[carrier]["status"] = "blocked"
-                    continue
+                    return
                 receipt = load_review_for_lane(
                     runtime,
                     root_id,
@@ -163,14 +210,26 @@ def run_campaign(
                     lanes[carrier]["error"] = (
                         error or f"{carrier} review receipt missing after success"
                     )
-                    continue
+                    return
                 apply_receipt_fields(lanes, carrier, receipt, phase="review")
                 if int(receipt["qualifiedCount"]) > 0 and str(
                     receipt["status"]
                 ) in {"qualified", "partial"}:
-                    publishable.append(carrier)
+                    publish_reviewed_lane(carrier)
                 else:
                     lanes[carrier]["status"] = "blocked"
+
+            run_phase(
+                clones,
+                submissions,
+                stage=_REVIEW_STAGE,
+                runtime=runtime,
+                root_execution_id=root_id,
+                timeout_seconds=effective_lane_timeout,
+                worker_count=policy.campaign_lane_workers,
+                lane_runner=lane_runner,
+                on_result=handle_review_result,
+            )
             write_report(
                 runtime,
                 root_id,
@@ -186,57 +245,6 @@ def run_campaign(
                 failure=None,
             )
             final_phase = "publish"
-            if publishable:
-                assert_frozen_main_tree(
-                    runtime.repo_root,
-                    git_branch=str(plan["gitBranch"]),
-                    commit_sha=str(plan["gitCommitSha"]),
-                    source_digest=str(plan["sourceDigest"]),
-                )
-                # Canonical publish shares PUBLISH_ROOT + mutex; concurrent
-                # carrier publish races leave orphan media and dead object jobs.
-                published = run_phase(
-                    clones,
-                    submissions,
-                    stage=_PUBLISH_STAGE,
-                    runtime=runtime,
-                    root_execution_id=root_id,
-                    timeout_seconds=effective_lane_timeout,
-                    worker_count=1,
-                    lane_runner=lane_runner,
-                    carriers=tuple(publishable),
-                )
-                for carrier, (code, error) in published.items():
-                    lanes[carrier].update(
-                        {
-                            "publishReturnCode": code,
-                            "phase": "publish",
-                            "error": error if code != 0 else None,
-                        }
-                    )
-                    if code != 0:
-                        lanes[carrier]["status"] = "blocked"
-                        continue
-                    try:
-                        receipt = load_lane_receipt(
-                            root_id,
-                            carrier,
-                            "publish",
-                            root=runtime.campaigns_root,
-                        )
-                    except (OSError, ValueError) as exc:
-                        lanes[carrier]["status"] = "blocked"
-                        lanes[carrier]["error"] = str(exc)
-                        continue
-                    if str(receipt.get("executionId") or "") != str(
-                        submissions[carrier]["executionId"]
-                    ):
-                        lanes[carrier]["status"] = "blocked"
-                        lanes[carrier]["error"] = (
-                            f"{carrier} publish receipt executionId drift"
-                        )
-                        continue
-                    apply_receipt_fields(lanes, carrier, receipt, phase="publish")
             assert_frozen_revision(
                 runtime.repo_root,
                 git_branch=str(plan["gitBranch"]),

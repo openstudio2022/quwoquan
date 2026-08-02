@@ -1,6 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.coverage import coverage_entity_type
+from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, Callable, ExecutionContext, Mapping, Sequence, _active_spec, _active_target, _download_repair_lanes, image_asset_strategy, image_strategy_allows_ai_generated, issue_messages, json, re, read_json, require_domain_etype, save_execution_state, store, write_json
 
 def _checkpoint_prompts(ctx: ExecutionContext, stage: str) -> list[str]:
@@ -36,10 +36,18 @@ def _checkpoint_prompts(ctx: ExecutionContext, stage: str) -> list[str]:
         vertical = ctx.spec.vertical
         pending_lanes_by_entity: dict[str, dict[str, list[str]]] = {}
         for entity in ctx.entity_ids:
+            entity_etype = coverage_entity_type_for_entity(ctx.spec, entity) or etype
             lane_issues = {
                 lane: issue_messages(found)
                 for lane in ("homepage", "article", "image")
-                if (found := _download_research_lane_issues(ctx, entity, etype, lane))
+                if (
+                    found := _download_research_lane_issues(
+                        ctx,
+                        entity,
+                        entity_etype,
+                        lane,
+                    )
+                )
             }
             if lane_issues:
                 pending_lanes_by_entity[entity] = lane_issues
@@ -67,8 +75,17 @@ def _checkpoint_prompts(ctx: ExecutionContext, stage: str) -> list[str]:
                 missing_lanes.setdefault(lane, [str(item) for item in repair_lane_issues])
             if not missing_lanes:
                 continue
+            target = _active_target(ctx, entity)
+            domain, entity_type = require_domain_etype(
+                target.get("entityType")
+                or coverage_entity_type_for_entity(ctx.spec, entity)
+                or etype,
+                context=entity,
+            )
             object_dir = resolve_entity_object_dir(
-                ctx.execution_id, entity, etype_hint=etype
+                ctx.execution_id,
+                entity,
+                etype_hint=f"{domain}/{entity_type}",
             )
             if repair and not repair_pending:
                 repair = {}

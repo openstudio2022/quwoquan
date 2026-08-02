@@ -8,7 +8,11 @@ import shutil
 import subprocess
 
 from content.execution.identity import validate_execution_id
-from content.execution.workspace import execution_root, transaction_workspace_root
+from content.execution.workspace import (
+    archive_frozen_target_set,
+    execution_root,
+    transaction_workspace_root,
+)
 from core.controller_lease import active_controller_issue
 
 
@@ -87,6 +91,7 @@ def discard_execution(execution_id: str) -> None:
             "GATE_BLOCK active task execute process owns execution: "
             + "; ".join(active_processes)
         )
+    archive_frozen_target_set(normalized_id)
     if (root / "evidence" / "reliabletask").is_dir():
         from content.execution.reliabletask_fleet import discard_reliabletask_execution
 

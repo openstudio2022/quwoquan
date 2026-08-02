@@ -171,7 +171,12 @@ def _managed_checkpoint_job_issues(
         entity = _managed_prompt_entity(prompt)
         if lane not in {"homepage", "article", "image", "video"} or not entity:
             return [f"download_plan prompt missing target lane/entity: lane={lane!r}, entity={entity!r}"]
-        etype = coverage_entity_type(ctx.spec)
+        target = _active_target(ctx, entity)
+        domain, entity_type = require_domain_etype(
+            target.get("entityType") or coverage_entity_type(ctx.spec),
+            context=entity,
+        )
+        etype = f"{domain}/{entity_type}"
         issues = issue_messages(
             _download_research_lane_issues(ctx, entity, etype, lane)
         )

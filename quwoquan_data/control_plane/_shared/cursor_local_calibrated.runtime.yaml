@@ -22,7 +22,10 @@ policy:
   budgets:
     startupTimeoutSeconds: 600
     campaignSubmissionTimeoutSeconds: 3600
-    campaignLaneTimeoutSeconds: 86400
+    # Cursor auto 单 lane 保持一个语义槽。按 M100 实测，M1000 的 1800
+    # 候选采集约 32 小时、1000 对象创作约 17 小时；72 小时给 review、
+    # publish 与有界恢复留出余量，同时仍由 controller 超时硬终止。
+    campaignLaneTimeoutSeconds: 259200
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 2400
     authRetryLimit: 3
