@@ -9,10 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from core.cursor_startup_probe import (
-    cursor_startup_probe_suite,
-    cursor_workspace_probe_suite,
-)
+from core.cursor_startup_probe import cursor_startup_probe_suite
+from core.cursor_workspace_probe import cursor_workspace_probe_suite
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
 from core.python_environment import prepare_data_runtime_cache
 from core.python_runtime import environment_preflight

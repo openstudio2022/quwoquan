@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from core import cursor_startup_probe as pr
 from core import cursor_startup_cache as cache
+from core import cursor_workspace_probe as workspace_probe
 from content.execution.preflight import handler as preflight_handler
 
 
@@ -25,6 +26,7 @@ def test_cursor_sdk_dependency_pin_matches_repaired_runtime() -> None:
         path.read_text(encoding="utf-8")
         for path in (
             data_root / "scripts/core/cursor_startup_probe.py",
+            data_root / "scripts/core/cursor_workspace_probe.py",
             data_root / "scripts/content/execution/agent/agent_runner.py",
             data_root / "scripts/content/execution/controller/preflight.py",
         )
@@ -122,9 +124,9 @@ def test_cursor_workspace_probe_suite_realizes_four_isolated_lanes(
             "sdkVersion": "1.0.26",
         }
 
-    monkeypatch.setattr(pr, "cursor_startup_probe", _ready_probe)
+    monkeypatch.setattr(workspace_probe, "cursor_startup_probe", _ready_probe)
 
-    report = pr.cursor_workspace_probe_suite(
+    report = workspace_probe.cursor_workspace_probe_suite(
         workspaces=workspaces,
         model="auto",
     )

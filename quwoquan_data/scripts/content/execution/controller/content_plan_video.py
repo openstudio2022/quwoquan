@@ -91,7 +91,6 @@ def _source_frames(
     rejects: dict[str, int] = {}
     seen_sha: set[str] = set()
     require_rights_proof = rights_proof_required(ctx.spec.vertical)
-    lifecycle = load_content_distribution_policy().product_lifecycle_state
 
     def reject(reason: str) -> None:
         rejects[reason] = rejects.get(reason, 0) + 1
@@ -211,6 +210,7 @@ def _sourced_videos(
     rejects: dict[str, int] = {}
     seen_sha: set[str] = set()
     require_rights_proof = rights_proof_required(ctx.spec.vertical)
+    lifecycle = load_content_distribution_policy().product_lifecycle_state
 
     def reject(reason: str) -> None:
         rejects[reason] = rejects.get(reason, 0) + 1

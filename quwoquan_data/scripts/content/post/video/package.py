@@ -590,7 +590,6 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             issues.append("video provenance contains an invalid source rights record")
     return issues
 
-
 __all__ = [
     "VideoRenderRequest",
     "VideoSourceBasis",

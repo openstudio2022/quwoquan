@@ -33,8 +33,8 @@ def _release_import_roots() -> tuple[Path, Path, Path]:
         services
         / "user-service"
         / "internal"
-        / "account"
-        / "user_account"
+        / "profile_projection"
+        / "creator_runtime_profile"
         / "infrastructure"
         / "releaseimport",
     )
