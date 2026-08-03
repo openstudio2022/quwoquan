@@ -50,7 +50,6 @@ from content.execution.recovery.download_research_gate import _download_research
 from content.execution.recovery.download_unresolved import absorb_download_shortfall_if_quota_met  # noqa: E402
 from content.execution.controller.content_plan_prep import _content_capacity_gate_for_entity  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
-from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 from support.image_fixture import jpeg_bytes  # noqa: E402
 
@@ -128,7 +127,7 @@ def test_homepage_low_resolution_candidate_does_not_invalidate_text_source():
     ) == []
 
 
-def test_video_download_uses_source_frame_policy_not_rendered_segment_count(monkeypatch):
+def test_video_download_does_not_accept_image_quota_as_video_supply(monkeypatch):
     fixture = ExecutionFixtureBuilder(VIDEO_TASK)
     monkeypatch.setattr(
         "content.execution.store.load_spec_model",
@@ -136,10 +135,9 @@ def test_video_download_uses_source_frame_policy_not_rendered_segment_count(monk
     )
 
     requirements = download_requirements(VIDEO_TASK)
-    delivery = load_content_supply_policy("travel").video_delivery
 
-    assert requirements.min_video_frames == delivery.minimum_source_frames
-    assert requirements.min_video_frames < delivery.minimum_segment_count
+    assert requirements.min_images == 0
+    assert not hasattr(requirements, "min_video_frames")
 
 
 def test_download_repair_active_issues_only_decodes_typed_records():
@@ -391,8 +389,47 @@ def test_frozen_authority_title_survives_plan_to_source_unit_projection():
     assert manifest["qualifiedAuthorityTitle"] == "梅湾街"
 
 
-def test_video_frame_collection_is_not_validated_as_direct_video():
-    """A retained still-frame fallback is a video-lane input, not a video file."""
+def test_commercial_article_binding_survives_plan_to_fetch_projection():
+    """Fetch must revalidate the exact frontier profile frozen by research."""
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "峨眉山")
+    plan_path = entity_dir / "1.download" / "article_source_plan.json"
+    write_json(
+        plan_path,
+        {
+            "sources": [
+                {
+                    "source_id": "article_frontier_wikivoyage",
+                    "platform": "维基导游",
+                    "url": "https://zh.wikivoyage.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
+                    "sourceUseMode": "factual_reference_only",
+                    "publishMediaMode": "illustrated",
+                    "category": "travelogue",
+                    "sourceRole": "base",
+                    "imageEvidenceMode": "same_source",
+                    "articleCommercialAdmission": "commercial_release",
+                    "articleSiteId": "wikivoyage_zh",
+                    "sourceDiscoveryProfileDigest": "sha256:frontier-profile",
+                    "candidateGate": {"passed": True, "issues": []},
+                }
+            ]
+        },
+    )
+
+    sources = curated_sources_for_entity(
+        TASK,
+        "峨眉山",
+        "地点/景区",
+        research_lane="article",
+    )
+
+    assert sources[0]["publishMediaMode"] == "illustrated"
+    assert sources[0]["articleCommercialAdmission"] == "commercial_release"
+    assert sources[0]["articleSiteId"] == "wikivoyage_zh"
+    assert sources[0]["sourceDiscoveryProfileDigest"] == "sha256:frontier-profile"
+
+
+def test_image_collection_source_catalog_accepts_attribution_contract():
 
     ensure_execution_layout(TASK)
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "乐山大佛")
@@ -400,16 +437,16 @@ def test_video_frame_collection_is_not_validated_as_direct_video():
     manifest = write_source_unit(
         entity_dir,
         ordinal=1,
-        source_id="video_frame_1",
-        source_md="# 乐山大佛\n\n清权静帧来源集合。",
-        quality={"sourceId": "video_frame_1", "quality": "B-fact", "score": 1},
+        source_id="image_collection_1",
+        source_md="# 乐山大佛\n\n清权图片来源集合。",
+        quality={"sourceId": "image_collection_1", "quality": "B-fact", "score": 1},
         platform="Wikimedia Commons",
         source_category="image_collection",
         source_kind="image_collection",
         extractor="image_collection_download",
         policy_revision="image-collection-attribution",
         source_use_mode="licensed_adaptation",
-        research_lane="video",
+        research_lane="image",
         license_value="CC BY 4.0",
         url="https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha.jpg",
         title="乐山大佛",
@@ -434,7 +471,7 @@ def test_video_frame_collection_is_not_validated_as_direct_video():
         build_variants=False,
     )
 
-    assert manifest["researchLane"] == "video"
+    assert manifest["researchLane"] == "image"
     assert manifest["hasVideo"] is False
     assert manifest["sourceKind"] == "image_collection"
     assert manifest["assetCount"] == 1
@@ -687,7 +724,6 @@ def test_gate_download_ignores_disabled_image_lane_but_blocks_source_shortfall(m
             min_article_base_sources=4,
             min_homepage_sources=1,
             min_homepage_media=0,
-            min_video_frames=0,
         ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "软图景区")
@@ -746,7 +782,6 @@ def test_gate_download_image_only_ignores_text_source_bundle_sidecar(monkeypatch
             min_article_base_sources=0,
             min_homepage_sources=0,
             min_homepage_media=0,
-            min_video_frames=0,
         ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "图片景区")
@@ -800,7 +835,6 @@ def test_gate_download_records_unverified_rights_without_blocking_travel(monkeyp
             min_article_base_sources=4,
             min_homepage_sources=1,
             min_homepage_media=0,
-            min_video_frames=0,
         ),
     )
     entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "权利风险景区")

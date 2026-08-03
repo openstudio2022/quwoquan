@@ -15,18 +15,36 @@ def build_inline_image_candidates(
     for row in inline_images or []:
         if not isinstance(row, Mapping):
             continue
-        source_url = str(row.get("src") or "").strip()
+        source_url = str(row.get("src") or row.get("url") or "").strip()
         placeholder_id = str(row.get("placeholderId") or "").strip()
         if not source_url or not placeholder_id:
             continue
         caption = str(row.get("caption") or "").strip()
-        candidates.append(
-            {
-                "url": source_url,
-                "placeholderId": placeholder_id,
-                "caption": caption,
-                "relevance": caption,
-            }
-        )
+        candidate = {
+            "url": source_url,
+            "placeholderId": placeholder_id,
+            "caption": caption,
+            "relevance": str(row.get("relevance") or caption).strip(),
+        }
+        for field in (
+            "platform",
+            "license",
+            "credit",
+            "sourceUrl",
+            "termsUrl",
+            "licenseSnapshot",
+            "authorizationProof",
+            "usageScope",
+            "modelReleaseStatus",
+            "width",
+            "height",
+            "creator",
+            "collectionPageUrl",
+            "sourceCollectionId",
+        ):
+            value = row.get(field)
+            if value not in (None, ""):
+                candidate[field] = value
+        candidates.append(candidate)
     _ = entity_id
     return candidates

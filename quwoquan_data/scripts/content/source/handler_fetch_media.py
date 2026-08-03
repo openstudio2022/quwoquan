@@ -40,15 +40,12 @@ class EntityMediaClosureInput:
     written_rejected_source_dirs: frozenset[Path]
     selected_lanes: frozenset[str] | None
     image_rights_issues: tuple[str, ...]
-    video_rights_issues: tuple[str, ...]
     image_quality_issues: tuple[str, ...]
     rejected_by_category: Mapping[str, int]
     image_lane_selected: bool
     homepage_media_selected: bool
-    video_lane_selected: bool
     required_image_work_images: int
     required_homepage_media: int
-    required_video_frames: int
     required_images: int
     planned_homepage_source_images: int
     kept_source_homepage_images: int
@@ -138,7 +135,6 @@ def _media_gate_issues(
 ) -> tuple[list[str], list[str], list[Any]]:
     image_count_issues: list[str] = []
     homepage_count_issues: list[str] = []
-    video_count_issues: list[str] = []
     if spec.image_lane_selected and kept_by_lane["image"] < spec.required_image_work_images:
         image_count_issues.append(
             f"imageCount: {spec.entity_id} image lane 仅下到 {kept_by_lane['image']} 张合格图"
@@ -149,21 +145,11 @@ def _media_gate_issues(
             f"homepageMediaCount: {spec.entity_id} 独立主页媒体仅下到 "
             f"{kept_by_lane['homepage']} 张合格图（要求 ≥{spec.required_homepage_media}）"
         )
-    if spec.video_lane_selected and kept_by_lane["video"] < spec.required_video_frames:
-        video_count_issues.append(
-            f"videoFrameCount: {spec.entity_id} video lane retained "
-            f"{kept_by_lane['video']} rights-cleared frame(s) "
-            f"but requires {spec.required_video_frames}"
-        )
     count_issues = [
         *image_count_issues,
         *homepage_count_issues,
-        *video_count_issues,
     ]
-    all_rights_issues = [
-        *spec.image_rights_issues,
-        *spec.video_rights_issues,
-    ]
+    all_rights_issues = list(spec.image_rights_issues)
     fetch_issues = [*all_rights_issues, *count_issues]
     if spec.required_images > 0 and kept_images == 0 and not all_rights_issues:
         fetch_issues.append(
@@ -208,22 +194,6 @@ def _media_gate_issues(
             messages=remaining,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         ))
-        typed_issues.extend(data_issues(
-            DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-            stage=DataIssueStage.IMAGE_FETCH,
-            ref=spec.entity_id,
-            lane=DataIssueLane.VIDEO,
-            messages=spec.video_rights_issues,
-            recovery=DataRecoveryAction.REPLACE_MEDIA,
-        ))
-        typed_issues.extend(data_issues(
-            DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-            stage=DataIssueStage.IMAGE_FETCH,
-            ref=spec.entity_id,
-            lane=DataIssueLane.VIDEO,
-            messages=video_count_issues,
-            recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-        ))
     return fetch_issues, blocking_issues, typed_issues
 
 
@@ -245,7 +215,7 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
             1 for image in spec.pending_images
             if str(image.get("researchLane") or "image") == lane
         )
-        for lane in ("image", "homepage", "video")
+        for lane in ("image", "homepage")
     }
     kept_by_lane["homepage"] += spec.kept_source_homepage_images
     fetch_issues, blocking_issues, typed_issues = _media_gate_issues(
@@ -285,7 +255,6 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
     if (
         spec.image_lane_selected
         or spec.homepage_media_selected
-        or spec.video_lane_selected
         or bool(spec.provider_asset_counts)
     ):
         rights_issues = [
@@ -295,14 +264,6 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
                 ref=spec.entity_id,
                 lane=DataIssueLane.IMAGE,
                 messages=spec.image_rights_issues,
-                recovery=DataRecoveryAction.REPLACE_MEDIA,
-            ),
-            *data_issues(
-                DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                stage=DataIssueStage.IMAGE_RIGHTS,
-                ref=spec.entity_id,
-                lane=DataIssueLane.VIDEO,
-                messages=spec.video_rights_issues,
                 recovery=DataRecoveryAction.REPLACE_MEDIA,
             ),
         ]
@@ -333,7 +294,6 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
                 "requiredByLane": {
                     "image": spec.required_image_work_images,
                     "homepage": spec.required_homepage_media,
-                    "video": spec.required_video_frames,
                 },
                 "downloadedByLane": kept_by_lane,
                 "rejectedForQuality": image_quality_issues,
@@ -373,6 +333,5 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
     failed = (
         spec.image_lane_selected
         or spec.homepage_media_selected
-        or spec.video_lane_selected
     ) and bool(blocking_issues)
     return kept_images, failed

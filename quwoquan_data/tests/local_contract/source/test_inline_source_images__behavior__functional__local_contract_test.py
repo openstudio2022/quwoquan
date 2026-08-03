@@ -27,6 +27,28 @@ from content.source.inline_images import build_inline_image_candidates  # noqa: 
 from content.source.html_text import _html_to_plain_text_with_inline_images  # noqa: E402
 
 
+def test_inline_candidate_preserves_mediawiki_rights_evidence():
+    candidates = build_inline_image_candidates(
+        [
+            {
+                "src": "https://upload.wikimedia.org/example.jpg",
+                "placeholderId": "source-inline-001",
+                "caption": "九寨沟五花海",
+                "license": "CC BY-SA 4.0",
+                "credit": "Example Author",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                "usageScope": "app_publish",
+            }
+        ],
+        entity_id="九寨沟",
+    )
+
+    assert candidates[0]["license"] == "CC BY-SA 4.0"
+    assert candidates[0]["authorizationProof"].startswith("https://commons.wikimedia.org/")
+
+
 def test_inline_extractor_prefers_lazy_data_attr_over_placeholder_src():
     """RC3 漏图根因：lazy 站点把真实图放 data-original，src 留占位 gif。
 

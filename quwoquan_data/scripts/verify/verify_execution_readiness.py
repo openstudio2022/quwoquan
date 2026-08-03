@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
@@ -91,10 +92,23 @@ def _execution_model_readiness(root: Path, execution_id: str, issues: list[str])
     if not author or not reviewer:
         issues.append("execution model readiness author/reviewer binding is incomplete")
         return {}
-    if author.get("modelFamily") == reviewer.get("modelFamily"):
-        issues.append("execution model readiness does not separate author and reviewer families")
-        return {}
     return payload
+
+
+def _resolve_homepage_quota_verdict(execution_id: str) -> Any:
+    """Resolve the canonical homepage quota verdict behind an isolation seam."""
+    from content.execution.controller.homepage_authoring import (
+        homepage_quota_verdict,
+    )
+    from content.execution import store as execution_store
+    from types import SimpleNamespace
+
+    return homepage_quota_verdict(
+        SimpleNamespace(
+            execution_id=execution_id,
+            spec=execution_store.load_spec_model(execution_id),
+        )
+    )
 
 
 def _reviewed_object_issues(
@@ -202,6 +216,8 @@ def _reviewed_object_issues(
             issues.append(f"{rel}/5.review: reviewer model drift from execution readiness")
         if reviewer_contract and reviewer_result.get("modelFamily") != reviewer_contract.get("modelFamily"):
             issues.append(f"{rel}/5.review: reviewer model family drift from execution readiness")
+        if draft_meta and reviewer_result.get("runId") == draft_meta.get("agentRunId"):
+            issues.append(f"{rel}/5.review: reviewer must use a distinct Cursor SDK run")
         if str(reviewer_result.get("runId") or "").startswith("contract-output:"):
             issues.append(f"{rel}/5.review: reviewer runId must be a real Cursor SDK run")
     if attestation:
@@ -319,18 +335,7 @@ def execution_readiness_issues(
 
     if content_type is ContentType.HOMEPAGE and mode == "commercial":
         try:
-            from content.execution.controller.homepage_authoring import (
-                homepage_quota_verdict,
-            )
-            from content.execution import store as execution_store
-            from types import SimpleNamespace
-
-            verdict = homepage_quota_verdict(
-                SimpleNamespace(
-                    execution_id=execution_id,
-                    spec=execution_store.load_spec_model(execution_id),
-                )
-            )
+            verdict = _resolve_homepage_quota_verdict(execution_id)
         except (OSError, TypeError, ValueError) as exc:
             issues.append(f"homepage review partition is invalid: {exc}")
             return issues

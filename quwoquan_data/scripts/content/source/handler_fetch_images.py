@@ -26,7 +26,6 @@ from governance.coverage.license import normalize_rights_payload, validate_image
 class PreparedEntityImages:
     image_manifest: list[dict[str, Any]]
     rights_issues: list[str]
-    video_rights_issues: list[str]
     quality_issues: list[str]
     rejected_by_category: dict[str, int]
     pending_images: list[dict[str, Any]]
@@ -34,7 +33,6 @@ class PreparedEntityImages:
     required_image_work_images: int
     planned_homepage_source_images: int
     required_homepage_media: int
-    required_video_frames: int
     required_images: int
 
 
@@ -108,11 +106,9 @@ def prepare_entity_images(
     image_specs: list[dict[str, Any]],
     image_lane_selected: bool,
     homepage_media_selected: bool,
-    video_lane_selected: bool,
 ) -> PreparedEntityImages:
     image_manifest: list[dict] = []
     image_rights_issues: list[str] = []
-    video_rights_issues: list[str] = []
     image_quality_issues: list[str] = []
     rejected_by_category = {
         "fetch_or_non_image": 0,
@@ -135,11 +131,9 @@ def prepare_entity_images(
     required_homepage_media = (
         requirements.min_homepage_media if homepage_media_selected else 0
     )
-    required_video_frames = requirements.min_video_frames if video_lane_selected else 0
     required_images = (
         required_image_work_images
         + required_homepage_media
-        + required_video_frames
     )
     image_fetch_target = (
         required_image_work_images
@@ -152,6 +146,12 @@ def prepare_entity_images(
     image_work_candidate_index = 0
     for idx_img, spec in enumerate(image_specs, start=1):
         lane = str(spec.get("researchLane") or "").strip()
+        if lane == "video":
+            image_rights_issues.append(
+                f"{idx_img}: video image-frame candidates are retired; "
+                "provide an admitted direct video"
+            )
+            continue
         is_page_owned_homepage_media = lane == "homepage"
         if lane == "image":
             image_work_candidate_index += 1
@@ -184,14 +184,13 @@ def prepare_entity_images(
             imageSpecScope=(
                 "homepage_source_page"
                 if is_page_owned_homepage_media
-                else ("video_frame" if lane == "video" else "image_work")
+                else "image_work"
             ),
         )
         asset_label = f"{entity_id}#{idx_img}"
         issues = validate_image_rights(spec, vertical=vertical)
         if issues:
-            target = video_rights_issues if lane == "video" else image_rights_issues
-            target.extend([f"{idx_img}: {issue}" for issue in issues])
+            image_rights_issues.extend([f"{idx_img}: {issue}" for issue in issues])
             rejected_by_category["rights"] += 1
             continue
         payload = _cached_image_lane_payload(object_dir, spec)
@@ -303,7 +302,6 @@ def prepare_entity_images(
     return PreparedEntityImages(
         image_manifest=image_manifest,
         rights_issues=image_rights_issues,
-        video_rights_issues=video_rights_issues,
         quality_issues=image_quality_issues,
         rejected_by_category=rejected_by_category,
         pending_images=pending_images,
@@ -311,6 +309,5 @@ def prepare_entity_images(
         required_image_work_images=required_image_work_images,
         planned_homepage_source_images=planned_homepage_source_images,
         required_homepage_media=required_homepage_media,
-        required_video_frames=required_video_frames,
         required_images=required_images,
     )

@@ -6,7 +6,7 @@ task:
     - content_ref
     - entity_name
     - segment_count
-    - source_frames_json
+    - source_video_json
     - video_script_path
     - draft_meta_path
   optional: []

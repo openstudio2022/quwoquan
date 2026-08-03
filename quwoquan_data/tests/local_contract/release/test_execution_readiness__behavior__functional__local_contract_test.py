@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -37,6 +38,14 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
         gate,
         "homepage_media_completeness_report",
         lambda execution_id: {"executionId": execution_id, "passed": True, "issues": []},
+    )
+    monkeypatch.setattr(
+        gate,
+        "_resolve_homepage_quota_verdict",
+        lambda _execution_id: SimpleNamespace(
+            qualified_refs=("地点/景区/验收景区",),
+            qualified_count=1,
+        ),
     )
     _write(
         root / "_shared/execution_state.json",
@@ -182,6 +191,60 @@ def test_execution_readiness__requires_terminal_bound_author_and_reviewer_eviden
     _fixture(monkeypatch, tmp_path)
 
     assert gate.execution_readiness_issues(EXECUTION_ID, require_reviewed=True) == []
+
+
+def test_execution_readiness__accepts_auto_for_distinct_author_and_reviewer_runs__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    root = _fixture(monkeypatch, tmp_path)
+    model_path = root / "evidence/model_readiness.json"
+    readiness = json.loads(model_path.read_text(encoding="utf-8"))
+    for role in ("author", "reviewer"):
+        readiness[role]["model"] = "auto"
+        readiness[role]["modelFamily"] = "auto"
+        readiness[role]["modelParameters"] = []
+        readiness[role]["startup"]["model"] = "auto"
+        readiness[role]["startup"]["modelParameters"] = []
+    _write(model_path, readiness)
+
+    object_root = root / "entities/地点/景区/验收景区"
+    draft_path = object_root / "4.draft/draft_meta.json"
+    draft = json.loads(draft_path.read_text(encoding="utf-8"))
+    draft["model"] = "auto"
+    _write(draft_path, draft)
+    result_path = object_root / "5.review/reviewer_result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["model"] = "auto"
+    result["modelFamily"] = "auto"
+    _write(result_path, result)
+    attestation_path = object_root / "5.review/attestation.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["independentReviewer"]["model"] = "auto"
+    attestation["independentReviewer"]["modelFamily"] = "auto"
+    _write(attestation_path, attestation)
+
+    assert gate.execution_readiness_issues(EXECUTION_ID, require_reviewed=True) == []
+
+
+def test_execution_readiness__rejects_reviewer_reusing_author_run__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    root = _fixture(monkeypatch, tmp_path)
+    object_root = root / "entities/地点/景区/验收景区"
+    result_path = object_root / "5.review/reviewer_result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["runId"] = "author-run-001"
+    _write(result_path, result)
+    attestation_path = object_root / "5.review/attestation.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["independentReviewer"]["runId"] = "author-run-001"
+    _write(attestation_path, attestation)
+
+    issues = gate.execution_readiness_issues(EXECUTION_ID, require_reviewed=True)
+
+    assert any("reviewer must use a distinct Cursor SDK run" in issue for issue in issues)
 
 
 def test_execution_readiness__rejects_pending_independent_reviewer__local_contract(

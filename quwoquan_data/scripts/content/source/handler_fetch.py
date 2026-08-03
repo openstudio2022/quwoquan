@@ -76,7 +76,6 @@ def _fetch_download_entity(
     written_rejected_source_dirs: set[Path] = set()
     image_lane_selected = plan.image_lane_selected
     homepage_media_selected = plan.homepage_media_selected
-    video_lane_selected = plan.video_lane_selected
     sourced_video_candidates = plan.sourced_video_candidates
     sourced_video_evidence = plan.sourced_video_evidence
     sourced_video_failure = plan.sourced_video_failure
@@ -108,7 +107,7 @@ def _fetch_download_entity(
             entity_count=entity_count,
             sources=0,
             images=0,
-            message="direct video admission failed; retained frame sequence will be evaluated",
+            message="direct video admission failed; target will be marked unavailable",
             lane="video",
             plannedVideos=len(sourced_video_candidates),
             admittedVideos=0,
@@ -125,11 +124,9 @@ def _fetch_download_entity(
         image_specs=image_specs,
         image_lane_selected=image_lane_selected,
         homepage_media_selected=homepage_media_selected,
-        video_lane_selected=video_lane_selected,
     )
     image_manifest = image_result.image_manifest
     image_rights_issues = image_result.rights_issues
-    video_rights_issues = image_result.video_rights_issues
     image_quality_issues = image_result.quality_issues
     rejected_by_category = dict(image_result.rejected_by_category)
     pending_images = image_result.pending_images
@@ -138,11 +135,7 @@ def _fetch_download_entity(
     required_image_work_images = image_result.required_image_work_images
     planned_homepage_source_images = image_result.planned_homepage_source_images
     required_homepage_media = image_result.required_homepage_media
-    required_video_frames = image_result.required_video_frames
     required_images = image_result.required_images
-    if sourced_video_evidence:
-        required_images = max(0, required_images - required_video_frames)
-        required_video_frames = 0
 
     seen_canonical_urls: set[str] = set()
     kept_source_homepage_images = 0
@@ -151,7 +144,11 @@ def _fetch_download_entity(
         try:
             require_source_candidate_admission(
                 source,
-                require_commercial_article_binding=commercial_article_closure,
+                require_commercial_article_binding=(
+                    commercial_article_closure
+                    and str(source.get("researchLane") or "") == "article"
+                    and str(source.get("sourceRole") or "") == "base"
+                ),
             )
         except ValueError as exc:
             raise DataIssueError(
@@ -197,6 +194,7 @@ def _fetch_download_entity(
             fetched = fetch_source_payload(
                 source["url"],
                 source=source,
+                entity_id=entity_id,
             )
             html_bytes = fetched["htmlBytes"]
             status_code = fetched["statusCode"]
@@ -561,15 +559,12 @@ def _fetch_download_entity(
         written_rejected_source_dirs=frozenset(written_rejected_source_dirs),
         selected_lanes=None if selected_lanes is None else frozenset(selected_lanes),
         image_rights_issues=tuple(image_rights_issues),
-        video_rights_issues=tuple(video_rights_issues),
         image_quality_issues=tuple(image_quality_issues),
         rejected_by_category=rejected_by_category,
         image_lane_selected=image_lane_selected,
         homepage_media_selected=homepage_media_selected,
-        video_lane_selected=video_lane_selected,
         required_image_work_images=required_image_work_images,
         required_homepage_media=required_homepage_media,
-        required_video_frames=required_video_frames,
         required_images=required_images,
         planned_homepage_source_images=planned_homepage_source_images,
         kept_source_homepage_images=kept_source_homepage_images,

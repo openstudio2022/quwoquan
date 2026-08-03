@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,7 +23,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import recipe  # noqa: E402
+from content.execution import recipe, recipe_checkpoint  # noqa: E402
 from content.execution.model_contract import execution_model_pair  # noqa: E402
 from content.execution.identity import (  # noqa: E402
     build_execution_id,
@@ -31,6 +32,7 @@ from content.execution.identity import (  # noqa: E402
 )
 from core.paths import FAMILIES_ROOT, iter_family_files  # noqa: E402
 from core.runtime_policy import load_runtime_policy  # noqa: E402
+from core.control_types import ExecutionStateStatus  # noqa: E402
 
 
 EXECUTION_ID = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
@@ -114,6 +116,52 @@ def test_travel_image_recipe_uses_the_verified_auto_binding() -> None:
         "id": author.model_id,
         "params": expected_parameters,
     }
+
+
+def test_review_only_keeps_lane_alive_across_managed_agent_yield(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+    sleeps: list[float] = []
+
+    def execute(*_args, **_kwargs) -> None:
+        calls.append("execute")
+
+    def state(_execution_id: str):
+        if len(calls) == 1:
+            return SimpleNamespace(
+                completed=[],
+                status=ExecutionStateStatus.WAITING_AGENT,
+                waiting_checkpoint="post_author",
+                failed_objects=[],
+            )
+        return SimpleNamespace(
+            completed=["post_review"],
+            status=ExecutionStateStatus.STOPPED_AT_UNTIL,
+            waiting_checkpoint=None,
+            failed_objects=[],
+        )
+
+    monkeypatch.setattr(recipe_checkpoint, "load_execution_state", state)
+    monkeypatch.setattr(
+        recipe_checkpoint,
+        "active_runtime_policy",
+        lambda: SimpleNamespace(
+            campaign_lane_timeout_seconds=30,
+            agent_future_poll_timeout_seconds=0.2,
+        ),
+    )
+    monkeypatch.setattr(recipe_checkpoint.time, "sleep", sleeps.append)
+
+    recipe_checkpoint.execute_until_checkpoint(
+        {},
+        EXECUTION_ID,
+        until="post_review",
+        execute=execute,
+    )
+
+    assert calls == ["execute", "execute"]
+    assert sleeps == [0.2]
 
 
 def test_execution_facade_invokes_the_canonical_data_cli() -> None:

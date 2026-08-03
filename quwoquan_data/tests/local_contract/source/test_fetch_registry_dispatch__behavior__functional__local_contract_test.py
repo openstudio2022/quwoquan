@@ -26,6 +26,7 @@ def _mediawiki_bundle(
     wikitext: str | None = None,
     requested_title: str = "九寨沟",
     resolved_title: str | None = None,
+    rendered_image_titles: tuple[str, ...] = (),
 ) -> MediaWikiPageBundle:
     resolved = resolved_title or requested_title
     revision_text = wikitext if wikitext is not None else rendered_text
@@ -42,7 +43,7 @@ def _mediawiki_bundle(
         content_sha256="a" * 64,
         rendered_text=rendered_text,
         wikitext=revision_text,
-        rendered_image_titles=(),
+        rendered_image_titles=rendered_image_titles,
         raw='{"query":{}}',
     )
 
@@ -448,6 +449,64 @@ def test_wikipedia_api_payload_only_carries_text_layout_not_second_image_path():
     assert figures and figures[0]["fileTitle"] == "Jiuzhaigou.jpg"
     assert figures[0]["caption"] == "五花海"
     assert "assets" not in payload
+
+
+def test_wikivoyage_payload_exposes_rights_bound_same_page_images(monkeypatch):
+    from content.source.research import image_search_providers
+
+    monkeypatch.setattr(
+        payload_mod,
+        "fetch_mediawiki_page_bundle_for_url",
+        lambda _url, **_kwargs: _mediawiki_bundle(
+            "九寨沟旅行正文段落。",
+            wikitext="== 概述 ==\n九寨沟旅行正文段落。",
+            rendered_image_titles=("File:Jiuzhaigou.jpg", "File:Five Flower Lake.jpg"),
+        ),
+    )
+    observed: dict[str, object] = {}
+
+    def images_for_titles(titles, **kwargs):
+        observed["titles"] = tuple(titles)
+        observed.update(kwargs)
+        return [
+            {
+                "url": "https://upload.wikimedia.org/jiuzhaigou.jpg",
+                "platform": "Wikimedia Commons",
+                "license": "CC BY-SA 4.0",
+                "credit": "Example Author",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Jiuzhaigou.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+                "licenseSnapshot": "CC BY-SA 4.0 on Commons",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Jiuzhaigou.jpg",
+                "usageScope": "app_publish",
+                "modelReleaseStatus": "not_required",
+                "caption": "九寨沟五花海",
+                "relevance": "九寨沟五花海",
+                "creator": "Example Author",
+                "collectionPageUrl": "https://zh.wikivoyage.org/wiki/九寨沟",
+            }
+        ]
+
+    monkeypatch.setattr(
+        image_search_providers,
+        "commons_images_for_titles",
+        images_for_titles,
+    )
+
+    payload = payload_mod.fetch_source_payload(
+        "https://zh.wikivoyage.org/wiki/九寨沟",
+        source={"extractor": "wikipedia_api", "fetchable": True},
+        entity_id="九寨沟",
+    )
+
+    assert observed["titles"] == (
+        "File:Jiuzhaigou.jpg",
+        "File:Five Flower Lake.jpg",
+    )
+    assert observed["entity_id"] == "九寨沟"
+    assert observed["require_metadata_entity_match"] is False
+    assert payload["inlineImages"][0]["license"] == "CC BY-SA 4.0"
+    assert payload["inlineImages"][0]["placeholderId"] == "source-inline-001"
 
 
 def test_static_official_plaintext_reads_ems517_api_payload():

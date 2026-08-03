@@ -592,6 +592,19 @@ def test_execution_spec_has_one_identity_and_readable_intent():
     assert "batchId" not in spec
 
 
+def test_execution_spec_freezes_branch_and_commit_evidence(monkeypatch):
+    def _stamp(spec: dict) -> str:
+        spec["executionPolicy"]["executionBranch"] = "dev1.0"
+        spec["executionPolicy"]["gitCommitSha"] = "a" * 40
+        return "dev1.0"
+
+    monkeypatch.setattr("content.execution.selection.stamp_execution_branch", _stamp)
+
+    policy = _spec()["executionPolicy"]
+    assert policy["executionBranch"] == "dev1.0"
+    assert policy["gitCommitSha"] == "a" * 40
+
+
 def test_homepage_execution_rejects_target_without_frozen_qualified_source():
     spec = store.resolve_spec(_spec())
     del spec["scope"]["coverageTargets"][0]["qualifiedHomepageSource"]

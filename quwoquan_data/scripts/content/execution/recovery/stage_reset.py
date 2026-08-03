@@ -434,23 +434,10 @@ def _source_plan_issue_records(
                     "image research needs enough rights-cleared source collections "
                     f"for {required_image_works} image work(s)"
                 )
-            # A directly sourced video is the preferred real-media carrier. Image
-            # frames remain the fallback and retain their minimum-count contract.
             if "video" in active_lanes and quotas.video_works_per_target > 0:
-                video_frame_candidates = [
-                    image for image in images
-                    if str(image.get("researchLane") or "") == "video"
-                ]
-                required_frames = requirements.min_video_frames
-                if (
-                    not sourced_videos
-                    and required_frames
-                    and len(video_frame_candidates) < required_frames
-                ):
+                if not sourced_videos:
                     lane_issues.append(
-                        "video research needs "
-                        f">={required_frames} rights-cleared frame candidate(s), "
-                        f"got {len(video_frame_candidates)}"
+                        "video research needs an admitted direct-video candidate"
                     )
             source_rights_lanes = [
                 lane for lane in ("homepage", "article")

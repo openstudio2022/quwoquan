@@ -1,4 +1,4 @@
-"""Build the formal video lane from individually rights-cleared source frames."""
+"""Build the formal video lane from acquired, rights-audited source videos."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,7 +6,6 @@ from typing import Any
 from datetime import UTC, datetime
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
-from governance.content_supply_policy import load_content_supply_policy
 from governance.coverage.distribution import (
     ProductLifecycleState,
     load_content_distribution_policy,
@@ -14,12 +13,10 @@ from governance.coverage.distribution import (
 from content.source.research import network_io
 from content.source.research.plan_state import (
     _record_unavailable,
-    _safe_collection_id,
     _source_unavailable_for_entity,
     _write_lane,
 )
 from content.source.research.source_quality import (
-    _collection_gate,
     _license_allows_app_publish,
 )
 from content.source.research.text_match import _normalized_title
@@ -251,178 +248,28 @@ def rank_video_candidates_by_popularity(
     return sorted(candidates, key=key)
 
 
-def _minimum_source_frame_count(vertical: str) -> int:
-    return load_content_supply_policy(vertical).video_delivery.minimum_source_frames
-
-
-def _video_frame_candidate(
-    raw: dict[str, Any],
-    *,
-    entity_id: str,
-    ordinal: int,
-    entity_aliases: list[str],
-    vertical: str,
-) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
-    item = dict(raw)
-    collection_id = _safe_collection_id(
-        "video_frame",
-        entity_id,
-        str(
-            item.get("sourceCollectionId")
-            or item.get("authorizationProof")
-            or item.get("sourceUrl")
-            or item.get("url")
-            or ""
-        ),
-    )
-    creator = str(
-        item.get("creator")
-        or item.get("credit")
-        or "Wikimedia Commons contributor"
-    ).strip()
-    collection_page = str(
-        item.get("collectionPageUrl")
-        or item.get("sourceUrl")
-        or item.get("authorizationProof")
-        or item.get("url")
-        or ""
-    ).strip()
-    item.update(
-        {
-            "sourceCollectionId": collection_id,
-            "creator": creator,
-            "credit": item.get("credit") or creator,
-            "collectionPageUrl": collection_page,
-            "authorizationProof": item.get("authorizationProof") or collection_page,
-            "usageScope": item.get("usageScope") or "app_publish",
-            "modelReleaseStatus": item.get("modelReleaseStatus") or "not_required",
-            "researchLane": "video",
-            "sourceId": f"video_frame_{ordinal}",
-        }
-    )
-    collection = {
-        "sourceCollectionId": collection_id,
-        "creator": creator,
-        "credit": item["credit"],
-        "collectionPageUrl": collection_page,
-        "platform": item.get("platform") or "Wikimedia Commons",
-        "license": item.get("license") or "",
-        "termsUrl": item.get("termsUrl") or "",
-        "licenseSnapshot": item.get("licenseSnapshot") or "",
-        "authorizationProof": item["authorizationProof"],
-        "usageScope": item["usageScope"],
-        "modelReleaseStatus": item["modelReleaseStatus"],
-        "images": [item],
-    }
-    verdict = _collection_gate(
-        collection,
-        entity_id=entity_id,
-        entity_aliases=entity_aliases,
-        vertical=vertical,
-    )
-    issues = tuple(str(issue) for issue in verdict.get("issues") or ())
-    return (item if verdict.get("passed") else None), issues
-
-
-def _qualified_video_frames(
-    *,
-    entity_id: str,
-    entity_aliases: list[str],
-    vertical: str,
-    image_pool: list[dict[str, Any]],
-    limit: int,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Select only same-entity frames that already pass the collection gate."""
-
-    frames: list[dict[str, Any]] = []
-    diagnostics: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    for ordinal, raw in enumerate(image_pool, start=1):
-        url = str(raw.get("url") or "").strip()
-        if not url or url in seen_urls:
-            continue
-        seen_urls.add(url)
-        frame, issues = _video_frame_candidate(
-            raw,
-            entity_id=entity_id,
-            ordinal=ordinal,
-            entity_aliases=entity_aliases,
-            vertical=vertical,
-        )
-        diagnostics.append(
-            {
-                "entityId": entity_id,
-                "url": url,
-                "passed": frame is not None,
-                "issues": list(issues),
-            }
-        )
-        if frame is not None:
-            frames.append(frame)
-        if len(frames) >= limit:
-            break
-    return frames, diagnostics
-
-
-def qualified_video_frame_count(
-    *,
-    entity_id: str,
-    entity_aliases: list[str],
-    vertical: str,
-    image_pool: list[dict[str, Any]],
-) -> int:
-    """Count the production-qualified frames before deciding whether to rescue."""
-
-    frames, _ = _qualified_video_frames(
-        entity_id=entity_id,
-        entity_aliases=entity_aliases,
-        vertical=vertical,
-        image_pool=image_pool,
-        limit=_minimum_source_frame_count(vertical),
-    )
-    return len(frames)
-
-
 def write_video_lane(
     *,
     entity_id: str,
-    entity_aliases: list[str],
-    vertical: str,
     plan_dir: Path,
     force: bool,
     report: dict[str, Any],
     updated: list[dict[str, Any]],
-    open_license_image_pool: list[dict[str, Any]],
     sourced_video_pool: list[dict[str, Any]],
 ) -> None:
-    minimum_frames = _minimum_source_frame_count(vertical)
     sourced_videos = list(sourced_video_pool[:1])
-    # A direct video is only a candidate until download/probe/OCR/admission
-    # completes. Keep a qualified frame sequence in the same frozen plan so a
-    # transient or admission failure can fall back without restarting research.
-    frames, frame_diagnostics = _qualified_video_frames(
-        entity_id=entity_id,
-        entity_aliases=entity_aliases,
-        vertical=vertical,
-        image_pool=open_license_image_pool,
-        limit=minimum_frames,
-    )
-    report.setdefault("videoFrames", []).extend(frame_diagnostics)
     report.setdefault("videoDiscovery", []).append(
         {
             "entityId": entity_id,
             "directVideoCandidates": len(sourced_videos),
-            "frameCandidates": len(frame_diagnostics),
-            "qualifiedFrames": len(frames),
-            "minimumFrames": minimum_frames,
         }
     )
-    if not sourced_videos and len(frames) < minimum_frames:
+    if not sourced_videos:
         _record_unavailable(
             report,
             entity_id=entity_id,
             lane="video",
-            reason=f"rights-cleared video frames={len(frames)} need>={minimum_frames}",
+            reason="acquired playable video files=0 need>=1",
             code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         )
@@ -430,13 +277,11 @@ def write_video_lane(
         plan_dir / "video_source_plan.json",
         "video",
         {
+            "renderStrategy": "sourced_video",
             "videos": sourced_videos,
-            "assets": frames,
             "diagnostic": {
                 "directVideoCandidates": len(sourced_videos),
-                "qualifiedFrames": len(frames),
-                "minimumFrames": minimum_frames,
-                "fallbackFramesRetained": bool(sourced_videos and frames),
+                "sourceMode": "sourced_video",
             },
             "sourceUnavailable": _source_unavailable_for_entity(
                 report,
@@ -451,13 +296,11 @@ def write_video_lane(
                 "entityId": entity_id,
                 "lane": "video",
                 "videos": len(sourced_videos),
-                "assets": len(frames),
             }
         )
 
 
 __all__ = [
-    "qualified_video_frame_count",
     "rank_video_candidates_by_popularity",
     "write_video_lane",
 ]

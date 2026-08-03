@@ -71,10 +71,12 @@ def test_lane_adapter_payload_differences_match_contract():
     assert image["sourceCollectionPolicy"]["aiImagesAllowed"] is False
 
 
-def test_video_lane_has_formal_rights_cleared_render_plan():
+def test_video_lane_requires_acquired_playable_source_video():
     obj = _prepared_object_dir()
     dl = obj / STAGE_DOWNLOAD
     plan = read_json(dl / "video_source_plan.json")["payload"]
     assert CARRIER_LANES["video"].source_plan_file == "video_source_plan.json"
-    assert plan["renderStrategy"] == "rights_cleared_image_sequence"
-    assert plan["sourceAssetPolicy"]["rightsEvidenceRequired"] is True
+    assert plan["renderStrategy"] == "sourced_video"
+    assert plan["sourceVideoPolicy"]["rightsEvidenceRequired"] is True
+    assert plan["sourceVideoPolicy"]["playableVideoRequired"] is True
+    assert "assets" not in plan

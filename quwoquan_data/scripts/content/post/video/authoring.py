@@ -74,7 +74,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
     if not isinstance(raw_brief, dict):
         raw_brief = {}
     pack, admission_failures = VideoWritingPack.from_brief(ref, raw_brief)
-    frame_issues = [
+    source_issues = [
         _issue(
             DataIssueCode.CONTRACT_INVALID,
             stage=DataIssueStage.COMPOSE_BRIEF,
@@ -87,30 +87,27 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
     delivery = load_content_supply_policy(
         parse_execution_id(execution_id).vertical
     ).video_delivery
-    if (
-        pack.source_video is None
-        and len(pack.source_frames) < delivery.minimum_source_frames
-    ):
-        frame_issues.append(
+    if pack.source_video is None:
+        source_issues.append(
             _issue(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
                 stage=DataIssueStage.POST_COMPOSE,
                 ref=ref,
                 recovery=DataRecoveryAction.REWIND_DOWNLOAD,
-                message="video source frame count is below delivery policy",
-                attributes={
-                    "actual": len(pack.source_frames),
-                    "required": delivery.minimum_source_frames,
-                },
+                message="video carrier requires one acquired playable video file",
             )
         )
+    if pack.source_video is None:
+        return {
+            "ref": ref,
+            "carrier": "video",
+            "sourceMode": "sourced_video",
+            "issues": [issue.as_dict() for issue in source_issues],
+        }
     pack_payload = pack.to_dict()
     write_writing_pack(execution_id, ref, pack_payload)
     prompt_pack_payload = dict(pack_payload)
-    if pack.source_video is not None:
-        prompt_pack_payload["sourceVideo"] = (
-            pack.source_video.author_prompt_dict()
-        )
+    prompt_pack_payload["sourceVideo"] = pack.source_video.author_prompt_dict()
     write_prompt(
         execution_id,
         ref,
@@ -120,12 +117,8 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
                 "content_ref": ref,
                 "entity_name": pack.primary_entity,
                 "segment_count": delivery.minimum_segment_count,
-                "source_frames_json": json.dumps(
-                    (
-                        prompt_pack_payload["sourceVideo"]
-                        if pack.source_video is not None
-                        else prompt_pack_payload["sourceFrames"]
-                    ),
+                "source_video_json": json.dumps(
+                    prompt_pack_payload["sourceVideo"],
                     ensure_ascii=False,
                     indent=2,
                 ),
@@ -156,7 +149,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         "recommendation": "compose",
         "carrier": "video",
         "sourceMode": pack_payload["sourceMode"],
-        "sourceFrameCount": len(pack.source_frames),
+        "sourceVideoCount": 1,
         "sourcePaths": list(pack.source_paths),
         "sourceUrls": list(pack.source_urls),
     }
@@ -172,14 +165,14 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         command="post",
         step="quality_analysis",
         ref=ref,
-        passed=not frame_issues,
-        issues=tuple(frame_issues),
+        passed=not source_issues,
+        issues=tuple(source_issues),
         evidence_summary={
             "carrier": "video",
             "sourceMode": pack_payload["sourceMode"],
-            "sourceFrameCount": len(pack.source_frames),
+            "sourceVideoCount": 1,
         },
-        next_step="compose_brief" if not frame_issues else None,
+        next_step="compose_brief" if not source_issues else None,
     )
     write_stage_result(
         execution_id,
@@ -193,14 +186,14 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         command="post",
         step="compose_brief",
         ref=ref,
-        passed=not frame_issues,
-        issues=tuple(frame_issues),
+        passed=not source_issues,
+        issues=tuple(source_issues),
         evidence_summary={
             "carrier": "video",
             "sourceMode": pack_payload["sourceMode"],
-            "sourceFrameCount": len(pack.source_frames),
+            "sourceVideoCount": 1,
         },
-        next_step="agent_compose" if not frame_issues else None,
+        next_step="agent_compose" if not source_issues else None,
     )
     return pack_payload
 
@@ -360,6 +353,8 @@ def _compose_payload(
     draft: VideoScriptDraft,
     meta: VideoDraftMeta,
 ) -> dict[str, object]:
+    if pack.source_video is None:
+        raise ValueError("video compose requires sourceVideo")
     return {
         "topicId": ref,
         "contentType": "video",
@@ -370,17 +365,8 @@ def _compose_payload(
         "tagRefs": list(pack.tag_refs),
         "sourceUrls": list(pack.source_urls),
         "sourcePaths": list(pack.source_paths),
-        "sourceFrames": [frame.to_dict() for frame in pack.source_frames],
-        "sourceMode": (
-            "sourced_video"
-            if pack.source_video is not None
-            else "rights_cleared_image_sequence"
-        ),
-        **(
-            {"sourceVideo": pack.source_video.to_dict()}
-            if pack.source_video is not None
-            else {}
-        ),
+        "sourceMode": "sourced_video",
+        "sourceVideo": pack.source_video.to_dict(),
         "storySpine": pack.to_dict()["storySpine"],
         "publishLayout": "video",
         "publishAngle": "体验",

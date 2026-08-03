@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
 from core.runtime_policy import apply_runtime_policy, load_runtime_policy
-from core.control_types import ExecutionStage, TargetSelector
+from core.control_types import TargetSelector
 from core.io import read_json, write_json
 from core.source_digest import current_source_digest
 from content.execution import store
@@ -555,16 +555,10 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     rc = invoke(_runtime_preflight_argv(execution_id))
     if rc != 0:
         raise SystemExit(f"[task execute] task preflight rc={rc}")
-    _execute(
-        recipe,
-        execution_id,
-        until=(
-            ExecutionStage.POST_REVIEW.value
-            if stage == "review-only"
-            else None
-        ),
-        recover_stage=recover_stage,
-        recovery_reason=recovery_reason,
+    from content.execution.recipe_checkpoint import execute_recipe_stage
+    execute_recipe_stage(
+        recipe, execution_id, stage=stage, execute=_execute,
+        recover_stage=recover_stage, recovery_reason=recovery_reason,
     )
     if stage == "review-only":
         if campaign_bound:

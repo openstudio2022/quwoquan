@@ -86,7 +86,6 @@ def _apply_writing_intent_override(brief, override):
         "carrier",
         "sourceCollectionId",
         "assetRefs",
-        "sourceFrames",
         "sourceVideo",
         "sourceMode",
         "tagRefs",

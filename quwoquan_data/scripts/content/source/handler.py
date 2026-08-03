@@ -197,6 +197,13 @@ def handle_download(
                 "category": source.get("category") or "",
                 "sourceRole": source.get("sourceRole") or "",
                 "researchLane": source.get("researchLane") or "",
+                "candidateGate": source.get("candidateGate") or {},
+                "imageEvidenceMode": source.get("imageEvidenceMode") or "",
+                "sourceUseMode": source.get("sourceUseMode") or "",
+                "publishMediaMode": source.get("publishMediaMode") or "",
+                "articleCommercialAdmission": source.get("articleCommercialAdmission") or "",
+                "articleSiteId": source.get("articleSiteId") or "",
+                "sourceDiscoveryProfileDigest": source.get("sourceDiscoveryProfileDigest") or "",
                 # P3 三类解耦：内容类型按 lane 路由（homepage=entity/article=article/image=image），
                 # 不再「全部当 article」实体键控；下游分类型下发调度据此区分来源处理。
                 "expectedContentType": content_type_for_lane(source.get("researchLane") or ""),

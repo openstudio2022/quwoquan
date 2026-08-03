@@ -234,21 +234,23 @@ def _lane_payload(
             **common,
             "sourceGuidanceRef": guidance_ref,
             "sourceCategorySummary": category_summary,
-            "renderStrategy": "rights_cleared_image_sequence",
-            "sourceAssetPolicy": {
+            "renderStrategy": "sourced_video",
+            "sourceVideoPolicy": {
                 "sameEntityRequired": True,
                 "rightsEvidenceRequired": True,
-                "commercialUseRequired": True,
+                "playableVideoRequired": True,
+                "directDownloadRequired": True,
                 "watermarkForbidden": True,
+                "drmForbidden": True,
                 "requiredFields": [
-                    "assetRef",
-                    "sha256",
-                    "license",
-                    "authorizationProof",
-                    "sourceUrl",
+                    "assetUrl",
+                    "sourcePostUrl",
+                    "rightsBasis",
+                    "attributionText",
+                    "publicationAdmission",
                 ],
             },
-            "assets": [],
+            "videos": [],
         }
     return {
         **common,

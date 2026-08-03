@@ -6,6 +6,7 @@ from pathlib import Path
 from content.execution.agent import agent_worker
 from core.control_types import AgentFailureKind, AgentRunStatus
 from content.execution.context import ExecutionContext
+from content.execution.workspace import execution_root
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
@@ -26,6 +27,7 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
     def fake_popen(*args, **kwargs):
         captured["args"] = args
         captured["env"] = kwargs["env"]
+        captured["cwd"] = kwargs["cwd"]
         return _CompletedProcess()
 
     monkeypatch.setattr(agent_worker.subprocess, "Popen", fake_popen)
@@ -47,3 +49,4 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
     assert outcome.failure_kind is AgentFailureKind.SUBPROCESS_EXITED
     python_path = str(captured["env"]["PYTHONPATH"]).split(os.pathsep)[0]
     assert Path(python_path) == Path(__file__).resolve().parents[3] / "scripts"
+    assert Path(str(captured["cwd"])) == execution_root(ctx.execution_id)

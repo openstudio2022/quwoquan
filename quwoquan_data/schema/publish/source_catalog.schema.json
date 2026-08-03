@@ -83,6 +83,7 @@
             "wikipedia_api",
             "baidu_baike_html",
             "toutiao_baike_html",
+            "image_collection_download",
             ""
           ]
         },
@@ -107,7 +108,11 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "policyRevision": {
-          "enum": ["encyclopedia-primary", ""]
+          "enum": [
+            "encyclopedia-primary",
+            "image-collection-attribution",
+            ""
+          ]
         },
         "sourceUseMode": {
           "enum": [

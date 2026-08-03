@@ -23,7 +23,6 @@ AUTO_RESEARCH_MERGE_ROW_KEYS = (
     "homepageMediaAdvisories",
     "sourceUnavailable",
     "rescueEvents",
-    "videoFrames",
     "videoDiscovery",
     "videoProviderFunnels",
 )

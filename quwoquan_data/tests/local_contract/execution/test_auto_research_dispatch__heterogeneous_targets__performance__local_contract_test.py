@@ -144,7 +144,6 @@ def test_auto_research_report_preserves_all_lane_evidence_across_waves(
         "homepageMediaAdvisories",
         "sourceUnavailable",
         "rescueEvents",
-        "videoFrames",
         "videoDiscovery",
         "videoProviderFunnels",
     )
