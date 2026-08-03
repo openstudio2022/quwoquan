@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ToolAssessmentDto {
   const ToolAssessmentDto({
@@ -46,6 +46,58 @@ class ToolAssessmentDto {
       };
 
   factory ToolAssessmentDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'assessmentType',
+      'userMessage',
+      'shouldContinueLoop',
+      'gapFill',
+      'rewriteQuery',
+      'allowAnswerWithCurrentEvidence',
+      'reasonCode',
+      'referenceCount',
+      'queryCount',
+      'coveredDimensions',
+      'missingDimensions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ToolAssessmentDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('assessmentType') || json['assessmentType'] == null || (json['assessmentType'] is! String)) {
+      throw const FormatException('ToolAssessmentDto field assessmentType has an invalid wire value');
+    }
+    if (json.containsKey('userMessage') && json['userMessage'] != null && (json['userMessage'] is! String)) {
+      throw const FormatException('ToolAssessmentDto field userMessage has an invalid wire value');
+    }
+    if (json.containsKey('shouldContinueLoop') && json['shouldContinueLoop'] != null && (json['shouldContinueLoop'] is! bool)) {
+      throw const FormatException('ToolAssessmentDto field shouldContinueLoop has an invalid wire value');
+    }
+    if (json.containsKey('gapFill') && json['gapFill'] != null && (json['gapFill'] is! bool)) {
+      throw const FormatException('ToolAssessmentDto field gapFill has an invalid wire value');
+    }
+    if (json.containsKey('rewriteQuery') && json['rewriteQuery'] != null && (json['rewriteQuery'] is! bool)) {
+      throw const FormatException('ToolAssessmentDto field rewriteQuery has an invalid wire value');
+    }
+    if (json.containsKey('allowAnswerWithCurrentEvidence') && json['allowAnswerWithCurrentEvidence'] != null && (json['allowAnswerWithCurrentEvidence'] is! bool)) {
+      throw const FormatException('ToolAssessmentDto field allowAnswerWithCurrentEvidence has an invalid wire value');
+    }
+    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
+      throw const FormatException('ToolAssessmentDto field reasonCode has an invalid wire value');
+    }
+    if (json.containsKey('referenceCount') && json['referenceCount'] != null && (json['referenceCount'] is! num)) {
+      throw const FormatException('ToolAssessmentDto field referenceCount has an invalid wire value');
+    }
+    if (json.containsKey('queryCount') && json['queryCount'] != null && (json['queryCount'] is! num)) {
+      throw const FormatException('ToolAssessmentDto field queryCount has an invalid wire value');
+    }
+    if (json.containsKey('coveredDimensions') && json['coveredDimensions'] != null && (json['coveredDimensions'] is! List || (json['coveredDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('ToolAssessmentDto field coveredDimensions has an invalid wire value');
+    }
+    if (json.containsKey('missingDimensions') && json['missingDimensions'] != null && (json['missingDimensions'] is! List || (json['missingDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('ToolAssessmentDto field missingDimensions has an invalid wire value');
+    }
     return ToolAssessmentDto(
       assessmentType: parseAssessmentTypeStrict((json['assessmentType'] as String?)?.trim() ?? ''),
       userMessage: (json['userMessage'] as String?)?.trim() ?? "",

@@ -28,6 +28,9 @@ from content.release.canonical.creator_commercial_closure import (
     creator_commercial_closure_issues,
 )
 from content.release.canonical.release_attestation import ReleaseAttestation
+from content.release.canonical.release_admission import (
+    build_release_asset_admission,
+)
 from content.release.environment.consistency import scan_release_contract
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.control_types import ContentType
@@ -45,6 +48,10 @@ from core.release_layout import (
 from core.release_media_binding import bind_release_object_media_assets
 from core.schema import assert_valid
 from core.source_digest import SourceDigest, SourceDigestError
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
 
@@ -230,9 +237,14 @@ def build_aggregate_release(
         entity_refs=entity_refs,
         post_refs=post_refs,
     )
+    distribution_policy = load_content_distribution_policy()
     creator_issues = creator_commercial_closure_issues(
         publish_root,
         creator_refs=creator_refs,
+        require_commercial_rights=(
+            distribution_policy.product_lifecycle_state
+            is ProductLifecycleState.COMMERCIAL
+        ),
     )
     if creator_issues:
         raise ObjectTransactionError(
@@ -258,6 +270,9 @@ def build_aggregate_release(
             and _existing_refs(final_root) == desired
             and header.get("canonicalMerkle") == selected_merkle
             and header.get("releaseKind") == ReleaseKind.CONTENT
+            and header.get("releaseClass") == distribution_policy.release_class.value
+            and header.get("productLifecycleState")
+            == distribution_policy.product_lifecycle_state.value
             and header.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and header.get("sourceDigests") == source_digest_documents
             and aggregate.get("sourceDigests") == source_digest_documents
@@ -303,12 +318,40 @@ def build_aggregate_release(
             objects_root=payload / "objects",
             manifest=media_manifest,
         )
+        asset_admission = build_release_asset_admission(
+            release_id=release_id,
+            objects_root=payload / "objects",
+            desired=desired,
+            policy=distribution_policy,
+        )
+        assert_valid(
+            asset_admission,
+            "release",
+            "release_asset_admission",
+            label=f"release_asset_admission:{release_id}",
+        )
+        _write_json(payload / "asset_admission.json", asset_admission)
         selected_merkle = object_closure_digest(staging, create=True)
         release_header = {
             "schema": RELEASE_SCHEMA,
             "releaseId": release_id,
             "sourceOwner": DataSourceOwner.QWQ_DATA,
             "releaseKind": ReleaseKind.CONTENT,
+            "releaseClass": distribution_policy.release_class.value,
+            "productLifecycleState": (
+                distribution_policy.product_lifecycle_state.value
+            ),
+            "containsUnverifiedAssets": asset_admission[
+                "containsUnverifiedAssets"
+            ],
+            "rightsStatusCounts": asset_admission["rightsStatusCounts"],
+            "authorizationRequiredAssetIds": asset_admission[
+                "authorizationRequiredAssetIds"
+            ],
+            "researchAcceptedCount": asset_admission["researchAcceptedCount"],
+            "commercialAcceptedCount": asset_admission[
+                "commercialAcceptedCount"
+            ],
             "canonicalMerkle": selected_merkle,
             "executionIds": execution_ids,
             "sourceDigests": source_digest_documents,
@@ -364,6 +407,17 @@ def build_aggregate_release(
             release_id=release_id,
             source_owner=DataSourceOwner.QWQ_DATA,
             release_kind=ReleaseKind.CONTENT,
+            release_class=distribution_policy.release_class,
+            product_lifecycle_state=distribution_policy.product_lifecycle_state,
+            contains_unverified_assets=bool(
+                asset_admission["containsUnverifiedAssets"]
+            ),
+            rights_status_counts=dict(asset_admission["rightsStatusCounts"]),
+            authorization_required_asset_ids=tuple(
+                asset_admission["authorizationRequiredAssetIds"]
+            ),
+            research_accepted_count=int(asset_admission["researchAcceptedCount"]),
+            commercial_accepted_count=int(asset_admission["commercialAcceptedCount"]),
             execution_ids=tuple(execution_ids),
             entity_count=len(entity_refs),
             post_count=len(post_refs),

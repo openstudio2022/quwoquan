@@ -29,6 +29,14 @@ def gamma_compose_files(repo_root: Path) -> list[Path]:
     files.append(
         repo_root
         / "quwoquan_service"
+        / "services"
+        / "product-ops-service"
+        / "deploy"
+        / "local-elasticsearch.compose.yaml"
+    )
+    files.append(
+        repo_root
+        / "quwoquan_service"
         / "control-plane"
         / "platform-ops"
         / "deploy"

@@ -547,7 +547,7 @@ func TestCreateConversationRejectsCircleBindingBeforeRelationshipGate(t *testing
 	if !ok {
 		t.Fatalf("expected structured circle binding rejection, got %T (%v)", err, err)
 	}
-	if got := appErr.Code.String(); got != "CHAT.USER.circle_group_binding_write_forbidden" {
-		t.Fatalf("code = %q, want CHAT.USER.circle_group_binding_write_forbidden", got)
+	if got := appErr.Code.String(); got != "CHAT.USER.source_managed_binding_write_forbidden" {
+		t.Fatalf("code = %q, want CHAT.USER.source_managed_binding_write_forbidden", got)
 	}
 }

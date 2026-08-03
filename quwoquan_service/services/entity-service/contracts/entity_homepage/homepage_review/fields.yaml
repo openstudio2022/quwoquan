@@ -120,6 +120,23 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  HomepageReviewView:
+    fields:
+      - {name: id, type: string, constraints: [NOT_BLANK]}
+      - {name: homepageId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: rating, type: int, constraints: [NOT_NULL, MIN_1, MAX_5]}
+      - {name: status, type: enum, enum_ref: HomepageReviewStatus, constraints: [NOT_NULL]}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: authorDisplayNameSnapshot, type: string, constraints: [NULLABLE]}
+      - {name: authorAvatarUrlSnapshot, type: string, constraints: [NULLABLE]}
+      - {name: body, type: string, constraints: [NULLABLE]}
+      - {name: tagRefs, type: '[]string', constraints: [NULLABLE]}
+  HomepageReviewPageSlice:
+    fields:
+      - {name: items, type: '[]HomepageReviewView', constraints: [NOT_NULL]}
+      - {name: nextCursor, type: string, constraints: [NULLABLE]}
   DeleteHomepageReviewCommand:
     fields:
       - name: reviewId

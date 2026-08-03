@@ -9,40 +9,93 @@ class IntegrationApiMetadata {
   static const String domain = 'integration';
   static const List<String> apiPrefixes = <String>[
     '/integration/location',
+    '/integrations/connections',
+    '/integrations/connector-authorizations',
+    '/integrations/connectors',
     '/integrations/external-requests',
+    '/integrations/invocations',
+    '/internal/integrations',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'CompleteNativeConnectorAuthorization': '/integrations/connector-authorizations/{authorizationId}/complete-native',
+    'CompleteOAuthConnectorAuthorization': '/internal/integrations/connector-authorizations/{authorizationId}/complete-oauth',
+    'ContinueConnectorInvocation': '/internal/integrations/invocations/{invocationId}/continue',
+    'CreateConnectorConnection': '/integrations/connections',
+    'GetConnectorAuthorization': '/integrations/connector-authorizations/{authorizationId}',
+    'GetConnectorConnection': '/integrations/connections/{connectionId}',
+    'GetConnectorDefinition': '/integrations/connectors/{connectorId}',
+    'GetConnectorInvocation': '/integrations/invocations/{invocationId}',
     'GetExternalInteractionMetricsSnapshot': '/integrations/external-requests/metrics:snapshot',
     'GetExternalInteractionRequest': '/integrations/external-requests/{requestId}',
     'GetNearbyLocations': '/integration/location/nearby',
+    'InvokeConnectorCapability': '/internal/integrations/invocations',
+    'ListConnectorConnections': '/integrations/connections',
+    'ListConnectorDefinitions': '/integrations/connectors',
+    'ListConnectorInvocations': '/integrations/invocations',
     'ListExternalInteractionAttempts': '/integrations/external-requests/{requestId}/attempts',
     'ListExternalInteractionDeadLetters': '/integrations/external-requests/dead-letters',
+    'PublishConnectorDefinition': '/internal/integrations/connectors/{connectorId}',
     'RecoverExternalInteractionDeadLetter': '/integrations/external-requests/dead-letters:recover',
+    'ResolveConnectorCapabilityGrant': '/internal/integrations/connector-capability-grants:resolve',
+    'RevokeConnectorConnection': '/integrations/connections/{connectionId}/revoke',
     'SearchLocations': '/integration/location/search',
+    'StartConnectorAuthorization': '/integrations/connector-authorizations',
     'SubmitExternalInteractionRequest': '/integrations/external-requests',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'CompleteNativeConnectorAuthorization': 'POST',
+    'CompleteOAuthConnectorAuthorization': 'POST',
+    'ContinueConnectorInvocation': 'POST',
+    'CreateConnectorConnection': 'POST',
+    'GetConnectorAuthorization': 'GET',
+    'GetConnectorConnection': 'GET',
+    'GetConnectorDefinition': 'GET',
+    'GetConnectorInvocation': 'GET',
     'GetExternalInteractionMetricsSnapshot': 'GET',
     'GetExternalInteractionRequest': 'GET',
     'GetNearbyLocations': 'GET',
+    'InvokeConnectorCapability': 'POST',
+    'ListConnectorConnections': 'GET',
+    'ListConnectorDefinitions': 'GET',
+    'ListConnectorInvocations': 'GET',
     'ListExternalInteractionAttempts': 'GET',
     'ListExternalInteractionDeadLetters': 'GET',
+    'PublishConnectorDefinition': 'PUT',
     'RecoverExternalInteractionDeadLetter': 'POST',
+    'ResolveConnectorCapabilityGrant': 'POST',
+    'RevokeConnectorConnection': 'POST',
     'SearchLocations': 'GET',
+    'StartConnectorAuthorization': 'POST',
     'SubmitExternalInteractionRequest': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'CompleteNativeConnectorAuthorization': 'required',
+    'CompleteOAuthConnectorAuthorization': 'required',
+    'ContinueConnectorInvocation': 'required',
+    'CreateConnectorConnection': 'required',
+    'GetConnectorAuthorization': 'required',
+    'GetConnectorConnection': 'required',
+    'GetConnectorDefinition': 'required',
+    'GetConnectorInvocation': 'required',
     'GetExternalInteractionMetricsSnapshot': 'required',
     'GetExternalInteractionRequest': 'required',
     'GetNearbyLocations': 'optional',
+    'InvokeConnectorCapability': 'required',
+    'ListConnectorConnections': 'required',
+    'ListConnectorDefinitions': 'required',
+    'ListConnectorInvocations': 'required',
     'ListExternalInteractionAttempts': 'required',
     'ListExternalInteractionDeadLetters': 'required',
+    'PublishConnectorDefinition': 'required',
     'RecoverExternalInteractionDeadLetter': 'required',
+    'ResolveConnectorCapabilityGrant': 'required',
+    'RevokeConnectorConnection': 'required',
     'SearchLocations': 'optional',
+    'StartConnectorAuthorization': 'required',
     'SubmitExternalInteractionRequest': 'required',
   };
 
@@ -54,15 +107,74 @@ class IntegrationApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String completeNativeConnectorAuthorizationOperation = 'CompleteNativeConnectorAuthorization';
+  static const String completeOAuthConnectorAuthorizationOperation = 'CompleteOAuthConnectorAuthorization';
+  static const String continueConnectorInvocationOperation = 'ContinueConnectorInvocation';
+  static const String createConnectorConnectionOperation = 'CreateConnectorConnection';
+  static const String getConnectorAuthorizationOperation = 'GetConnectorAuthorization';
+  static const String getConnectorConnectionOperation = 'GetConnectorConnection';
+  static const String getConnectorDefinitionOperation = 'GetConnectorDefinition';
+  static const String getConnectorInvocationOperation = 'GetConnectorInvocation';
   static const String getExternalInteractionMetricsSnapshotOperation = 'GetExternalInteractionMetricsSnapshot';
   static const String getExternalInteractionRequestOperation = 'GetExternalInteractionRequest';
   static const String getNearbyLocationsOperation = 'GetNearbyLocations';
+  static const String invokeConnectorCapabilityOperation = 'InvokeConnectorCapability';
+  static const String listConnectorConnectionsOperation = 'ListConnectorConnections';
+  static const String listConnectorDefinitionsOperation = 'ListConnectorDefinitions';
+  static const String listConnectorInvocationsOperation = 'ListConnectorInvocations';
   static const String listExternalInteractionAttemptsOperation = 'ListExternalInteractionAttempts';
   static const String listExternalInteractionDeadLettersOperation = 'ListExternalInteractionDeadLetters';
+  static const String publishConnectorDefinitionOperation = 'PublishConnectorDefinition';
   static const String recoverExternalInteractionDeadLetterOperation = 'RecoverExternalInteractionDeadLetter';
+  static const String resolveConnectorCapabilityGrantOperation = 'ResolveConnectorCapabilityGrant';
+  static const String revokeConnectorConnectionOperation = 'RevokeConnectorConnection';
   static const String searchLocationsOperation = 'SearchLocations';
+  static const String startConnectorAuthorizationOperation = 'StartConnectorAuthorization';
   static const String submitExternalInteractionRequestOperation = 'SubmitExternalInteractionRequest';
 
+  static const String completeNativeConnectorAuthorizationPathTemplate = '/integrations/connector-authorizations/{authorizationId}/complete-native';
+  static String completeNativeConnectorAuthorizationPath({required String authorizationId}) {
+    return _fillPath(completeNativeConnectorAuthorizationPathTemplate, <String, String>{
+      'authorizationId': authorizationId,
+    });
+  }
+  static const String completeOAuthConnectorAuthorizationPathTemplate = '/internal/integrations/connector-authorizations/{authorizationId}/complete-oauth';
+  static String completeOAuthConnectorAuthorizationPath({required String authorizationId}) {
+    return _fillPath(completeOAuthConnectorAuthorizationPathTemplate, <String, String>{
+      'authorizationId': authorizationId,
+    });
+  }
+  static const String continueConnectorInvocationPathTemplate = '/internal/integrations/invocations/{invocationId}/continue';
+  static String continueConnectorInvocationPath({required String invocationId}) {
+    return _fillPath(continueConnectorInvocationPathTemplate, <String, String>{
+      'invocationId': invocationId,
+    });
+  }
+  static const String createConnectorConnectionPath = '/integrations/connections';
+  static const String getConnectorAuthorizationPathTemplate = '/integrations/connector-authorizations/{authorizationId}';
+  static String getConnectorAuthorizationPath({required String authorizationId}) {
+    return _fillPath(getConnectorAuthorizationPathTemplate, <String, String>{
+      'authorizationId': authorizationId,
+    });
+  }
+  static const String getConnectorConnectionPathTemplate = '/integrations/connections/{connectionId}';
+  static String getConnectorConnectionPath({required String connectionId}) {
+    return _fillPath(getConnectorConnectionPathTemplate, <String, String>{
+      'connectionId': connectionId,
+    });
+  }
+  static const String getConnectorDefinitionPathTemplate = '/integrations/connectors/{connectorId}';
+  static String getConnectorDefinitionPath({required String connectorId}) {
+    return _fillPath(getConnectorDefinitionPathTemplate, <String, String>{
+      'connectorId': connectorId,
+    });
+  }
+  static const String getConnectorInvocationPathTemplate = '/integrations/invocations/{invocationId}';
+  static String getConnectorInvocationPath({required String invocationId}) {
+    return _fillPath(getConnectorInvocationPathTemplate, <String, String>{
+      'invocationId': invocationId,
+    });
+  }
   static const String getExternalInteractionMetricsSnapshotPath = '/integrations/external-requests/metrics:snapshot';
   static const String getExternalInteractionRequestPathTemplate = '/integrations/external-requests/{requestId}';
   static String getExternalInteractionRequestPath({required String requestId}) {
@@ -71,6 +183,10 @@ class IntegrationApiMetadata {
     });
   }
   static const String getNearbyLocationsPath = '/integration/location/nearby';
+  static const String invokeConnectorCapabilityPath = '/internal/integrations/invocations';
+  static const String listConnectorConnectionsPath = '/integrations/connections';
+  static const String listConnectorDefinitionsPath = '/integrations/connectors';
+  static const String listConnectorInvocationsPath = '/integrations/invocations';
   static const String listExternalInteractionAttemptsPathTemplate = '/integrations/external-requests/{requestId}/attempts';
   static String listExternalInteractionAttemptsPath({required String requestId}) {
     return _fillPath(listExternalInteractionAttemptsPathTemplate, <String, String>{
@@ -78,8 +194,22 @@ class IntegrationApiMetadata {
     });
   }
   static const String listExternalInteractionDeadLettersPath = '/integrations/external-requests/dead-letters';
+  static const String publishConnectorDefinitionPathTemplate = '/internal/integrations/connectors/{connectorId}';
+  static String publishConnectorDefinitionPath({required String connectorId}) {
+    return _fillPath(publishConnectorDefinitionPathTemplate, <String, String>{
+      'connectorId': connectorId,
+    });
+  }
   static const String recoverExternalInteractionDeadLetterPath = '/integrations/external-requests/dead-letters:recover';
+  static const String resolveConnectorCapabilityGrantPath = '/internal/integrations/connector-capability-grants:resolve';
+  static const String revokeConnectorConnectionPathTemplate = '/integrations/connections/{connectionId}/revoke';
+  static String revokeConnectorConnectionPath({required String connectionId}) {
+    return _fillPath(revokeConnectorConnectionPathTemplate, <String, String>{
+      'connectionId': connectionId,
+    });
+  }
   static const String searchLocationsPath = '/integration/location/search';
+  static const String startConnectorAuthorizationPath = '/integrations/connector-authorizations';
   static const String submitExternalInteractionRequestPath = '/integrations/external-requests';
 
   static String _fillPath(String template, Map<String, String> params) {

@@ -1,46 +1,12 @@
 read_model: CommentPageSlice
-description: '一级评论商用投影分页；由 Comment 白名单字段（含 authorIpLocation 快照）、回复摘要、
-
-  ContentReaction 批量计数与 viewer 状态、Post 作者赞过事实（authorLiked）、
-
-  viewer→评论作者关系事实（viewerRelation，来自 persona_follow_projection：
-
-  none/following/friend，未登录恒 none）、MediaAsset 附件快照及 Post ownership
-
-  capability 组合，全部批量读取避免 N+1，不返回任何聚合。
-
-  排序真相源：sort=hot（hotScore 投影分）或 latest；置顶段永远在前。
-
-  '
-source_entities:
-- Comment
-- ContentReaction
-- MediaAsset
-- Post
-source_projections:
-- persona_follow_projection
-consumers:
-- app
+description: >-
+  一级评论商用投影分页；组合 Comment、ContentReaction、MediaAsset、Post ownership
+  与对象本地 viewer relationship projection，按服务端 hot/latest keyset 排序且置顶段优先。
+source_entities: [Comment, ContentReaction, MediaAsset, Post]
+source_projections: [comment_viewer_relationship_projection]
+consumers: [app]
 reply_preview_limit: 1
-client_projection:
-  dart_class: ContentCommentPageSlice
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/comment_contracts.dart
 fields:
-- attachments
-- replyCount
-- replyPreview
-- replyNextCursor
-- likeCount
-- dislikeCount
-- name: viewerReaction
-  type: enum
-  enum_ref: CommentReactionType
-- authorLiked
-- name: viewerRelation
-  type: enum
-  enum_ref: CommentViewerRelation
-- isAuthor
-- canDelete
-- canReply
-- canReport
-- canPin
+  - {name: items, type: '[]CommentListItem', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: total, type: int, nullable: false}

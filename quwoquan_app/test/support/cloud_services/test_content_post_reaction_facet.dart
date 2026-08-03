@@ -7,11 +7,11 @@ final class TestContentPostReactionFacet implements ContentPostReactionFacet {
   int commandCallCount = 0;
 
   @override
-  Future<ContentPostReactionStateSlice> getReactionState(
+  Future<ContentReactionStateSlice> getReactionState(
     GetContentPostReactionStateQuery query,
   ) async {
     final liked = _liked[query.postId] ?? false;
-    return ContentPostReactionStateSlice(
+    return ContentReactionStateSlice(
       found: _liked.containsKey(query.postId),
       postId: query.postId,
       liked: liked,

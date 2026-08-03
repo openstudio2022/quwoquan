@@ -22,24 +22,21 @@ class AssistantConsentStore {
     return 'assistant_skill_consents:${digest.substring(0, 24)}';
   }
 
-  Future<List<AssistantSkillConsent>> load() async {
+  Future<List<SkillConsent>> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
     if (raw == null || raw.trim().isEmpty) {
-      return const <AssistantSkillConsent>[];
+      return const <SkillConsent>[];
     }
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! List) {
         await prefs.remove(_key);
-        return const <AssistantSkillConsent>[];
+        return const <SkillConsent>[];
       }
       return decoded
           .whereType<Map>()
-          .map(
-            (item) =>
-                AssistantSkillConsent.fromJson(item.cast<String, dynamic>()),
-          )
+          .map((item) => SkillConsent.fromJson(item.cast<String, dynamic>()))
           .where((item) => item.skillId.isNotEmpty)
           .toList(growable: false);
     } catch (error) {
@@ -50,11 +47,11 @@ class AssistantConsentStore {
         error: error,
       );
       await prefs.remove(_key);
-      return const <AssistantSkillConsent>[];
+      return const <SkillConsent>[];
     }
   }
 
-  Future<void> save(List<AssistantSkillConsent> items) async {
+  Future<void> save(List<SkillConsent> items) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _key,
@@ -62,9 +59,9 @@ class AssistantConsentStore {
     );
   }
 
-  Future<void> upsert(AssistantSkillConsent next) async {
+  Future<void> upsert(SkillConsent next) async {
     final current = await load();
-    final merged = <AssistantSkillConsent>[
+    final merged = <SkillConsent>[
       for (final item in current)
         if (item.skillId != next.skillId) item,
       next,

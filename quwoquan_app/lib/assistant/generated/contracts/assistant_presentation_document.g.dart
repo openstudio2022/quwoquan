@@ -43,6 +43,54 @@ class AssistantPresentationDocumentWire {
       };
 
   factory AssistantPresentationDocumentWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'templateRef',
+      'templateDigest',
+      'revision',
+      'rootNodeId',
+      'nodes',
+      'dataDigest',
+      'selectedVariant',
+      'fallbackMarkdown',
+      'fallbackPlainText',
+      'committedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantPresentationDocumentWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('templateRef') || json['templateRef'] == null || (json['templateRef'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field templateRef has an invalid wire value');
+    }
+    if (!json.containsKey('templateDigest') || json['templateDigest'] == null || (json['templateDigest'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field templateDigest has an invalid wire value');
+    }
+    if (!json.containsKey('revision') || json['revision'] == null || (json['revision'] is! num)) {
+      throw const FormatException('AssistantPresentationDocumentWire field revision has an invalid wire value');
+    }
+    if (!json.containsKey('rootNodeId') || json['rootNodeId'] == null || (json['rootNodeId'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field rootNodeId has an invalid wire value');
+    }
+    if (json.containsKey('nodes') && json['nodes'] != null && (json['nodes'] is! List || (json['nodes'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantPresentationDocumentWire field nodes has an invalid wire value');
+    }
+    if (!json.containsKey('dataDigest') || json['dataDigest'] == null || (json['dataDigest'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field dataDigest has an invalid wire value');
+    }
+    if (json.containsKey('selectedVariant') && json['selectedVariant'] != null && (json['selectedVariant'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field selectedVariant has an invalid wire value');
+    }
+    if (!json.containsKey('fallbackMarkdown') || json['fallbackMarkdown'] == null || (json['fallbackMarkdown'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field fallbackMarkdown has an invalid wire value');
+    }
+    if (!json.containsKey('fallbackPlainText') || json['fallbackPlainText'] == null || (json['fallbackPlainText'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field fallbackPlainText has an invalid wire value');
+    }
+    if (!json.containsKey('committedAt') || json['committedAt'] == null || (json['committedAt'] is! String)) {
+      throw const FormatException('AssistantPresentationDocumentWire field committedAt has an invalid wire value');
+    }
     return AssistantPresentationDocumentWire(
       templateRef: (json['templateRef'] as String?)?.trim() ?? "",
       templateDigest: (json['templateDigest'] as String?)?.trim() ?? "",

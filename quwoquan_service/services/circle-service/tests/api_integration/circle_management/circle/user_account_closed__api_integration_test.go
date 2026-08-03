@@ -507,7 +507,7 @@ func seedAccountClosureTransferFixture(t *testing.T, now time.Time) {
 			"createdAt": now.Add(-time.Hour), "updatedAt": now.Add(-time.Hour),
 		},
 	})
-	mustInsertMany(t, "posts", []any{
+	mustInsertMany(t, "circle_feed_items", []any{
 		bson.M{
 			"_id": "post-closed", "authorId": "persona-closed",
 			"circleId": "circle-transfer",
@@ -667,7 +667,7 @@ func assertAccountClosureTransferState(t *testing.T) {
 	for collection, filter := range map[string]bson.M{
 		"circle_behavior_facts":       {"_id": "behavior-closed"},
 		"circle_behavior_fact_outbox": {"aggregateId": "behavior-closed"},
-		"posts":                       {"_id": "post-closed"},
+		"circle_feed_items":           {"_id": "post-closed"},
 		"circle_post_owner_views":     {"_id": "post-closed"},
 	} {
 		if count := countDocuments(t, collection, filter); count != 0 {

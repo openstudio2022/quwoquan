@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
@@ -23,34 +24,33 @@ import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
 /// 小趣搜确定性替身：成功返回带 queryEcho/summary 的合法结果。
-class _FakeXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
+class _FakeXiaoquSearchFacet implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    return AssistantSearchResultView(
-      queryEcho: query.trim(),
-      summary: '已为“${query.trim()}”整理公开线索摘要（test fixture）。',
-      searchIntensity: searchIntensity,
-      citations: const <AssistantSearchCitationView>[],
+    return AssistantRunTerminalSnapshotView(
+      answerText: '已为“${query.trim()}”整理公开线索摘要（test fixture）。',
+      processes: const <AssistantRunVisibleProcessView>[],
     );
   }
 }
 
 /// 小趣搜失败替身：B8-3b 后 Remote 失败一律抛结构化 CloudException。
-class _ThrowingXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
+class _ThrowingXiaoquSearchFacet implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    throw CloudErrorMapper.fromException(
-      StateError('xiaoqu search unavailable (test)'),
-      requestPath: '/assistant/search/xiaoqu',
-    );
+    throw CloudErrorMapper.fromStatusCode(503, requestPath: '/assistant/runs');
   }
 }
 
@@ -77,7 +77,7 @@ Widget _buildApp({
 Widget _buildAppWithSearchRepository({
   required SearchLaunchContext launchContext,
   required SearchRepository repository,
-  AssistantXiaoquSearchFacet? xiaoquFacet,
+  AssistantSearchRunFacet? xiaoquFacet,
   ContentPostDetailReader? postDetailReader,
   SearchFeedbackCommandWriter? feedbackWriter,
   RecordingAppTelemetryRecorder? telemetryRecorder,
@@ -96,7 +96,7 @@ Widget _buildAppWithSearchRepository({
           postDetailReader,
         ),
       if (xiaoquFacet != null)
-        assistantXiaoquSearchFacetProvider.overrideWithValue(xiaoquFacet),
+        assistantSearchRunFacetProvider.overrideWithValue(xiaoquFacet),
     ],
     child: MaterialApp(
       home: SearchNetworkResultsPage(launchContext: launchContext),
@@ -632,10 +632,19 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+    await _pumpUntil(
+      tester,
+      condition: () => find
+          .text(SearchText.recoveryServiceUnavailableTitle)
+          .evaluate()
+          .isNotEmpty,
+    );
 
     // 不再本地合成"假搜索摘要当成功"；页面进入既有结构化错误态。
-    expect(find.text(SearchText.searchUnavailableTitle), findsOneWidget);
+    expect(
+      find.text(SearchText.recoveryServiceUnavailableTitle),
+      findsOneWidget,
+    );
     expect(find.textContaining('已为“露营”整理公开线索摘要'), findsNothing);
   });
 
@@ -1161,7 +1170,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 subtitle: '圈子主群',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: const SearchHitPayloadCircleGroup(
-                  CircleSearchItemView(
+                  CircleSearchHitViewData(
                     circleId: 'fixture_circle_photo',
                     name: '光影摄影社主群',
                     description: '圈子主群',

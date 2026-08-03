@@ -226,7 +226,10 @@ class _SearchNetworkResultsPageState
                 'search ${eventType.wireValue} feedback degraded: $error',
               );
             }
-            return const SearchFeedbackAck(accepted: false);
+            return const SearchFeedbackAck(
+              accepted: false,
+              requestId: 'local-feedback-degraded',
+            );
           }),
     );
   }
@@ -561,16 +564,7 @@ class _SearchNetworkResultsPageState
     if (reason == null) {
       return '';
     }
-    final displayReason = displayReadyIntersectionReason(
-      reason,
-      contextObjectTarget: IntersectionTarget(
-        objectType: 'post',
-        objectId: item.postId,
-        objectKind: 'content',
-        routeId: 'workBrowser',
-      ),
-    );
-    return displayReason?.primaryText.trim() ?? '';
+    return reason.primaryText?.trim() ?? '';
   }
 
   static String _hitIntersectionPrimaryText(SearchHit hit) {
@@ -578,57 +572,7 @@ class _SearchNetworkResultsPageState
     if (reason == null) {
       return '';
     }
-    final displayReason = displayReadyIntersectionReason(
-      reason,
-      contextObjectTarget: _searchHitContextTarget(hit),
-    );
-    return displayReason?.primaryText.trim() ?? '';
-  }
-
-  static IntersectionTarget? _searchHitContextTarget(SearchHit hit) {
-    final id = hit.objectId.trim();
-    if (id.isEmpty) {
-      return null;
-    }
-    switch (hit.objectType) {
-      case SearchObjectType.contentPost:
-        return IntersectionTarget(
-          objectType: 'post',
-          objectId: id,
-          objectKind: 'content',
-          routeId: 'workBrowser',
-        );
-      case SearchObjectType.circleCircle:
-        return IntersectionTarget(
-          objectType: 'circle',
-          objectId: id,
-          objectKind: 'circle',
-          routeId: 'circleDetail',
-        );
-      case SearchObjectType.entityHomepage:
-      case SearchObjectType.locationPlace:
-      case SearchObjectType.integrationLocationPoi:
-        return IntersectionTarget(
-          objectType: 'homepage',
-          objectId: id,
-          objectKind: 'place',
-          routeId: 'homepageDetail',
-        );
-      case SearchObjectType.userProfile:
-        return IntersectionTarget(
-          objectType: 'user',
-          objectId: id,
-          objectKind: 'person',
-          routeId: 'userProfile',
-        );
-      case SearchObjectType.webDocument:
-      case SearchObjectType.chatContact:
-      case SearchObjectType.chatConversation:
-      case SearchObjectType.chatMessage:
-      case SearchObjectType.circleGroup:
-      case SearchObjectType.tag:
-        return null;
-    }
+    return reason.primaryText?.trim() ?? '';
   }
 
   static String _entityMetaFromHit(SearchHit hit) {

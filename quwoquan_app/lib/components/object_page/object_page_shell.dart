@@ -5,12 +5,12 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
-/// 对象页吸顶模式（V3 三档，对应三壳范式）：
+/// 对象页吸顶模式（三档，对应三壳范式）：
 /// - [full]/[standard]：沉浸头图 + identity 吸顶 + 吸顶一级页签（profile/circle 同源）。
 /// - [minimal]：仅 toolbar 单渐显，无吸顶页签 / 无 identity 吸顶（homepage 范式），可带底栏。
 enum ObjectPagePinMode { full, standard, minimal }
 
-/// 对象页统一壳层骨架（V3 合规共享层，单一几何真相源）。
+/// 对象页统一壳层骨架（合规共享层，单一几何真相源）。
 ///
 /// 收口 ProfileShell / HomepageDetailShell / CircleShell 三壳的沉浸头图 + 下拉回弹 +
 /// summary 高度测量 + 两段吸顶过渡（identity / 一级页签）+ 三槽 toolbar + 吸顶页签 overlay +

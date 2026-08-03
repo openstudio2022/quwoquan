@@ -217,14 +217,14 @@ class _ShareRepository
   }
 
   @override
-  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+  Future<ProfileInteractionReadFactAck> appendReadFact(
     AppendContentProfileInteractionReadFactCommand command,
   ) async {
     appendCalls += 1;
     if (failWrites) {
       throw StateError('read fact unavailable');
     }
-    return ContentProfileInteractionReadFactAck(
+    return ProfileInteractionReadFactAck(
       factId: 'fact-${command.activityId}-${command.state.wireValue}',
       activityId: command.activityId,
       state: command.state.wireValue,

@@ -159,7 +159,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺的实现或验收证据：AssistantRun、AssistantTask、PageContext 与部分 read model 的独立物理归属；这些对象仍混入 AssistantSession 编排，其强/最终一致性尚无完整唯一裁决。SkillConsent 已完成对象专属 domain/Store/Command/Query/HTTP 硬切、单轨 accountId 与真实 PostgreSQL 事务证据。
+- 影响或价值：当前对象目录与 kind-aware 层门已覆盖既有服务，但运行时存储复核仍发现 AssistantSession/AssistantTurnView 直读 AssistantRun、Chat/Circle/Content 的账号关闭与查询实现直写兄弟或跨服务集合，以及 App operation 仍保留手写 `client_contract`/业务 decoder。新增 Travel 对象正在其唯一 owner 任务内完成物理分拆与测试，最终 canonical 对象数必须以同一 ContractGraph source hash 的实际 roster 为准，不再维护失效的固定数量台账。上述存储旁路、第二 wire 真相源、对象级测试或生成归属任一非零时，本 OPEN 不得删除，也不得声明 `MODEL_GOVERNANCE_READY`。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>

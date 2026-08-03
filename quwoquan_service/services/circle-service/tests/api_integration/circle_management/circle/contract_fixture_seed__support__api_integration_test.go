@@ -187,7 +187,7 @@ func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidenc
 
 func resetCircleFixtureNamespace(t *testing.T) {
 	t.Helper()
-	for _, coll := range []string{"circles", "circle_memberships", "circle_group_memberships", "circle_files", "circle_groups", "posts"} {
+	for _, coll := range []string{"circles", "circle_memberships", "circle_group_memberships", "circle_files", "circle_groups", "circle_feed_items"} {
 		_, err := mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},

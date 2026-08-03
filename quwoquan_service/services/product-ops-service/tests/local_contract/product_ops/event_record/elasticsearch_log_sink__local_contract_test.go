@@ -312,6 +312,80 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 	}
 }
 
+func TestElasticsearchLogSinkPersistsTypedVideoPlaybackQoeWithoutContentAttribution(
+	t *testing.T,
+) {
+	t.Parallel()
+	harness := newElasticsearchHarness(nil)
+	server := httptest.NewServer(harness)
+	t.Cleanup(server.Close)
+	store := newTestElasticsearchStore(t, server.URL)
+	now := time.Now().UTC().Add(-time.Minute)
+	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
+	effectivePlaybackMS := 12000
+	seekFailureCount, seekCommandMaxMS, seekSettleMaxMS := 0, 80, 120
+	droppedFrames, processedVideoFrames, audioUnderrunCount := 2, 300, 0
+	rendererMode, decoderQueueMode, decoderFallbackEnabled := "platform_view", "synchronous", true
+	seekEvidenceSource, playbackMode, result := "controller_command_completion", "autoplay", "success"
+	event := validEvent("video_playback_qoe", "event", now)
+	event.ReadyMS = &readyMS
+	event.RebufferCount = &rebufferCount
+	event.RebufferMS = &rebufferMS
+	event.EffectivePlaybackMS = &effectivePlaybackMS
+	event.SeekCount = &seekCount
+	event.SeekFailureCount = &seekFailureCount
+	event.SeekCommandMaxMS = &seekCommandMaxMS
+	event.SeekSettleMaxMS = &seekSettleMaxMS
+	event.DroppedFrames = &droppedFrames
+	event.ProcessedVideoFrames = &processedVideoFrames
+	event.AudioUnderrunCount = &audioUnderrunCount
+	event.RendererMode = &rendererMode
+	event.DecoderQueueMode = &decoderQueueMode
+	event.DecoderFallbackEnabled = &decoderFallbackEnabled
+	event.SeekEvidenceSource = &seekEvidenceSource
+	event.PlaybackMode = &playbackMode
+	event.Result = &result
+	batchKey := strings.Repeat("d", 64)
+	if err := store.PutEventBatch(context.Background(), batchKey, []application.EventRecord{{
+		EventRecordInput: event,
+		BatchKey:         batchKey,
+		BatchIndex:       0,
+		IngestedAt:       now.Add(time.Second),
+	}}); err != nil {
+		t.Fatalf("PutEventBatch() error = %v", err)
+	}
+	row := harness.document("app-product-telemetry-raw", batchKey+":0")
+	for field, expected := range map[string]string{
+		"eventType":              "video_playback_qoe",
+		"readyMs":                "420",
+		"rebufferCount":          "1",
+		"rebufferMs":             "180",
+		"effectivePlaybackMs":    "12000",
+		"seekCount":              "2",
+		"seekFailureCount":       "0",
+		"seekCommandMaxMs":       "80",
+		"seekSettleMaxMs":        "120",
+		"droppedFrames":          "2",
+		"processedVideoFrames":   "300",
+		"audioUnderrunCount":     "0",
+		"rendererMode":           "platform_view",
+		"decoderQueueMode":       "synchronous",
+		"decoderFallbackEnabled": "true",
+		"seekEvidenceSource":     "controller_command_completion",
+		"devicePlatform":         "android",
+		"playbackMode":           "autoplay",
+	} {
+		if fmt.Sprint(row[field]) != expected {
+			t.Fatalf("video qoe %s=%v, want %s; row=%+v", field, row[field], expected, row)
+		}
+	}
+	for _, forbidden := range []string{"postId", "feedRequestId", "rankingVersion", "tagRefs"} {
+		if _, found := row[forbidden]; found {
+			t.Fatalf("Ops video QoE must not contain %s: %+v", forbidden, row)
+		}
+	}
+}
+
 func TestElasticsearchLogSinkRepairsPendingPartialRawBatch(t *testing.T) {
 	t.Parallel()
 	harness := newElasticsearchHarness(nil)
@@ -355,6 +429,53 @@ func TestElasticsearchLogSinkRepairsPendingPartialRawBatch(t *testing.T) {
 	complete, err := store.HasEventBatch(context.Background(), batchKey, 1)
 	if err != nil || !complete {
 		t.Fatalf("HasEventBatch() after pending repair = %v, %v", complete, err)
+	}
+}
+
+func TestElasticsearchLogSinkUsesApiKeyWithoutLeakingIt(t *testing.T) {
+	t.Parallel()
+	const apiKey = "redacted-test-api-key"
+	var authorization string
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		request *http.Request,
+	) {
+		authorization = request.Header.Get("Authorization")
+		writeJSON(writer, http.StatusOK, map[string]any{"status": "yellow"})
+	}))
+	t.Cleanup(server.Close)
+	store, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Endpoint:               server.URL,
+			APIKey:                 apiKey,
+			RawIndex:               "app-product-telemetry-raw",
+			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
+			RuntimeLogIndex:        "runtime-diagnostics-raw",
+			AggregateIndex:         "app-product-telemetry-hourly",
+			Timeout:                time.Second,
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewElasticsearchEventLogStore() error = %v", err)
+	}
+	if err := store.Ping(context.Background()); err != nil {
+		t.Fatalf("Ping() error = %v", err)
+	}
+	if authorization != "ApiKey "+apiKey {
+		t.Fatalf("Authorization = %q; want ApiKey credential", authorization)
+	}
+	if _, err := telemetrypersistence.NewElasticsearchEventLogStore(
+		telemetrypersistence.ElasticsearchConfig{
+			Endpoint:               server.URL,
+			APIKey:                 "credential\r\ninjected: true",
+			RawIndex:               "app-product-telemetry-raw",
+			StartupDiagnosticIndex: "app-startup-diagnostic-raw",
+			RuntimeLogIndex:        "runtime-diagnostics-raw",
+			AggregateIndex:         "app-product-telemetry-hourly",
+			Timeout:                time.Second,
+		},
+	); err == nil || strings.Contains(err.Error(), "credential") {
+		t.Fatalf("invalid API key must be rejected without echoing the value: %v", err)
 	}
 }
 

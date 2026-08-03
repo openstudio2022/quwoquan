@@ -123,6 +123,10 @@
       "plane": "service",
       "slotOffset": 320
     },
+    "sms-provider-substitute": {
+      "plane": "service",
+      "slotOffset": 330
+    },
     "realtime-gateway": {
       "plane": "service",
       "slotOffset": 340
@@ -146,6 +150,14 @@
     "elasticsearch": {
       "plane": "dataDebug",
       "slotOffset": 430
+    },
+    "data-execution-mongodb": {
+      "plane": "dataDebug",
+      "slotOffset": 440
+    },
+    "data-execution-redis": {
+      "plane": "dataDebug",
+      "slotOffset": 450
     }
   },
   "profiles": {

@@ -75,11 +75,11 @@ func TestResolveFeedbackContextSnapshotFiltersPolicyAllowlists(t *testing.T) {
 	projection := eligibleLearningProjection()
 	service := orchestration.NewAssistantService(
 		consentStoreStub{consents: []consentmodel.Consent{{
-			ID:           "consent-1",
-			AccountID:    "account-1",
-			SkillID:      "assistant_learning",
-			GrantedScope: "assistant_learning_context",
-			GrantedAt:    time.Now().UTC(),
+			ID:            "consent-1",
+			AccountID:     "account-1",
+			SkillID:       "assistant_learning",
+			GrantedScopes: []string{"assistant_learning_context"},
+			GrantedAt:     time.Now().UTC(),
 		}}},
 		nil,
 		orchestration.WithLearningProjectionReader(learningProjectionReaderStub{
@@ -190,11 +190,11 @@ func TestResolveFeedbackContextSnapshotFailsClosedForUntrustedOrUnavailableProje
 
 func learningContextConsentStore() consentStoreStub {
 	return consentStoreStub{consents: []consentmodel.Consent{{
-		ID:           "consent-learning-context",
-		AccountID:    "account-1",
-		SkillID:      "assistant_learning",
-		GrantedScope: "assistant_learning_context",
-		GrantedAt:    time.Unix(1, 0).UTC(),
+		ID:            "consent-learning-context",
+		AccountID:     "account-1",
+		SkillID:       "assistant_learning",
+		GrantedScopes: []string{"assistant_learning_context"},
+		GrantedAt:     time.Unix(1, 0).UTC(),
 	}}}
 }
 

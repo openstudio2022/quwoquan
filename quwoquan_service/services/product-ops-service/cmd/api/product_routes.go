@@ -10,7 +10,9 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	accountenforcementhttp "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/adapters/inbound/http"
 	appreleasehttp "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
+	eventrecordhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
 	experimentassignmenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/http"
+	premiumpoolhttp "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/adapters/inbound/http"
 	recoveryfailurehttp "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/adapters/inbound/http"
 	visithttp "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/adapters/inbound/http"
 )
@@ -29,13 +31,12 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	visithttp.NewHandler(service.visits).Register(mux)
 	appreleasehttp.NewHandler(service.appRelease).Register(mux)
 	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeError).Register(mux)
-	mux.HandleFunc("/ops/events", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleReportEventBatch(w, r)
-	})
+	premiumpoolhttp.NewHandler(service.premiumPool, writeRuntimeError).Register(mux)
+	eventrecordhttp.NewHandler(
+		service.telemetry,
+		recordTelemetryIngestMetrics,
+		recordAppExperienceEvents,
+	).Register(mux)
 	mux.HandleFunc("/ops/runtime-logs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeRuntimeNotFound(w, r)
@@ -100,26 +101,6 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	})
 	mux.HandleFunc("/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/product/recommendation/premium-pool", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			service.handleListPremiumPool(w, r)
-		case http.MethodPost:
-			service.handleUpsertPremiumPool(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
-	})
-	mux.HandleFunc("/control-plane/product/recommendation/premium-pool/", func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollback"):
-			service.handleRollbackPremiumPool(w, r)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":takedown"):
-			service.handleTakedownPremiumPool(w, r)
-		default:
-			writeRuntimeNotFound(w, r)
-		}
 	})
 	mux.HandleFunc("/control-plane/product/workflows", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

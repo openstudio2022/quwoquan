@@ -131,7 +131,7 @@ class HomepageFacetProjectionAdapter implements HomepageFacetSet {
   }
 
   @override
-  Future<HomepageClaimRequestRecord> createHomepageClaimRequest({
+  Future<HomepageClaimRequestView> createHomepageClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
   }) async {
@@ -148,16 +148,7 @@ class HomepageFacetProjectionAdapter implements HomepageFacetSet {
         ),
       ),
     );
-    return HomepageClaimRequestRecord(
-      id: view.claimRequestId,
-      homepageId: view.homepageId,
-      requesterPersonaId: view.requesterPersonaId,
-      claimTier: view.claimTier,
-      status: view.status,
-      reviewNote: view.reviewNote,
-      createdAt: view.createdAt,
-      reviewedAt: view.reviewedAt,
-    );
+    return view;
   }
 
   @override
@@ -183,7 +174,7 @@ class HomepageFacetProjectionAdapter implements HomepageFacetSet {
   }
 
   @override
-  Future<HomepageStatusReportRecord> createHomepageStatusReport({
+  Future<HomepageStatusReportView> createHomepageStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
   }) async {
@@ -197,18 +188,7 @@ class HomepageFacetProjectionAdapter implements HomepageFacetSet {
         ),
       ),
     );
-    return HomepageStatusReportRecord(
-      id: view.reportId,
-      homepageId: view.homepageId,
-      reporterPersonaId: view.reporterPersonaId,
-      reason: view.reason,
-      status: view.status,
-      description: view.description,
-      evidenceUrls: view.evidenceUrls,
-      reviewNote: view.reviewNote,
-      createdAt: view.createdAt,
-      reviewedAt: view.reviewedAt,
-    );
+    return view;
   }
 
   Future<T> _execute<T>(Future<T> Function() operation) async {

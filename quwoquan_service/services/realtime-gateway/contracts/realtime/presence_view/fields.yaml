@@ -74,3 +74,23 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: projection
+- name: expiresAt
+  source: expiresAt
+  type: timestamp
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: sequence
+  source: sequence
+  type: int64
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection

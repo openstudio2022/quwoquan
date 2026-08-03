@@ -31,9 +31,9 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 			"conv-1",
 		):
 			_ = json.NewEncoder(w).Encode(struct {
-				CreatorMember        bool `json:"creatorMember"`
-				AssistantSkillMember bool `json:"assistantSkillMember"`
-			}{CreatorMember: true, AssistantSkillMember: true})
+				CreatorMember   bool `json:"creatorMember"`
+				AssistantMember bool `json:"assistantMember"`
+			}{CreatorMember: true, AssistantMember: true})
 			return
 		case serviceclients.ChatListAssistantGroundingMessagesPath("conv-1"):
 			if r.URL.Query().Get("beforeSeq") != "12" {
@@ -79,7 +79,6 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 		"conv-1",
 		"user-a",
 		"assistant",
-		"general",
 	)
 	if err != nil || !current {
 		t.Fatalf("ResolveAssistantDeliveryMembership current=%t err=%v", current, err)
@@ -88,7 +87,6 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 		ctx,
 		"conv-1",
 		"user-a",
-		"general",
 		12,
 		20,
 	)
@@ -101,7 +99,6 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 	err = client.SendMessage(ctx, ports.ChatGroundingSendMessageRequest{
 		ChatConversationID: "conv-1",
 		CreatorPersonaID:   "user-a",
-		AssistantSkillID:   "general",
 		Type:               "text",
 		Content:            "可以去川西。",
 		ClientMsgID:        "assistant-turn-1",

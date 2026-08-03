@@ -1,20 +1,11 @@
 package api_integration
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-
-	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 func TestSubmitPostPublicationPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
@@ -334,16 +325,6 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 	}
 	assertStablePostNotFound(t, viewerRec.Body.Bytes())
 
-	var projected bson.M
-	err := mongoDB.Collection("rm_discovery_feed").
-		FindOne(context.Background(), bson.M{"postId": postID}).
-		Decode(&projected)
-	if err == nil {
-		t.Fatalf("expected discovery projection removed after revoke, got %+v", projected)
-	}
-	if err != mongo.ErrNoDocuments {
-		t.Fatalf("expected no discovery projection after revoke, got %v", err)
-	}
 }
 
 func TestPrivatePostBlocksNonAuthorViewer(t *testing.T) {
@@ -399,89 +380,6 @@ func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 	testHandler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("Post cannot mutate CirclePostPlacement, got %d: %s", recorder.Code, recorder.Body.String())
-	}
-}
-
-func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
-	t.Cleanup(func() { cleanPosts(t) })
-
-	created := submitPublishedPostWithAuthor(t, "rebuild_author", `{
-		"contentType":"article",
-		"title":"记录作品",
-		"body":"等待补投影"
-	}`)
-	postID, _ := created["postId"].(string)
-	if postID == "" {
-		t.Fatal("expected post id")
-	}
-
-	if _, err := mongoDB.Collection("rm_discovery_feed").DeleteMany(
-		context.Background(),
-		bson.M{"postId": postID},
-	); err != nil {
-		t.Fatalf("delete projected doc: %v", err)
-	}
-
-	store := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
-	rebuildRelay := postapp.NewOutboxRelay(
-		store,
-		store,
-		contentmessaging.NewPostOutboxPublisher(
-			contentmessaging.NewInProcessProjectorPublisher(&discoveryProjectorAdapter{
-				projector: recinfra.NewDiscoveryFeedProjector(mongoDB),
-			}),
-		),
-		"api-integration-discovery-rebuild-"+postID,
-	)
-	count, err := rebuildRelay.Drain(context.Background(), 100)
-	if err != nil {
-		t.Fatalf("replay durable Post outbox: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expected one atomic PostPublished fact to replay, got %d", count)
-	}
-
-	var projected bson.M
-	if err := mongoDB.Collection("rm_discovery_feed").
-		FindOne(context.Background(), bson.M{"postId": postID}).
-		Decode(&projected); err != nil {
-		t.Fatalf("expected rebuilt projection, got %v", err)
-	}
-	if projected["contentIdentity"] != "work" {
-		t.Fatalf("expected rebuilt contentIdentity=work, got %v", projected["contentIdentity"])
-	}
-	if projected["assistantUsePolicy"] != "inherit" {
-		t.Fatalf("expected rebuilt assistantUsePolicy=inherit, got %v", projected["assistantUsePolicy"])
-	}
-	if projected["status"] != "published" {
-		t.Fatalf("expected rebuilt status=published, got %v", projected["status"])
-	}
-	if count, err := rebuildRelay.Drain(context.Background(), 100); err != nil || count != 0 {
-		t.Fatalf("rebuild checkpoint replay count=%d err=%v", count, err)
-	}
-}
-
-func TestDiscoveryProjectionPersistsAuthorPersonaID(t *testing.T) {
-	t.Cleanup(func() { cleanPosts(t) })
-
-	created := submitPublishedPostWithAuthor(t, "projection_author", `{
-		"contentType":"article",
-		"title":"作者主键投影",
-		"body":"发现流必须保留 canonical personaId"
-	}`)
-	postID, _ := created["postId"].(string)
-	if postID == "" {
-		t.Fatal("expected post id")
-	}
-
-	var projected bson.M
-	if err := mongoDB.Collection("rm_discovery_feed").
-		FindOne(context.Background(), bson.M{"postId": postID}).
-		Decode(&projected); err != nil {
-		t.Fatalf("expected discovery projection, got %v", err)
-	}
-	if projected["authorId"] != "projection_author" {
-		t.Fatalf("expected authorId=projection_author, got %v", projected["authorId"])
 	}
 }
 

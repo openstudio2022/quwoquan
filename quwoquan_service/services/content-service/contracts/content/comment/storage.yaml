@@ -120,6 +120,35 @@ collections:
     - name: idx_comment_projection_checkpoint_updated
       keys:
         updatedAt: -1
+  comment_viewer_relationship_projection:
+    entity: CommentViewerRelationshipProjection
+    role: projection
+    description: Comment 对 user.PersonaRelationship typed event 的对象本地只读投影；仅用于评论页关注、互关与拉黑展示，不成为关系权威源。
+    indexes:
+    - name: uq_comment_viewer_relationship_direction
+      keys:
+        sourcePersonaId: 1
+        targetPersonaId: 1
+      unique: true
+    - name: idx_comment_viewer_block_source
+      keys:
+        sourcePersonaId: 1
+        blocked: 1
+        targetPersonaId: 1
+    - name: idx_comment_viewer_block_target
+      keys:
+        targetPersonaId: 1
+        blocked: 1
+        sourcePersonaId: 1
+  comment_viewer_relationship_inbox:
+    entity: CommentViewerRelationshipProjection
+    role: projection_checkpoint
+    description: Comment 关系投影按 User eventId 去重的 durable inbox；投影版本守卫完成后写入。
+    indexes:
+    - name: uq_comment_viewer_relationship_event
+      keys:
+        eventId: 1
+      unique: true
 transaction:
   scope:
   - comments
@@ -173,4 +202,27 @@ read_models:
   - parentCommentId
   - status
   - createdAt
+- name: CommentViewerRelationshipProjection
+  source: comment_viewer_relationship_projection
+  projection:
+  - sourcePersonaId
+  - targetPersonaId
+  - following
+  - blocked
+  - version
+  - blockVersion
+  - updatedAt
+streams:
+  events.content.comment_lifecycle:
+    entity: Comment
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Comment outbox 的唯一 durable 生命周期 transport；消费者按 eventId 幂等。
+  events.user.persona_relationship.comment.dlq:
+    entity: CommentViewerRelationshipProjection
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Comment typed PersonaRelationship consumer 的失败事件；原始 user stream 仍由 user.PersonaRelationship 唯一拥有。
 role: authoritative

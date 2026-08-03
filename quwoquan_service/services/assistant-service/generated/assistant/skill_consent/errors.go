@@ -11,6 +11,7 @@ import (
 var (
 	ErrConsentIdempotencyConflict = errors.New("ASSISTANT.USER.consent_idempotency_conflict")
 	ErrConsentInvalidArgument     = errors.New("ASSISTANT.USER.consent_invalid_argument")
+	ErrConsentScopeConflict       = errors.New("ASSISTANT.USER.consent_scope_conflict")
 	ErrConsentUnauthorized        = errors.New("ASSISTANT.USER.consent_unauthorized")
 	ErrConsentUnavailable         = errors.New("ASSISTANT.SYSTEM.consent_unavailable")
 )
@@ -25,6 +26,12 @@ func AppErrorFromConsentIdempotencyConflict(debugMessage string) *rterr.AppError
 func AppErrorFromConsentInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_invalid_argument")
 	return rterr.NewAppError(code, "授权请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromConsentScopeConflict returns *AppError for ASSISTANT.USER.consent_scope_conflict (user_message from errors.yaml).
+func AppErrorFromConsentScopeConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.consent_scope_conflict")
+	return rterr.NewAppError(code, "技能所需权限已变化，请撤销原授权后重新确认", debugMessage).WithMetadata("consent_scope_conflict", 409).WithRecovery("refresh", 0)
 }
 
 // AppErrorFromConsentUnauthorized returns *AppError for ASSISTANT.USER.consent_unauthorized (user_message from errors.yaml).

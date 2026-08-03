@@ -17,28 +17,28 @@ final class AlphaRtcCallSessionFacets
   }
 
   static final DateTime _seedTime = DateTime.utc(2026, 7, 19);
-  final Map<String, CallSessionDto> _sessions = <String, CallSessionDto>{};
+  final Map<String, CallSession> _sessions = <String, CallSession>{};
 
   @override
-  Future<RtcInitiateCallResultDto> initiateCall(
+  Future<RtcInitiateCallResult> initiateCall(
     RtcInitiateCallCommand command,
   ) async {
     final callId = 'alpha_call_${_sessions.length + 1}';
-    final participants = <CallParticipantDto>[
-      const CallParticipantDto(
+    final participants = <CallParticipant>[
+      const CallParticipant(
         userId: 'fixture_user_current',
         role: ParticipantRole.initiator,
         status: ParticipantStatus.connecting,
       ),
       ...command.inviteeIds.map(
-        (id) => CallParticipantDto(
+        (id) => CallParticipant(
           userId: id,
           role: ParticipantRole.invitee,
           status: ParticipantStatus.ringing,
         ),
       ),
     ];
-    final session = CallSessionDto(
+    final session = CallSession(
       callId: callId,
       callType: command.callType,
       status: CallStatus.ringing,
@@ -53,66 +53,66 @@ final class AlphaRtcCallSessionFacets
       updatedAt: _seedTime,
     );
     _sessions[callId] = session;
-    return RtcInitiateCallResultDto(
+    return RtcInitiateCallResult(
       session: session,
-      mediaAccess: RtcMediaSessionAccessDto(
+      mediaAccess: RtcMediaSessionAccess(
         accessToken: 'alpha-media-access-$callId',
       ),
     );
   }
 
   @override
-  Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) async {
+  Future<RtcAnswerCallResult> answerCall(RtcCallIdCommand command) async {
     final session = _updateStatus(command.callId, CallStatus.inCall);
-    return RtcAnswerCallResultDto(
+    return RtcAnswerCallResult(
       session: session,
-      mediaAccess: RtcMediaSessionAccessDto(
+      mediaAccess: RtcMediaSessionAccess(
         accessToken: 'alpha-media-access-${command.callId}',
       ),
     );
   }
 
   @override
-  Future<CallSessionDto> rejectCall(RtcCallIdCommand command) async =>
+  Future<CallSession> rejectCall(RtcCallIdCommand command) async =>
       _end(command.callId, EndReason.rejected);
 
   @override
-  Future<CallSessionDto> cancelCall(RtcCallIdCommand command) async =>
+  Future<CallSession> cancelCall(RtcCallIdCommand command) async =>
       _end(command.callId, EndReason.cancelled);
 
   @override
-  Future<CallSessionDto> hangupCall(RtcCallIdCommand command) async =>
+  Future<CallSession> hangupCall(RtcCallIdCommand command) async =>
       _end(command.callId, EndReason.normal);
 
   @override
-  Future<RtcJoinCredentialsDto> joinCall(RtcCallIdCommand command) async {
+  Future<RtcJoinCredentials> joinCall(RtcCallIdCommand command) async {
     final session = _updateStatus(command.callId, CallStatus.inCall);
-    return RtcJoinCredentialsDto(
+    return RtcJoinCredentials(
       session: session,
-      mediaAccess: RtcMediaSessionAccessDto(
+      mediaAccess: RtcMediaSessionAccess(
         accessToken: 'alpha-media-access-${command.callId}',
       ),
     );
   }
 
   @override
-  Future<CallSessionDto> leaveCall(RtcCallIdCommand command) async =>
+  Future<CallSession> leaveCall(RtcCallIdCommand command) async =>
       _end(command.callId, EndReason.lastLeave);
 
   @override
-  Future<CallSessionDto> inviteToCall(RtcInviteToCallCommand command) async {
+  Future<CallSession> inviteToCall(RtcInviteToCallCommand command) async {
     final current = _require(command.callId);
     final existing = current.participants.map((item) => item.userId).toSet();
     final additions = command.inviteeIds
         .where((id) => !existing.contains(id))
         .map(
-          (id) => CallParticipantDto(
+          (id) => CallParticipant(
             userId: id,
             role: ParticipantRole.invitee,
             status: ParticipantStatus.ringing,
           ),
         );
-    final participants = <CallParticipantDto>[
+    final participants = <CallParticipant>[
       ...current.participants,
       ...additions,
     ];
@@ -126,7 +126,7 @@ final class AlphaRtcCallSessionFacets
   }
 
   @override
-  Future<CallSessionDto> reportMediaConnected(RtcCallIdCommand command) async {
+  Future<CallSession> reportMediaConnected(RtcCallIdCommand command) async {
     final current = _require(command.callId);
     if (current.status == CallStatus.ended) {
       return current;
@@ -156,7 +156,7 @@ final class AlphaRtcCallSessionFacets
   }
 
   @override
-  Future<CallSessionDto> toggleMute(RtcToggleMuteCommand command) async =>
+  Future<CallSession> toggleMute(RtcToggleMuteCommand command) async =>
       _updateParticipant(
         command.callId,
         (participant) => participant.userId == 'fixture_user_current'
@@ -165,7 +165,7 @@ final class AlphaRtcCallSessionFacets
       );
 
   @override
-  Future<CallSessionDto> toggleCamera(RtcToggleCameraCommand command) async =>
+  Future<CallSession> toggleCamera(RtcToggleCameraCommand command) async =>
       _updateParticipant(
         command.callId,
         (participant) => participant.userId == 'fixture_user_current'
@@ -174,7 +174,7 @@ final class AlphaRtcCallSessionFacets
       );
 
   @override
-  Future<CallSessionDto> startScreenShare(RtcCallIdCommand command) async {
+  Future<CallSession> startScreenShare(RtcCallIdCommand command) async {
     final current = _require(command.callId);
     return _save(
       current.copyWith(
@@ -186,10 +186,10 @@ final class AlphaRtcCallSessionFacets
   }
 
   @override
-  Future<CallSessionDto> stopScreenShare(RtcCallIdCommand command) async {
+  Future<CallSession> stopScreenShare(RtcCallIdCommand command) async {
     final current = _require(command.callId);
     return _save(
-      CallSessionDto(
+      CallSession(
         callId: current.callId,
         callType: current.callType,
         status: current.status,
@@ -213,7 +213,7 @@ final class AlphaRtcCallSessionFacets
   }
 
   @override
-  Future<CallSessionDto> getCall(RtcGetCallQuery query) async =>
+  Future<CallSession> getCall(RtcGetCallQuery query) async =>
       _require(query.callId);
 
   @override
@@ -246,7 +246,7 @@ final class AlphaRtcCallSessionFacets
           .map((value) => value.toString().trim())
           .where((id) => id.isNotEmpty)
           .map(
-            (id) => CallParticipantDto(
+            (id) => CallParticipant(
               userId: id,
               role: id == callerId
                   ? ParticipantRole.initiator
@@ -258,7 +258,7 @@ final class AlphaRtcCallSessionFacets
             ),
           )
           .toList(growable: false);
-      _sessions[callId] = CallSessionDto(
+      _sessions[callId] = CallSession(
         callId: callId,
         callType: callType,
         status: state,
@@ -273,7 +273,7 @@ final class AlphaRtcCallSessionFacets
     }
   }
 
-  CallSessionDto _require(String callId) {
+  CallSession _require(String callId) {
     final session = _sessions[callId];
     if (session == null) {
       throw StateError('alpha rtc fixture call not found: $callId');
@@ -281,17 +281,17 @@ final class AlphaRtcCallSessionFacets
     return session;
   }
 
-  CallSessionDto _save(CallSessionDto session) {
+  CallSession _save(CallSession session) {
     _sessions[session.callId] = session;
     return session;
   }
 
-  CallSessionDto _updateStatus(String callId, CallStatus status) {
+  CallSession _updateStatus(String callId, CallStatus status) {
     final current = _require(callId);
     return _save(current.copyWith(status: status, updatedAt: _seedTime));
   }
 
-  CallSessionDto _end(String callId, EndReason reason) {
+  CallSession _end(String callId, EndReason reason) {
     final current = _require(callId);
     return _save(
       current.copyWith(
@@ -303,9 +303,9 @@ final class AlphaRtcCallSessionFacets
     );
   }
 
-  CallSessionDto _updateParticipant(
+  CallSession _updateParticipant(
     String callId,
-    CallParticipantDto Function(CallParticipantDto participant) transform,
+    CallParticipant Function(CallParticipant participant) transform,
   ) {
     final current = _require(callId);
     return _save(

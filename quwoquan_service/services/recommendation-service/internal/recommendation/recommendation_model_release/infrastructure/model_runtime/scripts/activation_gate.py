@@ -1,187 +1,116 @@
 #!/usr/bin/env python3
-"""
-Automatic activation gate: compares active vs candidate shadow scores
-from rec_learning_events and activates a staged release if metrics are better.
+"""Activate a staged model release from immutable evaluation evidence.
 
-Usage:
-  python activation_gate.py --scenario content_feed --days 3 --min-samples 500 --release-id <id> --expected-active-release-id <id>
-  python activation_gate.py --scenario content_feed --dry-run
+This orchestration never reads or mutates model-registry storage directly. The
+quality decision is reproduced from the same evidence used by Stage, and the
+state transition is submitted only through the canonical CAS Activate facade.
 """
+from __future__ import annotations
+
 import argparse
 import json
-import os
 import sys
-from collections import defaultdict
-from datetime import timedelta
+from pathlib import Path
+from typing import Any
 
-try:
-    from pymongo import MongoClient
-except ImportError:
-    print("pip install pymongo", file=sys.stderr)
-    sys.exit(1)
-
+import evaluate_gate
 import model_release_client
-from time_utils import utc_now
 
 
-PROMOTION_THRESHOLDS = {
-    "ctr_lift_min": 0.0,
-    "engagement_score_lift_min": 0.0,
-    "shadow_score_mean_lift_min": 0.005,
-}
+def _load_evidence(path: str) -> dict[str, Any]:
+    document = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("model release evidence must be a JSON object")
+    return document
 
 
-def collect_shadow_metrics(db, scenario: str, days: int) -> dict:
-    """Collect shadow scoring events and compute comparison metrics."""
-    coll = db["rec_learning_events"]
-    since = utc_now() - timedelta(days=days)
+def evaluate_activation_evidence(
+    candidate: dict[str, Any],
+    active: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    release_id = str(candidate.get("releaseId") or "").strip()
+    scenario = str(candidate.get("scenario") or "").strip()
+    metrics = candidate.get("evaluationMetrics")
+    if not release_id or not scenario:
+        return False, "candidate evidence requires releaseId and scenario"
+    if not isinstance(metrics, dict) or not metrics:
+        return False, "candidate evidence requires evaluationMetrics"
 
-    shadow_events = list(coll.find({
-        "eventType": "rec_shadow",
-        "scenario": scenario,
-        "createdAt": {"$gte": since},
-    }).limit(100000))
-
-    impression_events = list(coll.find({
-        "eventType": "rec_impression",
-        "scenario": scenario,
-        "createdAt": {"$gte": since},
-    }).limit(100000))
-
-    engagement_events = list(coll.find({
-        "eventType": "rec_engagement",
-        "scenario": scenario,
-        "createdAt": {"$gte": since},
-    }).limit(100000))
-
-    champion_scores = {}
-    for ev in impression_events:
-        ctx = ev.get("context") or {}
-        score = ctx.get("score", 0)
-        content_id = ev.get("targetId", "")
-        if content_id:
-            champion_scores[content_id] = score
-
-    challenger_scores = {}
-    for ev in shadow_events:
-        ctx = ev.get("context") or {}
-        score = ctx.get("shadowScore", 0)
-        content_id = ev.get("targetId", "")
-        if content_id:
-            challenger_scores[content_id] = score
-
-    engaged_ids = set()
-    clicked_ids = set()
-    for ev in engagement_events:
-        labels = ev.get("labels") or {}
-        action = labels.get("action", "")
-        content_id = ev.get("targetId", "")
-        if action == "click":
-            clicked_ids.add(content_id)
-        if action in ("click", "like", "share", "comment", "follow"):
-            engaged_ids.add(content_id)
-
-    common_ids = set(champion_scores.keys()) & set(challenger_scores.keys())
-
-    if not common_ids:
-        return {"sample_count": 0}
-
-    champ_mean = sum(champion_scores[cid] for cid in common_ids) / len(common_ids)
-    chall_mean = sum(challenger_scores[cid] for cid in common_ids) / len(common_ids)
-
-    impression_count = len(impression_events)
-    ctr = len(clicked_ids) / max(impression_count, 1)
-    engagement_rate = len(engaged_ids) / max(impression_count, 1)
-
-    return {
-        "sample_count": len(common_ids),
-        "champion_score_mean": champ_mean,
-        "challenger_score_mean": chall_mean,
-        "score_lift": chall_mean - champ_mean,
-        "impression_count": impression_count,
-        "ctr": ctr,
-        "engagement_rate": engagement_rate,
-    }
+    active_metrics = (active or {}).get("evaluationMetrics") or {}
+    if not isinstance(active_metrics, dict):
+        return False, "active evidence evaluationMetrics must be an object"
+    status, reason, _diversity = evaluate_gate.evaluate_metrics(
+        scenario=scenario,
+        candidate_metrics=metrics,
+        active_metrics=active_metrics,
+    )
+    if status != "pass":
+        return False, reason
+    if candidate.get("status") not in {None, "pass"}:
+        return False, "candidate evidence is not a passing Stage input"
+    return True, reason
 
 
-def evaluate_gate(metrics: dict) -> tuple[bool, str]:
-    """Evaluate whether the candidate is eligible for activation."""
-    sample_count = metrics.get("sample_count", 0)
-    if sample_count == 0:
-        return False, "no shadow samples available"
-
-    score_lift = metrics.get("score_lift", 0)
-    min_lift = PROMOTION_THRESHOLDS["shadow_score_mean_lift_min"]
-    if score_lift < min_lift:
-        return False, f"score_lift {score_lift:.6f} < threshold {min_lift}"
-
-    return True, f"score_lift={score_lift:.6f} (samples={sample_count})"
-
-
-def main():
-    p = argparse.ArgumentParser(description="Automatic model activation gate")
-    p.add_argument("--scenario", default="content_feed")
-    p.add_argument("--days", type=int, default=3, help="Days of shadow data to analyze")
-    p.add_argument("--min-samples", type=int, default=500, help="Minimum shadow samples required")
-    p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
-    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_recommendation"))
-    p.add_argument("--dry-run", action="store_true", help="Analyze only, do not activate")
-    p.add_argument("--release-id", default="", help="Staged release to activate")
-    p.add_argument(
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Activate a staged model release from immutable evidence"
+    )
+    parser.add_argument("--candidate-evidence", required=True)
+    parser.add_argument("--active-evidence", default="")
+    parser.add_argument(
         "--expected-active-release-id",
         default=None,
-        help="Exact current active release for CAS; omit only when no active release exists",
+        help="Exact current active release for CAS; omit only when none is active",
     )
-    p.add_argument("--out", default="", help="Write result JSON to file")
-    args = p.parse_args()
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--out", default="")
+    args = parser.parse_args()
 
-    client = MongoClient(args.mongodb_uri, serverSelectionTimeoutMS=5000)
-    db = client[args.db]
+    candidate = _load_evidence(args.candidate_evidence)
+    active = _load_evidence(args.active_evidence) if args.active_evidence else {}
+    passed, reason = evaluate_activation_evidence(candidate, active)
+    release_id = str(candidate.get("releaseId") or "").strip()
+    scenario = str(candidate.get("scenario") or "").strip()
 
-    print(f"[activation_gate] Collecting shadow metrics for {args.scenario} (last {args.days} days)...")
-    metrics = collect_shadow_metrics(db, args.scenario, args.days)
-
-    print(f"[activation_gate] Metrics: {json.dumps(metrics, indent=2, default=str)}")
-
-    if metrics.get("sample_count", 0) < args.min_samples:
-        result = {"status": "SKIP", "reason": f"insufficient samples: {metrics.get('sample_count', 0)} < {args.min_samples}", "metrics": metrics}
-        print(f"[activation_gate] {result['status']}: {result['reason']}")
+    if not passed:
+        result: dict[str, Any] = {
+            "status": "BLOCKED",
+            "reason": reason,
+            "releaseId": release_id,
+            "scenario": scenario,
+        }
+        exit_code = 1
+    elif args.dry_run:
+        result = {
+            "status": "PASS_DRYRUN",
+            "reason": reason,
+            "releaseId": release_id,
+            "scenario": scenario,
+        }
+        exit_code = 0
     else:
-        passed, reason = evaluate_gate(metrics)
-        if passed and not args.dry_run and not args.release_id.strip():
-            result = {
-                "status": "BLOCKED",
-                "reason": "release-id is required for activation",
-                "metrics": metrics,
-            }
-            print(f"[activation_gate] BLOCKED: {result['reason']}")
-        elif passed and not args.dry_run:
-            release_scenario = f"{args.scenario}_multiobjective"
-            print(f"[activation_gate] PASS: {reason} — activating staged release")
-            activation = model_release_client.activate_release(
-                release_id=args.release_id,
-                scenario=release_scenario,
-                expected_active_release_id=args.expected_active_release_id,
-            )
-            result = {
-                "status": "ACTIVATED",
-                "reason": reason,
-                "metrics": metrics,
-                "release": activation,
-            }
-        elif passed:
-            result = {"status": "PASS_DRYRUN", "reason": reason, "metrics": metrics}
-            print(f"[activation_gate] PASS (dry-run): {reason}")
-        else:
-            result = {"status": "BLOCKED", "reason": reason, "metrics": metrics}
-            print(f"[activation_gate] BLOCKED: {reason}")
+        activation = model_release_client.activate_release(
+            release_id=release_id,
+            scenario=scenario,
+            expected_active_release_id=args.expected_active_release_id,
+        )
+        result = {
+            "status": "ACTIVATED",
+            "reason": reason,
+            "releaseId": release_id,
+            "scenario": scenario,
+            "release": activation,
+        }
+        exit_code = 0
 
     if args.out:
-        import json as _json
-        with open(args.out, "w") as f:
-            _json.dump(result, f, indent=2, default=str)
-        print(f"[activation_gate] Report written to {args.out}")
+        Path(args.out).write_text(
+            json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    print(f"[activation_gate] {result['status']}: {result['reason']}")
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

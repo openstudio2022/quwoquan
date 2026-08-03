@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/application/content/create_location_coordinator.dart';
@@ -17,7 +18,7 @@ final class _SequencedLocationQuery
 
   Object _next() {
     if (outcomes.isEmpty) {
-      return LocationPoiListSlice(const <LocationPoiDto>[]);
+      return const LocationPoiListSlice(items: <LocationPoi>[]);
     }
     return outcomes.removeAt(0);
   }
@@ -84,16 +85,18 @@ void main() {
   group('CreateLocationCoordinator', () {
     test('nearby 返回 typed LocationPoi Slice', () async {
       final query = _SequencedLocationQuery(<Object>[
-        LocationPoiListSlice(<LocationPoiDto>[
-          LocationPoiDto(
-            id: 'fixture_poi',
-            name: '成都·天府广场',
-            latitude: 30.6586,
-            longitude: 104.0648,
-            address: '锦江区',
-            distanceMeters: 120,
-          ),
-        ]),
+        LocationPoiListSlice(
+          items: <LocationPoi>[
+            LocationPoi(
+              id: 'fixture_poi',
+              name: '成都·天府广场',
+              latitude: 30.6586,
+              longitude: 104.0648,
+              address: '锦江区',
+              distanceMeters: 120,
+            ),
+          ],
+        ),
       ]);
       final coordinator = CreateLocationCoordinator(
         nearbyReader: query,
@@ -109,9 +112,16 @@ void main() {
 
     test('空搜索词回退 nearby，不调用 Search operation', () async {
       final query = _SequencedLocationQuery(<Object>[
-        LocationPoiListSlice(<LocationPoiDto>[
-          LocationPoiDto(id: 'fixture_poi', name: '杭州西湖'),
-        ]),
+        LocationPoiListSlice(
+          items: <LocationPoi>[
+            const LocationPoi(
+              id: 'fixture_poi',
+              name: '杭州西湖',
+              latitude: 30.2431,
+              longitude: 120.1505,
+            ),
+          ],
+        ),
       ]);
       final coordinator = CreateLocationCoordinator(
         nearbyReader: query,
@@ -128,9 +138,16 @@ void main() {
 
     test('429 保留最近一次 nearby Slice', () async {
       final query = _SequencedLocationQuery(<Object>[
-        LocationPoiListSlice(<LocationPoiDto>[
-          LocationPoiDto(id: 'fixture_poi', name: '杭州西湖'),
-        ]),
+        LocationPoiListSlice(
+          items: <LocationPoi>[
+            const LocationPoi(
+              id: 'fixture_poi',
+              name: '杭州西湖',
+              latitude: 30.2431,
+              longitude: 120.1505,
+            ),
+          ],
+        ),
         CloudException(
           type: CloudErrorType.unknown,
           message: 'rate limited',

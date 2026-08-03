@@ -95,11 +95,15 @@ func (subscription *cyclingAccountSecuritySubscription) Close() error {
 func TestAccountSecurityRelayReconnectsBeforeReadinessRecovers(t *testing.T) {
 	client := rtredis.NewMemoryClient()
 	authority := newTestAccountSecurityAuthority()
-	securityStore := redisstore.NewAccountSecurityStateStore(client)
+	presenceProjection := newTestPresenceProjection(t, client)
+	securityStore := redisstore.NewAccountSecurityStateStore(
+		client,
+		presenceProjection,
+	)
 	relay := newCyclingAccountSecurityRelay(2, 1)
 	hub, err := application.NewHub(
 		redisstore.NewLeaseStore(client),
-		redisstore.NewPresenceStore(client),
+		presenceProjection,
 		newTestEventSource(t, client),
 		authority,
 		securityStore,

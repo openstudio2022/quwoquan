@@ -1,33 +1,21 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 
 /// 媒体浏览器按帖子 id 携带的发现区/沉浸扩展数据。
 ///
-/// 强类型主视图为 [feedItem]；全量 wire 见 [toDynamicMap]（存量沉浸路径逐步淘汰）。
+/// 强类型内容由调用方通过 [fromViewData] 提供；扩展展示数据保留于本地 Map。
 class MediaViewerPostWireRow {
   MediaViewerPostWireRow._(this._wire);
 
   final Map<String, dynamic> _wire;
 
-  late final FeedItemDto feedItem = FeedItemDto.fromMap(_wire);
-
-  factory MediaViewerPostWireRow.fromFeedItem(
-    FeedItemDto item, {
-    Map<String, dynamic>? extra,
-  }) {
-    final merged = <String, dynamic>{...item.toDiscoveryWireMap(), ...?extra};
-    return MediaViewerPostWireRow._(merged);
-  }
-
   factory MediaViewerPostWireRow.fromDynamicMap(Map<String, dynamic> map) {
     return MediaViewerPostWireRow._(Map<String, dynamic>.from(map));
   }
 
-  factory MediaViewerPostWireRow.fromPostBase(
-    PostBaseDto post, {
+  factory MediaViewerPostWireRow.fromViewData(
+    ContentPostViewData post, {
     String? circleId,
     int? likeCount,
     int? commentCount,
@@ -35,7 +23,7 @@ class MediaViewerPostWireRow {
     bool isLiked = false,
     bool isFollowingAuthor = false,
   }) {
-    final wire = Map<String, dynamic>.from(post.toMap())
+    final wire = Map<String, dynamic>.from(post.toPresentationMap())
       ..['postId'] = post.id
       ..['contentType'] = post.type
       ..['likeCount'] = likeCount ?? post.likeCount
@@ -236,7 +224,7 @@ class MediaViewerCommentContext {
 class MediaViewerExtra {
   const MediaViewerExtra({
     required this.posts,
-    this.dtoPosts = const <PostBaseDto>[],
+    this.dtoPosts = const <ContentPostViewData>[],
     required this.initialIndex,
     this.initialImageIndex = 0,
     this.source = 'default',
@@ -252,7 +240,7 @@ class MediaViewerExtra {
   });
 
   final List<ContentSurfaceView> posts;
-  final List<PostBaseDto> dtoPosts;
+  final List<ContentPostViewData> dtoPosts;
 
   /// 入口 post 在列表中的序号（沉浸器初始定位用）。
   final int initialIndex;

@@ -46,7 +46,7 @@ func (service *AssistantService) ResolveFeedbackContextSnapshot(
 	var matchedConsent consentmodel.Consent
 	for _, consent := range consents {
 		if strings.TrimSpace(consent.SkillID) == assistantLearningConsentSkillID &&
-			strings.TrimSpace(consent.GrantedScope) == assistantLearningContextScope {
+			containsScope(consent.GrantedScopes, assistantLearningContextScope) {
 			matchedConsent = consent
 			break
 		}
@@ -107,6 +107,16 @@ func (service *AssistantService) ResolveFeedbackContextSnapshot(
 	}
 	recordFeedbackContextDecision(snapshot.Decision)
 	return snapshot
+}
+
+func containsScope(values []string, expected string) bool {
+	expected = strings.TrimSpace(expected)
+	for _, value := range values {
+		if strings.TrimSpace(value) == expected {
+			return true
+		}
+	}
+	return false
 }
 
 type feedbackWindowAggregate struct {

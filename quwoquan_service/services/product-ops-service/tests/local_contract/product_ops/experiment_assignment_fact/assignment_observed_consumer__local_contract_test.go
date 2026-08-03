@@ -13,6 +13,7 @@ import (
 	experimentports "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
 	assignmentstream "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/stream"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
+	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
 func TestAssignmentObservedConsumerProjectsCanonicalFactAndRejectsUnauthorizedProducer(t *testing.T) {
@@ -55,7 +56,7 @@ func appendAssignmentMessage(
 	transport runtimemessaging.MessageTransport,
 	eventID string,
 	producer string,
-	fact experimentmodel.AssignmentFact,
+	fact assignmentdomain.Fact,
 	assignedAt time.Time,
 ) {
 	t.Helper()
@@ -80,7 +81,7 @@ func appendAssignmentMessage(
 type assignmentStore struct {
 	mu          sync.Mutex
 	experiment  experimentmodel.Experiment
-	assignments map[string]experimentmodel.AssignmentFact
+	assignments map[string]assignmentdomain.Fact
 }
 
 func newAssignmentStore() *assignmentStore {
@@ -94,7 +95,7 @@ func newAssignmentStore() *assignmentStore {
 			},
 			CreatedAt: "2026-07-31T09:00:00Z", UpdatedAt: "2026-07-31T09:00:00Z",
 		},
-		assignments: map[string]experimentmodel.AssignmentFact{},
+		assignments: map[string]assignmentdomain.Fact{},
 	}
 }
 
@@ -117,7 +118,7 @@ func (*assignmentStore) Commit(context.Context, int64, experimentports.ChangeSet
 	return experimentports.CommitReceipt{}, nil
 }
 
-func (s *assignmentStore) Append(_ context.Context, fact experimentmodel.AssignmentFact) (experimentmodel.AssignmentFact, bool, error) {
+func (s *assignmentStore) Append(_ context.Context, fact assignmentdomain.Fact) (assignmentdomain.Fact, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := fact.ExperimentID + "\x00" + strconv.FormatInt(fact.ExperimentRevision, 10) + "\x00" + fact.SubjectKey
@@ -128,18 +129,18 @@ func (s *assignmentStore) Append(_ context.Context, fact experimentmodel.Assignm
 	return fact, true, nil
 }
 
-func (s *assignmentStore) Get(_ context.Context, experimentID string, revision int64, subjectKey string) (experimentmodel.AssignmentFact, error) {
+func (s *assignmentStore) Get(_ context.Context, experimentID string, revision int64, subjectKey string) (assignmentdomain.Fact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fact, ok := s.assignments[experimentID+"\x00"+strconv.FormatInt(revision, 10)+"\x00"+subjectKey]
 	if !ok {
-		return experimentmodel.AssignmentFact{}, experimentmodel.ErrAssignmentNotFound
+		return assignmentdomain.Fact{}, assignmentdomain.ErrNotFound
 	}
 	return fact, nil
 }
 
-func (s *assignmentStore) Stats(context.Context, string, int64) (experimentports.AssignmentStats, error) {
-	return experimentports.AssignmentStats{}, nil
+func (s *assignmentStore) Stats(context.Context, string, int64) (assignmentdomain.Stats, error) {
+	return assignmentdomain.Stats{}, nil
 }
 
 func (s *assignmentStore) count() int {
@@ -149,7 +150,7 @@ func (s *assignmentStore) count() int {
 }
 
 var (
-	_ experimentports.AggregateStore   = (*assignmentStore)(nil)
-	_ experimentports.AssignmentSink   = (*assignmentStore)(nil)
-	_ experimentports.AssignmentReader = (*assignmentStore)(nil)
+	_ experimentports.AggregateStore = (*assignmentStore)(nil)
+	_ assignmentapp.Sink             = (*assignmentStore)(nil)
+	_ assignmentapp.Reader           = (*assignmentStore)(nil)
 )

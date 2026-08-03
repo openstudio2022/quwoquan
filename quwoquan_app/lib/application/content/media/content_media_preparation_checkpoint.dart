@@ -34,7 +34,7 @@ final class ContentMediaPreparationCheckpoint {
   });
 
   final String slot;
-  final ContentMediaType mediaType;
+  final MediaType mediaType;
   final String sha256Digest;
   final String assetId;
   final String initIdempotencyKey;
@@ -52,7 +52,7 @@ final class ContentMediaPreparationCheckpoint {
   factory ContentMediaPreparationCheckpoint.forSource({
     required String preparationIdentity,
     required String slot,
-    required ContentMediaType mediaType,
+    required MediaType mediaType,
     required String sha256Digest,
     int attempt = 0,
   }) {
@@ -78,7 +78,7 @@ final class ContentMediaPreparationCheckpoint {
 
   bool matches({
     required String expectedSlot,
-    required ContentMediaType expectedMediaType,
+    required MediaType expectedMediaType,
     required String expectedSha256Digest,
   }) {
     return slot == expectedSlot &&
@@ -167,7 +167,7 @@ final class ContentMediaPreparationCheckpoint {
     final expiresAt = DateTime.tryParse(
       value['expiresAt']?.toString().trim() ?? '',
     )?.toUtc();
-    final mediaType = ContentMediaType.values.where(
+    final mediaType = MediaType.values.where(
       (candidate) => candidate.name == value['mediaType']?.toString(),
     );
     final phase = ContentMediaPreparationPhase.values.where(

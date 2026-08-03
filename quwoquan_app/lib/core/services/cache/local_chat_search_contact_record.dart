@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 class LocalChatSearchContactRecord {
@@ -29,7 +29,7 @@ class LocalChatSearchContactRecord {
   final String? matchedField;
 
   factory LocalChatSearchContactRecord.fromChatContactRowDto(
-    ChatContactRowDto dto,
+    ChatContactRowViewData dto,
   ) {
     return LocalChatSearchContactRecord(
       contactId: dto.userId.trim(),

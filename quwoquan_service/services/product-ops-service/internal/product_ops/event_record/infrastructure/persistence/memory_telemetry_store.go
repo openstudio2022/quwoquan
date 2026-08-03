@@ -61,7 +61,7 @@ func (s *MemoryTelemetryStore) PutEventBatch(_ context.Context, _ string, record
 	return nil
 }
 
-// ReadRtcMediaQoeSummary 为 local_contract 提供与生产 SLS/Postgres reader
+// ReadRtcMediaQoeSummary 为 local_contract 提供与生产 Elasticsearch reader
 // 相同的分母、原始样本 P95 和 UTC 小时桶语义。
 func (s *MemoryTelemetryStore) ReadRtcMediaQoeSummary(
 	_ context.Context,

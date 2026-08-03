@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AnswerBoundaryPolicyDto {
   const AnswerBoundaryPolicyDto({
@@ -46,6 +46,58 @@ class AnswerBoundaryPolicyDto {
       };
 
   factory AnswerBoundaryPolicyDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'evidenceRequired',
+      'authorityRequired',
+      'requireToolResultBeforeSynthesis',
+      'allowBoundedAnswer',
+      'freshnessHoursMax',
+      'authorityDomains',
+      'requiredDimensions',
+      'blockingDimensions',
+      'expansionPolicy',
+      'insufficiencyReason',
+      'summary',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AnswerBoundaryPolicyDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('evidenceRequired') && json['evidenceRequired'] != null && (json['evidenceRequired'] is! bool)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field evidenceRequired has an invalid wire value');
+    }
+    if (json.containsKey('authorityRequired') && json['authorityRequired'] != null && (json['authorityRequired'] is! bool)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field authorityRequired has an invalid wire value');
+    }
+    if (json.containsKey('requireToolResultBeforeSynthesis') && json['requireToolResultBeforeSynthesis'] != null && (json['requireToolResultBeforeSynthesis'] is! bool)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field requireToolResultBeforeSynthesis has an invalid wire value');
+    }
+    if (json.containsKey('allowBoundedAnswer') && json['allowBoundedAnswer'] != null && (json['allowBoundedAnswer'] is! bool)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field allowBoundedAnswer has an invalid wire value');
+    }
+    if (json.containsKey('freshnessHoursMax') && json['freshnessHoursMax'] != null && (json['freshnessHoursMax'] is! num)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field freshnessHoursMax has an invalid wire value');
+    }
+    if (json.containsKey('authorityDomains') && json['authorityDomains'] != null && (json['authorityDomains'] is! List || (json['authorityDomains'] as List).any((item) => item is! String))) {
+      throw const FormatException('AnswerBoundaryPolicyDto field authorityDomains has an invalid wire value');
+    }
+    if (json.containsKey('requiredDimensions') && json['requiredDimensions'] != null && (json['requiredDimensions'] is! List || (json['requiredDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AnswerBoundaryPolicyDto field requiredDimensions has an invalid wire value');
+    }
+    if (json.containsKey('blockingDimensions') && json['blockingDimensions'] != null && (json['blockingDimensions'] is! List || (json['blockingDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AnswerBoundaryPolicyDto field blockingDimensions has an invalid wire value');
+    }
+    if (json.containsKey('expansionPolicy') && json['expansionPolicy'] != null && (json['expansionPolicy'] is! String)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field expansionPolicy has an invalid wire value');
+    }
+    if (json.containsKey('insufficiencyReason') && json['insufficiencyReason'] != null && (json['insufficiencyReason'] is! String)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field insufficiencyReason has an invalid wire value');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AnswerBoundaryPolicyDto field summary has an invalid wire value');
+    }
     return AnswerBoundaryPolicyDto(
       evidenceRequired: json['evidenceRequired'] == true,
       authorityRequired: json['authorityRequired'] == true,

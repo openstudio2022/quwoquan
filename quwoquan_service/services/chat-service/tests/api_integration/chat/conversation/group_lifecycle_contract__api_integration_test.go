@@ -130,7 +130,7 @@ func TestCreateConversationRejectsClientSuppliedCircleBinding(t *testing.T) {
 		"user_test_001",
 		http.StatusBadRequest,
 	)
-	if rejected["code"] != "CHAT.USER.circle_group_binding_write_forbidden" {
+	if rejected["code"] != "CHAT.USER.source_managed_binding_write_forbidden" {
 		t.Fatalf("client circle binding must return dedicated rejection, got %#v", rejected)
 	}
 	if count, err := mongoDB.Collection("conversations").CountDocuments(context.Background(), bson.M{}); err != nil || count != 0 {
@@ -160,7 +160,7 @@ func TestCreateConversationRejectsClientSuppliedOriginFields(t *testing.T) {
 		"user_test_001",
 		http.StatusBadRequest,
 	)
-	if rejected["code"] != "CHAT.USER.circle_group_binding_write_forbidden" {
+	if rejected["code"] != "CHAT.USER.source_managed_binding_write_forbidden" {
 		t.Fatalf("client origin fields must return dedicated rejection, got %#v", rejected)
 	}
 }
@@ -185,7 +185,7 @@ func TestCreateConversationRejectsRetiredOriginValues(t *testing.T) {
 			"user_test_001",
 			http.StatusBadRequest,
 		)
-		if rejected["code"] != "CHAT.USER.circle_group_binding_write_forbidden" {
+		if rejected["code"] != "CHAT.USER.source_managed_binding_write_forbidden" {
 			t.Fatalf("retired originType %q must be rejected: %#v", retired, rejected)
 		}
 	}

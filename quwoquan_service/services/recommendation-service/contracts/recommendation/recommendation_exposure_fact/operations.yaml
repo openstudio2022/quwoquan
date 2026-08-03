@@ -1,4 +1,11 @@
 description: RecommendationExposureFact 只消费 Content 的实际交付事件，不开放第二写入口。
 api_routes: []
+runtime_entrypoints:
+- name: AppendRecommendationExposure
+  kind: subscription
+  phase: event_ingest
+  source_events: [content.FeedPageDelivered]
+  idempotency: event_id
+  application: {kind: command, facet: RecommendationExposureFactAppender, method: append, object_owner: RecommendationExposureFact}
 consumers:
 - {name: feed-page-delivered, channel: events.content.feed_page_delivered, source_event: FeedPageDelivered, capabilities: [validate_window_attribution, append_exposure_facts]}

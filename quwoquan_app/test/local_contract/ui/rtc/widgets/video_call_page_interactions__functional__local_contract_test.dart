@@ -95,7 +95,7 @@ final class _VideoPageSessionNotifier extends CallSessionNotifier {
   CallSessionState build() {
     final now = DateTime.utc(2026, 7, 20);
     return CallSessionState(
-      session: CallSessionDto(
+      session: CallSession(
         callId: 'call-video-page',
         callType: CallType.video,
         status: CallStatus.inCall,
@@ -124,9 +124,9 @@ final class _VideoPageParticipantsNotifier extends CallParticipantsNotifier {
   @override
   CallParticipantsState build() {
     return CallParticipantsState(
-      participants: List<CallParticipant>.generate(
+      participants: List<CallParticipantViewData>.generate(
         8,
-        (index) => CallParticipant(
+        (index) => CallParticipantViewData(
           userId: 'user-$index',
           displayName: 'User $index',
           status: ParticipantStatus.connected,

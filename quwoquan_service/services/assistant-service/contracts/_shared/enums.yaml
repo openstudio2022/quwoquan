@@ -150,6 +150,8 @@ enums:
         wire: source_reference
       - name: timeline
         wire: timeline
+      - name: routeMap
+        wire: route_map
       - name: comparisonTable
         wire: comparison_table
       - name: sourceList
@@ -305,6 +307,41 @@ enums:
         wire: user
       - name: chatConversation
         wire: chat_conversation
+
+  - name: SkillUserSettingStatus
+    values:
+      - name: enabled
+        wire: enabled
+      - name: disabled
+        wire: disabled
+
+  - name: SkillMemoryPolicy
+    values:
+      - name: packageDefault
+        wire: package_default
+      - name: confirmBeforeSave
+        wire: confirm_before_save
+      - name: disabled
+        wire: disabled
+
+  - name: SkillSurfaceKind
+    values:
+      - name: conversation
+        wire: conversation
+      - name: circle
+        wire: circle
+
+  - name: SkillSurfacePlacementPolicy
+    values:
+      - name: allSharedEligible
+        wire: all_shared_eligible
+
+  - name: SkillSurfacePlacementStatus
+    values:
+      - name: active
+        wire: active
+      - name: archived
+        wire: archived
 
   - name: AssistantLearningFactType
     values:

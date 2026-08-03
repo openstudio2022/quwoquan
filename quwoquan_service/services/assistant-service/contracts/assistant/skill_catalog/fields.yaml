@@ -1,5 +1,27 @@
 description: SkillCatalog 私有目录项与 ListSkills 响应类型。
 fields:
+- name: packageId
+  source: packageId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: releaseDigest
+  source: releaseDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
 - name: skillId
   source: skillId
   type: string
@@ -26,8 +48,8 @@ fields:
   type: string
   constraints:
   - NULLABLE
-  classification: SENSITIVE
-  log_policy: deny
+  classification: PUBLIC
+  log_policy: allow
   api_exposure: read
   ops_exposure: none
   role: projection
@@ -51,6 +73,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+- name: requiredConsentScopes
+  source: requiredConsentScopes
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: none
+  role: projection
 - name: iconHint
   source: iconHint
   type: string
@@ -61,18 +93,119 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: accountId
-  source: accountId
+- name: coverMediaRef
+  source: coverMediaRef
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: targetUsers
+  source: targetUsers
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: dataUseSummary
+  source: dataUseSummary
   type: string
   constraints:
   - NOT_NULL
-  classification: SENSITIVE
-  log_policy: deny
-  api_exposure: drop
-  ops_exposure: none
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
   role: projection
-  reference: true
+- name: exampleRefs
+  source: exampleRefs
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: activationMode
+  source: activationMode
+  type: enum
+  enum_ref: SkillActivationMode
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: allowedSurfaceKinds
+  source: allowedSurfaceKinds
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: configurationSchemaDigest
+  source: configurationSchemaDigest
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: setupTemplateRef
+  source: setupTemplateRef
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: configurationRequiredFields
+  source: configurationRequiredFields
+  type: '[]string'
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
 types:
+  GetSkillCatalogItemQuery:
+    description: GetSkillCatalogItem 的 path 与可信 transport 注入参数。
+    fields:
+    - name: skillId
+      source: skillId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: accountId
+      source: accountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: drop
+      ops_exposure: none
   ListSkillsQuery:
     description: ListSkills 的 query 与可信 transport 注入参数。
     fields:
@@ -97,8 +230,26 @@ types:
       api_exposure: drop
       ops_exposure: none
   AssistantSkillCatalogItemView:
-    description: 技能目录项；description 可包含当前账号已授权 scope，故响应整体为 SENSITIVE。
+    description: 由 active immutable SkillPackageRelease 投影的目录、输入与激活元数据；不包含账号 Consent、Setting 或 Subscription 状态。
     fields:
+    - name: packageId
+      source: packageId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: releaseDigest
+      source: releaseDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
     - name: skillId
       source: skillId
       type: string
@@ -122,8 +273,8 @@ types:
       type: string
       constraints:
       - NULLABLE
-      classification: SENSITIVE
-      log_policy: deny
+      classification: PUBLIC
+      log_policy: allow
       api_exposure: read
       ops_exposure: none
     - name: category
@@ -144,6 +295,15 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
+    - name: requiredConsentScopes
+      source: requiredConsentScopes
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: read
+      ops_exposure: none
     - name: iconHint
       source: iconHint
       type: string
@@ -153,15 +313,122 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
+    - name: coverMediaRef
+      source: coverMediaRef
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: targetUsers
+      source: targetUsers
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: dataUseSummary
+      source: dataUseSummary
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: exampleRefs
+      source: exampleRefs
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: activationMode
+      source: activationMode
+      type: enum
+      enum_ref: SkillActivationMode
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: allowedSurfaceKinds
+      source: allowedSurfaceKinds
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: configurationSchemaDigest
+      source: configurationSchemaDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: setupTemplateRef
+      source: setupTemplateRef
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: configurationRequiredFields
+      source: configurationRequiredFields
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
   AssistantSkillCatalogListView:
-    description: ListSkills 私有响应体。
+    description: ListSkills 受鉴权读取的 active package 公开目录响应体。
     fields:
     - name: items
       source: items
       type: '[]AssistantSkillCatalogItemView'
       constraints:
       - NOT_NULL
-      classification: SENSITIVE
-      log_policy: deny
+      classification: PUBLIC
+      log_policy: allow
       api_exposure: read
       ops_exposure: none
+  AssistantSkillCatalogItemDetailView:
+    description: 用户进入 Skill 详情后按需读取的 active package 目录项与同 digest 配置 schema。
+    fields:
+    - name: item
+      source: item
+      type: AssistantSkillCatalogItemView
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: none
+    - name: configurationSchema
+      source: configurationSchema
+      type: json
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: metadata_only
+      api_exposure: read
+      ops_exposure: none
+      description: 与 item.configurationSchemaDigest 同一 active package asset 对应的安全 JSON Schema；客户端只据此生成受控 setup 表单，服务端仍执行最终校验。
+enums:
+  SkillActivationMode:
+    values: [reactive, proactive, hybrid]

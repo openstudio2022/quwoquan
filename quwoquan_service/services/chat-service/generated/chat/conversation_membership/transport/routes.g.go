@@ -22,6 +22,7 @@ var RouteTable = []RouteEntry{
 	{"PATCH", "/chat/conversations/{conversationId}/owner", "TransferOwnership"},
 	{"PUT", "/chat/conversations/{conversationId}/admins", "UpdateGroupAdmins"},
 	{"GET", "/chat/conversations/{conversationId}/members", "ListMembers"},
+	{"PUT", "/internal/chat/gathering-conversations/{gatheringId}/members/{personaId}", "ProjectGatheringConversationMembership"},
 }
 
 func ResolveOperation(method, path string) (string, bool) {

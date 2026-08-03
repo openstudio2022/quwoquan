@@ -9,7 +9,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 /// Golden：`test/support/fixtures/rtc/list_calls_min_response.json` 与 rtc ListCalls 分页形状一致。
 void main() {
-  test('ListCalls golden JSON → CallSessionDto', () {
+  test('ListCalls golden JSON → CallSession', () {
     final path =
         '${Directory.current.path}/test/support/fixtures/rtc/list_calls_min_response.json';
     final raw =
@@ -18,7 +18,7 @@ void main() {
     final items = obj['items'];
     expect(items, isA<List>());
     final first = (items! as List).single as Map<String, dynamic>;
-    final dto = CallSessionDto.fromMap(first);
+    final dto = CallSession.fromMap(first);
     expect(dto.callId, equals('call_golden_001'));
     expect(dto.callType, CallType.audio);
     expect(dto.status, CallStatus.ended);

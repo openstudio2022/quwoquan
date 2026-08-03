@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../object_scenario_seed_reader.dart';
@@ -7,14 +8,14 @@ final class AlphaLocationQueryAdapter
   AlphaLocationQueryAdapter({ObjectScenarioSeedReader? fixtures})
     : _items = _readItems(fixtures ?? objectScenarioSeedReader);
 
-  final List<LocationPoiDto> _items;
+  final List<LocationPoi> _items;
 
   @override
   Future<LocationPoiListSlice> getNearbyLocations(
     NearbyLocationQueryParams query,
   ) async {
     return LocationPoiListSlice(
-      _items.take(query.limit).toList(growable: false),
+      items: _items.take(query.limit).toList(growable: false),
     );
   }
 
@@ -29,11 +30,11 @@ final class AlphaLocationQueryAdapter
           (item.address ?? '').toLowerCase().contains(normalized);
     });
     return LocationPoiListSlice(
-      matches.take(query.limit).toList(growable: false),
+      items: matches.take(query.limit).toList(growable: false),
     );
   }
 
-  static List<LocationPoiDto> _readItems(ObjectScenarioSeedReader fixtures) {
+  static List<LocationPoi> _readItems(ObjectScenarioSeedReader fixtures) {
     final decoded = fixtures.document('integration');
     final seedSets = decoded['seedSets'];
     if (seedSets is! Map) {
@@ -43,7 +44,7 @@ final class AlphaLocationQueryAdapter
     if (locationSeed is! Map || locationSeed['pois'] is! List) {
       throw FormatException('Integration location_poi_core fixture is missing');
     }
-    final items = <LocationPoiDto>[];
+    final items = <LocationPoi>[];
     for (final raw in locationSeed['pois'] as List) {
       if (raw is! Map) {
         throw FormatException('Integration POI fixture must be an object');
@@ -57,7 +58,7 @@ final class AlphaLocationQueryAdapter
         throw FormatException('Integration POI fixture is incomplete');
       }
       items.add(
-        LocationPoiDto(
+        LocationPoi(
           id: id,
           name: name,
           latitude: latitude.toDouble(),
@@ -67,6 +68,6 @@ final class AlphaLocationQueryAdapter
         ),
       );
     }
-    return List<LocationPoiDto>.unmodifiable(items);
+    return List<LocationPoi>.unmodifiable(items);
   }
 }

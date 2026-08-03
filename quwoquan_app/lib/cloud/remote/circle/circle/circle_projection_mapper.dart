@@ -6,15 +6,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 final class CircleProjectionMapper {
   const CircleProjectionMapper();
 
-  static final DateTime _epochUtc = DateTime.fromMillisecondsSinceEpoch(
-    0,
-    isUtc: true,
-  );
-
-  CircleDto toDto(CircleProjection projection) {
-    final createdAt = projection.createdAt ?? _epochUtc;
+  CircleDto toDto(Circle projection) {
     return CircleDto(
-      id: projection.circleId,
+      id: projection.id,
       name: projection.name,
       description: projection.description,
       rulesText: projection.rulesText,
@@ -23,7 +17,7 @@ final class CircleProjectionMapper {
       iconUrl: projection.iconUrl,
       ownerId: projection.ownerId,
       category: projection.category,
-      tags: projection.tags,
+      tags: projection.tags ?? const <String>[],
       memberCount: projection.memberCount,
       postCount: projection.postCount,
       weeklyActiveCount: projection.weeklyActiveCount,
@@ -34,12 +28,12 @@ final class CircleProjectionMapper {
       displaySubjectType: projection.displaySubjectType,
       followEnabled: projection.followEnabled,
       defaultPublicGroupId: projection.defaultPublicGroupId,
-      conversationId: projection.conversationId,
+      conversationId: null,
       autoSyncChat: projection.autoSyncChat,
-      sectionConfig: projection.sectionConfig
+      sectionConfig: (projection.sectionConfig ?? const <CircleSectionConfig>[])
           .map(
             (section) => CircleSectionConfigDto(
-              sectionType: section.sectionType,
+              sectionType: section.sectionType.wireName,
               visible: section.visible,
               order: section.order,
               customTitle: section.customTitle,
@@ -50,8 +44,8 @@ final class CircleProjectionMapper {
       storageQuotaBytes: projection.storageQuotaBytes,
       domainId: projection.domainId,
       subCategory: projection.subCategory,
-      createdAt: createdAt,
-      updatedAt: projection.updatedAt ?? createdAt,
+      createdAt: projection.createdAt,
+      updatedAt: projection.updatedAt,
     );
   }
 }

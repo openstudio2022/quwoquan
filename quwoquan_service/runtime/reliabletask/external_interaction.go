@@ -194,6 +194,29 @@ func (w ExternalInteractionWorker) handleTask(ctx context.Context, task Reliable
 		provider := w.Providers[providerName]
 		if provider == nil {
 			lastErr = fmt.Errorf("external provider %s unavailable", providerName)
+			if w.Ledger != nil {
+				record := ProviderAttemptRecord{
+					AttemptID:             NewRecordID("attempt"),
+					RequestID:             req.RequestID,
+					TaskID:                task.TaskID,
+					SubjectDigest:         req.Payload["subjectDigest"],
+					Operation:             req.Operation,
+					Provider:              providerName,
+					ProviderRequestDigest: ProviderRequestDigest(""),
+					Status:                ExternalInteractionStatusFailed,
+					NormalizedError:       lastErr.Error(),
+					Retryable:             false,
+					RecoveryAction:        "escalate",
+					Attributes:            map[string]string{"idempotencyKey": req.IdempotencyKey},
+					CreatedAt:             w.now(),
+				}
+				if _, ledgerErr := w.Ledger.RecordProviderAttemptWithResultOutbox(
+					ctx,
+					record,
+				); ledgerErr != nil {
+					return ledgerErr
+				}
+			}
 			continue
 		}
 		start := w.now()

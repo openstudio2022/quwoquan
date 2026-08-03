@@ -2,11 +2,11 @@ package media_test
 
 import (
 	"context"
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	"testing"
 
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 func TestPostBindingReaderPublishesNormalizedImageBytes(t *testing.T) {

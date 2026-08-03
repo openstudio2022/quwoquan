@@ -21,11 +21,10 @@ api_routes:
     response_entity: GatheringCommandResult
     authorization: {principal: persona, ownership_policy: creator_becomes_owner}
     reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.DEPENDENCY.gathering_target_unavailable, CIRCLE.SYSTEM.gathering_storage_failed]
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_create, trace: true, attributes: [outcome, join_policy, binding_status]}
     slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: object
   - method: GET
     path: /gatherings/{gatheringId}
@@ -43,7 +42,6 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_get, trace: true, attributes: [outcome, status]}
     slo: {latency_p95_ms: 400, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringSlice, response_decoder: decodeGatheringSlice}
     request_body_kind: none
   - method: POST
     path: /gatherings/{gatheringId}:join
@@ -61,7 +59,6 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_join, trace: true, attributes: [outcome, join_policy, participant_state]}
     slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: none
   - method: POST
     path: /gatherings/{gatheringId}:approve
@@ -79,7 +76,6 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_participant_approve, trace: true, attributes: [outcome, status]}
     slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: object
   - method: POST
     path: /gatherings/{gatheringId}:leave
@@ -97,7 +93,6 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_leave, trace: true, attributes: [outcome, status]}
     slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: none
   - method: POST
     path: /gatherings/{gatheringId}:cancel
@@ -115,7 +110,6 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_cancel, trace: true, attributes: [outcome, previous_status]}
     slo: {latency_p95_ms: 700, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: none
   - method: POST
     path: /gatherings/{gatheringId}:complete
@@ -133,5 +127,4 @@ api_routes:
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
     telemetry: {metric: gathering_complete, trace: true, attributes: [outcome, previous_status]}
     slo: {latency_p95_ms: 700, availability_percent: 99.9}
-    client_contract: {dart_import: ../circle/gathering_contracts.dart, response_type: GatheringCommandResult, response_decoder: decodeGatheringCommandResult}
     request_body_kind: none

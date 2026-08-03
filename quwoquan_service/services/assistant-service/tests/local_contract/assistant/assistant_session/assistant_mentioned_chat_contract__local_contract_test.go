@@ -15,7 +15,9 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T) {
@@ -37,9 +39,9 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 			"conv-e2e",
 		):
 			_ = json.NewEncoder(w).Encode(struct {
-				CreatorMember        bool `json:"creatorMember"`
-				AssistantSkillMember bool `json:"assistantSkillMember"`
-			}{CreatorMember: true, AssistantSkillMember: true})
+				CreatorMember   bool `json:"creatorMember"`
+				AssistantMember bool `json:"assistantMember"`
+			}{CreatorMember: true, AssistantMember: true})
 			return
 		case serviceclients.ChatListAssistantGroundingMessagesPath(
 			"conv-e2e",
@@ -97,14 +99,15 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		orchestration.ReactRuntime{Model: proactiveFinalModel{}},
 		nil,
 	)
+	loop.Catalog = skillfixture.Loader{}
+	loop.PromptAssets = promptassets.MustResolver(t)
 	service := orchestration.NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		redis,
-		orchestration.WithSessionRunStore(persistence.NewMemorySessionRunStore()),
+		orchestration.WithSessionStore(persistence.NewMemorySessionStore()),
 		orchestration.WithAgentLoop(loop),
 		canonicalRunTestOption(t, loop),
 		orchestration.WithChatGroundingClient(chatGrounding),
-		testFrozenPolicyOption(),
 	)
 	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
 		"assistant-service-local-contract",
@@ -128,10 +131,10 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-12",
 		"seq":               "12",
+		"senderAccountId":   "account-a",
 		"senderId":          "user-a",
 		"content":           "@小趣 总结一下这段路线讨论",
 		"assistantMemberId": "assistant",
-		"assistantSkillId":  "general",
 	}); err != nil {
 		t.Fatalf("XAdd: %v", err)
 	}

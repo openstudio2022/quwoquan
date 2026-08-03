@@ -10,6 +10,16 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: authoritative_state
+  - name: version
+    source: version
+    type: int64
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
   - name: owner
     source: owner
     type: SkillSubscriptionOwner
@@ -156,10 +166,11 @@ types:
       - {name: rawText, source: rawText, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read_write, ops_exposure: none}
       - {name: queries, source: queries, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: mask, api_exposure: read_write, ops_exposure: none}
   SkillSubscriptionTrigger:
-    description: 主动订阅的唯一触发计划。
+    description: 主动订阅的唯一触发计划；cron 按显式 IANA timezone 解释，禁止依赖 Worker 本地时区。
     fields:
       - {name: type, source: type, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read}
       - {name: cron, source: cron, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read_write, ops_exposure: read}
+      - {name: timezone, source: timezone, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read, description: IANA timezone identifier，例如 Asia/Shanghai；同一订阅的 cron 必须始终在该时区计算。}
   SkillSubscriptionDestination:
     description: 主动订阅的投递目标与频控策略。
     fields:
@@ -401,15 +412,15 @@ types:
         client_normalization: trim_dedupe_drop_empty
       - name: searchQueryPlan
         type: SkillSubscriptionSearchQueryPlan
-        client_dart_type: AssistantSkillSubscriptionSearchPlan
+        client_dart_type: SkillSubscriptionSearchQueryPlanWire
         client_wire: toJson
       - name: trigger
         type: SkillSubscriptionTrigger
-        client_dart_type: AssistantSkillSubscriptionTrigger
+        client_dart_type: SkillSubscriptionTriggerWire
         client_wire: toJson
       - name: destination
         type: SkillSubscriptionDestination
-        client_dart_type: AssistantSkillSubscriptionDestination
+        client_dart_type: SkillSubscriptionDestinationWire
         client_wire: toJson
       - name: clientRequestId
         type: string
@@ -426,6 +437,12 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: status
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: clientRequestId
         type: string
         constraints:
           - NOT_BLANK

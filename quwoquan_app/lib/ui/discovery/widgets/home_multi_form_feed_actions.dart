@@ -21,7 +21,7 @@ class _ActionRow extends StatelessWidget {
   });
 
   final Key moreButtonKey;
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final bool isLiked;
   final int likeCount;

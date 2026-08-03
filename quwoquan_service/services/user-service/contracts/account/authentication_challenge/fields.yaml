@@ -142,3 +142,29 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: String?
+  OtpChallengeIssueResult:
+    fields:
+      - {name: maskedPhone, type: string, constraints: [NOT_NULL]}
+      - {name: expiresInSeconds, type: int, constraints: [NOT_NULL]}
+      - {name: deliveryStatus, type: string, constraints: [NOT_NULL]}
+      - {name: retryAfterSeconds, type: int, constraints: [NOT_NULL]}
+      - {name: requestId, type: string, constraints: [NULLABLE]}
+      - {name: challengeId, type: string, constraints: [NULLABLE]}
+  AlipayAuthorizationGrant:
+    fields:
+      - {name: authorizationPayload, type: string, constraints: [NOT_BLANK]}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL]}
+  OneTapAccountHint:
+    fields:
+      - {name: displayName, type: string, constraints: [NOT_NULL]}
+      - {name: avatarUrl, type: string, constraints: [NOT_NULL]}
+      - {name: maskedPhone, type: string, constraints: [NOT_NULL]}
+      - {name: identityOrigin, type: string, constraints: [NOT_NULL]}
+  OneTapLoginHint:
+    fields:
+      - {name: state, type: string, constraints: [NOT_NULL]}
+      - {name: maskedPhone, type: string, constraints: [NOT_NULL]}
+      - {name: registered, type: boolean, constraints: [NOT_NULL]}
+      - {name: expiresInSeconds, type: int, constraints: [NOT_NULL]}
+      - {name: accountHint, type: OneTapAccountHint, constraints: [NULLABLE]}
+      - {name: providerRequestId, type: string, constraints: [NULLABLE]}

@@ -8,8 +8,8 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   });
 
   final Map<String, _AlphaUpload> _uploads = <String, _AlphaUpload>{};
-  final Map<String, ContentMediaAssetSlice> _assets =
-      <String, ContentMediaAssetSlice>{};
+  final Map<String, MediaAssetSlice> _assets =
+      <String, MediaAssetSlice>{};
   final Map<String, ContentMediaUploadSessionCommandResult> _initReceipts =
       <String, ContentMediaUploadSessionCommandResult>{};
   final Map<String, ContentMediaUploadSessionCommandResult> _completeReceipts =
@@ -65,7 +65,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
     upload
       ..assetId = assetId
       ..status = ContentMediaUploadStatus.completed;
-    _assets[assetId] = ContentMediaAssetSlice(
+    _assets[assetId] = MediaAssetSlice(
       assetId: assetId,
       version: 1,
       mediaType: upload.command.mediaType,
@@ -130,7 +130,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaAssetSlice> getMediaAsset(
+  Future<MediaAssetSlice> getMediaAsset(
     GetContentMediaAssetQuery query,
   ) async {
     final asset = _assets[query.mediaId];
@@ -139,12 +139,12 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+  Future<MediaAssetDiscardResult> discardMediaAsset(
     DiscardContentMediaAssetCommand command,
     ContentMediaAssetCommandContext context,
   ) async {
     if (_discardedAssetIds.contains(command.mediaId)) {
-      return ContentMediaAssetDiscardResult(
+      return MediaAssetDiscardResult(
         mediaId: command.mediaId,
         status: ContentMediaProcessingStatus.deleted,
         replayed: true,
@@ -154,7 +154,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       throw StateError('alpha media asset not found');
     }
     _discardedAssetIds.add(command.mediaId);
-    return ContentMediaAssetDiscardResult(
+    return MediaAssetDiscardResult(
       mediaId: command.mediaId,
       status: ContentMediaProcessingStatus.deleted,
       replayed: false,
@@ -162,13 +162,13 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) async {
     final asset = await getMediaAsset(
       GetContentMediaAssetQuery(mediaId: command.mediaId),
     );
-    return ContentMediaOriginalAccessGrant(
+    return MediaOriginalAccessGrant(
       mediaId: asset.assetId,
       status: 'granted',
       originalUrl: asset.cdnUrl,

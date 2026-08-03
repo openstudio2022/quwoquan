@@ -45,7 +45,7 @@
 
 - 离线来电与媒体 QoE 未形成真实证据时，设计保持 blocked，不用声明或占位告警伪装完成。
 - 具体编码层、FEC/NACK 等属于 LiveKit/runtime 配置能力；未有受控运行证据时不在产品规格中。
-- SLS 告警消费 `connection_lost`，LiveKit 告警只消费官方。
+- Elasticsearch 告警消费 `connection_lost`，LiveKit 告警只消费官方。
 - 完成告警触发、通知、恢复与 prod `gray_initial` 回滚演练。
 - 离线来电采用 `Integration attempt + result outbox -> Redis Stream -> Notification attempt inbox -> per-device timeline` 单轨；`external_accepted`、provider result、presentation ACK 不得互相代写。
 - B10 operator readback 仅携带 call/device/session 摘要和 receipt reference；hosted release receipt 必须由 `prod-hosted` service-plane 原子 CAS 提交并回读验签，本机 release-state 只是可删除缓存。

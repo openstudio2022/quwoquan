@@ -32,8 +32,13 @@ func nonPromotableFirstPartyPrevalidation(appEnv string) bool {
 		strings.TrimSpace(os.Getenv(nonPromotablePrevalidationEnv)) == "first-party"
 }
 
-func contentReleaseExternalAuthDisabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")), "content-release")
+func contentSliceExternalAuthDisabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD"))) {
+	case "content-release", "content-commercial":
+		return true
+	default:
+		return false
+	}
 }
 
 // federatedLoginBindings is the explicit production composition for every
@@ -194,9 +199,9 @@ func resolveAuthRuntimeBinding(
 	if appEnv == "" {
 		appEnv = "alpha"
 	}
-	if contentReleaseExternalAuthDisabled() {
+	if contentSliceExternalAuthDisabled() {
 		return authRuntimeBinding{}, fmt.Errorf(
-			"%w: %s is outside the content-release workload",
+			"%w: %s is outside the bounded content workload",
 			ErrAuthRuntimeCapabilityBlocked,
 			capabilityID,
 		)

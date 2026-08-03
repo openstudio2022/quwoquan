@@ -1,0 +1,25 @@
+kind: aggregate_root
+description: >-
+  官方 Connector 目录定义。只描述厂商无关 capability、授权模式、确认策略、数据等级和
+  环境可用性，不保存账号连接、凭证或调用结果。
+identity:
+  fields: [connectorId]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+capabilities: [commandable, queryable, immutable_release, idempotent_commands]
+taggable: false
+vector_enabled: false
+business_rules:
+- 只有 quwoquan.official 签名 release 可以发布 ConnectorDefinition，运行时不得扫描本地目录
+- capabilities 使用 canonical capability key；Skill 和 App 不得引用厂商、endpoint 或 credential
+- authorizationMode、confirmationPolicy、dataClassification 与 environment availability 均随 immutable release 固定
+- 目录查询不得返回 provider endpoint、client secret、token、credentialRef 或内部 adapter 配置
+lifecycle:
+  state_field: status
+  states: [active, retired]
+  optimistic_concurrency: release_digest
+  idempotency: command_receipt

@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_request_page_ids.g.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef SearchInvocationContextFactory =
@@ -29,7 +30,7 @@ final class RemoteRecentSearchAdapter
   }
 
   @override
-  Future<RecentSearchEntry> upsertRecentSearch(
+  Future<RecentSearchEntryWire> upsertRecentSearch(
     UpsertRecentSearchCommand command,
   ) {
     return client.searchRecentSearchStateUpsertRecentSearch(
@@ -39,16 +40,16 @@ final class RemoteRecentSearchAdapter
   }
 
   @override
-  Future<void> deleteRecentSearch(DeleteRecentSearchCommand command) {
-    return client.searchRecentSearchStateDeleteRecentSearch(
+  Future<void> deleteRecentSearch(DeleteRecentSearchCommand command) async {
+    await client.searchRecentSearchStateDeleteRecentSearch(
       command,
       context: invocationContext(SearchRequestPageIds.deleteRecentSearch),
     );
   }
 
   @override
-  Future<void> clearRecentSearches(ClearRecentSearchesCommand command) {
-    return client.searchRecentSearchStateClearRecentSearches(
+  Future<void> clearRecentSearches(ClearRecentSearchesCommand command) async {
+    await client.searchRecentSearchStateClearRecentSearches(
       command,
       context: invocationContext(SearchRequestPageIds.clearRecentSearches),
     );

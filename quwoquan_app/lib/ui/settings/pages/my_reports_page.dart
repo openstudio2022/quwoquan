@@ -22,7 +22,7 @@ class MyReportsPage extends ConsumerStatefulWidget {
 }
 
 class _MyReportsPageState extends ConsumerState<MyReportsPage> {
-  final List<ContentMyReportItem> _items = <ContentMyReportItem>[];
+  final List<MyReportItemSlice> _items = <MyReportItemSlice>[];
   String? _nextCursor;
   Object? _rawError;
   bool _loading = false;
@@ -293,7 +293,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
 class _MyReportRow extends StatelessWidget {
   const _MyReportRow({required this.item, required this.isDark});
 
-  final ContentMyReportItem item;
+  final MyReportItemSlice item;
   final bool isDark;
 
   @override
@@ -370,31 +370,31 @@ class _MyReportRow extends StatelessWidget {
     );
   }
 
-  static String _targetLabel(ContentReportTargetType type) {
+  static String _targetLabel(ReportTargetType type) {
     return switch (type) {
-      ContentReportTargetType.post => ContentText.reportTargetPost,
-      ContentReportTargetType.comment => ContentText.reportTargetComment,
-      ContentReportTargetType.user => ContentText.reportTargetUser,
-      ContentReportTargetType.circle => ContentText.reportTargetCircle,
-      ContentReportTargetType.message => ContentText.reportTargetMessage,
+      ReportTargetType.post => ContentText.reportTargetPost,
+      ReportTargetType.comment => ContentText.reportTargetComment,
+      ReportTargetType.user => ContentText.reportTargetUser,
+      ReportTargetType.circle => ContentText.reportTargetCircle,
+      ReportTargetType.message => ContentText.reportTargetMessage,
     };
   }
 
-  static String _statusLabel(ContentReportStatus status) {
+  static String _statusLabel(ReportStatus status) {
     return switch (status) {
-      ContentReportStatus.pending => ContentText.reportStatusPending,
-      ContentReportStatus.reviewing => ContentText.reportStatusReviewing,
-      ContentReportStatus.resolved => ContentText.reportStatusResolved,
-      ContentReportStatus.dismissed => ContentText.reportStatusDismissed,
+      ReportStatus.pending => ContentText.reportStatusPending,
+      ReportStatus.reviewing => ContentText.reportStatusReviewing,
+      ReportStatus.resolved => ContentText.reportStatusResolved,
+      ReportStatus.dismissed => ContentText.reportStatusDismissed,
     };
   }
 
-  static IconData _statusIcon(ContentReportStatus status) {
+  static IconData _statusIcon(ReportStatus status) {
     return switch (status) {
-      ContentReportStatus.pending => CupertinoIcons.clock,
-      ContentReportStatus.reviewing => CupertinoIcons.doc_text_search,
-      ContentReportStatus.resolved => CupertinoIcons.check_mark_circled,
-      ContentReportStatus.dismissed => CupertinoIcons.info_circle,
+      ReportStatus.pending => CupertinoIcons.clock,
+      ReportStatus.reviewing => CupertinoIcons.doc_text_search,
+      ReportStatus.resolved => CupertinoIcons.check_mark_circled,
+      ReportStatus.dismissed => CupertinoIcons.info_circle,
     };
   }
 }

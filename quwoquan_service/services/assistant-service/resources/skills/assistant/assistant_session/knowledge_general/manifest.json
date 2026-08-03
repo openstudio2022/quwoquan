@@ -18,9 +18,14 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.evidence_lookup",
-  "replayAssetRef": "assistant.replay.knowledge_general.v1",
+  "replayAssetRef": "assistant.replay.knowledge_general",
   "promptAssets": [
     "knowledge_general.reactive",
     "assistant.evidence_discipline"
-  ]
+  ],
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

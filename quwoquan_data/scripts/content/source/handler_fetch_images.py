@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from core.image_rules import pixel_size_issue, relevance_issue
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
@@ -18,6 +18,7 @@ from content.source.handler_images import (
 )
 from content.source.handler_plan import _write_download_progress
 from content.source.fetch_images import fetch_image_payload
+from content.source.contracts import MediaProvenance
 from governance.coverage.license import normalize_rights_payload, validate_image_rights
 
 
@@ -29,11 +30,70 @@ class PreparedEntityImages:
     quality_issues: list[str]
     rejected_by_category: dict[str, int]
     pending_images: list[dict[str, Any]]
+    provider_asset_counts: list[dict[str, Any]]
     required_image_work_images: int
     planned_homepage_source_images: int
     required_homepage_media: int
     required_video_frames: int
     required_images: int
+
+
+def _source_asset_key(item: Mapping[str, Any]) -> tuple[str, str]:
+    provider = str(item.get("platform") or "unknown").strip() or "unknown"
+    source_id = str(item.get("sourceId") or provider).strip() or provider
+    return provider, source_id
+
+
+def _provider_asset_counts(
+    *,
+    image_specs: list[dict[str, Any]],
+    downloaded_by_source: Mapping[tuple[str, str], int],
+    accepted_images: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for image_spec in image_specs:
+        provider, source_id = _source_asset_key(image_spec)
+        row = rows.setdefault(
+            (provider, source_id),
+            {
+                "displayName": str(
+                    image_spec.get("title")
+                    or image_spec.get("caption")
+                    or image_spec.get("sourceCollectionId")
+                    or source_id
+                ).strip()
+                or source_id,
+                "provider": provider,
+                "plannedAssetCount": 0,
+                "discoveredAssetCount": 0,
+                "downloadedAssetCount": 0,
+                "acceptedAssetCount": 0,
+                "rejectedAssetCount": 0,
+                "verifiedAssetCount": 0,
+                "unverifiedAssetCount": 0,
+                "restrictedAssetCount": 0,
+                "unknownAssetCount": 0,
+            },
+        )
+        row["plannedAssetCount"] += 1
+        row["discoveredAssetCount"] += 1
+    for key, downloaded in downloaded_by_source.items():
+        if key in rows:
+            rows[key]["downloadedAssetCount"] = max(0, int(downloaded))
+    for image in accepted_images:
+        key = _source_asset_key(image)
+        row = rows[key]
+        row["acceptedAssetCount"] += 1
+        status = str(image.get("rightsAuditStatus") or "unknown").strip()
+        counter = f"{status}AssetCount"
+        if counter not in row:
+            counter = "unknownAssetCount"
+        row[counter] += 1
+    for row in rows.values():
+        row["rejectedAssetCount"] = (
+            row["discoveredAssetCount"] - row["acceptedAssetCount"]
+        )
+    return [rows[key] for key in sorted(rows)]
 
 
 def prepare_entity_images(
@@ -63,6 +123,7 @@ def prepare_entity_images(
         "other": 0,
     }
     pending_images: list[dict] = []
+    downloaded_by_source: dict[tuple[str, str], int] = {}
     requirements = download_requirements(execution_id)
     required_image_work_images = requirements.min_images if image_lane_selected else 0
     planned_homepage_source_images = sum(
@@ -142,6 +203,9 @@ def prepare_entity_images(
             )
             rejected_by_category["fetch_or_non_image"] += 1
             continue
+        provider, source_id = _source_asset_key(spec)
+        source_key = (provider, source_id)
+        downloaded_by_source[source_key] = downloaded_by_source.get(source_key, 0) + 1
         # 最小像素尺寸门：糊图/缩略图不进内容页。
         image_probe = probe_image_bytes(payload["bytes"])
         if not image_probe.succeeded:
@@ -179,6 +243,7 @@ def prepare_entity_images(
             rejected_by_category["other"] += 1
             continue
         rights = normalize_rights_payload(spec)
+        provenance = MediaProvenance.from_mapping(spec, vertical=vertical)
         pending_images.append(
             {
                 "bytes": payload["bytes"],
@@ -205,10 +270,14 @@ def prepare_entity_images(
                 "authorizationProof": spec.get("authorizationProof") or "",
                 "researchLane": spec.get("researchLane") or "image",
                 "sourceId": spec.get("sourceId") or "",
+                "platform": provider,
+                "title": spec.get("title") or "",
+                "capturedAt": spec.get("capturedAt") or spec.get("collectedAt") or "",
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,
                 "slug": f"{entity_id}_{idx_img}",
                 "sha256": payload.get("sha256"),
+                **provenance.audit_fields(),
             }
         )
         if lane == "image":
@@ -225,6 +294,12 @@ def prepare_entity_images(
         ]
         rejected_by_category["duplicate"] += len(dup_idx)
 
+    provider_asset_counts = _provider_asset_counts(
+        image_specs=image_specs,
+        downloaded_by_source=downloaded_by_source,
+        accepted_images=pending_images,
+    )
+
     return PreparedEntityImages(
         image_manifest=image_manifest,
         rights_issues=image_rights_issues,
@@ -232,6 +307,7 @@ def prepare_entity_images(
         quality_issues=image_quality_issues,
         rejected_by_category=rejected_by_category,
         pending_images=pending_images,
+        provider_asset_counts=provider_asset_counts,
         required_image_work_images=required_image_work_images,
         planned_homepage_source_images=planned_homepage_source_images,
         required_homepage_media=required_homepage_media,

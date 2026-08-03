@@ -12,7 +12,7 @@ imports:
   - package:quwoquan_app/assistant/contracts/task_graph_contract.dart
   - package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart
   - package:quwoquan_app/assistant/contracts/understanding_result_contract.dart
-  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
   - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
   - package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart
 fields:

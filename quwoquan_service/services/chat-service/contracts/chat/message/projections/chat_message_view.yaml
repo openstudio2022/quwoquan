@@ -1,0 +1,64 @@
+read_model: ChatMessageView
+description: >-
+  Message 与 MediaAsset delivery Reader 组合后的唯一公开消息 wire；聚合内部 _id、
+  media authority 和存储字段不跨边界暴露。
+source_entities:
+- Message
+- MediaAsset
+consumers:
+- app
+fields:
+- name: id
+  type: string
+- name: conversationId
+  type: string
+- name: seq
+  type: int64
+- name: clientMsgId
+  type: string
+- name: senderId
+  type: string
+- name: senderName
+  type: string
+  nullable: true
+- name: senderAvatar
+  type: string
+  nullable: true
+- name: type
+  type: enum
+  enum_ref: MessageType
+- name: content
+  type: string
+  nullable: true
+- name: mediaAssetId
+  type: string
+  nullable: true
+- name: mediaDeliveryUrl
+  type: string
+  nullable: true
+- name: mediaType
+  type: string
+  nullable: true
+- name: mediaContentType
+  type: string
+  nullable: true
+- name: mediaFileSizeBytes
+  type: int64
+  nullable: true
+- name: card
+  type: MessageCard
+  nullable: true
+- name: replyToMessageId
+  type: string
+  nullable: true
+- name: mentions
+  type: '[]string'
+  nullable: true
+- name: status
+  type: enum
+  enum_ref: MessageStatus
+- name: recalledAt
+  type: timestamp
+  nullable: true
+- name: timestamp
+  type: timestamp

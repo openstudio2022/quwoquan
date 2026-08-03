@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	. "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 func TestMediaAssetCaptureMetadataValidatesAndSurvivesSnapshot(t *testing.T) {

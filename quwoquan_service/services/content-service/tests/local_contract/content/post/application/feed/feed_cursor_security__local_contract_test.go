@@ -27,7 +27,7 @@ func TestListFeedCursorIsOpaqueTamperSafeAndRequestBound(t *testing.T) {
 			CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 		},
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
 			{
 				ContentID: posts[0].ID, ContentType: "image",
@@ -39,10 +39,10 @@ func TestListFeedCursorIsOpaqueTamperSafeAndRequestBound(t *testing.T) {
 			},
 		}),
 		fixtureFeedReader{posts: posts},
-		feedDeliveryPageStoreOption(),
+		readyActiveSupplyOption(),
 	)
 	request := ListFeedRequest{
-		UserID: "cursor-user", SessionID: "cursor-session",
+		UserID: "cursor-user", ViewerPersonaID: "cursor-persona", SessionID: "cursor-session",
 		ChannelID: "following", Limit: 1,
 	}
 	first, err := service.ListFeed(context.Background(), request)
@@ -94,16 +94,16 @@ func TestListFeedCursorScopeIsInjectiveAcrossFieldBoundaries(t *testing.T) {
 		{ID: "cursor-scope-1", AuthorId: "cursor-scope-author-1", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
 		{ID: "cursor-scope-2", AuthorId: "cursor-scope-author-2", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
 			{ContentID: posts[0].ID, ContentType: "image", AuthorID: posts[0].AuthorId, PublishedAt: posts[0].PublishedAt},
 			{ContentID: posts[1].ID, ContentType: "image", AuthorID: posts[1].AuthorId, PublishedAt: posts[1].PublishedAt},
 		}),
 		fixtureFeedReader{posts: posts},
-		feedDeliveryPageStoreOption(),
+		readyActiveSupplyOption(),
 	)
 	original := ListFeedRequest{
-		UserID: "actor-a", SessionID: "session-b\x1fsession-c",
+		UserID: "actor-a", ViewerPersonaID: "persona-a", SessionID: "session-b-session-c",
 		ChannelID: "following", Limit: 1,
 	}
 	first, err := service.ListFeed(context.Background(), original)
@@ -111,11 +111,10 @@ func TestListFeedCursorScopeIsInjectiveAcrossFieldBoundaries(t *testing.T) {
 		t.Fatalf("create cursor for injective-scope test: response=%+v err=%v", first, err)
 	}
 
-	// Under delimiter joining these first two fields serialize identically to
-	// the original tuple: ["actor-a", "session-b\x1fsession-c"] versus
-	// ["actor-a\x1fsession-b", "session-c"]. Length-prefixing must reject it.
+	// 将原 scope 的字段边界重新分配后必须失效；scope 由结构化长度前缀编码，
+	// 不能依赖任何可出现在合法 identity 中的分隔符。
 	assertInvalidFeedCursor(t, service, ListFeedRequest{
-		UserID: "actor-a\x1fsession-b", SessionID: "session-c",
+		UserID: "actor-a-session-b", ViewerPersonaID: "persona-a", SessionID: "session-c",
 		ChannelID: "following", Limit: 1, Cursor: first.NextCursor,
 	})
 }
@@ -157,13 +156,13 @@ func TestListFeedCursorExpiresAndStopsAtContinuationDepthLimit(t *testing.T) {
 				AuthorID: post.AuthorId, PublishedAt: post.PublishedAt,
 			})
 		}
-		return NewFeedService(
+		return newTerminalFeedService(
 				newTerminalFeedEngine(candidates),
 				fixtureFeedReader{posts: posts},
 				WithFeedCursorCodec(codec),
-				feedDeliveryPageStoreOption(),
+				readyActiveSupplyOption(),
 			), ListFeedRequest{
-				UserID: "cursor-boundary-user", SessionID: "cursor-boundary-session",
+				UserID: "cursor-boundary-user", ViewerPersonaID: "cursor-boundary-persona", SessionID: "cursor-boundary-session",
 				ChannelID: "following", Limit: 1,
 			}
 	}

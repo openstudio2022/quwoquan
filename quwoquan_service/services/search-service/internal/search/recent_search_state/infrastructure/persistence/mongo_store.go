@@ -205,4 +205,28 @@ func (s *Store) RecordNoopReceipt(ctx context.Context, receipt ports.Receipt) (p
 	return receipt, nil
 }
 
+// DeleteClosedSubjects is RecentSearchState's account-closure port. The caller
+// may pass a Mongo transaction context so state, receipt, and consumer inbox
+// changes commit atomically without exposing these collections to siblings.
+func (s *Store) DeleteClosedSubjects(
+	ctx context.Context,
+	subjects []string,
+) (int64, int64, error) {
+	stateResult, err := s.states.DeleteMany(
+		ctx,
+		bson.M{"personaId": bson.M{"$in": subjects}},
+	)
+	if err != nil {
+		return 0, 0, err
+	}
+	receiptResult, err := s.receipts.DeleteMany(
+		ctx,
+		bson.M{"personaId": bson.M{"$in": subjects}},
+	)
+	if err != nil {
+		return 0, 0, err
+	}
+	return stateResult.DeletedCount, receiptResult.DeletedCount, nil
+}
+
 var _ ports.Store = (*Store)(nil)

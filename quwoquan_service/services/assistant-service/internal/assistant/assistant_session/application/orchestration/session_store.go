@@ -7,12 +7,9 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
-func WithSessionRunStore(store ports.SessionRunStore) AssistantServiceOption {
+func WithSessionStore(store ports.SessionStore) AssistantServiceOption {
 	return func(service *AssistantService) {
-		service.sessionRuns = store
-		if eventStore, ok := store.(AssistantRunEventStore); ok {
-			service.runEvents = eventStore
-		}
+		service.sessions = store
 	}
 }
 
@@ -39,16 +36,6 @@ func assistantSessionStorageUnavailable(debug string) *rterr.AppError {
 	return appErr
 }
 
-func assistantRunNotFound() *rterr.AppError {
-	appErr := rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "run_not_found"),
-		"本次执行不存在或已失效",
-		"assistant run not found",
-	)
-	appErr.HTTPStatus = http.StatusNotFound
-	return appErr
-}
-
 func AssistantRunInvalidArgument(debug string) *rterr.AppError {
 	appErr := rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "run_invalid_argument"),
@@ -56,15 +43,5 @@ func AssistantRunInvalidArgument(debug string) *rterr.AppError {
 		debug,
 	)
 	appErr.HTTPStatus = http.StatusBadRequest
-	return appErr
-}
-
-func assistantRunStorageUnavailable(debug string) *rterr.AppError {
-	appErr := rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleAssistant, rterr.KindSystem, "run_storage_unavailable"),
-		"助手执行服务暂不可用，请稍后重试",
-		debug,
-	)
-	appErr.HTTPStatus = http.StatusServiceUnavailable
 	return appErr
 }

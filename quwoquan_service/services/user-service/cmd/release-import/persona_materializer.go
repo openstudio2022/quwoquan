@@ -12,10 +12,10 @@ import (
 
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
-	releaseimport "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/releaseimport"
 	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
 	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
 	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
+	releaseimport "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport"
 )
 
 type creatorPersonaMaterializer struct {

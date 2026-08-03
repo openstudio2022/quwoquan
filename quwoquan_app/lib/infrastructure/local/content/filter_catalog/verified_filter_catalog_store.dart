@@ -38,14 +38,19 @@ final class SharedPreferencesVerifiedFilterCatalogStore
         'verified filter catalog cache has an invalid verifiedAt timestamp',
       );
     }
+    final snapshotPayload = Map<String, Object?>.from(payload)
+      ..remove('verifiedAt');
     return VerifiedFilterCatalogCacheEntry(
-      snapshot: decodeFilterCatalogSnapshot(payload),
+      snapshot: FilterCatalogSlice.fromWire(
+        snapshotPayload,
+        'VerifiedFilterCatalogCacheEntry.snapshot',
+      ),
       verifiedAt: verifiedAt.toUtc(),
     );
   }
 
   @override
-  Future<void> write(FilterCatalogSnapshot snapshot) async {
+  Future<void> write(FilterCatalogSlice snapshot) async {
     if (!imageEditorFilterConfigFromSnapshot(snapshot).isValid()) {
       throw ArgumentError.value(snapshot, 'snapshot', 'must be verified');
     }
@@ -80,13 +85,13 @@ final class AssetFilterCatalogBootstrapReader
   final String assetPath;
 
   @override
-  Future<FilterCatalogSnapshot> read() async {
+  Future<FilterCatalogSlice> read() async {
     final source = await rootBundle.loadString(assetPath);
     final catalog = ImageEditorFilterConfig.fromJsonString(source);
     if (!catalog.isValid()) {
       throw const FormatException('invalid bundled filter catalog');
     }
-    return FilterCatalogSnapshot(
+    return FilterCatalogSlice(
       releaseId: catalog.releaseId,
       canonicalDigest: catalog.canonicalDigest,
       status: FilterCatalogReleaseStatus.active,
@@ -94,7 +99,7 @@ final class AssetFilterCatalogBootstrapReader
       presetCount: catalog.presets.length,
       categories: catalog.categories
           .map(
-            (category) => FilterCatalogCategory(
+            (category) => FilterCategoryDefinition(
               categoryId: category.id,
               displayNameZhHans: category.label,
               displayNameEn: category.displayNameEn,
@@ -105,7 +110,7 @@ final class AssetFilterCatalogBootstrapReader
           .toList(growable: false),
       presets: catalog.presets
           .map(
-            (preset) => FilterCatalogPreset(
+            (preset) => FilterPresetDefinition(
               presetId: preset.id,
               categoryId: preset.categoryId,
               displayNameZhHans: preset.name,
@@ -129,13 +134,13 @@ final class CanonicalFilterCatalogIntegrityVerifier
   const CanonicalFilterCatalogIntegrityVerifier();
 
   @override
-  bool hasValidCanonicalDigest(FilterCatalogSnapshot snapshot) {
+  bool hasValidCanonicalDigest(FilterCatalogSlice snapshot) {
     return imageEditorFilterConfigFromSnapshot(snapshot).isValid();
   }
 }
 
 ImageEditorFilterConfig imageEditorFilterConfigFromSnapshot(
-  FilterCatalogSnapshot snapshot,
+  FilterCatalogSlice snapshot,
 ) {
   return ImageEditorFilterConfig(
     releaseId: snapshot.releaseId,
@@ -169,7 +174,7 @@ ImageEditorFilterConfig imageEditorFilterConfigFromSnapshot(
   );
 }
 
-Map<String, Object?> _snapshotToJson(FilterCatalogSnapshot snapshot) {
+Map<String, Object?> _snapshotToJson(FilterCatalogSlice snapshot) {
   return <String, Object?>{
     'releaseId': snapshot.releaseId,
     'canonicalDigest': snapshot.canonicalDigest,
@@ -208,7 +213,7 @@ Map<String, Object?> _snapshotToJson(FilterCatalogSnapshot snapshot) {
 }
 
 Map<String, double> _contractAdjustmentsToJson(
-  FilterCatalogAdjustmentValues adjustments,
+  FilterAdjustmentValues adjustments,
 ) {
   return <String, double>{
     'lightSense': adjustments.lightSense,
@@ -229,10 +234,10 @@ Map<String, double> _contractAdjustmentsToJson(
   };
 }
 
-FilterCatalogAdjustmentValues _toContractAdjustments(
+FilterAdjustmentValues _toContractAdjustments(
   ImageEditorFilterAdjustments adjustments,
 ) {
-  return FilterCatalogAdjustmentValues(
+  return FilterAdjustmentValues(
     lightSense: adjustments.lightSense,
     brightness: adjustments.brightness,
     exposure: adjustments.exposure,
@@ -252,7 +257,7 @@ FilterCatalogAdjustmentValues _toContractAdjustments(
 }
 
 ImageEditorFilterAdjustments _toEditorAdjustments(
-  FilterCatalogAdjustmentValues adjustments,
+  FilterAdjustmentValues adjustments,
 ) {
   return ImageEditorFilterAdjustments(
     lightSense: adjustments.lightSense,

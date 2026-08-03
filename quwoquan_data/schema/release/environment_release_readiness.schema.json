@@ -9,6 +9,13 @@
     "environment",
     "releaseId",
     "releaseKind",
+    "releaseClass",
+    "productLifecycleState",
+    "containsUnverifiedAssets",
+    "rightsStatusCounts",
+    "authorizationRequiredAssetIds",
+    "researchAcceptedCount",
+    "commercialAcceptedCount",
     "sourceOwner",
     "readinessPhase",
     "manifestDigest",
@@ -40,7 +47,14 @@
     "releaseId": {"type": "string", "minLength": 1},
     "releaseKind": {"const": "content"},
     "sourceOwner": {"const": "qwq_data"},
-    "readinessPhase": {"enum": ["consumer", "commercial"]},
+    "releaseClass": {"enum": ["research", "commercial"]},
+    "productLifecycleState": {"enum": ["research", "commercial"]},
+    "containsUnverifiedAssets": {"type": "boolean"},
+    "rightsStatusCounts": {"type": "object", "required": ["verified", "unverified", "restricted", "unknown"], "additionalProperties": false, "properties": {"verified": {"type": "integer", "minimum": 0}, "unverified": {"type": "integer", "minimum": 0}, "restricted": {"type": "integer", "minimum": 0}, "unknown": {"type": "integer", "minimum": 0}}},
+    "authorizationRequiredAssetIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "researchAcceptedCount": {"type": "integer", "minimum": 0},
+    "commercialAcceptedCount": {"type": "integer", "minimum": 0},
+    "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "importRunId": {"type": "string", "minLength": 1},
@@ -92,6 +106,40 @@
     "creatorIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "tagRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "mediaAssetIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "appUatEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "releaseClass",
+        "productLifecycleState",
+        "homepageId",
+        "homepageTitle",
+        "articleWorkId",
+        "articleTitle",
+        "imageWorkId",
+        "imageTitle",
+        "videoWorkId",
+        "creatorName",
+        "tagLabel",
+        "videoAttribution"
+      ],
+      "properties": {
+        "releaseId": {"type": "string", "minLength": 1},
+        "releaseClass": {"enum": ["research", "commercial"]},
+        "productLifecycleState": {"enum": ["research", "commercial"]},
+        "homepageId": {"type": "string", "minLength": 1},
+        "homepageTitle": {"type": "string", "minLength": 1},
+        "articleWorkId": {"type": "string", "minLength": 1},
+        "articleTitle": {"type": "string", "minLength": 1},
+        "imageWorkId": {"type": "string", "minLength": 1},
+        "imageTitle": {"type": "string", "minLength": 1},
+        "videoWorkId": {"type": "string", "minLength": 1},
+        "creatorName": {"type": "string", "minLength": 1},
+        "tagLabel": {"type": "string", "minLength": 1},
+        "videoAttribution": {"type": "string", "minLength": 1}
+      }
+    },
     "feedQueries": {
       "type": "array",
       "minItems": 5,
@@ -143,10 +191,11 @@
   "allOf": [
     {
       "if": {
-        "properties": {"readinessPhase": {"const": "commercial"}},
+        "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},
         "required": ["readinessPhase"]
       },
       "then": {
+        "required": ["appUatEnvelope"],
         "properties": {
           "counts": {
             "properties": {

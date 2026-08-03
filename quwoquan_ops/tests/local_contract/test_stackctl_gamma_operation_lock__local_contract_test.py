@@ -59,6 +59,67 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         handoff.start()
         self.addCleanup(handoff.stop)
 
+    def test_bounded_content_workloads_do_not_materialize_unrelated_providers(
+        self,
+    ) -> None:
+        auth = mock.Mock(environment={"AUTH_JWT_SECRET": "protected"})
+        storage = mock.Mock(
+            environment={"LOCAL_GAMMA_OBJECT_STORAGE_BUCKET": "alpha-bucket"},
+            host_endpoint="https://upload.alpha.quwoquan.com:17100",
+        )
+        topology = {
+            "targets": {
+                "alpha-local": {
+                    "portProfile": "alpha-local",
+                    "publicBases": {
+                        "mediaImage": "https://cdn.alpha.quwoquan.com:17100/media/image",
+                        "mediaUpload": "https://upload.alpha.quwoquan.com:17100/media/upload",
+                    },
+                }
+            }
+        }
+        for workload in ("content-release", "content-commercial"):
+            environment: dict[str, str] = {}
+            with self.subTest(workload=workload):
+                with (
+                    mock.patch.object(
+                        stackctl,
+                        "prepare_local_environment_auth",
+                        return_value=auth,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "prepare_local_environment_object_storage",
+                        return_value=storage,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "load_environment_topology",
+                        return_value=topology,
+                    ),
+                    mock.patch.object(stackctl, "load_port_manifest", return_value={}),
+                    mock.patch.object(
+                        stackctl,
+                        "profile_ports",
+                        return_value={"object-storage-edge": 17100},
+                    ),
+                    mock.patch.object(stackctl, "_sync_object_storage_binding_aliases"),
+                    mock.patch.object(
+                        stackctl,
+                        "_bind_local_external_provider_environment",
+                    ) as bind_external,
+                ):
+                    error = stackctl._bind_formal_local_release_provider_environment(
+                        environment,
+                        environment_name="alpha",
+                        target_name="alpha-local",
+                        workload=workload,
+                    )
+
+                self.assertIsNone(error)
+                self.assertEqual(environment["AUTH_JWT_SECRET"], "protected")
+                bind_external.assert_not_called()
+
     def test_package_lock_serializes_one_target_and_allows_other_targets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
@@ -107,6 +168,8 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             self.assertEqual(alias, source)
         self.assertNotIn("LOCAL_GAMMA_IMAGE_VERSION", environment)
         self.assertNotIn("QWQ_COMPOSE_IMAGE_VERSION", environment)
+        self.assertEqual(environment["RTC_MEDIA_API_KEY"], "down-not-used")
+        self.assertEqual(environment["RTC_MEDIA_API_SECRET"], "down-not-used")
         for service, local_key in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
             self.assertNotIn(local_key, environment, service)
             self.assertNotIn(
@@ -144,7 +207,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     {
                         "status": "passed",
                         "runtimeEnv": "gamma",
-                        "composeProject": "quwoquan_service",
+                        "composeProject": "quwoquan_gamma_release_old_1",
                         "configurationDigest": configuration_digest,
                         "imageTransportTag": version,
                         "imageComposition": composition,
@@ -152,10 +215,17 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with mock.patch.object(
-                stackctl,
-                "target_process_dir",
-                return_value=process_dir,
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "startup_attempt_path",
+                    return_value=process_dir / "startup_attempt.json",
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "target_process_dir",
+                    return_value=process_dir,
+                ),
             ):
                 loaded = stackctl._load_gamma_runtime_image_composition(
                     "gamma-local"
@@ -163,7 +233,96 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
 
         expected_composition = dict(composition)
         expected_composition["configurationDigest"] = configuration_digest
-        self.assertEqual(loaded, (expected_composition, "quwoquan_service"))
+        self.assertEqual(
+            loaded,
+            (expected_composition, "quwoquan_gamma_release_old_1"),
+        )
+
+    def test_gamma_down_rejects_runtime_receipt_from_other_environment_project(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            process_dir = Path(temporary_dir)
+            (process_dir / "stack_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "runtimeEnv": "gamma",
+                        "composeProject": "quwoquan_beta_release_old_1",
+                        "configurationDigest": "sha256:" + "f" * 64,
+                        "imageTransportTag": "unused",
+                        "imageComposition": {"images": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "startup_attempt_path",
+                    return_value=process_dir / "startup_attempt.json",
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "target_process_dir",
+                    return_value=process_dir,
+                ),
+                self.assertRaisesRegex(ValueError, "Compose project mismatch"),
+            ):
+                stackctl._load_gamma_runtime_image_composition("gamma-local")
+
+    def test_stopped_attempt_falls_back_to_successful_runtime_receipt(self) -> None:
+        refs = {
+            service: (
+                f"localhost/quwoquan_service_{service.replace('-', '_')}:"
+                + f"{index:064x}"
+            )
+            for index, (service, _) in enumerate(
+                stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
+                start=1,
+            )
+        }
+        version = stackctl.immutable_image_digest(refs)
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            process_dir = Path(temporary_dir)
+            attempt = process_dir / "startup_attempt.json"
+            attempt.write_text(json.dumps({"status": "stopped"}), encoding="utf-8")
+            (process_dir / "stack_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "runtimeEnv": "alpha",
+                        "composeProject": "quwoquan_alpha_release_old_1",
+                        "configurationDigest": "sha256:" + "f" * 64,
+                        "imageTransportTag": version,
+                        "imageComposition": {
+                            "imageVersion": version,
+                            "images": {
+                                service: {"ref": ref}
+                                for service, ref in refs.items()
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "startup_attempt_path",
+                    return_value=attempt,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "target_process_dir",
+                    return_value=process_dir,
+                ),
+            ):
+                loaded = stackctl._load_gamma_runtime_image_composition(
+                    "alpha-local"
+                )
+
+        self.assertEqual(loaded[1], "quwoquan_alpha_release_old_1")
 
     def test_gamma_down_rejects_drifted_runtime_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -173,7 +332,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     {
                         "status": "passed",
                         "runtimeEnv": "gamma",
-                        "composeProject": "quwoquan_service",
+                        "composeProject": "quwoquan_gamma_release_old_1",
                         "imageTransportTag": "0.1.2",
                         "imageComposition": {
                             "imageVersion": "0.1.2",
@@ -184,6 +343,11 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
+                mock.patch.object(
+                    stackctl,
+                    "startup_attempt_path",
+                    return_value=process_dir / "startup_attempt.json",
+                ),
                 mock.patch.object(
                     stackctl,
                     "target_process_dir",
@@ -297,13 +461,16 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     return_value={
                         "QWQ_LOCAL_RELEASE_ENV": "alpha",
                         "QWQ_LOCAL_RELEASE_TARGET": "alpha-local",
-                        "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release",
+                        "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_new_2",
                     },
                 ),
                 mock.patch.object(
                     stackctl,
                     "_load_gamma_runtime_image_composition",
-                    return_value=({"images": {}}, "quwoquan_alpha_release"),
+                    return_value=(
+                        {"images": {}},
+                        "quwoquan_alpha_release_old_1",
+                    ),
                 ),
                 mock.patch.object(stackctl, "_apply_gamma_image_composition"),
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
@@ -328,6 +495,12 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
 
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(
+            run.call_args_list[0].kwargs["env"][
+                "LOCAL_GAMMA_COMPOSE_PROJECT_NAME"
+            ],
+            "quwoquan_alpha_release_old_1",
+        )
+        self.assertEqual(
             [call.args[0] for call in run.call_args_list],
             [
                 [
@@ -344,6 +517,107 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 ],
             ],
         )
+
+    def test_alpha_down_purges_only_runtime_receipt_bound_compose_volumes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            report_dir = Path(temporary_dir)
+            target_cache = Path(temporary_dir) / "target-cache"
+            target_cache.mkdir()
+            environment = {
+                "QWQ_LOCAL_RELEASE_ENV": "alpha",
+                "QWQ_LOCAL_RELEASE_TARGET": "alpha-local",
+                "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_new_2",
+            }
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "load_environment_topology",
+                    return_value={},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "get_target",
+                    return_value={"env": "alpha"},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value=environment,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_load_gamma_runtime_image_composition",
+                    return_value=(
+                        {"images": {}},
+                        "quwoquan_alpha_release_old_1",
+                    ),
+                ),
+                mock.patch.object(stackctl, "_apply_gamma_image_composition"),
+                mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    return_value=CompletedProcess([], 0, stdout="", stderr=""),
+                ) as run,
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_network_report",
+                    return_value={"ports": []},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "target_cache_dir",
+                    return_value=target_cache,
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+            ):
+                result = stackctl.command_down(
+                    argparse.Namespace(
+                        target="alpha-local",
+                        report_dir="",
+                        formal_release=False,
+                        purge_rebuildable_state=True,
+                    )
+                )
+            report = json.loads((report_dir / "report.json").read_text())
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            [
+                "bash",
+                "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+                "--down",
+                "--purge-rebuildable-state",
+            ],
+        )
+        self.assertEqual(
+            run.call_args_list[0].kwargs["env"][
+                "LOCAL_GAMMA_COMPOSE_PROJECT_NAME"
+            ],
+            "quwoquan_alpha_release_old_1",
+        )
+        self.assertTrue(report["destructiveRepairPerformed"])
+        self.assertEqual(
+            report["destructiveActions"],
+            [
+                "purge-compose-volumes:quwoquan_alpha_release_old_1",
+                "purge-target-cache:alpha-local",
+            ],
+        )
+        self.assertFalse(target_cache.exists())
 
     def test_alpha_down_fails_when_canonical_port_remains_occupied(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -377,12 +651,10 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
                 mock.patch.object(
                     stackctl,
-                    "_network_report",
-                    return_value={
-                        "ports": [
-                            {"name": "media-origin", "port": 17110, "open": True}
-                        ]
-                    },
+                    "_wait_for_network_ports_released",
+                    return_value=[
+                        {"name": "media-origin", "port": 17110, "open": True}
+                    ],
                 ),
                 mock.patch.object(
                     stackctl,
@@ -397,6 +669,26 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
 
         self.assertEqual(result["exitCode"], 2)
         self.assertIn("canonical port remains occupied", result["details"][0])
+
+    def test_down_waits_for_host_port_forward_release(self) -> None:
+        reports = iter(
+            [
+                {"ports": [{"name": "mongodb", "port": 17410, "open": True}]},
+                {"ports": [{"name": "mongodb", "port": 17410, "open": False}]},
+            ]
+        )
+        with (
+            mock.patch.object(stackctl, "_network_report", side_effect=reports),
+            mock.patch.object(stackctl.time, "sleep") as sleep,
+        ):
+            occupied = stackctl._wait_for_network_ports_released(
+                "alpha-local",
+                timeout_seconds=1.0,
+                poll_interval_seconds=0.01,
+            )
+
+        self.assertEqual(occupied, [])
+        sleep.assert_called_once_with(0.01)
 
     def test_orphan_repair_requires_explicit_confirmation(self) -> None:
         args = argparse.Namespace(
@@ -833,15 +1125,16 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         operation_lock.__exit__.assert_called_once()
         run.assert_not_called()
 
-    def test_beta_external_provider_environment_binds_protected_material(self) -> None:
+    def test_beta_external_provider_environment_binds_substitute_topology(self) -> None:
         environment: dict[str, str] = {}
         values = {
-            "CONTENT_EMBEDDING_ENDPOINT": "https://embedding.nonprod.test/v1",
-            "CONTENT_EMBEDDING_API_KEY": "protected-key",
+            "CONTENT_EMBEDDING_ENDPOINT": (
+                "http://integration-service:18089/v1/embeddings"
+            ),
         }
         with mock.patch.object(
             stackctl,
-            "load_protected_provider_environment",
+            "load_nonprod_provider_environment",
             return_value=values,
         ):
             error = stackctl._bind_beta_external_provider_environment(environment)
@@ -852,10 +1145,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             environment["QWQ_COMPOSE_EMBEDDING_ENDPOINT"],
             values["CONTENT_EMBEDDING_ENDPOINT"],
         )
-        self.assertEqual(
-            environment["QWQ_COMPOSE_EMBEDDING_API_KEY"],
-            values["CONTENT_EMBEDDING_API_KEY"],
-        )
+        self.assertNotIn("QWQ_COMPOSE_EMBEDDING_API_KEY", environment)
 
     def test_beta_full_workload_blocks_when_provider_materialization_fails(
         self,
@@ -1269,7 +1559,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 )
                 self.assertNotEqual(environment[environment_key], build_refs[service])
 
-    def test_gamma_external_provider_environment_binds_protected_material(
+    def test_gamma_external_provider_environment_binds_substitute_topology(
         self,
     ) -> None:
         environment: dict[str, str] = {}
@@ -1292,7 +1582,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             ),
             mock.patch.object(
                 stackctl,
-                "load_protected_provider_environment",
+                "load_nonprod_provider_environment",
                 return_value=values,
             ) as prepare,
         ):
@@ -1302,6 +1592,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         prepare.assert_called_once_with(
             environment="gamma",
             target_name="gamma-local",
+            source=environment,
         )
         self.assertEqual(
             environment["CONTENT_OSS_ENDPOINT"],
@@ -1327,8 +1618,8 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         self.assertNotIn("QWQ_COMPOSE_EMBEDDING_ENDPOINT", environment)
         self.assertNotIn("QWQ_COMPOSE_EMBEDDING_API_KEY", environment)
         self.assertIn("RTC_MEDIA_API_KEY", environment)
-        self.assertEqual(environment["PRODUCT_OPS_SLS_ENDPOINT"], "")
-        self.assertEqual(environment["ALIBABA_CLOUD_ACCESS_KEY_ID"], "")
+        self.assertNotIn("PRODUCT_OPS_SLS_ENDPOINT", environment)
+        self.assertNotIn("ALIBABA_CLOUD_ACCESS_KEY_ID", environment)
 
     def test_gamma_external_provider_environment_reports_materialization_failure(
         self,
@@ -1422,6 +1713,11 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                         "images": {},
                     },
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "activate_search_experiment_policy",
+                    return_value={"status": "passed"},
+                ),
                 mock.patch.object(stackctl, "run", side_effect=successful_syntax_check),
                 mock.patch.object(
                     stackctl,
@@ -1433,7 +1729,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             ):
                 result = stackctl.command_up(args)
 
-        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["exitCode"], 0, result)
         self.assertTrue(
             any("package" in " ".join(argv) for argv in argv_calls)
             or any("start_local_gamma_mirror" in " ".join(argv) for argv in argv_calls)

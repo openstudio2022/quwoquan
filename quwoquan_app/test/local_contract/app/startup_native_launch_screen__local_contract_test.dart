@@ -642,7 +642,7 @@ void main() {
       expect(runtime, contains('elapsedSinceProcessStart'));
       expect(runtime, contains("'fallbackDart'"));
       final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
-      expect(welcome, contains('hydrateNativeProcessSegments'));
+      expect(welcome, contains('beginNativeStartupAttempt'));
       expect(welcome, contains('unawaited('));
       expect(welcome, contains('_armDeadline();'));
       expect(welcome, contains('_refreshNativeSegmentsWithoutBlockingWelcome'));
@@ -896,12 +896,12 @@ void main() {
       expect(motionProbe, contains('frame_displacement'));
     });
 
-    test('公共 CA 单轨不在 Flutter bootstrap 注入本地 trust', () {
+    test('公共 CA 单轨只允许 bootstrap 执行原生 attempt 握手', () {
       final bootstrap = _readAppFile('lib/app_bootstrap.dart');
       final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
       final beforeRunApp = bootstrap.substring(0, bootstrap.indexOf('runApp('));
       expect(beforeRunApp, isNot(contains('await startupPrerequisites')));
-      expect(beforeRunApp, isNot(contains('hydrateNativeProcessSegments')));
+      expect(beforeRunApp, contains('beginNativeStartupAttempt'));
       // SecureStorage / package_info 不得阻塞 runApp，否则挤爆原生首帧预算。
       expect(beforeRunApp, contains('bootstrapForColdStart'));
       expect(
@@ -962,9 +962,13 @@ void main() {
       expect(script, contains('direct_flutter_run'));
       expect(script, contains('DIRECT_RUNTIME_DEFINES_JSON'));
       expect(script, contains('runtimeDefines'));
-      expect(script, isNot(contains('export FLUTTER_TARGET=')));
+      expect(script, contains('print("export FLUTTER_TARGET="'));
+      expect(script, contains('consumer-lease acquire'));
+      expect(script, contains('--platform ios-simulator'));
       expect(script, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(wrapper, contains('runtime package preparation failed'));
+      expect(wrapper, contains('first typed blocker'));
+      expect(wrapper, isNot(contains('use quwoquan_app/run.sh')));
       expect(wrapper, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(project, contains('xcode_backend_build.sh'));
       expect(project, isNot(contains('eval \\"')));
@@ -1047,6 +1051,17 @@ void main() {
       expect(gradle, contains('direct_flutter_run'));
       expect(gradle, contains('direct-debug'));
       expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
+      expect(gradle, contains('app-debug-preflight'));
+      expect(gradle, contains('QWQ_CONTENT_RELEASE_ID'));
+      expect(gradle, contains('QWQ_CONTENT_MANIFEST_DIGEST'));
+      expect(gradle, contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST'));
+      expect(activity, contains('contentReadinessReceiptDigest'));
+      final runtimeConfig = _readAppFile(
+        'lib/cloud/runtime/cloud_runtime_config.dart',
+      );
+      expect(runtimeConfig, contains('_nativeRuntimeDriftKeys'));
+      expect(runtimeConfig, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
+      expect(runtimeConfig, contains('if (!shouldLoadNativeRuntimePackage)'));
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));
       expect(gradle, contains('QWQ_CONSUMER_LEASE_ACQUIRED'));
@@ -1073,7 +1088,8 @@ void main() {
       expect(gradle, isNot(contains('mergeAlphaLocalDartDefines')));
       expect(gradle, isNot(contains('prepareAndroidLocalAlphaStack')));
       expect(gradle, isNot(contains('prepareAndroidLocalAdbReverse')));
-      expect(gradle, isNot(contains('consumer-lease",\n')));
+      expect(gradle, contains('"consumer-lease",'));
+      expect(gradle, contains('handoffLocalPorts(directDebugHandoff)'));
       expect(gradle, contains('providers.gradleProperty("target-platform")'));
       expect(gradle, contains('abiFilters.addAll(flutterTargetAndroidAbis)'));
       expect(

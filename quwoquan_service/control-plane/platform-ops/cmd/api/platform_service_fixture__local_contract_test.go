@@ -15,9 +15,12 @@ func seedTestPlatformService(service *platformService) error {
 			{
 				"id": "platform-ops-service-beta-control-a-0", "environment": "beta",
 				"cluster": "beta-control-a", "service": "platform-ops-service",
-				"instanceId":  "platform-ops-service-beta-control-a-0",
-				"desiredHash": "expected", "effectiveHash": "stale", "inSync": false,
+				"instanceId":    "platform-ops-service-beta-control-a-0",
+				"configVersion": "fixture-config", "imageVersion": "fixture-image",
+				"releaseManifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				"desiredHash":           "expected", "effectiveHash": "stale", "inSync": false,
 				"source": "config-center", "lastError": "stale configuration",
+				"updatedAt": "2026-08-02T00:00:00Z",
 			},
 		},
 	}

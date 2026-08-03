@@ -31,6 +31,7 @@ import (
 	credentialhttp "quwoquan_service/services/user-service/internal/account/credential_binding/adapters/inbound/http"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
+	registrationhttp "quwoquan_service/services/user-service/internal/account/device_registration/adapters/inbound/http"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
 	registrationpersistence "quwoquan_service/services/user-service/internal/account/device_registration/infrastructure/persistence"
 	invitationhttp "quwoquan_service/services/user-service/internal/account/invitation/adapters/inbound/http"
@@ -50,6 +51,7 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
 	usercache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/cache"
 	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
+	usersettingshttp "quwoquan_service/services/user-service/internal/account/user_settings/adapters/inbound/http"
 	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
 	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
 	personaapp "quwoquan_service/services/user-service/internal/persona_management/persona/application/persona"
@@ -58,18 +60,26 @@ import (
 	proposalapp "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/application"
 	proposalmessaging "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/messaging"
 	proposalpersistence "quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal/infrastructure/persistence"
+	creatorpersistence "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/persistence"
+	followingevent "quwoquan_service/services/user-service/internal/profile_projection/following_subject/adapters/inbound/event"
+	followinghttp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/adapters/inbound/http"
 	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
+	followingpersistence "quwoquan_service/services/user-service/internal/profile_projection/following_subject/infrastructure/persistence"
 	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
 	contactapp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/application"
 	contactpersistence "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/infrastructure/persistence"
+	visithttp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/adapters/inbound/http"
 	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
+	visitpersistence "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/infrastructure/persistence"
 	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 	greetingpersistence "quwoquan_service/services/user-service/internal/relationship/greeting_request/infrastructure/persistence"
+	relationshipadapter "quwoquan_service/services/user-service/internal/relationship/persona_relationship/adapters/inbound/application"
 	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
 	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
 	relationshippersistence "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/persistence"
 	relationshipprojection "quwoquan_service/services/user-service/internal/relationship/persona_relationship/infrastructure/projection"
+	subjectfollowhttp "quwoquan_service/services/user-service/internal/relationship/subject_follow/adapters/inbound/http"
 	subjectfollowapp "quwoquan_service/services/user-service/internal/relationship/subject_follow/application"
 	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
 	subjectfollowpersistence "quwoquan_service/services/user-service/internal/relationship/subject_follow/infrastructure/persistence"
@@ -448,9 +458,9 @@ func rebuildTestHandler(ctx context.Context) error {
 	// SubjectFollow / FollowingSubject / FollowedSubjectVisitState packet
 	subjectFollowStore := subjectfollowpersistence.NewPgSubjectFollowStore(pgPool)
 	subjectFollowService := subjectfollowapp.NewSubjectFollowService(subjectFollowStore)
-	followingSubjectStore := persistence.NewMongoFollowingSubjectStore(mongoDB)
-	followedSubjectVisitStore := persistence.NewMongoFollowedSubjectVisitStore(mongoDB)
-	var followingProjector *followingapp.Projector
+	followingSubjectStore := followingpersistence.NewMongoFollowingSubjectStore(mongoDB)
+	followedSubjectVisitStore := visitpersistence.NewMongoFollowedSubjectVisitStore(mongoDB)
+	var followingProjector *followingevent.Handler
 	if mongoDB != nil {
 		if err := followingSubjectStore.EnsureIndexes(ctx); err != nil {
 			return err
@@ -458,7 +468,7 @@ func rebuildTestHandler(ctx context.Context) error {
 		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
 			return err
 		}
-		followingProjector = followingapp.NewProjector(followingSubjectStore)
+		followingProjector = followingevent.NewHandler(followingapp.NewProjector(followingSubjectStore))
 	}
 	followedSubjectVisitService := visitapp.NewVisitService(followedSubjectVisitStore, followingSubjectStore)
 	followingSubjectQueryService := followingapp.NewQueryService(followingSubjectStore, personaStore, nil)
@@ -560,7 +570,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		profileStore,
 		profileCache,
 		application.WithCreatorRuntimeProfiles(
-			persistence.NewCreatorRuntimeProfileReader(mongoDB),
+			newCreatorRuntimeProfileTestAdapter(
+				creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB),
+			),
 		),
 	)
 	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
@@ -597,6 +609,11 @@ func rebuildTestHandler(ctx context.Context) error {
 		accountCloseProjections = searchindex.ComposePublisher(
 			accountCloseProjections,
 			useraccountprojection.NewMongoCleanupProjector(mongoDB),
+			newAccountClosureTestPublisher(
+				followingSubjectStore,
+				followedSubjectVisitStore,
+				creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB),
+			),
 		)
 	}
 	accountEventFanout, err := mq.NewUserAccountEventFanout(
@@ -629,19 +646,25 @@ func rebuildTestHandler(ctx context.Context) error {
 	accountEnforcementFacade :=
 		useraccountapp.NewAccountEnforcementCommandFacade(accountEnforcementStore)
 	userHandler, err := httpadapter.NewUserHandler(
-		profileService, searchService, relationshipService, greetingService,
-		userSettingsCommands, userSettingsQueries,
+		profileService, searchService, relationshipadapter.NewHandler(relationshipService), greetingService,
 		authService, credentialQueries,
-		deviceRegistrationCommands, deviceRegistrationQueries,
 		personaService,
 		interestProfileService,
-		subjectFollowService,
-		followedSubjectVisitService,
-		followingSubjectQueryService,
 	)
 	if err != nil {
 		return err
 	}
+	userHandler.WithUserSettingsRoutes(
+		usersettingshttp.NewHandler(userSettingsCommands, userSettingsQueries),
+	)
+	userHandler.WithDeviceRegistrationRoutes(
+		registrationhttp.NewHandler(deviceRegistrationCommands, deviceRegistrationQueries),
+	)
+	userHandler.WithSubjectObjectRoutes(
+		subjectfollowhttp.NewHandler(subjectFollowService, userHandler),
+		visithttp.NewHandler(followedSubjectVisitService, userHandler),
+		followinghttp.NewHandler(followingSubjectQueryService, userHandler),
+	)
 	profileProposalHandler, err := proposalhttp.NewHandler(profileProposalFacade)
 	if err != nil {
 		return err
@@ -722,7 +745,7 @@ func rebuildTestHandler(ctx context.Context) error {
 // 的 fanout 同构：Redis 发布 + following_subjects 投影都成功才推进 checkpoint。
 type testPersonaRelationshipFanout struct {
 	events    *mq.EventPublisher
-	projector *followingapp.Projector
+	projector *followingevent.Handler
 	counters  *relationshipprojection.CounterProjector
 }
 
@@ -736,12 +759,18 @@ func (f *testPersonaRelationshipFanout) PublishPersonaRelationship(ctx context.C
 	if f.projector == nil {
 		return nil
 	}
-	return f.projector.ApplyPersonaRelationship(ctx, event)
+	payload := event.Payload
+	return f.projector.Apply(ctx, followingapp.FollowChangedEvent{
+		EventID: event.EventID, ViewerPersonaID: payload.SourcePersonaID,
+		SubjectType: "persona", SubjectID: payload.TargetPersonaID,
+		Following: payload.Following, OccurredAt: payload.OccurredAt,
+		SourceVersion: payload.Version,
+	})
 }
 
 type testSubjectFollowFanout struct {
 	events    *mq.EventPublisher
-	projector *followingapp.Projector
+	projector *followingevent.Handler
 }
 
 func (f *testSubjectFollowFanout) PublishSubjectFollow(ctx context.Context, event sfmodel.OutboxEvent) error {
@@ -751,7 +780,13 @@ func (f *testSubjectFollowFanout) PublishSubjectFollow(ctx context.Context, even
 	if f.projector == nil {
 		return nil
 	}
-	return f.projector.ApplySubjectFollow(ctx, event)
+	payload := event.Payload
+	return f.projector.Apply(ctx, followingapp.FollowChangedEvent{
+		EventID: event.EventID, ViewerPersonaID: payload.PersonaID,
+		SubjectType: payload.SubjectType, SubjectID: payload.SubjectID,
+		Following:  payload.State == sfmodel.StateFollowing,
+		OccurredAt: payload.OccurredAt, SourceVersion: payload.Version,
+	})
 }
 
 func requireMongoBackedRuntime(tb testing.TB) {

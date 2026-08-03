@@ -1,32 +1,43 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestRemoveRetiredGeneratedOutputs_RemovesFixtureIdentityOutput(t *testing.T) {
+func TestRemoveUntrackedGeneratedOutputsRemovesRetiredSingleTrackOutputs(t *testing.T) {
 	appDir := t.TempDir()
-	retired := filepath.Join(
-		appDir,
-		"lib",
-		"cloud",
-		"user",
-		"generated",
-		"prefab_user_metadata.g.dart",
-	)
-	if err := os.MkdirAll(filepath.Dir(retired), 0o755); err != nil {
-		t.Fatalf("create generated directory: %v", err)
+	beginGeneratedManifest(appDir, "canonical-graph")
+	retired := []string{
+		"lib/cloud/user/generated/prefab_user_metadata.g.dart",
+		"lib/cloud/runtime/generated/integration/location_poi_dto.g.dart",
+		"packages/quwoquan_cloud_contracts/lib/src/generated/requests/integration/location_queries.requests.g.dart",
+		"packages/quwoquan_cloud_contracts/lib/src/generated/requests/notification/app_message_contracts.requests.g.dart",
+		"packages/quwoquan_cloud_contracts/lib/src/generated/requests/notification/incoming_call_delivery_contracts.requests.g.dart",
 	}
-	if err := os.WriteFile(retired, []byte("retired fixture identity"), 0o600); err != nil {
-		t.Fatalf("write retired generated output: %v", err)
+	for _, relativePath := range retired {
+		path := filepath.Join(appDir, filepath.FromSlash(relativePath))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("create generated directory for %s: %v", relativePath, err)
+		}
+		if err := os.WriteFile(
+			path,
+			[]byte("// Code generated from retired single-track source. DO NOT EDIT.\n"),
+			0o600,
+		); err != nil {
+			t.Fatalf("write retired generated output %s: %v", relativePath, err)
+		}
 	}
 
-	removeRetiredGeneratedOutputs(appDir)
+	if err := removeUntrackedGeneratedOutputs(); err != nil {
+		t.Fatal(err)
+	}
 
-	if _, err := os.Stat(retired); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("retired fixture identity output must be removed, stat error: %v", err)
+	for _, relativePath := range retired {
+		path := filepath.Join(appDir, filepath.FromSlash(relativePath))
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("retired output %s must be removed, stat error: %v", relativePath, err)
+		}
 	}
 }

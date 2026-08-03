@@ -26,7 +26,7 @@ void main() {
     await store.ensureHydrated();
     store.put(
       key: queryKey,
-      items: <PostBaseDto>[
+      items: <ContentPostViewData>[
         _post(
           'oversized_author',
           authorId: List<String>.filled(43, '人').join(),
@@ -50,8 +50,8 @@ void main() {
   });
 }
 
-PostBaseDto _post(String id, {required String authorId}) {
-  return postBaseDtoFromMap(<String, dynamic>{
+ContentPostViewData _post(String id, {required String authorId}) {
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     'type': 'micro',
     'identity': 'moment',

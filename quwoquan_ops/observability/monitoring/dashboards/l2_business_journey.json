@@ -142,7 +142,7 @@
         "title": "群聊创建成功率与 P95",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 56 },
-        "description": "服务端黄金信号；产品侧来源采用率与完成漏斗仍以 SLS journey_action 为单一事实源。",
+        "description": "服务端黄金信号；产品侧来源采用率与完成漏斗仍以 Elasticsearch journey_action 为单一事实源。",
         "targets": [
           {
             "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])), 1e-9)",
@@ -231,12 +231,12 @@
         ]
       },
       {
-        "title": "群聊商业漏斗（SLS 单一事实源）",
+        "title": "群聊商业漏斗（Elasticsearch 单一事实源）",
         "type": "text",
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 88 },
         "options": {
           "mode": "markdown",
-          "content": "群聊产品漏斗来自 SLS `app-product-telemetry-chat-funnel-hourly`（`rowKind=chat_funnel`）：候选源打开/选择 → 建群或加成员结果 → @选择/发送 → 已读水位 → 群治理。按 `chatAction`、`chatOutcome`、来源与成员/未读分桶聚合；失败下钻使用 `failReasonCode`、`recoveryAction`。原始事件和聚合均禁止 conversationId、messageId、userId；Prometheus 面板只证明服务健康，不替代产品转化事实。"
+          "content": "群聊产品漏斗来自 Elasticsearch `app-product-telemetry-chat-funnel-hourly`（`rowKind=chat_funnel`）：候选源打开/选择 → 建群或加成员结果 → @选择/发送 → 已读水位 → 群治理。按 `chatAction`、`chatOutcome`、来源与成员/未读分桶聚合；失败下钻使用 `failReasonCode`、`recoveryAction`。原始事件和聚合均禁止 conversationId、messageId、userId；Prometheus 面板只证明服务健康，不替代产品转化事实。"
         }
       }
     ]

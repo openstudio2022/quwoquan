@@ -1,5 +1,5 @@
 commercial_defaults:
-  block_reason: 未声明的 SkillConsent operation 默认阻断；已声明操作仍需同一候选四环境 Remote UAT、SLI/SLO 读回与回滚证据
+  block_reason: 未声明的 SkillConsent operation 默认阻断；已声明操作的运行授权不代表最终发布准出
   gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
   status: blocked
   target_story: app-cloud-business-object-commercial-closure
@@ -12,18 +12,20 @@ api_routes:
     facet: SkillConsentCommandFacade
     kind: command
     method: grantConsent
-  description: 授权 Skill；命名状态迁移，重复授权持久化 no-op receipt，仅真实状态变化追加不可变事实与审计事件。
+  description: 对 Skill 的完整 grantedScopes 集合明确授权；同集合重复授权持久化 no-op receipt，集合不同时失败并要求先撤权，禁止静默扩权。
   method: POST
   operation: GrantSkillConsent
   path: /assistant/skills/{skillId}/consent
+  request_entity: GrantSkillConsentRequest
+  request_body_kind: object
   commercial:
-    status: blocked
-    block_reason: 对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
-    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   request_bindings:
     path:
     - {name: skillId, field: skillId}
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: GrantSkillConsentReceipt
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -33,6 +35,7 @@ api_routes:
   error_codes:
   - ASSISTANT.USER.consent_invalid_argument
   - ASSISTANT.USER.consent_idempotency_conflict
+  - ASSISTANT.USER.consent_scope_conflict
   - ASSISTANT.USER.consent_unauthorized
   - ASSISTANT.SYSTEM.consent_unavailable
   privacy:
@@ -71,14 +74,16 @@ api_routes:
   method: DELETE
   operation: RevokeSkillConsent
   path: /assistant/skills/{skillId}/consent
+  request_entity: RevokeSkillConsentRequest
+  request_body_kind: none
   commercial:
-    status: blocked
-    block_reason: 对象专属领域模型、PG 事务回执、审计事件与 HTTP facade 已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
-    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   request_bindings:
     path:
     - {name: skillId, field: skillId}
+    injected:
+    - {name: Idempotency-Key, field: idempotencyKey}
+  response_entity: RevokeSkillConsentReceipt
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -125,11 +130,11 @@ api_routes:
   method: GET
   operation: ListConsents
   path: /assistant/consents
+  request_entity: ListSkillConsentsQuery
+  request_body_kind: none
+  response_entity: SkillConsentListSlice
   commercial:
-    status: blocked
-    block_reason: 对象专属 QueryFacade 与真实 PostgreSQL 读证据已闭合；仍缺同一候选四环境 Remote UAT、SLI/SLO 读回和回滚证据
-    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
-    target_story: app-cloud-business-object-commercial-closure
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported

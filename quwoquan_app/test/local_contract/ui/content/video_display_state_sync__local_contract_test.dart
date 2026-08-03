@@ -24,7 +24,7 @@ void main() {
       'createdAt': '2026-01-01T00:00:00.000Z',
     };
 
-    final dto = postBaseDtoFromMap(wire);
+    final dto = contentPostViewDataFromReadModelMap(wire);
     final view = ContentSurfaceViewMapper.fromDto(dto, wire: wire);
 
     expect(dto.mediaVideoUrl, 'media/video/s/fixture/video-sync/v1/clip.mp4');

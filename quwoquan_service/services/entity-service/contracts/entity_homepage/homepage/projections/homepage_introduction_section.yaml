@@ -16,35 +16,15 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageIntroductionSection
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_introduction_section.g.dart
-  dart_imports:
-  - homepage_introduction_asset.g.dart
-  - homepage_introduction_timeline_item.g.dart
-  fields:
-  - name: kind
-    dart_type: String
-    nullable: false
-    source: kind
-    default: '''overview'''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: bodyMarkdown
-    dart_type: String
-    nullable: true
-    source: bodyMarkdown
-  - name: assets
-    dart_type: List<HomepageIntroductionAsset>
-    nullable: false
-    source: assets
-    list_element_dart_class: HomepageIntroductionAsset
-  - name: timelineItems
-    dart_type: List<HomepageIntroductionTimelineItem>
-    nullable: false
-    source: timelineItems
-    list_element_dart_class: HomepageIntroductionTimelineItem
+fields:
+- name: kind
+  type: string
+- name: title
+  type: string
+- name: bodyMarkdown
+  type: string
+  nullable: true
+- name: assets
+  type: '[]HomepageIntroductionAsset'
+- name: timelineItems
+  type: '[]HomepageIntroductionTimelineItem'

@@ -49,7 +49,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListAppMessagesPage'
+                                $ref: '#/components/schemas/AppMessageInboxSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -88,7 +88,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AppMessageDetailSlice'
+                                $ref: '#/components/schemas/AppMessage'
                 default:
                     description: Runtime failure
                     content:
@@ -115,8 +115,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AppMessage'
                 default:
                     description: Runtime failure
                     content:
@@ -143,8 +147,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AppMessage'
                 default:
                     description: Runtime failure
                     content:
@@ -450,10 +458,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AckIncomingCallPresentationResult
             x-contract-placeholder: true
-        AppMessageDetailSlice:
+        AppMessage:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AppMessageDetailSlice
+            x-contract-entity: AppMessage
             x-contract-placeholder: true
         AppMessageInboxSlice:
             type: object
@@ -475,19 +483,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IncomingCallDeliveryTimeline
             x-contract-placeholder: true
-        ListAppMessagesPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/AppMessageInboxSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: AppMessageInboxSlice
         ListNotificationDeliveryJobDeadLettersPage:
             type: object
             required:

@@ -90,7 +90,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), profiles, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
 		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStorage),
+		newTestInboxService(),
 		nil,
 	).Routes()
 
@@ -272,7 +272,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), testProfileResolver{}, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
 		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStorage),
+		newTestInboxService(),
 		nil,
 	).Routes()
 

@@ -16,6 +16,23 @@ type recordingReader struct {
 	result    turnviewmodel.AssistantTurnListView
 }
 
+type ownedSessionReader struct{}
+
+func (ownedSessionReader) OwnedSessionExists(
+	context.Context,
+	string,
+	string,
+) (bool, error) {
+	return true, nil
+}
+
+type synchronizerStub struct{ calls int }
+
+func (s *synchronizerStub) CatchUp(context.Context) error {
+	s.calls++
+	return nil
+}
+
 func (r *recordingReader) ListSessionTurns(
 	_ context.Context,
 	userID string,
@@ -35,7 +52,12 @@ func TestQueryFacadeOwnsAndNormalizesSessionTurnHistoryRead(t *testing.T) {
 	reader := &recordingReader{result: turnviewmodel.AssistantTurnListView{
 		Items: []turnviewmodel.AssistantTurnSummaryView{{TurnID: "turn_1"}},
 	}}
-	facade := turnviewapplication.NewQueryFacade(reader)
+	synchronizer := &synchronizerStub{}
+	facade := turnviewapplication.NewQueryFacade(
+		reader,
+		ownedSessionReader{},
+		synchronizer,
+	)
 
 	result, err := facade.ListSessionTurns(
 		context.Background(),
@@ -59,5 +81,8 @@ func TestQueryFacadeOwnsAndNormalizesSessionTurnHistoryRead(t *testing.T) {
 	}
 	if len(result.Items) != 1 || result.Items[0].TurnID != "turn_1" {
 		t.Fatalf("result = %+v", result)
+	}
+	if synchronizer.calls != 1 {
+		t.Fatalf("projection sync calls = %d, want 1", synchronizer.calls)
 	}
 }

@@ -20,7 +20,8 @@
   },
   "trigger": {
     "type": "cron",
-    "cron": "0 21 * * *"
+    "cron": "0 21 * * *",
+    "timezone": "Asia/Shanghai"
   },
   "destination": {
     "destinationType": "user",

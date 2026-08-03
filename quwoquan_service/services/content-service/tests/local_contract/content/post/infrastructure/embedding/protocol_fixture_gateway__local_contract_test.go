@@ -8,7 +8,7 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/embedding"
 )
 
-func TestEveryEnvironmentEmbeddingFailsClosedWithoutProviderMaterial(t *testing.T) {
+func TestEmbeddingBindingsUseNonprodProtocolSubstituteAndProdRealProvider(t *testing.T) {
 	t.Setenv("CONTENT_EMBEDDING_ENDPOINT", "")
 	t.Setenv(EmbeddingAPIKeyEnv, "")
 	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
@@ -17,7 +17,11 @@ func TestEveryEnvironmentEmbeddingFailsClosedWithoutProviderMaterial(t *testing.
 				environment,
 				"content.embedding.generation",
 			)
-			if !found || binding.AdapterID != OpenAICompatibleAdapterID {
+			expectedAdapter := ProtocolFixtureAdapterID
+			if environment == "prod" {
+				expectedAdapter = OpenAICompatibleAdapterID
+			}
+			if !found || binding.AdapterID != expectedAdapter {
 				t.Fatalf("embedding binding is not canonical: %#v", binding)
 			}
 			_, err := LoadEmbeddingGateway(
@@ -25,7 +29,7 @@ func TestEveryEnvironmentEmbeddingFailsClosedWithoutProviderMaterial(t *testing.
 				runtimeconfig.EnvRuntimeConfigProvider{},
 			)
 			if err == nil {
-				t.Fatal("LoadEmbeddingGateway() accepted missing provider material")
+				t.Fatal("LoadEmbeddingGateway() accepted missing endpoint or credential material")
 			}
 			assertRequiredDependencyError(t, err)
 		})

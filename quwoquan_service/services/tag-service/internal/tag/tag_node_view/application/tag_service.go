@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	nodecontract "quwoquan_service/services/tag-service/generated/tag/tag_node_view/contract/tag"
+	indexmodel "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/model"
+	indexports "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/ports"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
@@ -84,14 +86,14 @@ type TagValidationResultView struct {
 // TagService 提供交集核心与创作打标只读用例。
 type TagService struct {
 	nodes    ports.TagNodeReader
-	objects  ports.ObjectTagIndexReader
+	objects  indexports.Reader
 	releases releaseports.ActiveReleaseReader
 }
 
 // NewTagService 注入只读存储依赖。
 func NewTagService(
 	nodes ports.TagNodeReader,
-	objects ports.ObjectTagIndexReader,
+	objects indexports.Reader,
 	releases releaseports.ActiveReleaseReader,
 ) *TagService {
 	return &TagService{nodes: nodes, objects: objects, releases: releases}
@@ -393,7 +395,7 @@ func (s *TagService) Inverted(ctx context.Context, tagRef, objectType string, li
 	if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 		return &InvertedObjectsView{TagRef: tagRef, ObjectIds: []string{}}, nil
 	}
-	var idxs []model.ObjectTagIndex
+	var idxs []indexmodel.ObjectTagIndex
 	if includeDescendants {
 		idxs, err = s.objects.FindObjectsByTagRefSubtree(ctx, tagRef, objectType, int64(limit))
 	} else {

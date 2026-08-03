@@ -10,7 +10,7 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AppendCircleBehaviorFactCommand,
-        CircleBehaviorEventType,
+        BehaviorEventType,
         CircleBehaviorFactWriter;
 
 /// 圈子主页路由入口。
@@ -62,19 +62,19 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
             circleDetailBehaviorFactWriterProvider,
           );
         }
-        _appendCircleBehaviorFact(CircleBehaviorEventType.impression);
+        _appendCircleBehaviorFact(BehaviorEventType.impression);
       }
     });
   }
 
   @override
   void dispose() {
-    _appendCircleBehaviorFact(CircleBehaviorEventType.dwell);
+    _appendCircleBehaviorFact(BehaviorEventType.dwell);
     super.dispose();
   }
 
   /// fire-and-forget：行为信号失败不影响页面交互，经全局异常遥测观测。
-  void _appendCircleBehaviorFact(CircleBehaviorEventType eventType) {
+  void _appendCircleBehaviorFact(BehaviorEventType eventType) {
     final writer = _behaviorFactWriter;
     if (writer == null) {
       return;
@@ -90,7 +90,7 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
               AppExceptionTelemetryService.instance.recordGlobalException(
-                source: 'circle.behavior.${eventType.wireValue}',
+                source: 'circle.behavior.${eventType.wireName}',
                 exceptionText: error.toString(),
                 stackText: stackTrace.toString(),
               ),

@@ -173,10 +173,10 @@ void main() {
       type: 'card',
       content: '',
       clientMsgId: 'client-msg-card',
-      card: ChatMessageCardCommand(
+      card: MessageCard(
         kind: 'profile_qr',
         title: '分享卡片',
-        attributes: const <ChatMessageCardAttribute>[],
+        attributes: const <MessageCardAttribute>[],
       ),
     );
     expect(await outbox.enqueueCommand(cardCommand), isFalse);

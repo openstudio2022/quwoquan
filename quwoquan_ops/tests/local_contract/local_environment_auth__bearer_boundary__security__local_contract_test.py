@@ -43,6 +43,22 @@ class LocalEnvironmentAuthBoundaryTest(unittest.TestCase):
             self.assertNotIn("QWQ_ACCEPTANCE_OWNER_ID", auth.environment)
             self.assertEqual(auth.secret_path.stat().st_mode & 0o777, 0o600)
 
+    def test_read_only_loader_never_creates_missing_auth_material(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            secret_path = Path(directory) / "alpha-local/secrets/auth.env"
+            with mock.patch.object(
+                local_environment_auth,
+                "deployment_target_path_in_work_root",
+                return_value=secret_path,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "GATE_BLOCK"):
+                    local_environment_auth.load_local_environment_auth(
+                        "alpha",
+                        "alpha-local",
+                        deployment_work_root=directory,
+                    )
+            self.assertFalse(secret_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

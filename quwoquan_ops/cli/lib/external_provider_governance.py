@@ -347,7 +347,7 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                     source.relative_to(ROOT).as_posix() if source is not None else ""
                 ),
                 "implementation_status": (
-                    "test_fixture_only"
+                    "sandbox"
                     if is_local_substitute_adapter(adapter_id)
                     and adapter_id != "infra.redis.message_transport"
                     else "production"

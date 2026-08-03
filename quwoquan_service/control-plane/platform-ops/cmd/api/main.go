@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -14,18 +15,25 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	configreporthttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_instance_report/adapters/inbound/http"
+	configreportapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_instance_report/application"
+	configreportmessaging "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_instance_report/infrastructure/messaging"
+	configreportpersistence "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_instance_report/infrastructure/persistence"
 	confighttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
 	configapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer"
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
-	operationsecurity "quwoquan_service/generated/operationsecurity"
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
+	"quwoquan_service/internal/platform/pgoutbox"
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	rtredis "quwoquan_service/runtime/redis"
 
 	"gopkg.in/yaml.v3"
 )
@@ -35,8 +43,44 @@ type platformService struct {
 	store                 controlplane.StateStore
 	configLayer           *configapp.Facade
 	configLayers          http.Handler
+	configInstanceReports http.Handler
 	releaseManifestDigest string
 	health                func(context.Context) error
+}
+
+func composeConfigInstanceReportHandler(
+	service *platformService,
+) (http.Handler, error) {
+	if service == nil || service.store == nil || service.configLayer == nil {
+		return nil, errors.New("config instance report composition requires store and ConfigSnapshot")
+	}
+	atomicStore, ok := service.store.(controlplane.AtomicMutationStore)
+	if !ok {
+		return nil, errors.New("config instance report composition requires atomic mutation store")
+	}
+	stateStore, err := configreportpersistence.NewStateStore(service.store, atomicStore)
+	if err != nil {
+		return nil, err
+	}
+	desiredHash := configreportapp.DesiredHashReaderFunc(func(
+		ctx context.Context,
+		environment string,
+		serviceName string,
+	) (string, error) {
+		resolved, err := service.configLayer.Resolve(ctx, controlplane.ConfigResolutionScope{
+			Environment: environment,
+			Service:     serviceName,
+		})
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(resolved.DesiredHash), nil
+	})
+	return configreporthttp.NewHandler(
+		configreportapp.NewCommandFacade(stateStore, desiredHash, nil),
+		configreportapp.NewQueryFacade(stateStore),
+		service.releaseManifestDigest,
+	)
 }
 
 func platformOperatorOIDCRequired(appEnv string) bool {
@@ -84,7 +128,8 @@ func main() {
 		addr = ":18087"
 	}
 	repoRoot := resolveRepoRoot()
-	ctx := context.Background()
+	ctx, cancelRuntime := context.WithCancel(context.Background())
+	defer cancelRuntime()
 	postgresConfig, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
 	if err != nil {
 		log.Fatalf("platform-ops-service postgres config invalid: %v", err)
@@ -107,6 +152,43 @@ func main() {
 	if err := store.EnsureSchema(ctx); err != nil {
 		log.Fatalf("platform-ops-service control plane schema initialization failed: %v", err)
 	}
+	redisRouter, err := platformredis.NewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {
+				Mode: "standalone",
+				Addr: strings.TrimSpace(cfg.Redis.General.Addr),
+			},
+		},
+		DefaultScene: "general",
+	})
+	if err != nil {
+		log.Fatalf("platform-ops-service Redis router invalid: %v", err)
+	}
+	defer redisRouter.Close()
+	generalRedis := redisRouter.Scene("general")
+	if err := generalRedis.Ping(ctx); err != nil {
+		log.Fatalf("platform-ops-service Redis unavailable: %v", err)
+	}
+	messageTransport, err := runtimemessaging.NewRedisMessageTransport(
+		generalRedis,
+		generalRedis,
+	)
+	if err != nil {
+		log.Fatalf("platform-ops-service message transport invalid: %v", err)
+	}
+	configReportPublisher, err := configreportmessaging.NewPublisher(messageTransport)
+	if err != nil {
+		log.Fatalf("platform-ops-service ConfigInstanceReport publisher invalid: %v", err)
+	}
+	configReportDispatcher, err := pgoutbox.NewDispatcher(
+		postgresPool,
+		configReportPublisher,
+		"platform_control_plane_outbox",
+	)
+	if err != nil {
+		log.Fatalf("platform-ops-service ConfigInstanceReport outbox invalid: %v", err)
+	}
+	go configReportDispatcher.Run(ctx)
 	configKeyCatalog, err := configapp.NewConfigKeyCatalog(
 		generatedcontrolplane.MustLoadPlatformConfig(),
 	)
@@ -137,7 +219,12 @@ func main() {
 	service := &platformService{
 		repoRoot: repoRoot, store: store, configLayer: configLayerFacade, configLayers: configLayerHandler,
 		releaseManifestDigest: releaseManifestDigest,
-		health:                postgresPool.Ping,
+		health: func(healthCtx context.Context) error {
+			if err := postgresPool.Ping(healthCtx); err != nil {
+				return err
+			}
+			return generalRedis.Ping(healthCtx)
+		},
 	}
 	mux := newServerMux(service)
 	outerMux := http.NewServeMux()
@@ -154,10 +241,7 @@ func main() {
 	outerMux.Handle(
 		"/",
 		rtauth.EnforceGeneratedOperationAuthorization(
-			append(
-				operationsecurity.ForDomain("ops"),
-				generatedcontrolplane.PlatformOperationSecurityDescriptors...,
-			),
+			generatedcontrolplane.PlatformOperationSecurityDescriptors,
 		)(mux),
 	)
 

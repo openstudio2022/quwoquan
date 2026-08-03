@@ -22,19 +22,17 @@ func MaterializeReleaseExternalInteractionBindings(
 		if !ok {
 			return Config{}, fmt.Errorf("SMS provider binding has no endpoint")
 		}
-		tokenKey := "INTEGRATION_SMS_TOKEN"
-		if smsBinding.AdapterID == providerbinding.SMSAdapterLocalCapture {
-			tokenKey = "INTEGRATION_SMS_FIXTURE_TOKEN"
-		}
-		smsToken, ok := smsBinding.Secret(tokenKey)
+		smsToken, ok := smsBinding.Secret("INTEGRATION_SMS_TOKEN")
 		if !ok {
 			return Config{}, fmt.Errorf("SMS provider binding has no bearer token")
 		}
+		caFile, _ := configProvider.GetString("INTEGRATION_SMS_SUBSTITUTE_CA_FILE")
 		cfg.Integration.ExternalInteraction.SMS = ExternalProviderConfig{
-			Enabled:  true,
-			Provider: smsBinding.AdapterID,
-			Endpoint: smsEndpoint,
-			Token:    smsToken,
+			Enabled:   true,
+			Provider:  smsBinding.AdapterID,
+			Endpoint:  smsEndpoint,
+			Token:     smsToken,
+			CAFile:    caFile,
 			TimeoutMs: int(smsBinding.Timeout.Milliseconds()),
 		}
 	case errors.Is(err, providerbinding.ErrExternalInteractionCapabilityBlocked):
@@ -52,18 +50,10 @@ func MaterializeReleaseExternalInteractionBindings(
 		return Config{}, fmt.Errorf("Push provider binding invalid: %w", err)
 	}
 	if pushBinding.AdapterID == providerbinding.PushAdapterLocalRecorder {
-		userServiceBaseURL, ok := pushBinding.Endpoint("user_service_base_url")
-		if !ok {
-			return Config{}, fmt.Errorf("Push local_recorder binding has no user service base URL")
-		}
-		if _, ok := pushBinding.Secret("INTEGRATION_PUSH_FIXTURE_HMAC_KEY"); !ok {
-			return Config{}, fmt.Errorf("Push local_recorder binding has no HMAC material")
-		}
 		cfg.Integration.ExternalInteraction.Push = PushDeliveryProviderConfig{
-			Enabled:            true,
-			Mode:               "local_recorder",
-			TimeoutMs:          int(pushBinding.Timeout.Milliseconds()),
-			UserServiceBaseURL: userServiceBaseURL,
+			Enabled:   true,
+			Mode:      "local_recorder",
+			TimeoutMs: int(pushBinding.Timeout.Milliseconds()),
 		}
 		return cfg, nil
 	}

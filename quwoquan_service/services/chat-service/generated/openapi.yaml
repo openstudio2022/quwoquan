@@ -33,7 +33,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListContactHomePage'
+                                $ref: '#/components/schemas/ContactHomePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -71,7 +71,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListContactsPage'
+                                $ref: '#/components/schemas/ContactPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -109,7 +109,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListConversationsPage'
+                                $ref: '#/components/schemas/ConversationPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -255,8 +255,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -295,8 +299,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ChatUpdateConversationAdminsCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -372,15 +380,13 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ChatInviteConversationAssistantCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -412,8 +418,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -490,8 +500,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -549,7 +563,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListMembersPage'
+                                $ref: '#/components/schemas/ConversationMemberPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -587,8 +601,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ChatAddConversationMembersCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -626,8 +644,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -675,7 +697,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListMessagesPage'
+                                $ref: '#/components/schemas/MessagePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -756,8 +778,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationUserStateCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -795,8 +821,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MessageCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -808,8 +838,8 @@ paths:
     /chat/conversations/{conversationId}/messages/{messageId}/receipts:
         get:
             operationId: GetReceipts
-            x-contract-operation-id: chat.conversation.GetReceipts
-            x-object-id: chat.conversation
+            x-contract-operation-id: chat.message_receipt_fact.GetReceipts
+            x-object-id: chat.message_receipt_fact
             x-actor: persona
             x-application:
                 kind: query
@@ -834,7 +864,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetReceiptsPage'
+                                $ref: '#/components/schemas/MessageReceiptPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -873,8 +903,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ChatTransferConversationOwnershipCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationMembershipCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -913,8 +947,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ChatUpdateConversationSettingsCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationUserStateCommandAck'
                 default:
                     description: Runtime failure
                     content:
@@ -986,7 +1024,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/BatchGetConversationsPage'
+                                $ref: '#/components/schemas/ConversationBatchSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1013,7 +1051,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListConversationTimestampsPage'
+                                $ref: '#/components/schemas/ConversationTimestampIndexSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1051,7 +1089,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListGroupCandidatesPage'
+                                $ref: '#/components/schemas/GroupCandidatePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1096,14 +1134,14 @@ paths:
     /chat/inbox:
         get:
             operationId: ListInbox
-            x-contract-operation-id: chat.conversation.ListInbox
-            x-object-id: chat.conversation
+            x-contract-operation-id: chat.chat_inbox_view.ListInbox
+            x-object-id: chat.chat_inbox_view
             x-actor: persona
             x-application:
                 kind: query
-                facet: ConversationInboxQueryFacet
+                facet: ChatInboxViewQueryFacet
                 method: listInbox
-                reader: ChatInboxReader
+                reader: ChatInboxViewReader
                 slice: ChatInboxPageSlice
             parameters:
                 - name: limit
@@ -1122,7 +1160,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListInboxPage'
+                                $ref: '#/components/schemas/ChatInboxPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1165,7 +1203,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListMessageHomePage'
+                                $ref: '#/components/schemas/MessageHomePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1213,7 +1251,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListSelectableGroupConversationsPage'
+                                $ref: '#/components/schemas/SelectableGroupConversationPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1261,7 +1299,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListSelectableGroupContactMembersPage'
+                                $ref: '#/components/schemas/SelectableGroupContactPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1337,11 +1375,6 @@ paths:
                   required: false
                   schema:
                     type: string
-                - name: assistantSkillId
-                  in: query
-                  required: false
-                  schema:
-                    type: string
             responses:
                 "200":
                     description: OK
@@ -1375,11 +1408,6 @@ paths:
                   schema:
                     type: string
                 - name: creatorPersonaId
-                  in: query
-                  required: false
-                  schema:
-                    type: string
-                - name: assistantSkillId
                   in: query
                   required: false
                   schema:
@@ -1434,11 +1462,6 @@ paths:
                   required: false
                   schema:
                     type: string
-                - name: assistantSkillId
-                  in: query
-                  required: false
-                  schema:
-                    type: string
                 - name: beforeSeq
                   in: query
                   required: false
@@ -1455,7 +1478,100 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListAssistantGroundingMessagesPage'
+                                $ref: '#/components/schemas/Message'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/chat/gathering-conversations/{gatheringId}:
+        put:
+            operationId: ProjectGatheringConversation
+            x-contract-operation-id: chat.conversation.ProjectGatheringConversation
+            x-object-id: chat.conversation
+            x-actor: none
+            x-application:
+                kind: command
+                facet: GatheringConversationProjectionFacet
+                method: projectGatheringConversation
+                aggregateOwner: Conversation
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/GatheringConversationProjectionCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringConversationProjectionResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/chat/gathering-conversations/{gatheringId}/members/{personaId}:
+        put:
+            operationId: ProjectGatheringConversationMembership
+            x-contract-operation-id: chat.conversation_membership.ProjectGatheringConversationMembership
+            x-object-id: chat.conversation_membership
+            x-actor: none
+            x-application:
+                kind: command
+                facet: GatheringConversationMembershipProjectionFacet
+                method: projectGatheringConversationMembership
+                aggregateOwner: ConversationMembership
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/GatheringConversationMembershipProjectionCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringConversationMembershipProjectionResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1474,19 +1590,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantDeliveryMembershipView
             x-contract-placeholder: true
-        BatchGetConversationsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatConversation'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatConversation
         ChatAccountClosureDeadLetterRecoveryAccepted:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1507,45 +1610,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatBatchGetConversationsQuery
             x-contract-placeholder: true
-        ChatContactListRow:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatContactListRow
-            x-contract-placeholder: true
         ChatConversation:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatConversation
-            x-contract-placeholder: true
-        ChatConversationTimestamp:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatConversationTimestamp
             x-contract-placeholder: true
         ChatCreateConversationCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatCreateConversationCommand
             x-contract-placeholder: true
-        ChatInbox:
+        ChatInboxPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatInbox
-            x-contract-placeholder: true
-        ChatInviteConversationAssistantCommand:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatInviteConversationAssistantCommand
-            x-contract-placeholder: true
-        ChatMessageClient:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatMessageClient
-            x-contract-placeholder: true
-        ChatMessageReceipt:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ChatMessageReceipt
+            x-contract-entity: ChatInboxPageSlice
             x-contract-placeholder: true
         ChatMessageSyncSlice:
             type: object
@@ -1602,197 +1680,113 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatUpdateGroupGovernanceSettingsCommand
             x-contract-placeholder: true
-        ContactHomeRow:
+        ContactHomePageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ContactHomeRow
+            x-contract-entity: ContactHomePageSlice
             x-contract-placeholder: true
-        ConversationMemberListRow:
+        ContactPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ConversationMemberListRow
+            x-contract-entity: ContactPageSlice
             x-contract-placeholder: true
-        GetReceiptsPage:
+        ConversationBatchSlice:
             type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatMessageReceipt'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatMessageReceipt
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationBatchSlice
+            x-contract-placeholder: true
+        ConversationCommandAck:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationCommandAck
+            x-contract-placeholder: true
+        ConversationMemberPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationMemberPageSlice
+            x-contract-placeholder: true
+        ConversationMembershipCommandAck:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationMembershipCommandAck
+            x-contract-placeholder: true
+        ConversationPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationPageSlice
+            x-contract-placeholder: true
+        ConversationTimestampIndexSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationTimestampIndexSlice
+            x-contract-placeholder: true
+        ConversationUserStateCommandAck:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationUserStateCommandAck
+            x-contract-placeholder: true
+        GatheringConversationMembershipProjectionCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringConversationMembershipProjectionCommand
+            x-contract-placeholder: true
+        GatheringConversationMembershipProjectionResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringConversationMembershipProjectionResult
+            x-contract-placeholder: true
+        GatheringConversationProjectionCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringConversationProjectionCommand
+            x-contract-placeholder: true
+        GatheringConversationProjectionResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringConversationProjectionResult
+            x-contract-placeholder: true
+        GroupCandidatePageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GroupCandidatePageSlice
+            x-contract-placeholder: true
         GroupHome:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GroupHome
             x-contract-placeholder: true
-        ListAssistantGroundingMessagesPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatMessageClient'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatMessageClient
-        ListContactHomePage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ContactHomeRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ContactHomeRow
-        ListContactsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatContactListRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatContactListRow
-        ListConversationTimestampsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatConversationTimestamp'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatConversationTimestamp
-        ListConversationsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatConversation'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatConversation
-        ListGroupCandidatesPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatContactListRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatContactListRow
-        ListInboxPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatInbox'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatInbox
-        ListMembersPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ConversationMemberListRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ConversationMemberListRow
-        ListMessageHomePage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/MessageHomeRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: MessageHomeRow
-        ListMessagesPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatMessageClient'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatMessageClient
-        ListSelectableGroupContactMembersPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChatContactListRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ChatContactListRow
-        ListSelectableGroupConversationsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/SelectableGroupConversationRow'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: SelectableGroupConversationRow
-        MessageHomeRow:
+        Message:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: MessageHomeRow
+            x-contract-entity: Message
             x-contract-placeholder: true
-        SelectableGroupConversationRow:
+        MessageCommandAck:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SelectableGroupConversationRow
+            x-contract-entity: MessageCommandAck
+            x-contract-placeholder: true
+        MessageHomePageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MessageHomePageSlice
+            x-contract-placeholder: true
+        MessagePageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MessagePageSlice
+            x-contract-placeholder: true
+        MessageReceiptPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MessageReceiptPageSlice
+            x-contract-placeholder: true
+        SelectableGroupContactPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SelectableGroupContactPageSlice
+            x-contract-placeholder: true
+        SelectableGroupConversationPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SelectableGroupConversationPageSlice
             x-contract-placeholder: true

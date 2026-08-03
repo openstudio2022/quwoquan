@@ -6,6 +6,6 @@ source_entities:
 - Message
 fields:
 - name: messages
-  type: array
+  type: '[]ChatMessageView'
 - name: hasMore
   type: bool

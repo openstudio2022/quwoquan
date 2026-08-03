@@ -1,0 +1,70 @@
+{
+  "templateId": "travel.route_map",
+  "skillId": "travel_companion",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "map": {
+        "type": "object"
+      }
+    },
+    "required": ["map"]
+  },
+  "rootNodeId": "root",
+  "nodes": [
+    {
+      "nodeId": "root",
+      "parentNodeId": "",
+      "order": 0,
+      "kind": "route_map",
+      "title": "行程路线",
+      "body": "",
+      "data": {},
+      "binding": {
+        "data": "$.map"
+      },
+      "style": {
+        "tone": "informative",
+        "density": "standard",
+        "emphasis": "normal",
+        "variant": "standard",
+        "alignment": "start",
+        "spacingRole": "section",
+        "aspectRatio": 0,
+        "responsiveSpan": 12
+      },
+      "accessibility": {
+        "semanticLabel": "旅行行程路线图",
+        "semanticHint": "按行程顺序展示地点与随拍标记",
+        "excludeFromSemantics": false
+      }
+    }
+  ],
+  "responsiveVariants": [
+    {
+      "variantId": "compact",
+      "requiredNodeKinds": ["route_map"],
+      "viewportClass": "compact",
+      "density": "standard"
+    },
+    {
+      "variantId": "standard",
+      "requiredNodeKinds": ["route_map"],
+      "viewportClass": "standard",
+      "density": "standard"
+    },
+    {
+      "variantId": "expanded",
+      "requiredNodeKinds": ["route_map"],
+      "viewportClass": "expanded",
+      "density": "standard"
+    }
+  ],
+  "allowedActionIntents": [],
+  "fallbackMarkdown": "行程路线暂时无法以地图结构展示，请查看完整文字答案。",
+  "accessibility": {
+    "summary": "旅行地点顺序、路线与随拍标记"
+  },
+  "assetDigest": "sha256:cc192c60139ef6a8d05c6cae2a4bc9f56ecfc1c64f8558d765733c38dc0bcd23"
+}

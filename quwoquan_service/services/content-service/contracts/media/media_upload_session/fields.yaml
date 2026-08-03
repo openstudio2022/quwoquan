@@ -169,6 +169,29 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  MediaUploadSessionCommandResult:
+    description: Canonical mutation result for init, complete, and abort of one upload session.
+    fields:
+      - {name: sessionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: assetId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: assetProcessingStatus, type: enum, enum_ref: MediaAssetStatus, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: MediaUploadSessionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: uploadUrl, type: url, constraints: [NULLABLE], classification: SENSITIVE, log_policy: redact, api_exposure: read, ops_exposure: redacted}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  MediaUploadSessionSlice:
+    description: Owner-visible state of one bounded upload session.
+    fields:
+      - {name: sessionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: assetId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: mediaType, type: enum, enum_ref: MediaType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mimeType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: fileSize, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: MediaUploadSessionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   InitMediaUploadRequest:
     fields:
       - {name: mediaType, type: enum, enum_ref: MediaType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
@@ -182,10 +205,8 @@ types:
   InitContentMediaUploadCommand:
     fields:
       - name: mediaType
-        type: string
+        type: enum
         enum_ref: MediaType
-        client_dart_type: ContentMediaType
-        client_wire: canonicalEnum
       - name: mimeType
         type: string
         constraints:
@@ -210,17 +231,13 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: accessPolicy
-        type: string
+        type: enum
         enum_ref: MediaAssetAccessPolicy
-        client_dart_type: ContentMediaAccessPolicy
-        client_default: ContentMediaAccessPolicy.ownerOnly
-        client_wire: canonicalEnum
+        client_default: MediaAssetAccessPolicy.ownerOnly
       - name: captureMetadata
         type: MediaCaptureMetadata
         constraints:
           - NULLABLE
-        client_dart_type: ContentMediaCaptureMetadata?
-        client_wire: toWire
   GetContentMediaUploadSessionQuery:
     fields:
       - name: sessionId

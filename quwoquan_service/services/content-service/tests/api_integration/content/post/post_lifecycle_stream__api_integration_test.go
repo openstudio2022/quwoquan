@@ -8,7 +8,6 @@ import (
 
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
 
 func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
@@ -25,7 +24,7 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 		t.Fatalf("published Post has no id: %#v", created)
 	}
 
-	store := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	store := newMongoPostStore(mongoDB.Collection("posts"))
 	relay := postapp.NewOutboxRelay(
 		store,
 		store,
@@ -57,14 +56,26 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 		}
 		types[message.Values["eventType"]] = true
 		var payload struct {
-			ID       string `json:"postId"`
-			AuthorID string `json:"authorId"`
+			ID          string `json:"postId"`
+			AuthorID    string `json:"authorId"`
+			Status      string `json:"status"`
+			Visibility  string `json:"visibility"`
+			ContentType string `json:"contentType"`
+			Body        string `json:"body"`
+			CreatedAt   string `json:"createdAt"`
+			UpdatedAt   string `json:"updatedAt"`
+			PublishedAt string `json:"publishedAt"`
 		}
 		if err := json.Unmarshal([]byte(message.Values["payload"]), &payload); err != nil {
 			t.Fatalf("decode stream payload: %v", err)
 		}
 		if payload.ID != postID || payload.AuthorID != "persona-stream-owner" {
 			t.Fatalf("stream payload identity drift: %#v", payload)
+		}
+		if payload.Status != "published" || payload.Visibility != "public" ||
+			payload.ContentType != "micro" || payload.Body != "durable stream contract" ||
+			payload.CreatedAt == "" || payload.UpdatedAt == "" || payload.PublishedAt == "" {
+			t.Fatalf("stream payload is not a reconstructable Post snapshot: %#v", payload)
 		}
 		if message.Values["eventId"] == "" || message.Values["aggregateVersion"] == "" {
 			t.Fatalf("stream lost durable identity: %#v", message.Values)

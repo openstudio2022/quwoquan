@@ -53,7 +53,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Circle'
+                                $ref: '#/components/schemas/CirclePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -557,7 +557,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleGroupSlice'
+                                $ref: '#/components/schemas/CircleGroupPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -786,7 +786,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleGroupMembershipSlice'
+                                $ref: '#/components/schemas/CircleGroupMembershipPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1164,7 +1164,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleGroupSlice'
+                                $ref: '#/components/schemas/CircleGroupPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1240,7 +1240,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleMembershipSlice'
+                                $ref: '#/components/schemas/CircleMembershipPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1453,7 +1453,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CircleMembershipSlice'
+                                $ref: '#/components/schemas/CircleMembershipPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2289,7 +2289,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PersonaCircleSlice'
+                                $ref: '#/components/schemas/PersonaCirclePageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2369,10 +2369,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleGroupMembershipCommandResult
             x-contract-placeholder: true
+        CircleGroupMembershipPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleGroupMembershipPageSlice
+            x-contract-placeholder: true
         CircleGroupMembershipSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleGroupMembershipSlice
+            x-contract-placeholder: true
+        CircleGroupPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleGroupPageSlice
             x-contract-placeholder: true
         CircleGroupSlice:
             type: object
@@ -2389,10 +2399,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleMembershipCommandResult
             x-contract-placeholder: true
+        CircleMembershipPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CircleMembershipPageSlice
+            x-contract-placeholder: true
         CircleMembershipSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleMembershipSlice
+            x-contract-placeholder: true
+        CirclePageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CirclePageSlice
             x-contract-placeholder: true
         CirclePostPlacementCommandResult:
             type: object
@@ -2444,10 +2464,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GatheringSlice
             x-contract-placeholder: true
-        PersonaCircleSlice:
+        PersonaCirclePageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PersonaCircleSlice
+            x-contract-entity: PersonaCirclePageSlice
             x-contract-placeholder: true
         PinCirclePostCommand:
             type: object

@@ -455,6 +455,10 @@ func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 		if evt.Payload["memberType"] != "assistant" {
 			t.Errorf("expected assistant member payload, got %v", evt.Payload["memberType"])
 		}
+		if evt.Payload["invitedByAccountId"] != "user_test_001" ||
+			evt.Payload["invitedBy"] != "user_test_001" {
+			t.Errorf("assistant membership identity drifted: %#v", evt.Payload)
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("ConversationMemberAdded event not received within timeout")
 	}
@@ -498,8 +502,12 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 			if evt.Payload["assistantMemberId"] != "assistant" {
 				t.Errorf("expected assistantMemberId=assistant, got %v", evt.Payload["assistantMemberId"])
 			}
-			if evt.Payload["assistantSkillId"] != "general" {
-				t.Errorf("expected assistantSkillId=general, got %v", evt.Payload["assistantSkillId"])
+			if evt.Payload["senderAccountId"] != "user_test_001" ||
+				evt.Payload["senderId"] != "user_test_001" {
+				t.Errorf("assistant mention identity drifted: %#v", evt.Payload)
+			}
+			if _, exists := evt.Payload["assistantSkillId"]; exists {
+				t.Errorf("AssistantMentioned must not bind a Skill identity: %#v", evt.Payload)
 			}
 			return
 		case <-ctx.Done():
@@ -512,7 +520,7 @@ func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	convId := "fixture_assistant_removed_event_conv"
-	seedConversationWithAssistantMember(t, convId, "user_test_001", "assistant remove event", "general")
+	seedConversationWithAssistantMember(t, convId, "user_test_001", "assistant remove event")
 
 	channel := "rt:user:user_test_001"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -543,11 +551,14 @@ func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 			if evt.ActorID != "user_test_001" {
 				t.Errorf("expected actorId=user_test_001, got %s", evt.ActorID)
 			}
-			if evt.Payload["assistantSkillId"] != "general" {
-				t.Errorf("expected assistantSkillId=general, got %v", evt.Payload["assistantSkillId"])
+			if _, exists := evt.Payload["assistantSkillId"]; exists {
+				t.Errorf("ConversationMemberRemoved must not bind a Skill identity: %#v", evt.Payload)
 			}
 			if evt.Payload["removedBy"] != "user_test_001" {
 				t.Errorf("expected removedBy=user_test_001, got %v", evt.Payload["removedBy"])
+			}
+			if evt.Payload["removedByAccountId"] != "user_test_001" {
+				t.Errorf("expected removedByAccountId=user_test_001, got %#v", evt.Payload)
 			}
 			if evt.Payload["memberId"] == "" {
 				t.Errorf("expected memberId in payload, got %#v", evt.Payload)

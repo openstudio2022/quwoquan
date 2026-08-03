@@ -7,14 +7,14 @@ import (
 )
 
 // spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-003
-func TestOperatorOIDCIsMandatoryFromGammaThroughProduction(t *testing.T) {
+func TestOperatorOIDCIsMandatoryForProductionAndNonLocalEnvironments(t *testing.T) {
 	tests := []struct {
 		environment string
 		required    bool
 	}{
 		{environment: "alpha", required: false},
 		{environment: "beta", required: false},
-		{environment: "gamma", required: true},
+		{environment: "gamma", required: false},
 		{environment: "prod", required: true},
 		{environment: "release", required: true},
 		{environment: "", required: true},

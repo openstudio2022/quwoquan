@@ -7,6 +7,9 @@ fields:
 - name: subscriptionId
   type: string
   required: true
+- name: version
+  type: int
+  required: true
 - name: owner
   type: object
   ref: subscription_owner
@@ -81,6 +84,9 @@ subcontracts:
     - name: cron
       type: string
       default: ''
+    - name: timezone
+      type: string
+      required: true
   subscription_destination:
     class_name: SkillSubscriptionDestinationWire
     fields:

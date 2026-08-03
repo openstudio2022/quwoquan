@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
 )
 
 // spec_ref: GWT-004

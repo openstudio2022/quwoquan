@@ -59,7 +59,8 @@ func main() {
 		))
 	}
 	serviceOutputRequested :=
-		assistantRuntimeEnumsGoOutput != "" || citationDestinationsGoOutput != ""
+		assistantRuntimeEnumsGoOutput != "" ||
+			citationDestinationsGoOutput != ""
 	if serviceOutputRequested {
 		if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 			exitErr(err)
@@ -94,7 +95,6 @@ func main() {
 		exitErr(err)
 	}
 	beginGeneratedManifest(appDir, activeContractSHA256)
-	removeRetiredGeneratedOutputs(appDir)
 	shared, err := readShared(filepath.Join(metadataDir, "_shared", "types.yaml"))
 	if err != nil {
 		exitErr(err)
@@ -201,18 +201,6 @@ func main() {
 	metaPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "content_metadata.g.dart")
 	writeFile(metaPath, metaOut)
 	generatedStandaloneProjectionPaths := map[string]bool{}
-
-	// 2. 生成 feed_item_dto.g.dart（FeedItemDto 强类型 DTO）
-	if len(projection.ClientProjection.Fields) > 0 {
-		dtoOut := renderFeedItemDtoDart(projection.ClientProjection)
-		dtoRelPath := projection.ClientProjection.OutputPath
-		if dtoRelPath == "" {
-			dtoRelPath = "cloud/runtime/generated/content/feed_item_dto.g.dart"
-		}
-		dtoPath := filepath.Join(appDir, "lib", dtoRelPath)
-		writeFile(dtoPath, dtoOut)
-		generatedStandaloneProjectionPaths[dtoRelPath] = true
-	}
 
 	contentGenDir := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content")
 	writeFile(filepath.Join(contentGenDir, "report_create_request_wire.g.dart"), renderCreateReportRequestWireDart())
@@ -456,53 +444,6 @@ func main() {
 		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "integration", "integration_location_errors.g.dart"), locErrOut)
 	}
 
-	// 2c. 生成 integration/external_integration/location projections（无 base_class 的 standalone DTO，如 LocationPoiDto）
-	for _, projectionPath := range metadataDocumentPaths("integration/external_integration/location/projections", ".yaml") {
-		p, err := readValidatedProjection(projectionPath, shared.Enums)
-		if err != nil {
-			exitErr(err)
-		}
-		if len(p.ClientProjection.Fields) == 0 {
-			continue
-		}
-		if p.ClientProjection.BaseClass != "" {
-			continue
-		}
-		sourcePath := fmt.Sprintf(
-			"integration/external_integration/location/projections/%s",
-			filepath.Base(projectionPath),
-		)
-		out := renderStandaloneDtoDart(p.ClientProjection, sourcePath)
-		relPath := p.ClientProjection.OutputPath
-		if relPath == "" {
-			continue
-		}
-		writeFile(filepath.Join(appDir, "lib", relPath), out)
-		generatedStandaloneProjectionPaths[relPath] = true
-	}
-
-	// 3. 生成带 base_class 的 typed post DTOs（photo/video/article/moment）
-	// 规范路径：services/content-service/contracts/content/post/projections/
-	for _, projectionPath := range metadataDocumentPaths("content/content/post/projections", ".yaml") {
-		if filepath.Base(projectionPath) == "discovery_feed.yaml" {
-			continue // already handled above
-		}
-		p, err := readValidatedProjection(projectionPath, shared.Enums)
-		if err != nil {
-			exitErr(err)
-		}
-		if p.ClientProjection.BaseClass == "" || len(p.ClientProjection.Fields) == 0 {
-			continue
-		}
-		out := renderTypedPostDtoDart(p.ClientProjection, filepath.Base(projectionPath))
-		relPath := p.ClientProjection.OutputPath
-		if relPath == "" {
-			continue
-		}
-		dtoPath := filepath.Join(appDir, "lib", relPath)
-		writeFile(dtoPath, out)
-	}
-
 	writeFile(filepath.Join(contentGenDir, "content_dtos.dart"), renderContentDtosBarrelDart())
 
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
@@ -675,7 +616,10 @@ func main() {
 	if circleEnumRefsErr != nil {
 		exitErr(circleEnumRefsErr)
 	}
-	if circleContractEnums, renderErr := renderCircleContractEnumsDart(shared.Enums, circleEnumRefs); renderErr != nil {
+	if circleContractEnums, renderErr := renderCircleContractEnumsDart(
+		shared.Enums,
+		enumRefsWithout(circleEnumRefs, "HomepageType"),
+	); renderErr != nil {
 		exitErr(renderErr)
 	} else {
 		writeFile(
@@ -689,6 +633,25 @@ func main() {
 				"circle_contract_enums.g.dart",
 			),
 			circleContractEnums,
+		)
+	}
+	if homepageType, renderErr := renderSharedOperationEnumDart(
+		"HomepageType",
+		shared.Enums["HomepageType"],
+	); renderErr != nil {
+		exitErr(renderErr)
+	} else {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"homepage_type.g.dart",
+			),
+			homepageType,
 		)
 	}
 	if userContractEnums, renderErr := renderSharedContractEnumsDart(
@@ -760,12 +723,24 @@ func main() {
 	if err := generateAssistantRuntimeArtifacts(metadataDir, appDir); err != nil {
 		exitErr(err)
 	}
-	if err := generateAssistantCloudApiWireDart(metadataDir, appDir); err != nil {
+	if err := generateAssistantOperationContracts(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
+	providedResponseModels, err := generateDomainOperationContracts(
+		metadataDir,
+		appDir,
+		activeContractLock,
+	)
+	if err != nil {
+		exitErr(err)
+	}
+	if err := generateDomainOperationPublicBarrels(appDir, activeContractLock); err != nil {
 		exitErr(err)
 	}
 	requestArtifacts, err := writeGeneratedOperationRequests(
 		appDir,
 		activeContractLock,
+		providedResponseModels,
 	)
 	if err != nil {
 		exitErr(err)
@@ -775,6 +750,9 @@ func main() {
 		activeContractLock,
 		requestArtifacts,
 	); err != nil {
+		exitErr(err)
+	}
+	if err := removeUntrackedGeneratedOutputs(); err != nil {
 		exitErr(err)
 	}
 	if err := writeGeneratedManifest(generatedManifestPath); err != nil {
@@ -792,46 +770,6 @@ func writeContentErrorsDart(metadataDir string, appDir string) error {
 		renderContentErrorsDart(errorsDefinition),
 	)
 	return nil
-}
-
-func removeRetiredGeneratedOutputs(appDir string) {
-	retired := []string{
-		filepath.Join("lib", "cloud", "user", "generated", "prefab_user_metadata.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_publication_receipt_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_claim_request_record.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_content_preview.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_geo_point.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_asset.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_section.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_introduction_timeline_item.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_question_preview.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_related_group_summary.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_review_summary_data.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_source.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "entity", "homepage_status_report_record.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "integration", "location_poi_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "contact_discovery_match_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "following_subject_item_view_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "following_subject_visit_result_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_create_request_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_lifecycle_guard_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_item_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_quota_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_management_summary_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_update_request_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "user_profile_stats_wire_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_search_item_view_dto.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "rtc", "rtc_request_wires.g.dart"),
-		filepath.Join("lib", "cloud", "runtime", "generated", "user", "profile_interaction_activity_wire_dto.g.dart"),
-		filepath.Join("lib", "assistant", "generated", "enums", "assistant_runtime_enums.g.dart"),
-	}
-	for _, relativePath := range retired {
-		path := filepath.Join(appDir, relativePath)
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			exitErr(fmt.Errorf("remove retired generated output %s: %w", path, err))
-		}
-	}
 }
 
 // ── readers ───────────────────────────────────────────────────────────────────

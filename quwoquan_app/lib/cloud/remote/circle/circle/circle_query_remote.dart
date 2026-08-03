@@ -33,18 +33,17 @@ final class RemoteCircleQueryReader
   );
 
   @override
-  Future<CircleSearchResultSlice> search(CircleSearchQuery query) =>
+  Future<CircleSearchResultView> search(CircleSearchQuery query) =>
       client.circleCircleSearchCircles(
         query,
         context: _context(CircleRequestPageIds.searchCircles),
       );
 
   @override
-  Future<CircleProjection> get(CircleDetailQuery query) =>
-      client.circleCircleGetCircle(
-        query,
-        context: _context(CircleRequestPageIds.getCircle),
-      );
+  Future<Circle> get(CircleDetailQuery query) => client.circleCircleGetCircle(
+    query,
+    context: _context(CircleRequestPageIds.getCircle),
+  );
 
   @override
   Future<CircleFeedPageSlice> feed(CircleFeedQuery query) =>
@@ -54,14 +53,14 @@ final class RemoteCircleQueryReader
       );
 
   @override
-  Future<CircleStatsSlice> stats(CircleStatsQuery query) =>
+  Future<CircleStatsWire> stats(CircleStatsQuery query) =>
       client.circleCircleGetCircleStats(
         query,
         context: _context(CircleRequestPageIds.getCircleStats),
       );
 
   @override
-  Future<CircleImpactSlice> impact(CircleImpactQuery query) =>
+  Future<CircleImpactSummary> impact(CircleImpactQuery query) =>
       client.circleCircleGetCircleImpact(
         query,
         context: _context(CircleRequestPageIds.getCircleImpact),

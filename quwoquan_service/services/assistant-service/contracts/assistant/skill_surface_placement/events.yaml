@@ -1,0 +1,8 @@
+events:
+- name: SkillSurfacePlacementChanged
+  description: 群聊或圈子的共享 Skill 策略完成创建或 CAS 更新。
+  producer: assistant-service
+  consumers: [assistant-run, notification-service]
+  channel: assistant.skill_surface_placement
+  payload_entity: SkillSurfacePlacement
+  payload_fields: [id, surfaceKind, surfaceId, policy, disabledSkillIds, status, revision, updatedAt]

@@ -24,11 +24,20 @@ func newTerminalFeedService(
 	reader postports.PostFeedReader,
 	options ...FeedServiceOption,
 ) *FeedService {
+	options = append(
+		[]FeedServiceOption{WithFeedViewerBlockReader(terminalAllowAllBlockReader{})},
+		options...,
+	)
 	return NewFeedService(
-		engine,
 		reader,
 		testsupport.RankedRecommendationOptions(engine, options...)...,
 	)
+}
+
+type terminalAllowAllBlockReader struct{}
+
+func (terminalAllowAllBlockReader) ListBlockedPersonaIDs(context.Context, string) ([]string, error) {
+	return nil, nil
 }
 
 type terminalActiveSupplyReader struct {
@@ -65,7 +74,6 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 		ManifestDigest:  manifestDigest,
 		ReadbackStatus:  "passed",
 		Posts:           1,
-		DiscoveryPosts:  1,
 		PlayableVideos:  playableVideos,
 	}, nil
 }
@@ -129,8 +137,6 @@ func (r releaseHydrationFeedReader) ListPublishedFeedPosts(
 	return postports.PostFeedSlice{Items: []postports.PostFeedItemSlice{r.post}}, nil
 }
 
-type terminalHardExclusionFailureReader struct{}
-
 type terminalRawRecallSource struct {
 	candidates []rtrec.ContentCandidate
 }
@@ -140,21 +146,6 @@ func (s terminalRawRecallSource) Recall(
 	rtrec.RecallRequest,
 ) ([]rtrec.ContentCandidate, error) {
 	return append([]rtrec.ContentCandidate(nil), s.candidates...), nil
-}
-
-func (terminalHardExclusionFailureReader) GetSessionState(
-	context.Context,
-	string,
-	string,
-) (*rtrec.SessionState, error) {
-	return &rtrec.SessionState{}, nil
-}
-
-func (terminalHardExclusionFailureReader) LoadHardExclusions(
-	context.Context,
-	string,
-) (rtrec.FeedbackExclusions, error) {
-	return rtrec.FeedbackExclusions{}, errors.New("redis hard exclusions unavailable")
 }
 
 func (r terminalFailingFeedReader) FindPublishedFeedPost(
@@ -309,31 +300,7 @@ func TestListFeedPremiumInitialHealthyEmptyIsCanonicalEmpty(t *testing.T) {
 	}
 }
 
-func TestListFeedHardExclusionReadFailureIsCanonicalDependencyFailure(t *testing.T) {
-	engine := rtrec.NewEngine(
-		terminalHardExclusionFailureReader{},
-		[]rtrec.CandidateSource{&captureRecallSource{candidates: []rtrec.ContentCandidate{{
-			ContentID: "post-hard-filter", ContentType: "image", AuthorID: "author-hard-filter",
-		}}}},
-	)
-	service := newTerminalFeedService(
-		engine,
-		fixtureFeedReader{},
-		WithActiveSupplyReader(&terminalActiveSupplyReader{active: true}),
-	)
-
-	_, err := service.ListFeed(context.Background(), ListFeedRequest{
-		UserID: "u-hard-filter", SessionID: "s-hard-filter", ChannelID: "recommend", Limit: 10,
-	})
-	requireAppErrorCodeAndStage(
-		t,
-		err,
-		"CONTENT.SYSTEM.required_dependency_unavailable",
-		rtrec.FailureStageHardExclusionStateUnavailable,
-	)
-}
-
-func TestListFeedFollowingBypassesActiveSupplyGuardAndMayBeEmpty(t *testing.T) {
+func TestListFeedFollowingRequiresCanonicalSupply(t *testing.T) {
 	active := &terminalActiveSupplyReader{active: false}
 	service := newTerminalFeedService(
 		newTerminalFeedEngine(nil),
@@ -342,7 +309,7 @@ func TestListFeedFollowingBypassesActiveSupplyGuardAndMayBeEmpty(t *testing.T) {
 	)
 
 	response, err := service.ListFeed(context.Background(), ListFeedRequest{
-		UserID: "u-follow-empty", SessionID: "s-follow-empty", ChannelID: "following", Limit: 10,
+		UserID: "u-follow-empty", ViewerPersonaID: "persona-follow-empty", SessionID: "s-follow-empty", ChannelID: "following", Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
@@ -351,11 +318,11 @@ func TestListFeedFollowingBypassesActiveSupplyGuardAndMayBeEmpty(t *testing.T) {
 		t.Fatalf("following healthy empty must stay empty, got %+v", response.Items)
 	}
 	if response.Outcome != FeedResponseOutcomeEmpty ||
-		response.EmptyReason != FeedEmptyReasonFollowingEmpty {
+		response.EmptyReason != FeedEmptyReasonNoActiveRelease {
 		t.Fatalf("unexpected following empty response: %+v", response)
 	}
-	if active.calls != 0 {
-		t.Fatalf("following must bypass active supply guard, calls=%d", active.calls)
+	if active.calls != 1 {
+		t.Fatalf("following must validate canonical supply once, calls=%d", active.calls)
 	}
 }
 
@@ -432,7 +399,7 @@ func TestListFeedRecommendAndPremiumContinuationReadActiveSupplyEveryPage(t *tes
 	}
 }
 
-func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T) {
+func TestListFeedFollowingContinuationReadsCanonicalSupplyEveryPage(t *testing.T) {
 	now := time.Now().UTC()
 	posts := []postmodel.Post{
 		{
@@ -447,7 +414,7 @@ func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T
 			CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 		},
 	}
-	active := &terminalActiveSupplyReader{active: false}
+	active := &terminalActiveSupplyReader{active: true}
 	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
 			{
@@ -464,7 +431,7 @@ func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T
 		feedDeliveryPageStoreOption(),
 	)
 	request := ListFeedRequest{
-		UserID: "u-follow-continuation", SessionID: "s-follow-continuation",
+		UserID: "u-follow-continuation", ViewerPersonaID: "persona-follow-continuation", SessionID: "s-follow-continuation",
 		ChannelID: "following", Limit: 1,
 	}
 	first, err := service.ListFeed(context.Background(), request)
@@ -479,8 +446,8 @@ func TestListFeedFollowingContinuationDoesNotRequireCanonicalSupply(t *testing.T
 	if _, err := service.ListFeed(context.Background(), request); err != nil {
 		t.Fatalf("following continuation: %v", err)
 	}
-	if active.calls != 0 {
-		t.Fatalf("following pagination must bypass active supply, calls=%d", active.calls)
+	if active.calls != 2 {
+		t.Fatalf("following pagination must validate canonical supply on every page, calls=%d", active.calls)
 	}
 }
 

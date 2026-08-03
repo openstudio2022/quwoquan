@@ -43,10 +43,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/profile_interaction_contracts.dart
-      response_type: ContentProfileInteractionPage
-      response_decoder: decodeContentProfileInteractionPage
     description: '个人主页收到的点赞、评论与站外转发活动。type 仅允许 like/comment/share；
 
       列表从 ProfileInteractionActivityView projection 做 keyset 分页，不请求期 join。
@@ -64,8 +60,8 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: ProfileInteractionActivityView
-    response_body: ProfileInteractionActivityView
+    response_entity: ProfileInteractionActivityPageSlice
+    response_body: ProfileInteractionActivityPageSlice
     response_body_kind: page
     security:
       auth_mode: required
@@ -114,10 +110,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/profile_interaction_contracts.dart
-      response_type: ContentProfileInteractionPage
-      response_decoder: decodeContentProfileInteractionPage
     description: '个人主页发出的点赞、评论与站外转发活动。type 仅允许 like/comment/share；
 
       列表从 ProfileInteractionActivityView projection 做 keyset 分页，不请求期 join。
@@ -135,8 +127,8 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: ProfileInteractionActivityView
-    response_body: ProfileInteractionActivityView
+    response_entity: ProfileInteractionActivityPageSlice
+    response_body: ProfileInteractionActivityPageSlice
     response_body_kind: page
     security:
       auth_mode: required

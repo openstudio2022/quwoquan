@@ -1,0 +1,54 @@
+commercial_defaults:
+  status: blocked
+  block_reason: SkillSurfacePlacement 新操作必须证明 Chat/Circle 管理员鉴权、动态 package 求交、共享隐私和双端群圈 UAT
+  gap_id: ASSISTANT_SKILL_SURFACE_PLACEMENT_COMMERCIAL_EVIDENCE
+  target_story: shared-surface-skill-placement
+externalDependencies:
+- capability: chat.conversation.membership.read
+  port: ConversationSurfaceAuthorityReaderPort
+  operations: [listMembers]
+  conformance: chat_conversation_surface_authority
+- capability: circle.membership.self.read
+  port: CircleSurfaceAuthorityReaderPort
+  operations: [getMyCircleMembership]
+  conformance: circle_surface_authority
+api_routes:
+- method: GET
+  path: /assistant/skill-placements/{surfaceKind}/{surfaceId}
+  operation: GetSkillSurfacePlacement
+  actor: account
+  request_bindings: {path: [{name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]}
+  response_entity: SkillSurfacePlacement
+  authorization: {principal: account, ownership_policy: surface_member}
+  security: {anonymous_policy: deny, auth_mode: required, principal: member, token_transport: bearer, visibility: private}
+  commercial: {status: blocked, block_reason: 缺 Chat/Circle typed authority 四环境与双端群圈 UAT, gap_id: ASSISTANT_SKILL_SURFACE_PLACEMENT_COMMERCIAL_EVIDENCE, target_story: shared-surface-skill-placement}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.skill_placement_unauthorized, ASSISTANT.USER.skill_placement_forbidden, ASSISTANT.USER.skill_placement_not_found, ASSISTANT.SYSTEM.skill_placement_authority_unavailable, ASSISTANT.SYSTEM.skill_placement_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_surface_placement_query, trace: true, attributes: [operation, outcome, error_code, surface_kind]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  application: {kind: query, facet: SkillSurfacePlacementQueryFacade, method: getPlacement, reader: SkillSurfacePlacementReader, slice: SkillSurfacePlacement}
+  description: surface 成员读取共享 Skill 策略；响应不包含个人设置、记忆或 Connector references。
+- method: PUT
+  path: /assistant/skill-placements/{surfaceKind}/{surfaceId}
+  operation: PutSkillSurfacePlacement
+  actor: account
+  request_entity: PutSkillSurfacePlacementRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]}
+  response_entity: SkillSurfacePlacement
+  authorization: {principal: account, ownership_policy: surface_admin}
+  security: {anonymous_policy: deny, auth_mode: required, principal: admin, token_transport: bearer, visibility: private}
+  commercial: {status: blocked, block_reason: 缺 Chat/Circle typed authority 四环境与双端群圈 UAT, gap_id: ASSISTANT_SKILL_SURFACE_PLACEMENT_COMMERCIAL_EVIDENCE, target_story: shared-surface-skill-placement}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.skill_placement_unauthorized, ASSISTANT.USER.skill_placement_forbidden, ASSISTANT.USER.skill_placement_invalid_argument, ASSISTANT.USER.skill_placement_revision_conflict, ASSISTANT.USER.skill_placement_idempotency_conflict, ASSISTANT.USER.skill_placement_unknown_skill, ASSISTANT.SYSTEM.skill_placement_authority_unavailable, ASSISTANT.SYSTEM.skill_placement_package_unavailable, ASSISTANT.SYSTEM.skill_placement_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_surface_placement_command, trace: true, attributes: [operation, outcome, error_code, surface_kind, replayed]}
+  slo: {latency_p95_ms: 700, availability_percent: 99.9}
+  application: {kind: command, facet: SkillSurfacePlacementCommandFacade, method: putPlacement, aggregate_owner: SkillSurfacePlacement, mutation_target: SkillSurfacePlacement, invariant_target: SkillSurfacePlacement}
+  description: surface 管理员以 expectedRevision CAS 保存共享 Skill 策略，不修改 Chat/Circle 成员事实。
+consumers:
+- name: app
+  capabilities: [get_skill_surface_placement, put_skill_surface_placement]
+- name: assistant-run
+  capabilities: [read_effective_surface_skills]

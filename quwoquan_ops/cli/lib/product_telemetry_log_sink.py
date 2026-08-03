@@ -13,7 +13,7 @@ _LOCAL_TARGETS = {
     "beta": "beta-local",
     "gamma": "gamma-local",
 }
-_GAMMA_ELASTICSEARCH_ENVIRONMENT = {
+_LOCAL_ELASTICSEARCH_ENVIRONMENT = {
     "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
 }
 
@@ -25,10 +25,12 @@ class ProductTelemetryLogSink:
     source: str
     status: str
     redacted_digest: str
+    adapter_id: str = "ext.obs.elasticsearch"
 
     def redacted_receipt(self) -> dict[str, str]:
         """Return the only binding fields suitable for reports or stdout."""
         return {
+            "adapterId": self.adapter_id,
             "source": self.source,
             "status": self.status,
             "redactedDigest": self.redacted_digest,
@@ -49,12 +51,8 @@ def load_product_telemetry_log_sink(
         raise ValueError(
             f"unsupported product telemetry target: {environment}/{target_name}"
         )
-    if environment == "gamma":
-        values = dict(_GAMMA_ELASTICSEARCH_ENVIRONMENT)
-        source = "gamma-local-elasticsearch-topology"
-    else:
-        values = {}
-        source = "service-config-postgres-telemetry"
+    values = dict(_LOCAL_ELASTICSEARCH_ENVIRONMENT)
+    source = f"{target_name}-elasticsearch-topology"
     return ProductTelemetryLogSink(
         environment=values,
         secret_path=None,

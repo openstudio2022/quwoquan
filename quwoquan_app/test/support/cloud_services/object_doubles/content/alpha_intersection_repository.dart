@@ -71,6 +71,7 @@ class AlphaIntersectionRepository
           sourceRef: sample?.source.trim() ?? '',
           countObjectKind: sample?.objectKind.trim() ?? '',
           subtitleText: _subtitleTextFor(items),
+          iconKey: intersectionIconKeyByDimension[dimension] ?? 'attention',
         ),
       );
     });
@@ -171,6 +172,10 @@ class AlphaIntersectionRepository
     final hostTarget = IntersectionTarget(
       objectType: _objectTypeForHost(objectType),
       objectId: objectId,
+      objectKind: _objectKindForObjectType(objectType),
+      routeId: intersectionRouteIdForObjectKind(
+        _objectKindForObjectType(objectType),
+      ),
     );
     final projected = reasons
         .map((reason) => applyHostPlainDisplayContext(reason, hostTarget))
@@ -339,6 +344,7 @@ class AlphaIntersectionRepository
       text: text,
       role: 'object',
       target: IntersectionTarget(
+        objectType: _objectTypeForKind(objectKind),
         objectId: objectId,
         objectKind: objectKind,
         routeId: intersectionRouteIdForObjectKind(objectKind),
@@ -351,7 +357,9 @@ class AlphaIntersectionRepository
       text: text,
       role: 'count',
       target: IntersectionTarget(
+        objectType: 'dimension',
         objectId: dimension,
+        objectKind: 'tag',
         routeId: 'myIntersections',
       ),
     );
@@ -376,6 +384,7 @@ class AlphaIntersectionRepository
           target: objectId.isEmpty
               ? null
               : IntersectionTarget(
+                  objectType: _objectTypeForKind(objectKind),
                   objectId: objectId,
                   objectKind: objectKind,
                   routeId: intersectionRouteIdForObjectKind(objectKind),
@@ -428,6 +437,14 @@ class AlphaIntersectionRepository
             dimension: entry.key,
             label: _fixtureDimensionLabel(entry.key),
             count: entry.value,
+            newCount: 0,
+            briefText: '',
+            subtitleText: '',
+            sourceRef: '',
+            countObjectKind: '',
+            strengthenedCount: 0,
+            reactivatedCount: 0,
+            iconKey: intersectionIconKeyByDimension[entry.key] ?? 'attention',
           ),
         )
         .toList(growable: false);
@@ -462,6 +479,7 @@ class AlphaIntersectionRepository
         target: reason.actionTargetId.trim().isEmpty
             ? null
             : IntersectionTarget(
+                objectType: _objectTypeForKind(reason.objectKind),
                 objectId: reason.actionTargetId.trim(),
                 objectKind: reason.objectKind.trim(),
                 routeId: intersectionRouteIdForObjectKind(reason.objectKind),
@@ -485,6 +503,36 @@ class AlphaIntersectionRepository
       requiredGates: metadata.requiredGates,
       dispatch: metadata.dispatch,
     );
+  }
+}
+
+String _objectKindForObjectType(String objectType) {
+  switch (objectType.trim()) {
+    case 'user':
+    case 'person':
+      return 'person';
+    case 'circle':
+      return 'circle';
+    case 'post':
+    case 'content':
+      return 'content';
+    default:
+      return 'place';
+  }
+}
+
+String _objectTypeForKind(String objectKind) {
+  switch (objectKind.trim()) {
+    case 'person':
+      return 'user';
+    case 'circle':
+      return 'circle';
+    case 'content':
+      return 'post';
+    case 'tag':
+      return 'tag';
+    default:
+      return 'homepage';
   }
 }
 

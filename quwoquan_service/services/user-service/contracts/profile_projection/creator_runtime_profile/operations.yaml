@@ -4,6 +4,16 @@ commercial_defaults:
   gap_id: USER_CREATOR_RUNTIME_PROFILE_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 api_routes: []
+runtime_entrypoints:
+- name: ProjectCreatorRuntimeProfile
+  kind: projector
+  phase: event_projection
+  source_events: [user.CreatorReleaseActivated, user.CreatorReleaseRetired, user.PersonaUpdated, user.UserAccountClosed]
+  checkpoint: creator_release_digest_and_persona_sequence
+  rebuild: import_active_creator_release_then_replay_persona_events
+  tombstone: remove_public_profile_keep_release_audit
+  idempotency: aggregate_version
+  application: {kind: command, facet: CreatorRuntimeProfileProjector, method: apply, object_owner: CreatorRuntimeProfile}
 consumers:
 - name: user-profile-api
   capabilities:

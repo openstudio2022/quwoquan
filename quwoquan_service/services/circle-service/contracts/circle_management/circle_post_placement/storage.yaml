@@ -77,6 +77,16 @@ collections:
       keys:
         state: 1
         updatedAt: -1
+  circle_feed_items:
+    entity: CircleFeedItemView
+    role: projection
+    description: Content Post lifecycle typed fact 在 Circle 边界形成的本地展示投影；圈子 feed 只能读取本集合，禁止读取 Content 的 posts。
+    indexes:
+    - name: idx_circle_feed_item_author_state
+      keys:
+        authorId: 1
+        status: 1
+        updatedAt: -1
   circle_content_post_inbox:
     entity: CircleContentPostInbox
     role: append_only

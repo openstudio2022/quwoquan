@@ -22,10 +22,10 @@ final class TestProfileInteractionFacets
   }
 
   @override
-  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+  Future<ProfileInteractionReadFactAck> appendReadFact(
     AppendContentProfileInteractionReadFactCommand command,
   ) async {
-    return ContentProfileInteractionReadFactAck(
+    return ProfileInteractionReadFactAck(
       factId: 'test-fact-${command.activityId}',
       activityId: command.activityId,
       state: command.state.wireValue,

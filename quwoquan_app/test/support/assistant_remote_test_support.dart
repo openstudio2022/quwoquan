@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
@@ -20,17 +21,32 @@ GeneratedCloudOperationClient buildAssistantRemoteTestOperationClient(
   );
 }
 
+final class AssistantRemoteTestAuthTokenProvider
+    implements CloudAuthTokenProvider {
+  const AssistantRemoteTestAuthTokenProvider();
+
+  @override
+  Future<String?> getAccessToken() async => 'assistant-test-token';
+}
+
 CloudOperationInvocationContext assistantRemoteTestInvocationContext(
-  String clientPageId,
-) {
+  String clientPageId, {
+  String? idempotencyKey,
+  bool networkSurface = false,
+}) {
   return CloudOperationInvocationContext(
-    surfaceId: AppUiSurfaces.personalAssistantDialog.id,
-    routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+    surfaceId: networkSurface
+        ? AppUiSurfaces.globalSearchNetworkResults.id
+        : AppUiSurfaces.personalAssistantDialog.id,
+    routeId: networkSurface
+        ? AppUiSurfaces.globalSearchNetworkResults.routeId
+        : AppUiSurfaces.personalAssistantDialog.routeId,
     clientPageId: clientPageId,
     actor: const CloudOperationActorContext(
       accountId: 'assistant-test-account',
       personaId: 'assistant-test-persona',
     ),
+    idempotencyKey: idempotencyKey,
   );
 }
 

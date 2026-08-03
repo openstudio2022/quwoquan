@@ -78,7 +78,7 @@ FollowingSubjectResult _subject({
       FollowSubjectKind.homepage => '九寨沟',
       FollowSubjectKind.location => '川西',
     },
-    targetRouteId: type.wireValue,
+    targetRouteId: type.wireName,
     targetObjectId: id,
     followedAt: DateTime.utc(2026, 5, 20, 8),
     unreadChangeCount: unread ? 1 : 0,

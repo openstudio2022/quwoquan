@@ -42,8 +42,11 @@ func TestAssistantRunHTTPUsesOneMongoAggregateAndJournal(t *testing.T) {
 			_, err := service.GetSession(ctx, userID, sessionID)
 			return err
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		integrationRunPolicyResolver(),
 	)
 	handler := assistanthttp.NewHandler(
 		service,

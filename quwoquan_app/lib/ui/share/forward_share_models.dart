@@ -1,6 +1,6 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -52,7 +52,7 @@ class AppForwardPayload {
   final String shareText;
   final WidgetBuilder? previewBuilder;
   final Map<String, Object?> extra;
-  final ChatMessageCardObjectRef? objectRef;
+  final MessageCardObjectRef? objectRef;
 
   String get messagePreview {
     final explicit = shareText.trim();
@@ -62,9 +62,9 @@ class AppForwardPayload {
     return title.trim();
   }
 
-  ChatMessageCardCommand toMessageCardCommand({String message = ''}) {
-    return ChatMessageCardCommand(
-      kind: kind.wire,
+  MessageCard toMessageCardCommand({String message = ''}) {
+    return MessageCard(
+      kind: MessageCardKind.fromWire(kind.wire, 'AppForwardPayload.kind'),
       title: title,
       objectRef: objectRef,
       subtitle: subtitle,
@@ -81,11 +81,12 @@ class AppForwardPayload {
                 entry.value.toString().trim().isNotEmpty,
           )
           .map(
-            (entry) => ChatMessageCardAttribute(
+            (entry) => MessageCardAttribute(
               name: entry.key,
               value: entry.value.toString(),
             ),
-          ),
+          )
+          .toList(growable: false),
     );
   }
 }
@@ -127,7 +128,7 @@ class AppForwardRecipient {
     return '';
   }
 
-  factory AppForwardRecipient.fromConversation(ChatInboxDto dto) {
+  factory AppForwardRecipient.fromConversation(ChatInboxViewData dto) {
     final normalizedType = dto.type.trim().toLowerCase();
     final isGroup =
         normalizedType == 'group' || normalizedType == 'circle_group';
@@ -145,12 +146,14 @@ class AppForwardRecipient {
     );
   }
 
-  factory AppForwardRecipient.fromContactHome(ContactHomeRowDto dto) {
+  factory AppForwardRecipient.fromContactHome(ContactHomeRow dto) {
     final normalizedKind = dto.kind.trim().toLowerCase();
     final isGroup = normalizedKind == 'group';
     final title = dto.title.trim().isNotEmpty
         ? dto.title.trim()
-        : (dto.userId.trim().isNotEmpty ? dto.userId.trim() : dto.id);
+        : ((dto.userId?.trim().isNotEmpty ?? false)
+              ? dto.userId!.trim()
+              : dto.id);
     return AppForwardRecipient(
       id: dto.id.isNotEmpty ? dto.id : dto.objectId,
       kind: isGroup
@@ -161,11 +164,11 @@ class AppForwardRecipient {
           ? dto.subtitle.trim()
           : dto.summaryIntersections.take(2).join(' · '),
       avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
-      conversationId: dto.conversationId.trim(),
-      userId: dto.userId.trim().isNotEmpty
-          ? dto.userId.trim()
+      conversationId: dto.conversationId?.trim() ?? '',
+      userId: (dto.userId?.trim().isNotEmpty ?? false)
+          ? dto.userId!.trim()
           : dto.objectId.trim(),
-      memberCount: dto.memberCount,
+      memberCount: dto.memberCount ?? 0,
       lastActiveAt: dto.lastActiveAt,
     );
   }

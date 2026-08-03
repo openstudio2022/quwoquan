@@ -571,7 +571,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   }
 
   Widget _buildPostCanvas(
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableArticlePageCurl,
     required bool isVisible,
     required int videoViewportEpoch,
@@ -648,7 +648,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   }
 
   Widget _buildTypedCanvas(
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableArticlePageCurl,
     required bool isVisible,
     required int videoViewportEpoch,
@@ -775,7 +775,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   /// 页码 chevron 切页（V1.0 `‹ n / m ›`）：更新 inner index 后由
   /// `_WorksArticleCanvas.initialPage` 驱动 deck `didUpdateWidget` 跳页，
   /// 不引入第二套翻页控制通路。
-  void _stepArticlePage(PostBaseDto post, int delta) {
+  void _stepArticlePage(ContentPostViewData post, int delta) {
     final total = _articlePageCount(post);
     final current = (_articleInnerIndex[post.id] ?? 0).clamp(0, total - 1);
     final next = (current + delta).clamp(0, total - 1).toInt();
@@ -786,7 +786,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     });
   }
 
-  void _handleArticleInnerPageChanged(PostBaseDto post, int index) {
+  void _handleArticleInnerPageChanged(ContentPostViewData post, int index) {
     final previousIndex = _articleInnerIndex[post.id] ?? 0;
     if (previousIndex != index) {
       _trackArticlePageFlipCommit(

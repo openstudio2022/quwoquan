@@ -1,8 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_propagation_path.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/components/object_page/intersection_lifecycle_badge.dart';
@@ -166,9 +163,7 @@ class IntersectionStatementRow extends StatelessWidget {
     // 避免重复；否则继续渲染 leading 簇服务通用消费者。
     final hasVisuals = item.visuals.isNotEmpty && !item._suppressLeadingCluster;
     final primaryActionHint = item.actionHints
-        .where(
-          isDisplayableIntersectionActionHint,
-        )
+        .where(isDisplayableIntersectionActionHint)
         .fold<IntersectionActionHint?>(
           null,
           (best, hint) =>

@@ -50,10 +50,6 @@ api_routes:
           field: personaId
         - name: interactionId
           field: interactionId
-    client_contract:
-      dart_import: ../content/profile_interaction_contracts.dart
-      response_type: ContentProfileInteractionReadFactAck
-      response_decoder: decodeContentProfileInteractionReadFactAck
     description: '当前 active owner persona 追加 received activity 的 seen/read 事实。
 
       事实语义键 ownerPersonaId+activityId+state 唯一；命令不直接修改 projection，

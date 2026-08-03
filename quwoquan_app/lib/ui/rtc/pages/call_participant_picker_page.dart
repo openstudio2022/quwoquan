@@ -1,7 +1,7 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
@@ -33,7 +33,7 @@ class _CallParticipantPickerPageState
   final Set<String> _selectedIds = {};
   String _searchQuery = '';
   List<CallPickerParticipantRow> _contacts = [];
-  List<ChatInboxDto> _availableGroups = [];
+  List<ChatInboxViewData> _availableGroups = [];
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
   _ParticipantSource _source = _ParticipantSource.currentConversation;
@@ -56,7 +56,7 @@ class _CallParticipantPickerPageState
       final contacts = await _loadContactsForSource(_source);
       final groups = widget.allowsCrossContextSources
           ? await _loadAvailableGroups()
-          : const <ChatInboxDto>[];
+          : const <ChatInboxViewData>[];
       if (mounted) {
         setState(() {
           _contacts = contacts;
@@ -84,9 +84,9 @@ class _CallParticipantPickerPageState
     }
   }
 
-  Future<List<ChatInboxDto>> _loadAvailableGroups() async {
+  Future<List<ChatInboxViewData>> _loadAvailableGroups() async {
     if (!widget.allowsCrossContextSources) {
-      return const <ChatInboxDto>[];
+      return const <ChatInboxViewData>[];
     }
     final inbox = await ref
         .read(chatConversationRepositoryProvider)

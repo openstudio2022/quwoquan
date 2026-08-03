@@ -28,10 +28,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	circleapp "quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/searchindex"
 	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
 	groupsearchindex "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
+	viewapp "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/application"
+	viewes "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/infrastructure/elasticsearch"
 )
 
 func main() {
@@ -46,8 +48,8 @@ func main() {
 
 	// Build ES config from the shared SEARCH_ES_* env, then apply explicit flag
 	// overrides so local/manual reconcile runs work without mutating env.
-	esCfg := searchindex.ESConfig{Index: strings.TrimSpace(*esIndex)}
-	searchindex.ApplyESEnvOverrides(&esCfg)
+	esCfg := viewes.Config{Index: strings.TrimSpace(*esIndex)}
+	viewes.ApplyEnvOverrides(&esCfg)
 	if eps := strings.TrimSpace(*esEndpoints); eps != "" {
 		parts := strings.Split(eps, ",")
 		out := make([]string, 0, len(parts))
@@ -78,7 +80,7 @@ func main() {
 	database := client.Database(*circleDB)
 	store := persistence.NewMongoCircleStore(database.Collection(*circleColl))
 
-	built, err := searchindex.Build(esCfg, store)
+	built, err := viewes.Build(esCfg)
 	if err != nil {
 		log.Fatalf("[search-backfill] es client build: %v", err)
 	}
@@ -86,12 +88,17 @@ func main() {
 		log.Fatalf("[search-backfill] es disabled after config resolution")
 	}
 
-	report, err := searchindex.Backfill(ctx, built.Client, store, *batchSize)
+	if err := built.EnsureIndex(ctx); err != nil {
+		log.Fatalf("[search-backfill] ensure index: %v", err)
+	}
+	report, err := viewapp.NewProjector(built.Index).Rebuild(
+		ctx, circleSearchRebuildSource{store: store}, *batchSize,
+	)
 	if err != nil {
-		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.IndexedCircles, report.BatchesPushed, err)
+		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.Upserted, report.Batches, err)
 	}
 	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
-		*env, built.Client.IndexName(), report.TotalCircles, report.IndexedCircles, report.DeletedCircles, report.BatchesPushed)
+		*env, built.Client.IndexName(), report.Total, report.Upserted, report.Deleted, report.Batches)
 
 	groupReport, err := groupsearchindex.Backfill(
 		ctx,
@@ -118,3 +125,34 @@ func main() {
 		groupReport.BatchesPushed,
 	)
 }
+
+type circleSearchRebuildSource struct {
+	store *persistence.MongoCircleStore
+}
+
+func (source circleSearchRebuildSource) ListSearchItems(
+	ctx context.Context,
+	afterID string,
+	limit int,
+) ([]viewapp.RebuildEntry, error) {
+	circles, err := source.store.ListForSearch(ctx, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]viewapp.RebuildEntry, 0, len(circles))
+	for _, circle := range circles {
+		version := circle.Version
+		if version <= 0 {
+			version = 1
+		}
+		entries = append(entries, viewapp.RebuildEntry{
+			Item: viewapp.FromSearchDocument(
+				circleapp.ProjectCircleToSearchDocument(circle), version,
+			),
+			Visible: circleapp.CircleSearchEligible(circle),
+		})
+	}
+	return entries, nil
+}
+
+var _ viewapp.RebuildSource = circleSearchRebuildSource{}

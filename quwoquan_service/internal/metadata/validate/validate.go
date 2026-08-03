@@ -65,9 +65,11 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 
 	operationIDs := map[string]string{}
 	transportKeys := map[string]string{}
-	operationCountByObject := map[string]int{}
+	mutationOperationCountByObject := map[string]int{}
 	for _, operation := range contractGraph.Operations {
-		operationCountByObject[operation.ObjectID]++
+		if operation.Kind != ast.OperationKindQuery {
+			mutationOperationCountByObject[operation.ObjectID]++
+		}
 		if previous, exists := operationIDs[operation.ID]; exists {
 			issues = append(issues, issue(
 				"CONTRACT.DUPLICATE.OPERATION_ID",
@@ -98,6 +100,61 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				"operation %q path %q must be an unversioned resource path without version segments",
 				operation.ID,
 				operation.PathTemplate,
+			))
+		}
+		if operation.Transport != "json" && operation.Transport != "sse" {
+			issues = append(issues, issue(
+				"CONTRACT.TRANSPORT.INVALID_KIND",
+				operation.SourcePath,
+				"operation %q uses unsupported transport %q", operation.ID, operation.Transport,
+			))
+		}
+		if operation.Transport == "sse" {
+			if operation.Method != "GET" || operation.RequestBodyKind != "none" {
+				issues = append(issues, issue(
+					"CONTRACT.TRANSPORT.INVALID_SSE_SHAPE",
+					operation.SourcePath,
+					"SSE operation %q must use GET with request_body_kind none", operation.ID,
+				))
+			}
+			if operation.ResponseAdmission == nil || operation.ResponseAdmission.MaximumBodyBytes < 1024 {
+				issues = append(issues, issue(
+					"CONTRACT.TRANSPORT.SSE_FRAME_BUDGET_REQUIRED",
+					operation.SourcePath,
+					"SSE operation %q must declare response_admission.maximum_body_bytes as its per-frame bound", operation.ID,
+				))
+			}
+			if operation.Streaming == nil {
+				issues = append(issues, issue(
+					"CONTRACT.TRANSPORT.SSE_POLICY_REQUIRED",
+					operation.SourcePath,
+					"SSE operation %q must declare resume and terminal fields", operation.ID,
+				))
+			} else {
+				resumeBindingFound := false
+				if operation.RequestBindings != nil {
+					for _, binding := range operation.RequestBindings.Query {
+						if binding.Name == operation.Streaming.ResumeRequestField {
+							resumeBindingFound = true
+							break
+						}
+					}
+				}
+				if !resumeBindingFound {
+					issues = append(issues, issue(
+						"CONTRACT.TRANSPORT.SSE_RESUME_BINDING_REQUIRED",
+						operation.SourcePath,
+						"SSE operation %q resume field %q must be a canonical query binding",
+						operation.ID,
+						operation.Streaming.ResumeRequestField,
+					))
+				}
+			}
+		} else if operation.Streaming != nil {
+			issues = append(issues, issue(
+				"CONTRACT.TRANSPORT.STREAMING_POLICY_FORBIDDEN",
+				operation.SourcePath,
+				"non-SSE operation %q cannot declare streaming policy", operation.ID,
 			))
 		}
 		transportKey := operation.Method + " " + operation.PathTemplate
@@ -149,21 +206,26 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				entrypoint.ID,
 				entrypoint.ObjectID,
 			))
-		} else if object.Kind != ast.ObjectKindRuntimeSession {
-			issues = append(issues, issue(
-				"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_OWNER_KIND",
-				entrypoint.SourcePath,
-				"runtime entrypoint %q owner %q has kind %q, want runtime_session",
-				entrypoint.ID,
-				entrypoint.ObjectID,
-				object.Kind,
-			))
+		} else {
+			for _, sourceObject := range entrypoint.SourceObjects {
+				sourceDomain, sourceName, sourceOK := strings.Cut(sourceObject, ".")
+				_, sourceExists := objectsByDomainName[domainObjectKey(sourceDomain, sourceName)]
+				if !sourceOK || !sourceExists {
+					issues = append(issues, issue(
+						"CONTRACT.RUNTIME_ENTRYPOINT.UNKNOWN_SOURCE_OBJECT",
+						entrypoint.SourcePath,
+						"runtime entrypoint %q references unknown source object %q",
+						entrypoint.ID,
+						sourceObject,
+					))
+				}
+			}
 		}
-		if operationCountByObject[entrypoint.ObjectID] != 0 {
+		if mutationOperationCountByObject[entrypoint.ObjectID] != 0 {
 			issues = append(issues, issue(
 				"CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK",
 				entrypoint.SourcePath,
-				"object %q must own either HTTP api_routes or runtime_entrypoints, not both",
+				"object %q must not own both HTTP mutation operations and runtime mutation entrypoints",
 				entrypoint.ObjectID,
 			))
 		}
@@ -225,39 +287,76 @@ func validateRuntimeEntrypoint(
 			entrypoint.ID,
 		))
 	}
-	if entrypoint.RuntimeKind != "middleware" {
+	expectedPhase := map[string]string{
+		"middleware":    "post_authorization_pre_owner_proxy",
+		"projector":     "event_projection",
+		"subscription":  "event_ingest",
+		"internal_port": "transactional_append",
+		"external_port": "outbound_invocation",
+	}[entrypoint.RuntimeKind]
+	if expectedPhase == "" {
 		issues = append(issues, issue(
 			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_KIND",
 			entrypoint.SourcePath,
-			"runtime entrypoint %q kind %q must be middleware",
+			"runtime entrypoint %q has unsupported kind %q",
+			entrypoint.ID,
+			entrypoint.RuntimeKind,
+		))
+	} else if entrypoint.Phase != expectedPhase {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_PHASE",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q kind %q requires phase %q, got %q",
+			entrypoint.ID,
+			entrypoint.RuntimeKind,
+			expectedPhase,
+			entrypoint.Phase,
+		))
+	}
+	expectedObjectKind := map[string]ast.ObjectKind{
+		"middleware":    ast.ObjectKindRuntimeSession,
+		"projector":     ast.ObjectKindProjection,
+		"subscription":  ast.ObjectKindAppendOnlyFact,
+		"internal_port": ast.ObjectKindAppendOnlyFact,
+		"external_port": ast.ObjectKindExternalReference,
+	}[entrypoint.RuntimeKind]
+	if expectedObjectKind != "" && object.Kind != expectedObjectKind {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_OWNER_KIND",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q kind %q requires object kind %q, got %q",
+			entrypoint.ID,
+			entrypoint.RuntimeKind,
+			expectedObjectKind,
+			object.Kind,
+		))
+	}
+	if entrypoint.RuntimeKind == "middleware" &&
+		entrypoint.ApplicationKind != ast.OperationKindSession {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_APPLICATION_KIND",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q middleware application.kind must be session",
+			entrypoint.ID,
+		))
+	}
+	if entrypoint.RuntimeKind != "middleware" &&
+		entrypoint.RuntimeKind != "external_port" &&
+		entrypoint.ApplicationKind != ast.OperationKindCommand {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_APPLICATION_KIND",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q kind %q application.kind must be command",
 			entrypoint.ID,
 			entrypoint.RuntimeKind,
 		))
 	}
-	if entrypoint.Phase != "post_authorization_pre_owner_proxy" {
-		issues = append(issues, issue(
-			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_PHASE",
-			entrypoint.SourcePath,
-			"runtime entrypoint %q phase %q must be post_authorization_pre_owner_proxy",
-			entrypoint.ID,
-			entrypoint.Phase,
-		))
-	}
-	if entrypoint.ApplicationKind != ast.OperationKindSession {
-		issues = append(issues, issue(
-			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_APPLICATION_KIND",
-			entrypoint.SourcePath,
-			"runtime entrypoint %q application.kind %q must be session",
-			entrypoint.ID,
-			entrypoint.ApplicationKind,
-		))
-	}
 	if !typedBindingIdentifier.MatchString(entrypoint.Facet) ||
-		!strings.HasSuffix(entrypoint.Facet, "Facade") {
+		!hasTypedEntrypointSuffix(entrypoint.Facet) {
 		issues = append(issues, issue(
 			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_FACADE",
 			entrypoint.SourcePath,
-			"runtime entrypoint %q facet %q must be a typed *Facade identifier",
+			"runtime entrypoint %q facet %q must be a typed Facade/Projector/Appender/Port identifier",
 			entrypoint.ID,
 			entrypoint.Facet,
 		))
@@ -271,17 +370,44 @@ func validateRuntimeEntrypoint(
 			entrypoint.FacadeMethod,
 		))
 	}
-	if entrypoint.SessionOwner == "" || entrypoint.SessionOwner != object.Name {
+	if entrypoint.ObjectOwner == "" || entrypoint.ObjectOwner != object.Name {
 		issues = append(issues, issue(
-			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_SESSION_OWNER",
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_OBJECT_OWNER",
 			entrypoint.SourcePath,
-			"runtime entrypoint %q session_owner %q must equal canonical owner %q",
+			"runtime entrypoint %q object_owner %q must equal canonical owner %q",
 			entrypoint.ID,
-			entrypoint.SessionOwner,
+			entrypoint.ObjectOwner,
 			object.Name,
 		))
 	}
+	if entrypoint.RuntimeKind == "projector" &&
+		(len(entrypoint.SourceEvents) == 0 || entrypoint.Checkpoint == "" ||
+			entrypoint.Rebuild == "" || entrypoint.Tombstone == "") {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INCOMPLETE_PROJECTOR",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q projector requires source events, checkpoint, rebuild and tombstone",
+			entrypoint.ID,
+		))
+	}
+	if entrypoint.RuntimeKind != "middleware" && entrypoint.Idempotency == "" {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.MISSING_IDEMPOTENCY",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q must declare one idempotency identity",
+			entrypoint.ID,
+		))
+	}
 	return bindIssueSubject(entrypoint.ID, issues)
+}
+
+func hasTypedEntrypointSuffix(value string) bool {
+	for _, suffix := range []string{"Facade", "Projector", "Appender", "Port"} {
+		if strings.HasSuffix(value, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // All 执行 ContractGraph 交叉校验，并在 commercial profile 下强制消费版本化 schema。

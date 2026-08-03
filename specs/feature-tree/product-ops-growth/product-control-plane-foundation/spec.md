@@ -114,5 +114,5 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Gamma 真实 OIDC、scope、服务身份、UserAccount、双端 Journey、正式申诉 intake、跨域收敛和受保护 Prod 恢复演练；仓内 contract/实现不能替代这些证据。
+- 影响或价值：尚缺 Gamma target-scoped operator conformance、scope、服务身份、UserAccount、双端 Journey、正式申诉 intake、跨域收敛和受保护 Prod OIDC/恢复演练；仓内 contract/实现不能替代这些证据。
 - 完成判定：`SIT-002` 具有直属 Story local_contract、api_integration、Gamma user_acceptance 和受保护 Prod 运行证据，且对应 P0 OPEN 全部关闭。

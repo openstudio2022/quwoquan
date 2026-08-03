@@ -1,5 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
@@ -30,8 +32,8 @@ ContentArticleRender projectArticleDetailView(
   Map<String, dynamic> raw, {
   required String fallbackArticleId,
 }) {
-  final dto = postBaseDtoFromMap(raw);
-  final read = PostReadPresentation.fromPostBase(dto, wire: raw);
+  final dto = contentPostViewDataFromReadModelMap(raw);
+  final read = PostReadPresentationMapper.fromViewData(dto, wire: raw);
   final postTitle = read.title;
   final body = read.body;
   final mediaCoverUrl = resolveContentMediaUrl(dto.mediaCoverUrl);

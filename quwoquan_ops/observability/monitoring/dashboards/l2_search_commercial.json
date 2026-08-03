@@ -101,12 +101,12 @@
         ]
       },
       {
-        "title": "三项产品黄金指标（SLS 单一事实源）",
+        "title": "三项产品黄金指标（Elasticsearch 单一事实源）",
         "type": "text",
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
         "options": {
           "mode": "markdown",
-          "content": "产品漏斗来自 SLS `app-product-telemetry-search-funnel-hourly`（`rowKind=search_funnel`），按 `requestId` 去重：①有效搜索成功率 = `effectiveActionRequestCount / querySubmitCount`，目标 ≥35%；②提交→首个可操作结果 P95 来自 `firstActionableHistogram`，目标 ≤1500ms；③结果→有效行动率 = `effectiveActionRequestCount / nonEmptyResultCount`，目标 ≥20%。有效行动定义为结果点击或结果页连续停留 ≥3000ms。原始事件禁止写 query、objectId 或用户身份；Prometheus 面板仅表示服务健康，不能替代 SLS 产品漏斗。"
+          "content": "产品漏斗来自 Elasticsearch `app-product-telemetry-search-funnel-hourly`（`rowKind=search_funnel`），按 `requestId` 去重：①有效搜索成功率 = `effectiveActionRequestCount / querySubmitCount`，目标 ≥35%；②提交→首个可操作结果 P95 来自 `firstActionableHistogram`，目标 ≤1500ms；③结果→有效行动率 = `effectiveActionRequestCount / nonEmptyResultCount`，目标 ≥20%。有效行动定义为结果点击或结果页连续停留 ≥3000ms。原始事件禁止写 query、objectId 或用户身份；Prometheus 面板仅表示服务健康，不能替代 Elasticsearch 产品漏斗。"
         }
       }
     ]

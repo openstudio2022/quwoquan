@@ -155,7 +155,7 @@
 ### SIT-005 观测、灾备和容量闭环
 
 - GIVEN Prometheus、Alertmanager、OTel、exporter、备份目标和异地副本配置真实可用。
-- WHEN 触发服务/基础设施告警或执行 PostgreSQL/Mongo/SLS 恢复演练。
+- WHEN 触发服务/基础设施告警或执行 PostgreSQL/Mongo/Elasticsearch 恢复演练。
 - THEN 告警完成 firing -> notify -> ack -> resolved。
 - THEN 备份按计划生成、校验并恢复到隔离目标，RPO/RTO/容量/成本水位有机器证据。
 
@@ -173,7 +173,7 @@
 - THEN 服务有效配置缺失、摘要不匹配或无法解析时 beta/gamma/prod 不能启动；不得回退旧分层路径、空配置或第二套默认配置。
 - THEN 客户端伪造 province/carrier 不命中；只有可信边缘上下文与 hosted UAT 同时到位后才可启用。
 - THEN 未知 rollout stage 被拒绝，不能回退全局 dimensions 或静默退化为稳定流量。
-- THEN Portal 页面只展示真实控制面、SLS、Prometheus 或业务投影数据。
+- THEN Portal 页面只展示真实控制面、Elasticsearch、Prometheus 或业务投影数据。
 
 <a id="sit-007"></a>
 ### SIT-007 验收追踪和开放事项零漂移
@@ -190,7 +190,7 @@
 - WHEN stackctl 在唯一 prevalidate namespace 执行 first-party scope。
 - THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验。
 - THEN 受限单机的当前可用空间与可回收空间分别报告；只可删除声明匹配且未运行的旧容器、清理未使用镜像，禁止删除 volume，并在任何镜像传输前复验回收后的实际空间。
-- THEN 容器进程存活与 Provider readiness 分开判定；SLS 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
+- THEN 容器进程存活与 Provider readiness 分开判定；Elasticsearch 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
 - THEN 报告分别给出容器部署与正式发布资格；不写 ledger/receipt，正式发布仍为 `GATE_BLOCK`。
 
 ## 8. 开放事项

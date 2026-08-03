@@ -74,7 +74,7 @@ void main() {
       AppCloudOperationIds.chatConversationListContactHome,
       AppCloudOperationIds.chatConversationListContacts,
       AppCloudOperationIds.chatConversationListGroupCandidates,
-      AppCloudOperationIds.chatConversationListInbox,
+      AppCloudOperationIds.chatChatInboxViewListInbox,
       AppCloudOperationIds.chatConversationListSelectableGroupConversations,
       AppCloudOperationIds.chatConversationListSelectableGroupContactMembers,
     ]);
@@ -126,10 +126,7 @@ void main() {
       idempotencyKey: 'title-1',
     );
     await membershipWriter.inviteAssistant(
-      ChatInviteConversationAssistantCommand(
-        conversationId: 'conversation-1',
-        skillId: 'skill-1',
-      ),
+      ChatInviteConversationAssistantCommand(conversationId: 'conversation-1'),
       idempotencyKey: 'assistant-invite-1',
     );
     await membershipWriter.removeAssistant(
@@ -154,7 +151,7 @@ void main() {
       'conversationId': 'conversation-1',
     });
     expect(executor.payloads[1].body, <String, Object?>{'title': '新的讨论名'});
-    expect(executor.payloads[2].body, <String, Object?>{'skillId': 'skill-1'});
+    expect(executor.payloads[2].body, isNull);
     expect(executor.payloads[3].body, isNull);
     expect(
       executor.contexts.skip(1).map((context) => context.idempotencyKey),
@@ -367,7 +364,7 @@ Object? _responseFor(String operationId) {
         'items': <Object?>[_contact],
         'nextCursor': null,
       },
-    AppCloudOperationIds.chatConversationListInbox => <String, Object?>{
+    AppCloudOperationIds.chatChatInboxViewListInbox => <String, Object?>{
       'items': <Object?>[_inbox],
       'nextCursor': null,
     },
@@ -523,7 +520,6 @@ const Map<String, Object?> _member = <String, Object?>{
   'avatarUrl': '',
   'role': 'member',
   'memberType': 'user',
-  'assistantSkillId': null,
   'joinedAt': '2026-07-20T08:00:00Z',
   'isCurrentUser': false,
 };

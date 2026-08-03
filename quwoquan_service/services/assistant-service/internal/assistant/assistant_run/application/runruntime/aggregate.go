@@ -53,6 +53,7 @@ func NewRun(
 // AssistantRun and are used by owner isolation and StartRun replay.
 func (r *Run) BindIdentity(
 	userID string,
+	personaID string,
 	sessionID string,
 	clientRequestID string,
 	traceID string,
@@ -68,6 +69,7 @@ func (r *Run) BindIdentity(
 		return ErrRevisionConflict
 	}
 	r.UserID = strings.TrimSpace(userID)
+	r.PersonaID = strings.TrimSpace(personaID)
 	r.SessionID = strings.TrimSpace(sessionID)
 	r.ClientRequestID = strings.TrimSpace(clientRequestID)
 	r.TraceID = strings.TrimSpace(traceID)
@@ -97,6 +99,20 @@ func (r *Run) BindExecutionInput(
 	r.Trigger = cloneMap(trigger)
 	r.ContextSnapshot = cloneMap(contextSnapshot)
 	r.SurfaceCapabilities = cloneMap(surfaceCapabilities)
+	return nil
+}
+
+func (r *Run) BindSkillPackage(
+	packageID string,
+	releaseDigest string,
+) error {
+	if r == nil || strings.TrimSpace(packageID) == "" ||
+		!validSkillPackageDigest(strings.TrimSpace(releaseDigest)) ||
+		r.SkillPackageID != "" || r.SkillPackageReleaseDigest != "" {
+		return ErrInvalidRun
+	}
+	r.SkillPackageID = strings.TrimSpace(packageID)
+	r.SkillPackageReleaseDigest = strings.TrimSpace(releaseDigest)
 	return nil
 }
 

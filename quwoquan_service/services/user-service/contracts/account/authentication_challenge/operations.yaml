@@ -68,10 +68,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/authentication_challenge_contracts.dart
-      response_type: OtpChallengeIssueResult
-      response_decoder: decodeOtpChallengeIssueResult
+    response_entity: OtpChallengeIssueResult
+    response_body: OtpChallengeIssueResult
+    response_body_kind: object
     request_entity: SendOtpCommand
     request_body_kind: object
   - method: POST
@@ -129,10 +128,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/authentication_challenge_contracts.dart
-      response_type: AlipayAuthorizationGrant
-      response_decoder: decodeAlipayAuthorizationGrant
+    response_entity: AlipayAuthorizationGrant
+    response_body: AlipayAuthorizationGrant
+    response_body_kind: object
     request_entity: CreateAlipayAuthorizationRequestCommand
     request_body_kind: object
   - method: POST
@@ -198,9 +196,8 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/authentication_challenge_contracts.dart
-      response_type: OneTapLoginHint
-      response_decoder: decodeOneTapLoginHint
+    response_entity: OneTapLoginHint
+    response_body: OneTapLoginHint
+    response_body_kind: object
     request_entity: ResolveOneTapLoginHintCommand
     request_body_kind: object

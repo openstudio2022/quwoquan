@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ContextContinuityPolicy {
   const ContextContinuityPolicy({
@@ -52,6 +52,66 @@ class ContextContinuityPolicy {
       };
 
   factory ContextContinuityPolicy.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'queryIntent',
+      'problemClass',
+      'continuityMode',
+      'explicitContinuation',
+      'topicOverlap',
+      'allowHistorySummary',
+      'allowLongtermMemory',
+      'allowLocationHints',
+      'referenceQueries',
+      'carryForwardFacts',
+      'needsRecheckFacts',
+      'discardedAssumptions',
+      'mismatchSignal',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ContextContinuityPolicy response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('queryIntent') && json['queryIntent'] != null && (json['queryIntent'] is! String)) {
+      throw const FormatException('ContextContinuityPolicy field queryIntent has an invalid wire value');
+    }
+    if (json.containsKey('problemClass') && json['problemClass'] != null && (json['problemClass'] is! String)) {
+      throw const FormatException('ContextContinuityPolicy field problemClass has an invalid wire value');
+    }
+    if (json.containsKey('continuityMode') && json['continuityMode'] != null && (json['continuityMode'] is! String)) {
+      throw const FormatException('ContextContinuityPolicy field continuityMode has an invalid wire value');
+    }
+    if (json.containsKey('explicitContinuation') && json['explicitContinuation'] != null && (json['explicitContinuation'] is! bool)) {
+      throw const FormatException('ContextContinuityPolicy field explicitContinuation has an invalid wire value');
+    }
+    if (json.containsKey('topicOverlap') && json['topicOverlap'] != null && (json['topicOverlap'] is! num)) {
+      throw const FormatException('ContextContinuityPolicy field topicOverlap has an invalid wire value');
+    }
+    if (json.containsKey('allowHistorySummary') && json['allowHistorySummary'] != null && (json['allowHistorySummary'] is! bool)) {
+      throw const FormatException('ContextContinuityPolicy field allowHistorySummary has an invalid wire value');
+    }
+    if (json.containsKey('allowLongtermMemory') && json['allowLongtermMemory'] != null && (json['allowLongtermMemory'] is! bool)) {
+      throw const FormatException('ContextContinuityPolicy field allowLongtermMemory has an invalid wire value');
+    }
+    if (json.containsKey('allowLocationHints') && json['allowLocationHints'] != null && (json['allowLocationHints'] is! bool)) {
+      throw const FormatException('ContextContinuityPolicy field allowLocationHints has an invalid wire value');
+    }
+    if (json.containsKey('referenceQueries') && json['referenceQueries'] != null && (json['referenceQueries'] is! List || (json['referenceQueries'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextContinuityPolicy field referenceQueries has an invalid wire value');
+    }
+    if (json.containsKey('carryForwardFacts') && json['carryForwardFacts'] != null && (json['carryForwardFacts'] is! List || (json['carryForwardFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextContinuityPolicy field carryForwardFacts has an invalid wire value');
+    }
+    if (json.containsKey('needsRecheckFacts') && json['needsRecheckFacts'] != null && (json['needsRecheckFacts'] is! List || (json['needsRecheckFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextContinuityPolicy field needsRecheckFacts has an invalid wire value');
+    }
+    if (json.containsKey('discardedAssumptions') && json['discardedAssumptions'] != null && (json['discardedAssumptions'] is! List || (json['discardedAssumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextContinuityPolicy field discardedAssumptions has an invalid wire value');
+    }
+    if (json.containsKey('mismatchSignal') && json['mismatchSignal'] != null && (json['mismatchSignal'] is! String)) {
+      throw const FormatException('ContextContinuityPolicy field mismatchSignal has an invalid wire value');
+    }
     return ContextContinuityPolicy(
       queryIntent: parseQueryIntentStrict((json['queryIntent'] as String?)?.trim() ?? ""),
       problemClass: parseProblemClassStrict((json['problemClass'] as String?)?.trim() ?? "general"),

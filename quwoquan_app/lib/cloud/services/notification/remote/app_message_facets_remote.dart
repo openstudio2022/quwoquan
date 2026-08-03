@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/notification/notification_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef NotificationInvocationContextFactory =

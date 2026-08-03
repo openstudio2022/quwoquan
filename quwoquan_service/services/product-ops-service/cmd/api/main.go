@@ -42,7 +42,11 @@ import (
 	experimentmessaging "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/messaging"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
 	assignmentstream "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/stream"
+	assignmentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/infrastructure/persistence"
+	premiumpoolapp "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/application"
+	premiumpoolpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/infrastructure/persistence"
 	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
+	recoveryreporter "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/infrastructure/eventrecord"
 	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
 )
@@ -77,6 +81,7 @@ type productService struct {
 	appRelease         *apprelease.Service
 	recoveryFailures   *recoveryfailure.Service
 	accountEnforcement *accountenforcementapp.Service
+	premiumPool        *premiumpoolapp.Service
 }
 
 func main() {
@@ -218,6 +223,13 @@ func main() {
 	if err := experimentStore.EnsureSchema(ctx); err != nil {
 		log.Fatalf("product-ops-service experiment schema initialization failed: %v", err)
 	}
+	assignmentStore, err := assignmentpersistence.NewPostgresStore(postgresPool)
+	if err != nil {
+		log.Fatalf("product-ops-service experiment assignment store invalid: %v", err)
+	}
+	if err := assignmentStore.EnsureSchema(ctx); err != nil {
+		log.Fatalf("product-ops-service experiment assignment schema initialization failed: %v", err)
+	}
 	accountEnforcementStore, err := accountenforcementpersistence.NewPostgresStore(postgresPool)
 	if err != nil {
 		log.Fatalf("product-ops-service account enforcement store invalid: %v", err)
@@ -225,6 +237,14 @@ func main() {
 	if err := accountEnforcementStore.EnsureSchema(ctx); err != nil {
 		log.Fatalf("product-ops-service account enforcement schema initialization failed: %v", err)
 	}
+	premiumPoolStore, err := premiumpoolpersistence.NewPostgresStore(postgresPool)
+	if err != nil {
+		log.Fatalf("product-ops-service PremiumPoolEntry store invalid: %v", err)
+	}
+	if err := premiumPoolStore.EnsureSchema(ctx); err != nil {
+		log.Fatalf("product-ops-service PremiumPoolEntry schema initialization failed: %v", err)
+	}
+	premiumPoolService := premiumpoolapp.NewService(premiumPoolStore)
 	accountEnforcementMetrics := accountenforcementobservability.Recorder{}
 	accountAppealIntakes, err := accountenforcementuser.NewAppealIntakeHTTPClient(
 		accountenforcementuser.AppealIntakeHTTPClientConfig{
@@ -277,8 +297,8 @@ func main() {
 	experimentFacade, err := experimentapp.NewFacade(
 		experimentStore,
 		experimentStore,
-		experimentStore,
-		experimentStore,
+		assignmentStore,
+		assignmentStore,
 	)
 	if err != nil {
 		log.Fatalf("product-ops-service experiment facade invalid: %v", err)
@@ -344,6 +364,15 @@ func main() {
 		log.Fatalf("product-ops-service control-plane outbox dispatcher invalid: %v", err)
 	}
 	go controlPlaneOutboxDispatcher.Run(ctx)
+	premiumPoolOutboxDispatcher, err := pgoutbox.NewDispatcher(
+		postgresPool,
+		publisher,
+		"premium_pool_entry_outbox",
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service PremiumPoolEntry outbox dispatcher invalid: %v", err)
+	}
+	go premiumPoolOutboxDispatcher.Run(ctx)
 	mongoClient, err := rtmongo.Connect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI})
 	if err != nil {
 		log.Fatalf("product-ops-service mongodb unavailable: %v", err)
@@ -372,36 +401,11 @@ func main() {
 	// 协议与契约证据由 local_contract 测试直接组装 in-memory store；生产二进制
 	// 不承载任何 Memory composition，缺后端能力时按下方分支 fail-fast。
 	switch cfg.LogSinkAdapterID {
-	case logsink.PostgresTelemetryLocalAdapterID:
-		schema := postgresTelemetrySchema(appEnv)
-		if schema == "" {
-			log.Fatalf(
-				"product-ops-service postgres telemetry adapter is unsupported for environment=%s",
-				appEnv,
-			)
-		}
-		localStore, err := telemetrypersistence.NewPostgresTelemetryStore(postgresPool, schema)
-		if err != nil {
-			log.Fatalf("product-ops-service postgres telemetry composition invalid: %v", err)
-		}
-		if err := localStore.EnsureSchema(ctx); err != nil {
-			log.Fatalf("product-ops-service postgres telemetry schema initialization failed: %v", err)
-		}
-		eventStore = localStore
-		rtcMediaQoeReader = localStore
-		runtimeLogStore = localStore
-		batchLedger = localStore
-		healthChecker.Register("telemetry-postgres-local", func(ctx context.Context) error {
-			return postgresPool.Ping(ctx)
-		})
-		log.Printf(
-			"product-ops-service telemetry storage=postgres_local schema=%s evidence=api_integration",
-			schema,
-		)
-	case logsink.ElasticsearchLocalAdapterID:
+	case logsink.ElasticsearchAdapterID:
 		elasticsearchStore, err := telemetrypersistence.NewElasticsearchEventLogStore(
 			telemetrypersistence.ElasticsearchConfig{
 				Endpoint:               strings.TrimSpace(cfg.Elasticsearch.Endpoint),
+				APIKey:                 strings.TrimSpace(cfg.Elasticsearch.APIKey),
 				RawIndex:               strings.TrimSpace(cfg.Elasticsearch.RawIndex),
 				StartupDiagnosticIndex: strings.TrimSpace(cfg.Elasticsearch.StartupDiagnosticIndex),
 				RuntimeLogIndex:        strings.TrimSpace(cfg.Elasticsearch.RuntimeLogIndex),
@@ -428,67 +432,14 @@ func main() {
 			router.Scene("general"),
 		)
 		healthChecker.Register(
-			"telemetry-elasticsearch-local",
+			"telemetry-elasticsearch",
 			elasticsearchStore.Ping,
 		)
 		log.Printf(
-			"product-ops-service telemetry storage=elasticsearch_local raw=%s runtime=%s aggregate=%s visit_storage=mongodb db=%s",
+			"product-ops-service telemetry storage=elasticsearch raw=%s runtime=%s aggregate=%s visit_storage=mongodb db=%s",
 			cfg.Elasticsearch.RawIndex,
 			cfg.Elasticsearch.RuntimeLogIndex,
 			cfg.Elasticsearch.AggregateIndex,
-			dbName,
-		)
-	case logsink.AliyunSLSAdapterID:
-		slsConfig := telemetrypersistence.SLSConfig{
-			Region:                    strings.TrimSpace(cfg.SLS.Region),
-			Endpoint:                  strings.TrimSpace(cfg.SLS.Endpoint),
-			Project:                   strings.TrimSpace(cfg.SLS.Project),
-			RawLogstore:               strings.TrimSpace(cfg.SLS.RawLogstore),
-			StartupDiagnosticLogstore: strings.TrimSpace(cfg.SLS.StartupDiagnosticLogstore),
-			RuntimeLogstore:           strings.TrimSpace(cfg.SLS.RuntimeLogstore),
-			AggregateLogstore:         strings.TrimSpace(cfg.SLS.AggregateLogstore),
-			Timeout:                   time.Duration(cfg.SLS.TimeoutMS) * time.Millisecond,
-		}
-		accessKeyID := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"))
-		accessKeySecret := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"))
-		securityToken := strings.TrimSpace(os.Getenv("ALIBABA_CLOUD_SECURITY_TOKEN"))
-		if accessKeyID == "" || accessKeySecret == "" {
-			log.Fatal("product-ops-service SLS credentials are required through deployment Secret")
-		}
-		slsClient := telemetrypersistence.NewOfficialSLSClient(
-			slsConfig,
-			accessKeyID,
-			accessKeySecret,
-			securityToken,
-		)
-		defer slsClient.Close()
-		slsStore, err := telemetrypersistence.NewSLSEventLogStore(slsClient, slsConfig)
-		if err != nil {
-			log.Fatalf("product-ops-service SLS telemetry store invalid: %v", err)
-		}
-		eventStore = slsStore
-		rtcMediaQoeReader = slsStore
-		runtimeLogStore = slsStore
-		healthChecker.Register("sls", func(context.Context) error {
-			for _, logstore := range []string{
-				slsConfig.RawLogstore,
-				slsConfig.StartupDiagnosticLogstore,
-				slsConfig.RuntimeLogstore,
-				slsConfig.AggregateLogstore,
-			} {
-				if _, err := slsClient.GetLogStore(slsConfig.Project, logstore); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		batchLedger = telemetrypersistence.NewRedisEventBatchLedger(router.Scene("general"))
-		log.Printf(
-			"product-ops-service telemetry storage=sls project=%s raw=%s runtime=%s aggregate=%s visit_storage=mongodb db=%s",
-			slsConfig.Project,
-			slsConfig.RawLogstore,
-			slsConfig.RuntimeLogstore,
-			slsConfig.AggregateLogstore,
 			dbName,
 		)
 	default:
@@ -510,7 +461,12 @@ func main() {
 		publisher,
 	)
 	service.accountEnforcement = accountEnforcementService
-	service.recoveryFailures = recoveryfailure.NewService(service.runtimeLogs)
+	service.premiumPool = premiumPoolService
+	recoveryFailureReporter, err := recoveryreporter.NewReporter(service.runtimeLogs)
+	if err != nil {
+		log.Fatalf("product-ops-service RecoveryFailure reporter init failed: %v", err)
+	}
+	service.recoveryFailures = recoveryfailure.NewService(recoveryFailureReporter)
 	appReleaseService, appReleaseErr := buildAppReleaseService(cfg)
 	if appReleaseErr != nil {
 		log.Printf("product-ops-service app release recovery unavailable: %v", appReleaseErr)

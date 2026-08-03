@@ -8,6 +8,7 @@ import (
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	deadletteradapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/adapters/inbound/runtime"
 )
 
 type contractProvider struct {
@@ -55,7 +56,7 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 	); err == nil {
 		t.Fatal("nil store must be rejected")
 	}
-	var typedNilStore *reliabletask.MemoryStore
+	var typedNilStore *deadletteradapter.RuntimeStore
 	if _, err := application.NewExternalInteractionService(
 		typedNilStore,
 		providers,
@@ -65,14 +66,14 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 	}
 	store := reliabletask.NewMemoryStore()
 	if _, err := application.NewExternalInteractionService(
-		store,
+		canonicalMemoryExternalStore(store),
 		providers,
 		policies,
 	); err == nil {
 		t.Fatal("sms policy without an OTP reference store must be rejected")
 	}
 	service, err := application.NewExternalInteractionService(
-		store,
+		canonicalMemoryExternalStore(store),
 		providers,
 		policies,
 		contractOTPReferenceStore{},
@@ -88,7 +89,7 @@ func TestExternalInteractionConstructorRequiresExplicitDependencies(t *testing.T
 func TestExternalInteractionConstructorRejectsMockProviderPolicy(t *testing.T) {
 	store := reliabletask.NewMemoryStore()
 	_, err := application.NewExternalInteractionService(
-		store,
+		canonicalMemoryExternalStore(store),
 		map[string]reliabletask.ExternalProvider{
 			"mock_sms": contractProvider{name: "mock_sms"},
 		},

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
+import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'comment_provider_state.dart';
@@ -65,7 +66,9 @@ class CommentNotifier extends Notifier<CommentState>
         return;
       }
       state = state.copyWith(
-        comments: page.items,
+        comments: page.items
+            .map(CommentViewData.fromWire)
+            .toList(growable: false),
         nextCursor: () => page.nextCursor,
         totalCount: page.total,
         sessionLoadVersion: state.sessionLoadVersion + 1,
@@ -127,7 +130,7 @@ class CommentNotifier extends Notifier<CommentState>
   }
 
   /// 切换服务端排序档位并重新加载首屏；排序真相源在服务端，禁止本地重排。
-  Future<void> changeSort(ContentCommentSort sort) async {
+  Future<void> changeSort(CommentSort sort) async {
     if (state.sort == sort || state.isLoading) return;
     state = state.copyWith(
       sort: sort,
@@ -164,7 +167,10 @@ class CommentNotifier extends Notifier<CommentState>
         return;
       }
       state = state.copyWith(
-        comments: [...state.comments, ...page.items],
+        comments: [
+          ...state.comments,
+          ...page.items.map(CommentViewData.fromWire),
+        ],
         nextCursor: () => page.nextCursor,
         totalCount: page.total,
         status: CommentListStatus.idle,
@@ -202,11 +208,11 @@ class CommentNotifier extends Notifier<CommentState>
     }
   }
 
-  Future<ContentCommentListItem?> addComment(
+  Future<CommentViewData?> addComment(
     String content, {
     String? replyToCommentId,
     List<String> attachmentMediaIds = const <String>[],
-    List<ContentCommentMention> mentions = const <ContentCommentMention>[],
+    List<CommentMention> mentions = const <CommentMention>[],
   }) async {
     final stopwatch = Stopwatch()..start();
     final activeContext = await _resolveActivePersonaContext();
@@ -249,7 +255,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.submitSucceeded,
         postId: postId,
         commentId: confirmed.id,
-        sortMode: state.sort.wireValue,
+        sortMode: state.sort.wireName,
         replyDepth: replyToCommentId == null ? 0 : 1,
         latencyMs: stopwatch.elapsedMilliseconds,
         attachmentCount: attachmentMediaIds.length,
@@ -268,7 +274,7 @@ class CommentNotifier extends Notifier<CommentState>
       _observability.trackAction(
         eventName: CommentEventNames.submitFailed,
         postId: postId,
-        sortMode: state.sort.wireValue,
+        sortMode: state.sort.wireName,
         replyDepth: replyToCommentId == null ? 0 : 1,
         latencyMs: stopwatch.elapsedMilliseconds,
         failureKind: e.runtimeType.toString(),
@@ -279,7 +285,7 @@ class CommentNotifier extends Notifier<CommentState>
     }
   }
 
-  Future<ContentCommentListItem> _refreshAfterCreate({
+  Future<CommentViewData> _refreshAfterCreate({
     required String createdCommentId,
     required String? parentCommentId,
   }) async {
@@ -288,7 +294,9 @@ class CommentNotifier extends Notifier<CommentState>
       throw StateError('comment surface disposed during authoritative refresh');
     }
     state = state.copyWith(
-      comments: page.items,
+      comments: page.items
+          .map(CommentViewData.fromWire)
+          .toList(growable: false),
       nextCursor: () => page.nextCursor,
       totalCount: page.total,
       status: CommentListStatus.idle,
@@ -307,10 +315,10 @@ class CommentNotifier extends Notifier<CommentState>
       commentId: parentCommentId,
       limit: state.replyExpandPageSize,
     );
-    ContentCommentListItem? created;
+    CommentViewData? created;
     for (final reply in replies.items) {
       if (reply.id == createdCommentId) {
-        created = reply;
+        created = CommentViewData.fromWire(reply);
         break;
       }
     }
@@ -322,7 +330,9 @@ class CommentNotifier extends Notifier<CommentState>
           .map(
             (comment) => comment.id == parentCommentId
                 ? comment.copyWith(
-                    replyPreview: replies.items,
+                    replyPreview: replies.items
+                        .map(CommentViewData.fromWire)
+                        .toList(growable: false),
                     replyCount: replies.total,
                     replyNextCursor: () => replies.nextCursor,
                   )
@@ -388,23 +398,23 @@ class CommentNotifier extends Notifier<CommentState>
 
   Future<void> toggleLike(String commentId) async {
     final current = _findComment(commentId);
-    final next = current?.viewerReaction == ContentCommentReactionValue.like
-        ? ContentCommentReactionValue.none
-        : ContentCommentReactionValue.like;
+    final next = current?.viewerReaction == CommentReactionType.like
+        ? CommentReactionType.none
+        : CommentReactionType.like;
     await reactToComment(commentId, next);
   }
 
   Future<void> toggleDislike(String commentId) async {
     final current = _findComment(commentId);
-    final next = current?.viewerReaction == ContentCommentReactionValue.dislike
-        ? ContentCommentReactionValue.none
-        : ContentCommentReactionValue.dislike;
+    final next = current?.viewerReaction == CommentReactionType.dislike
+        ? CommentReactionType.none
+        : CommentReactionType.dislike;
     await reactToComment(commentId, next);
   }
 
   Future<void> reactToComment(
     String commentId,
-    ContentCommentReactionValue reaction,
+    CommentReactionType reaction,
   ) async {
     final stopwatch = Stopwatch()..start();
     final original = state.comments;
@@ -446,7 +456,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.reactionChanged,
         postId: postId,
         commentId: commentId,
-        sortMode: state.sort.wireValue,
+        sortMode: state.sort.wireName,
         latencyMs: stopwatch.elapsedMilliseconds,
         reaction: reaction.name,
       );
@@ -525,7 +535,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.pinChanged,
         postId: postId,
         commentId: commentId,
-        sortMode: state.sort.wireValue,
+        sortMode: state.sort.wireName,
         latencyMs: stopwatch.elapsedMilliseconds,
         reaction: nextPinned ? 'pin' : 'unpin',
       );
@@ -567,7 +577,7 @@ class CommentNotifier extends Notifier<CommentState>
           eventName: CommentEventNames.replyExpanded,
           postId: postId,
           commentId: commentId,
-          sortMode: state.sort.wireValue,
+          sortMode: state.sort.wireName,
           replyDepth: 1,
         );
       }
@@ -596,7 +606,10 @@ class CommentNotifier extends Notifier<CommentState>
             .map(
               (comment) => comment.id == commentId
                   ? comment.copyWith(
-                      replyPreview: [...comment.replyPreview, ...page.items],
+                      replyPreview: [
+                        ...comment.replyPreview,
+                        ...page.items.map(CommentViewData.fromWire),
+                      ],
                       replyNextCursor: () => page.nextCursor,
                     )
                   : comment,
@@ -617,7 +630,7 @@ class CommentNotifier extends Notifier<CommentState>
         eventName: CommentEventNames.replyExpanded,
         postId: postId,
         commentId: commentId,
-        sortMode: state.sort.wireValue,
+        sortMode: state.sort.wireName,
         replyDepth: 1,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
@@ -653,7 +666,7 @@ class CommentNotifier extends Notifier<CommentState>
       eventName: CommentEventNames.replyCollapsed,
       postId: postId,
       commentId: commentId,
-      sortMode: state.sort.wireValue,
+      sortMode: state.sort.wireName,
       replyDepth: 1,
     );
   }
@@ -681,7 +694,7 @@ class CommentNotifier extends Notifier<CommentState>
     return null;
   }
 
-  ContentCommentListItem? _findComment(String commentId) {
+  CommentViewData? _findComment(String commentId) {
     for (final comment in state.comments) {
       if (comment.id == commentId) return comment;
       for (final reply in comment.replyPreview) {

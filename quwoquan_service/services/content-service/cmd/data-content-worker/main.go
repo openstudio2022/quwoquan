@@ -14,13 +14,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
@@ -101,7 +99,7 @@ func run() error {
 	}
 	defer client.Disconnect(context.Background())
 	database := client.Database(cfg.MongoDatabase)
-	store := reliabletaskmongo.New(database)
+	store := reliabletaskmongo.NewDataContentImport(database)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure reliabletask indexes: %w", err)
 	}
@@ -180,7 +178,6 @@ func run() error {
 	}
 	tasks, runErr := runWorkers(
 		ctx,
-		database,
 		request,
 		fleet,
 		executor,
@@ -188,15 +185,15 @@ func run() error {
 		request.ObjectTimeout(),
 	)
 	completedAt := time.Now().UTC()
-	outboxFilter, filterErr := importer.DataContentOutboxFilter(request)
-	if filterErr != nil {
-		return filterErr
+	stage, stageErr := request.Stage()
+	if stageErr != nil {
+		return stageErr
 	}
-	outboxCount, countErr := database.Collection("reliable_task_outbox").
-		CountDocuments(
-			context.Background(),
-			outboxFilter,
-		)
+	outboxCount, countErr := store.CountDataContentOutboxes(
+		context.Background(),
+		request.ExecutionID,
+		stage,
+	)
 	if countErr != nil {
 		return fmt.Errorf("count data content outboxes: %w", countErr)
 	}
@@ -272,7 +269,7 @@ func discardExecution(executionID string) error {
 		return fmt.Errorf("connect reliabletask Mongo for execution discard: %w", err)
 	}
 	defer client.Disconnect(context.Background())
-	store := reliabletaskmongo.New(client.Database(cfg.MongoDatabase))
+	store := reliabletaskmongo.NewDataContentImport(client.Database(cfg.MongoDatabase))
 	if err := store.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure reliabletask indexes for execution discard: %w", err)
 	}
@@ -316,7 +313,6 @@ func discardExecution(executionID string) error {
 
 func runWorkers(
 	ctx context.Context,
-	database *mongo.Database,
 	request importer.FleetRequest,
 	fleet reliabletask.DataContentFleet,
 	executor reliabletask.DataContentExecutor,
@@ -371,7 +367,7 @@ func runWorkers(
 	for {
 		executionTasks, err := loadExecutionTasks(
 			ctx,
-			database,
+			fleet.Store,
 			request.ExecutionID,
 		)
 		if err != nil {
@@ -412,28 +408,13 @@ func runWorkers(
 
 func loadExecutionTasks(
 	ctx context.Context,
-	database *mongo.Database,
+	store reliabletask.DataContentExecutionStore,
 	executionID string,
 ) ([]reliabletask.ReliableAsyncTask, error) {
-	cursor, err := database.Collection("reliable_async_task").Find(
-		ctx,
-		bson.M{
-			"taskType":            reliabletask.DataContentTaskType,
-			"payload.executionId": executionID,
-		},
-	)
-	if err != nil {
-		return nil, err
+	if store == nil {
+		return nil, reliabletask.ErrStoreRequired
 	}
-	defer cursor.Close(ctx)
-	var tasks []reliabletask.ReliableAsyncTask
-	if err := cursor.All(ctx, &tasks); err != nil {
-		return nil, err
-	}
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
-	})
-	return tasks, nil
+	return store.ListDataContentExecutionTasks(ctx, executionID)
 }
 
 func writeJSONAtomically(path string, value any) error {

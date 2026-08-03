@@ -584,6 +584,27 @@ types:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+  CirclePageSlice:
+    description: CircleReader 的稳定游标分页结果；不再以单对象 response_entity 配合手写列表 decoder。
+    fields:
+      - name: items
+        source: items
+        type: '[]Circle'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: cursor
+        source: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   CircleSectionConfig:
     description: 圈子主页板块配置项（嵌入文档，非独立集合）
     embedded: true
@@ -1341,11 +1362,9 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: sections
-        type: '[]object'
+        type: '[]CircleSectionConfig'
         constraints:
           - NOT_BLANK
-        client_dart_type: List<CircleSectionConfigInput>
-        client_wire: toMap
   CircleSearchQuery:
     fields:
       - name: query
@@ -1383,11 +1402,9 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: scope
-        type: string
+        type: enum
         enum_ref: CircleDiscoveryFeedScope
-        client_dart_type: CircleDiscoveryFeedScope
         client_default: CircleDiscoveryFeedScope.recommended
-        client_wire: canonicalEnum
       - name: cursor
         type: string
         constraints:

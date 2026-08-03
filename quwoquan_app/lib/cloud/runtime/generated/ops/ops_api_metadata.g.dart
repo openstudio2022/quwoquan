@@ -20,6 +20,8 @@ class OpsApiMetadata {
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'AcknowledgeAlert': '/control-plane/platform/alerts/{fingerprint}:ack',
+    'CreateExperiment': '/control-plane/product/experiments',
     'GetAccountEnforcementCase': '/control-plane/product/account-enforcement-cases/{caseId}',
     'GetAppRecoveryVersion': '/ops/app-recovery/version',
     'GetConfigSnapshot': '/control-plane/platform/configs/snapshot',
@@ -27,13 +29,38 @@ class OpsApiMetadata {
     'GetEventSummary': '/ops/events/summary',
     'GetExperimentAssignment': '/ops/experiments/{experimentId}/assignment',
     'GetExperimentStats': '/ops/experiments/{experimentId}/stats',
+    'GetGrayRoutingPolicy': '/control-plane/platform/rollout/routing-policy',
+    'GetGrowthOverview': '/control-plane/product/growth/overview',
+    'GetPageExperience': '/control-plane/product/experience/pages',
+    'GetPlatformProjectionSummary': '/control-plane/platform/projections/summary',
+    'GetPlatformTriageSummary': '/control-plane/platform/triage/summary',
+    'GetProdPlaneAccessIsolation': '/control-plane/platform/topology/prod-plane-access-isolation',
+    'GetProductProjectionSummary': '/control-plane/product/projections/summary',
+    'GetProductTriageSummary': '/control-plane/product/triage/summary',
     'GetRtcMediaQoeSummary': '/ops/events/rtc-media-qoe/summary',
     'GetRuntimeLogDrilldown': '/ops/runtime-logs/drilldown',
     'GetRuntimeLogSummary': '/ops/runtime-logs/summary',
+    'GetServiceRouteRED': '/control-plane/product/metrics/red-routes',
     'GetVisitStats': '/ops/visits/stats',
+    'IngestAlertmanagerWebhook': '/control-plane/platform/alerts/ingest',
+    'ListActiveAlerts': '/control-plane/platform/alerts/active',
     'ListConfigDomains': '/control-plane/platform/configs/domains',
     'ListConfigInstanceReports': '/control-plane/platform/configs/instances',
+    'ListEnvironmentTopologies': '/control-plane/platform/topology/environments',
     'ListExperiments': '/control-plane/product/experiments',
+    'ListL1L4MetricSnapshots': '/control-plane/product/metrics/l1l4',
+    'ListPlaneBindings': '/control-plane/platform/topology/planes',
+    'ListPlatformApprovals': '/control-plane/platform/approvals',
+    'ListPlatformAudits': '/control-plane/platform/audits',
+    'ListPremiumPoolEntries': '/control-plane/product/recommendation/premium-pool',
+    'ListProductApprovals': '/control-plane/product/approvals',
+    'ListProductAudits': '/control-plane/product/audits',
+    'ListProductWorkflows': '/control-plane/product/workflows',
+    'ListReleaseCandidateAcks': '/control-plane/platform/releases',
+    'ListRuntimeClusters': '/control-plane/platform/topology/clusters',
+    'ListRuntimeInstances': '/control-plane/platform/topology/instances',
+    'ListRuntimeServices': '/control-plane/platform/topology/services',
+    'ListServiceCatalogEntries': '/control-plane/platform/catalog/services',
     'ListServiceConfigs': '/control-plane/platform/configs',
     'OpenAccountAppealCase': '/control-plane/product/account-enforcement-cases/appeal',
     'OpenAccountModerationCase': '/control-plane/product/account-enforcement-cases/moderation',
@@ -47,10 +74,15 @@ class OpsApiMetadata {
     'ResolveEffectiveConfigForInstance': '/control-plane/platform/configs/resolve-for-instance',
     'RetryAccountEnforcementDelivery': '/control-plane/product/account-enforcement-cases/{caseId}:retry-delivery',
     'ReviewAccountEnforcementCase': '/control-plane/product/account-enforcement-cases/{caseId}:review',
+    'RollbackPremiumPoolEntry': '/control-plane/product/recommendation/premium-pool/{contentId}:rollback',
+    'TakedownPremiumPoolEntry': '/control-plane/product/recommendation/premium-pool/{contentId}:takedown',
     'UpdateExperimentRollout': '/control-plane/product/experiments/{experimentId}:rollout',
+    'UpsertPremiumPoolEntry': '/control-plane/product/recommendation/premium-pool',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'AcknowledgeAlert': 'POST',
+    'CreateExperiment': 'POST',
     'GetAccountEnforcementCase': 'GET',
     'GetAppRecoveryVersion': 'GET',
     'GetConfigSnapshot': 'GET',
@@ -58,13 +90,38 @@ class OpsApiMetadata {
     'GetEventSummary': 'GET',
     'GetExperimentAssignment': 'GET',
     'GetExperimentStats': 'GET',
+    'GetGrayRoutingPolicy': 'GET',
+    'GetGrowthOverview': 'GET',
+    'GetPageExperience': 'GET',
+    'GetPlatformProjectionSummary': 'GET',
+    'GetPlatformTriageSummary': 'GET',
+    'GetProdPlaneAccessIsolation': 'GET',
+    'GetProductProjectionSummary': 'GET',
+    'GetProductTriageSummary': 'GET',
     'GetRtcMediaQoeSummary': 'GET',
     'GetRuntimeLogDrilldown': 'GET',
     'GetRuntimeLogSummary': 'GET',
+    'GetServiceRouteRED': 'GET',
     'GetVisitStats': 'GET',
+    'IngestAlertmanagerWebhook': 'POST',
+    'ListActiveAlerts': 'GET',
     'ListConfigDomains': 'GET',
     'ListConfigInstanceReports': 'GET',
+    'ListEnvironmentTopologies': 'GET',
     'ListExperiments': 'GET',
+    'ListL1L4MetricSnapshots': 'GET',
+    'ListPlaneBindings': 'GET',
+    'ListPlatformApprovals': 'GET',
+    'ListPlatformAudits': 'GET',
+    'ListPremiumPoolEntries': 'GET',
+    'ListProductApprovals': 'GET',
+    'ListProductAudits': 'GET',
+    'ListProductWorkflows': 'GET',
+    'ListReleaseCandidateAcks': 'GET',
+    'ListRuntimeClusters': 'GET',
+    'ListRuntimeInstances': 'GET',
+    'ListRuntimeServices': 'GET',
+    'ListServiceCatalogEntries': 'GET',
     'ListServiceConfigs': 'GET',
     'OpenAccountAppealCase': 'POST',
     'OpenAccountModerationCase': 'POST',
@@ -78,11 +135,16 @@ class OpsApiMetadata {
     'ResolveEffectiveConfigForInstance': 'GET',
     'RetryAccountEnforcementDelivery': 'POST',
     'ReviewAccountEnforcementCase': 'POST',
+    'RollbackPremiumPoolEntry': 'POST',
+    'TakedownPremiumPoolEntry': 'POST',
     'UpdateExperimentRollout': 'POST',
+    'UpsertPremiumPoolEntry': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'AcknowledgeAlert': 'required',
+    'CreateExperiment': 'required',
     'GetAccountEnforcementCase': 'required',
     'GetAppRecoveryVersion': 'optional',
     'GetConfigSnapshot': 'required',
@@ -90,13 +152,38 @@ class OpsApiMetadata {
     'GetEventSummary': 'required',
     'GetExperimentAssignment': 'required',
     'GetExperimentStats': 'required',
+    'GetGrayRoutingPolicy': 'required',
+    'GetGrowthOverview': 'required',
+    'GetPageExperience': 'required',
+    'GetPlatformProjectionSummary': 'required',
+    'GetPlatformTriageSummary': 'required',
+    'GetProdPlaneAccessIsolation': 'required',
+    'GetProductProjectionSummary': 'required',
+    'GetProductTriageSummary': 'required',
     'GetRtcMediaQoeSummary': 'required',
     'GetRuntimeLogDrilldown': 'required',
     'GetRuntimeLogSummary': 'required',
+    'GetServiceRouteRED': 'required',
     'GetVisitStats': 'required',
+    'IngestAlertmanagerWebhook': 'required',
+    'ListActiveAlerts': 'required',
     'ListConfigDomains': 'required',
     'ListConfigInstanceReports': 'required',
+    'ListEnvironmentTopologies': 'required',
     'ListExperiments': 'required',
+    'ListL1L4MetricSnapshots': 'required',
+    'ListPlaneBindings': 'required',
+    'ListPlatformApprovals': 'required',
+    'ListPlatformAudits': 'required',
+    'ListPremiumPoolEntries': 'required',
+    'ListProductApprovals': 'required',
+    'ListProductAudits': 'required',
+    'ListProductWorkflows': 'required',
+    'ListReleaseCandidateAcks': 'required',
+    'ListRuntimeClusters': 'required',
+    'ListRuntimeInstances': 'required',
+    'ListRuntimeServices': 'required',
+    'ListServiceCatalogEntries': 'required',
     'ListServiceConfigs': 'required',
     'OpenAccountAppealCase': 'required',
     'OpenAccountModerationCase': 'required',
@@ -110,7 +197,10 @@ class OpsApiMetadata {
     'ResolveEffectiveConfigForInstance': 'required',
     'RetryAccountEnforcementDelivery': 'required',
     'ReviewAccountEnforcementCase': 'required',
+    'RollbackPremiumPoolEntry': 'required',
+    'TakedownPremiumPoolEntry': 'required',
     'UpdateExperimentRollout': 'required',
+    'UpsertPremiumPoolEntry': 'required',
   };
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
@@ -123,6 +213,8 @@ class OpsApiMetadata {
     'GetRtcMediaQoeSummary': 'object',
   };
 
+  static const String acknowledgeAlertOperation = 'AcknowledgeAlert';
+  static const String createExperimentOperation = 'CreateExperiment';
   static const String getAccountEnforcementCaseOperation = 'GetAccountEnforcementCase';
   static const String getAppRecoveryVersionOperation = 'GetAppRecoveryVersion';
   static const String getConfigSnapshotOperation = 'GetConfigSnapshot';
@@ -130,13 +222,38 @@ class OpsApiMetadata {
   static const String getEventSummaryOperation = 'GetEventSummary';
   static const String getExperimentAssignmentOperation = 'GetExperimentAssignment';
   static const String getExperimentStatsOperation = 'GetExperimentStats';
+  static const String getGrayRoutingPolicyOperation = 'GetGrayRoutingPolicy';
+  static const String getGrowthOverviewOperation = 'GetGrowthOverview';
+  static const String getPageExperienceOperation = 'GetPageExperience';
+  static const String getPlatformProjectionSummaryOperation = 'GetPlatformProjectionSummary';
+  static const String getPlatformTriageSummaryOperation = 'GetPlatformTriageSummary';
+  static const String getProdPlaneAccessIsolationOperation = 'GetProdPlaneAccessIsolation';
+  static const String getProductProjectionSummaryOperation = 'GetProductProjectionSummary';
+  static const String getProductTriageSummaryOperation = 'GetProductTriageSummary';
   static const String getRtcMediaQoeSummaryOperation = 'GetRtcMediaQoeSummary';
   static const String getRuntimeLogDrilldownOperation = 'GetRuntimeLogDrilldown';
   static const String getRuntimeLogSummaryOperation = 'GetRuntimeLogSummary';
+  static const String getServiceRouteREDOperation = 'GetServiceRouteRED';
   static const String getVisitStatsOperation = 'GetVisitStats';
+  static const String ingestAlertmanagerWebhookOperation = 'IngestAlertmanagerWebhook';
+  static const String listActiveAlertsOperation = 'ListActiveAlerts';
   static const String listConfigDomainsOperation = 'ListConfigDomains';
   static const String listConfigInstanceReportsOperation = 'ListConfigInstanceReports';
+  static const String listEnvironmentTopologiesOperation = 'ListEnvironmentTopologies';
   static const String listExperimentsOperation = 'ListExperiments';
+  static const String listL1L4MetricSnapshotsOperation = 'ListL1L4MetricSnapshots';
+  static const String listPlaneBindingsOperation = 'ListPlaneBindings';
+  static const String listPlatformApprovalsOperation = 'ListPlatformApprovals';
+  static const String listPlatformAuditsOperation = 'ListPlatformAudits';
+  static const String listPremiumPoolEntriesOperation = 'ListPremiumPoolEntries';
+  static const String listProductApprovalsOperation = 'ListProductApprovals';
+  static const String listProductAuditsOperation = 'ListProductAudits';
+  static const String listProductWorkflowsOperation = 'ListProductWorkflows';
+  static const String listReleaseCandidateAcksOperation = 'ListReleaseCandidateAcks';
+  static const String listRuntimeClustersOperation = 'ListRuntimeClusters';
+  static const String listRuntimeInstancesOperation = 'ListRuntimeInstances';
+  static const String listRuntimeServicesOperation = 'ListRuntimeServices';
+  static const String listServiceCatalogEntriesOperation = 'ListServiceCatalogEntries';
   static const String listServiceConfigsOperation = 'ListServiceConfigs';
   static const String openAccountAppealCaseOperation = 'OpenAccountAppealCase';
   static const String openAccountModerationCaseOperation = 'OpenAccountModerationCase';
@@ -150,8 +267,18 @@ class OpsApiMetadata {
   static const String resolveEffectiveConfigForInstanceOperation = 'ResolveEffectiveConfigForInstance';
   static const String retryAccountEnforcementDeliveryOperation = 'RetryAccountEnforcementDelivery';
   static const String reviewAccountEnforcementCaseOperation = 'ReviewAccountEnforcementCase';
+  static const String rollbackPremiumPoolEntryOperation = 'RollbackPremiumPoolEntry';
+  static const String takedownPremiumPoolEntryOperation = 'TakedownPremiumPoolEntry';
   static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
+  static const String upsertPremiumPoolEntryOperation = 'UpsertPremiumPoolEntry';
 
+  static const String acknowledgeAlertPathTemplate = '/control-plane/platform/alerts/{fingerprint}:ack';
+  static String acknowledgeAlertPath({required String fingerprint}) {
+    return _fillPath(acknowledgeAlertPathTemplate, <String, String>{
+      'fingerprint': fingerprint,
+    });
+  }
+  static const String createExperimentPath = '/control-plane/product/experiments';
   static const String getAccountEnforcementCasePathTemplate = '/control-plane/product/account-enforcement-cases/{caseId}';
   static String getAccountEnforcementCasePath({required String caseId}) {
     return _fillPath(getAccountEnforcementCasePathTemplate, <String, String>{
@@ -174,13 +301,38 @@ class OpsApiMetadata {
       'experimentId': experimentId,
     });
   }
+  static const String getGrayRoutingPolicyPath = '/control-plane/platform/rollout/routing-policy';
+  static const String getGrowthOverviewPath = '/control-plane/product/growth/overview';
+  static const String getPageExperiencePath = '/control-plane/product/experience/pages';
+  static const String getPlatformProjectionSummaryPath = '/control-plane/platform/projections/summary';
+  static const String getPlatformTriageSummaryPath = '/control-plane/platform/triage/summary';
+  static const String getProdPlaneAccessIsolationPath = '/control-plane/platform/topology/prod-plane-access-isolation';
+  static const String getProductProjectionSummaryPath = '/control-plane/product/projections/summary';
+  static const String getProductTriageSummaryPath = '/control-plane/product/triage/summary';
   static const String getRtcMediaQoeSummaryPath = '/ops/events/rtc-media-qoe/summary';
   static const String getRuntimeLogDrilldownPath = '/ops/runtime-logs/drilldown';
   static const String getRuntimeLogSummaryPath = '/ops/runtime-logs/summary';
+  static const String getServiceRouteREDPath = '/control-plane/product/metrics/red-routes';
   static const String getVisitStatsPath = '/ops/visits/stats';
+  static const String ingestAlertmanagerWebhookPath = '/control-plane/platform/alerts/ingest';
+  static const String listActiveAlertsPath = '/control-plane/platform/alerts/active';
   static const String listConfigDomainsPath = '/control-plane/platform/configs/domains';
   static const String listConfigInstanceReportsPath = '/control-plane/platform/configs/instances';
+  static const String listEnvironmentTopologiesPath = '/control-plane/platform/topology/environments';
   static const String listExperimentsPath = '/control-plane/product/experiments';
+  static const String listL1L4MetricSnapshotsPath = '/control-plane/product/metrics/l1l4';
+  static const String listPlaneBindingsPath = '/control-plane/platform/topology/planes';
+  static const String listPlatformApprovalsPath = '/control-plane/platform/approvals';
+  static const String listPlatformAuditsPath = '/control-plane/platform/audits';
+  static const String listPremiumPoolEntriesPath = '/control-plane/product/recommendation/premium-pool';
+  static const String listProductApprovalsPath = '/control-plane/product/approvals';
+  static const String listProductAuditsPath = '/control-plane/product/audits';
+  static const String listProductWorkflowsPath = '/control-plane/product/workflows';
+  static const String listReleaseCandidateAcksPath = '/control-plane/platform/releases';
+  static const String listRuntimeClustersPath = '/control-plane/platform/topology/clusters';
+  static const String listRuntimeInstancesPath = '/control-plane/platform/topology/instances';
+  static const String listRuntimeServicesPath = '/control-plane/platform/topology/services';
+  static const String listServiceCatalogEntriesPath = '/control-plane/platform/catalog/services';
   static const String listServiceConfigsPath = '/control-plane/platform/configs';
   static const String openAccountAppealCasePath = '/control-plane/product/account-enforcement-cases/appeal';
   static const String openAccountModerationCasePath = '/control-plane/product/account-enforcement-cases/moderation';
@@ -209,12 +361,25 @@ class OpsApiMetadata {
       'caseId': caseId,
     });
   }
+  static const String rollbackPremiumPoolEntryPathTemplate = '/control-plane/product/recommendation/premium-pool/{contentId}:rollback';
+  static String rollbackPremiumPoolEntryPath({required String contentId}) {
+    return _fillPath(rollbackPremiumPoolEntryPathTemplate, <String, String>{
+      'contentId': contentId,
+    });
+  }
+  static const String takedownPremiumPoolEntryPathTemplate = '/control-plane/product/recommendation/premium-pool/{contentId}:takedown';
+  static String takedownPremiumPoolEntryPath({required String contentId}) {
+    return _fillPath(takedownPremiumPoolEntryPathTemplate, <String, String>{
+      'contentId': contentId,
+    });
+  }
   static const String updateExperimentRolloutPathTemplate = '/control-plane/product/experiments/{experimentId}:rollout';
   static String updateExperimentRolloutPath({required String experimentId}) {
     return _fillPath(updateExperimentRolloutPathTemplate, <String, String>{
       'experimentId': experimentId,
     });
   }
+  static const String upsertPremiumPoolEntryPath = '/control-plane/product/recommendation/premium-pool';
 
   static String _fillPath(String template, Map<String, String> params) {
     var path = template;

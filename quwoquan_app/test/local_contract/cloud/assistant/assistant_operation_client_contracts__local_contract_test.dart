@@ -25,10 +25,7 @@ void main() {
       expect(body.containsKey('queryText'), isFalse);
       expect(body['occurredAt'], '2026-07-26T00:00:00.000Z');
 
-      final receipt = decodeAssistantLearningFactAppendReceipt(<
-        String,
-        Object?
-      >{
+      final receipt = decodeAssistantLearningFactReceipt(<String, Object?>{
         'eventId': 'fact-1',
         'accepted': true,
         'deduplicated': false,
@@ -38,13 +35,13 @@ void main() {
         'recordedAt': '2026-07-26T00:00:01Z',
       });
       expect(receipt.appendSequence, 7);
-      expect(receipt.recordedAt, DateTime.utc(2026, 7, 26, 0, 0, 1));
+      expect(receipt.recordedAt, '2026-07-26T00:00:01Z');
     },
   );
 
   test('learning fact receipt rejects the retired event identity field', () {
     expect(
-      () => decodeAssistantLearningFactAppendReceipt(<String, Object?>{
+      () => decodeAssistantLearningFactReceipt(<String, Object?>{
         'eventId': 'fact-1',
         // Retired eventVersion input must be rejected, never ignored.
         'eventVersion': 1,
@@ -75,12 +72,15 @@ void main() {
             skillId: 'daily_digest',
             domainId: 'assistant',
             tagRefs: const <String>['travel'],
-            searchQueryPlan: AssistantSkillSubscriptionSearchPlan(
+            searchQueryPlan: SkillSubscriptionSearchQueryPlanWire(
               queries: const <String>['Shanghai travel'],
             ),
-            trigger: AssistantSkillSubscriptionTrigger(cron: '0 8 * * *'),
-            destination: AssistantSkillSubscriptionDestination(
-              destinationType: 'user',
+            trigger: SkillSubscriptionTriggerWire(
+              cron: '0 8 * * *',
+              timezone: 'Asia/Shanghai',
+            ),
+            destination: SkillSubscriptionDestinationWire(
+              destinationType: SkillSubscriptionDestinationType.user,
             ),
             clientRequestId: 'intent-1',
           ),
@@ -94,6 +94,7 @@ void main() {
           UpdateAssistantSkillSubscriptionStatusCommand(
             subscriptionId: 'subscription-1',
             status: 'paused',
+            clientRequestId: 'intent-2',
           ),
         );
     expect(update.pathParameters['subscriptionId'], 'subscription-1');
@@ -104,7 +105,7 @@ void main() {
     'skill subscription response decoder rejects weak or incomplete shapes',
     () {
       expect(
-        () => decodeAssistantSkillSubscription(<String, Object?>{
+        () => decodeSkillSubscriptionWire(<String, Object?>{
           'subscriptionId': 'subscription-1',
         }),
         throwsFormatException,
@@ -113,15 +114,28 @@ void main() {
   );
 
   test('skill catalog decoder exposes one strict client projection', () {
-    final catalog = decodeAssistantSkillCatalogList(<String, Object?>{
+    final catalog = decodeAssistantSkillCatalogListView(<String, Object?>{
       'items': <Object?>[
         <String, Object?>{
+          'packageId': 'quwoquan.official.daily_assistant',
+          'releaseDigest':
+              'sha256:1111111111111111111111111111111111111111111111111111111111111111',
           'skillId': 'daily_assistant',
           'displayName': '每日助手',
           'description': '管理每日计划',
           'category': 'life',
           'requiresConsent': false,
+          'requiredConsentScopes': <String>[],
           'iconHint': 'checkmark',
+          'targetUsers': <String>['all_users'],
+          'dataUseSummary': '仅使用当前对话与公开信息',
+          'exampleRefs': <String>[],
+          'activationMode': 'hybrid',
+          'allowedSurfaceKinds': <String>['personal'],
+          'configurationSchemaDigest':
+              'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+          'setupTemplateRef': 'assistant.skill.setup.none',
+          'configurationRequiredFields': <String>[],
         },
       ],
     });
@@ -129,7 +143,7 @@ void main() {
     expect(catalog.items.single.skillId, 'daily_assistant');
     expect(catalog.items.single.requiresConsent, isFalse);
     expect(
-      () => decodeAssistantSkillCatalogList(<String, Object?>{
+      () => decodeAssistantSkillCatalogListView(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
             'skillId': 'daily_assistant',

@@ -1,55 +1,11 @@
 read_model: AuthorImpactEvidencePage
-description: '创作者影响力证据分页（ListAuthorImpactEvidence 响应真相源，对应云侧读模型
-
-  rm_author_impact_evidence）。回答「这个影响数字具体由哪些内容、什么时候产生」：
-
-  items 为按 occurredAt 倒序的影响证据明细行，cursor 分页 + 触底结束态。
-
-
-  endpoint 语义：?impactId=&evidenceSnapshotId=&cursor=&limit=；impactId 为
-
-  AuthorImpactItem.impactId（数字下钻锚点），evidenceSnapshotId 为可选快照校验。
-
-  无证据时返回空 items + hasMore=false，端不编造全量（R-ID03 闭合）。
-
-  '
-consumers:
-- app
-client_projection:
-  dart_class: AuthorImpactEvidencePage
-  strict: true
-  base_class: ''
-  output_path: cloud/runtime/generated/content/author_impact_evidence_page.g.dart
-  dart_imports:
-  - author_impact_evidence_item.g.dart
-  fields:
-  - name: impactId
-    dart_type: String
-    nullable: false
-    source: impactId
-    default: ''''''
-  - name: evidenceSnapshotId
-    dart_type: String
-    nullable: false
-    source: evidenceSnapshotId
-    default: ''''''
-  - name: totalCount
-    dart_type: int
-    nullable: false
-    source: totalCount
-    default: '0'
-  - name: items
-    dart_type: List<AuthorImpactEvidenceItem>
-    nullable: false
-    source: items
-    list_element_dart_class: AuthorImpactEvidenceItem
-  - name: nextCursor
-    dart_type: String
-    nullable: false
-    source: nextCursor
-    default: ''''''
-  - name: hasMore
-    dart_type: bool
-    nullable: false
-    source: hasMore
-    default: 'false'
+description: 单一 impactId 的 privacy-filtered 证据 keyset page。
+source_entities: [RecommendationFeatureProfileView, Post]
+consumers: [app]
+fields:
+  - {name: impactId, type: string, nullable: false}
+  - {name: evidenceSnapshotId, type: string, nullable: false}
+  - {name: totalCount, type: int, nullable: false}
+  - {name: items, type: '[]AuthorImpactEvidenceItem', nullable: false}
+  - {name: nextCursor, type: string, nullable: false}
+  - {name: hasMore, type: bool, nullable: false}

@@ -24,12 +24,12 @@ void main() {
     );
 
     final importedView = ContentSurfaceViewMapper.fromDto(
-      postBaseDtoFromMap(imported),
+      contentPostViewDataFromReadModelMap(imported),
       wire: imported,
       mediaResolver: _mediaResolver,
     );
     final uploadedView = ContentSurfaceViewMapper.fromDto(
-      postBaseDtoFromMap(uploaded),
+      contentPostViewDataFromReadModelMap(uploaded),
       wire: uploaded,
       mediaResolver: _mediaResolver,
     );

@@ -21,14 +21,14 @@ class SubmitCommentContinuation extends AuthContinuation {
     this.postId,
     this.replyToCommentId,
     this.attachmentMediaIds = const <String>[],
-    this.mentions = const <ContentCommentMention>[],
+    this.mentions = const <CommentMention>[],
   });
 
   final String content;
   final String? postId;
   final String? replyToCommentId;
   final List<String> attachmentMediaIds;
-  final List<ContentCommentMention> mentions;
+  final List<CommentMention> mentions;
 }
 
 /// 举报动作的原始表面；登录成功后只允许该表面消费，避免首页与沉浸浏览器抢占。
@@ -44,7 +44,7 @@ class SubmitContentReportContinuation extends AuthContinuation {
 
   final String postId;
   final ContentReportContinuationSurface surface;
-  final ContentReportReason reason;
+  final ReportReason reason;
 }
 
 /// 续接「举报评论」；由原 CommentThread surface 按 postId 消费。
@@ -57,7 +57,7 @@ class SubmitCommentReportContinuation extends AuthContinuation {
 
   final String postId;
   final String commentId;
-  final ContentReportReason reason;
+  final ReportReason reason;
 }
 
 enum ContentModerationContinuationSurface { homeFeed, workBrowser }

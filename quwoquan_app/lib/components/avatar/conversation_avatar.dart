@@ -1,6 +1,6 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/conversation_avatar_members_provider.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
@@ -54,10 +54,10 @@ class ConversationAvatar extends ConsumerWidget {
         ? ref.watch(
             conversationAvatarMembersProvider.select(
               (state) =>
-                  state[normalizedId] ?? const <ChatConversationMemberDto>[],
+                  state[normalizedId] ?? const <ConversationMemberListRow>[],
             ),
           )
-        : const <ChatConversationMemberDto>[];
+        : const <ConversationMemberListRow>[];
 
     if (shouldLoadMembers && members.isEmpty) {
       ref
@@ -96,7 +96,7 @@ class ConversationAvatar extends ConsumerWidget {
   }
 
   static String _resolveDirectAvatarUrl(
-    List<ChatConversationMemberDto> members,
+    List<ConversationMemberListRow> members,
   ) {
     for (final member in members) {
       final url = member.avatarUrl.trim();

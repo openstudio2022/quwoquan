@@ -12,33 +12,9 @@ source_entities:
 - UserProfile
 consumers:
 - app
-client_projection:
-  dart_class: UserHomepageViewerContextWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/user/user_homepage_viewer_context_wire_dto.g.dart
-  fields:
-  - name: viewerPersonaId
-    dart_type: String
-    nullable: false
-    source: viewerPersonaId
-    default: ''''''
-  - name: isOwner
-    dart_type: bool
-    nullable: false
-    source: isOwner
-    default: 'false'
-  - name: isGuest
-    dart_type: bool
-    nullable: false
-    source: isGuest
-    default: 'false'
-  - name: relationToTarget
-    dart_type: String
-    nullable: false
-    source: relationToTarget
-    default: '''not_following'''
-  - name: canViewFullProfile
-    dart_type: bool
-    nullable: false
-    source: canViewFullProfile
-    default: 'true'
+fields:
+- {name: viewerPersonaId, type: string, nullable: false}
+- {name: isOwner, type: bool, nullable: false}
+- {name: isGuest, type: bool, nullable: false}
+- {name: relationToTarget, type: enum, enum_ref: RelationshipState, nullable: false}
+- {name: canViewFullProfile, type: bool, nullable: false}

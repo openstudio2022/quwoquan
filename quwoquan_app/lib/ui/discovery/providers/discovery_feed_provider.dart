@@ -2,11 +2,9 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
@@ -53,19 +51,19 @@ bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
     return false;
   }
   return switch (page.emptyReason!) {
-    ContentDiscoveryFeedEmptyReason.followingEmpty => channelId == 'following',
-    ContentDiscoveryFeedEmptyReason.noActiveRelease ||
-    ContentDiscoveryFeedEmptyReason.noEligibleContent =>
+    ContentFeedEmptyReason.followingEmpty => channelId == 'following',
+    ContentFeedEmptyReason.noActiveRelease ||
+    ContentFeedEmptyReason.noEligibleContent =>
       channelId != 'following',
-    ContentDiscoveryFeedEmptyReason.continuationEnd => false,
+    ContentFeedEmptyReason.continuationEnd => false,
   };
 }
 
 void _requireCanonicalContinuationPage(DiscoveryFeedPage page) {
   final valid = page.items.isEmpty
-      ? page.outcome == ContentDiscoveryFeedOutcome.empty &&
-            page.emptyReason == ContentDiscoveryFeedEmptyReason.continuationEnd
-      : page.outcome == ContentDiscoveryFeedOutcome.content &&
+      ? page.outcome == ContentFeedOutcome.empty &&
+            page.emptyReason == ContentFeedEmptyReason.continuationEnd
+      : page.outcome == ContentFeedOutcome.content &&
             page.emptyReason == null;
   if (!valid) {
     throw const FormatException(
@@ -80,11 +78,11 @@ void _requireCanonicalContinuationPage(DiscoveryFeedPage page) {
 /// `following` 的合法空态和分页 continuation end 同样不会调用此构造器。
 RuntimeFailure discoveryFeedInitialPageProtocolFailure(String channelId) {
   return RuntimeFailure(
-    code: ContentErrorCode.requiredDependencyUnavailable.code,
+    code: RuntimeFailureCodes.appContractInvalidResponse,
     semanticReason: 'discovery_feed_initial_page_protocol_violation',
     origin: RuntimeFailureOrigin.localClient,
-    kind: RuntimeFailureKind.unavailable,
-    nature: RuntimeFailureNature.transient,
+    kind: RuntimeFailureKind.contract,
+    nature: RuntimeFailureNature.bug,
     location: const RuntimeFailureLocation(
       businessObject: 'content.discovery_feed',
       functionModule: 'discovery_feed_provider',
@@ -108,7 +106,7 @@ final class DiscoveryFeedLocalPostRemoval {
     this.residentPlacement,
   });
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final int visibleIndex;
   final DiscoveryFeedVisiblePostPlacement? residentPlacement;
 }
@@ -140,11 +138,11 @@ class DiscoveryFeedState {
     this.prependError,
   });
 
-  final List<PostBaseDto> items;
+  final List<ContentPostViewData> items;
 
   /// 混合对象卡（B4 插卡模式）：anchorIndex 为 items 全量列表中的插入位。
   /// 只随首刷下发（分页续接不重复注入）。
-  final List<FeedObjectCardDto> objectCards;
+  final List<FeedObjectCard> objectCards;
   final List<String> seenItemIds;
   final String? nextCursor;
 
@@ -155,7 +153,7 @@ class DiscoveryFeedState {
   final String? policyDigest;
 
   /// 服务端确认本次查询健康完成但无内容时的 canonical 原因。
-  final ContentDiscoveryFeedEmptyReason? emptyReason;
+  final ContentFeedEmptyReason? emptyReason;
 
   /// 当前 resident deque 两侧仍可从同一有界内存窗口恢复的页边界。
   final bool canRestorePreviousPage;
@@ -198,8 +196,8 @@ class DiscoveryFeedState {
   }
 
   DiscoveryFeedState copyWith({
-    List<PostBaseDto>? items,
-    List<FeedObjectCardDto>? objectCards,
+    List<ContentPostViewData>? items,
+    List<FeedObjectCard>? objectCards,
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
     Object? feedRequestId = _unset,
@@ -234,7 +232,7 @@ class DiscoveryFeedState {
           : policyDigest as String?,
       emptyReason: identical(emptyReason, _unset)
           ? this.emptyReason
-          : emptyReason as ContentDiscoveryFeedEmptyReason?,
+          : emptyReason as ContentFeedEmptyReason?,
       canRestorePreviousPage:
           canRestorePreviousPage ?? this.canRestorePreviousPage,
       hasBufferedNextPage: hasBufferedNextPage ?? this.hasBufferedNextPage,
@@ -267,6 +265,28 @@ typedef DiscoveryFeedQuery = ({
   String? identity,
   String? type,
 });
+
+enum DiscoveryFeedLoadTerminal {
+  content,
+  canonicalEmpty,
+  retainedContent,
+  stillBlocked,
+  superseded,
+  cancelled,
+}
+
+/// 一次 Feed generation 的权威终态；Widget 不得在 await 后再读共享状态猜测结果。
+final class DiscoveryFeedLoadResult {
+  const DiscoveryFeedLoadResult({
+    required this.terminal,
+    required this.generation,
+    this.failure,
+  });
+
+  final DiscoveryFeedLoadTerminal terminal;
+  final int generation;
+  final Object? failure;
+}
 
 /// 将 surface tab id 映射到统一 discovery feed 查询。
 ///
@@ -497,10 +517,19 @@ class DiscoveryFeedMapNotifier
     );
   }
 
-  Future<void> load(String channelId, {bool force = false}) async {
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async {
     final currentValue = state[channelId]?.value;
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
-      return;
+      return DiscoveryFeedLoadResult(
+        terminal: currentValue.staleDataError == null
+            ? DiscoveryFeedLoadTerminal.content
+            : DiscoveryFeedLoadTerminal.retainedContent,
+        generation: _refreshWaitControllers[channelId]?.generation ?? 0,
+        failure: currentValue.staleDataError,
+      );
     }
     final repo = ref.read(contentDiscoveryFeedQueryProvider);
     final query = _resolveQuery(channelId);
@@ -597,7 +626,9 @@ class DiscoveryFeedMapNotifier
           AppRequestWaitTimings.foregroundReadDeadline,
         ),
       );
-      if (!controller.isCurrent(generation)) return;
+      if (!controller.isCurrent(generation)) {
+        return _terminalLoadResult(channelId, controller, generation);
+      }
       final revalidation = page.revalidation;
       if (revalidation != null) {
         _applyInitialPage(
@@ -607,7 +638,9 @@ class DiscoveryFeedMapNotifier
           isStaleSnapshot: true,
         );
         final revalidatedPage = await revalidation;
-        if (!controller.isCurrent(generation)) return;
+        if (!controller.isCurrent(generation)) {
+          return _terminalLoadResult(channelId, controller, generation);
+        }
         _applyInitialPage(
           channelId,
           revalidatedPage,
@@ -622,9 +655,11 @@ class DiscoveryFeedMapNotifier
           isStaleSnapshot: false,
         );
       }
-      controller.complete(generation);
+      return _terminalLoadResult(channelId, controller, generation);
     } catch (e, st) {
-      if (!controller.isCurrent(generation)) return;
+      if (!controller.isCurrent(generation)) {
+        return _terminalLoadResult(channelId, controller, generation);
+      }
       final error = _normalizeDiscoveryFeedError(e);
       final latestValue = state[channelId]?.value ?? currentValue;
       if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
@@ -640,7 +675,7 @@ class DiscoveryFeedMapNotifier
             ),
           ),
         };
-        return;
+        return _terminalLoadResult(channelId, controller, generation);
       }
       developer.log(
         'load error: $error',
@@ -672,7 +707,11 @@ class DiscoveryFeedMapNotifier
           itemCount: latestValue.items.length,
           requestId: latestValue.feedRequestId,
         );
-        return;
+        return DiscoveryFeedLoadResult(
+          terminal: DiscoveryFeedLoadTerminal.retainedContent,
+          generation: generation,
+          failure: error,
+        );
       }
       state = {
         ...state,
@@ -694,9 +733,56 @@ class DiscoveryFeedMapNotifier
         hasCache: false,
         itemCount: 0,
       );
+      return DiscoveryFeedLoadResult(
+        terminal: DiscoveryFeedLoadTerminal.stillBlocked,
+        generation: generation,
+        failure: error,
+      );
     } finally {
       controller.complete(generation);
     }
+  }
+
+  DiscoveryFeedLoadResult _terminalLoadResult(
+    String channelId,
+    AppRequestWaitController controller,
+    int generation,
+  ) {
+    if (controller.generation != generation) {
+      return DiscoveryFeedLoadResult(
+        terminal: controller.isDisposed
+            ? DiscoveryFeedLoadTerminal.cancelled
+            : DiscoveryFeedLoadTerminal.superseded,
+        generation: generation,
+      );
+    }
+    final value = state[channelId]?.value;
+    if (value?.blockingError != null) {
+      return DiscoveryFeedLoadResult(
+        terminal: DiscoveryFeedLoadTerminal.stillBlocked,
+        generation: generation,
+        failure: value!.blockingError,
+      );
+    }
+    if (value != null && value.items.isNotEmpty) {
+      return DiscoveryFeedLoadResult(
+        terminal: value.staleDataError == null
+            ? DiscoveryFeedLoadTerminal.content
+            : DiscoveryFeedLoadTerminal.retainedContent,
+        generation: generation,
+        failure: value.staleDataError,
+      );
+    }
+    if (value?.emptyReason != null) {
+      return DiscoveryFeedLoadResult(
+        terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
+        generation: generation,
+      );
+    }
+    return DiscoveryFeedLoadResult(
+      terminal: DiscoveryFeedLoadTerminal.cancelled,
+      generation: generation,
+    );
   }
 
   void _applyInitialPage(
@@ -713,7 +799,7 @@ class DiscoveryFeedMapNotifier
         ((page.items.isEmpty &&
                 !_isCanonicalInitialEmptyPage(channelId, page)) ||
             (page.items.isNotEmpty &&
-                (page.outcome != ContentDiscoveryFeedOutcome.content ||
+                (page.outcome != ContentFeedOutcome.content ||
                     page.emptyReason != null)));
     if (hasInitialPageProtocolViolation) {
       final error = discoveryFeedInitialPageProtocolFailure(channelId);
@@ -1175,7 +1261,7 @@ class DiscoveryFeedMapNotifier
     final deadlineAt = DateTime.now().add(
       AppRequestWaitTimings.foregroundReadDeadline,
     );
-    final confirmed = <PostBaseDto>[];
+    final confirmed = <ContentPostViewData>[];
     Object? fallbackError;
     try {
       // 已交付页可能因内容删除/权限变化而收缩为空；最多跨过四个空页，避免
@@ -1466,7 +1552,7 @@ class DiscoveryFeedMapNotifier
           current.items.any((item) => item.id == entry.value.post.id)) {
         continue;
       }
-      final items = List<PostBaseDto>.from(current.items);
+      final items = List<ContentPostViewData>.from(current.items);
       final index = entry.value.visibleIndex.clamp(0, items.length).toInt();
       final residentWindow = _residentPageWindows[entry.key];
       if (residentWindow != null) {

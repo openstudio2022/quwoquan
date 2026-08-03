@@ -1,0 +1,23 @@
+read_model: ActorFirstSeenView
+description: EventRecord 重放形成的不可逆 actor hash 首见日期投影；仅服务新增与留存计算，不保存原始账号身份。
+storage_backend: mongodb
+projection_mode: rebuildable
+source_entities:
+- EventRecord
+consumers:
+- product-ops-service
+checkpoint:
+  source: EventRecord occurredAt 与稳定事件身份
+  resume: inclusive_idempotent
+rebuild:
+  strategy: replay_event_record_history
+  atomic_replace: true
+tombstone:
+  strategy: rebuild_without_removed_source
+fields:
+- name: actorHash
+  type: string
+- name: firstSeenDate
+  type: string
+- name: firstSeenAt
+  type: timestamp

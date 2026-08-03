@@ -226,7 +226,7 @@ def test_package_boundary_and_isolation_include_every_package_kind(
     assert names == {"app.txt", "shared.txt", "manifest.json", "portal.txt"}
 
 
-def test_product_telemetry_sls_package_rejects_resolved_bindings(
+def test_product_telemetry_package_rejects_resolved_credentials(
     tmp_path: Path,
 ) -> None:
     package_dir = tmp_path / "product-ops-service"
@@ -234,20 +234,20 @@ def test_product_telemetry_sls_package_rejects_resolved_bindings(
     config_dir.mkdir(parents=True)
     config = config_dir / "config.yaml"
     config.write_text(
-        "PRODUCT_OPS_SLS_ENDPOINT: ${PRODUCT_OPS_SLS_ENDPOINT}\n"
-        "ALIBABA_CLOUD_ACCESS_KEY_ID: ${ALIBABA_CLOUD_ACCESS_KEY_ID:-}\n",
+        "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT: https://logs.prod.example\n"
+        "PRODUCT_OPS_ELASTICSEARCH_API_KEY: ${PRODUCT_OPS_ELASTICSEARCH_API_KEY:-}\n",
         encoding="utf-8",
     )
-    assert packaging.validate_product_telemetry_sls_package(package_dir) == []
+    assert packaging.validate_product_telemetry_secret_package(package_dir) == []
 
     config.write_text(
-        "- name: ALIBABA_CLOUD_ACCESS_KEY_SECRET\n"
+        "- name: PRODUCT_OPS_ELASTICSEARCH_API_KEY\n"
         "  value: fixture-value-must-not-package\n",
         encoding="utf-8",
     )
     assert any(
-        "ALIBABA_CLOUD_ACCESS_KEY_SECRET" in issue
-        for issue in packaging.validate_product_telemetry_sls_package(package_dir)
+        "PRODUCT_OPS_ELASTICSEARCH_API_KEY" in issue
+        for issue in packaging.validate_product_telemetry_secret_package(package_dir)
     )
 
 

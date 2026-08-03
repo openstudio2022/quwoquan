@@ -62,7 +62,6 @@ func (c *Client) ResolveAssistantDeliveryMembership(
 	conversationID string,
 	creatorPersonaID string,
 	assistantMemberID string,
-	assistantSkillID string,
 ) (bool, error) {
 	if c == nil || c.http == nil || c.baseURL == "" {
 		return false, fmt.Errorf("chat grounding client not configured")
@@ -72,7 +71,6 @@ func (c *Client) ResolveAssistantDeliveryMembership(
 	if assistantMemberID = strings.TrimSpace(assistantMemberID); assistantMemberID != "" {
 		query.Set("assistantMemberId", assistantMemberID)
 	}
-	query.Set("assistantSkillId", strings.TrimSpace(assistantSkillID))
 	endpoint := c.baseURL +
 		serviceclients.ChatResolveAssistantDeliveryMembershipPath(
 			conversationID,
@@ -89,14 +87,13 @@ func (c *Client) ResolveAssistantDeliveryMembership(
 	); err != nil {
 		return false, err
 	}
-	return payload.CreatorMember && payload.AssistantSkillMember, nil
+	return payload.CreatorMember && payload.AssistantMember, nil
 }
 
 func (c *Client) ListMessages(
 	ctx context.Context,
 	conversationID string,
 	creatorPersonaID string,
-	assistantSkillID string,
 	beforeSeq int64,
 	limit int,
 ) ([]ports.ChatGroundingMessage, error) {
@@ -105,7 +102,6 @@ func (c *Client) ListMessages(
 	}
 	query := url.Values{}
 	query.Set("creatorPersonaId", strings.TrimSpace(creatorPersonaID))
-	query.Set("assistantSkillId", strings.TrimSpace(assistantSkillID))
 	if beforeSeq > 0 {
 		query.Set("beforeSeq", strconv.FormatInt(beforeSeq, 10))
 	}
@@ -167,7 +163,6 @@ func (c *Client) SendMessage(
 		"creatorPersonaId",
 		strings.TrimSpace(req.CreatorPersonaID),
 	)
-	query.Set("assistantSkillId", strings.TrimSpace(req.AssistantSkillID))
 	endpoint := c.baseURL +
 		serviceclients.ChatSendAssistantDeliveryMessagePath(
 			req.ChatConversationID,
@@ -280,8 +275,8 @@ func (m messageWire) groundingObjectRef() *ports.ChatGroundingObjectRef {
 }
 
 type assistantDeliveryMembershipWire struct {
-	CreatorMember        bool `json:"creatorMember"`
-	AssistantSkillMember bool `json:"assistantSkillMember"`
+	CreatorMember   bool `json:"creatorMember"`
+	AssistantMember bool `json:"assistantMember"`
 }
 
 type sendMessageWire struct {

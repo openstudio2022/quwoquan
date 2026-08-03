@@ -1,5 +1,6 @@
 # spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-004
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-003
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md#gwt-004
 
 from __future__ import annotations
 
@@ -273,6 +274,21 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(args.report_dir, ".qwq_output/env/alpha/runs/global")
 
+    def test_parser_accepts_bounded_content_commercial_workload(self) -> None:
+        args = stackctl.build_parser().parse_args(
+            [
+                "up",
+                "--env",
+                "alpha",
+                "--workload",
+                "content-commercial",
+                "--skip-build",
+                "--skip-app",
+            ]
+        )
+
+        self.assertEqual(args.workload, "content-commercial")
+
     def test_status_uses_content_consumer_scope_for_current_content_release(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             process_dir = Path(tmp_dir) / "process"
@@ -294,6 +310,37 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
         self.assertEqual(result, health_payload)
         self.assertEqual(health.call_args.args[0].scope, "content-consumer")
+
+    def test_status_uses_bounded_commercial_scope_for_current_content_commercial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            process_dir = Path(tmp_dir) / "process"
+            process_dir.mkdir()
+            (process_dir / "stack.state").write_text(
+                "stack=beta-local\nworkload=content-commercial\n",
+                encoding="utf-8",
+            )
+            health_payload = {"exitCode": 0, "summary": "content commercial ready"}
+            with (
+                mock.patch.object(stackctl, "target_process_dir", return_value=process_dir),
+                mock.patch.object(
+                    stackctl,
+                    "load_startup_attempt",
+                    return_value={
+                        "status": "running",
+                        "workload": "content-commercial",
+                    },
+                ),
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "get_target", return_value={"env": "beta"}),
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir) / "report"),
+                mock.patch.object(stackctl, "command_health", return_value=health_payload) as health,
+            ):
+                result = stackctl.command_status(
+                    argparse.Namespace(target="beta-local", output_format="text", report_dir="")
+                )
+
+        self.assertEqual(result, health_payload)
+        self.assertEqual(health.call_args.args[0].scope, "content-commercial")
 
     def test_gamma_status_uses_completed_workload_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -848,6 +895,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         search = by_name["global_search"]
         self.assertEqual(search["method"], "POST")
         self.assertEqual(search["url"], "https://gamma.example/search")
+        self.assertEqual(search["headers"]["X-Session-Id"], "stackctl-environment-probe")
         self.assertEqual(
             json.loads(search["body"].decode("utf-8")),
             {"query": "西湖", "mode": "result", "limit": 1},
@@ -1201,7 +1249,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertNotIn("CONTENT_EMBEDDING_FIXTURE_", script)
 
-    def test_local_gamma_content_release_excludes_secret_backed_assistant(self) -> None:
+    def test_local_gamma_content_release_excludes_out_of_scope_assistant(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script = (
             root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
@@ -1223,8 +1271,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "commercial-observability,assistant-runtime,edge-media",
             script,
         )
-        self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', script)
-        self.assertIn("content_release_services=(", script)
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then',
+            script,
+        )
+        self.assertIn("content_slice_services=(", script)
         for service_name in (
             "api-edge",
             "recommendation-service",
@@ -1245,20 +1296,20 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             '[[ "$service_name" == "assistant-service" ]] ||',
             script,
         )
+        self.assertIn("content_slice_services+=(product-ops-service)", script)
+        self.assertIn("PRODUCT_OPS_REQUIRED=1", script)
+        self.assertIn("PRODUCT_TELEMETRY_AVAILABLE=0", script)
+        self.assertIn("compose_up_args+=(product-ops-service)", script)
+        self.assertIn("compose_up_args+=(api-edge gamma-proxy)", script)
         self.assertIn(
-            "compose_up_args+=(\n"
-            "    recommendation-service\n"
-            "    content-service\n"
-            "    user-service\n"
-            "    entity-service\n"
-            "    api-edge\n"
-            "    gamma-proxy",
+            "bounded content workloads require canonical Docker Compose service slicing",
             script,
         )
         self.assertIn("gamma_full_workload_dependencies_ready", script)
         self.assertIn('"workload": workload', script)
         self.assertIn("prepare_down_compose_environment()", script)
-        self.assertIn("prepare_down_compose_environment\n  docker compose", script)
+        self.assertIn("prepare_down_compose_environment\n  down_args=(down)", script)
+        self.assertIn('"${COMPOSE_FILE_ARGS[@]}" "${down_args[@]}"', script)
         self.assertIn("validate_local_gamma_image_composition()", script)
         self.assertIn('composition_args+=("$service" "$image_ref")', script)
         self.assertNotIn("source-provenance-required", script)
@@ -1902,6 +1953,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value={},
             ),
             mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(
+                stackctl,
+                "_current_runtime_health_scope",
+                return_value="full",
+            ),
         ):
             commands = stackctl._selected_profile_commands(
                 "beta",

@@ -132,10 +132,10 @@ void main() {
     );
     await AssistantConsentStore(
       accountId: actorA,
-    ).save(const <AssistantSkillConsent>[]);
+    ).save(const <SkillConsent>[]);
     await AssistantConsentStore(
       accountId: actorB,
-    ).save(const <AssistantSkillConsent>[]);
+    ).save(const <SkillConsent>[]);
     final emoji = EmojiRepository(preferences);
     await emoji.setLastReportDate('2026-07-24');
 

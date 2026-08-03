@@ -1,0 +1,107 @@
+description: ChatInboxView 只由 typed chat 生命周期事件投影，不暴露第二条 HTTP 写入轨。
+commercial_defaults:
+  status: blocked
+  block_reason: operation 尚未逐项完成商业证据绑定
+  gap_id: CHAT_INBOX_VIEW_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: GET
+  path: /chat/inbox
+  operation: ListInbox
+  request_bindings:
+    query:
+    - name: limit
+      field: limit
+    - name: cursor
+      field: cursor
+      required: false
+  actor: persona
+  commercial:
+    status: ready
+  authorization:
+    principal: persona
+    ownership_policy: active_persona_inbox
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CHAT.USER.unauthorized
+  - CHAT.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: chat_inbox_list
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  application:
+    kind: query
+    facet: ChatInboxViewQueryFacet
+    method: listInbox
+    reader: ChatInboxViewReader
+    slice: ChatInboxPageSlice
+  description: 读取唯一物化 ChatInboxView；按 pinned、lastMessageTime 与 conversationId 稳定分页，不回扫源对象。
+  response_entity: ChatInboxPageSlice
+  response_body: ChatInbox
+  response_body_kind: page
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  request_entity: ChatListInboxQuery
+  request_body_kind: none
+runtime_entrypoints:
+- name: ProjectChatInbox
+  kind: projector
+  phase: event_projection
+  source_events:
+  - chat.ConversationCreated
+  - chat.ConversationUpdated
+  - chat.ConversationDissolved
+  - chat.MessageSent
+  - chat.ConversationUserSettingsChanged
+  - chat.ConversationReadWatermarkAdvanced
+  checkpoint: chat_outbox_sequence
+  rebuild: replay_chat_authoritative_outbox
+  tombstone: hide_conversation_and_retain_checkpoint
+  idempotency: aggregate_version
+  application:
+    kind: command
+    facet: ChatInboxViewProjector
+    method: apply
+    object_owner: ChatInboxView
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: chat-service API
+      data_source: fields.yaml
+      scenarios:
+      - name: inbox_list
+        route: GET /chat/inbox
+        assertions:
+        - status_200
+        - items_match_schema
+        - sorted_by_pinned_then_last_message_time_then_conversation_id
+        - unread_and_mention_counts_present
+    service_side:
+      description: 使用真实 MongoDB 验证物化分页、per-source checkpoint、rebuild 与 tombstone；禁止 mock store 代替 api_integration。
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      data_management:
+        cleanup: DeleteMany for chat_inbox_views and chat_inbox_view_checkpoints
+      scenarios:
+      - name: stable_page_and_tombstone
+        assertions:
+        - pinned rows sort first
+        - opaque cursor does not duplicate or skip rows
+        - tombstone hides content and retains source checkpoints

@@ -1,11 +1,11 @@
 overrides:
   sys.integration-service.account_security_authority.base_url: http://user-service:18081
   sys.integration-service.account_security_authority.timeout_ms: 300
-  sys.integration-service.integration.external_interaction.push.apns.environment: sandbox
+  sys.integration-service.integration.external_interaction.push.mode: local_recorder
+  sys.integration-service.integration.external_interaction.sms.enabled: true
+  sys.integration-service.integration.external_interaction.sms.provider: ext.sms.local_capture
   sys.integration-service.redis.general.addr: redis:6379
 secretRefs:
-  sys.integration-service.integration.external_interaction.push.apns.key_file: INTEGRATION_PUSH_APNS_KEY_FILE
-  sys.integration-service.integration.external_interaction.push.fcm.service_account_file: INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
   sys.integration-service.integration.external_interaction.sms.token: INTEGRATION_SMS_TOKEN
   sys.integration-service.mongodb.uri: INTEGRATION_MONGO_URI
 externalBindings:
@@ -13,38 +13,24 @@ externalBindings:
     state: enabled
   identity.sms.otp:
     state: enabled
-    adapter: ext.sms.aliyun
-    endpointRef: environment_binding:integration.sms
+    adapter: ext.sms.local_capture
+    endpointRef: local_topology:integration.local_capture
     endpointEnvs:
       endpoint: INTEGRATION_SMS_ENDPOINT
     secretRefs:
     - INTEGRATION_SMS_TOKEN
-    - OTP_CODE_REF_KEYS_JSON
-    - INTEGRATION_SERVICE_MTLS_CA_FILE
-    - INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE
-    - INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE
     timeoutMs: 10000
   integration.push.delivery:
     state: enabled
-    adapter: ext.push.dispatch
-    endpointRef: environment_binding:integration.push
-    endpointEnvs:
-      user_service_base_url: INTEGRATION_PUSH_USER_SERVICE_BASE_URL
-      apns_environment: INTEGRATION_PUSH_APNS_ENVIRONMENT
-      apns_key_id: INTEGRATION_PUSH_APNS_KEY_ID
-      apns_team_id: INTEGRATION_PUSH_APNS_TEAM_ID
-      apns_topic: INTEGRATION_PUSH_APNS_TOPIC
-      fcm_project_id: INTEGRATION_PUSH_FCM_PROJECT_ID
-    secretRefs:
-    - INTEGRATION_PUSH_APNS_KEY_FILE
-    - INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE
+    adapter: ext.push.local_recorder
+    endpointRef: local_topology:integration.local_recorder
+    endpointEnvs: {}
+    secretRefs: []
     timeoutMs: 10000
   integration.location.lookup:
     state: enabled
-    adapter: ext.map.baidu
-    endpointRef: environment_binding:integration.location
-    endpointEnvs:
-      base: INTEGRATION_LOCATION_BAIDU_BASE_URL
-    secretRefs:
-    - INTEGRATION_LOCATION_BAIDU_AK
+    adapter: ext.map.protocol_fixture
+    endpointRef: local_topology:integration.protocol_fixture
+    endpointEnvs: {}
+    secretRefs: []
     timeoutMs: 1200

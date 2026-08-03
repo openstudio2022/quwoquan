@@ -55,36 +55,48 @@ type LeaseStore interface {
 	CurrentFence(ctx context.Context, identity TrustedIdentity) (int64, error)
 }
 
-type PresenceDevice struct {
-	AccountID       string    `json:"accountId"`
-	PersonaID       string    `json:"personaId"`
-	DeviceID        string    `json:"deviceId"`
-	ConnectionID    string    `json:"connId"`
-	NodeID          string    `json:"nodeId"`
-	Transport       string    `json:"transport"`
-	LastHeartbeatAt time.Time `json:"lastHeartbeatAt"`
-}
-
-type PresenceView struct {
-	PersonaID string           `json:"personaId"`
-	Devices   []PresenceDevice `json:"devices"`
-}
-
-// PresenceStore 维护 persona 设备级在线投影（redis presence:persona:* hash）。
-type PresenceStore interface {
-	Attach(ctx context.Context, identity TrustedIdentity, connID, nodeID, transport string) error
-	Heartbeat(ctx context.Context, identity TrustedIdentity, connID, nodeID, transport string) error
-	Detach(ctx context.Context, identity TrustedIdentity, connID string) error
-}
-
-// PresenceViewReader 是 notification-service 的 internal named reader。
-// reader 按每个 hash field 的 heartbeat 单独清理陈旧设备。
-type PresenceViewReader interface {
-	ReadPresence(
+// PresenceProjector is the typed lifecycle port to the separately-owned
+// PresenceView projection. The Connection fence is mandatory on every write.
+type PresenceProjector interface {
+	Attach(
 		ctx context.Context,
+		identity TrustedIdentity,
+		connID string,
+		nodeID string,
+		transport string,
+		sequence int64,
+	) error
+	Heartbeat(
+		ctx context.Context,
+		identity TrustedIdentity,
+		connID string,
+		nodeID string,
+		transport string,
+		sequence int64,
+	) error
+	Detach(
+		ctx context.Context,
+		identity TrustedIdentity,
+		connID string,
+		sequence int64,
+	) error
+}
+
+// PresenceRevoker is used by the durable account-security consumer. It keeps
+// Connection cleanup from directly reading or mutating PresenceView keys.
+type PresenceRevoker interface {
+	RemoveConnection(
+		ctx context.Context,
+		accountID string,
 		personaID string,
-		now time.Time,
-	) (PresenceView, error)
+		deviceID string,
+		connectionID string,
+	) error
+	RemoveAccount(
+		ctx context.Context,
+		accountID string,
+		personaIDs []string,
+	) error
 }
 
 // EventSource 同时使用 account/persona 的明确语义：账号通道保留给账号级消息，

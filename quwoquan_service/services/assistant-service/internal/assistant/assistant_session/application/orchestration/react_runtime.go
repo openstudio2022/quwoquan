@@ -7,13 +7,23 @@ import (
 
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	react "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/reasoning"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
 type ReactRuntime struct {
-	Model     ModelProvider
-	Tools     ToolExecutor
+	Model ModelProvider
+	Tools ToolExecutor
+	// PreToolUse 在每个工具调用的安全边界重新检查动态 Setting、Consent、
+	// Placement 与共享资格。撤权后已启动的长 Run 不能继续使用旧权限。
+	PreToolUse func(
+		context.Context,
+		assistant.AssistantTurn,
+		SkillSelection,
+		string,
+		toolpkg.Metadata,
+	) error
 	Planner   react.ReactPlanner
 	Reflector react.ReactReflector
 	Guard     react.ToolExecutionGuard
@@ -87,16 +97,20 @@ func (r ReactRuntime) RunWithFinalTextSink(
 	}
 	planner := r.Planner
 	guard := r.Guard
-	if guard.AllowedTools == nil && len(skill.ToolPolicy) > 0 {
+	toolCatalog := modelToolDeclarationsFor(tools, skill.ToolPolicy)
+	runtimeToolPolicy := make([]string, 0, len(toolCatalog))
+	for _, definition := range toolCatalog {
+		runtimeToolPolicy = append(runtimeToolPolicy, definition.Name)
+	}
+	if guard.AllowedTools == nil && len(runtimeToolPolicy) > 0 {
 		guard.AllowedTools = map[string]bool{}
-		for _, allowed := range skill.ToolPolicy {
+		for _, allowed := range runtimeToolPolicy {
 			guard.AllowedTools[allowed] = true
 		}
 	}
 	assessor := r.Assessor
 	truncator := r.Truncator
 	reflector := r.Reflector
-	toolCatalog := modelToolDeclarationsFor(tools, skill.ToolPolicy)
 	toolHistory := []string{}
 	stepsOut := []ReactStepResult{}
 	usage := map[string]any{}
@@ -136,7 +150,7 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		decision := planner.Decide(react.PlanInput{
 			ReasoningText:   reasoningResp.Text,
 			StructuredDelta: reasoningResp.StructuredDelta,
-			ToolPolicy:      skill.ToolPolicy,
+			ToolPolicy:      runtimeToolPolicy,
 			Budget: react.Budget{
 				MaxIterations: budget.MaxIterations - iteration + 1,
 				MaxToolCalls:  budget.MaxToolCalls - len(toolHistory),
@@ -187,12 +201,38 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			stopReason = "model_answered_without_tools"
 			break
 		}
+		if !stringSliceContains(runtimeToolPolicy, toolName) {
+			if len(runtimeToolPolicy) == 0 || len(toolHistory) == 0 {
+				return ReactResult{}, fmt.Errorf(
+					"tool %q is unavailable in this runtime",
+					toolName,
+				)
+			}
+			toolName = runtimeToolPolicy[0]
+		}
 		if err := guard.Allow(toolName); err != nil {
-			if len(skill.ToolPolicy) == 0 || len(toolHistory) == 0 {
+			if len(runtimeToolPolicy) == 0 || len(toolHistory) == 0 {
 				return ReactResult{}, err
 			}
-			toolName = skill.ToolPolicy[0]
+			toolName = runtimeToolPolicy[0]
 			if err := guard.Allow(toolName); err != nil {
+				return ReactResult{}, err
+			}
+		}
+		if r.PreToolUse != nil {
+			metadataProvider, ok := tools.(ToolMetadataProvider)
+			if !ok {
+				return ReactResult{}, fmt.Errorf(
+					"tool %q has no canonical metadata provider", toolName,
+				)
+			}
+			metadata, found := metadataProvider.ToolMetadata(toolName)
+			if !found {
+				return ReactResult{}, fmt.Errorf(
+					"tool %q has no canonical capability metadata", toolName,
+				)
+			}
+			if err := r.PreToolUse(ctx, turn, skill, toolName, metadata); err != nil {
 				return ReactResult{}, err
 			}
 		}
@@ -708,4 +748,14 @@ func replanReason(observation react.Observation, budget react.Budget) string {
 		return "budget_exhausted"
 	}
 	return "observation_empty"
+}
+
+func stringSliceContains(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
 }

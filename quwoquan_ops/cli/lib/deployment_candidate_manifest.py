@@ -27,6 +27,11 @@ SPEC_REFS = (
     "runtime/runtime-data-engineering/SIT-001",
 )
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+ROOT = Path(__file__).resolve().parents[3]
+LOG_SINK_ADAPTER_ID = "ext.obs.elasticsearch"
+_ELASTICSEARCH_IMAGE_RE = re.compile(
+    r"docker\.elastic\.co/elasticsearch/elasticsearch@(sha256:[0-9a-f]{64})"
+)
 
 
 def _sha256_file(path: Path) -> str:
@@ -60,6 +65,64 @@ def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
         "releaseDigest": release_digest,
         "attestationRef": str(path),
         "attestationDigest": _sha256_file(path),
+    }
+
+
+def _observability_log_sink_identity(
+    env_name: str,
+    target_name: str,
+) -> dict[str, str]:
+    """Bind the canonical Product Ops log sink without exposing credentials."""
+
+    service_root = (
+        ROOT / "quwoquan_service/services/product-ops-service"
+    )
+    compose_path = service_root / "deploy/local-elasticsearch.compose.yaml"
+    binding_path = service_root / "environments" / env_name / "config.yaml"
+    try:
+        binding_text = binding_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"canonical Product Ops log sink is unreadable: {exc}") from exc
+    if f"adapter: {LOG_SINK_ADAPTER_ID}" not in binding_text:
+        raise ValueError(
+            f"{env_name} Product Ops Binding must select {LOG_SINK_ADAPTER_ID}"
+        )
+    if env_name == "prod":
+        if (
+            "endpointRef: environment_binding:product_ops.elasticsearch"
+            not in binding_text
+            or "- PRODUCT_OPS_ELASTICSEARCH_API_KEY" not in binding_text
+        ):
+            raise ValueError("Prod Product Ops Binding must select protected managed ES")
+        return {
+            "adapterId": LOG_SINK_ADAPTER_ID,
+            "deploymentMode": "managed-external",
+            "imageDigest": "",
+            "bindingDigest": _sha256_file(binding_path),
+            "deploymentDigest": "",
+            "clusterRef": "environment-binding:product_ops.elasticsearch",
+        }
+    if env_name not in {"alpha", "beta", "gamma"}:
+        raise ValueError(f"unsupported Product Ops log sink environment: {env_name}")
+    expected_endpoint = f"endpointRef: local_topology:{env_name}.elasticsearch"
+    if expected_endpoint not in binding_text:
+        raise ValueError(
+            f"{env_name} Product Ops Binding is not target-local Elasticsearch"
+        )
+    try:
+        compose_text = compose_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"canonical local Elasticsearch workload is unreadable: {exc}") from exc
+    image_match = _ELASTICSEARCH_IMAGE_RE.search(compose_text)
+    if image_match is None:
+        raise ValueError("canonical Product Ops Elasticsearch image digest is missing")
+    return {
+        "adapterId": LOG_SINK_ADAPTER_ID,
+        "deploymentMode": "package-bound-local",
+        "imageDigest": image_match.group(1),
+        "bindingDigest": _sha256_file(binding_path),
+        "deploymentDigest": _sha256_file(compose_path),
+        "clusterRef": f"target:{target_name}/product-ops/elasticsearch",
     }
 
 
@@ -160,6 +223,10 @@ def write_candidate_manifest(
         "runtimeSchemaVersion": runtime_schema_version,
         "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
         "environmentRuntimeDigest": _sha256_file(environment_runtime_path),
+        "observabilityLogSink": _observability_log_sink_identity(
+            env_name,
+            target_name,
+        ),
         "release": release,
         "specRefs": list(SPEC_REFS),
     }
@@ -201,6 +268,7 @@ def validate_candidate_manifest(
         "runtimeSchemaVersion",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
+        "observabilityLogSink",
         "release",
         "specRefs",
     }
@@ -239,6 +307,39 @@ def validate_candidate_manifest(
     for field in ("buildInputDigest", "imageDigest"):
         if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
             raise ValueError(f"full deployment candidate {field} is invalid")
+    log_sink = payload.get("observabilityLogSink")
+    if not isinstance(log_sink, dict) or set(log_sink) != {
+        "adapterId",
+        "deploymentMode",
+        "imageDigest",
+        "bindingDigest",
+        "deploymentDigest",
+        "clusterRef",
+    }:
+        raise ValueError("deployment candidate observability log sink fields mismatch")
+    if log_sink.get("adapterId") != LOG_SINK_ADAPTER_ID:
+        raise ValueError("deployment candidate log sink adapter mismatch")
+    if _DIGEST.fullmatch(str(log_sink.get("bindingDigest") or "")) is None:
+        raise ValueError("deployment candidate log sink bindingDigest is invalid")
+    if expected_environment == "prod":
+        if (
+            log_sink.get("deploymentMode") != "managed-external"
+            or log_sink.get("imageDigest") != ""
+            or log_sink.get("deploymentDigest") != ""
+            or log_sink.get("clusterRef")
+            != "environment-binding:product_ops.elasticsearch"
+        ):
+            raise ValueError("Prod deployment candidate must bind managed Elasticsearch")
+    else:
+        if log_sink.get("deploymentMode") != "package-bound-local":
+            raise ValueError("local deployment candidate log sink mode mismatch")
+        for field in ("imageDigest", "deploymentDigest"):
+            if _DIGEST.fullmatch(str(log_sink.get(field) or "")) is None:
+                raise ValueError(f"deployment candidate log sink {field} is invalid")
+        if log_sink.get("clusterRef") != (
+            f"target:{expected_target}/product-ops/elasticsearch"
+        ):
+            raise ValueError("deployment candidate log sink clusterRef mismatch")
     release = payload.get("release")
     if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
         raise ValueError("full deployment candidate release binding mismatch")

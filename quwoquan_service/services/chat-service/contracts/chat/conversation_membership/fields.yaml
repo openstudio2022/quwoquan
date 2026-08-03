@@ -123,17 +123,6 @@ fields:
     ops_exposure: read
     description: owner/admin/member（assistant 成员固定为 member）
     role: authoritative_state
-  - name: assistantSkillId
-    source: assistantSkillId
-    type: string
-    constraints:
-      - NULLABLE
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-    description: 仅 memberType=assistant 时有效，绑定的 Skill ID（不同会话可邀请不同能力的助手）
-    role: authoritative_state
   - name: invitedBy
     source: invitedBy
     type: string
@@ -156,6 +145,21 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  GatheringConversationMembershipProjectionCommand:
+    description: circle-service 提交的 Gathering participant source fact；sourceVersion 单调且 operation 幂等。
+    fields:
+      - {name: gatheringId, source: path.gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: personaId, source: path.personaId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceEventId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceVersion, type: int64, constraints: [NOT_NULL]}
+      - {name: ownerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: state, type: enum, enum_ref: GatheringMembershipProjectionState, constraints: [NOT_NULL]}
+  GatheringConversationMembershipProjectionResult:
+    fields:
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: personaId, type: string, constraints: [NOT_BLANK]}
+      - {name: state, type: enum, enum_ref: GatheringMembershipProjectionState, constraints: [NOT_NULL]}
   ChatRemoveConversationAssistantCommand:
     fields:
       - name: conversationId
@@ -276,12 +280,6 @@ types:
         client_dart_type: String
         client_normalization: trim
         client_wire_name: Idempotency-Key
-      - name: skillId
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-        client_normalization: trim_to_null
   ChatRemoveConversationMemberCommand:
     fields:
       - name: conversationId
@@ -325,3 +323,21 @@ types:
         client_dart_type: List<String>
         client_parameter_type: Iterable<String>
         client_normalization: trim
+  ConversationMembershipCommandAck:
+    description: ConversationMembership 命令的对象本地稳定确认体。
+    fields:
+      - name: status
+        type: string
+        constraints: [NOT_NULL]
+  ConversationMemberPageSlice:
+    description: ConversationMembership Reader 的稳定分页响应。
+    fields:
+      - name: items
+        type: '[]ConversationMemberListRow'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]
+enums:
+  GatheringMembershipProjectionState:
+    values: [joined, left]

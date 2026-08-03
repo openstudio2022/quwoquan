@@ -19,44 +19,10 @@ source_entities:
 - UserProfile
 consumers:
 - app
-client_projection:
-  dart_class: UserHomepageBundleWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart
-  dart_imports:
-  - persona_profile_wire_dto.g.dart
-  - account/user_account_stats_wire_dto.g.dart
-  - relationship_capability_wire_dto.g.dart
-  - user_homepage_tab_counts_wire_dto.g.dart
-  - user_homepage_viewer_context_wire_dto.g.dart
-  fields:
-  - name: profile
-    dart_type: PersonaProfileWireDto
-    nullable: true
-    source: profile
-    map_from_string_key_class: PersonaProfileWireDto
-  - name: stats
-    dart_type: UserProfileStatsWireDto
-    nullable: true
-    source: stats
-    map_from_string_key_class: UserProfileStatsWireDto
-  - name: relationshipCapability
-    dart_type: RelationshipCapabilityWireDto
-    nullable: true
-    source: relationshipCapability
-    map_from_string_key_class: RelationshipCapabilityWireDto
-  - name: tabCounts
-    dart_type: UserHomepageTabCountsWireDto
-    nullable: true
-    source: tabCounts
-    map_from_string_key_class: UserHomepageTabCountsWireDto
-  - name: viewerContext
-    dart_type: UserHomepageViewerContextWireDto
-    nullable: true
-    source: viewerContext
-    map_from_string_key_class: UserHomepageViewerContextWireDto
-  - name: cacheVersion
-    dart_type: String
-    nullable: false
-    source: cacheVersion
-    default: ''''''
+fields:
+- {name: profile, type: PersonaProfileView, nullable: false}
+- {name: stats, type: UserProfileStatsWire, nullable: false}
+- {name: relationshipCapability, type: RelationshipCapabilityView, nullable: true}
+- {name: tabCounts, type: UserHomepageTabCountsWire, nullable: false}
+- {name: viewerContext, type: UserHomepageViewerContextWire, nullable: false}
+- {name: cacheVersion, type: string, nullable: false}

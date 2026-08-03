@@ -23,7 +23,7 @@
 
 ## 4. 架构与数据流
 
-- [`event-ingestion-and-analytics`](./event-ingestion-and-analytics/spec.md)：App 产品事件/异常、受限启动诊断、SLS 明细/聚合、Portal 查询和推荐反馈边界的端到端验收。
+- [`event-ingestion-and-analytics`](./event-ingestion-and-analytics/spec.md)：App 产品事件/异常、受限启动诊断、Elasticsearch 明细/聚合、Portal 查询和推荐反馈边界的端到端验收。
 - [`experiment-bucketing-and-rollout`](./experiment-bucketing-and-rollout/spec.md)：推荐/搜索服务端权威分桶、实际流量事实归因，以及未绑定 Product Ops 控制面的 fail-closed 单轨验收。
 - [`feedback-optimization-loop`](./feedback-optimization-loop/spec.md)：反馈优化大循环：行为反馈 → 兴趣/人群画像派生 → 元数据驱动的推荐策略解析与自调建议 → 人审发布。算法侧闭环（content 派生 + user 投影 + recpolicy 热加载引擎 + 顾问 suggest-only）。
 - [`outbound-share-distribution`](./outbound-share-distribution/spec.md)：5 类对象统一对外分享分发（微信卡片/海报/口令/系统分享），携带归因并可靠回流。
@@ -46,7 +46,7 @@
 - 决策：Product Ops 以唯一 `AccountEnforcementCase` 聚合拥有 moderation/appeal 双签与不可变 decision；decision 只通过持久化 HTTP outbox 和受限服务身份调用 UserAccount，application receipt、bounded retry、terminal DLQ 与同 decision recovery 均留在 Product Ops。
 - 理由：审批事实与账号状态属于不同一致性边界；明确 producer/executor 所有权可避免 Product Ops 直写 User、User 反向复制 workflow，以及消息/同步双发产生的双重处罚。
 - 被否决方案：包括 Product Ops 直写 UserAccount 数据库、User Service 持有审批、拆分两套 aggregate、MQ 与 HTTP 双发、DLQ 保存原始 payload，以及恢复时签发新 decision。
-- 约束与影响：UserAccount public internal command 以 decision id 幂等并校验稳定 digest。只有已交付的最新 Suspend 可开启 appeal，任一 unresolved delivery 阻止同账号的新 case。Gamma/Prod 缺少 OIDC、scope、服务身份或 DLQ/readiness 证据时 `GATE_BLOCK`。
+- 约束与影响：UserAccount public internal command 以 decision id 幂等并校验稳定 digest。只有已交付的最新 Suspend 可开启 appeal，任一 unresolved delivery 阻止同账号的新 case。Alpha/Beta/Gamma 缺少 target-scoped operator conformance、scope、服务身份或 DLQ/readiness 证据时 `GATE_BLOCK`；Prod 额外强制真实 OIDC。
 - 关联要求：`REQ-001`、`REQ-002`
 - 关联能力：[`product-control-plane-foundation`](./product-control-plane-foundation/spec.md)
 

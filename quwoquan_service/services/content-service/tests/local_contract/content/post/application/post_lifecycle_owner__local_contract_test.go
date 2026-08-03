@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	. "quwoquan_service/services/content-service/internal/content/post/application"
 	"testing"
+	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 
@@ -66,9 +67,17 @@ func TestPostSettingsUpdatedCarriesCanonicalProjectionSnapshot(t *testing.T) {
 			LocalDraftID:    "post-settings-snapshot-draft",
 			AuthorID:        "persona-owner",
 			Content: postmodel.Post{
-				ContentType: "micro",
-				Body:        "settings must not erase projection fields",
-				TagRefs:     []string{"Topic/旅行"},
+				ContentType:       "micro",
+				Body:              "settings must not erase projection fields",
+				TagRefs:           []string{"Topic/旅行"},
+				PrimaryHomepageId: "homepage-001",
+				PrimaryHomepageSnapshot: postmodel.PostHomepageSnapshot{
+					CanonicalEntityId: "entity-001",
+					Title:             "公开对象页",
+					Subtitle:          "公开副标题",
+					CoverUrl:          "https://cdn.example/homepage-001.jpg",
+				},
+				VisitedAt: time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC),
 			},
 		},
 	)
@@ -96,7 +105,7 @@ func TestPostSettingsUpdatedCarriesCanonicalProjectionSnapshot(t *testing.T) {
 	for _, field := range []string{
 		"postId", "authorId", "contentType", "contentIdentity", "status",
 		"visibility", "moderationStatus", "publishedAt", "updatedAt",
-		"tagRefs", "entityRefs", "semanticMentions",
+		"tagRefs", "entityRefs", "semanticMentions", "primaryHomepageSnapshot", "visitedAt",
 	} {
 		if _, exists := payload[field]; !exists {
 			t.Fatalf("PostSettingsUpdated payload missing canonical field %q: %+v", field, payload)
@@ -105,5 +114,10 @@ func TestPostSettingsUpdatedCarriesCanonicalProjectionSnapshot(t *testing.T) {
 	tagRefs, ok := payload["tagRefs"].([]any)
 	if !ok || len(tagRefs) != 1 || tagRefs[0] != "Topic/旅行" {
 		t.Fatalf("PostSettingsUpdated tagRefs = %#v, want preserved canonical tags", payload["tagRefs"])
+	}
+	homepageSnapshot, ok := payload["primaryHomepageSnapshot"].(map[string]any)
+	if !ok || homepageSnapshot["canonicalEntityId"] != "entity-001" ||
+		homepageSnapshot["title"] != "公开对象页" {
+		t.Fatalf("PostSettingsUpdated primaryHomepageSnapshot = %#v", payload["primaryHomepageSnapshot"])
 	}
 }

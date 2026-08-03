@@ -1,16 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_lifecycle_guard_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_tab_counts_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_viewer_context_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
@@ -82,98 +70,49 @@ class PersonaProfileViewData {
   final List<String> overriddenFields;
   final DateTime? updatedAt;
 
-  /// Wire DTO 已按 canonical 字段解码；此处仅做展示层派生。
-  factory PersonaProfileViewData.fromPersonaProfileWire(
-    PersonaProfileWireDto w,
-  ) {
-    final personaId = w.personaId;
-    final nickname = w.nickname;
-    final displayName = w.displayName.isNotEmpty
-        ? w.displayName
-        : (nickname.isNotEmpty ? nickname : personaId);
-    final userHandle = w.userHandle;
-    final subjectType = w.subjectType.isNotEmpty
-        ? w.subjectType
-        : (personaId.isEmpty ? 'account' : 'persona');
-    // 本地选取（相册/拍照）的临时文件路径在 alpha「保存后即时回显」链路中原样保留，
-    // 不经媒体解析器（否则会被当作服务端相对路径拼接成不可访问 URL）。
-    final avatarUrl = isLocalFileImageSource(w.avatarUrl)
-        ? w.avatarUrl
-        : resolveAvatarImageUrl(w.avatarUrl, avatarVersion: w.avatarVersion);
-    final backgroundUrl = isLocalFileImageSource(w.backgroundUrl)
-        ? w.backgroundUrl
-        : resolveContentMediaUrl(w.backgroundUrl);
-    return PersonaProfileViewData(
-      personaId: personaId,
-      ownerUserId: w.ownerUserId,
-      subjectType: subjectType,
-      userHandle: userHandle,
-      displayName: displayName,
-      nicknameCustomized: w.nicknameCustomized,
-      avatarUrl: avatarUrl,
-      avatarVersion: w.avatarVersion,
-      backgroundUrl: backgroundUrl,
-      bio: w.bio,
-      identityTags: w.identityTags,
-      verified: w.verified,
-      followerCount: w.followerCount,
-      followingCount: w.followingCount,
-      postCount: w.postCount,
-      circleCount: w.circleCount,
-      likeCount: w.likeCount,
-      profileCompleteness: w.profileCompleteness,
-      profileCompletenessMissingItems: w.profileCompletenessMissingItems,
-      isolationLevel: w.isolationLevel,
-      profileVisibility: w.profileVisibility,
-      inheritsFromOwner: w.inheritsFromOwner,
-      overriddenFields: w.overriddenFields ?? const <String>[],
-      updatedAt: w.updatedAt,
-    );
-  }
-
-  factory PersonaProfileViewData.fromPersonaProfileProjection(
-    PersonaProfileProjection projection,
+  /// canonical generated wire 到 App 展示模型的唯一映射。
+  factory PersonaProfileViewData.fromWire(
+    PersonaProfileView projection,
   ) {
     final personaId = projection.personaId;
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
-        : (projection.nickname.isNotEmpty ? projection.nickname : personaId);
+        : personaId;
     final userHandle = projection.userHandle;
-    final subjectType = projection.subjectType.isNotEmpty
-        ? projection.subjectType
-        : 'account';
-    final avatarUrl = isLocalFileImageSource(projection.avatarUrl)
-        ? projection.avatarUrl
+    final subjectType = projection.subjectType.wireName;
+    final rawAvatarUrl = projection.avatarUrl ?? '';
+    final rawBackgroundUrl = projection.backgroundUrl ?? '';
+    final avatarUrl = isLocalFileImageSource(rawAvatarUrl)
+        ? rawAvatarUrl
         : resolveAvatarImageUrl(
-            projection.avatarUrl,
-            avatarVersion: projection.avatarVersion,
+            rawAvatarUrl,
+            avatarVersion: 0,
           );
-    final backgroundUrl = isLocalFileImageSource(projection.backgroundUrl)
-        ? projection.backgroundUrl
-        : resolveContentMediaUrl(projection.backgroundUrl);
+    final backgroundUrl = isLocalFileImageSource(rawBackgroundUrl)
+        ? rawBackgroundUrl
+        : resolveContentMediaUrl(rawBackgroundUrl);
     return PersonaProfileViewData(
       personaId: personaId,
-      ownerUserId: projection.ownerUserId,
+      ownerUserId: '',
       subjectType: subjectType,
       userHandle: userHandle,
       displayName: displayName,
       nicknameCustomized: projection.nicknameCustomized,
       avatarUrl: avatarUrl,
-      avatarVersion: projection.avatarVersion,
+      avatarVersion: 0,
       backgroundUrl: backgroundUrl,
-      bio: projection.bio,
-      identityTags: projection.identityTags,
-      verified: projection.verified,
+      bio: projection.bio ?? '',
+      identityTags: projection.identityTags ?? const <String>[],
+      verified: false,
       followerCount: projection.followerCount,
       followingCount: projection.followingCount,
       postCount: projection.postCount,
       circleCount: projection.circleCount,
       likeCount: projection.likeCount,
-      profileCompleteness: projection.profileCompleteness,
-      profileCompletenessMissingItems:
-          projection.profileCompletenessMissingItems,
-      isolationLevel: projection.isolationLevel,
-      profileVisibility: projection.profileVisibility,
+      profileCompleteness: 100,
+      profileCompletenessMissingItems: const <String>[],
+      isolationLevel: projection.isolationLevel.wireName,
+      profileVisibility: projection.profileVisibility.wireName,
       inheritsFromOwner: projection.inheritsFromOwner,
       overriddenFields: projection.overriddenFields ?? const <String>[],
       updatedAt: projection.updatedAt,
@@ -225,20 +164,8 @@ class UserProfileStatsViewData {
   final int followerCount;
   final int likeCount;
   final int postCount;
-  factory UserProfileStatsViewData.fromUserProfileStatsWire(
-    UserProfileStatsWireDto w,
-  ) {
-    return UserProfileStatsViewData(
-      followingCount: w.followingCount,
-      circleCount: w.circleCount,
-      followerCount: w.followerCount,
-      likeCount: w.likeCount,
-      postCount: w.postCount,
-    );
-  }
-
-  factory UserProfileStatsViewData.fromUserProfileStatsProjection(
-    UserProfileStatsProjection projection,
+  factory UserProfileStatsViewData.fromWire(
+    UserProfileStatsWire projection,
   ) {
     return UserProfileStatsViewData(
       followingCount: projection.followingCount,
@@ -280,15 +207,6 @@ class RelationshipViewData {
   bool get isFollowing => relationState == 'following' || isMutual;
   bool get isFollowedBy => relationState == 'followed_by' || isMutual;
 
-  factory RelationshipViewData.fromRelationshipViewWire(
-    RelationshipViewWireDto w,
-  ) {
-    return RelationshipViewData(
-      relationState: w.relationState,
-      isBlocked: w.isBlocked,
-      isBlockedBy: w.isBlockedBy,
-    );
-  }
 }
 
 /// 关注/粉丝列表行（`listFollowing` / `listFollowers` wire → 强类型，供 UI 使用）。
@@ -317,8 +235,8 @@ class ProfileSocialRelationRowViewData {
   bool get isSelf => relationshipCapability?.isSelf ?? false;
   bool get isFollowing => relationshipCapability?.viewerFollowsTarget ?? false;
 
-  factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-    ProfileSocialRelationRowWireDto w,
+  factory ProfileSocialRelationRowViewData.fromFollowingWire(
+    FollowingListItemView w,
   ) {
     final id = w.personaId;
     final name = w.displayName.isNotEmpty ? w.displayName : id;
@@ -327,21 +245,21 @@ class ProfileSocialRelationRowViewData {
       userHandle: w.userHandle,
       displayName: name,
       avatarUrl: resolveAvatarImageUrl(
-        w.avatarUrl,
-        avatarVersion: w.avatarVersion,
+        w.avatarUrl ?? '',
+        avatarVersion: 0,
       ),
-      avatarVersion: w.avatarVersion,
-      profileVisibility: w.profileVisibility,
-      relationState: w.relationState,
+      avatarVersion: 0,
+      profileVisibility: w.profileVisibility.wireName,
+      relationState: w.relationState.wireName,
       followedAt: w.followedAt,
       relationshipCapability: w.relationshipCapability == null
           ? null
-          : RelationshipCapabilityDto.fromMap(w.relationshipCapability!),
+          : RelationshipCapabilityDto.fromWire(w.relationshipCapability!),
     );
   }
 
-  factory ProfileSocialRelationRowViewData.fromPersonaRelationshipListItem(
-    PersonaRelationshipListItem item,
+  factory ProfileSocialRelationRowViewData.fromFollowerWire(
+    FollowerListItemView item,
   ) {
     final id = item.personaId;
     final name = item.displayName.isNotEmpty ? item.displayName : id;
@@ -349,13 +267,13 @@ class ProfileSocialRelationRowViewData {
       personaId: id,
       userHandle: item.userHandle,
       displayName: name,
-      avatarUrl: resolveAvatarImageUrl(item.avatarUrl),
-      profileVisibility: item.profileVisibility,
-      relationState: item.relationState,
+      avatarUrl: resolveAvatarImageUrl(item.avatarUrl ?? ''),
+      profileVisibility: item.profileVisibility.wireName,
+      relationState: item.relationState.wireName,
       followedAt: item.followedAt,
       relationshipCapability: item.relationshipCapability == null
           ? null
-          : RelationshipCapabilityDto.fromContract(
+          : RelationshipCapabilityDto.fromWire(
               item.relationshipCapability!,
             ),
     );

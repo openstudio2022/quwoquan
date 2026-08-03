@@ -14,10 +14,10 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
 	grouppersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
 	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
+	groupmembershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/messaging"
 	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
 )
 
@@ -123,7 +123,7 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 
 	streamRelay := groupmembershipapp.NewOutboxRelay(
 		groupMembershipStore, groupMembershipStore,
-		messaging.NewCircleGroupMembershipStreamPublisher(circleMessageTransport), "group-membership-stream-api-test",
+		groupmembershipmessaging.NewCircleGroupMembershipStreamPublisher(circleMessageTransport), "group-membership-stream-api-test",
 	)
 	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 5 {
 		t.Fatalf("group membership stream count=%d err=%v", count, err)

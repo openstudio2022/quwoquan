@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""校验 content 页面 product_action 漏斗的 metadata→App→SLS→Dashboard 闭环。"""
+"""校验 content 页面 product_action 漏斗的 metadata→App→Elasticsearch→Dashboard 闭环。"""
 
 from __future__ import annotations
 
@@ -23,9 +23,14 @@ EVENT_CATALOG = (
     REPO_ROOT
     / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml"
 )
-SLS_CONTRACT = (
+STORAGE_CONTRACT = (
     REPO_ROOT
-    / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+    / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
+)
+ROLLUP_CONTRACT = STORAGE_CONTRACT.with_name("rollups.yaml")
+ALERT_POLICY = (
+    REPO_ROOT
+    / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
 )
 DASHBOARD = (
     REPO_ROOT
@@ -203,42 +208,62 @@ def _product_action_extensions(
     return set()
 
 
-def _sls_parts(
-    sls_path: Path, issues: list[str]
+def _elasticsearch_parts(
+    storage_path: Path,
+    rollup_path: Path,
+    alert_path: Path,
+    issues: list[str],
 ) -> tuple[set[str], dict[str, str], dict[str, str]]:
-    document = _mapping(
-        yaml.safe_load(sls_path.read_text(encoding="utf-8")),
-        str(sls_path),
+    storage = _mapping(
+        yaml.safe_load(storage_path.read_text(encoding="utf-8")),
+        str(storage_path),
         issues,
     )
-    spec = _mapping(document.get("spec"), "product_telemetry.spec", issues)
-    raw_fields: set[str] = set()
-    for logstore in spec.get("logstores", []):
-        if (
-            isinstance(logstore, dict)
-            and logstore.get("name") == "app-product-telemetry-raw"
-        ):
-            indexes = _mapping(
-                logstore.get("indexes"), "raw logstore.indexes", issues
-            )
-            fields = indexes.get("fields", [])
-            if isinstance(fields, list):
-                raw_fields = {str(field) for field in fields}
-            break
+    raw = _mapping(
+        _mapping(storage.get("logstores"), "storage.logstores", issues).get("raw"),
+        "storage.logstores.raw",
+        issues,
+    )
+    fields = raw.get("indexed_fields", [])
+    raw_fields = {str(field) for field in fields} if isinstance(fields, list) else set()
     if not raw_fields:
-        issues.append("SLS 缺少 app-product-telemetry-raw 字段索引")
+        issues.append("Elasticsearch 缺少 app-product-telemetry-raw 字段索引")
 
-    scheduled = _mapping(
-        spec.get("scheduledSql"), "product_telemetry.scheduledSql", issues
+    rollups = _mapping(
+        yaml.safe_load(rollup_path.read_text(encoding="utf-8")),
+        str(rollup_path),
+        issues,
     )
     jobs = {
-        str(job.get("rowKind", "")).strip(): str(job.get("sql", ""))
-        for job in scheduled.get("jobs", [])
+        str(job.get("row_kind", "")).strip(): " ".join(
+            [
+                *[str(value) for value in job.get("dimensions", [])],
+                *[
+                    " ".join(
+                        (
+                            str(measure.get("name", "")),
+                            str(measure.get("algebra", "")),
+                        )
+                    )
+                    for measure in job.get("measures", [])
+                    if isinstance(measure, dict)
+                ],
+            ]
+        )
+        for job in rollups.get("jobs", [])
         if isinstance(job, dict)
     }
+    alert_policy = _mapping(
+        yaml.safe_load(alert_path.read_text(encoding="utf-8")),
+        str(alert_path),
+        issues,
+    )
+    alert_spec = _mapping(alert_policy.get("spec"), "alert_policy.spec", issues)
     alerts = {
-        str(alert.get("name", "")).strip(): str(alert.get("query", ""))
-        for alert in spec.get("alerts", [])
+        str(alert.get("name", "")).strip(): json.dumps(
+            alert.get("filter", {}), ensure_ascii=False, sort_keys=True
+        )
+        for alert in alert_spec.get("alerts", [])
         if isinstance(alert, dict)
     }
     return raw_fields, jobs, alerts
@@ -248,7 +273,9 @@ def verify_content_page_funnels(
     *,
     page_contract: Path = PAGE_CONTRACT,
     event_catalog: Path = EVENT_CATALOG,
-    sls_contract: Path = SLS_CONTRACT,
+    storage_contract: Path = STORAGE_CONTRACT,
+    rollup_contract: Path = ROLLUP_CONTRACT,
+    alert_policy: Path = ALERT_POLICY,
     dashboard: Path = DASHBOARD,
     app_root: Path = APP_ROOT,
     tracker: Path = TRACKER,
@@ -263,7 +290,12 @@ def verify_content_page_funnels(
             f"{sorted(missing_catalog_dimensions)}"
         )
 
-    raw_fields, jobs, configured_alerts = _sls_parts(sls_contract, issues)
+    raw_fields, jobs, configured_alerts = _elasticsearch_parts(
+        storage_contract,
+        rollup_contract,
+        alert_policy,
+        issues,
+    )
     required_raw_fields = REQUIRED_FAILURE_DIMENSIONS | {
         "journey",
         "action",
@@ -271,7 +303,7 @@ def verify_content_page_funnels(
     }
     missing_raw_fields = required_raw_fields - raw_fields
     if missing_raw_fields:
-        issues.append(f"SLS raw index 缺字段: {sorted(missing_raw_fields)}")
+        issues.append(f"Elasticsearch raw index 缺字段: {sorted(missing_raw_fields)}")
 
     tracker_text = (
         tracker.read_text(encoding="utf-8", errors="ignore")
@@ -337,13 +369,13 @@ def verify_content_page_funnels(
         aggregate_sql = jobs.get(funnel.aggregate_row_kind, "")
         if not aggregate_sql:
             issues.append(
-                f"{funnel.identity} SLS 缺 rowKind={funnel.aggregate_row_kind}"
+                f"{funnel.identity} Elasticsearch 缺 rowKind={funnel.aggregate_row_kind}"
             )
         else:
             for dimension in AGGREGATED_FAILURE_DIMENSIONS:
                 if dimension not in aggregate_sql:
                     issues.append(
-                        f"{funnel.identity} SLS 聚合缺维度: {dimension}"
+                        f"{funnel.identity} Elasticsearch 聚合缺维度: {dimension}"
                     )
             if funnel.journey not in dashboard_text:
                 issues.append(
@@ -358,7 +390,7 @@ def verify_content_page_funnels(
         for alert_name in funnel.alerts:
             query = configured_alerts.get(alert_name)
             if not query:
-                issues.append(f"{funnel.identity} SLS 告警不存在: {alert_name}")
+                issues.append(f"{funnel.identity} Elasticsearch 告警不存在: {alert_name}")
                 continue
             if funnel.journey not in query:
                 issues.append(

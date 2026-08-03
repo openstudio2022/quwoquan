@@ -33,7 +33,8 @@ taggable: false
 vector_enabled: false
 business_rules:
 - consent owner 固定为可信 accountId；每个授权事实由 id 唯一标识，同一 accountId + skillId 最多一个生效事实
-- grantedScope 是授权内容而非身份；grant 必须记录 scope、actor 与审计时间
+- grantedScopes 是用户一次明确授权的完整 scope 集合而非身份；grant 必须非空、去重、稳定排序并记录 actor 与审计时间
+- 已有 active consent 与新授权 scope 集合不同时必须冲突失败；用户需先撤权再对新 package scope 集合重新明确授权，禁止静默扩权
 - revoke 立即阻断后续 run，但不删除历史审计
 - AssistantRun 只能读取当前 consent Slice，不能直接修改 consent
 lifecycle:

@@ -108,7 +108,7 @@ class _PublishLocationSelectorPageState
         latitude: position.latitude,
         longitude: position.longitude,
       );
-      final items = pois.map(CreateLocationOption.from).toList(growable: false);
+      final items = pois;
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -299,7 +299,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       );
       if (!mounted) return;
       setState(() {
-        _items = result.map(CreateLocationOption.from).toList(growable: false);
+        _items = result;
         _loading = false;
       });
     } on CloudException catch (e) {

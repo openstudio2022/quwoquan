@@ -68,6 +68,16 @@
 
 - `content-release` workload 只启动首页读取与 release 验证所需的 canonical service 集合，
   并使用与 full workload 同一 packaged OCI candidate；不得维护专用镜像或 fixture 数据源。
+- `content-commercial` workload 在同一内容 consumer plane 上只增加
+  `product-ops-service`、其持久化依赖与 canonical API edge 路由，用于候选绑定的
+  精品池运营 command/event；不得借此声称 Assistant、RTC、通知、外部登录或全量
+  商业观测已就绪，也不得把 Data `commercial` phase 的 telemetry/trace/SLO 语义缩减
+  为精品池入池。
+- Alpha/Beta/Gamma 的 `content-commercial` 操作只接受 target-scoped、短时、最小
+  scope 的受管非生产 operator principal；Prod 继续要求真实 OIDC，非生产凭据不得进入
+  Prod package 或运行时。精品池只能经
+  `UpsertPremiumPoolEntry -> events.ops.premium_pool_entry -> rm_premium_pool` 收敛，
+  禁止 Data 直写、projection seed 或手工数据库修补。
 - 首页 runtime readiness 与 FilterCatalog 发布是两个独立门：runtime 启动只证明服务
   readiness，不读取或改写 catalog；`stage-and-activate -> verify` 由启动后的显式 release
   操作执行。发布失败不得污染已经健康的 runtime，也不得以空 catalog 合成成功。
@@ -132,6 +142,21 @@
   TLS bypass。
 - AND FilterCatalog、TLS、Feed 契约或 release identity 任一失败均返回可区分的
   `GATE_BLOCK`，不显示“环境健康”伪成功、不写入 fixture 或 fallback 内容。
+
+<a id="gwt-004"></a>
+### GWT-004 候选绑定的精品池运营闭环
+
+- GIVEN Alpha、Beta 或 Gamma 已以当前 immutable package 启动并完成 release import，
+  release 中至少一个 video work 具备可播放媒体事实。
+- WHEN 以 `content-commercial` workload 启动最小运营切片，并由符合环境身份策略的
+  operator 调用 `UpsertPremiumPoolEntry`。
+- THEN command receipt、`events.ops.premium_pool_entry` 与 Recommendation
+  `rm_premium_pool` 回读绑定同一 contentId/release/importRunId，公网 Ops 路由与
+  Product Ops 内部 health 均通过。
+- WHEN 随后恢复 `content-release` workload 并重新执行 consumer verify。
+- THEN candidate-bound readiness、通用 Feed、视频书与 premium Feed 均只读取当前
+  release，`premiumPlayableVideos > 0`；任何身份、事件、投影或候选摘要不一致均
+  `GATE_BLOCK`，不得使用历史 receipt 代替。
 
 ## 6. 依赖
 

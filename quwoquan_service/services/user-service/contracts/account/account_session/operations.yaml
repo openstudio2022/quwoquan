@@ -72,10 +72,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: AuthSessionGrant
-      response_decoder: decodeAuthSessionGrant
+    response_entity: AuthSessionGrant
+    response_body: AuthSessionGrant
+    response_body_kind: object
     request_entity: LoginWithPhoneCommand
     request_body_kind: object
   - method: POST
@@ -141,10 +140,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: FederatedLoginOutcome
-      response_decoder: decodeFederatedLoginOutcome
+    response_entity: FederatedLoginOutcome
+    response_body: FederatedLoginOutcome
+    response_body_kind: object
     request_entity: LoginWithWechatCommand
     request_body_kind: object
   - method: POST
@@ -210,10 +208,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: FederatedLoginOutcome
-      response_decoder: decodeFederatedLoginOutcome
+    response_entity: FederatedLoginOutcome
+    response_body: FederatedLoginOutcome
+    response_body_kind: object
     request_entity: LoginWithAlipayCommand
     request_body_kind: object
   - method: POST
@@ -279,10 +276,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: FederatedLoginOutcome
-      response_decoder: decodeFederatedLoginOutcome
+    response_entity: FederatedLoginOutcome
+    response_body: FederatedLoginOutcome
+    response_body_kind: object
     request_entity: LoginWithQqCommand
     request_body_kind: object
   - method: POST
@@ -356,10 +352,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: AuthSessionGrant
-      response_decoder: decodeAuthSessionGrant
+    response_entity: AuthSessionGrant
+    response_body: AuthSessionGrant
+    response_body_kind: object
     request_entity: LoginOneTapCommand
     request_body_kind: object
   - method: POST
@@ -374,8 +369,8 @@ api_routes:
       mutation_target: AccountSession
       invariant_target: AccountSession
     description: 基于 installId + deviceFingerprintHash 匿名引导，复用同设备稳定 owner/persona
-    response_entity: AuthLoginResult
-    response_body: AuthLoginResult
+    response_entity: AuthSessionGrant
+    response_body: AuthSessionGrant
     response_body_kind: object
     response_fields:
       - accessToken
@@ -421,10 +416,6 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: AuthSessionGrant
-      response_decoder: decodeAuthSessionGrant
     request_entity: LoginAnonymousCommand
     request_body_kind: object
   - method: POST
@@ -478,10 +469,9 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.95
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: TokenRefreshGrant
-      response_decoder: decodeTokenRefreshGrant
+    response_entity: TokenRefreshGrant
+    response_body: TokenRefreshGrant
+    response_body_kind: object
     request_entity: RefreshTokenCommand
     request_body_kind: object
   - method: POST
@@ -534,9 +524,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/account_session_contracts.dart
-      response_type: LogoutAck
-      response_decoder: decodeLogoutAck
+    response_entity: LogoutAck
+    response_body: LogoutAck
+    response_body_kind: object
     request_entity: LogoutCommand
     request_body_kind: object

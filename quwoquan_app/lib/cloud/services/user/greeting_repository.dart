@@ -1,10 +1,9 @@
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 打招呼请求 DTO
-class GreetingRequestDto {
-  const GreetingRequestDto({
+class GreetingRequestViewData {
+  const GreetingRequestViewData({
     required this.id,
     required this.requesterPersonaId,
     required this.targetPersonaId,
@@ -25,7 +24,7 @@ class GreetingRequestDto {
   final String targetPersonaId;
   final String? requestMessage;
   final GreetingIntersectionRef? intersectionRef;
-  final GreetingIntersectionSnapshot? intersectionSnapshot;
+  final GreetingIntersectionSnapshotViewData? intersectionSnapshot;
 
   /// pending / replied / ignored / blocked / cancelled / expired
   final String status;
@@ -39,13 +38,13 @@ class GreetingRequestDto {
   bool get isPending => status == 'pending';
   bool get isReplied => status == 'replied';
 
-  GreetingRequestDto copyWith({
+  GreetingRequestViewData copyWith({
     String? status,
     String? promotedConversationId,
     DateTime? decisionAt,
     DateTime? updatedAt,
   }) {
-    return GreetingRequestDto(
+    return GreetingRequestViewData(
       id: id,
       requesterPersonaId: requesterPersonaId,
       targetPersonaId: targetPersonaId,
@@ -63,42 +62,20 @@ class GreetingRequestDto {
     );
   }
 
-  factory GreetingRequestDto.fromMap(Map<String, dynamic> map) {
-    return GreetingRequestDto(
-      id: (map['id'] as String?) ?? '',
-      requesterPersonaId: (map['requesterPersonaId'] as String?) ?? '',
-      targetPersonaId: (map['targetPersonaId'] as String?) ?? '',
-      requestMessage: map['requestMessage'] as String?,
-      intersectionRef: null,
-      intersectionSnapshot: null,
-      status: (map['status'] as String?) ?? 'pending',
-      source: (map['source'] as String?) ?? 'profile',
-      promotedConversationId: map['promotedConversationId'] as String?,
-      expireAt: map['expireAt'] != null
-          ? DateTime.tryParse(map['expireAt'] as String)
-          : null,
-      decisionAt: map['decisionAt'] != null
-          ? DateTime.tryParse(map['decisionAt'] as String)
-          : null,
-      createdAt:
-          DateTime.tryParse((map['createdAt'] ?? '') as String) ??
-          DateTime.now(),
-      updatedAt:
-          DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
-          DateTime.now(),
-    );
-  }
-
-  factory GreetingRequestDto.fromContract(GreetingRequestRecord record) {
-    return GreetingRequestDto(
+  factory GreetingRequestViewData.fromWire(GreetingRequestRecord record) {
+    return GreetingRequestViewData(
       id: record.id,
       requesterPersonaId: record.requesterPersonaId,
       targetPersonaId: record.targetPersonaId,
       requestMessage: record.requestMessage,
       intersectionRef: record.intersectionRef,
-      intersectionSnapshot: record.intersectionSnapshot,
-      status: record.status,
-      source: record.source,
+      intersectionSnapshot: record.intersectionSnapshot == null
+          ? null
+          : GreetingIntersectionSnapshotViewData(
+              primaryText: record.intersectionSnapshot!.primaryText,
+            ),
+      status: record.status.wireName,
+      source: record.source.wireName,
       promotedConversationId: record.promotedConversationId,
       expireAt: record.expireAt,
       decisionAt: record.decisionAt,
@@ -106,6 +83,18 @@ class GreetingRequestDto {
       updatedAt: record.updatedAt,
     );
   }
+}
+
+final class GreetingIntersectionSnapshotViewData {
+  const GreetingIntersectionSnapshotViewData({required this.primaryText});
+
+  final String primaryText;
+}
+
+final class GreetingReplyResultViewData {
+  const GreetingReplyResultViewData({required this.conversationId});
+
+  final String conversationId;
 }
 
 /// 打招呼 Repository（三层模式）
@@ -118,30 +107,30 @@ class GreetingRequestDto {
 ///   POST   /user/greeting-request/{requestId}/ignore
 ///   DELETE /user/greeting-request/{requestId}
 abstract class GreetingRepository {
-  Future<GreetingRequestDto> sendGreeting({
+  Future<GreetingRequestViewData> sendGreeting({
     required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
     GreetingIntersectionRef? intersectionRef,
   });
 
-  Future<List<GreetingRequestDto>> listInbox({
+  Future<List<GreetingRequestViewData>> listInbox({
     String status = 'pending',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<GreetingRequestDto>> listOutbox({
+  Future<List<GreetingRequestViewData>> listOutbox({
     String status = 'pending',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<GreetingReplyResultDto> replyGreeting(String requestId);
+  Future<GreetingReplyResultViewData> replyGreeting(String requestId);
 
-  Future<GreetingRequestDto> ignoreGreeting(String requestId);
+  Future<GreetingRequestViewData> ignoreGreeting(String requestId);
 
-  Future<GreetingRequestDto> cancelGreeting(String requestId);
+  Future<GreetingRequestViewData> cancelGreeting(String requestId);
 }
 
 /// Remote 实现
@@ -155,7 +144,7 @@ class RemoteGreetingRepository implements GreetingRepository {
   final GreetingRequestQuery query;
 
   @override
-  Future<GreetingRequestDto> sendGreeting({
+  Future<GreetingRequestViewData> sendGreeting({
     required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
@@ -169,11 +158,11 @@ class RemoteGreetingRepository implements GreetingRepository {
         intersectionRef: intersectionRef,
       ),
     );
-    return GreetingRequestDto.fromContract(record);
+    return GreetingRequestViewData.fromWire(record);
   }
 
   @override
-  Future<List<GreetingRequestDto>> listInbox({
+  Future<List<GreetingRequestViewData>> listInbox({
     String status = 'pending',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -182,12 +171,12 @@ class RemoteGreetingRepository implements GreetingRepository {
       ListGreetingRequestsQuery(status: status, cursor: cursor, limit: limit),
     );
     return slice.items
-        .map(GreetingRequestDto.fromContract)
+        .map(GreetingRequestViewData.fromWire)
         .toList(growable: false);
   }
 
   @override
-  Future<List<GreetingRequestDto>> listOutbox({
+  Future<List<GreetingRequestViewData>> listOutbox({
     String status = 'pending',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -196,33 +185,33 @@ class RemoteGreetingRepository implements GreetingRepository {
       ListGreetingRequestsQuery(status: status, cursor: cursor, limit: limit),
     );
     return slice.items
-        .map(GreetingRequestDto.fromContract)
+        .map(GreetingRequestViewData.fromWire)
         .toList(growable: false);
   }
 
   @override
-  Future<GreetingReplyResultDto> replyGreeting(String requestId) async {
+  Future<GreetingReplyResultViewData> replyGreeting(String requestId) async {
     final record = await commandWriter.replyGreeting(
       ReplyGreetingCommand(requestId: requestId),
     );
-    return GreetingReplyResultDto(
+    return GreetingReplyResultViewData(
       conversationId: record.promotedConversationId ?? '',
     );
   }
 
   @override
-  Future<GreetingRequestDto> ignoreGreeting(String requestId) async {
+  Future<GreetingRequestViewData> ignoreGreeting(String requestId) async {
     final record = await commandWriter.ignoreGreeting(
       IgnoreGreetingCommand(requestId: requestId),
     );
-    return GreetingRequestDto.fromContract(record);
+    return GreetingRequestViewData.fromWire(record);
   }
 
   @override
-  Future<GreetingRequestDto> cancelGreeting(String requestId) async {
+  Future<GreetingRequestViewData> cancelGreeting(String requestId) async {
     final record = await commandWriter.cancelGreeting(
       CancelGreetingCommand(requestId: requestId),
     );
-    return GreetingRequestDto.fromContract(record);
+    return GreetingRequestViewData.fromWire(record);
   }
 }

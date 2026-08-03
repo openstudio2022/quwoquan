@@ -11,7 +11,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
 )
 

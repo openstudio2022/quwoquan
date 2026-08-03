@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
@@ -25,7 +25,7 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
   final dto = detail.post;
   final raw = detail.mergedArticleWireMap;
   final snapshot = buildMediaViewerInteractionSnapshot(
-    posts: <PostBaseDto>[dto],
+    posts: <ContentPostViewData>[dto],
     relationshipState: ref.read(userRelationshipStateProvider),
     postInteractionState: ref.read(postInteractionStateProvider),
   );
@@ -33,7 +33,7 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
     posts: <ContentSurfaceView>[
       ContentSurfaceViewMapper.fromDto(dto, wire: raw),
     ],
-    dtoPosts: <PostBaseDto>[dto],
+    dtoPosts: <ContentPostViewData>[dto],
     initialIndex: 0,
     source: source,
     rawPostsById: <String, MediaViewerPostWireRow>{

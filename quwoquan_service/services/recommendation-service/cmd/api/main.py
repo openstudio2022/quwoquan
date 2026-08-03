@@ -1,5 +1,6 @@
 """recommendation-service composition root."""
 
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 import os
 import time
@@ -20,10 +21,16 @@ runtime_config = bootstrap_runtime_contract_or_die()
 
 from api.score import get_scoring_facade, router as score_router  # noqa: E402
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.post_lifecycle_consumer import (  # noqa: E402
-    PostLifecycleConsumer,
+    PostLifecycleConsumer as CandidatePostLifecycleConsumer,
+)
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.persona_relationship_consumer import (  # noqa: E402
+    PersonaRelationshipConsumer as CandidatePersonaRelationshipConsumer,
 )
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.premium_pool_consumer import (  # noqa: E402
     PremiumPoolConsumer,
+)
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.user_account_restriction_consumer import (  # noqa: E402
+    UserAccountRestrictionConsumer,
 )
 from internal.recommendation.recommendation_candidate_index_view.infrastructure.mongo_store import (  # noqa: E402
     MongoCandidateIndexStore,
@@ -31,8 +38,44 @@ from internal.recommendation.recommendation_candidate_index_view.infrastructure.
 from internal.recommendation.recommendation_feature_profile_view.infrastructure.mongo_store import (  # noqa: E402
     MongoFeatureProfileStore,
 )
+from internal.recommendation.recommendation_feature_profile_view.application.author_impact_reader import (  # noqa: E402
+    Reader as AuthorImpactReader,
+)
+from internal.recommendation.recommendation_feature_profile_view.application.intersection_reader import (  # noqa: E402
+    Reader as IntersectionReader,
+)
+from internal.recommendation.recommendation_feature_profile_view.application.intersection_projector import (  # noqa: E402
+    Projector as IntersectionProjector,
+)
+from internal.recommendation.recommendation_feature_profile_view.application.intersection_materializer import (  # noqa: E402
+    Materializer as IntersectionMaterializer,
+)
+from internal.recommendation.recommendation_feature_profile_view.application.intersection_event_projector import (  # noqa: E402
+    IntersectionEventProjector,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.http.router import (  # noqa: E402
+    build_router as build_feature_profile_router,
+)
 from internal.recommendation.recommendation_feature_profile_view.application.projector import (  # noqa: E402
     Projector as FeatureProfileProjector,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.fact_projector import (  # noqa: E402
+    FactProjectionAdapter,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.tag_feedback_consumer import (  # noqa: E402
+    TagFeedbackConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.persona_relationship_consumer import (  # noqa: E402
+    PersonaRelationshipConsumer as FeaturePersonaRelationshipConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.circle_membership_consumer import (  # noqa: E402
+    CircleMembershipConsumer as FeatureCircleMembershipConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.content_behavior_consumer import (  # noqa: E402
+    ContentBehaviorConsumer as FeatureContentBehaviorConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.post_lifecycle_consumer import (  # noqa: E402
+    PostLifecycleConsumer as FeaturePostLifecycleConsumer,
 )
 from internal.recommendation.recommendation_exposure_fact.infrastructure.mongo_store import (  # noqa: E402
     MongoExposureFactStore,
@@ -44,7 +87,7 @@ from internal.recommendation.recommendation_exposure_fact.application.appender i
     canonical_snapshot_digest,
 )
 from internal.recommendation.recommendation_feedback_fact.adapters.inbound.stream.content_behavior_consumer import (  # noqa: E402
-    ContentBehaviorConsumer,
+    ContentBehaviorConsumer as FeedbackContentBehaviorConsumer,
 )
 from internal.recommendation.recommendation_feedback_fact.infrastructure.mongo_store import (  # noqa: E402
     MongoFeedbackFactStore,
@@ -124,6 +167,26 @@ def _redis_scene_config(scene: str) -> dict:
     return scene_config
 
 
+def _ranked_window_store_config() -> dict[str, int]:
+    config = runtime_config.get("ranked_window")
+    if not isinstance(config, Mapping):
+        raise RuntimeError("runtime ranked_window config must be a mapping")
+    bindings = {
+        "quota_shard_count": "quota_shard_count",
+        "maximum_live_records_per_shard": "maximum_live_records_per_shard",
+        "maximum_live_bytes_per_shard": "maximum_live_bytes_per_shard",
+    }
+    resolved: dict[str, int] = {}
+    for runtime_key, constructor_key in bindings.items():
+        value = config.get(runtime_key)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise RuntimeError(
+                f"runtime ranked_window.{runtime_key} must be a positive integer"
+            )
+        resolved[constructor_key] = value
+    return resolved
+
+
 def _host_port(address: str) -> tuple[str, int]:
     normalized = address.strip()
     if not normalized:
@@ -199,7 +262,14 @@ async def lifespan(app: FastAPI):
     post_lifecycle_consumer = None
     premium_pool_consumer = None
     user_account_closed_consumer = None
+    user_account_restriction_consumer = None
+    persona_relationship_consumer = None
     content_behavior_consumer = None
+    feature_persona_relationship_consumer = None
+    feature_circle_membership_consumer = None
+    feature_content_behavior_consumer = None
+    feature_post_lifecycle_consumer = None
+    tag_feedback_consumer = None
     feed_page_delivered_consumer = None
     experiment_policy_consumer = None
     try:
@@ -219,6 +289,22 @@ async def lifespan(app: FastAPI):
         subject_closure_store.ensure_indexes()
         exposure_store.ensure_indexes()
         feedback_store.ensure_indexes()
+        feature_projector = FactProjectionAdapter(FeatureProfileProjector(feature_store))
+        intersection_materializer = IntersectionMaterializer(
+            evidence=feature_store,
+            projector=IntersectionProjector(feature_store),
+        )
+        intersection_event_projector = IntersectionEventProjector(
+            store=feature_store,
+            materializer=intersection_materializer,
+            subject_closures=subject_closure_store,
+        )
+        app.state.author_impact_reader = AuthorImpactReader(feature_store)
+        app.state.intersection_reader = IntersectionReader(
+            feature_store,
+            intersection_materializer,
+            subject_closure_store,
+        )
         app.state.model_release_command_facade = (
             RecommendationModelReleaseCommandFacade(model_release_store)
         )
@@ -227,11 +313,13 @@ async def lifespan(app: FastAPI):
         experiment_assignments = ExperimentAssignments(
             RedisExperimentAssignmentPublisher(general_redis_client)
         )
-        content_release_workload = (
-            os.getenv("QWQ_WORKLOAD", "full").strip() == "content-release"
-        )
+        runtime_workload = os.getenv("QWQ_WORKLOAD", "full").strip().lower()
+        content_slice_workload = runtime_workload in {
+            "content-release",
+            "content-commercial",
+        }
         restored_policy = experiment_policy_store.load(RECOMMENDATION_EXPERIMENT_ID)
-        if restored_policy is None and content_release_workload:
+        if restored_policy is None and content_slice_workload:
             restored_policy = experiment_policy_store.apply(
                 load_content_release_policy(
                     os.getenv(
@@ -252,14 +340,15 @@ async def lifespan(app: FastAPI):
         )
         experiment_policy_consumer.process_once()
         experiment_ready = experiment_assignments.healthy()
-        app.state.runtime_workload = (
-            "content-release" if content_release_workload else "full"
-        )
-        if not experiment_ready and not content_release_workload:
+        app.state.runtime_workload = runtime_workload if content_slice_workload else "full"
+        if not experiment_ready and not content_slice_workload:
             raise RuntimeError(
                 "recommendation-service requires active rec_model_vs_rule ExperimentPolicyActivated"
             )
-        window_store = RedisWindowStore(recommendation_redis_client)
+        window_store = RedisWindowStore(
+            recommendation_redis_client,
+            **_ranked_window_store_config(),
+        )
         if experiment_ready:
             experiment_policy_consumer.start()
             app.state.experiment_policy_consumer = experiment_policy_consumer
@@ -274,9 +363,10 @@ async def lifespan(app: FastAPI):
                 ),
                 subject_closures=subject_closure_store,
             )
-        post_lifecycle_consumer = PostLifecycleConsumer(
+        post_lifecycle_consumer = CandidatePostLifecycleConsumer(
             redis_client=general_redis_client,
             projection=candidate_store,
+            subject_closures=subject_closure_store,
             consumer=os.getenv("SERVICE_INSTANCE_ID", "recommendation-candidate-projection"),
         )
         post_lifecycle_consumer.start()
@@ -293,36 +383,131 @@ async def lifespan(app: FastAPI):
         user_account_closed_consumer = UserAccountClosedConsumer(
             redis_client=general_redis_client,
             store=subject_closure_store,
-            erasers=(feedback_store, exposure_store, feature_store, window_store),
+            erasers=(
+                candidate_store,
+                feedback_store,
+                exposure_store,
+                feature_store,
+                window_store,
+            ),
             consumer=os.getenv("SERVICE_INSTANCE_ID", "recommendation-subject-closure"),
         )
         user_account_closed_consumer.start()
         app.state.user_account_closed_consumer = user_account_closed_consumer
+        user_account_restriction_consumer = UserAccountRestrictionConsumer(
+            redis_client=general_redis_client,
+            projection=candidate_store,
+            subject_closures=subject_closure_store,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-candidate-restriction"
+            ),
+        )
+        user_account_restriction_consumer.start()
+        app.state.user_account_restriction_consumer = (
+            user_account_restriction_consumer
+        )
+        persona_relationship_consumer = CandidatePersonaRelationshipConsumer(
+            redis_client=general_redis_client,
+            projection=candidate_store,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID",
+                "recommendation-candidate-persona-relationship",
+            ),
+        )
+        persona_relationship_consumer.start()
+        app.state.persona_relationship_consumer = persona_relationship_consumer
         feed_page_delivered_consumer = FeedPageDeliveredConsumer(
             redis_client=general_redis_client,
             exposure_store=exposure_store,
             subject_closures=subject_closure_store,
-            feature_projector=FeatureProfileProjector(feature_store),
+            feature_projector=feature_projector,
             consumer=os.getenv("SERVICE_INSTANCE_ID", "recommendation-exposure-fact"),
         )
         feed_page_delivered_consumer.start()
         app.state.feed_page_delivered_consumer = feed_page_delivered_consumer
-        content_behavior_consumer = ContentBehaviorConsumer(
+        content_behavior_consumer = FeedbackContentBehaviorConsumer(
             redis_client=general_redis_client,
             feedback_store=feedback_store,
             exposure_store=exposure_store,
             subject_closures=subject_closure_store,
-            feature_projector=FeatureProfileProjector(feature_store),
+            feature_projector=feature_projector,
             consumer=os.getenv("SERVICE_INSTANCE_ID", "recommendation-feedback-fact"),
         )
         content_behavior_consumer.start()
         app.state.content_behavior_consumer = content_behavior_consumer
+        feature_persona_relationship_consumer = FeaturePersonaRelationshipConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-persona-relationship"
+            ),
+        )
+        feature_persona_relationship_consumer.start()
+        app.state.feature_persona_relationship_consumer = (
+            feature_persona_relationship_consumer
+        )
+        feature_circle_membership_consumer = FeatureCircleMembershipConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-circle-membership"
+            ),
+        )
+        feature_circle_membership_consumer.start()
+        app.state.feature_circle_membership_consumer = feature_circle_membership_consumer
+        feature_content_behavior_consumer = FeatureContentBehaviorConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-content-behavior"
+            ),
+        )
+        feature_content_behavior_consumer.start()
+        app.state.feature_content_behavior_consumer = feature_content_behavior_consumer
+        feature_post_lifecycle_consumer = FeaturePostLifecycleConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-post-lifecycle"
+            ),
+        )
+        feature_post_lifecycle_consumer.start()
+        app.state.feature_post_lifecycle_consumer = feature_post_lifecycle_consumer
+        tag_feedback_consumer = TagFeedbackConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            feature_projector=feature_projector,
+            subject_closures=subject_closure_store,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-tag-feedback"
+            ),
+        )
+        tag_feedback_consumer.start()
+        app.state.tag_feedback_consumer = tag_feedback_consumer
         yield
     finally:
+        if feature_post_lifecycle_consumer is not None:
+            feature_post_lifecycle_consumer.stop()
+        if feature_content_behavior_consumer is not None:
+            feature_content_behavior_consumer.stop()
+        if feature_circle_membership_consumer is not None:
+            feature_circle_membership_consumer.stop()
+        if feature_persona_relationship_consumer is not None:
+            feature_persona_relationship_consumer.stop()
+        if user_account_restriction_consumer is not None:
+            user_account_restriction_consumer.stop()
+        if persona_relationship_consumer is not None:
+            persona_relationship_consumer.stop()
         if experiment_policy_consumer is not None:
             experiment_policy_consumer.stop()
         if content_behavior_consumer is not None:
             content_behavior_consumer.stop()
+        if tag_feedback_consumer is not None:
+            tag_feedback_consumer.stop()
         if feed_page_delivered_consumer is not None:
             feed_page_delivered_consumer.stop()
         if user_account_closed_consumer is not None:
@@ -357,6 +542,20 @@ def _model_release_command_facade(
     if facade is None:
         raise RuntimeError("recommendation model release runtime is not initialized")
     return facade
+
+
+def _author_impact_reader(request: Request) -> AuthorImpactReader:
+    reader = getattr(request.app.state, "author_impact_reader", None)
+    if reader is None:
+        raise RuntimeError("recommendation author impact reader is not initialized")
+    return reader
+
+
+def _intersection_reader(request: Request) -> IntersectionReader:
+    reader = getattr(request.app.state, "intersection_reader", None)
+    if reader is None:
+        raise RuntimeError("recommendation intersection reader is not initialized")
+    return reader
 
 
 def _handler_label(request: Request) -> str:
@@ -407,6 +606,13 @@ app.include_router(score_router)
 app.include_router(
     build_model_release_router(
         facade_provider=_model_release_command_facade,
+        token_verifier=ServiceTokenVerifier.from_env(),
+    )
+)
+app.include_router(
+    build_feature_profile_router(
+        reader_provider=_author_impact_reader,
+        intersection_reader_provider=_intersection_reader,
         token_verifier=ServiceTokenVerifier.from_env(),
     )
 )

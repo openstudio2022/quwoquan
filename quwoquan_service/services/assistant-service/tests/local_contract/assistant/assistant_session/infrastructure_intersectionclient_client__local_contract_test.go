@@ -5,12 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/intersectionclient"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/intersectionclient"
 )
 
 type assistantSessionClientAuthorizationStub struct{}
@@ -154,7 +154,7 @@ func TestResolveAuthorizedIntersectionEvidenceRejectsStaleOrForgedReferences(t *
 		"persona-1",
 		[]assistant.AssistantIntersectionEvidenceRef{stale},
 	)
-	if !errors.Is(err, orchestration.ErrIntersectionEvidenceNotFound) {
+	if !errors.Is(err, runapplication.ErrIntersectionEvidenceNotFound) {
 		t.Fatalf("stale reference error = %v, want not found", err)
 	}
 }

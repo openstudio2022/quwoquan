@@ -1,7 +1,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {

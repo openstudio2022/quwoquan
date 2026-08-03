@@ -9,7 +9,7 @@ import (
 	"time"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )

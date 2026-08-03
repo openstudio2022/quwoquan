@@ -1,24 +1,25 @@
-// 混合维护：壳层预览/认领记录等由 entity/entity_homepage/homepage/projections/*.yaml 生成（*.g.dart）再 export；
-// 继承链（CanonicalReference/Summary/Detail）、HomepageShellData、Draft 仍手写；wire 收窄见 [HomepageWireCodec]。
+// App ViewData：只消费 canonical Entity generated contracts；不拥有 Cloud wire decoder。
+// 继承链（CanonicalReference/Summary/Detail）、HomepageShellData、Draft 只表达页面状态。
 // 字段与 quwoquan_service/contracts/metadata/entity/entity_homepage/homepage/fields.yaml 对齐。
 // 路由与 operation 常量：entity_api_metadata.g.dart、entity_request_page_ids.g.dart
 // 契约测试：test/cloud/entity/contract/homepage_repository_contract_test.dart
 
 import 'package:quwoquan_app/cloud/runtime/codec/homepage_wire_codec.dart';
+import 'package:quwoquan_cloud_contracts/generated/entity_contracts.dart'
+    show
+        HomepageContentPreview,
+        HomepageGeoPoint,
+        HomepageQuestionPreview,
+        HomepageRelatedGroupSummary,
+        HomepageReviewSummaryData;
 
-import 'entity_homepage/homepage_content_preview.g.dart';
-import 'entity_homepage/homepage_geo_point.g.dart';
-import 'entity_homepage/homepage_question_preview.g.dart';
-import 'entity_homepage/homepage_related_group_summary.g.dart';
-import 'entity_homepage/homepage_review_summary_data.g.dart';
-
-export 'entity_homepage/homepage_claim_request_record.g.dart';
-export 'entity_homepage/homepage_content_preview.g.dart';
-export 'entity_homepage/homepage_geo_point.g.dart';
-export 'entity_homepage/homepage_question_preview.g.dart';
-export 'entity_homepage/homepage_related_group_summary.g.dart';
-export 'entity_homepage/homepage_review_summary_data.g.dart';
-export 'entity_homepage/homepage_status_report_record.g.dart';
+export 'package:quwoquan_cloud_contracts/generated/entity_contracts.dart'
+    show
+        HomepageContentPreview,
+        HomepageGeoPoint,
+        HomepageQuestionPreview,
+        HomepageRelatedGroupSummary,
+        HomepageReviewSummaryData;
 
 class HomepageCanonicalReference {
   const HomepageCanonicalReference({
@@ -127,25 +128,7 @@ class HomepageSummary extends HomepageCanonicalReference {
   final double? averageRating;
   final int ratingCount;
 
-  factory HomepageSummary.fromMap(Map<String, dynamic> map) {
-    return HomepageSummary(
-      id: (map['homepageId'] ?? '').toString().trim(),
-      homepageType: (map['homepageType'] ?? '').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
-      coverUrl: HomepageWireCodec.optionalTrimmedString(map['coverUrl']),
-      status: HomepageWireCodec.optionalTrimmedString(map['status']),
-      canonicalEntityId: HomepageWireCodec.optionalTrimmedString(
-        map['canonicalEntityId'],
-      ),
-      city: HomepageWireCodec.optionalTrimmedString(map['city']),
-      address: HomepageWireCodec.optionalTrimmedString(map['address']),
-      averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
-      ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  /// Mock / 本地聚合：由 [HomepageDetail] 投影为搜索列表行（与 [fromMap] 字段一致）。
+  /// Mock / 本地聚合：由 [HomepageDetail] 投影为搜索列表行。
   factory HomepageSummary.fromDetail(HomepageDetail detail) {
     return HomepageSummary(
       id: detail.id,
@@ -222,70 +205,6 @@ class HomepageDetail extends HomepageCanonicalReference {
   final DateTime? updatedAt;
   final DateTime? publishedAt;
   final DateTime? offlineAt;
-
-  factory HomepageDetail.fromMap(Map<String, dynamic> map) {
-    return HomepageDetail(
-      id: (map['homepageId'] ?? '').toString().trim(),
-      homepageType: (map['homepageType'] ?? '').toString().trim(),
-      title: (map['title'] ?? '').toString().trim(),
-      subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
-      coverUrl: HomepageWireCodec.optionalTrimmedString(map['coverUrl']),
-      status: HomepageWireCodec.optionalTrimmedString(map['status']),
-      sourceType: HomepageWireCodec.optionalTrimmedString(map['sourceType']),
-      claimStatus: HomepageWireCodec.optionalTrimmedString(map['claimStatus']),
-      canonicalEntityId: HomepageWireCodec.optionalTrimmedString(
-        map['canonicalEntityId'],
-      ),
-      categoryTags:
-          (map['categoryTags'] as List?)
-              ?.map((item) => item.toString())
-              .toList(growable: false) ??
-          const <String>[],
-      address: HomepageWireCodec.optionalTrimmedString(map['address']),
-      city: HomepageWireCodec.optionalTrimmedString(map['city']),
-      location: () {
-        final loc = map['location'];
-        return loc is Map
-            ? HomepageGeoPoint.fromMap(Map<String, dynamic>.from(loc))
-            : null;
-      }(),
-      ownerUserId: HomepageWireCodec.optionalTrimmedString(map['ownerUserId']),
-      ownerPersonaId: HomepageWireCodec.optionalTrimmedString(
-        map['ownerPersonaId'],
-      ),
-      viewerFollowsHomepage:
-          map['viewerFollowsHomepage'] == true ||
-          map['viewerFollowsHomepage']?.toString() == 'true',
-      followerCount: (map['followerCount'] as num?)?.toInt() ?? 0,
-      verified:
-          map['verified'] == true || map['verified']?.toString() == 'true',
-      establishedYear: (map['establishedYear'] as num?)?.toInt(),
-      averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
-      ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
-      reviewSummary: () {
-        final rs = map['reviewSummary'];
-        return rs is Map
-            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
-            : null;
-      }(),
-      contentPreview: HomepageWireCodec.mapList(
-        map['contentPreview'],
-        HomepageContentPreview.fromMap,
-      ),
-      questionPreview: HomepageWireCodec.mapList(
-        map['questionPreview'],
-        HomepageQuestionPreview.fromMap,
-      ),
-      relatedGroups: HomepageWireCodec.mapList(
-        map['relatedGroups'],
-        HomepageRelatedGroupSummary.fromMap,
-      ),
-      createdAt: HomepageWireCodec.optionalDateTime(map['createdAt']),
-      updatedAt: HomepageWireCodec.optionalDateTime(map['updatedAt']),
-      publishedAt: HomepageWireCodec.optionalDateTime(map['publishedAt']),
-      offlineAt: HomepageWireCodec.optionalDateTime(map['offlineAt']),
-    );
-  }
 
   /// 深拷贝 / Mock 可变状态：未传入的字段沿用当前值。
   HomepageDetail copyWith({
@@ -368,32 +287,6 @@ class HomepageShellData {
   final List<HomepageContentPreview> contentPreview;
   final List<HomepageQuestionPreview> questionPreview;
   final List<HomepageRelatedGroupSummary> relatedGroups;
-
-  factory HomepageShellData.fromMap(Map<String, dynamic> map) {
-    return HomepageShellData(
-      homepage: HomepageDetail.fromMap(
-        HomepageWireCodec.stringKeyMapOrEmpty(map['homepage']),
-      ),
-      reviewSummary: () {
-        final rs = map['reviewSummary'];
-        return rs is Map
-            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
-            : null;
-      }(),
-      contentPreview: HomepageWireCodec.mapList(
-        map['contentPreview'],
-        HomepageContentPreview.fromMap,
-      ),
-      questionPreview: HomepageWireCodec.mapList(
-        map['questionPreview'],
-        HomepageQuestionPreview.fromMap,
-      ),
-      relatedGroups: HomepageWireCodec.mapList(
-        map['relatedGroups'],
-        HomepageRelatedGroupSummary.fromMap,
-      ),
-    );
-  }
 }
 
 class HomepageSuggestionDraft {
@@ -428,7 +321,7 @@ class HomepageSuggestionDraft {
     if (address.trim().isNotEmpty) 'address': address.trim(),
     if (city.trim().isNotEmpty) 'city': city.trim(),
     if (sourcePlaceId.trim().isNotEmpty) 'sourcePlaceId': sourcePlaceId.trim(),
-    if (location != null) 'location': location!.toMap(),
+    if (location != null) 'location': location!.toWire(),
   };
 }
 
@@ -494,7 +387,7 @@ class HomepageBasicDraft {
     if (address != null && address!.trim().isNotEmpty)
       'address': address!.trim(),
     if (city != null && city!.trim().isNotEmpty) 'city': city!.trim(),
-    if (location != null) 'location': location!.toMap(),
+    if (location != null) 'location': location!.toWire(),
   };
 }
 

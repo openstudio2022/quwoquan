@@ -13,7 +13,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show HomepageObjectPageBundleQuery;
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart'
+    show AlphaHomepageFacet;
 
 import '../../../../support/homepage_remote_test_support.dart';
 
@@ -272,7 +276,11 @@ void main() {
       final b = await second.getHomepageDetail('homepage_sight_west_lake');
 
       expect(identical(a, b), isFalse);
-      expect(a.canonicalEntityId, 'entity:sight:west_lake');
+      expect(a.canonicalEntityId, isNull);
+      final bundle = await first.getObjectPageBundle(
+        'homepage_sight_west_lake',
+      );
+      expect(bundle.canonicalEntityId, 'entity:sight:west_lake');
     });
   });
 
@@ -309,7 +317,15 @@ void main() {
           return http.Response(
             json.encode({
               'groups': [
-                {'circleId': 'c2', 'name': 'RG', 'memberCount': 1},
+                {
+                  'circleId': 'c2',
+                  'name': 'RG',
+                  'memberCount': 1,
+                  'ownerUserId': 'owner-1',
+                  'ownerDisplayNameSnapshot': 'Owner',
+                  'ownerAvatarUrlSnapshot': '',
+                  'evidenceSnapshotId': 'circle:c2:members',
+                },
               ],
             }),
             200,
@@ -409,6 +425,23 @@ void main() {
               'homepageId': 'h-min',
               'homepageType': 'sight',
               'title': 'Minimal',
+              'status': 'published',
+              'claimStatus': 'unclaimed',
+              'categoryTags': <String>[],
+              'viewerFollow': {
+                'viewerFollowsHomepage': false,
+                'followerCount': 0,
+              },
+              'verified': false,
+              'ratingCount': 0,
+              'contentPreview': <Object>[],
+              'questionPreview': <Object>[],
+              'relatedGroups': <Object>[],
+              'relationEdges': <Object>[],
+              'introductionAssets': <Object>[],
+              'sourceUrls': <String>[],
+              'createdAt': '2026-08-02T00:00:00Z',
+              'updatedAt': '2026-08-02T00:00:00Z',
             }),
             200,
             headers: {'content-type': 'application/json'},
@@ -427,69 +460,21 @@ void main() {
     });
 
     test('getObjectPageBundle 解析 query 上下文和嵌套 projection', () async {
+      final contractBundle = await AlphaHomepageFacet().getObjectPageBundle(
+        const HomepageObjectPageBundleQuery(
+          homepageId: 'homepage_sight_west_lake',
+          referralSource: 'entity_page',
+          feedRequestId: 'feed-1',
+          recommendationTraceId: 'trace-1',
+          experimentBucket: 'A',
+          rolloutCohort: 'cohort-a',
+        ),
+      );
       Uri? capturedUri;
       final client = MockClient((request) async {
         capturedUri = request.url;
         return http.Response(
-          json.encode({
-            'objectType': 'homepage',
-            'objectId': 'h-bundle',
-            'canonicalEntityId': 'entity:h-bundle',
-            'title': 'Bundle',
-            'objectPageTemplate': 'campus',
-            'tagRefs': ['publish/tags/campus'],
-            'intersectionReasons': [
-              {
-                'dimension': 'interest',
-                'primaryText': '你们都关注校园摄影',
-                'confidenceLabel': '公开资料',
-                'tagRefs': ['publish/tags/campus'],
-                'totalPointCount': 1,
-                'intersectionPoints': [
-                  {
-                    'pointId': 'ev1',
-                    'pointClass': 'fact',
-                    'dimension': 'interest',
-                    'sourceRef': 'tag',
-                    'label': '校园摄影',
-                    'displayText': '校园摄影',
-                    'visibility': 'public',
-                    'count': 1,
-                  },
-                ],
-              },
-            ],
-            'highlightItems': [
-              {'postId': 'p1', 'title': '校园看点'},
-            ],
-            'relatedObjects': [
-              {'circleId': 'c1', 'name': '摄影圈', 'memberCount': 8},
-            ],
-            'relationEdges': [
-              {
-                'edgeId': 'e1',
-                'edgeType': 'circle_under_entity',
-                'sourceObjectType': 'circle',
-                'sourceObjectId': 'c1',
-                'targetObjectType': 'homepage',
-                'targetObjectId': 'h-bundle',
-                'canonicalEntityId': 'entity:h-bundle',
-                'confidence': 0.9,
-              },
-            ],
-            'assistantContext': {
-              'objectType': 'homepage',
-              'objectId': 'h-bundle',
-              'canonicalEntityId': 'entity:h-bundle',
-              'referralSource': 'entity_page',
-              'feedRequestId': 'feed-1',
-            },
-            'rolloutContext': {
-              'enabled': true,
-              'cohort': 'cohort-a',
-              'relationEvidenceEnabled': true,
-            },
-          }),
+          json.encode(contractBundle.toWire()),
           200,
           headers: {'content-type': 'application/json'},
         );
@@ -500,7 +485,7 @@ void main() {
       );
 
       final bundle = await repo.getObjectPageBundle(
-        'h-bundle',
+        'homepage_sight_west_lake',
         referralSource: 'entity_page',
         feedRequestId: 'feed-1',
         recommendationTraceId: 'trace-1',
@@ -508,22 +493,22 @@ void main() {
         rolloutCohort: 'cohort-a',
       );
 
-      expect(capturedUri?.path, '/homepages/h-bundle/object-page-bundle');
+      expect(
+        capturedUri?.path,
+        '/homepages/homepage_sight_west_lake/object-page-bundle',
+      );
       expect(capturedUri?.queryParameters['referralSource'], 'entity_page');
       expect(capturedUri?.queryParameters['feedRequestId'], 'feed-1');
       expect(capturedUri?.queryParameters['recommendationTraceId'], 'trace-1');
       expect(capturedUri?.queryParameters['experimentBucket'], 'A');
       expect(capturedUri?.queryParameters['rolloutCohort'], 'cohort-a');
-      expect(bundle.canonicalEntityId, 'entity:h-bundle');
-      expect(bundle.intersectionReasons.single.primaryText, '你们都关注校园摄影');
-      expect(
-        bundle.intersectionReasons.single.intersectionPoints.single.sourceRef,
-        'tag',
-      );
-      expect(bundle.intersectionReasons.single.confidenceLabel, '公开资料');
-      expect(bundle.relationEdges.single.edgeType, 'circle_under_entity');
+      expect(bundle.canonicalEntityId, 'entity:sight:west_lake');
+      expect(bundle.highlightItems, isNotEmpty);
+      expect(bundle.relatedObjects, isNotEmpty);
+      expect(bundle.intersectionReasons, isEmpty);
+      expect(bundle.relationEdges, isEmpty);
       expect(bundle.assistantContext?.feedRequestId, 'feed-1');
-      expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
+      expect(bundle.rolloutContext?.relationEvidenceEnabled, isFalse);
     });
   });
 }

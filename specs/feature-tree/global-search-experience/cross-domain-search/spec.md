@@ -55,7 +55,7 @@
 - 远端降级/能力受限时由 degradeSignals 驱动降级横幅；单域失败只显该域降级，不阻塞整页。
 - 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 归因链可观测。
 - 搜索专有事件按 requestId 形成提交/非空或零结果/点击/筛选/非空结果停留漏斗，原始 query、objectId、userId 不进入产品遥测。
-- 三项黄金指标在 SLS 聚合、大盘和至少 100 样本告警中同源：有效搜索成功率 ≥35%、首个可操作结果 P95 ≤1.5s、结果到有效行动率 ≥20%。
+- 三项黄金指标在 Elasticsearch 聚合、大盘和至少 100 样本告警中同源：有效搜索成功率 ≥35%、首个可操作结果 P95 ≤1.5s、结果到有效行动率 ≥20%。
 
 <a id="req-002"></a>
 ### REQ-002 命名空间限定在本地：`chat.contact / chat.conversation / chat.message`（`local_only`）与 `circle.group` 本地全量
@@ -93,7 +93,7 @@
 - THEN 远端降级/能力受限时由 degradeSignals 驱动降级横幅；单域失败只显该域降级，不阻塞整页。
 - THEN 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 归因链可观测。
 - THEN 搜索专有事件按 requestId 形成提交/非空或零结果/点击/筛选/非空结果停留漏斗，原始 query、objectId、userId 不进入产品遥测。
-- THEN 三项黄金指标在 SLS 聚合、大盘和至少 100 样本告警中同源：有效搜索成功率 ≥35%、首个可操作结果 P95 ≤1.5s、结果到有效行动率 ≥20%。
+- THEN 三项黄金指标在 Elasticsearch 聚合、大盘和至少 100 样本告警中同源：有效搜索成功率 ≥35%、首个可操作结果 P95 ≤1.5s、结果到有效行动率 ≥20%。
 
 ## 8. 开放事项
 
@@ -104,8 +104,8 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：local_contract、真实 Mongo/ES api_integration 与 production
-  Remote Patrol 目标均已具备；Gamma-local 日志 Port 替身由统一材料器提供，不要求
-  真实 SLS 租户或凭据。当前仍缺真机 CaseResult 与同源指标样本；编译成功、
+  Remote Patrol 目标均已具备；Gamma-local 使用 canonical observability capability，
+  不依赖外部日志租户。当前仍缺真机 CaseResult 与同源指标样本；编译成功、
   Alpha/Mock 或无同源 CaseResult 的 local-gamma 运行均不构成 Remote UAT 和 SLO 证据。
 - 目标：使用 Gamma production Remote composition 完成搜索结果、清空本地缓存后
   `RecentSearchState` 回读，并采集同源 `runtime.log.sink` 搜索漏斗与黄金指标样本。

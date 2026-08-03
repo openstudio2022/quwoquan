@@ -4,7 +4,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
   Future<void> _requestHomePostReport(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
+    ContentPostViewData post,
   ) async {
     final reason = await showContentReportReasonSheet(context);
     if (reason == null || !context.mounted) {
@@ -41,7 +41,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
   void _scheduleHomeReportContinuationResume(
     BuildContext context,
     WidgetRef ref,
-    List<PostBaseDto> posts, {
+    List<ContentPostViewData> posts, {
     int remainingFrames = 30,
   }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -67,7 +67,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
           controller.set(pending);
           return;
         }
-        PostBaseDto? matched;
+        ContentPostViewData? matched;
         for (final post in posts) {
           if (post.id == pending.postId) {
             matched = post;
@@ -89,7 +89,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
         controller.set(moderation);
         return;
       }
-      PostBaseDto? matched;
+      ContentPostViewData? matched;
       for (final post in posts) {
         if (post.id == moderation.postId) {
           matched = post;
@@ -115,8 +115,8 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
   Future<void> _submitHomePostReport(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
-    ContentReportReason reason,
+    ContentPostViewData post,
+    ReportReason reason,
   ) async {
     final journeyTracker = ref.read(journeyEventTrackerProvider);
     final startedAt = DateTime.now();
@@ -126,7 +126,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
           .createReport(
             CreateContentReportCommand(
               targetId: post.id,
-              targetType: ContentReportTargetType.post,
+              targetType: ReportTargetType.post,
               reason: reason,
             ),
           );

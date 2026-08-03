@@ -16,7 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/application/importmanifest"
-	persistence "quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
+	persistence "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/persistence"
 )
 
 func main() {

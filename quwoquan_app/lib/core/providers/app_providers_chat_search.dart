@@ -422,8 +422,19 @@ final chatInteractionTelemetryTrackerProvider =
 /// Intersection Repository（读面；Mock 收敛归 R-ID10）
 final intersectionRepositoryProvider = Provider<IntersectionRepository>(
   (ref) => RemoteIntersectionRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
-    currentUserId: ref.watch(currentUserIdProvider),
+    client: ref.watch(generatedCloudOperationClientProvider),
+    myIntersectionsInvocationContext: (clientPageId) =>
+        _contentQueryInvocationContext(
+          ref,
+          surface: AppUiSurfaces.myIntersections,
+          clientPageId: clientPageId,
+        ),
+    objectIntersectionsInvocationContext: (clientPageId) =>
+        _contentQueryInvocationContext(
+          ref,
+          surface: AppUiSurfaces.objectIntersections,
+          clientPageId: clientPageId,
+        ),
   ),
 );
 

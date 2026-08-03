@@ -29,7 +29,6 @@ func TestAnonymousFeedSessionsDoNotEvictEachOthersRankedWindows(t *testing.T) {
 	}
 	engine := newTerminalFeedEngine(candidates)
 	service := NewFeedService(
-		engine,
 		fixtureFeedReader{posts: posts},
 		testsupport.RankedRecommendationOptions(
 			engine,

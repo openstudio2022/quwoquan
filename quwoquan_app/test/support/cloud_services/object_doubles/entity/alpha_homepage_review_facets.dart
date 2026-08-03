@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Alpha 内存 HomepageReview facet。
@@ -117,7 +118,9 @@ final class AlphaHomepageReviewFacet
             .map((record) => record.view)
             .toList(growable: false)
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return HomepageReviewPageSlice(items: items.take(query.limit));
+    return HomepageReviewPageSlice(
+      items: items.take(query.limit).toList(growable: false),
+    );
   }
 
   @override

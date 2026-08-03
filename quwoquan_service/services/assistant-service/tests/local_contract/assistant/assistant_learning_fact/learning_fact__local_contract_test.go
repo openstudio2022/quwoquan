@@ -9,6 +9,7 @@ import (
 
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
+	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
 )
 
 type memoryLearningFactStore struct {
@@ -49,7 +50,7 @@ func (store *memoryLearningFactStore) Append(
 }
 
 type fixedRunOwnerReader struct {
-	owner learningapplication.RunOwner
+	owner rundomain.Owner
 	found bool
 	err   error
 }
@@ -57,7 +58,7 @@ type fixedRunOwnerReader struct {
 func (reader fixedRunOwnerReader) ResolveRunOwner(
 	context.Context,
 	string,
-) (learningapplication.RunOwner, bool, error) {
+) (rundomain.Owner, bool, error) {
 	return reader.owner, reader.found, reader.err
 }
 
@@ -70,7 +71,7 @@ func TestLearningFactAppendIsDurablyIdempotentAndRejectsConflict(
 	service := learningapplication.NewService(
 		store,
 		fixedRunOwnerReader{
-			owner: learningapplication.RunOwner{
+			owner: rundomain.Owner{
 				UserID:    "account-1",
 				PersonaID: "persona-1",
 			},
@@ -140,7 +141,7 @@ func TestLearningFactFailsClosedForOwnerAndRestrictedTraining(
 	service := learningapplication.NewService(
 		&memoryLearningFactStore{},
 		fixedRunOwnerReader{
-			owner: learningapplication.RunOwner{
+			owner: rundomain.Owner{
 				UserID:    "account-1",
 				PersonaID: "persona-1",
 			},

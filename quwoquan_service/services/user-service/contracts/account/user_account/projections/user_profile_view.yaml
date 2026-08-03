@@ -6,6 +6,7 @@ description: '用户画像 ReadModel。聚合 UserProfile + 标签 + 行为统�
   '
 storage_backend: mongodb
 collection: rm_user_profile_view
+projection_mode: rebuildable
 source_entities:
 - UserProfile
 - PersonaRelationship
@@ -20,6 +21,14 @@ source_events:
 consumers:
 - recommendation-engine
 - assistant-service
+checkpoint:
+  source: typed event identity 与 aggregate version
+  resume: inclusive_idempotent
+rebuild:
+  strategy: replay_declared_source_events
+  atomic_replace: true
+tombstone:
+  strategy: UserAccountClosed 删除账号视图且禁止迟到事件复活
 fields:
 - name: userId
   type: string

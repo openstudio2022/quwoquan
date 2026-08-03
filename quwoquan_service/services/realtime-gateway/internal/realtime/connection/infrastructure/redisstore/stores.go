@@ -1,5 +1,5 @@
 // Package redisstore 实现 Connection runtime_session 的 redis 端口：
-// 一次性 ticket、逐连接 lease + fencing、presence 投影与按用户订阅。
+// 一次性 ticket、逐连接 lease + fencing 与按用户订阅。
 // 键契约唯一真相源：services/realtime-gateway/contracts/realtime/connection/storage.yaml。
 package redisstore
 
@@ -10,33 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
-)
-
-var (
-	presenceStaleFieldsRemovedTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "realtime_presence_stale_fields_removed_total",
-			Help: "Stale persona-device presence hash fields removed by the named reader.",
-		},
-	)
-	presenceViewDeviceCount = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "realtime_presence_view_device_count",
-			Help:    "Fresh device count returned by PresenceView.",
-			Buckets: []float64{0, 1, 2, 3, 5, 8, 16},
-		},
-	)
 )
 
 const (
@@ -45,11 +25,8 @@ const (
 	accountTicketPrefix = "rt:account:tickets:"
 	leaseKeyPrefix      = "rt:conn:lease:"
 	fenceKeyPrefix      = "rt:conn:fence:"
-	presenceKeyPrefix   = "presence:persona:"
 
 	ticketUsedMarkerTTL = 60 * time.Second
-	presenceTTL         = 120 * time.Second
-	presenceStaleAfter  = 60 * time.Second
 	fenceCounterTTL     = 24 * time.Hour
 )
 
@@ -236,166 +213,6 @@ func fenceKey(identity application.TrustedIdentity) string {
 	return fenceKeyPrefix +
 		strings.TrimSpace(identity.PersonaID) + ":" +
 		strings.TrimSpace(identity.DeviceID)
-}
-
-type PresenceStore struct {
-	client rtredis.Client
-}
-
-func NewPresenceStore(client rtredis.Client) *PresenceStore {
-	return &PresenceStore{client: client}
-}
-
-type presenceEntry struct {
-	AccountID       string `json:"accountId"`
-	PersonaID       string `json:"personaId"`
-	DeviceID        string `json:"deviceId"`
-	ConnectionID    string `json:"connId"`
-	NodeID          string `json:"nodeId"`
-	Transport       string `json:"transport"`
-	LastHeartbeatAt string `json:"lastHeartbeatAt"`
-}
-
-func (s *PresenceStore) Attach(
-	ctx context.Context,
-	identity application.TrustedIdentity,
-	connID string,
-	nodeID string,
-	transport string,
-) error {
-	return s.writeEntry(ctx, identity, connID, nodeID, transport)
-}
-
-func (s *PresenceStore) Heartbeat(
-	ctx context.Context,
-	identity application.TrustedIdentity,
-	connID string,
-	nodeID string,
-	transport string,
-) error {
-	return s.writeEntry(ctx, identity, connID, nodeID, transport)
-}
-
-func (s *PresenceStore) Detach(
-	ctx context.Context,
-	identity application.TrustedIdentity,
-	connID string,
-) error {
-	key := presenceKeyPrefix + strings.TrimSpace(identity.PersonaID)
-	field := strings.TrimSpace(identity.DeviceID)
-	current, err := s.client.HGet(ctx, key, field)
-	if errors.Is(err, rtredis.ErrKeyNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	var entry presenceEntry
-	if json.Unmarshal([]byte(current), &entry) != nil ||
-		entry.ConnectionID != strings.TrimSpace(connID) {
-		return nil
-	}
-	return s.client.HDel(ctx, key, field)
-}
-
-func (s *PresenceStore) writeEntry(
-	ctx context.Context,
-	identity application.TrustedIdentity,
-	connID string,
-	nodeID string,
-	transport string,
-) error {
-	payload, err := json.Marshal(presenceEntry{
-		AccountID:       strings.TrimSpace(identity.AccountID),
-		PersonaID:       strings.TrimSpace(identity.PersonaID),
-		DeviceID:        strings.TrimSpace(identity.DeviceID),
-		ConnectionID:    strings.TrimSpace(connID),
-		NodeID:          nodeID,
-		Transport:       transport,
-		LastHeartbeatAt: time.Now().UTC().Format(time.RFC3339),
-	})
-	if err != nil {
-		return err
-	}
-	key := presenceKeyPrefix + strings.TrimSpace(identity.PersonaID)
-	if err := s.client.HSet(
-		ctx,
-		key,
-		strings.TrimSpace(identity.DeviceID),
-		string(payload),
-	); err != nil {
-		return err
-	}
-	return s.client.Expire(ctx, key, presenceTTL)
-}
-
-func (s *PresenceStore) ReadPresence(
-	ctx context.Context,
-	personaID string,
-	now time.Time,
-) (application.PresenceView, error) {
-	personaID = strings.TrimSpace(personaID)
-	view := application.PresenceView{
-		PersonaID: personaID,
-		Devices:   []application.PresenceDevice{},
-	}
-	entries, err := s.client.HGetAll(ctx, presenceKeyPrefix+personaID)
-	if err != nil && !errors.Is(err, rtredis.ErrKeyNotFound) {
-		return view, err
-	}
-	now = now.UTC()
-	for field, encoded := range entries {
-		var entry presenceEntry
-		heartbeat, valid := parsePresenceEntry(encoded, personaID, field, &entry)
-		if !valid || now.Sub(heartbeat) > presenceStaleAfter {
-			if err := s.client.HDel(
-				ctx,
-				presenceKeyPrefix+personaID,
-				field,
-			); err != nil {
-				return view, err
-			}
-			presenceStaleFieldsRemovedTotal.Inc()
-			continue
-		}
-		view.Devices = append(view.Devices, application.PresenceDevice{
-			AccountID:       entry.AccountID,
-			PersonaID:       entry.PersonaID,
-			DeviceID:        entry.DeviceID,
-			ConnectionID:    entry.ConnectionID,
-			NodeID:          entry.NodeID,
-			Transport:       entry.Transport,
-			LastHeartbeatAt: heartbeat,
-		})
-	}
-	sort.Slice(view.Devices, func(i, j int) bool {
-		return view.Devices[i].DeviceID < view.Devices[j].DeviceID
-	})
-	presenceViewDeviceCount.Observe(float64(len(view.Devices)))
-	return view, nil
-}
-
-func parsePresenceEntry(
-	encoded string,
-	personaID string,
-	field string,
-	entry *presenceEntry,
-) (time.Time, bool) {
-	if json.Unmarshal([]byte(encoded), entry) != nil ||
-		strings.TrimSpace(entry.PersonaID) != personaID ||
-		strings.TrimSpace(entry.DeviceID) != strings.TrimSpace(field) ||
-		strings.TrimSpace(entry.AccountID) == "" ||
-		strings.TrimSpace(entry.ConnectionID) == "" {
-		return time.Time{}, false
-	}
-	heartbeat, err := time.Parse(
-		time.RFC3339Nano,
-		strings.TrimSpace(entry.LastHeartbeatAt),
-	)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return heartbeat.UTC(), true
 }
 
 // EventSource 按可信 identity 订阅明确语义的通道；RTC 只按 persona，

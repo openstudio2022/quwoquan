@@ -10,8 +10,9 @@ import (
 // ProjectorEvent 是 commit 后的同进程 best-effort 搜索投影事件；Homepage 事实源是
 // 同事务写入的 homepage_outbox，本事件只缩短可见延迟，不能替代 outbox 重放。
 type ProjectorEvent struct {
-	Type       string
-	HomepageID string
+	Type          string
+	HomepageID    string
+	SourceVersion int64
 	// Homepage is the post-mutation snapshot. nil means "removed" (delete only).
 	Homepage *Homepage
 }

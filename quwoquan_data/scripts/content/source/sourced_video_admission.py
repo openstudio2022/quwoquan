@@ -222,6 +222,7 @@ def admitted_audio_evidence(
     *,
     declared_status: str,
     authorization_proof_url: str | None,
+    allow_unverified_rights: bool = False,
 ) -> dict[str, object]:
     probe = probe_audio_stream(path)
     has_audio = probe["hasAudio"] is True
@@ -230,7 +231,8 @@ def admitted_audio_evidence(
         passed = declared_status == status
     else:
         status = declared_status
-        passed = (
+        passed = status == "unverified" and allow_unverified_rights
+        passed = passed or (
             status
             in {
                 "licensed",

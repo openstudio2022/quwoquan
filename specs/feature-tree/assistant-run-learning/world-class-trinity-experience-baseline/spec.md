@@ -90,12 +90,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前缺口是受管 Provider 与 Gamma/Prod readiness evidence、Prod 法务真值、Android/iPhone 真机 UAT，以及 5%→25%→100% rollout/≤300 秒 rollback readback 尚未完成。
-  - 四个 Story 的实现、专项指标/SLO/告警、direct local contract、真实 Mongo/Redis API integration 与 Patrol UAT 定义均已补齐。
-  - Alpha/Beta/Gamma 曾生成绑定候选 Data release `20260731--travel-zhejiang-six--scale-017` 和 rollback release `west-lake-canonical-20260731` 的不可变包；后续契约与 runtime 修复已使当前 managed workspace 再次漂移，旧包不得充当本次准出收据。
-  - 最终 `verify-service-architecture` 仍要求把 AssistantEntryView、AssistantTaskView、PageContext、SkillSubscription 的 local_contract，以及九个 Assistant routed object 的 api_integration 证据归位到 object-local 目录；全仓其他领域也有同类缺口。
-  - `assistant_session` API integration 全包仍含 pre-cutover 的 `input/turnId/AssistantTurn` 请求响应假设，只有 canonical AssistantRun、Worker recovery、主动 Trigger、公开网与 Skill release 定向包已通过。
-  - 最新 `stackctl status/inspect --target alpha-local` 显示 `0/6` healthy，active candidate 与当前 workspace 的 `baselineId/workspaceStatusDigest/deploymentInputDigest` 不一致，且 Web current pointer 与 Android latest manifest 缺失；Alpha 仍缺受保护 Provider material，Gamma/Prod Provider readiness evidence 为 0。
-  - Prod 法务静态包仍含运营主体、注册地址、客服电话和 ICP 备案占位。
-  - 本机仅有 iOS simulator、没有 Android/iPhone 真机，未执行的 Patrol 与发布/回滚不得包装为通过。
-- 完成判定：先完成 Assistant object-local 三层证据归位、迁移 `assistant_session` API integration 全包到 canonical Run wire，并通过 `verify-service-architecture`。随后补齐受管 Provider、Gamma DNS-01/环境证据和 Prod 法务真值，通过 `stackctl up/health/inspect` 建立完整第一方拓扑。在 Android/iPhone 真机执行四主题 Remote UAT，并由受保护 Prod 审批完成 5%→25%→100% rollout 与 ≤300 秒 rollback readback。四个 Story 的阻断 OPEN 全部满足各自完成判定后方可删除本 OPEN。
+- 影响或价值：尚缺受管 Provider、真实 Mongo/Redis、三环境同候选、双端物理真机和 Prod 发布证据，源码与本地门禁不能替代商业准出。
+  - 缺真实 Mongo/Redis Assistant API integration 全包执行收据；包可编译以及 `AssistantRun`、TaskGraph、Checkpoint、Presentation、主动 Trigger、公开网、原生工具调用和恢复状态机的 direct local contract 不能替代该收据。
+  - 缺绑定最终冻结 snapshot 的唯一 immutable candidate，以及 Alpha/Beta/Gamma 对同一 active Skill package digest 的 activation、Provider、Run/Tool/Presentation 与 rollback readback。
+  - 缺公开 URL、主动 Skill、Adaptive Presentation 和后台恢复的 Android/iPhone 物理真机 Remote UAT。
+  - 缺 Prod 法务真值、受保护审批、5%→25%→100% rollout 与 ≤300 秒 rollback readback；模拟器、本地测试、未绑定最终 snapshot 的 package 或未执行的 Patrol 均不能替代。
+- 完成判定：冻结 current source 后重新通过 ContractGraph、Assistant local contract、真实 Mongo/Redis API integration 与 service architecture；生成唯一 immutable candidate，并在 Alpha/Beta/Gamma 取得同 digest 的 package activation、Provider、Run/Tool/Presentation 与 rollback receipts。随后在 Android/iPhone 物理真机执行 Remote UAT，补齐 Prod 法务真值并完成受保护的 5%→25%→100% rollout 与 ≤300 秒 rollback readback。全部直属 Story 的阻断 OPEN 满足各自完成判定后方可删除本 OPEN。

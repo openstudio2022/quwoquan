@@ -82,12 +82,12 @@
 - THEN 恢复只递增 retry generation 并重新投递原 decision；UserAccount path、idempotency key、case ref、decision digest 与 approved time 保持不变，成功 receipt 后 readiness 恢复。
 
 <a id="gwt-003"></a>
-### GWT-003 Gamma 真实权限、双签、跨域收敛与恢复演练
+### GWT-003 Gamma 隔离权限、双签、跨域收敛与恢复演练
 
-- GIVEN Gamma 使用真实 operator OIDC、细分 operation scope、Product Ops 服务身份、PostgreSQL、User Service Remote composition 和真实可逆测试账号。
+- GIVEN Gamma 使用 target-scoped 受管非生产 operator port、细分 operation scope、Product Ops 服务身份、PostgreSQL、User Service Remote composition 和真实可逆测试账号；Prod 仍强制真实 OIDC。
 - WHEN 执行 moderation → Suspend → 旧 token 拒绝 → 正式 appeal intake → Restore → 新会话登录，并注入一次可恢复投递失败和一次 terminal DLQ。
 - THEN Product Ops case/decision/receipt、UserAccount state/auth epoch/session revoke、下游 restriction projection、App 受限与恢复体验、指标/告警/DLQ/恢复记录可由同一 trace 与 decision ref 对齐。
-- THEN 未获授权 scope、OIDC/服务身份无效、依赖不可用或 DLQ 未清零时全部 fail-closed，且不得以本地 fake、人工改库或 Mock App 作为替代证据。
+- THEN 未获授权 scope、operator/服务身份无效、依赖不可用或 DLQ 未清零时全部 fail-closed，且不得以内存 fake、人工改库或 Mock App 作为替代证据。
 
 ## 6. 依赖
 
@@ -99,12 +99,12 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 Gamma 真实账号治理端到端证据
+### OPEN-001 Gamma 隔离账号治理端到端证据
 
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Gamma operator OIDC、细分 scope、服务身份、UserAccount Remote、双端设备、旧凭据拒绝、跨域 restriction 收敛及 telemetry/alert readback；仓内实现与真实存储集成测试不能替代这些证据。
+- 影响或价值：尚缺 Gamma target-scoped operator conformance、细分 scope、服务身份、UserAccount Remote、双端设备、旧凭据拒绝、跨域 restriction 收敛及 telemetry/alert readback；仓内实现与真实存储集成测试不能替代这些证据。
 - 完成判定：`GWT-003` 在 Gamma Android/iOS 与受保护账号上真实通过，CaseResult 绑定 decision/trace、UserAccount receipt、跨域 lag、DLQ/readiness 和告警 readback。
 
 <a id="open-002"></a>

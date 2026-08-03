@@ -15,10 +15,12 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rtoperation "quwoquan_service/runtime/operation"
+	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
+	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 // 本文件只验证 Comment / ContentReaction 对象 Facade 的正式 HTTP 契约。
@@ -66,7 +68,7 @@ func TestCommentListPagination(t *testing.T) {
 
 func TestCommentListEnforcesServerProjectedBlockFacts(t *testing.T) {
 	ctx := context.Background()
-	relationships := requireMongoDB(t).Collection("persona_follow_projection")
+	relationships := requireMongoDB(t).Collection("comment_viewer_relationship_projection")
 	viewerID := "comment_block_viewer"
 	postOwnerID := "comment_block_post_owner"
 	blockedCommenterID := "comment_block_author"
@@ -97,10 +99,11 @@ func TestCommentListEnforcesServerProjectedBlockFacts(t *testing.T) {
 		"blocked comment",
 		"",
 	)
-	projector := recinfra.NewPersonaRelationshipProjection(requireMongoDB(t))
-	if err := projector.Apply(ctx, recinfra.PersonaRelationshipProjectionEvent{
+	projection := commentpersistence.NewCommentViewerRelationshipMongoProjection(requireMongoDB(t))
+	projector := commentapp.NewViewerRelationshipProjector(projection)
+	if err := projector.Apply(ctx, commentapp.ViewerRelationshipEvent{
 		EventID:         "comment_block_author_event",
-		EventName:       recinfra.PersonaBlocked,
+		EventName:       commentapp.ViewerBlocked,
 		PairID:          "comment_block_author_pair",
 		SourcePersonaID: viewerID,
 		TargetPersonaID: blockedCommenterID,
@@ -115,9 +118,9 @@ func TestCommentListEnforcesServerProjectedBlockFacts(t *testing.T) {
 		t.Fatalf("blocked commenter leaked into Comment page: %+v", page)
 	}
 
-	if err := projector.Apply(ctx, recinfra.PersonaRelationshipProjectionEvent{
+	if err := projector.Apply(ctx, commentapp.ViewerRelationshipEvent{
 		EventID:         "comment_block_owner_event",
-		EventName:       recinfra.PersonaBlocked,
+		EventName:       commentapp.ViewerBlocked,
 		PairID:          "comment_block_owner_pair",
 		SourcePersonaID: viewerID,
 		TargetPersonaID: postOwnerID,
@@ -307,8 +310,8 @@ func TestCommentModerationLifecycleApiIntegration(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		commentapp.BindFacades(testCommentService),
-		reactionapp.BindFacades(testReactionService),
+		commenthttp.NewHandler(commentapp.BindFacades(testCommentService)),
+		reactionhttp.NewHandler(reactionapp.BindFacades(testReactionService)),
 		nil,
 		nil,
 	).Routes())

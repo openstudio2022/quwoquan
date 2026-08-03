@@ -12,6 +12,8 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	behaviormodel "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model"
+	behaviorports "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
@@ -108,38 +110,23 @@ type BehaviorService struct {
 	feedbackIngestor     rtrec.FeedbackIngestor
 	feedbackReplayReader rtrec.FeedbackReplayReader
 	store                postports.DetailReader
-	feedback             *rtrec.FeedbackRecorder
-	eventStore           ports.BehaviorEventStore
+	eventStore           behaviorports.FactStore
 	wishlistStore        ports.WishlistEventStore
 	wishlistReader       ports.WishlistStateReader
-	metricsStore         ports.DailyMetricsStore
-	authorImpact         ports.AuthorImpactStore
-	authorImpactEvidence ports.AuthorImpactEvidenceStore
+	metricsStore         behaviorports.DailyMetricsStore
 	sessionInvalid       func(userID, sessionID string)
 	patchEmitter         *rtrec.FeedPatchEmitter
 	intersectionFeedback IntersectionFeedbackSink
 	onboardingTaxonomy   OnboardingInterestTaxonomyValidator
-	experimentBucket     func(userID string) string
 }
 
 type BehaviorServiceOption func(*BehaviorService)
-
-func WithBehaviorFeedbackRecorder(f *rtrec.FeedbackRecorder) BehaviorServiceOption {
-	return func(s *BehaviorService) { s.feedback = f }
-}
 
 func WithSessionCacheInvalidator(fn func(userID, sessionID string)) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.sessionInvalid = fn }
 }
 
-// WithExperimentBucketResolver 注入 experiment_bucket 服务端重算器（N1-3）。
-// resolver 必须与 engine 的 scoring 分桶同源（同一 policy hash）；未注入时
-// 行为归因的 experiment_bucket 收敛为 "unknown"。
-func WithExperimentBucketResolver(fn func(userID string) string) BehaviorServiceOption {
-	return func(s *BehaviorService) { s.experimentBucket = fn }
-}
-
-func WithBehaviorEventStore(es ports.BehaviorEventStore) BehaviorServiceOption {
+func WithBehaviorEventStore(es behaviorports.FactStore) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.eventStore = es }
 }
 
@@ -151,16 +138,8 @@ func WithWishlistStateReader(reader ports.WishlistStateReader) BehaviorServiceOp
 	return func(s *BehaviorService) { s.wishlistReader = reader }
 }
 
-func WithDailyMetricsStore(ms ports.DailyMetricsStore) BehaviorServiceOption {
+func WithDailyMetricsStore(ms behaviorports.DailyMetricsStore) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.metricsStore = ms }
-}
-
-func WithAuthorImpactStore(store ports.AuthorImpactStore) BehaviorServiceOption {
-	return func(s *BehaviorService) { s.authorImpact = store }
-}
-
-func WithAuthorImpactEvidenceStore(store ports.AuthorImpactEvidenceStore) BehaviorServiceOption {
-	return func(s *BehaviorService) { s.authorImpactEvidence = store }
 }
 
 // WithFeedPatchEmitter 注入低风险实时推荐 patch 发射器（阶段七 §G）。
@@ -419,11 +398,6 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			IntersectionSourceRef:  strings.TrimSpace(eventInput.IntersectionSourceRef),
 			IntersectionEvidenceID: strings.TrimSpace(eventInput.IntersectionEvidenceID),
 		}
-		// N1-3 experiment_bucket 归因：服务端按 policy 确定性分桶重算
-		// （与 engine 下发同一 hash，不信任端侧），行为漏斗可按分桶切分。
-		if s.experimentBucket != nil {
-			signal.ExperimentBucket = s.experimentBucket(userID)
-		}
 		if s.feedbackIngestor != nil {
 			accepted, err := s.feedbackIngestor.AcceptEvent(ctx, signal)
 			if err != nil {
@@ -472,10 +446,14 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		rtrec.RecordBehaviorMetric(signal)
 	}
 	if s.eventStore != nil {
-		rawEvents := make([]ports.RawBehaviorEvent, len(signals))
+		rawEvents := make([]behaviormodel.Fact, len(signals))
 		for i, sig := range signals {
 			eventOccurredAt := eventTimes[i]
-			rawEvents[i] = ports.RawBehaviorEvent{
+			impactHelpType := ""
+			if helpType, ok := rtimpact.BehaviorActionToHelpType[sig.Action]; ok && sig.AuthorID != "" {
+				impactHelpType = helpType
+			}
+			rawEvents[i] = behaviormodel.Fact{
 				ClientEventID:          sig.ClientEventID,
 				State:                  sig.State,
 				UserID:                 sig.UserID,
@@ -484,10 +462,15 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				ContentID:              sig.ContentID,
 				Action:                 sig.Action,
 				ContentType:            sig.ContentType,
+				ObjectID:               strings.TrimSpace(acceptedInputs[i].ObjectID),
+				ObjectKind:             strings.TrimSpace(acceptedInputs[i].ObjectKind),
+				DisplayName:            strings.TrimSpace(acceptedInputs[i].DisplayName),
+				SourceSurface:          strings.TrimSpace(acceptedInputs[i].SourceSurface),
 				TaxonomyReleaseID:      strings.TrimSpace(acceptedInputs[i].TaxonomyReleaseID),
 				Tags:                   sig.Tags,
 				Duration:               sig.Duration,
 				AuthorID:               sig.AuthorID,
+				ImpactHelpType:         impactHelpType,
 				ReferralSource:         sig.ReferralSource,
 				EngagementDepth:        sig.EngagementDepth,
 				ConsumedRatio:          sig.ConsumedRatio,
@@ -512,6 +495,11 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				CreatedAt:              eventOccurredAt,
 			}
 		}
+		for _, fact := range rawEvents {
+			if err := fact.Validate(); err != nil {
+				return generated.AppErrorFromInvalidArgument(err.Error())
+			}
+		}
 		if err := s.eventStore.InsertBatch(ctx, rawEvents); err != nil {
 			return err
 		}
@@ -520,54 +508,30 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		for i, sig := range signals {
 			dateStr := eventTimes[i].Format("2006-01-02")
 			dwellMs := int64(sig.Duration * 1000)
-			if err := s.metricsStore.IncrementMetric(ctx, dateStr, ports.DailyMetricDimensionAction, sig.Action, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
+			if err := s.metricsStore.IncrementMetric(ctx, dateStr, behaviorports.DailyMetricDimensionAction, sig.Action, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
 				return err
 			}
 			if sig.ContentID != "" {
-				if err := s.metricsStore.IncrementMetric(ctx, dateStr, ports.DailyMetricDimensionContent, sig.ContentID, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
+				if err := s.metricsStore.IncrementMetric(ctx, dateStr, behaviorports.DailyMetricDimensionContent, sig.ContentID, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
 					return err
 				}
 			}
 			if sig.AuthorID != "" {
-				if err := s.metricsStore.IncrementMetric(ctx, dateStr, ports.DailyMetricDimensionAuthor, sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
+				if err := s.metricsStore.IncrementMetric(ctx, dateStr, behaviorports.DailyMetricDimensionAuthor, sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
 					return err
 				}
 			}
 			// 交集转化北极星（S6）：交集维度上有归因的行动（关注/进圈子/加联系人等）按维度累计，
 			// 供「交集转化率 = 交集行动数 / 新增可解释交集数」按 dimension 下钻。
 			if sig.IntersectionDimension != "" {
-				if err := s.metricsStore.IncrementMetric(ctx, dateStr, ports.DailyMetricDimensionIntersection, sig.IntersectionDimension, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
+				if err := s.metricsStore.IncrementMetric(ctx, dateStr, behaviorports.DailyMetricDimensionIntersection, sig.IntersectionDimension, sig.Action, dwellMs, sig.EngagementDepth); err != nil {
 					return err
 				}
 			}
 		}
 	}
-	if s.authorImpactEvidence != nil {
-		for i, sig := range signals {
-			eventOccurredAt := eventTimes[i]
-			if event := authorImpactEventFromSignal(sig, eventOccurredAt); event.AuthorID != "" {
-				if err := s.recordAuthorImpactEvidence(ctx, sig, event, eventOccurredAt); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if s.feedback != nil {
-		for _, signal := range signals {
-			if strings.TrimSpace(signal.FeedRequestID) == "" {
-				// 非推荐入口的行为没有与最终下发曝光关联的 requestId。
-				// 它仍已进入权威行为事实、实时 HotPath 和特征投影，但不能写入
-				// rec_learning_events 伪装为可训练反馈。
-				continue
-			}
-			if err := s.feedback.RecordEngagement(ctx, signal, 0); err != nil {
-				return err
-			}
-		}
-	}
-	// N0-2：BehaviorBatchReported 不再经 Pub/Sub fire-and-forget 发布（生产无
-	// 订阅者导致特征投影断链）。行为 → rm_recommend_feature 投影由
-	// BehaviorProjectionRelay 从 rm_behavior_events 持久轨游标驱动（断点续传）。
+	// ContentBehaviorFact 由对象存储与 typed stream 单轨发布；推荐反馈、长期
+	// 特征与训练样本均由 recommendation-service 消费形成，Content 不再旁写。
 	//
 	// N0-4：SessionCache 的缓存 key 是 feed 读路径的 sessionId（FeedSession 滚动
 	// UUID），signal.SessionID 是跨服务 trace sessionId（两套语义）。

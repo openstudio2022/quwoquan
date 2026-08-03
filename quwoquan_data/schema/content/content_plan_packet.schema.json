@@ -96,7 +96,7 @@
                 },
                 "rightsAuditStatus": {
                   "type": "string",
-                  "enum": ["verified", "unverified"]
+                  "enum": ["verified", "unverified", "restricted", "unknown"]
                 },
                 "rightsAuditIssues": {
                   "type": "array",
@@ -161,7 +161,8 @@
             "type": "string",
             "enum": [
               "licensed_adaptation",
-              "factual_reference_only"
+              "factual_reference_only",
+              "rights_audit_only"
             ],
             "description": "主来源使用模式；blocked 来源不得进入 content_plan"
           }

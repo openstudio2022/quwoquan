@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 part 'assistant_presentation_validation.dart';
+part 'assistant_route_map_node.dart';
 
 typedef AssistantPresentationMarkdownBuilder = Widget Function(String markdown);
 typedef AssistantPresentationMediaUrlResolver =
@@ -86,6 +87,7 @@ class AssistantPresentationRenderCapabilities {
     AssistantPresentationNodeKind.entityReference,
     AssistantPresentationNodeKind.sourceReference,
     AssistantPresentationNodeKind.timeline,
+    AssistantPresentationNodeKind.routeMap,
     AssistantPresentationNodeKind.comparisonTable,
     AssistantPresentationNodeKind.sourceList,
     AssistantPresentationNodeKind.callout,
@@ -266,6 +268,7 @@ class _AssistantPresentationRendererRegistry {
       AssistantPresentationNodeKind.entityReference => _reference(node),
       AssistantPresentationNodeKind.sourceReference => _reference(node),
       AssistantPresentationNodeKind.timeline => _timeline(node, children),
+      AssistantPresentationNodeKind.routeMap => _routeMap(node),
       AssistantPresentationNodeKind.comparisonTable => _comparisonTable(node),
       AssistantPresentationNodeKind.sourceList => _list(node, children),
       AssistantPresentationNodeKind.mediaGallery => _carousel(node, children),
@@ -290,6 +293,7 @@ class _AssistantPresentationRendererRegistry {
     return Semantics(
       label: accessibility.semanticLabel,
       hint: accessibility.semanticHint,
+      explicitChildNodes: true,
       child: rendered,
     );
   }
@@ -610,6 +614,17 @@ class _AssistantPresentationRendererRegistry {
     );
   }
 
+  Widget _routeMap(AssistantPresentationNodeWire node) =>
+      _AssistantRouteMapNode(
+        node: node,
+        textColor: textColor,
+        colors: _themeColors,
+        toneColor: _toneColor(node.style.tone),
+        compact:
+            capabilities.viewportClass ==
+            AssistantPresentationViewportClass.compact,
+      );
+
   Widget _comparisonTable(AssistantPresentationNodeWire node) {
     final columns = _stringList(node.data['columns']);
     final rows = _mapList(node.data['rows']);
@@ -910,6 +925,10 @@ _PresentationValidation _validateDocument(
             !_validAction(node.action!) ||
             canHandleAction?.call(node.action!) == false)) {
       return const _PresentationValidation(reason: 'action_unavailable');
+    }
+    if (node.kind == AssistantPresentationNodeKind.routeMap &&
+        !_validRouteMapData(node.data)) {
+      return const _PresentationValidation(reason: 'invalid_route_map');
     }
   }
   final root = byId[document.rootNodeId];

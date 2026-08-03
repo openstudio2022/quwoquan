@@ -210,7 +210,7 @@ func newSelectableGroupHandlerWithRelationshipGate(
 		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), profiles, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
 		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStorage),
+		newTestInboxService(),
 		nil,
 	).Routes()
 }

@@ -198,6 +198,31 @@ func TestHTTPExternalProviderFailsClosedWithoutCredentials(t *testing.T) {
 	}
 }
 
+func TestHTTPExternalProviderAcceptsCanonicalLocalCaptureSMSProvider(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Minute)
+	sealer, references := smsOTPDependencies(
+		t,
+		"sms-request-local-capture",
+		"challenge-local-capture",
+		expiresAt,
+	)
+	_, err := provider.NewHTTPExternalProvider(
+		provider.HTTPExternalProviderConfig{
+			Name:              "local_capture_sms",
+			Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
+			Endpoint:          "https://sms-provider-substitute:9443/v1/provider/sms/send",
+			BearerToken:       "target-scoped-provider-token",
+			Timeout:           time.Second,
+			OTPCodeSealer:     sealer,
+			OTPCodeReferences: references,
+		},
+		&http.Client{},
+	)
+	if err != nil {
+		t.Fatalf("canonical local capture SMS provider must be accepted: %v", err)
+	}
+}
+
 func TestHTTPExternalProviderDoesNotImplementPushDelivery(t *testing.T) {
 	_, err := provider.NewHTTPExternalProvider(
 		provider.HTTPExternalProviderConfig{

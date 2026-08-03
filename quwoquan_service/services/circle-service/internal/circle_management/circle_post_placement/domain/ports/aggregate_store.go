@@ -112,8 +112,10 @@ type PolicyReaders struct {
 	Memberships MembershipRoleReader
 }
 
-// PostLifecycleEvent is the typed cross-context fact consumed by Circle. It
-// intentionally contains only the fields required to maintain PostOwnerView.
+// PostLifecycleEvent is the typed cross-context fact consumed by Circle. The
+// optional feed snapshot is present only for lifecycle events that can keep a
+// public CircleFeedItem projection alive; removal/redaction facts carry only
+// identity, version and owner state.
 type PostLifecycleEvent struct {
 	EventID        string
 	EventType      string
@@ -121,7 +123,38 @@ type PostLifecycleEvent struct {
 	PostVersion    int64
 	OwnerPersonaID string
 	State          string
+	Visibility     string
+	Moderation     string
+	FeedItem       *PostFeedItemSnapshot
 	OccurredAt     time.Time
+}
+
+// PostFeedItemSnapshot is the Content-owned public Post slice copied into the
+// Circle boundary by the typed lifecycle stream. It is a projection payload,
+// never a second Post aggregate or an authority for Content mutations.
+type PostFeedItemSnapshot struct {
+	ContentType        string
+	ContentIdentity    string
+	AssistantUsePolicy string
+	AuthorDisplayName  string
+	AuthorAvatarURL    string
+	Title              string
+	Body               string
+	Summary            string
+	CoverURL           string
+	MediaURLs          []string
+	VideoURL           string
+	ThumbnailURL       string
+	Width              int64
+	Height             int64
+	DurationMs         int64
+	LikeCount          int64
+	CommentCount       int64
+	ShareCount         int64
+	ContentVertical    string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	PublishedAt        time.Time
 }
 
 type PostLifecycleProjection interface {

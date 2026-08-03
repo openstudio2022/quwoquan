@@ -36,7 +36,11 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	t.Helper()
 	client := rtredis.NewMemoryClient()
 	authority := newTestAccountSecurityAuthority()
-	securityStore := redisstore.NewAccountSecurityStateStore(client)
+	presenceProjection := newTestPresenceProjection(t, client)
+	securityStore := redisstore.NewAccountSecurityStateStore(
+		client,
+		presenceProjection,
+	)
 	relay := redisstore.NewAccountSecurityRelay(client)
 	tickets, err := application.NewTicketService(
 		redisstore.NewTicketStore(client),
@@ -49,7 +53,7 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 	eventSource := newTestEventSource(t, client)
 	hub, err := application.NewHub(
 		redisstore.NewLeaseStore(client),
-		redisstore.NewPresenceStore(client),
+		presenceProjection,
 		eventSource,
 		authority,
 		securityStore,
@@ -68,7 +72,6 @@ func newGatewayHarness(t *testing.T) *gatewayHarness {
 		tickets,
 		hub,
 		mustTestResumableEventReader(t, client),
-		redisstore.NewPresenceStore(client),
 		httpadapter.DefaultTransportConfig(),
 	)
 	if err != nil {
@@ -672,59 +675,5 @@ func TestLongPollResumesDurableEventsStrictlyAfterCursor(t *testing.T) {
 	defer func() { _ = invalidResponse.Body.Close() }()
 	if invalidResponse.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid cursor status=%d, want 400", invalidResponse.StatusCode)
-	}
-}
-
-func TestPresenceViewRemovesStaleDeviceFieldsIndependently(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	client := rtredis.NewMemoryClient()
-	store := redisstore.NewPresenceStore(client)
-	now := time.Date(2026, 7, 20, 15, 0, 0, 0, time.UTC)
-	key := "presence:persona:persona-presence"
-	active := map[string]any{
-		"accountId":       "account-presence",
-		"personaId":       "persona-presence",
-		"deviceId":        "device-active",
-		"connId":          "conn-active",
-		"nodeId":          "node-a",
-		"transport":       "websocket",
-		"lastHeartbeatAt": now.Add(-10 * time.Second).Format(time.RFC3339Nano),
-	}
-	stale := map[string]any{
-		"accountId":       "account-presence",
-		"personaId":       "persona-presence",
-		"deviceId":        "device-stale",
-		"connId":          "conn-stale",
-		"nodeId":          "node-b",
-		"transport":       "websocket",
-		"lastHeartbeatAt": now.Add(-61 * time.Second).Format(time.RFC3339Nano),
-	}
-	for deviceID, entry := range map[string]map[string]any{
-		"device-active": active,
-		"device-stale":  stale,
-	} {
-		encoded, _ := json.Marshal(entry)
-		if err := client.HSet(ctx, key, deviceID, string(encoded)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	view, err := store.ReadPresence(ctx, "persona-presence", now)
-	if err != nil {
-		t.Fatalf("read presence: %v", err)
-	}
-	if len(view.Devices) != 1 ||
-		view.Devices[0].DeviceID != "device-active" ||
-		view.Devices[0].AccountID != "account-presence" {
-		t.Fatalf("presence view=%+v", view)
-	}
-	if _, err := client.HGet(ctx, key, "device-stale"); !errors.Is(
-		err,
-		rtredis.ErrKeyNotFound,
-	) {
-		t.Fatalf("stale field must be removed, err=%v", err)
-	}
-	if _, err := client.HGet(ctx, key, "device-active"); err != nil {
-		t.Fatalf("active field must remain despite stale sibling: %v", err)
 	}
 }

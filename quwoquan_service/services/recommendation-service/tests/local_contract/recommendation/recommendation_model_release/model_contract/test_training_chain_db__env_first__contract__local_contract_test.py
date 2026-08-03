@@ -15,6 +15,7 @@ train 永远训不到新样本、activation gate 必报无候选证据。
 from __future__ import annotations
 
 import math
+import random
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,7 @@ from support.path_setup import model_runtime_root
 SCRIPTS_DIR = model_runtime_root() / "scripts"
 from training_sample_policy import filter_point_in_time_rows
 from sample_joiner import build_training_samples
+from generate_seed_data import generate_facts, generate_posts, generate_users
 
 TRAINING_CHAIN_SCRIPTS = [
     "sample_joiner.py",
@@ -130,46 +132,48 @@ def test_point_in_time_filter_rejects_invalid_threshold(invalid_threshold):
 def test_sample_joiner_uses_request_scoped_immutable_online_snapshots():
     occurred_at = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
     snapshot_at = datetime(2026, 7, 19, 23, 0, tzinfo=timezone.utc)
-    events = []
+    exposures = []
+    feedbacks = []
     for request_id, marker in (("frq_1", 1), ("frq_2", 2)):
-        events.extend([
+        exposure_id = f"exposure-{marker}"
+        exposures.append(
             {
-                "eventType": "rec_impression",
+                "_id": exposure_id,
+                "userId": "user-1",
+                "targetId": "post-1",
+                "targetType": "image",
+                "requestId": request_id,
+                "exposedAt": occurred_at,
+                "featureSnapshotAt": snapshot_at,
+                "userFeatureSnapshot": {"totalLikes": marker},
+                "itemFeatureSnapshot": {
+                    "contentType": "image",
+                    "viewCount": marker,
+                },
+            }
+        )
+        feedbacks.append(
+            {
+                "_id": f"feedback-{marker}",
+                "exposureId": exposure_id,
                 "userId": "user-1",
                 "targetId": "post-1",
                 "occurredAt": occurred_at,
-                "labels": {"contentType": "image"},
-                "context": {
-                    "feedRequestId": request_id,
-                    "featureSnapshotAt": snapshot_at,
-                    "userFeatureSnapshot": {"totalLikes": marker},
-                    "itemFeatureSnapshot": {
-                        "contentType": "image",
-                        "viewCount": marker,
-                    },
-                },
-            },
-            {
-                "eventType": "rec_engagement",
-                "userId": "user-1",
-                "targetId": "post-1",
-                "occurredAt": occurred_at,
-                "labels": {"action": "click"},
-                "context": {
-                    "feedRequestId": request_id,
-                    "duration": marker,
-                },
-            },
-        ])
+                "feedbackType": "click",
+                "value": marker,
+            }
+        )
 
     docs, rejected_identity, rejected_snapshot = build_training_samples(
-        events,
+        exposures,
+        feedbacks,
         "content_feed",
     )
 
     assert rejected_identity == 0
     assert rejected_snapshot == 0
     assert [doc["requestId"] for doc in docs] == ["frq_1", "frq_2"]
+    assert [doc["sourceSampleId"] for doc in docs] == ["exposure-1", "exposure-2"]
     assert [doc["userFeatures"]["totalLikes"] for doc in docs] == [1, 2]
     assert [doc["itemFeatures"]["viewCount"] for doc in docs] == [1, 2]
     assert all(doc["labels"]["click"] == 1.0 for doc in docs)
@@ -181,21 +185,21 @@ def test_sample_joiner_uses_request_scoped_immutable_online_snapshots():
 def test_sample_joiner_preserves_future_snapshot_as_invalid_pit_lag():
     impression_at = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
     future_snapshot_at = datetime(2026, 7, 20, 12, 0, 1, tzinfo=timezone.utc)
-    events = [{
-        "eventType": "rec_impression",
+    exposures = [{
+        "_id": "exposure-future-snapshot",
         "userId": "user-future-snapshot",
         "targetId": "post-future-snapshot",
-        "occurredAt": impression_at,
-        "context": {
-            "feedRequestId": "frq_future_snapshot",
-            "featureSnapshotAt": future_snapshot_at,
-            "userFeatureSnapshot": {},
-            "itemFeatureSnapshot": {"contentType": "image"},
-        },
+        "targetType": "image",
+        "requestId": "frq_future_snapshot",
+        "exposedAt": impression_at,
+        "featureSnapshotAt": future_snapshot_at,
+        "userFeatureSnapshot": {},
+        "itemFeatureSnapshot": {"contentType": "image"},
     }]
 
     docs, rejected_identity, rejected_snapshot = build_training_samples(
-        events,
+        exposures,
+        [],
         "content_feed",
     )
 
@@ -209,31 +213,53 @@ def test_sample_joiner_preserves_future_snapshot_as_invalid_pit_lag():
 
 def test_sample_joiner_fails_closed_without_identity_or_snapshot():
     occurred_at = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
-    events = [
+    exposures = [
         {
-            "eventType": "rec_impression",
+            "_id": "exposure-missing-request",
             "userId": "user-1",
             "targetId": "post-missing-request",
-            "occurredAt": occurred_at,
-            "context": {},
+            "exposedAt": occurred_at,
         },
         {
-            "eventType": "rec_impression",
+            "_id": "exposure-missing-snapshot",
             "userId": "user-1",
             "targetId": "post-missing-snapshot",
-            "occurredAt": occurred_at,
-            "context": {"feedRequestId": "frq_missing_snapshot"},
+            "requestId": "frq_missing_snapshot",
+            "exposedAt": occurred_at,
         },
     ]
 
     docs, rejected_identity, rejected_snapshot = build_training_samples(
-        events,
+        exposures,
+        [],
         "content_feed",
     )
 
     assert docs == []
     assert rejected_identity == 1
     assert rejected_snapshot == 1
+
+
+def test_local_dryrun_generator_emits_exactly_attributed_canonical_facts():
+    rng = random.Random(42)
+    posts = generate_posts(rng, 4)
+    users = generate_users(rng, 2)
+
+    exposures, feedbacks = generate_facts(
+        rng,
+        posts,
+        users,
+        count=20,
+        scenario="content_feed",
+    )
+
+    exposure_ids = {document["_id"] for document in exposures}
+    assert len(exposures) == 20
+    assert feedbacks
+    assert all(document["exposureId"] in exposure_ids for document in feedbacks)
+    assert all(document["scenario"] == "content_feed" for document in exposures)
+    assert all(len(document["featureSnapshotDigest"]) == 64 for document in exposures)
+    assert all("eventType" not in document for document in exposures + feedbacks)
 
 
 def test_skewed_features_stay_retired():

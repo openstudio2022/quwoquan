@@ -155,16 +155,22 @@ func assistantReferencedLocalSubcontracts(schema *assistantContractSchema) []str
 
 func assistantCollectContractImports(schema *assistantContractSchema, index *assistantContractIndex) []string {
 	importsSet := map[string]bool{}
+	const packageOwner = "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart"
+	hasRuntimeEnumImport := false
 	for _, imp := range schema.Imports {
 		trimmed := strings.TrimSpace(imp)
 		if trimmed != "" {
 			importsSet[trimmed] = true
+			hasRuntimeEnumImport = hasRuntimeEnumImport ||
+				strings.HasSuffix(trimmed, "assistant_runtime_enums.g.dart") ||
+				strings.HasSuffix(trimmed, "assistant/contracts/runtime_enums.dart")
 		}
 	}
 	if assistantSchemaNeedsRuntimeEnums(schema) &&
+		!hasRuntimeEnumImport &&
 		!importsSet["package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart"] &&
 		!importsSet["package:quwoquan_app/assistant/contracts/context_fill_contract.dart"] {
-		importsSet["package:quwoquan_app/assistant/contracts/runtime_enums.dart"] = true
+		importsSet["package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart"] = true
 	}
 	for _, field := range schema.Fields {
 		ref := strings.TrimSpace(field.Ref)
@@ -172,6 +178,9 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 			continue
 		}
 		if _, ok := schema.Subcontracts[ref]; ok {
+			continue
+		}
+		if importsSet[packageOwner] && assistantPackageOwnedContractType(ref) {
 			continue
 		}
 		if libraryPath, ok := index.libraryByClass[ref]; ok && libraryPath != schema.LibraryPath {
@@ -187,6 +196,19 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 	}
 	sort.Strings(imports)
 	return imports
+}
+
+func assistantPackageOwnedContractType(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "RuntimeFailureWire",
+		"AssistantRunEnvelopeWire",
+		"AssistantStreamEventWire",
+		"AssistantSessionWire",
+		"SkillSubscriptionWire":
+		return true
+	default:
+		return false
+	}
 }
 
 func assistantSchemaNeedsRuntimeEnums(schema *assistantContractSchema) bool {
@@ -229,6 +251,7 @@ func renderAssistantSchemaClass(
 	}
 	b.WriteString("      };\n\n")
 	b.WriteString(fmt.Sprintf("  factory %s.fromJson(Map<String, dynamic> json) {\n", className))
+	b.WriteString(assistantRenderSchemaJsonValidation(className, fields))
 	b.WriteString(fmt.Sprintf("    return %s(\n", className))
 	for _, field := range fields {
 		b.WriteString(fmt.Sprintf("      %s: %s,\n", field.Name, assistantRenderFromJsonValue(field, schema, index)))
@@ -241,6 +264,89 @@ func renderAssistantSchemaClass(
 	}
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func assistantRenderSchemaJsonValidation(
+	className string,
+	fields []assistantContractField,
+) string {
+	var b strings.Builder
+	b.WriteString("    const allowedFields = <String>{\n")
+	for _, field := range fields {
+		fmt.Fprintf(&b, "      '%s',\n", field.Name)
+	}
+	b.WriteString("    };\n")
+	b.WriteString("    final unknownFields = json.keys\n")
+	b.WriteString("        .where((key) => !allowedFields.contains(key))\n")
+	b.WriteString("        .toList(growable: false);\n")
+	b.WriteString("    if (unknownFields.isNotEmpty) {\n")
+	fmt.Fprintf(
+		&b,
+		"      throw FormatException('%s response contains unknown fields: ${unknownFields.join(', ')}');\n",
+		className,
+	)
+	b.WriteString("    }\n")
+	for _, field := range fields {
+		condition := assistantSchemaJsonInvalidCondition(field)
+		if condition == "" {
+			continue
+		}
+		required := field.Required && field.Default == nil
+		if required {
+			fmt.Fprintf(
+				&b,
+				"    if (!json.containsKey('%s') || json['%s'] == null || (%s)) {\n",
+				field.Name,
+				field.Name,
+				condition,
+			)
+		} else {
+			fmt.Fprintf(
+				&b,
+				"    if (json.containsKey('%s') && json['%s'] != null && (%s)) {\n",
+				field.Name,
+				field.Name,
+				condition,
+			)
+		}
+		fmt.Fprintf(
+			&b,
+			"      throw const FormatException('%s field %s has an invalid wire value');\n",
+			className,
+			field.Name,
+		)
+		b.WriteString("    }\n")
+	}
+	return b.String()
+}
+
+func assistantSchemaJsonInvalidCondition(field assistantContractField) string {
+	accessor := "json['" + field.Name + "']"
+	switch field.Type {
+	case "string", "enum":
+		return accessor + " is! String"
+	case "int", "double":
+		return accessor + " is! num"
+	case "bool":
+		return accessor + " is! bool"
+	case "datetime":
+		return accessor + " is! String || DateTime.tryParse(" + accessor + " as String) == null"
+	case "map", "object", "map<object>", "partitioned_map":
+		return accessor + " is! Map"
+	case "list<string>":
+		return accessor + " is! List || (" + accessor +
+			" as List).any((item) => item is! String)"
+	case "list<map>", "list<object>":
+		return accessor + " is! List || (" + accessor +
+			" as List).any((item) => item is! Map)"
+	case "any":
+		if field.Required && field.Default == nil {
+			return "false"
+		}
+		return ""
+	default:
+		return ""
+	}
 }
 
 func renderAssistantSchemaFieldConstants(

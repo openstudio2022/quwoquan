@@ -63,14 +63,21 @@ type IndexEnsurer interface {
 	EnsureIndexes(ctx context.Context) error
 }
 
-type Store interface {
+// TaskStore is the smallest durable boundary required by task dispatchers and
+// workers. Data content execution must not depend on notification delivery or
+// provider ledgers merely because those adapters share the same state machine.
+type TaskStore interface {
 	TransactionRunner
 	OutboxStore
 	ReadyQueue
+	IndexEnsurer
+}
+
+type Store interface {
+	TaskStore
 	NotificationStore
 	DeliveryLedgerStore
 	LeaseStore
-	IndexEnsurer
 }
 
 type Dispatcher struct {
@@ -135,7 +142,7 @@ func (d Dispatcher) DispatchDue(ctx context.Context, limit int) ([]ReliableAsync
 type TaskHandler func(context.Context, ReliableAsyncTask) error
 
 type Worker struct {
-	Store          Store
+	Store          TaskStore
 	Ready          ReadyIndex
 	TaskTypes      []string
 	WorkerID       string

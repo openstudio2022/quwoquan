@@ -35,22 +35,35 @@ import (
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
 	circleconfig "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/runtimeconfig"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/searchindex"
 	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
+	behaviorfactmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/messaging"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/persistence"
 	fileapp "quwoquan_service/services/circle-service/internal/circle_management/circle_file/application"
 	fileexternal "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/external"
+	filemessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/messaging"
 	filepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/persistence"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
+	groupmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/messaging"
 	groupersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
 	groupsearchindex "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
 	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
+	groupmembershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/messaging"
 	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
+	membershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/messaging"
 	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
 	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
+	placementmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/messaging"
 	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
+	searchviewevents "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/adapters/inbound/events"
+	searchviewapp "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/application"
+	searchviewes "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/infrastructure/elasticsearch"
+	searchviewpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/infrastructure/persistence"
+	gatheringhttp "quwoquan_service/services/circle-service/internal/circle_management/gathering/adapters/inbound/http"
+	gatheringapp "quwoquan_service/services/circle-service/internal/circle_management/gathering/application"
+	gatheringexternal "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/external"
+	gatheringpersistence "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/persistence"
 )
 
 type redisSceneCfg struct {
@@ -91,7 +104,7 @@ type config struct {
 		General redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
 
-	ES searchindex.ESConfig `yaml:"es"`
+	ES searchviewes.Config `yaml:"es"`
 }
 
 func main() {
@@ -170,6 +183,10 @@ func run() error {
 	if err := circleAggregateStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle aggregate indexes failed: %v", err)
 	}
+	gatheringStore := gatheringpersistence.NewMongoAggregateStore(db)
+	if err := gatheringStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("Gathering aggregate indexes failed: %v", err)
+	}
 	fileStore := filepersistence.NewMongoAggregateStore(db)
 	if err := fileStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle file indexes failed: %v", err)
@@ -239,8 +256,8 @@ func run() error {
 	// search publisher, so the primary write path is unaffected. The projector
 	// reads circles back through the same (cached) store the service writes
 	// through, so reconciles see the just-written state.
-	searchindex.ApplyESEnvOverrides(&cfg.ES)
-	searchBuilt, err := searchindex.Build(cfg.ES, circleStore)
+	searchviewes.ApplyEnvOverrides(&cfg.ES)
+	searchBuilt, err := searchviewes.Build(cfg.ES)
 	if err != nil {
 		log.Fatalf("circle-service search index build failed: %v", err)
 	}
@@ -269,6 +286,34 @@ func run() error {
 	if err != nil {
 		log.Fatalf("content-service credential init failed: %v", err)
 	}
+	gatheringChatCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig, "circle-service", []string{"chat.gathering.write"},
+	)
+	if err != nil {
+		log.Fatalf("Chat Gathering projection credential init failed: %v", err)
+	}
+	gatheringConversationPort, err := gatheringexternal.NewChatConversationPort(
+		os.Getenv("CHAT_SERVICE_BASE_URL"), gatheringChatCredentials, nil,
+	)
+	if err != nil {
+		log.Fatalf("Chat Gathering projection port invalid: %v", err)
+	}
+	gatheringTargetReader, err := gatheringexternal.NewTargetReader(gatheringexternal.TargetReaderConfig{
+		ContentBaseURL: os.Getenv("CONTENT_SERVICE_BASE_URL"),
+		EntityBaseURL:  os.Getenv("ENTITY_SERVICE_BASE_URL"),
+		UserBaseURL:    os.Getenv("USER_SERVICE_BASE_URL"),
+		Circles:        gatheringCircleReader{circles: circleAggregateStore},
+	})
+	if err != nil {
+		log.Fatalf("Gathering target reader invalid: %v", err)
+	}
+	gatheringCommands := gatheringapp.NewCommandFacade(
+		gatheringStore, gatheringTargetReader, gatheringConversationPort,
+	)
+	gatheringQueries := gatheringapp.NewQueryFacade(gatheringStore)
+	gatheringReconciler := gatheringapp.NewReconciler(
+		gatheringStore, gatheringStore, gatheringConversationPort,
+	)
 	mediaAssetReader, err := fileexternal.NewMediaAssetOwnerReader(
 		os.Getenv("CONTENT_SERVICE_BASE_URL"), contentCredentials, nil,
 	)
@@ -300,9 +345,11 @@ func run() error {
 	if strings.TrimSpace(instanceID) == "" {
 		instanceID = "circle-service"
 	}
-	contentPostConsumer := messaging.NewContentPostConsumer(
+	contentPostConsumer := placementmessaging.NewContentPostConsumer(
 		messageTransport, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
-	).WithDiscoveryFeedCache(redisClient)
+	).WithDiscoveryFeedCacheInvalidator(func(ctx context.Context) error {
+		return cache.InvalidateCircleDiscoveryFeed(ctx, redisClient)
+	})
 	accountClosedProjection := persistence.NewMongoUserAccountClosedProjection(
 		db,
 		redisClient,
@@ -334,7 +381,7 @@ func run() error {
 	if err := accountClosedConsumer.EnsureGroup(ctx); err != nil {
 		log.Fatalf("circle UserAccountClosed consumer group failed: %v", err)
 	}
-	groupConversationBindingConsumer, err := messaging.NewCircleGroupConversationBindingConsumer(
+	groupConversationBindingConsumer, err := groupmessaging.NewCircleGroupConversationBindingConsumer(
 		messageTransport,
 		groupConversationBindingProjector,
 		groupConversationBindingFailures,
@@ -354,7 +401,7 @@ func run() error {
 	)
 	placementStreamRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
-		messaging.NewCirclePostPlacementStreamPublisher(messageTransport),
+		placementmessaging.NewCirclePostPlacementStreamPublisher(messageTransport),
 		"circle-post-placement-stream",
 	)
 	membershipCountRelay := membershipapp.NewOutboxRelay(
@@ -364,7 +411,7 @@ func run() error {
 	)
 	membershipStreamRelay := membershipapp.NewOutboxRelay(
 		membershipStore, membershipStore,
-		messaging.NewCircleMembershipStreamPublisher(messageTransport),
+		membershipmessaging.NewCircleMembershipStreamPublisher(messageTransport),
 		"circle-membership-stream",
 	)
 	behaviorWeeklyActiveRelay := behaviorfactapp.NewOutboxRelay(
@@ -374,12 +421,12 @@ func run() error {
 	)
 	behaviorStreamRelay := behaviorfactapp.NewOutboxRelay(
 		behaviorFactStore, behaviorFactStore,
-		messaging.NewCircleBehaviorFactStreamPublisher(messageTransport),
+		behaviorfactmessaging.NewCircleBehaviorFactStreamPublisher(messageTransport),
 		"circle-behavior-fact-stream",
 	)
 	groupStreamRelay := groupapp.NewOutboxRelay(
 		groupStore, groupStore,
-		messaging.NewCircleGroupStreamPublisher(messageTransport),
+		groupmessaging.NewCircleGroupStreamPublisher(messageTransport),
 		"circle-group-stream",
 	)
 	groupOwnerMembershipRelay := groupapp.NewOutboxRelay(
@@ -398,28 +445,39 @@ func run() error {
 	}
 	groupMembershipStreamRelay := groupmembershipapp.NewOutboxRelay(
 		groupMembershipStore, groupMembershipStore,
-		messaging.NewCircleGroupMembershipStreamPublisher(messageTransport),
+		groupmembershipmessaging.NewCircleGroupMembershipStreamPublisher(messageTransport),
 		"circle-group-membership-stream",
 	)
 	fileStreamRelay := fileapp.NewOutboxRelay(
 		fileStore, fileStore,
-		messaging.NewCircleFileStreamPublisher(messageTransport),
+		filemessaging.NewCircleFileStreamPublisher(messageTransport),
 		"circle-file-stream",
 	)
-	var circleSearchRelay *application.CircleOutboxRelay
-	if searchBuilt.Projector != nil {
-		circleSearchRelay = application.NewCircleOutboxRelay(
-			circleAggregateStore, circleAggregateStore,
-			application.NewCircleDomainEventSink(searchBuilt.Projector),
+	var circleSearchRelay *searchviewapp.Relay
+	if searchBuilt.Index != nil {
+		searchProjector := searchviewapp.NewProjector(searchBuilt.Index)
+		searchSink := searchviewevents.NewSink(
+			searchProjector,
+			circleSearchItemSnapshotReader{store: circleAggregateStore},
+		)
+		circleSearchRelay = searchviewapp.NewRelay(
+			circleSearchItemEventSource{reader: circleAggregateStore},
+			searchviewpersistence.NewMongoCheckpointStore(db),
+			searchSink,
 			"circle-search-index",
 		)
 	}
 
-	handler := httpadapter.NewCircleHandler(
-		circleService, circleCommands, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
+	circleHandler := newCircleObjectRoutes(
+		httpadapter.NewCircleHandler(circleService, circleCommands).Routes(),
+		fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
 		groupMembershipCommands, groupMembershipQueries,
 		membershipCommands, membershipQueries, placementCommands,
-	).Routes()
+	)
+	objectRoutes := http.NewServeMux()
+	gatheringhttp.NewHandler(gatheringCommands, gatheringQueries).Register(objectRoutes)
+	objectRoutes.Handle("/", circleHandler)
+	var handler http.Handler = objectRoutes
 	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
 		handler,
 		runtimemessaging.DeadLetterRecoveryRouteConfig{
@@ -465,6 +523,9 @@ func run() error {
 	})
 	healthChecker.Register("user-account-closed-consumer", func(_ context.Context) error {
 		return accountClosedConsumer.Healthy(10 * time.Second)
+	})
+	healthChecker.Register("gathering-chat-reconciliation", func(_ context.Context) error {
+		return gatheringReconciler.Healthy(10 * time.Second)
 	})
 	healthChecker.Register("circle-group-conversation-binding-projector", func(_ context.Context) error {
 		return groupConversationBindingConsumer.Healthy(30 * time.Second)
@@ -519,6 +580,11 @@ func run() error {
 	go func() {
 		defer close(groupConversationBindingDone)
 		groupConversationBindingConsumer.Run(ctx)
+	}()
+	go func() {
+		if err := gatheringReconciler.Run(ctx, 500*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("Gathering Chat reconciliation stopped: %v", err)
+		}
 	}()
 	go func() {
 		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -20,7 +21,11 @@ type operationRequestArtifact struct {
 type requestLibrarySpec struct {
 	OwnerImport string
 	Models      map[string]requestModelSpec
-	Operations  []requestOperationSpec
+	// ProvidedModels are canonical wire value objects emitted by the owner
+	// library. The request part may reference them, but must not redeclare them
+	// as a second type in the same Dart library.
+	ProvidedModels map[string]struct{}
+	Operations     []requestOperationSpec
 }
 
 type requestModelSpec struct {
@@ -39,6 +44,7 @@ type requestOperationSpec struct {
 func writeGeneratedOperationRequests(
 	appDir string,
 	lock appContractLock,
+	providedModelsByOwner map[string]map[string]struct{},
 ) (map[string]operationRequestArtifact, error) {
 	libraries := map[string]*requestLibrarySpec{}
 	artifacts := map[string]operationRequestArtifact{}
@@ -131,8 +137,9 @@ func writeGeneratedOperationRequests(
 		library := libraries[client.DartImport]
 		if library == nil {
 			library = &requestLibrarySpec{
-				OwnerImport: client.DartImport,
-				Models:      map[string]requestModelSpec{},
+				OwnerImport:    client.DartImport,
+				Models:         map[string]requestModelSpec{},
+				ProvidedModels: providedModelsByOwner[client.DartImport],
 			}
 			libraries[client.DartImport] = library
 		}
@@ -414,9 +421,9 @@ func validateCanonicalRequestEnumField(
 	if !hasCanonicalEnumRef {
 		return fmt.Errorf("enum_ref %s has no canonical values", enumRef)
 	}
-	if mode != "canonicalEnum" {
+	if mode != "" && mode != "canonicalEnum" {
 		return fmt.Errorf(
-			"typed enum %s requires client_wire canonicalEnum, got %q",
+			"typed enum %s only permits implicit enum_ref serialization or client_wire canonicalEnum, got %q",
 			canonicalType,
 			mode,
 		)
@@ -463,16 +470,11 @@ func loadOperationRequestModel(
 	for name, entity := range document.Members {
 		entities[name] = entity
 	}
-	var shared fieldsFile
-	sharedPath := filepath.Join(activeMetadataRoot, "_shared", "types.yaml")
-	if err := decodeMetadataDocument(sharedPath, &shared); err != nil {
-		return requestModelSpec{}, nil, fmt.Errorf(
-			"%s load shared request value types: %w",
-			operation.CanonicalOperationID,
-			err,
-		)
+	sharedTypes, err := loadCanonicalSharedValueTypes(operation)
+	if err != nil {
+		return requestModelSpec{}, nil, err
 	}
-	for name, sharedEntity := range shared.Types {
+	for name, sharedEntity := range sharedTypes {
 		if local, found := entities[name]; found {
 			localModel := requestModelSpec{Name: name, Fields: local.Fields}
 			sharedModel := requestModelSpec{Name: name, Fields: sharedEntity.Fields}
@@ -541,6 +543,51 @@ func loadOperationRequestModel(
 		return requestModelSpec{}, nil, err
 	}
 	return root, dependencies, nil
+}
+
+func loadCanonicalSharedValueTypes(
+	operation appExposedOperation,
+) (map[string]entityDef, error) {
+	result := map[string]entityDef{}
+	paths := []string{
+		filepath.Join(activeMetadataRoot, "_shared", "types.yaml"),
+		filepath.Join(
+			activeMetadataRoot,
+			strings.TrimSpace(operation.Domain),
+			"_shared",
+			"types.yaml",
+		),
+	}
+	for index, path := range paths {
+		var shared fieldsFile
+		if err := decodeMetadataDocument(path, &shared); err != nil {
+			if index > 0 && os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf(
+				"%s load shared value types from %s: %w",
+				operation.CanonicalOperationID,
+				path,
+				err,
+			)
+		}
+		for name, entity := range shared.Types {
+			if previous, exists := result[name]; exists {
+				left := requestModelSpec{Name: name, Fields: previous.Fields}
+				right := requestModelSpec{Name: name, Fields: entity.Fields}
+				if requestModelFingerprint(left) != requestModelFingerprint(right) {
+					return nil, fmt.Errorf(
+						"%s shared value type %s has multiple definitions",
+						operation.CanonicalOperationID,
+						name,
+					)
+				}
+				continue
+			}
+			result[name] = entity
+		}
+	}
+	return result, nil
 }
 
 func validateRequestModelBindings(
@@ -908,20 +955,33 @@ func renderOperationRequestPart(
 		)
 	}
 
+	var modelOutput strings.Builder
 	modelNames := make([]string, 0, len(library.Models))
 	for name := range library.Models {
 		modelNames = append(modelNames, name)
 	}
 	sort.Strings(modelNames)
 	for _, name := range modelNames {
-		if err := renderRequestModel(
-			&output,
+		if _, provided := library.ProvidedModels[name]; provided {
+			continue
+		}
+		model, err := requestModelWithProvidedWireOwners(
 			library.Models[name],
+			library.ProvidedModels,
+		)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", library.OwnerImport, err)
+		}
+		if err := renderRequestModel(
+			&modelOutput,
+			model,
 			enumValues,
 		); err != nil {
 			return "", fmt.Errorf("%s: %w", library.OwnerImport, err)
 		}
 	}
+	writeGeneratedRequestWireDecoderHelpers(&output, modelOutput.String())
+	output.WriteString(modelOutput.String())
 
 	operations := append([]requestOperationSpec(nil), library.Operations...)
 	sort.Slice(operations, func(left, right int) bool {
@@ -929,7 +989,17 @@ func renderOperationRequestPart(
 			operations[right].CanonicalOperationID
 	})
 	for _, operation := range operations {
-		model := library.Models[operation.RequestType]
+		model, err := requestModelWithProvidedWireOwners(
+			library.Models[operation.RequestType],
+			library.ProvidedModels,
+		)
+		if err != nil {
+			return "", fmt.Errorf(
+				"%s: %w",
+				operation.CanonicalOperationID,
+				err,
+			)
+		}
 		if err := renderRequestEncoder(
 			&output,
 			operation,
@@ -944,6 +1014,131 @@ func renderOperationRequestPart(
 		}
 	}
 	return output.String(), nil
+}
+
+func writeGeneratedRequestWireDecoderHelpers(
+	output *strings.Builder,
+	modelPayload string,
+) {
+	helpers := []struct {
+		reference string
+		payload   string
+	}{
+		{reference: "_generatedRequestObject(", payload: generatedRequestObjectHelper},
+		{reference: "_generatedRequestRejectUnknownFields(", payload: generatedRequestUnknownFieldsHelper},
+		{reference: "_generatedRequestString(", payload: generatedRequestStringHelper},
+		{reference: "_generatedRequestInt(", payload: generatedRequestIntHelper},
+		{reference: "_generatedRequestDouble(", payload: generatedRequestDoubleHelper},
+		{reference: "_generatedRequestBool(", payload: generatedRequestBoolHelper},
+		{reference: "_generatedRequestTimestamp(", payload: generatedRequestTimestampHelper},
+		{reference: "_generatedRequestList(", payload: generatedRequestListHelper},
+	}
+	for _, helper := range helpers {
+		if strings.Contains(modelPayload, helper.reference) {
+			output.WriteString(helper.payload)
+		}
+	}
+}
+
+const generatedRequestObjectHelper = `Map<String, Object?> _generatedRequestObject(Object? value, String path) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) return Map<String, Object?>.from(value);
+  throw FormatException('$path must be an object');
+}
+
+`
+
+const generatedRequestUnknownFieldsHelper = `
+void _generatedRequestRejectUnknownFields(
+  Map<String, Object?> map,
+  Set<String> allowed,
+  String path,
+) {
+  for (final key in map.keys) {
+    if (!allowed.contains(key)) {
+      throw FormatException('$path contains unknown field $key');
+    }
+  }
+}
+
+`
+
+const generatedRequestStringHelper = `
+String _generatedRequestString(Object? value, String path) {
+  if (value is String) return value;
+  throw FormatException('$path must be a string');
+}
+
+`
+
+const generatedRequestIntHelper = `
+int _generatedRequestInt(Object? value, String path) {
+  if (value is int) return value;
+  throw FormatException('$path must be an integer');
+}
+
+`
+
+const generatedRequestDoubleHelper = `
+double _generatedRequestDouble(Object? value, String path) {
+  if (value is num) return value.toDouble();
+  throw FormatException('$path must be a number');
+}
+
+`
+
+const generatedRequestBoolHelper = `
+bool _generatedRequestBool(Object? value, String path) {
+  if (value is bool) return value;
+  throw FormatException('$path must be a boolean');
+}
+
+`
+
+const generatedRequestTimestampHelper = `
+DateTime _generatedRequestTimestamp(Object? value, String path) {
+  if (value is! String) throw FormatException('$path must be a timestamp');
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) throw FormatException('$path must be a timestamp');
+  return parsed.toUtc();
+}
+
+`
+
+const generatedRequestListHelper = `
+List<Object?> _generatedRequestList(Object? value, String path) {
+  if (value is List) return List<Object?>.from(value);
+  throw FormatException('$path must be a list');
+}
+
+`
+
+func requestModelWithProvidedWireOwners(
+	model requestModelSpec,
+	provided map[string]struct{},
+) (requestModelSpec, error) {
+	if len(provided) == 0 {
+		return model, nil
+	}
+	result := model
+	result.Fields = append([]fieldDef(nil), model.Fields...)
+	for index, field := range result.Fields {
+		if strings.TrimSpace(field.ClientWire) != "" {
+			continue
+		}
+		dartType, _, err := requestFieldDartType(field)
+		if err != nil {
+			return requestModelSpec{}, err
+		}
+		baseType := strings.TrimSuffix(dartType, "?")
+		if strings.HasPrefix(baseType, "List<") && strings.HasSuffix(baseType, ">") {
+			baseType = strings.TrimSuffix(strings.TrimPrefix(baseType, "List<"), ">")
+		}
+		if _, ownerProvided := provided[baseType]; ownerProvided {
+			result.Fields[index].ClientWire = "toWire"
+		}
+	}
+	return result, nil
 }
 
 func requestLibraryUsesWireMode(
@@ -1087,7 +1282,51 @@ func renderRequestModel(
 			requestFieldDartName(field),
 		)
 	}
-	output.WriteString("\n  Map<String, Object?> toJson() => <String, Object?>{\n")
+	if requestModelSupportsWireDecoder(model) {
+		fmt.Fprintf(
+			output,
+			"\n  factory %s.fromWire(Map<String, Object?> map, [String path = %q]) {\n",
+			model.Name,
+			model.Name,
+		)
+		output.WriteString("    _generatedRequestRejectUnknownFields(map, const <String>{")
+		for index, field := range model.Fields {
+			if index > 0 {
+				output.WriteString(", ")
+			}
+			fmt.Fprintf(output, "%q", requestFieldWireName(field))
+		}
+		output.WriteString("}, path);\n")
+		fmt.Fprintf(output, "    return %s(\n", model.Name)
+		for _, field := range model.Fields {
+			expression, err := requestFieldFromWireExpression(
+				fmt.Sprintf("map[%q]", requestFieldWireName(field)),
+				fmt.Sprintf("'$path.%s'", requestFieldWireName(field)),
+				field,
+				enumValues,
+			)
+			if err != nil {
+				return fmt.Errorf("%s.%s decoder: %w", model.Name, field.Name, err)
+			}
+			if defaultValue := requestFieldDefault(field); defaultValue != "" {
+				expression = fmt.Sprintf(
+					"map.containsKey(%q) ? %s : %s",
+					requestFieldWireName(field),
+					expression,
+					defaultValue,
+				)
+			}
+			fmt.Fprintf(
+				output,
+				"      %s: %s,\n",
+				requestFieldDartName(field),
+				expression,
+			)
+		}
+		output.WriteString("    );\n")
+		output.WriteString("  }\n")
+	}
+	output.WriteString("\n  Map<String, Object?> toWire() => <String, Object?>{\n")
 	for _, field := range model.Fields {
 		dartName := requestFieldDartName(field)
 		value, err := requestFieldWireExpression(
@@ -1129,23 +1368,190 @@ func renderRequestModel(
 	return nil
 }
 
+func requestModelSupportsWireDecoder(model requestModelSpec) bool {
+	for _, field := range model.Fields {
+		switch strings.TrimSpace(field.ClientWire) {
+		case "", "quoted", "uri_csv", "wire", "wireValue", "wireName", "name", "toWire", "mapToWire", "canonicalEnum":
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func requestFieldFromWireExpression(
+	access string,
+	pathExpression string,
+	field fieldDef,
+	enumValues map[string][]string,
+) (string, error) {
+	if isRequestFieldNullable(field) {
+		required := field
+		required.ClientDartType = strings.TrimSuffix(
+			strings.TrimSpace(required.ClientDartType),
+			"?",
+		)
+		required.ClientParameterType = strings.TrimSuffix(
+			strings.TrimSpace(required.ClientParameterType),
+			"?",
+		)
+		required.Constraints = make([]string, 0, len(field.Constraints))
+		for _, constraint := range field.Constraints {
+			if constraint != "NULLABLE" {
+				required.Constraints = append(required.Constraints, constraint)
+			}
+		}
+		expression, err := requestFieldFromWireExpression(
+			access,
+			pathExpression,
+			required,
+			enumValues,
+		)
+		if err != nil {
+			return "", err
+		}
+		return access + " == null ? null : " + expression, nil
+	}
+
+	dartType, _, err := requestFieldDartType(field)
+	if err != nil {
+		return "", err
+	}
+	baseDartType := strings.TrimSuffix(dartType, "?")
+	metaType := strings.TrimSpace(field.Type)
+	mode := strings.TrimSpace(field.ClientWire)
+	if strings.HasPrefix(metaType, "[]") {
+		if mode == "uri_csv" {
+			return "List<String>.unmodifiable(_generatedRequestString(" + access + ", " + pathExpression + ").split(',').where((value) => value.isNotEmpty).map(Uri.decodeQueryComponent))", nil
+		}
+		item := field
+		item.Type = strings.TrimPrefix(metaType, "[]")
+		item.ClientDartType = listItemDartType(baseDartType)
+		item.ClientParameterType = ""
+		item.ClientDefault = ""
+		item.ClientOmitEmpty = false
+		item.ClientSpreadBody = false
+		item.Constraints = nil
+		if mode == "mapToWire" {
+			item.ClientWire = "toWire"
+		}
+		itemExpression, itemErr := requestFieldFromWireExpression(
+			"entry.value",
+			pathExpression+" + '[${entry.key}]'",
+			item,
+			enumValues,
+		)
+		if itemErr != nil {
+			return "", itemErr
+		}
+		return "List<" + strings.TrimSuffix(item.ClientDartType, "?") + ">.unmodifiable(_generatedRequestList(" + access + ", " + pathExpression + ").asMap().entries.map((entry) => " + itemExpression + "))", nil
+	}
+
+	switch mode {
+	case "quoted":
+		if baseDartType == "int" {
+			return "int.parse(_generatedRequestString(" + access + ", " + pathExpression + "))", nil
+		}
+		return "", fmt.Errorf("quoted decoder does not support %s", baseDartType)
+	case "wire", "wireValue", "wireName", "name", "canonicalEnum":
+		return requestEnumFromWireExpression(
+			baseDartType,
+			access,
+			pathExpression,
+			field,
+			enumValues,
+		)
+	case "toWire":
+		return baseDartType + ".fromWire(_generatedRequestObject(" + access + ", " + pathExpression + "), " + pathExpression + ")", nil
+	}
+
+	switch metaType {
+	case "string", "tag_ref", "time", "ObjectId", "uuid", "identifier":
+		if baseDartType != "String" {
+			return baseDartType + ".fromWire(" + access + ", " + pathExpression + ")", nil
+		}
+		return "_generatedRequestString(" + access + ", " + pathExpression + ")", nil
+	case "int", "int32", "int64", "long":
+		return "_generatedRequestInt(" + access + ", " + pathExpression + ")", nil
+	case "float", "float32", "float64", "double":
+		return "_generatedRequestDouble(" + access + ", " + pathExpression + ")", nil
+	case "bool", "boolean":
+		return "_generatedRequestBool(" + access + ", " + pathExpression + ")", nil
+	case "timestamp", "datetime", "date":
+		return "_generatedRequestTimestamp(" + access + ", " + pathExpression + ")", nil
+	case "enum":
+		if baseDartType == "String" {
+			return "_generatedRequestString(" + access + ", " + pathExpression + ")", nil
+		}
+		if len(enumValues[strings.TrimSpace(field.EnumRef)]) == 0 {
+			return "", fmt.Errorf("enum_ref %s has no canonical values", field.EnumRef)
+		}
+		return requestEnumFromWireExpression(
+			baseDartType,
+			access,
+			pathExpression,
+			field,
+			enumValues,
+		)
+	case "object", "json", "jsonb":
+		if strings.HasPrefix(baseDartType, "Map<") {
+			return "_generatedRequestObject(" + access + ", " + pathExpression + ")", nil
+		}
+	}
+	if baseDartType == "String" {
+		return "_generatedRequestString(" + access + ", " + pathExpression + ")", nil
+	}
+	return baseDartType + ".fromWire(_generatedRequestObject(" + access + ", " + pathExpression + "), " + pathExpression + ")", nil
+}
+
+func requestEnumFromWireExpression(
+	dartType string,
+	access string,
+	pathExpression string,
+	field fieldDef,
+	enumValues map[string][]string,
+) (string, error) {
+	values := enumValues[strings.TrimSpace(field.EnumRef)]
+	if len(values) == 0 {
+		return "", fmt.Errorf("enum_ref %s has no canonical values", field.EnumRef)
+	}
+	members, err := canonicalRequestEnumMembers(field, values)
+	if err != nil {
+		return "", err
+	}
+	cases := make([]string, 0, len(members))
+	for _, member := range members {
+		cases = append(
+			cases,
+			strconv.Quote(member.WireValue)+" => "+dartType+"."+member.DartMember,
+		)
+	}
+	return "switch (" + access + ") { " + strings.Join(cases, ", ") +
+		", _ => throw FormatException(" + pathExpression +
+		" + ' has an invalid enum value'), }", nil
+}
+
 func requestFieldDartType(field fieldDef) (string, bool, error) {
 	nullable := hasRequestConstraint(field, "NULLABLE")
 	dartType := strings.TrimSpace(field.ClientDartType)
 	if dartType == "" {
 		switch strings.TrimSpace(field.Type) {
-		case "string", "ObjectId", "uuid", "identifier":
+		case "string", "tag_ref", "time", "ObjectId", "uuid", "identifier":
 			dartType = "String"
 		case "int", "int32", "int64", "long":
 			dartType = "int"
 		case "float", "float32", "float64", "double":
 			dartType = "double"
-		case "bool":
+		case "bool", "boolean":
 			dartType = "bool"
-		case "timestamp", "date":
+		case "timestamp", "datetime", "date":
 			dartType = "DateTime"
 		case "enum":
-			dartType = "String"
+			dartType = strings.TrimSpace(field.EnumRef)
+			if dartType == "" {
+				dartType = "String"
+			}
 		case "object", "json", "jsonb":
 			dartType = "Map<String, Object?>"
 		default:
@@ -1603,7 +2009,7 @@ func requestConditionExpectedExpression(
 	switch baseType {
 	case "String":
 		return strconv.Quote(expected), nil
-	case "bool":
+	case "bool", "boolean":
 		if expected == "true" || expected == "false" {
 			return expected, nil
 		}
@@ -1830,6 +2236,11 @@ func requestFieldWireExpression(
 	var result string
 	switch {
 	case strings.HasPrefix(metaType, "[]"):
+		if mode == "mapToWire" {
+			result = nonNullAccess +
+				".map((value) => value.toWire()).toList(growable: false)"
+			break
+		}
 		item := field
 		item.Type = strings.TrimPrefix(metaType, "[]")
 		item.ClientDartType = listItemDartType(baseDartType)
@@ -1911,7 +2322,7 @@ func requestFieldWireExpression(
 			", (value) => value.wireValue)"
 	case mode == "structuredValue":
 		result = "_encodeGeneratedStructuredValue(" + nonNullAccess + ")"
-	case metaType == "timestamp" || metaType == "date":
+	case metaType == "timestamp" || metaType == "datetime" || metaType == "date":
 		result = nonNullAccess + ".toUtc().toIso8601String()"
 	case metaType == "enum" && baseDartType == "String":
 		result = nonNullAccess
@@ -1923,17 +2334,17 @@ func requestFieldWireExpression(
 				field.EnumRef,
 			)
 		}
-		result = nonNullAccess + ".name"
+		result = nonNullAccess + "." + canonicalEnumWireGetter(field.EnumRef)
 	case baseDartType == "String" || baseDartType == "int" ||
 		baseDartType == "double" || baseDartType == "bool" ||
 		strings.HasPrefix(baseDartType, "Map<"):
 		result = nonNullAccess
 	default:
-		return "", fmt.Errorf(
-			"field %s (%s) requires canonical client_wire serialization",
-			field.Name,
-			baseDartType,
-		)
+		// Non-scalar request dependencies are emitted into the same generated
+		// library and own one canonical toJson encoder. Requiring a per-field
+		// client_wire marker would duplicate type information already carried
+		// by the request_entity graph.
+		result = nonNullAccess + ".toWire()"
 	}
 	if stringPosition &&
 		baseDartType != "String" &&
@@ -1944,16 +2355,20 @@ func requestFieldWireExpression(
 	return result, nil
 }
 
+func canonicalEnumWireGetter(enumRef string) string {
+	switch strings.TrimSpace(enumRef) {
+	case "CanonicalSearchMode", "SearchFeedbackEventType":
+		return "wireValue"
+	default:
+		return "wireName"
+	}
+}
+
 func requestInlineObjectWireExpression(
 	access string,
 	dartType string,
 ) (string, error) {
 	switch dartType {
-	case "HomepageGeoPointInput":
-		return "<String, Object?>{" +
-			"'lat': " + access + ".lat, " +
-			"'lng': " + access + ".lng" +
-			"}", nil
 	case "CircleSectionConfigInput":
 		return "<String, Object?>{" +
 			"'sectionType': " + access + ".sectionType, " +

@@ -15,7 +15,7 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 )
 
 const reactionReceiptTTL = 24 * time.Hour

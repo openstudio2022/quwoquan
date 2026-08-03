@@ -18,7 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediaobjectfence"
+	"quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/mediaobjectfence"
 )
 
 func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
@@ -228,20 +228,23 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	mustInsertAccountClosureDocuments(t, db.Collection("rm_intersection_watermark"), []any{
 		bson.M{"_id": event.Payload.UserID, "wm": bson.M{"content": int64(1)}},
 	})
-	mustInsertAccountClosureDocuments(t, db.Collection("persona_follow_projection"), []any{
+	mustInsertAccountClosureDocuments(t, db.Collection("content_persona_access_projection"), []any{
 		bson.M{
-			"_id": "acct-close-follow", "sourcePersonaId": event.Payload.PersonaIDs[0],
+			"_id": "acct-close-access", "sourcePersonaId": event.Payload.PersonaIDs[0],
 			"targetPersonaId": "acct-close-other-persona",
+			"blocked":         true,
 			"eventId":         "acct-close-relationship-event",
 			"pairId":          "acct-close-relationship-pair",
 		},
 	})
-	mustInsertAccountClosureDocuments(t, db.Collection("persona_relationship_projection_inbox"), []any{
+	mustInsertAccountClosureDocuments(t, db.Collection("content_persona_access_projection_inbox"), []any{
 		bson.M{
-			"_id":       "acct-close-relationship-inbox",
-			"eventId":   "acct-close-relationship-event",
-			"pairId":    "acct-close-relationship-pair",
-			"eventName": "PersonaFollowStateChanged",
+			"_id":             "acct-close-access-inbox",
+			"eventId":         "acct-close-relationship-event",
+			"pairId":          "acct-close-relationship-pair",
+			"eventName":       "PersonaBlocked",
+			"sourcePersonaId": event.Payload.PersonaIDs[0],
+			"targetPersonaId": "acct-close-other-persona",
 		},
 	})
 	mustInsertAccountClosureDocuments(t, db.Collection("media_upload_sessions"), []any{
@@ -418,106 +421,33 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 		{"outbound_share_facts", bson.M{"_id": shareFactID}},
 		{"rm_behavior_events", bson.M{"userId": bson.M{"$in": subjects}}},
 		{"entity_wishlist_events", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rec_learning_events", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rec_training_samples", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rec_replay_samples", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rm_recommend_feature", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rm_search_intent", bson.M{"userId": bson.M{"$in": subjects}}},
-		{"rm_viewer_object_intersection", bson.M{"_id": "acct-close-other-viewer"}},
-		{"rm_intersection_watermark", bson.M{"_id": event.Payload.UserID}},
-		{"persona_follow_projection", bson.M{"_id": "acct-close-follow"}},
-		{"persona_relationship_projection_inbox", bson.M{"_id": "acct-close-relationship-inbox"}},
+		{"content_persona_access_projection", bson.M{"_id": "acct-close-access"}},
+		{"content_persona_access_projection_inbox", bson.M{"_id": "acct-close-access-inbox"}},
 		{"media_upload_sessions", bson.M{"_id": mediaSessionID}},
 		{"media_assets", bson.M{"_id": mediaAssetID}},
 	} {
 		assertAccountClosureCount(t, db, assertion.collection, assertion.filter, 0)
 	}
-	assertAccountClosureCount(
-		t,
-		db,
-		"rm_search_intent",
-		bson.M{
-			"_id":              "acct-close-search-intent-kept",
-			"engagedObjectIds": ownedPostID,
-		},
-		0,
-	)
-	assertAccountClosureCount(
-		t,
-		db,
-		"rec_training_samples",
-		bson.M{"_id": "acct-close-training-kept"},
-		1,
-	)
-	assertAccountClosureCount(
-		t,
-		db,
-		"rec_replay_samples",
-		bson.M{"_id": "acct-close-replay-kept"},
-		1,
-	)
-	var replayDataset struct {
-		PrivacyStatus             string     `bson:"privacyStatus"`
-		PrivacyInvalidatedAt      *time.Time `bson:"privacyInvalidatedAt"`
-		PrivacyInvalidationReason string     `bson:"privacyInvalidationReason"`
-	}
-	if err := db.Collection("rec_replay_datasets").FindOne(
-		ctx,
-		bson.M{"_id": replayDatasetID},
-	).Decode(&replayDataset); err != nil {
-		t.Fatal(err)
-	}
-	if replayDataset.PrivacyStatus != "privacy_invalidated" ||
-		replayDataset.PrivacyInvalidatedAt == nil ||
-		replayDataset.PrivacyInvalidationReason != "account_closed" {
-		t.Fatalf("affected replay dataset remained usable: %+v", replayDataset)
-	}
-	assertAccountClosureCount(
-		t,
-		db,
-		"rec_replay_datasets",
-		bson.M{
-			"_id":           unrelatedReplayDatasetID,
-			"privacyStatus": "active",
-		},
-		1,
-	)
-	assertAccountClosureCount(
-		t,
-		db,
-		"rm_viewer_object_intersection",
-		bson.M{"_id": "acct-close-kept-viewer"},
-		1,
-	)
-	var keptFeature struct {
-		UserFeatures struct {
-			AuthorInteraction map[string]int `bson:"authorInteraction"`
-		} `bson:"userFeatures"`
-	}
-	if err := db.Collection("rm_recommend_feature").FindOne(
-		ctx,
-		bson.M{"_id": "acct-close-feature-kept"},
-	).Decode(&keptFeature); err != nil {
-		t.Fatal(err)
-	}
-	if _, leaked := keptFeature.UserFeatures.AuthorInteraction[event.Payload.PersonaIDs[0]]; leaked {
-		t.Fatalf("closed persona leaked in recommendation feature: %+v", keptFeature)
-	}
-	if keptFeature.UserFeatures.AuthorInteraction["acct-close-other-persona"] != 2 {
-		t.Fatalf("unrelated recommendation affinity was changed: %+v", keptFeature)
-	}
-	var keptSearchIntent struct {
-		EngagedObjectIDs []string `bson:"engagedObjectIds"`
-	}
-	if err := db.Collection("rm_search_intent").FindOne(
-		ctx,
-		bson.M{"_id": "acct-close-search-intent-kept"},
-	).Decode(&keptSearchIntent); err != nil {
-		t.Fatal(err)
-	}
-	if len(keptSearchIntent.EngagedObjectIDs) != 1 ||
-		keptSearchIntent.EngagedObjectIDs[0] != keptPostID {
-		t.Fatalf("search intent cleanup changed unrelated affinity: %+v", keptSearchIntent)
+	// ContentAccountClosureWorkflow must not mutate foreign owners. The same
+	// UserAccountClosed event is consumed independently by Recommendation,
+	// Search and User; seeding their collection names here makes any future
+	// cross-store regression observable without treating Content as a backup
+	// cleanup path.
+	for _, assertion := range []struct {
+		collection string
+		filter     bson.M
+	}{
+		{"rm_discovery_feed", bson.M{"_id": "acct-close-feed-owned"}},
+		{"rec_learning_events", bson.M{"_id": "acct-close-learning"}},
+		{"rec_training_samples", bson.M{"_id": "acct-close-training"}},
+		{"rec_replay_samples", bson.M{"_id": "acct-close-replay"}},
+		{"rec_replay_datasets", bson.M{"_id": replayDatasetID, "privacyStatus": "active"}},
+		{"rm_recommend_feature", bson.M{"_id": "acct-close-feature"}},
+		{"rm_search_intent", bson.M{"_id": event.Payload.UserID}},
+		{"rm_viewer_object_intersection", bson.M{"_id": "acct-close-other-viewer"}},
+		{"rm_intersection_watermark", bson.M{"_id": event.Payload.UserID}},
+	} {
+		assertAccountClosureCount(t, db, assertion.collection, assertion.filter, 1)
 	}
 	var retainedReply struct {
 		ParentCommentID  string `bson:"parentCommentId"`
@@ -1191,8 +1121,14 @@ func cleanupAccountClosureIntegrationData(
 		{"rm_viewer_object_intersection", bson.M{"_id": "acct-close-other-viewer"}},
 		{"rm_viewer_object_intersection", bson.M{"_id": "acct-close-kept-viewer"}},
 		{"rm_intersection_watermark", bson.M{"_id": bson.M{"$in": subjects}}},
-		{"persona_follow_projection", bson.M{"sourcePersonaId": bson.M{"$in": subjects}}},
-		{"persona_relationship_projection_inbox", bson.M{"_id": "acct-close-relationship-inbox"}},
+		{"content_persona_access_projection", bson.M{"$or": bson.A{
+			bson.M{"sourcePersonaId": bson.M{"$in": subjects}},
+			bson.M{"targetPersonaId": bson.M{"$in": subjects}},
+		}}},
+		{"content_persona_access_projection_inbox", bson.M{"$or": bson.A{
+			bson.M{"sourcePersonaId": bson.M{"$in": subjects}},
+			bson.M{"targetPersonaId": bson.M{"$in": subjects}},
+		}}},
 		{"media_upload_sessions", bson.M{"ownerId": bson.M{"$in": subjects}}},
 		{"media_assets", bson.M{"ownerId": bson.M{"$in": subjects}}},
 		{"media_original_access_facts", bson.M{"_id": "acct-close-media-audit"}},

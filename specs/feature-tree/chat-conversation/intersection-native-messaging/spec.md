@@ -92,7 +92,7 @@
 - 下游能力：本目录直接 Story 及其公开结果。
 - 读取事实：交集理由与行动提示投影、被引用对象的标签与可达性。
 - 写入事实：打招呼请求上的交集依据、会话内的助手提及事件。
-- operation / event / surface：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/projections/intersection_action_hint.yaml`、`quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml`、`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- operation / event / surface：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_action_hint.yaml`、`quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml`、`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
 - 一致性要求：依据以服务端重解析结果为准；端侧展示不得领先于服务端事实。
 
 ## 7. 集成验收

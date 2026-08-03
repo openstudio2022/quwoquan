@@ -25,9 +25,10 @@ types:
     fields:
       - { name: startAt, type: timestamp }
       - { name: endAt, type: timestamp }
-      - { name: recurrence, type: enum, values: [once, annual] }
+      - { name: recurrence, type: enum, enum_ref: TagHeatRecurrence }
 
 enums:
+  TagHeatRecurrence: [once, annual]
   ContentType: [image, video, micro, article]
   IntersectionDimension: [identity, location, content, interest, relationship]
   ArticleTemplatePreset: [gentle, ritual, diffuse, journal, tech]
@@ -86,7 +87,7 @@ enums:
   # transport_hub/city/route/photo_spot/gear 是旅行垂类的下钻宾语，承载
   # intersection_kind_registry.verticalExtensionContract 要求的「objectKind 必须映射到
   # 已有 homepage 类型」；它们不在数据发布试点 scope 内，只能由 user_suggested/owner_created 产生。
-  HomepageType: [vehicle, hotel, restaurant, sight, university, travel_photo, museum, heritage_site, ancient_town, religious_site, check_in_spot, natural_landscape, park, hot_spring, theme_park, transport_hub, city, route, photo_spot, gear]
+  HomepageType: [vehicle, hotel, restaurant, sight, university, school, travel_photo, museum, heritage_site, ancient_town, religious_site, check_in_spot, natural_landscape, park, hot_spring, theme_park, transport_hub, city, route, photo_spot, gear]
   HomepageSourceType: [official_seed, imported, user_suggested, owner_created]
   HomepageClaimStatus: [unclaimed, pending_review, claimed, rejected]
   HomepageClaimTier: [basic, verified]
@@ -109,6 +110,13 @@ enums:
   ExternalInteractionAttemptStatus: [sent_unconfirmed, delivered, failed]
   ExternalInteractionSensitivity: [public, private, secret]
   ExternalInteractionProvider: [aliyun_sms, local_sms_recorder, push_dispatch, apns_voip, fcm, local_push_recorder]
+  ConnectorAuthorizationMode: [device_native, oauth2, public_link]
+  ConnectorAuthorizationStatus: [pending, verified, consumed, expired, revoked, failed]
+  ConnectorConfirmationPolicy: [none, user_confirmation]
+  ConnectorDefinitionStatus: [active, retired]
+  ConnectorConnectionStatus: [pending, active, expired, revoked, failed]
+  ConnectorInvocationStatus: [accepted, awaiting_confirmation, executing, completed, failed, cancelled]
+  ConnectorDataClassification: [public, private, sensitive]
   OneTapLoginHintState: [registered, new_phone, unavailable]
   # user owns endpoint registration and integration owns provider delivery;
   # the endpoint kind crossing that boundary therefore has one shared owner.
@@ -133,11 +141,11 @@ enums:
   CredentialType: [anonymous_device, phone, carrier_phone, federated_slot_a, federated_slot_b, federated_slot_c, apple, passkey]
   GreetingRequestStatus: [pending, replied, ignored, blocked, cancelled, expired]
   GreetingRequestSource: [profile, recommendation, group_member, invite]
-  ConversationOriginType: [direct_init, greeting_reply, ad_hoc_group, circle_group]
+  ConversationOriginType: [direct_init, greeting_reply, ad_hoc_group, circle_group, gathering]
   ConversationStatus: [active, dissolved]
   MessageCardKind: [profile_qr, content_post, user_profile, entity_profile, circle, gathering, rtc_call_log]
   RelationshipState: [self, not_following, following, followed_by, mutual]
-  ProfileOwnerKind: [account, persona]
+  ProfileOwnerKind: [account, persona, creator]
   FollowSubjectKind: [persona, homepage, circle, location]
   SubjectFollowState: [following, unfollowed]
   ProfileSyncApplyScope: [current_subject_only, owner_only, all_personas, selected_subjects]

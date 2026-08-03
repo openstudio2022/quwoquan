@@ -27,6 +27,8 @@ class ChatRequestPageIds {
     'ListSelectableGroupContactMembers': 'chat.list.selectable.group.contact.members',
     'ListSelectableGroupConversations': 'chat.list.selectable.group.conversations',
     'MarkAsRead': 'chat.message.read',
+    'ProjectGatheringConversation': 'chat.project.gathering.conversation',
+    'ProjectGatheringConversationMembership': 'chat.project.gathering.conversation.membership',
     'RecallMessage': 'chat.message.recall',
     'RecoverChatAccountClosureDeadLetter': 'chat.recover.chat.account.closure.dead.letter',
     'RemoveAssistant': 'chat.assistant.remove',
@@ -65,6 +67,8 @@ class ChatRequestPageIds {
   static const String listSelectableGroupContactMembers = 'chat.list.selectable.group.contact.members';
   static const String listSelectableGroupConversations = 'chat.list.selectable.group.conversations';
   static const String markAsRead = 'chat.message.read';
+  static const String projectGatheringConversation = 'chat.project.gathering.conversation';
+  static const String projectGatheringConversationMembership = 'chat.project.gathering.conversation.membership';
   static const String recallMessage = 'chat.message.recall';
   static const String recoverChatAccountClosureDeadLetter = 'chat.recover.chat.account.closure.dead.letter';
   static const String removeAssistant = 'chat.assistant.remove';

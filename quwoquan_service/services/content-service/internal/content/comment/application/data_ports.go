@@ -24,7 +24,7 @@ type DataPorts struct {
 	Attachments  commentports.AttachmentReader
 	Reactions    CommentReactionProjectionReader
 	// ViewerRelations 是 viewer→评论作者关注/互关事实的窄只读防腐端口
-	// （persona_follow_projection）；批量方法是强制要求，禁止页面 N+1。
+	// （Comment 对象本地具名投影）；批量方法是强制要求，禁止页面 N+1。
 	ViewerRelations CommentViewerRelationReader
 	// ViewerBlocks 返回与 viewer 任一方向存在拉黑关系的 persona 集合。
 	// 该事实来自 user 域投影，评论读路径不得信任客户端自报集合。

@@ -7,5 +7,5 @@ consumers:
 fields:
 - name: creatorMember
   type: bool
-- name: assistantSkillMember
+- name: assistantMember
   type: bool

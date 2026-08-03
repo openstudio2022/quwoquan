@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
@@ -46,9 +46,51 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 		}},
 	}
 	handler := assistanthttp.NewHandler(
-		newIntegrationAssistantService(
-			orchestration.WithIntersectionEvidenceReader(reader),
-		),
+		newIntegrationAssistantService(),
+		assistanthttp.WithRunContextResolver(runapplication.NewContextResolver(
+			nil,
+			runapplication.IntersectionEvidenceAuthorizerFunc(func(
+				ctx context.Context,
+				personaID string,
+				references []runapplication.IntersectionEvidenceRef,
+			) ([]runapplication.AuthorizedIntersectionEvidence, error) {
+				requested := make([]assistant.AssistantIntersectionEvidenceRef, 0, len(references))
+				for _, reference := range references {
+					requested = append(requested, assistant.AssistantIntersectionEvidenceRef{
+						IntersectionID: reference.IntersectionID,
+						EvidenceID:     reference.EvidenceID,
+						SourceRef:      reference.SourceRef,
+						ObjectTypeRef:  reference.ObjectTypeRef,
+						ObjectID:       reference.ObjectID,
+					})
+				}
+				facts, authorizeErr := reader.ResolveAuthorizedIntersectionEvidence(
+					ctx,
+					personaID,
+					requested,
+				)
+				if authorizeErr != nil {
+					if authorizeErr == runapplication.ErrIntersectionEvidenceNotFound {
+						return nil, runapplication.ErrIntersectionEvidenceNotFound
+					}
+					return nil, authorizeErr
+				}
+				result := make([]runapplication.AuthorizedIntersectionEvidence, 0, len(facts))
+				for _, fact := range facts {
+					result = append(result, runapplication.AuthorizedIntersectionEvidence{
+						IntersectionID: fact.IntersectionID,
+						EvidenceID:     fact.EvidenceID,
+						SourceRef:      fact.SourceRef,
+						ObjectTypeRef:  fact.ObjectTypeRef,
+						ObjectID:       fact.ObjectID,
+						PrimaryText:    fact.PrimaryText,
+						Dimension:      fact.Dimension,
+						VerifiedAt:     fact.VerifiedAt,
+					})
+				}
+				return result, nil
+			}),
+		)),
 	).Routes()
 
 	create := assistantAPIRequest(
@@ -83,7 +125,9 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 		"/assistant/sessions/"+session.SessionID+"/runs",
 		"intersection-owner",
 		map[string]any{
-			"input":           map[string]any{"text": "解释这条交集"},
+			"intent": map[string]any{
+				"kind": "answer", "answer": map[string]any{"text": "解释这条交集"},
+			},
 			"clientRequestId": "intersection-run-1",
 			"contextSnapshot": map[string]any{
 				"capturedAt":               capturedAt.Format(time.RFC3339Nano),
@@ -102,24 +146,31 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 	if _, leaked := envelope["intersectionEvidence"]; leaked {
 		t.Fatalf("run envelope leaked internal evidence: %#v", envelope)
 	}
-	turnID, _ := envelope["turnId"].(string)
-	turn, found, err := integrationSessionRunStore.GetTurn(t.Context(), turnID)
-	if err != nil || !found {
-		t.Fatalf("load persisted turn found=%v err=%v", found, err)
+	runID, _ := envelope["runId"].(string)
+	run, err := integrationRunRepository.Load(t.Context(), runID)
+	if err != nil {
+		t.Fatalf("load persisted run: %v", err)
 	}
-	if reader.personaID != "intersection-owner" ||
+	if reader.personaID != "intersection-owner:persona" ||
 		len(reader.refs) != 1 ||
 		reader.refs[0].EvidenceID != "evidence-client" {
 		t.Fatalf("reader actor/refs = %q %#v", reader.personaID, reader.refs)
 	}
-	if len(turn.IntersectionEvidence) != 1 ||
-		turn.IntersectionEvidence[0].EvidenceID != "evidence-server" ||
-		turn.IntersectionEvidence[0].ObjectID != "post-server" {
-		t.Fatalf("turn persisted client payload instead of authorized evidence: %#v", turn.IntersectionEvidence)
+	encodedFacts, err := json.Marshal(run.ContextSnapshot["authorizedIntersectionEvidence"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var facts []runapplication.AuthorizedIntersectionEvidence
+	if err := json.Unmarshal(encodedFacts, &facts); err != nil {
+		t.Fatal(err)
+	}
+	if len(facts) != 1 || facts[0].EvidenceID != "evidence-server" ||
+		facts[0].ObjectID != "post-server" {
+		t.Fatalf("run persisted client payload instead of authorized evidence: %#v", facts)
 	}
 
 	reader.result = nil
-	reader.err = orchestration.ErrIntersectionEvidenceNotFound
+	reader.err = runapplication.ErrIntersectionEvidenceNotFound
 	rejected := assistantAPIRequest(
 		t,
 		handler,
@@ -127,7 +178,9 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 		"/assistant/sessions/"+session.SessionID+"/runs",
 		"intersection-owner",
 		map[string]any{
-			"input":           map[string]any{"text": "再次解释"},
+			"intent": map[string]any{
+				"kind": "answer", "answer": map[string]any{"text": "再次解释"},
+			},
 			"clientRequestId": "intersection-run-2",
 			"contextSnapshot": map[string]any{
 				"capturedAt":               capturedAt.Add(time.Minute).Format(time.RFC3339Nano),

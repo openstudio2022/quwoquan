@@ -3,8 +3,60 @@ commercial_defaults:
   block_reason: 未显式携带 SkillCatalog 商业证据的新增操作默认阻断
   gap_id: ASSISTANT_SKILL_CATALOG_UNDECLARED_OPERATION
   target_story: skill-progressive-disclosure-routing
-description: SkillCatalog 私有账号目录 Reader；HTTP path 保持稳定，operation 只归属本对象。
+description: SkillCatalog 私有账号目录 Reader；只投影 active package 元数据，不混入账号 Consent 或 Setting 状态。
 api_routes:
+- method: GET
+  path: /assistant/skills/{skillId}
+  operation: GetSkillCatalogItem
+  actor: account
+  commercial:
+    status: ready
+  application:
+    kind: query
+    facet: SkillCatalogQueryFacade
+    method: getSkillCatalogItem
+    reader: SkillCatalogReader
+    slice: AssistantSkillCatalogItemDetailView
+  description: 用户进入详情后按需读取单个 active package Skill 的目录元数据与配置 schema。
+  request_entity: GetSkillCatalogItemQuery
+  request_body_kind: none
+  request_bindings:
+    path:
+    - {name: skillId, field: skillId}
+    injected:
+    - {name: accountId, field: accountId}
+  response_entity: AssistantSkillCatalogItemDetailView
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.skill_catalog_unauthorized
+  - ASSISTANT.USER.skill_catalog_invalid_argument
+  - ASSISTANT.USER.skill_catalog_not_found
+  - ASSISTANT.SYSTEM.skill_catalog_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_catalog_detail_query
+    trace: true
+    attributes: [operation, outcome, error_code, skill_id]
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: requester_self
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
 - method: GET
   path: /assistant/skills
   operation: ListSkills
@@ -17,7 +69,7 @@ api_routes:
     method: listSkills
     reader: SkillCatalogReader
     slice: AssistantSkillCatalogListView
-  description: 可用技能与账号授权状态的私有目录。
+  description: 可用 Skill 与 active package 输入、激活、展示元数据目录；账号 Consent 与 Setting 由各自对象查询。
   request_entity: ListSkillsQuery
   request_body_kind: none
   request_bindings:
@@ -26,10 +78,6 @@ api_routes:
     injected:
     - {name: accountId, field: accountId}
   response_entity: AssistantSkillCatalogListView
-  client_contract:
-    dart_import: ../assistant/assistant_contracts.dart
-    response_type: AssistantSkillCatalogListProjection
-    response_decoder: decodeAssistantSkillCatalogList
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -39,11 +87,10 @@ api_routes:
   error_codes:
   - ASSISTANT.USER.skill_catalog_unauthorized
   - ASSISTANT.USER.skill_catalog_invalid_argument
-  - ASSISTANT.SYSTEM.skill_catalog_consent_unavailable
   - ASSISTANT.SYSTEM.skill_catalog_unavailable
   privacy:
     request_classification: SENSITIVE
-    response_classification: SENSITIVE
+    response_classification: PUBLIC
     log_policy: metadata_only
   telemetry:
     metric: assistant_skill_catalog_query

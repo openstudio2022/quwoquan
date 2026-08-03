@@ -41,6 +41,13 @@ privacy_contract:
   - outcome
   - error_code
 api_routes: []
+runtime_entrypoints:
+- name: InvokePushDeliveryProvider
+  kind: external_port
+  phase: outbound_invocation
+  source_objects: [integration.ExternalInteraction, user.DeviceRegistration]
+  idempotency: transaction_identity
+  application: {kind: command, facet: PushDeliveryPort, method: deliver, object_owner: PushDelivery}
 consumers:
 - name: external-interaction
   capabilities:

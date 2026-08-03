@@ -8,7 +8,7 @@ import '../../../../support/cloud_services/repository_mock_reexports.dart';
 void main() {
   group('FollowingSubject object ports', () {
     test('FollowSubjectKind has one strict canonical wire vocabulary', () {
-      expect(FollowSubjectKind.values.map((kind) => kind.wireValue), <String>[
+      expect(FollowSubjectKind.values.map((kind) => kind.wireName), <String>[
         'persona',
         'homepage',
         'circle',

@@ -9,15 +9,18 @@ import (
 // InboxService manages the per-user conversation inbox (ChatInbox projection).
 // It provides sorted conversation lists and unread count maintenance.
 type InboxService struct {
-	conversations ConversationStore
-	userStates    UserStateStore
+	reader InboxProjectionReader
 }
 
-func NewInboxService(storage ChatStoragePorts) *InboxService {
-	return &InboxService{
-		conversations: storage.Conversations,
-		userStates:    storage.UserStates,
+type InboxProjectionReader interface {
+	ListInboxPage(context.Context, ListInboxRequest) (InboxPage, error)
+}
+
+func NewInboxService(reader InboxProjectionReader) *InboxService {
+	if reader == nil {
+		panic("ChatInboxView reader is required")
 	}
+	return &InboxService{reader: reader}
 }
 
 // InboxItem combines a conversation with the user's state for inbox display.
@@ -53,37 +56,9 @@ func (s *InboxService) ListInbox(ctx context.Context, req ListInboxRequest) ([]I
 // from ListInbox so existing internal one-shot readers retain their narrow
 // list contract while remote clients receive the actual keyset continuation.
 func (s *InboxService) ListInboxPage(ctx context.Context, req ListInboxRequest) (InboxPage, error) {
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-
-	statePage, err := s.userStates.ListUserStatePage(ctx, req.UserId, limit, req.Cursor)
-	if err != nil {
-		return InboxPage{}, err
-	}
-
-	items := make([]InboxItem, 0, len(statePage.Items))
-	for _, state := range statePage.Items {
-		conv, err := s.conversations.FindConversationByID(ctx, state.ConversationId)
-		if err != nil {
-			continue
-		}
-		if conv.Status != "active" {
-			continue
-		}
-		items = append(items, InboxItem{
-			Conversation: *conv,
-			UserState:    state,
-		})
-	}
-
-	return InboxPage{
-		Items:      items,
-		NextCursor: statePage.NextCursor,
-	}, nil
+	return s.reader.ListInboxPage(ctx, req)
 }
 
-// 未读推进的唯一写入口是 InboxProjector（消费 MessageSent 事件），已读
+// 未读推进的唯一写入口是 ChatInboxView Projector（消费 MessageSent 事件），已读
 // 水位的唯一写入口是 MessageService.MarkAsRead 命令；本查询服务不再提供
 // 任何直接改写未读数的方法。

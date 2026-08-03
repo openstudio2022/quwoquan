@@ -8,6 +8,11 @@ collections:
       keys:
         eventId: 1
       unique: true
+  outbound_share_receipts:
+    entity: OutboundShareFact
+    role: authoritative
+    description: OutboundShareFact append 的幂等 command receipt；与事实和 outbox 同事务。
+    indexes:
     - name: idx_outbound_share_dedupe
       keys:
         actorDimension: 1

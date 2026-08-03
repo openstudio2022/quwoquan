@@ -30,3 +30,7 @@ tables:
       columns: [scope, namespace, document_id]
     optimistic_lock: updated_at
 role: authoritative
+outbox:
+  table: platform_control_plane_outbox
+  event: ConfigInstanceReported
+  role: transactional_outbox

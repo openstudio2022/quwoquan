@@ -547,6 +547,12 @@ void main() {
     final unknown = _appMessageResponse()
       ..['unsupportedActionUrl'] = '/unsupported';
     expect(() => decodeAppMessage(unknown), throwsA(isA<FormatException>()));
+
+    final invalidType = _appMessageResponse()..['messageType'] = 'entity';
+    expect(
+      () => decodeAppMessage(invalidType),
+      throwsA(isA<FormatException>()),
+    );
   });
 }
 

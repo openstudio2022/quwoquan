@@ -1,5 +1,5 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -18,7 +18,7 @@ class MemberListNavigateTile extends StatelessWidget {
   });
 
   final bool isDark;
-  final ChatConversationMemberDto member;
+  final ConversationMemberListRow member;
   final VoidCallback onTap;
   final String? subtitleText;
 
@@ -84,7 +84,7 @@ class MemberListMultiSelectTile extends StatelessWidget {
   });
 
   final bool isDark;
-  final ChatConversationMemberDto member;
+  final ConversationMemberListRow member;
   final bool isSelected;
   final VoidCallback onTap;
 

@@ -12,74 +12,87 @@ import (
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
+	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
+	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
+	deliverypost "quwoquan_service/services/content-service/internal/content/feed_delivery_page/adapters/inbound/post"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
 	deliverymessaging "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/messaging"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
+	intersectionvisithttp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/adapters/inbound/http"
+	intersectionvisitapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
+	outboundsharehttp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/adapters/inbound/http"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
-	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/feedmetrics"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	taxonomyvalidationinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/taxonomyvalidation"
+	profileactivityhttp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/adapters/inbound/http"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
+	profilereadfacthttp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/adapters/inbound/http"
 	filtercataloghttp "quwoquan_service/services/content-service/internal/media/filter_catalog_release/adapters/inbound/http"
 	filtercatalogapp "quwoquan_service/services/content-service/internal/media/filter_catalog_release/application"
+	mediaassethttp "quwoquan_service/services/content-service/internal/media/media_asset/adapters/inbound/http"
+	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
+	mediareprocesshttp "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/adapters/inbound/http"
+	originalaccesshttp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/http"
 	uploadsessionhttp "quwoquan_service/services/content-service/internal/media/media_upload_session/adapters/inbound/http"
+	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
+	reporthttp "quwoquan_service/services/content-service/internal/trust_safety/report/adapters/inbound/http"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
+	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/reportmetrics"
 )
 
 type contentHTTPHandlerInput struct {
-	ctx                       context.Context
-	logger                    *slog.Logger
-	healthChecker             *rthealth.Checker
-	router                    *rtredis.Router
-	bufferedWriter            *rtrec.BufferedHotPath
-	sessionCache              *rtrec.SessionCache
-	candidateSources          []rtrec.CandidateSource
-	recommendationOptions     []rtrec.EngineOption
-	policyStore               *rtrecpolicy.Store
-	postStore                 *persistence.MongoPostStore
-	postQueryReader           *persistence.MongoPostQueryReader
-	activeSupplyReader        feedapp.ActiveSupplyReader
-	feedCursorCodec           *feedapp.FeedCursorCodec
-	feedRuntimeConfig         feedRuntimeConfig
-	rankedRecommendation      deliveryapp.RankedRecommendationGateway
-	viewerBlockReader         *recinfra.PersonaBlockReader
-	reactionStore             *persistence.MongoContentReactionStore
-	reactionService           *reactionapp.Service
-	commentStore              *persistence.MongoCommentDataAdapter
-	commentService            *commentapp.CommentService
-	reportStore               *persistence.PGReportStore
-	mediaStore                *persistence.MongoMediaStore
-	mediaRuntime              mediaRuntimeComposition
-	postServiceOptions        []postapp.PostServiceOption
-	moderationStore           *persistence.MongoPostModerationCaseStore
-	moderationFacades         *moderationapp.Facades
-	feedbackRecorder          *rtrec.FeedbackRecorder
-	onboardingTaxonomy        behaviorapp.OnboardingInterestTaxonomyValidator
-	behaviorEventStore        ports.BehaviorEventStore
-	wishlistEventStore        ports.WishlistEventStore
-	wishlistStateReader       ports.WishlistStateReader
-	dailyMetricsStore         *persistence.DailyMetricsStore
-	authorImpactStore         *persistence.AuthorImpactStore
-	authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
-	intersectionService       *intersectionapp.IntersectionService
-	entityCardProvider        feedapp.ObjectCardProvider
-	bulkImportService         *importerapp.BulkImportService
-	outboundShareFacades      *outboundshareapp.Facades
-	profileInteractionFacades *profileinteractionapp.Facades
-	filterCatalogFacades      *filtercatalogapp.Facades
+	ctx                          context.Context
+	logger                       *slog.Logger
+	healthChecker                *rthealth.Checker
+	router                       *rtredis.Router
+	bufferedWriter               *rtrec.BufferedHotPath
+	sessionCache                 *rtrec.SessionCache
+	policyStore                  *rtrecpolicy.Store
+	postStore                    *persistence.MongoPostStore
+	postQueryReader              *persistence.MongoPostQueryReader
+	activeSupplyReader           feedapp.ActiveSupplyReader
+	feedCursorCodec              *feedapp.FeedCursorCodec
+	feedRuntimeConfig            feedRuntimeConfig
+	rankedRecommendation         deliveryapp.RankedRecommendationGateway
+	viewerBlockReader            *accessinfra.PersonaBlockReader
+	reactionStore                *reactionpersistence.MongoContentReactionStore
+	reactionService              *reactionapp.Service
+	commentStore                 *commentpersistence.MongoCommentDataAdapter
+	commentService               *commentapp.CommentService
+	reportStore                  *reportpersistence.PGReportStore
+	mediaStore                   *mediaassetpersistence.MongoMediaStore
+	mediaRuntime                 mediaRuntimeComposition
+	postServiceOptions           []postapp.PostServiceOption
+	moderationStore              *moderationpersistence.MongoPostModerationCaseStore
+	moderationFacades            *moderationapp.Facades
+	onboardingTaxonomy           behaviorapp.OnboardingInterestTaxonomyValidator
+	behaviorEventStore           ports.BehaviorEventStore
+	wishlistEventStore           ports.WishlistEventStore
+	wishlistStateReader          ports.WishlistStateReader
+	dailyMetricsStore            *behaviorpersistence.DailyMetricsStore
+	authorImpactProjectionReader ports.AuthorImpactProjectionReader
+	intersectionService          *intersectionapp.IntersectionService
+	outboundShareFacades         *outboundshareapp.Facades
+	profileInteractionFacades    *profileinteractionapp.Facades
+	filterCatalogFacades         *filtercatalogapp.Facades
 }
 
 func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
@@ -89,8 +102,6 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	router := input.router
 	bufferedWriter := input.bufferedWriter
 	sessionCache := input.sessionCache
-	candidateSources := input.candidateSources
-	recOpts := input.recommendationOptions
 	policyStore := input.policyStore
 	store := input.postStore
 	postQueryReader := input.postQueryReader
@@ -107,38 +118,31 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	mediaObjectGateway := input.mediaRuntime.mediaObjectGateway
 	mediaService := input.mediaRuntime.mediaService
 	mediaImageReprocessService := input.mediaRuntime.mediaImageReprocessService
+	mediaOriginalAccessService := input.mediaRuntime.mediaOriginalAccessService
 	postServiceOpts := input.postServiceOptions
 	moderationStore := input.moderationStore
 	moderationFacades := input.moderationFacades
-	recFeedback := input.feedbackRecorder
 	onboardingTaxonomy := input.onboardingTaxonomy
 	behaviorEventStore := input.behaviorEventStore
 	wishlistEventStore := input.wishlistEventStore
 	wishlistStateReader := input.wishlistStateReader
 	dailyMetricsStore := input.dailyMetricsStore
-	authorImpactStore := input.authorImpactStore
-	authorImpactEvidenceStore := input.authorImpactEvidenceStore
+	authorImpactProjectionReader := input.authorImpactProjectionReader
 	intersectionService := input.intersectionService
-	entityCardProvider := input.entityCardProvider
-	bulkImportService := input.bulkImportService
 	outboundShareFacades := input.outboundShareFacades
 	profileInteractionFacades := input.profileInteractionFacades
 	filterCatalogFacades := input.filterCatalogFacades
 
-	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
 	feedServiceOpts := []feedapp.FeedServiceOption{
 		feedapp.WithFeedFilterObserver(feedmetrics.Observer{}),
+		feedapp.WithObjectCardPolicy(
+			func() rtrecpolicy.ObjectCardConfig {
+				return policyStore.Current().ObjectCards
+			},
+		),
 	}
 	if intersectionService != nil {
 		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))
-	}
-	if entityCardProvider != nil {
-		// 混合对象卡（B4 插卡模式，S0 实体主页卡）：策略经热加载 policy 读取，
-		// enabled=false 即零成本关闭；召回器只读既有物化集合（fail-open 到无卡）。
-		feedServiceOpts = append(feedServiceOpts, feedapp.WithObjectCardProvider(
-			entityCardProvider,
-			func() rtrecpolicy.ObjectCardConfig { return policyStore.Current().ObjectCards },
-		))
 	}
 	if activeSupplyReader == nil {
 		log.Fatal("content-service active supply reader is not configured")
@@ -155,12 +159,12 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		feedapp.WithFeedCursorCodec(feedCursorCodec),
 		feedapp.WithRankedRecommendationGateway(rankedRecommendation),
 		feedapp.WithFeedDeliveryPageStore(
-			deliveryredis.NewStore(
+			deliverypost.NewDeliveryPort(deliveryredis.NewStore(
 				router.Scene("rec"),
 				deliveryredis.WithQuotaPolicy(
 					input.feedRuntimeConfig.deliveryPageQuotaPolicy(),
 				),
-			),
+			)),
 		),
 		feedapp.WithFeedPageDeliveredPublisher(
 			deliverymessaging.NewFeedPageDeliveredPublisher(
@@ -178,7 +182,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		feedServiceOpts,
 		feedapp.WithFeedViewerBlockReader(viewerBlockReader),
 	)
-	feedService := feedapp.NewFeedService(engine, postQueryReader, feedServiceOpts...)
+	feedService := feedapp.NewFeedService(postQueryReader, feedServiceOpts...)
 	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
 		Detail:       postQueryReader,
 		Author:       postQueryReader,
@@ -226,6 +230,10 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		)
 		reportFacades = reportapp.BindFacades(reportServiceCore)
 	}
+	var reportHandler httpadapter.ReportHTTPHandler
+	if reportFacades != nil {
+		reportHandler = reporthttp.NewHandler(reportFacades)
+	}
 	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
 	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
 	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
@@ -233,20 +241,11 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		rtrec.WithFeedPatchLogger(logger),
 	)
 	behaviorOpts := []behaviorapp.BehaviorServiceOption{
-		behaviorapp.WithBehaviorFeedbackRecorder(recFeedback),
-		// N1-3 experiment_bucket 归因：与 engine 的 scoring 分桶同源
-		//（同一 policy 确定性 hash），行为漏斗指标可按分桶切分。
-		behaviorapp.WithExperimentBucketResolver(func(userID string) string {
-			policy := policyStore.Current()
-			return policy.ResolveBucketOr(rtrecpolicy.ExpScoringWeights, userID, nil, policy.DefaultPreset)
-		}),
 		behaviorapp.WithSessionCacheInvalidator(sessionCache.Invalidate),
 		behaviorapp.WithBehaviorEventStore(behaviorEventStore),
 		behaviorapp.WithWishlistEventStore(wishlistEventStore),
 		behaviorapp.WithWishlistStateReader(wishlistStateReader),
 		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
-		behaviorapp.WithAuthorImpactStore(authorImpactStore),
-		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 		behaviorapp.WithFeedPatchEmitter(feedPatchEmitter),
 	}
 	if onboardingTaxonomy == nil {
@@ -266,16 +265,38 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 
 	var handlerOpts []httpadapter.ContentHandlerOption
 	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
+	if intersectionService == nil {
+		log.Fatal("content-service IntersectionVisitState object composition is not configured")
+	}
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithIntersectionVisitStateHandler(
+			intersectionvisithttp.NewHandler(
+				intersectionvisitapp.NewCommands(intersectionService),
+				intersectionService,
+			),
+		),
+	)
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithContentBehaviorHandler(behaviorhttp.NewHandler(behaviorService)),
+	)
 	if outboundShareFacades == nil {
 		log.Fatal("content-service OutboundShareFact object composition is not configured")
 	}
-	handlerOpts = append(handlerOpts, httpadapter.WithOutboundShareService(outboundShareFacades))
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithOutboundShareHandler(outboundsharehttp.NewHandler(outboundShareFacades)),
+	)
 	if profileInteractionFacades == nil {
 		log.Fatal("content-service ProfileInteraction object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
-		httpadapter.WithProfileInteractionService(profileInteractionFacades),
+		httpadapter.WithProfileInteractionHandlers(
+			profileactivityhttp.NewHandler(profileInteractionFacades.ActivityQueryFacade),
+			profilereadfacthttp.NewHandler(profileInteractionFacades.ReadFactAppendFacade),
+		),
 	)
 	if filterCatalogFacades == nil {
 		log.Fatal("content-service FilterCatalogRelease object composition is not configured")
@@ -289,8 +310,25 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	if moderationFacades == nil {
 		log.Fatal("content-service PostModerationCase object composition is not configured")
 	}
-	handlerOpts = append(handlerOpts, httpadapter.WithModerationService(moderationFacades))
-	handlerOpts = append(handlerOpts, httpadapter.WithMediaService(mediaService))
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithPostModerationCaseHandler(
+			moderationhttp.NewHandler(moderationFacades),
+		),
+	)
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithMediaAssetHandler(mediaassethttp.NewHandler(mediaService)),
+	)
+	if mediaOriginalAccessService == nil {
+		log.Fatal("content-service MediaOriginalAccessFact object composition is not configured")
+	}
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithMediaOriginalAccessHandler(
+			originalaccesshttp.NewHandler(mediaOriginalAccessService),
+		),
+	)
 	if input.mediaRuntime.mediaUploadSessionService == nil {
 		log.Fatal("content-service MediaUploadSession object composition is not configured")
 	}
@@ -305,31 +343,21 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	}
 	handlerOpts = append(
 		handlerOpts,
-		httpadapter.WithMediaImageReprocessService(mediaImageReprocessService),
+		httpadapter.WithMediaImageReprocessHandler(
+			mediareprocesshttp.NewHandler(mediaImageReprocessService),
+		),
 	)
-	if bulkImportService != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
-	}
-
-	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （ix:watermark HASH）+ 事实/概率合并排序。
-	if intersectionService != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
-	}
-	if authorImpactStore != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
-	}
-	if authorImpactEvidenceStore != nil {
-		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore))
+	if authorImpactProjectionReader != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactProjectionReader(authorImpactProjectionReader))
 	}
 
 	contentHandler := httpadapter.NewContentHandler(
 		feedService,
 		postService,
 		postQueryService,
-		commentService,
-		reactionService,
-		reportFacades,
+		commenthttp.NewHandler(commentService),
+		reactionhttp.NewHandler(reactionService),
+		reportHandler,
 		behaviorService,
 		handlerOpts...,
 	).Routes()

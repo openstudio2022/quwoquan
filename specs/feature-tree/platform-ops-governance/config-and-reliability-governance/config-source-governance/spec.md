@@ -35,6 +35,8 @@
 - 系统必须由 config schema 与单个环境 overlay 合成服务有效配置，并以 revision 与摘要识别发布内容，且失败时不得写入成功事实。
 - APP_ENV 与 CONFIG_VERSION 能支撑灰度范围、回滚点和发布证据追踪。
 - 服务配置不得声明镜像最低/最高版本或任何兼容范围；每个运行实例只能绑定部署包提供的一份精确不可变镜像身份，缺失、可变占位或与部署证据不一致时必须在启动或发布门禁中失败。
+- 本地 workload、Data 执行控制面及调试依赖的 host 端口都必须引用同一个 `local_env_port_manifest.yaml` 中互不重叠的 role；独立控制面不得借用 Alpha、Beta、Gamma 环境 workload 的 MongoDB、Redis 或 Elasticsearch role。
+- `stackctl down` 只能撤销目标拥有的容器、隧道和 lease；检测到外部占用时必须保留证据并失败，不得通过重启 Docker、Colima 或其它共享运行时抢占资源。
 
 <a id="req-003"></a>
 ### REQ-003 搜索存储配置来源
@@ -59,6 +61,7 @@
 - WHEN 参与者执行“配置来源治理”对应的公开行为。
 - THEN 系统必须由 config schema 与单个环境 overlay 合成服务有效配置，并以 revision 与摘要识别发布内容，且失败时不得写入成功事实。
 - AND 镜像身份只来自同一部署包的精确 digest/ref，不接受 SemVer 范围、兼容推断、缺省身份或本地绕过。
+- AND 本地端口均由唯一 port manifest 分配且跨 workload 不重叠；目标 `down` 不停止或重启共享容器运行时。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

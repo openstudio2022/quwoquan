@@ -14,10 +14,6 @@ source_entities:
 consumers:
 - notification-service
 - app
-client_projection:
-  dart_class: AppMessageUnreadCountSlice
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message_unread_count_slice.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message_unread_count_slice.dart
 fields:
 - name: unreadCount
   type: int64

@@ -1,0 +1,29 @@
+read_model: EntityWishlistState
+description: >-
+  ContentBehaviorFact 中 wishlist_add 与 wishlist_remove 的当前状态投影；
+  它只表达主体对 canonical object 的显式想去状态，不成为 Entity 或 Post 的权威事实。
+storage_backend: mongodb
+collection: entity_wishlist_events
+source_entities:
+  - ContentBehaviorFact
+source_events:
+  - ContentBehaviorRecorded
+consumers:
+  - content-service
+  - recommendation-service
+checkpoint:
+  source: content_behavior_fact_client_event_id
+  rebuild: replay_content_behavior_facts
+  tombstone: retain_removed_state_and_last_event_id
+fields:
+  - {name: subjectId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: none, ops_exposure: read}
+  - {name: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  - {name: sourceEventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+  - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+indexes:
+  - name: uq_entity_wishlist_subject_object
+    keys: {subjectId: 1, objectId: 1}
+    unique: true
+  - name: idx_entity_wishlist_object_status
+    keys: {objectId: 1, status: 1, occurredAt: -1}

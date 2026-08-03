@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 package local_contract
 
 import (
@@ -25,7 +25,7 @@ func TestSkillConsentFacadesFailClosedWithoutStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"personal_content_access"},
 	); err == nil {
 		t.Fatal("Grant() error=nil, want unavailable")
 	}
@@ -52,13 +52,16 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"personal_content_access", "travel.trip.read"},
 	)
 	if err != nil || granted.Consent == nil {
 		t.Fatalf("Grant() result=%+v error=%v", granted, err)
 	}
 	if granted.Consent.AccountID != "account-a" ||
 		granted.Consent.SkillID != "personal_content_access" ||
+		len(granted.Consent.GrantedScopes) != 2 ||
+		granted.Consent.GrantedScopes[0] != "personal_content_access" ||
+		granted.Consent.GrantedScopes[1] != "travel.trip.read" ||
 		!granted.Consent.IsGranted() {
 		t.Fatalf("Grant()=%+v", granted)
 	}
@@ -67,7 +70,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"travel.trip.read", "personal_content_access"},
 	)
 	if err != nil || !replayed.Replayed || replayed.Consent == nil ||
 		replayed.Consent.ID != granted.Consent.ID {
@@ -78,7 +81,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command-distinct",
 		"account-a",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"personal_content_access", "travel.trip.read"},
 	)
 	if err != nil || noOp.Changed || noOp.Replayed || noOp.Consent == nil ||
 		noOp.Consent.ID != granted.Consent.ID {
@@ -93,7 +96,7 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"grant-command",
 		"account-a",
 		"another_skill",
-		"another_scope",
+		[]string{"another_scope"},
 	); !errors.Is(err, model.ErrIdempotencyConflict) {
 		t.Fatalf("Grant() reused command error=%v, want idempotency conflict", err)
 	}
@@ -102,9 +105,27 @@ func TestSkillConsentLifecycleUsesAuthoritativeStore(t *testing.T) {
 		"blank-scope-command",
 		"account-a",
 		"personal_content_access",
-		"",
+		[]string{},
 	); !errors.Is(err, model.ErrInvalidArgument) {
 		t.Fatalf("Grant() blank scope error=%v, want invalid argument", err)
+	}
+	if _, err := commands.Grant(
+		ctx,
+		"duplicate-scope-command",
+		"account-a",
+		"personal_content_access",
+		[]string{"travel.trip.read", "travel.trip.read"},
+	); !errors.Is(err, model.ErrInvalidArgument) {
+		t.Fatalf("Grant() duplicate scope error=%v, want invalid argument", err)
+	}
+	if _, err := commands.Grant(
+		ctx,
+		"scope-conflict-command",
+		"account-a",
+		"personal_content_access",
+		[]string{"personal_content_access", "travel.trip.read", "travel.stay.read"},
+	); !errors.Is(err, model.ErrScopeConflict) {
+		t.Fatalf("Grant() changed scope set error=%v, want scope conflict", err)
 	}
 	if _, err := commands.Revoke(
 		ctx,

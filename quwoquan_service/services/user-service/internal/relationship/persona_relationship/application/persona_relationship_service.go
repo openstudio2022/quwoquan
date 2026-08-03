@@ -31,6 +31,20 @@ type PersonaRelationshipService struct {
 	greetings GreetingBlockCascade
 }
 
+type Facade interface {
+	Follow(context.Context, string, string, string, string) (relmodel.MutationResult, error)
+	Unfollow(context.Context, string, string, string) (relmodel.MutationResult, error)
+	Block(context.Context, string, string, string) (relmodel.MutationResult, error)
+	Unblock(context.Context, string, string, string) (relmodel.MutationResult, error)
+	GetRelationship(context.Context, string, string) (relmodel.RelationshipState, error)
+	CheckBlocked(context.Context, string, string) (bool, error)
+	ListFollowing(context.Context, string, string, int) ([]relmodel.Direction, string, error)
+	ListFollowers(context.Context, string, string, int) ([]relmodel.Direction, string, error)
+	ListBlocked(context.Context, string, string, int) ([]relports.BlockedListItem, string, error)
+}
+
+var _ Facade = (*PersonaRelationshipService)(nil)
+
 func NewPersonaRelationshipService(
 	store relports.PersonaRelationshipStore,
 	personas userrepo.PersonaReader,

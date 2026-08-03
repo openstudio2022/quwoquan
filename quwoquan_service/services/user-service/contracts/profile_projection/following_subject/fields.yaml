@@ -169,9 +169,7 @@ types:
         client_dart_type: int
         client_default: "20"
       - name: subjectType
-        type: FollowSubjectKind
+        type: enum
         enum_ref: FollowSubjectKind
         constraints:
           - NULLABLE
-        client_dart_type: FollowSubjectKind?
-        client_wire: canonicalEnum

@@ -4,6 +4,125 @@ info:
     title: quwoquan recommendation API
     version: canonical
 paths:
+    /internal/recommendation/authors/{authorId}/impact:
+        get:
+            operationId: GetRecommendationAuthorImpact
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.GetRecommendationAuthorImpact
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: getAuthorImpact
+                reader: RecommendationAuthorImpactReader
+                slice: RecommendationAuthorImpactSummary
+            parameters:
+                - name: authorId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationAuthorImpactSummary'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/recommendation/authors/{authorId}/impact/{impactId}/evidence:
+        get:
+            operationId: ListRecommendationAuthorImpactEvidence
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.ListRecommendationAuthorImpactEvidence
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: listAuthorImpactEvidence
+                reader: RecommendationAuthorImpactReader
+                slice: RecommendationAuthorImpactEvidencePage
+            parameters:
+                - name: authorId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: impactId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationAuthorImpactEvidencePage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/recommendation/intersection-supply/{supplyKey}:
+        get:
+            operationId: GetRecommendationIntersectionSupply
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.GetRecommendationIntersectionSupply
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: getIntersectionSupply
+                reader: RecommendationIntersectionReader
+                slice: RecommendationIntersectionSupply
+            parameters:
+                - name: supplyKey
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationIntersectionSupply'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/recommendation/model-releases:activate:
         post:
             operationId: ActivateRecommendationModelRelease
@@ -219,6 +338,11 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: subjectId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
                 - name: fromOrdinal
                   in: query
                   required: false
@@ -229,6 +353,12 @@ paths:
                   required: false
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/GetRankedRecommendationPageQuery'
             responses:
                 "200":
                     description: OK
@@ -236,6 +366,92 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/RankedRecommendationPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/recommendation/subjects/{subjectId}/intersections:
+        get:
+            operationId: ListRecommendationSubjectIntersections
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.ListRecommendationSubjectIntersections
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: listSubjectIntersections
+                reader: RecommendationIntersectionReader
+                slice: RecommendationIntersectionReasonSlice
+            parameters:
+                - name: subjectId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: intersectionClass
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: channel
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationIntersectionReasonSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/recommendation/subjects/{subjectId}/objects/{objectType}/{objectId}/intersections:
+        get:
+            operationId: ListRecommendationObjectIntersections
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.ListRecommendationObjectIntersections
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: listObjectIntersections
+                reader: RecommendationIntersectionReader
+                slice: RecommendationObjectIntersectionReasonSlice
+            parameters:
+                - name: subjectId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: objectType
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: objectId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationObjectIntersectionReasonSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -269,6 +485,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateRankedRecommendationWindowCommand
             x-contract-placeholder: true
+        GetRankedRecommendationPageQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetRankedRecommendationPageQuery
+            x-contract-placeholder: true
         ModelScoreRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -284,10 +505,35 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RankedRecommendationPage
             x-contract-placeholder: true
+        RecommendationAuthorImpactEvidencePage:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationAuthorImpactEvidencePage
+            x-contract-placeholder: true
+        RecommendationAuthorImpactSummary:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationAuthorImpactSummary
+            x-contract-placeholder: true
+        RecommendationIntersectionReasonSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationIntersectionReasonSlice
+            x-contract-placeholder: true
+        RecommendationIntersectionSupply:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationIntersectionSupply
+            x-contract-placeholder: true
         RecommendationModelReleaseCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecommendationModelReleaseCommandResult
+            x-contract-placeholder: true
+        RecommendationObjectIntersectionReasonSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationObjectIntersectionReasonSlice
             x-contract-placeholder: true
         StageRecommendationModelReleaseCommand:
             type: object

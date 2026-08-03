@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
 	assignmentapplication "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
+	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
 type Facade struct {
@@ -22,8 +24,8 @@ type Facade struct {
 func NewFacade(
 	store ports.AggregateStore,
 	catalog ports.CatalogReader,
-	assignments ports.AssignmentSink,
-	reader ports.AssignmentReader,
+	assignments assignmentapplication.Sink,
+	reader assignmentapplication.Reader,
 ) (*Facade, error) {
 	if store == nil || catalog == nil || assignments == nil || reader == nil {
 		return nil, fmt.Errorf("experiment aggregate store, catalog, assignment sink and reader are required")
@@ -43,6 +45,65 @@ func (f *Facade) Get(ctx context.Context, id string) (model.Experiment, error) {
 
 func (f *Facade) List(ctx context.Context) ([]model.Experiment, error) {
 	return f.catalog.List(ctx)
+}
+
+func (f *Facade) Create(
+	ctx context.Context,
+	id string,
+	key string,
+	status string,
+	variants []model.Variant,
+	audienceRule model.AudienceRule,
+	startsAt string,
+	endsAt string,
+	idempotencyKey string,
+) (ports.CommitReceipt, error) {
+	id = strings.TrimSpace(id)
+	key = strings.TrimSpace(key)
+	status = strings.TrimSpace(status)
+	startsAt = strings.TrimSpace(startsAt)
+	endsAt = strings.TrimSpace(endsAt)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	audienceRule.Kind = strings.TrimSpace(audienceRule.Kind)
+	if id == "" || key == "" || idempotencyKey == "" {
+		return ports.CommitReceipt{}, fmt.Errorf("%w: id, key and Idempotency-Key are required", model.ErrInvalidArgument)
+	}
+	commandPayload, err := json.Marshal(struct {
+		ID           string             `json:"id"`
+		Key          string             `json:"key"`
+		Status       string             `json:"status"`
+		Variants     []model.Variant    `json:"variants"`
+		AudienceRule model.AudienceRule `json:"audienceRule"`
+		StartsAt     string             `json:"startsAt,omitempty"`
+		EndsAt       string             `json:"endsAt,omitempty"`
+	}{id, key, status, variants, audienceRule, startsAt, endsAt})
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	commandDigest := fmt.Sprintf("%x", sha256.Sum256(commandPayload))
+	if receipt, found, err := f.store.Replay(ctx, id, idempotencyKey, commandDigest); err != nil {
+		return ports.CommitReceipt{}, err
+	} else if found {
+		return receipt, nil
+	}
+	now := f.now().UTC()
+	experiment := model.Experiment{
+		ID: id, Key: key, Version: 1, Status: status,
+		Variants:     append([]model.Variant(nil), variants...),
+		AudienceRule: audienceRule, StartsAt: startsAt, EndsAt: endsAt,
+		CreatedAt: now.Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339),
+	}
+	if err := experiment.Validate(); err != nil {
+		return ports.CommitReceipt{}, fmt.Errorf("%w: %v", model.ErrInvalidArgument, err)
+	}
+	event, err := newPolicyActivationEvent(experiment, idempotencyKey, now)
+	if err != nil {
+		return ports.CommitReceipt{}, err
+	}
+	return f.store.Commit(ctx, 0, ports.ChangeSet{
+		Experiment: experiment, IdempotencyKey: idempotencyKey,
+		CommandDigest: commandDigest, Events: []model.Event{event},
+	})
 }
 
 func (f *Facade) UpdateRollout(
@@ -75,8 +136,23 @@ func (f *Facade) UpdateRollout(
 	now := f.now().UTC()
 	next, err := current.UpdateRollout(status, variants, now)
 	if err != nil {
+		return ports.CommitReceipt{}, fmt.Errorf("%w: %v", model.ErrInvalidArgument, err)
+	}
+	event, err := newPolicyActivationEvent(next, idempotencyKey, now)
+	if err != nil {
 		return ports.CommitReceipt{}, err
 	}
+	return f.store.Commit(ctx, expectedVersion, ports.ChangeSet{
+		Experiment: next, IdempotencyKey: idempotencyKey,
+		CommandDigest: commandDigest, Events: []model.Event{event},
+	})
+}
+
+func newPolicyActivationEvent(
+	experiment model.Experiment,
+	idempotencyKey string,
+	now time.Time,
+) (model.Event, error) {
 	payload, err := json.Marshal(struct {
 		ID           string             `json:"id"`
 		Key          string             `json:"key"`
@@ -88,31 +164,27 @@ func (f *Facade) UpdateRollout(
 		EndsAt       string             `json:"endsAt,omitempty"`
 		UpdatedAt    string             `json:"updatedAt"`
 	}{
-		ID: next.ID, Key: next.Key, Version: next.Version, Status: next.Status,
-		Variants: next.Variants, AudienceRule: next.AudienceRule,
-		StartsAt: next.StartsAt, EndsAt: next.EndsAt,
-		UpdatedAt: next.UpdatedAt,
+		ID: experiment.ID, Key: experiment.Key, Version: experiment.Version,
+		Status: experiment.Status, Variants: experiment.Variants,
+		AudienceRule: experiment.AudienceRule, StartsAt: experiment.StartsAt,
+		EndsAt: experiment.EndsAt, UpdatedAt: experiment.UpdatedAt,
 	})
 	if err != nil {
-		return ports.CommitReceipt{}, err
+		return model.Event{}, err
 	}
-	eventDigest := sha256.Sum256([]byte(id + "\x00" + idempotencyKey))
-	return f.store.Commit(ctx, expectedVersion, ports.ChangeSet{
-		Experiment:     next,
-		IdempotencyKey: idempotencyKey,
-		CommandDigest:  commandDigest,
-		Events: []model.Event{{
-			ID: "experiment-policy-" + fmt.Sprintf("%x", eventDigest[:16]), Type: "ExperimentPolicyActivated",
-			AggregateID: id, AggregateType: "Experiment", Payload: payload, OccurredAt: now,
-		}},
-	})
+	eventDigest := sha256.Sum256([]byte(experiment.ID + "\x00" + idempotencyKey))
+	return model.Event{
+		ID:   "experiment-policy-" + fmt.Sprintf("%x", eventDigest[:16]),
+		Type: "ExperimentPolicyActivated", AggregateID: experiment.ID,
+		AggregateType: "Experiment", Payload: payload, OccurredAt: now,
+	}, nil
 }
 
-func (f *Facade) GetAssignment(ctx context.Context, experimentID, subjectKey string) (model.AssignmentFact, error) {
+func (f *Facade) GetAssignment(ctx context.Context, experimentID, subjectKey string) (assignmentdomain.Fact, error) {
 	return f.assignmentFacts.Get(ctx, experimentID, subjectKey)
 }
 
-func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experiment, ports.AssignmentStats, error) {
+func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experiment, assignmentdomain.Stats, error) {
 	return f.assignmentFacts.Stats(ctx, experimentID)
 }
 
@@ -121,6 +193,6 @@ func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experime
 func (f *Facade) StatsFor(
 	ctx context.Context,
 	experiment model.Experiment,
-) (ports.AssignmentStats, error) {
+) (assignmentdomain.Stats, error) {
 	return f.assignmentFacts.StatsFor(ctx, experiment)
 }

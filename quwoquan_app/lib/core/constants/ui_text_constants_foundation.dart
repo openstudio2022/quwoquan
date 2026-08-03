@@ -65,6 +65,8 @@ abstract final class FoundationText {
   static const String loginOtpVerifyRetry = '重新验证';
   static const String loginOtpRequestRetry = '重新获取';
   static const String loginNetworkUnavailable = '网络连接异常，请检查后重试';
+  static const String loginRequestTimeout = '请求超时，请重试';
+  static const String loginOtpServiceUnavailable = '登录服务暂不可用，请重试';
   static const String loginServiceUnavailable = '登录服务暂不可用，请使用其他方式登录';
   static const String loginSocialNotConfigured = '当前测试环境未配置，请改用短信验证码登录';
   static const String loginSocialClientNotInstalled = '未安装对应客户端，请改用短信验证码登录';

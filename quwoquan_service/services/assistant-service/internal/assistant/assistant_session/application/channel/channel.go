@@ -168,3 +168,19 @@ func Resolve(turnType string, trigger assistant.AssistantTurnTrigger) AssistantC
 	}
 	return Personal()
 }
+
+// ResolveForSurface gives the owner-backed shared surface the final say over
+// the privacy boundary. A direct invocation from a Conversation or Circle is
+// still public/shared even when its trigger is a normal user message.
+func ResolveForSurface(
+	turnType string,
+	trigger assistant.AssistantTurnTrigger,
+	surfaceKind string,
+) AssistantChannel {
+	switch strings.TrimSpace(surfaceKind) {
+	case "conversation", "circle":
+		return GroupMention()
+	default:
+		return Resolve(turnType, trigger)
+	}
+}

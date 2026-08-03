@@ -1,10 +1,15 @@
 package embedding
 
 import (
+	"strings"
+	"time"
+
 	runtimeconfig "quwoquan_service/runtime/config"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
 )
+
+const protocolFixtureCredentialMarker = "nonprod-protocol-substitute"
 
 // LoadEmbeddingGateway materializes the compiler-selected embedding adapter.
 func LoadEmbeddingGateway(
@@ -32,6 +37,22 @@ func LoadEmbeddingGateway(
 			return nil, err
 		}
 		return NewOpenAICompatibleGateway(binding)
+	case ProtocolFixtureAdapterID:
+		endpointKey := strings.TrimSpace(
+			descriptor.EndpointEnvironmentKeys["endpoint"],
+		)
+		endpoint, ok := configProvider.GetString(endpointKey)
+		if endpointKey == "" || !ok {
+			return nil, contentgenerated.AppErrorFromRequiredDependencyUnavailable(
+				"embedding protocol substitute endpoint is unavailable",
+			)
+		}
+		return NewOpenAICompatibleGateway(OpenAICompatibleBinding{
+			Endpoint: strings.TrimSpace(endpoint),
+			APIKey:   protocolFixtureCredentialMarker,
+			Model:    defaultEmbeddingModel,
+			Timeout:  time.Duration(descriptor.TimeoutMilliseconds) * time.Millisecond,
+		})
 	default:
 		return nil, contentgenerated.AppErrorFromRequiredDependencyUnavailable(
 			"embedding binding selects an unsupported adapter",

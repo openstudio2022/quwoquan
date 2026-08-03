@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 ///
 /// 创作者可逐组关闭；关闭后该组派生的 tagRef 与交集事实必须同步撤回，不得残留。
 /// 分组是端云同一套闭集：端侧按组裁剪后再上报，服务端按组撤回既有派生事实。
-enum MediaCaptureDisclosureGroup {
+enum CaptureMetadataDisclosureGroup {
   /// 机身与镜头（`cameraMake` / `cameraModel` / `lensModel`）。
   gear('gear'),
 
@@ -18,13 +18,13 @@ enum MediaCaptureDisclosureGroup {
   /// 拍摄时间（`capturedAt`）。PII。
   time('time');
 
-  const MediaCaptureDisclosureGroup(this.wire);
+  const CaptureMetadataDisclosureGroup(this.wire);
 
   /// 与服务端 `CaptureDisclosureGroup` 枚举同名的线上取值。
   final String wire;
 
-  static MediaCaptureDisclosureGroup? fromWire(String value) {
-    for (final group in MediaCaptureDisclosureGroup.values) {
+  static CaptureMetadataDisclosureGroup? fromWire(String value) {
+    for (final group in CaptureMetadataDisclosureGroup.values) {
       if (group.wire == value) return group;
     }
     return null;
@@ -33,14 +33,14 @@ enum MediaCaptureDisclosureGroup {
 
 /// 默认披露集合：全字段默认提取并参与推荐/交集。
 ///
-/// 该默认值是产品决策，配套要求见 [MediaCaptureMetadata]：`place` 与 `time` 属 PII，
+/// 该默认值是产品决策，配套要求见 [ExtractedMediaCaptureMetadata]：`place` 与 `time` 属 PII，
 /// 不得进入日志与分享卡，且首次发布必须给出一次性告知。
-const Set<MediaCaptureDisclosureGroup> kDefaultCaptureDisclosure =
-    <MediaCaptureDisclosureGroup>{
-      MediaCaptureDisclosureGroup.gear,
-      MediaCaptureDisclosureGroup.parameters,
-      MediaCaptureDisclosureGroup.place,
-      MediaCaptureDisclosureGroup.time,
+const Set<CaptureMetadataDisclosureGroup> kDefaultCaptureDisclosure =
+    <CaptureMetadataDisclosureGroup>{
+      CaptureMetadataDisclosureGroup.gear,
+      CaptureMetadataDisclosureGroup.parameters,
+      CaptureMetadataDisclosureGroup.place,
+      CaptureMetadataDisclosureGroup.time,
     };
 
 /// 从原始素材解析出的拍摄事实。
@@ -53,8 +53,8 @@ const Set<MediaCaptureDisclosureGroup> kDefaultCaptureDisclosure =
 ///   `classification: PII` + `log_policy: mask`；端侧不得写入日志或分享卡文案。
 /// - 未披露分组必须在离开端侧之前被裁剪，见 [discloseOnly]。
 @immutable
-class MediaCaptureMetadata {
-  const MediaCaptureMetadata({
+class ExtractedMediaCaptureMetadata {
+  const ExtractedMediaCaptureMetadata({
     this.cameraMake,
     this.cameraModel,
     this.lensModel,
@@ -98,7 +98,7 @@ class MediaCaptureMetadata {
   final double? gpsLongitude;
 
   /// 没有解析到任何字段的空元数据。
-  static const MediaCaptureMetadata empty = MediaCaptureMetadata();
+  static const ExtractedMediaCaptureMetadata empty = ExtractedMediaCaptureMetadata();
 
   bool get hasGear =>
       cameraMake != null || cameraModel != null || lensModel != null;
@@ -118,28 +118,28 @@ class MediaCaptureMetadata {
   bool get isNotEmpty => !isEmpty;
 
   /// 本次解析实际命中的分组，用于决定发布面板显示哪些开关。
-  Set<MediaCaptureDisclosureGroup> get availableGroups =>
-      <MediaCaptureDisclosureGroup>{
-        if (hasGear) MediaCaptureDisclosureGroup.gear,
-        if (hasParameters) MediaCaptureDisclosureGroup.parameters,
-        if (hasPlace) MediaCaptureDisclosureGroup.place,
-        if (hasTime) MediaCaptureDisclosureGroup.time,
+  Set<CaptureMetadataDisclosureGroup> get availableGroups =>
+      <CaptureMetadataDisclosureGroup>{
+        if (hasGear) CaptureMetadataDisclosureGroup.gear,
+        if (hasParameters) CaptureMetadataDisclosureGroup.parameters,
+        if (hasPlace) CaptureMetadataDisclosureGroup.place,
+        if (hasTime) CaptureMetadataDisclosureGroup.time,
       };
 
   /// 只保留 [disclosed] 中的分组，其余分组整体置空。
   ///
   /// 这是「关闭某组后已派生事实必须同步撤回」的端侧一半：上报前裁剪，使服务端
   /// 收到的 payload 本身不含被关闭分组。服务端据此撤回既有 tagRef 与交集事实。
-  MediaCaptureMetadata discloseOnly(
-    Set<MediaCaptureDisclosureGroup> disclosed,
+  ExtractedMediaCaptureMetadata discloseOnly(
+    Set<CaptureMetadataDisclosureGroup> disclosed,
   ) {
-    final gear = disclosed.contains(MediaCaptureDisclosureGroup.gear);
+    final gear = disclosed.contains(CaptureMetadataDisclosureGroup.gear);
     final parameters = disclosed.contains(
-      MediaCaptureDisclosureGroup.parameters,
+      CaptureMetadataDisclosureGroup.parameters,
     );
-    final place = disclosed.contains(MediaCaptureDisclosureGroup.place);
-    final time = disclosed.contains(MediaCaptureDisclosureGroup.time);
-    return MediaCaptureMetadata(
+    final place = disclosed.contains(CaptureMetadataDisclosureGroup.place);
+    final time = disclosed.contains(CaptureMetadataDisclosureGroup.time);
+    return ExtractedMediaCaptureMetadata(
       cameraMake: gear ? cameraMake : null,
       cameraModel: gear ? cameraModel : null,
       lensModel: gear ? lensModel : null,
@@ -170,7 +170,7 @@ class MediaCaptureMetadata {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is MediaCaptureMetadata &&
+      other is ExtractedMediaCaptureMetadata &&
           other.cameraMake == cameraMake &&
           other.cameraModel == cameraModel &&
           other.lensModel == lensModel &&
@@ -199,7 +199,7 @@ class MediaCaptureMetadata {
   /// 诊断字符串。刻意不包含 GPS 与拍摄时间，避免 PII 随 `toString` 进入日志。
   @override
   String toString() =>
-      'MediaCaptureMetadata(cameraModel: $cameraModel, lensModel: $lensModel, '
+      'ExtractedMediaCaptureMetadata(cameraModel: $cameraModel, lensModel: $lensModel, '
       'focalLengthMm: $focalLengthMm, apertureFNumber: $apertureFNumber, '
       'shutterSpeedSeconds: $shutterSpeedSeconds, iso: $isoSensitivity, '
       'hasPlace: $hasPlace, hasTime: $hasTime)';

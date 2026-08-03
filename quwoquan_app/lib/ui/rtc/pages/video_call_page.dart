@@ -220,13 +220,13 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildVideoArea(
-    List<CallParticipant> participants,
+    List<CallParticipantViewData> participants,
     CallParticipantsState state,
     CallSessionState session,
   ) {
     if (session.session?.isScreenSharing == true) {
       final declaredSharerId = session.session?.screenShareUserId;
-      CallParticipant? sharer;
+      CallParticipantViewData? sharer;
       for (final participant in participants) {
         if (participant.userId == declaredSharerId) {
           sharer = participant;

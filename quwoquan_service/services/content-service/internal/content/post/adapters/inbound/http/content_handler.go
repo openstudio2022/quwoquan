@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -12,54 +11,41 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
-	"quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
-	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
-	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
-	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
-	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
-	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
-	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
-	mediareprocessapp "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
-	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
-	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
-	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
 )
 
 type ContentHandler struct {
-	feedService                 *feedapp.FeedService
-	postService                 *postapp.Facades
-	postQueryService            *postapp.PostQueryFacade
-	commentService              *commentapp.Facades
-	reactionService             *reactionapp.Facades
-	reportService               *reportapp.Facades
-	moderationService           *moderationapp.Facades
-	outboundShareService        *outboundshareapp.Facades
-	profileInteractionService   *profileinteractionapp.Facades
-	mediaService                *mediaapp.Facades
-	mediaUploadSessionHandler   mediaUploadSessionHTTPHandler
-	filterCatalogReleaseHandler filterCatalogReleaseHTTPHandler
-	mediaImageReprocessService  *mediareprocessapp.Service
-	behaviorService             *behaviorapp.BehaviorService
-	importService               *importerapp.BulkImportService
-	intersectionService         *intersectionapp.IntersectionService
-	authorImpactStore           ports.AuthorImpactStore
-	authorImpactEvidenceStore   ports.AuthorImpactEvidenceStore
-	healthChecker               *rthealth.Checker
+	feedService                  *feedapp.FeedService
+	postService                  *postapp.Facades
+	postQueryService             *postapp.PostQueryFacade
+	commentHandler               commentHTTPHandler
+	reactionHandler              contentReactionHTTPHandler
+	reportHandler                ReportHTTPHandler
+	moderationHandler            postModerationCaseHTTPHandler
+	outboundShareHandler         outboundShareHTTPHandler
+	profileInteractionHandler    profileInteractionActivityHTTPHandler
+	profileReadFactHandler       profileInteractionReadFactHTTPHandler
+	mediaAssetHandler            mediaAssetHTTPHandler
+	mediaUploadSessionHandler    mediaUploadSessionHTTPHandler
+	mediaOriginalAccessHandler   mediaOriginalAccessHTTPHandler
+	filterCatalogReleaseHandler  filterCatalogReleaseHTTPHandler
+	mediaImageReprocessHandler   mediaImageReprocessHTTPHandler
+	behaviorService              *behaviorapp.BehaviorService
+	behaviorHandler              contentBehaviorHTTPHandler
+	intersectionVisitHandler     intersectionVisitStateHTTPHandler
+	authorImpactProjectionReader ports.AuthorImpactProjectionReader
+	healthChecker                *rthealth.Checker
 }
 
 // postDetailClientWire is the explicit GET /content/content/posts/{postId} contract.
@@ -182,9 +168,9 @@ func NewContentHandler(
 	feedService *feedapp.FeedService,
 	postService *postapp.Facades,
 	postQueryService *postapp.PostQueryFacade,
-	commentService *commentapp.Facades,
-	reactionService *reactionapp.Facades,
-	reportService *reportapp.Facades,
+	commentHandler commentHTTPHandler,
+	reactionHandler contentReactionHTTPHandler,
+	reportHandler ReportHTTPHandler,
 	behaviorService *behaviorapp.BehaviorService,
 	opts ...ContentHandlerOption,
 ) *ContentHandler {
@@ -192,9 +178,9 @@ func NewContentHandler(
 		feedService:      feedService,
 		postService:      postService,
 		postQueryService: postQueryService,
-		commentService:   commentService,
-		reactionService:  reactionService,
-		reportService:    reportService,
+		commentHandler:   commentHandler,
+		reactionHandler:  reactionHandler,
+		reportHandler:    reportHandler,
 		behaviorService:  behaviorService,
 	}
 	for _, opt := range opts {
@@ -206,6 +192,67 @@ func NewContentHandler(
 // ContentHandlerOption configures the ContentHandler.
 type ContentHandlerOption func(*ContentHandler)
 
+// commentHTTPHandler is the narrow route-dispatch contract implemented by the
+// Comment object's inbound adapter. Post does not parse Comment wire payloads.
+type commentHTTPHandler interface {
+	CreateComment(http.ResponseWriter, *http.Request, string)
+	ListComments(http.ResponseWriter, *http.Request, string)
+	ListCommentReplies(http.ResponseWriter, *http.Request, string, string)
+	DeleteComment(http.ResponseWriter, *http.Request, string, string)
+	SetCommentPinned(http.ResponseWriter, *http.Request, string, string, bool)
+	BindMediaAssetsToComment(http.ResponseWriter, *http.Request, string)
+	ListCommentsByAuthor(http.ResponseWriter, *http.Request)
+	ListCommentsForPostAuthor(http.ResponseWriter, *http.Request)
+	HideComment(http.ResponseWriter, *http.Request, string)
+	RestoreComment(http.ResponseWriter, *http.Request, string)
+}
+
+// contentReactionHTTPHandler is implemented by ContentReaction's inbound
+// adapter. Generated routes remain composed once, while object wire ownership
+// remains local to ContentReaction.
+type contentReactionHTTPHandler interface {
+	LikePost(http.ResponseWriter, *http.Request, string)
+	UnlikePost(http.ResponseWriter, *http.Request, string)
+	GetContentReactionState(http.ResponseWriter, *http.Request, string)
+	ReactToComment(http.ResponseWriter, *http.Request, string)
+}
+
+// ReportHTTPHandler is implemented only by Report's object-local inbound
+// adapter. Post owns the shared generated router, not Report wire semantics.
+type ReportHTTPHandler interface {
+	Create(http.ResponseWriter, *http.Request)
+	List(http.ResponseWriter, *http.Request)
+	ListMine(http.ResponseWriter, *http.Request)
+	Get(http.ResponseWriter, *http.Request)
+	BeginReview(http.ResponseWriter, *http.Request)
+	Dismiss(http.ResponseWriter, *http.Request)
+	Resolve(http.ResponseWriter, *http.Request)
+}
+
+type outboundShareHTTPHandler interface {
+	CreateOutboundShare(http.ResponseWriter, *http.Request)
+}
+
+type contentBehaviorHTTPHandler interface {
+	Report(http.ResponseWriter, *http.Request)
+}
+
+type intersectionVisitStateHTTPHandler interface {
+	MarkVisited(http.ResponseWriter, *http.Request)
+	GetMyIntersectionSummary(http.ResponseWriter, *http.Request)
+	ListMyIntersections(http.ResponseWriter, *http.Request)
+	GetObjectIntersections(http.ResponseWriter, *http.Request)
+}
+
+type profileInteractionActivityHTTPHandler interface {
+	ListReceived(http.ResponseWriter, *http.Request)
+	ListSent(http.ResponseWriter, *http.Request)
+}
+
+type profileInteractionReadFactHTTPHandler interface {
+	Append(http.ResponseWriter, *http.Request)
+}
+
 // mediaUploadSessionHTTPHandler is an application-shell dispatch contract.
 // Request parsing and response projection remain owned by the
 // MediaUploadSession inbound adapter.
@@ -214,6 +261,39 @@ type mediaUploadSessionHTTPHandler interface {
 	Complete(http.ResponseWriter, *http.Request)
 	Abort(http.ResponseWriter, *http.Request)
 	Get(http.ResponseWriter, *http.Request)
+}
+
+type mediaOriginalAccessHTTPHandler interface {
+	Request(http.ResponseWriter, *http.Request)
+}
+
+type mediaImageReprocessHTTPHandler interface {
+	Start(http.ResponseWriter, *http.Request)
+	Pause(http.ResponseWriter, *http.Request)
+	Resume(http.ResponseWriter, *http.Request)
+	Rollback(http.ResponseWriter, *http.Request)
+	Get(http.ResponseWriter, *http.Request)
+}
+
+type mediaAssetHTTPHandler interface {
+	GetPublic(http.ResponseWriter, *http.Request)
+	GetOwned(http.ResponseWriter, *http.Request)
+	GetReference(http.ResponseWriter, *http.Request)
+	GetDeliveryReference(http.ResponseWriter, *http.Request)
+	RecordProcessingResult(http.ResponseWriter, *http.Request)
+	UpdateAccessPolicy(http.ResponseWriter, *http.Request)
+	Discard(http.ResponseWriter, *http.Request)
+	SelectAutoCover(http.ResponseWriter, *http.Request)
+	SelectManualCover(http.ResponseWriter, *http.Request)
+}
+
+type postModerationCaseHTTPHandler interface {
+	Open(http.ResponseWriter, *http.Request)
+	Review(http.ResponseWriter, *http.Request)
+	Decide(http.ResponseWriter, *http.Request)
+	Supersede(http.ResponseWriter, *http.Request)
+	GetCurrent(http.ResponseWriter, *http.Request)
+	GetPublicationEligibility(http.ResponseWriter, *http.Request)
 }
 
 // filterCatalogReleaseHTTPHandler keeps FilterCatalogRelease wire parsing and
@@ -226,30 +306,42 @@ type filterCatalogReleaseHTTPHandler interface {
 	GetActive(http.ResponseWriter, *http.Request)
 }
 
-func WithBulkImportService(svc *importerapp.BulkImportService) ContentHandlerOption {
-	return func(h *ContentHandler) { h.importService = svc }
-}
-
 func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 	return func(h *ContentHandler) { h.healthChecker = c }
 }
 
-func WithOutboundShareService(service *outboundshareapp.Facades) ContentHandlerOption {
-	return func(handler *ContentHandler) { handler.outboundShareService = service }
+func WithOutboundShareHandler(service outboundShareHTTPHandler) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.outboundShareHandler = service }
 }
 
-func WithProfileInteractionService(
-	service *profileinteractionapp.Facades,
+func WithContentBehaviorHandler(handler contentBehaviorHTTPHandler) ContentHandlerOption {
+	return func(contentHandler *ContentHandler) { contentHandler.behaviorHandler = handler }
+}
+
+func WithIntersectionVisitStateHandler(
+	handler intersectionVisitStateHTTPHandler,
 ) ContentHandlerOption {
-	return func(handler *ContentHandler) { handler.profileInteractionService = service }
+	return func(contentHandler *ContentHandler) {
+		contentHandler.intersectionVisitHandler = handler
+	}
 }
 
-func WithModerationService(service *moderationapp.Facades) ContentHandlerOption {
-	return func(handler *ContentHandler) { handler.moderationService = service }
+func WithProfileInteractionHandlers(
+	activity profileInteractionActivityHTTPHandler,
+	readFact profileInteractionReadFactHTTPHandler,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) {
+		handler.profileInteractionHandler = activity
+		handler.profileReadFactHandler = readFact
+	}
 }
 
-func WithMediaService(service *mediaapp.Facades) ContentHandlerOption {
-	return func(handler *ContentHandler) { handler.mediaService = service }
+func WithPostModerationCaseHandler(handler postModerationCaseHTTPHandler) ContentHandlerOption {
+	return func(contentHandler *ContentHandler) { contentHandler.moderationHandler = handler }
+}
+
+func WithMediaAssetHandler(handler mediaAssetHTTPHandler) ContentHandlerOption {
+	return func(contentHandler *ContentHandler) { contentHandler.mediaAssetHandler = handler }
 }
 
 func WithMediaUploadSessionHandler(
@@ -257,6 +349,14 @@ func WithMediaUploadSessionHandler(
 ) ContentHandlerOption {
 	return func(contentHandler *ContentHandler) {
 		contentHandler.mediaUploadSessionHandler = handler
+	}
+}
+
+func WithMediaOriginalAccessHandler(
+	handler mediaOriginalAccessHTTPHandler,
+) ContentHandlerOption {
+	return func(contentHandler *ContentHandler) {
+		contentHandler.mediaOriginalAccessHandler = handler
 	}
 }
 
@@ -268,23 +368,16 @@ func WithFilterCatalogReleaseHandler(
 	}
 }
 
-func WithMediaImageReprocessService(
-	service *mediareprocessapp.Service,
+func WithMediaImageReprocessHandler(
+	handler mediaImageReprocessHTTPHandler,
 ) ContentHandlerOption {
-	return func(handler *ContentHandler) { handler.mediaImageReprocessService = service }
+	return func(contentHandler *ContentHandler) {
+		contentHandler.mediaImageReprocessHandler = handler
+	}
 }
 
-// WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
-func WithIntersectionService(svc *intersectionapp.IntersectionService) ContentHandlerOption {
-	return func(h *ContentHandler) { h.intersectionService = svc }
-}
-
-func WithAuthorImpactStore(store ports.AuthorImpactStore) ContentHandlerOption {
-	return func(h *ContentHandler) { h.authorImpactStore = store }
-}
-
-func WithAuthorImpactEvidenceStore(store ports.AuthorImpactEvidenceStore) ContentHandlerOption {
-	return func(h *ContentHandler) { h.authorImpactEvidenceStore = store }
+func WithAuthorImpactProjectionReader(reader ports.AuthorImpactProjectionReader) ContentHandlerOption {
+	return func(h *ContentHandler) { h.authorImpactProjectionReader = reader }
 }
 
 func (h *ContentHandler) Routes() http.Handler {
@@ -296,7 +389,6 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/metrics/rec/engagement", h.handleEngagementMetrics)
 	mux.HandleFunc("/metrics/rec/behavior-attribution", h.handleBehaviorAttributionMetrics)
 	mux.HandleFunc("/metrics/rec/prometheus", h.handlePrometheusMetrics)
-	mux.HandleFunc("/admin/import", h.handleBulkImport)
 	mux.HandleFunc("/admin/content/semantic-mentions:apply", h.handleApplySemanticMentionGovernanceEvent)
 	RegisterGeneratedRoutes(mux, h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -389,33 +481,6 @@ func (h *ContentHandler) handleBehaviorAttributionMetrics(w http.ResponseWriter,
 
 func (h *ContentHandler) handlePrometheusMetrics(w http.ResponseWriter, r *http.Request) {
 	promhttp.Handler().ServeHTTP(w, r)
-}
-
-func (h *ContentHandler) handleBulkImport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only POST"))
-		return
-	}
-	if h.importService == nil {
-		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
-			"导入服务未启用",
-			"bulk import not configured (no MongoDB)",
-		))
-		return
-	}
-	defer r.Body.Close()
-	result, err := h.importService.ImportNDJSON(r.Context(), r.Body)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"total":    result.Total,
-		"success":  result.Success,
-		"failed":   result.Failed,
-		"duration": result.Duration.String(),
-	})
 }
 
 func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
@@ -575,54 +640,6 @@ func shouldHonorTestErrorInject(r *http.Request, code string) bool {
 	return strings.TrimSpace(r.Header.Get("X-Test-Error-Inject")) == code
 }
 
-func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Request) {
-	if h.reportService == nil {
-		h.handleNotImplemented(w, r, "CreateReport")
-		return
-	}
-	var body struct {
-		TargetType  reportmodel.TargetType `json:"targetType"`
-		TargetID    string                 `json:"targetId"`
-		Reason      reportmodel.Reason     `json:"reason"`
-		Description string                 `json:"description"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
-		return
-	}
-	currentOperation, ok := operation.FromContext(r.Context())
-	reporterID := strings.TrimSpace(currentOperation.Actor.PersonaID)
-	reporterAccountID := strings.TrimSpace(currentOperation.Actor.AccountID)
-	if !ok || reporterID == "" || reporterAccountID == "" {
-		writeHTTPError(
-			w,
-			r,
-			rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "unauthorized"),
-				"请先登录",
-				"trusted persona actor missing for CreateReport",
-			),
-		)
-		return
-	}
-	_, err := h.reportService.CreateReport(
-		r.Context(),
-		reportapp.CreateReportCommand{
-			ReporterID:        reporterID,
-			ReporterAccountID: reporterAccountID,
-			TargetType:        body.TargetType,
-			TargetID:          body.TargetID,
-			Reason:            body.Reason,
-			Description:       body.Description,
-		},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedRequestBodyFromRequest(r, "UpdatePostSettings")
 	if err != nil {
@@ -680,110 +697,6 @@ func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"postId": postID, "status": "deleted"})
 }
 
-func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, postID string) {
-	if h.reactionService == nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ContentReaction facades are not configured"))
-		return
-	}
-	actor, err := resolveReactionActor(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	result, err := h.reactionService.LikePost(
-		r.Context(),
-		reactionapp.LikePostCommand{PostID: strings.TrimSpace(postID), Actor: actor},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"reactionId": result.ReactionID,
-		"postId":     postID,
-		"version":    result.Version,
-		"liked":      result.Liked,
-		"changed":    result.Changed,
-		"replayed":   result.Replayed,
-	})
-}
-
-func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request, postID string) {
-	if h.reactionService == nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ContentReaction facades are not configured"))
-		return
-	}
-	actor, err := resolveReactionActor(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	result, err := h.reactionService.UnlikePost(
-		r.Context(),
-		reactionapp.UnlikePostCommand{PostID: strings.TrimSpace(postID), Actor: actor},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"reactionId": result.ReactionID,
-		"postId":     postID,
-		"version":    result.Version,
-		"liked":      result.Liked,
-		"changed":    result.Changed,
-		"replayed":   result.Replayed,
-	})
-}
-
-func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.Request, postID string) {
-	if h.reactionService == nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ContentReaction facades are not configured"))
-		return
-	}
-	actor, err := resolveReactionActor(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	slice, err := h.reactionService.GetContentReactionState(
-		r.Context(),
-		reactionapp.GetContentReactionStateQuery{PostID: strings.TrimSpace(postID), Actor: actor},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	payload := map[string]any{
-		"found":   slice.Found,
-		"postId":  slice.PostID,
-		"liked":   slice.Liked,
-		"version": slice.Version,
-	}
-	if !slice.UpdatedAt.IsZero() {
-		payload["updatedAt"] = slice.UpdatedAt.UTC().Format(time.RFC3339Nano)
-	}
-	writeJSON(w, http.StatusOK, payload)
-}
-
-func resolveReactionActor(r *http.Request) (reactiondomain.Actor, error) {
-	principal, ok := rtauth.PrincipalFromContext(r.Context())
-	if !ok {
-		return reactiondomain.Actor{}, contentgenerated.AppErrorFromUnauthorized(
-			"ContentReaction requires a verified persona or device principal",
-		)
-	}
-	if personaID := strings.TrimSpace(principal.Actor.PersonaID); personaID != "" {
-		return reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, personaID)
-	}
-	if deviceActorID := strings.TrimSpace(principal.Actor.DeviceActorID); deviceActorID != "" {
-		return reactiondomain.NewActor(reactiondomain.ActorDimensionDevice, deviceActorID)
-	}
-	return reactiondomain.Actor{}, contentgenerated.AppErrorFromUnauthorized(
-		"ContentReaction principal has no persona or device actor",
-	)
-}
-
 func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, r *http.Request) {
 	payload := h.postService.GetAppConfig()
 	hash, _ := payload["configHash"].(string)
@@ -796,16 +709,6 @@ func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	writeJSON(w, http.StatusOK, payload)
-}
-
-func commentIDFromPath(path string) string {
-	parts := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
-	for i, p := range parts {
-		if p == "comments" && i+1 < len(parts) {
-			return strings.TrimSpace(parts[i+1])
-		}
-	}
-	return ""
 }
 
 func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Request, postID string) {

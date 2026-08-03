@@ -37,6 +37,7 @@ func TestCircleGroupChatSyncProjectsLifecycleAndRejectsLateMembership(t *testing
 			Transactions:                      passthroughTransactionRunner{},
 			Conversations:                     store,
 			Members:                           store,
+			RosterProjection:                  store,
 			UserStates:                        store,
 			MembershipCommands:                commands,
 			CircleGroupMembershipProjections:  store,
@@ -160,6 +161,7 @@ func TestCircleGroupChatSyncRejectsPublicChatGovernance(t *testing.T) {
 			Transactions:       passthroughTransactionRunner{},
 			Conversations:      store,
 			Members:            store,
+			RosterProjection:   store,
 			UserStates:         store,
 			MembershipCommands: newMemoryAggregateCommandStore(),
 		},
@@ -173,8 +175,34 @@ func TestCircleGroupChatSyncRejectsPublicChatGovernance(t *testing.T) {
 	err := memberService.AddMembers(commandContext("owner", "attempt-private-add"), AddMembersRequest{
 		ConversationId: "conv-circle", InvitedBy: "owner", UserIds: []string{"p2"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "CHAT.USER.circle_group_managed_by_circle") {
+	if err == nil || !strings.Contains(err.Error(), "CHAT.USER.source_managed_conversation") {
 		t.Fatalf("Circle-bound Chat HTTP governance must be rejected, got %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-001
+func TestGatheringConversationRejectsPublicChatGovernance(t *testing.T) {
+	store := newCircleGroupChatSyncMemoryStore()
+	store.conversations["conv-gathering"] = &model.Conversation{
+		ID: "conv-gathering", Type: "group", Status: model.ConversationStatusActive,
+		GatheringId: "gathering-1", MaxGroupSize: 8,
+	}
+	store.members[store.memberKey("conv-gathering", "owner")] = &model.ConversationMember{
+		ID: "member-owner", ConversationId: "conv-gathering", UserId: "owner", MemberType: "user", Role: "owner",
+	}
+	memberService := NewMemberService(
+		ChatStoragePorts{
+			Transactions: passthroughTransactionRunner{}, Conversations: store, Members: store,
+			RosterProjection: store, UserStates: store, MembershipCommands: newMemoryAggregateCommandStore(),
+		},
+		noopCache{}, syncNoopEventPublisher{}, nil, nil, nil,
+		syncNoopGroupAvatarScheduler{},
+	)
+	err := memberService.AddMembers(commandContext("owner", "attempt-gathering-add"), AddMembersRequest{
+		ConversationId: "conv-gathering", InvitedBy: "owner", UserIds: []string{"p2"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "CHAT.USER.source_managed_conversation") {
+		t.Fatalf("Gathering-bound Chat governance must be rejected, got %v", err)
 	}
 }
 
@@ -222,6 +250,42 @@ func TestProvisionCircleGroupConversationRecoversConcurrentBinding(t *testing.T)
 	}
 	if conversation.ID != "already-bound" {
 		t.Fatalf("expected existing circle group binding, got %+v", conversation)
+	}
+}
+
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+func TestProvisionGatheringConversationCommitsSoleBindingOwnerAndOutbox(t *testing.T) {
+	store := newCircleGroupChatSyncMemoryStore()
+	commands := newMemoryAggregateCommandStore()
+	service := NewConversationService(
+		ChatStoragePorts{
+			Transactions: passthroughTransactionRunner{}, Conversations: store,
+			GatheringConversations: store, Members: store, UserStates: store,
+			ConversationCommands: commands,
+		},
+		noopCache{}, syncNoopEventPublisher{}, nil, nil, nil, nil, syncNoopGroupAvatarScheduler{},
+	)
+	request := GatheringConversationProvisioningRequest{
+		SourceEventID: "gathering-1:created:1", GatheringID: "gathering-1",
+		OwnerPersonaID: "owner-1", Title: "贡嘎同行", MaxGroupSize: 8,
+	}
+	conversation, err := service.ProvisionGatheringConversation(context.Background(), request)
+	if err != nil {
+		t.Fatalf("ProvisionGatheringConversation: %v", err)
+	}
+	if conversation.GatheringId != "gathering-1" || conversation.OriginType != "gathering" ||
+		conversation.CreatorId != "owner-1" || conversation.MemberCount != 1 {
+		t.Fatalf("invalid Gathering conversation: %+v", conversation)
+	}
+	if _, err := store.FindMember(context.Background(), conversation.ID, "owner-1"); err != nil {
+		t.Fatalf("owner membership missing: %v", err)
+	}
+	if !containsAggregateEvent(commands.events, "GatheringConversationProvisioned") {
+		t.Fatalf("Gathering binding event missing: %#v", commands.eventTypes())
+	}
+	replayed, err := service.ProvisionGatheringConversation(context.Background(), request)
+	if err != nil || replayed.ID != conversation.ID || len(store.conversations) != 1 {
+		t.Fatalf("replay created another binding: replay=%+v err=%v count=%d", replayed, err, len(store.conversations))
 	}
 }
 
@@ -310,6 +374,13 @@ func (s *circleGroupChatSyncMemoryStore) CreateConversation(_ context.Context, v
 			}
 		}
 	}
+	if strings.TrimSpace(value.GatheringId) != "" {
+		for _, existing := range s.conversations {
+			if existing.GatheringId == value.GatheringId {
+				return model.ErrGatheringConversationAlreadyBound
+			}
+		}
+	}
 	copy := *value
 	s.conversations[value.ID] = &copy
 	return nil
@@ -331,6 +402,16 @@ func (s *circleGroupChatSyncMemoryStore) FindConversationByCircleGroupID(_ conte
 	}
 	for _, value := range s.conversations {
 		if value.CircleGroupId == groupID {
+			copy := *value
+			return &copy, nil
+		}
+	}
+	return nil, model.ErrConversationNotFound
+}
+
+func (s *circleGroupChatSyncMemoryStore) FindConversationByGatheringID(_ context.Context, gatheringID string) (*model.Conversation, error) {
+	for _, value := range s.conversations {
+		if value.GatheringId == gatheringID {
 			copy := *value
 			return &copy, nil
 		}

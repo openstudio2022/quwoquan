@@ -82,7 +82,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CallSession'
+                                $ref: '#/components/schemas/RtcCallHistoryPage'
                 default:
                     description: Runtime failure
                     content:
@@ -115,8 +115,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RtcInitiateCallCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RtcInitiateCallResult'
                 default:
                     description: Runtime failure
                     content:
@@ -182,8 +186,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RtcAnswerCallResult'
                 default:
                     description: Runtime failure
                     content:
@@ -222,8 +230,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RtcToggleCameraCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -256,8 +268,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -290,8 +306,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -324,8 +344,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -364,8 +388,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RtcInviteToCallCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -398,8 +426,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RtcJoinCredentials'
                 default:
                     description: Runtime failure
                     content:
@@ -432,8 +464,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -472,8 +508,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RtcToggleMuteCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -506,8 +546,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -540,8 +584,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -574,8 +622,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CallSession'
                 default:
                     description: Runtime failure
                     content:
@@ -604,15 +656,35 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RtcAccountClosureDeadLetterRecoveryRequest
             x-contract-placeholder: true
+        RtcAnswerCallResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RtcAnswerCallResult
+            x-contract-placeholder: true
+        RtcCallHistoryPage:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RtcCallHistoryPage
+            x-contract-placeholder: true
         RtcInitiateCallCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RtcInitiateCallCommand
             x-contract-placeholder: true
+        RtcInitiateCallResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RtcInitiateCallResult
+            x-contract-placeholder: true
         RtcInviteToCallCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RtcInviteToCallCommand
+            x-contract-placeholder: true
+        RtcJoinCredentials:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RtcJoinCredentials
             x-contract-placeholder: true
         RtcToggleCameraCommand:
             type: object

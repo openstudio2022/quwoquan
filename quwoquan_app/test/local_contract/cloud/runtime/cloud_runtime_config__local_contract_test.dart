@@ -5,13 +5,16 @@ Map<String, String> _nativeRuntimePackageFor(String environment) {
   return <String, String>{
     'APP_RUNTIME_ENV': environment,
     'CLOUD_GATEWAY_BASE_URL': 'https://api.$environment.example.test',
-    'REALTIME_CONNECTION_URL': 'wss://realtime.$environment.example.test',
+    'REALTIME_CONNECTION_URL': 'wss://api.$environment.example.test',
     'PUBLIC_WEB_BASE_URL': 'https://www.$environment.example.test',
-    'APP_DOWNLOAD_BASE_URL': 'https://download.$environment.example.test/app',
-    'APP_LEGAL_BASE_URL': 'https://legal.$environment.example.test/terms',
-    'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.$environment.example.test/avatar',
-    'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.$environment.example.test/image',
-    'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.$environment.example.test/video',
+    'APP_DOWNLOAD_BASE_URL': 'https://cdn.$environment.example.test/download',
+    'APP_LEGAL_BASE_URL': 'https://www.$environment.example.test/legal',
+    'MEDIA_AVATAR_CDN_BASE_URL':
+        'https://cdn.$environment.example.test/media/avatar',
+    'MEDIA_IMAGE_CDN_BASE_URL':
+        'https://cdn.$environment.example.test/media/image',
+    'MEDIA_VIDEO_CDN_BASE_URL':
+        'https://cdn.$environment.example.test/media/video',
     'MEDIA_UPLOAD_BASE_URL': 'https://upload.$environment.example.test',
     'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.$environment.example.test',
     'QWQ_APP_LAUNCH_MODE': 'stackctl_$environment',
@@ -42,6 +45,14 @@ void main() {
         'MEDIA_UPLOAD_BASE_URL': 'https://upload.example.test',
         'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.example.test',
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+        'launchTarget': 'alpha-local',
+        'effectiveLaunchManifestDigest':
+            'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+        'contentReleaseId': 'release-alpha',
+        'contentManifestDigest':
+            'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+        'contentReadinessReceiptDigest':
+            'sha256:2222222222222222222222222222222222222222222222222222222222222222',
       });
 
       expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
@@ -51,7 +62,52 @@ void main() {
         'complete',
       );
       expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
+      expect(CloudRuntimeConfig.hasCompleteContentBinding, isTrue);
+      expect(
+        CloudRuntimeConfig.runtimeDefineSummary['contentBindingState'],
+        'complete',
+      );
       expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
+    });
+
+    test('内容发布绑定缺失或 digest 非 canonical 时保持 invalid', () {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('alpha'),
+        'contentReleaseId': 'release-alpha',
+        'contentManifestDigest': 'invalid',
+        'contentReadinessReceiptDigest':
+            'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+      });
+
+      expect(CloudRuntimeConfig.hasCompleteContentBinding, isFalse);
+      expect(
+        CloudRuntimeConfig.runtimeDefineSummary['contentBindingState'],
+        'invalid',
+      );
+    });
+
+    test('direct Flutter Debug 缺少 release-bound 内容时阻断启动', () {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('alpha'),
+        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+      });
+
+      expect(
+        CloudRuntimeConfig.validateRequiredEndpoints,
+        throwsA(
+          isA<CloudRuntimeConfigurationException>().having(
+            (error) => error.invalidKeys,
+            'invalidKeys',
+            containsAll(<String>[
+              'contentReleaseId',
+              'contentManifestDigest',
+              'contentReadinessReceiptDigest',
+              'launchTarget',
+              'effectiveLaunchManifestDigest',
+            ]),
+          ),
+        ),
+      );
     });
 
     test('Alpha、Beta、Gamma native 包不会混合 endpoint 或启动上下文', () {
@@ -75,7 +131,7 @@ void main() {
       }
     });
 
-    test('完整业务 endpoint 包通过且不要求 SLS 配置', () {
+    test('完整业务 endpoint 包通过且只要求 canonical telemetry endpoint', () {
       expect(
         () => CloudRuntimeConfig.validateRuntimePackage(
           runtimeEnv: 'gamma',

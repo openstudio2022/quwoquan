@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	preferencehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/adapters/inbound/http"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
@@ -19,12 +20,15 @@ func newPreferenceIntegrationHandler() http.Handler {
 	queries := preferencefact.NewQueryFacade(integrationPreferenceStore)
 	commands := preferencefact.NewCommandFacade(
 		integrationPreferenceStore,
-		integrationSessionRunStore,
+		integrationSessionStore,
 	)
-	return assistanthttp.NewHandler(
+	mux := http.NewServeMux()
+	preferencehttp.NewHandler(commands, queries).RegisterRoutes(mux)
+	mux.Handle("/", assistanthttp.NewHandler(
 		newIntegrationAssistantService(),
-		assistanthttp.WithPreferenceFacades(commands, queries),
-	).Routes()
+		assistanthttp.WithRunPreferenceSnapshots(queries),
+	).Routes())
+	return mux
 }
 
 func TestAssistantPreferencePersistenceRunSnapshotAndRestore(t *testing.T) {

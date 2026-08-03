@@ -10,5 +10,11 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.news",
   "evaluationProfileRef": "evaluation.realtime_info",
-  "replayAssetRef": "assistant.replay.news_briefing.v1"
+  "replayAssetRef": "assistant.replay.news_briefing",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none",
+  "promptAssets": ["news_briefing.proactive", "assistant.evidence_discipline"]
 }

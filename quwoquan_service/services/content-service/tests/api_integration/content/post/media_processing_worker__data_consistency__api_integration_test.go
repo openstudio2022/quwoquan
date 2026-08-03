@@ -10,15 +10,15 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	"quwoquan_service/runtime/commandmeta"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 )
 
 func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
-	store := persistence.NewMongoMediaStore(mongoDB)
+	store := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	consumer := fmt.Sprintf("media-processing-api-%d", time.Now().UnixNano())
 	t.Cleanup(func() {
 		_, _ = mongoDB.Collection("media_projection_checkpoints").DeleteOne(
@@ -115,7 +115,7 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 }
 
 func TestDiscardedMediaCleanupDeletesSharedCASOnlyAfterLastLiveAsset(t *testing.T) {
-	store := persistence.NewMongoMediaStore(mongoDB)
+	store := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	mediaService := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(store),
 		newAPIIntegrationMediaObjectGateway(),
@@ -220,7 +220,7 @@ func TestDiscardedMediaCleanupDeletesSharedCASOnlyAfterLastLiveAsset(t *testing.
 }
 
 func TestMediaProcessingPoisonEventIsDurableAndIdempotent(t *testing.T) {
-	store := persistence.NewMongoMediaStore(mongoDB)
+	store := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	consumer := fmt.Sprintf("media-processing-poison-%d", time.Now().UnixNano())
 	eventID := fmt.Sprintf("evt-poison-%d", time.Now().UnixNano())
 	collection := mongoDB.Collection("media_processing_dead_letters")
@@ -302,7 +302,7 @@ func containsString(values []string, expected string) bool {
 
 func latestMediaOutboxCheckpoint(
 	t *testing.T,
-	store *persistence.MongoMediaStore,
+	store *mediaassetpersistence.MongoMediaStore,
 ) string {
 	t.Helper()
 	checkpoint := ""

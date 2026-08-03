@@ -19,30 +19,34 @@ type ExternalProviderBinding struct {
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"runtime.log.sink": {
-			State:                   "enabled",
-			AdapterID:               "ext.obs.postgres_telemetry_local",
-			EndpointRef:             "service_config:product_ops.postgres",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     1000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "local_topology:alpha.elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
 		},
 	},
 	"beta": {
 		"runtime.log.sink": {
-			State:                   "enabled",
-			AdapterID:               "ext.obs.postgres_telemetry_local",
-			EndpointRef:             "service_config:product_ops.postgres",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     1000,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "local_topology:beta.elasticsearch",
+			EndpointEnvironmentKeys: map[string]string{
+				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
 		},
 	},
 	"gamma": {
 		"runtime.log.sink": {
 			State:       "enabled",
-			AdapterID:   "ext.obs.elasticsearch_local",
+			AdapterID:   "ext.obs.elasticsearch",
 			EndpointRef: "local_topology:gamma.elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
@@ -55,16 +59,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"prod": {
 		"runtime.log.sink": {
 			State:       "enabled",
-			AdapterID:   "ext.obs.aliyun_sls",
-			EndpointRef: "environment_binding:product_ops.sls_sink",
+			AdapterID:   "ext.obs.elasticsearch",
+			EndpointRef: "environment_binding:product_ops.elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
-				"endpoint": "PRODUCT_OPS_SLS_ENDPOINT",
-				"project":  "PRODUCT_OPS_SLS_PROJECT",
-				"region":   "PRODUCT_OPS_SLS_REGION",
+				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
-				"ALIBABA_CLOUD_ACCESS_KEY_ID",
-				"ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+				"PRODUCT_OPS_ELASTICSEARCH_API_KEY",
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{},

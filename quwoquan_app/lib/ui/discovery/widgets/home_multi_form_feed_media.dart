@@ -13,7 +13,7 @@ class _HomeImagePostCard extends ConsumerWidget {
     required this.onFallbackTap,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final IntersectionReason? reason;
   final bool expanded;
@@ -208,7 +208,7 @@ class _HomeVideoPostCard extends StatelessWidget {
     required this.onFallbackTap,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final IntersectionReason? reason;
   final bool initialize;
@@ -281,7 +281,7 @@ class _HomeArticlePostCard extends StatelessWidget {
     required this.onFallbackTap,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final IntersectionReason? reason;
   final VoidCallback onTap;
@@ -418,7 +418,7 @@ class _HomeArticlePostCard extends StatelessWidget {
     );
   }
 
-  bool _articlePrefersTopImage(PostBaseDto item) {
+  bool _articlePrefersTopImage(ContentPostViewData item) {
     return item.normalizedBody.length >=
         DiscoveryFeedSpacing.homeFeedArticleTopImageTextLength;
   }
@@ -432,7 +432,7 @@ class _ArticleTextBlock extends StatelessWidget {
     required this.onFallbackTap,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final IntersectionReason? reason;
   final void Function(IntersectionTextSpan span)? onSpanTap;
   final VoidCallback? onFallbackTap;
@@ -678,7 +678,7 @@ TextStyle _articleSummaryTextStyle(BuildContext context) {
   );
 }
 
-double _mediaAspectRatio(PostBaseDto item) {
+double _mediaAspectRatio(ContentPostViewData item) {
   return clampDisplayAspectRatioValue(
     item.aspectRatio,
     fallback: item.hasVideo
@@ -687,7 +687,7 @@ double _mediaAspectRatio(PostBaseDto item) {
   );
 }
 
-bool _isMomentGridPost(PostBaseDto item) {
+bool _isMomentGridPost(ContentPostViewData item) {
   return item.identity == 'moment' && item.mediaImageUrls.isNotEmpty;
 }
 

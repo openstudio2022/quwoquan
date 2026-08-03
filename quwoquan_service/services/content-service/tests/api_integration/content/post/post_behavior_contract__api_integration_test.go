@@ -25,15 +25,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	rtauth "quwoquan_service/runtime/auth"
-	rtimpact "quwoquan_service/runtime/impact"
 	rtoperation "quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
-	"quwoquan_service/services/content-service/internal/content/post/application/authorimpact"
-	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
 
 // TestLikePost verifies persona/device actors occupy disjoint reaction identities.
@@ -410,7 +406,7 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
-		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		newMongoPostStore(mongoDB.Collection("posts")),
 	)
 
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
@@ -532,58 +528,13 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 	}
 }
 
-func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
-	ctx := context.Background()
-	featureColl := mongoDB.Collection("rm_recommend_feature")
-	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}); err != nil {
-		t.Fatalf("clean recommend feature: %v", err)
-	}
-	// 生产同构装配（N0-2）：行为写持久轨 rm_behavior_events，特征投影由
-	// BehaviorProjectionRelay 游标驱动（与 main.go 相同管线），不再经进程内
-	// publisher 直连 projector（那会掩盖生产 Pub/Sub 断链）。
-	behaviorService := behaviorapp.NewBehaviorService(
-		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
-		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorEventStore(behaviorpersistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
-	)
-
-	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{
-			ClientEventID: "evt-assistant-interest-projector-001",
-			OccurredAt:    time.Now().UTC().Format(time.RFC3339Nano),
-			UserID:        "user_assistant_interest_projector_001",
-			SessionID:     "sess_assistant_interest_projector_001",
-			Action:        "assistant_interest",
-			Tags:          []string{"Topic/旅行", "Topic/旅行主题"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("process assistant_interest: %v", err)
-	}
-	drainBehaviorProjection(t, ctx)
-
-	var got struct {
-		UserFeatures struct {
-			TagInteraction map[string]int `bson:"tagInteraction"`
-		} `bson:"userFeatures"`
-	}
-	if err := featureColl.FindOne(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}).Decode(&got); err != nil {
-		t.Fatalf("find recommend feature: %v", err)
-	}
-	if got.UserFeatures.TagInteraction["Topic/旅行"] != 1 || got.UserFeatures.TagInteraction["Topic/旅行主题"] != 1 {
-		t.Fatalf("tagInteraction not projected: %+v", got.UserFeatures.TagInteraction)
-	}
-}
-
 func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *testing.T) {
 	ctx := context.Background()
 	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	userID := "user_onboarding_interest_" + runID
 	eventID := "evt-onboarding-interest-" + runID
-	featureColl := mongoDB.Collection("rm_recommend_feature")
 	eventColl := mongoDB.Collection("rm_behavior_events")
 	t.Cleanup(func() {
-		_, _ = featureColl.DeleteMany(context.Background(), bson.M{"userId": userID})
 		_, _ = eventColl.DeleteMany(context.Background(), bson.M{"userId": userID})
 	})
 
@@ -605,7 +556,6 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 		}
 	}
 
-	drainBehaviorProjection(t, ctx)
 	count, err := eventColl.CountDocuments(ctx, bson.M{
 		"userId":        userID,
 		"clientEventId": eventID,
@@ -629,23 +579,6 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 	if _, exists := persistedBinding["catalogVersion"]; exists {
 		t.Fatalf("persisted onboarding fact retained retired catalogVersion: %+v", persistedBinding)
 	}
-
-	var got struct {
-		UserFeatures struct {
-			TagInteraction map[string]int `bson:"tagInteraction"`
-		} `bson:"userFeatures"`
-	}
-	if err := featureColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&got); err != nil {
-		t.Fatalf("find onboarding recommend feature: %v", err)
-	}
-	for _, tagRef := range []string{
-		"Topic/兴趣/旅行",
-		"Audience/用户/兴趣偏好/摄影",
-	} {
-		if got.UserFeatures.TagInteraction[tagRef] != 1 {
-			t.Fatalf("tagInteraction[%q]=%d, want exactly one: %+v", tagRef, got.UserFeatures.TagInteraction[tagRef], got.UserFeatures.TagInteraction)
-		}
-	}
 }
 
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
@@ -658,10 +591,8 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 		"evt-onboarding-interest-invalid-" + runID,
 	}
 	eventColl := mongoDB.Collection("rm_behavior_events")
-	featureColl := mongoDB.Collection("rm_recommend_feature")
 	t.Cleanup(func() {
 		_, _ = eventColl.DeleteMany(context.Background(), bson.M{"userId": userID})
-		_, _ = featureColl.DeleteMany(context.Background(), bson.M{"userId": userID})
 	})
 
 	payload := fmt.Sprintf(
@@ -695,13 +626,6 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 	if factCount != 0 {
 		t.Fatalf("invalid onboarding batch wrote %d behavior facts, want 0", factCount)
 	}
-	featureCount, err := featureColl.CountDocuments(ctx, bson.M{"userId": userID})
-	if err != nil {
-		t.Fatalf("count recommendation features: %v", err)
-	}
-	if featureCount != 0 {
-		t.Fatalf("invalid onboarding batch projected %d recommendation feature documents, want 0", featureCount)
-	}
 }
 
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
@@ -714,10 +638,8 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 		"evt-onboarding-interest-dependency-" + runID,
 	}
 	eventColl := mongoDB.Collection("rm_behavior_events")
-	featureColl := mongoDB.Collection("rm_recommend_feature")
 	t.Cleanup(func() {
 		_, _ = eventColl.DeleteMany(context.Background(), bson.M{"userId": userID})
-		_, _ = featureColl.DeleteMany(context.Background(), bson.M{"userId": userID})
 	})
 
 	payload := fmt.Sprintf(
@@ -751,57 +673,26 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 	if factCount != 0 {
 		t.Fatalf("taxonomy dependency failure wrote %d behavior facts, want 0", factCount)
 	}
-	featureCount, err := featureColl.CountDocuments(ctx, bson.M{"userId": userID})
-	if err != nil {
-		t.Fatalf("count recommendation features: %v", err)
-	}
-	if featureCount != 0 {
-		t.Fatalf(
-			"taxonomy dependency failure projected %d recommendation feature documents, want 0",
-			featureCount,
-		)
-	}
 }
 
-// TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick 验证阶段五七态漏斗在
-// 特征投影中的语义：弱可见 visible 不计入 typeImpressions（served/impressed 双轨的 impressed 侧），
-// 仅真实曝光 impressed 计入；click 计入 typeEngagements（CTR 分子）。同时携带 channelId/policyDigest
-// 归因字段，验证其可随批次贯穿。
-func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.T) {
+// TestBehaviorBatchPersistsCanonicalFunnelStates verifies ContentBehaviorFact's
+// typed source facts and attribution only. Recommendation derives its feature
+// counters in recommendation-service and must never write them in Content.
+func TestBehaviorBatchPersistsCanonicalFunnelStates(t *testing.T) {
 	ctx := context.Background()
 	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	userID := "user_seven_state_" + runID
 	visibleID := "post_ss_visible_" + runID
 	impressedID := "post_ss_impressed_" + runID
 	clickID := "post_ss_click_" + runID
-	featureColl := mongoDB.Collection("rm_recommend_feature")
-	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": userID}); err != nil {
-		t.Fatalf("clean recommend feature: %v", err)
-	}
-	feedColl := mongoDB.Collection("rm_discovery_feed")
+	eventColl := mongoDB.Collection("rm_behavior_events")
 	contentIDs := []string{visibleID, impressedID, clickID}
-	if _, err := feedColl.DeleteMany(ctx, bson.M{"postId": bson.M{"$in": contentIDs}}); err != nil {
-		t.Fatalf("clean DiscoveryFeed seven-state fixtures: %v", err)
-	}
 	t.Cleanup(func() {
-		_, _ = featureColl.DeleteMany(context.Background(), bson.M{"userId": userID})
-		_, _ = feedColl.DeleteMany(context.Background(), bson.M{"postId": bson.M{"$in": contentIDs}})
-		_, _ = mongoDB.Collection("rm_behavior_events").DeleteMany(
-			context.Background(),
-			bson.M{"userId": userID},
-		)
+		_, _ = eventColl.DeleteMany(context.Background(), bson.M{"userId": userID})
 	})
-	fixtures := make([]any, 0, len(contentIDs))
-	for _, contentID := range contentIDs {
-		fixtures = append(fixtures, bson.M{"postId": contentID, "viewCount": int64(0)})
-	}
-	if _, err := feedColl.InsertMany(ctx, fixtures); err != nil {
-		t.Fatalf("seed DiscoveryFeed seven-state fixtures: %v", err)
-	}
-	// 生产同构装配（N0-2）：持久轨 + relay 驱动投影，与 main.go 一致。
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
-		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		newMongoPostStore(mongoDB.Collection("posts")),
 		behaviorapp.WithBehaviorEventStore(behaviorpersistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
 	)
 
@@ -814,285 +705,37 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)
 	}
-	drainBehaviorProjection(t, ctx)
-
-	var got struct {
-		UserFeatures struct {
-			TypeImpressions map[string]int `bson:"typeImpressions"`
-			TypeEngagements map[string]int `bson:"typeEngagements"`
-		} `bson:"userFeatures"`
-	}
-	if err := featureColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&got); err != nil {
-		t.Fatalf("find recommend feature: %v", err)
-	}
-	if got.UserFeatures.TypeImpressions["image"] != 1 {
-		t.Fatalf("typeImpressions[image] want 1 (impressed only, exclude weak visible), got %d", got.UserFeatures.TypeImpressions["image"])
-	}
-	if got.UserFeatures.TypeEngagements["image"] < 1 {
-		t.Fatalf("typeEngagements[image] want >=1 (click counted as CTR numerator), got %d", got.UserFeatures.TypeEngagements["image"])
-	}
-	wantViews := map[string]int64{
-		visibleID:   0,
-		impressedID: 1,
-		clickID:     0,
-	}
-	for contentID, want := range wantViews {
-		var row struct {
-			ViewCount int64 `bson:"viewCount"`
-		}
-		if err := feedColl.FindOne(ctx, bson.M{"postId": contentID}).Decode(&row); err != nil {
-			t.Fatalf("read DiscoveryFeed viewCount for %s: %v", contentID, err)
-		}
-		if row.ViewCount != want {
-			t.Fatalf("DiscoveryFeed viewCount[%s]=%d want=%d", contentID, row.ViewCount, want)
-		}
-	}
-}
-
-func TestBehaviorBatchIntersectionConversionsUpdateMetricsWithoutForgedAuthorImpact(t *testing.T) {
-	ctx := context.Background()
-	authorID := "author_intersection_impact_001"
-	if _, err := mongoDB.Collection("rm_daily_metrics").DeleteMany(ctx, bson.M{}); err != nil {
-		t.Fatalf("clean daily metrics: %v", err)
-	}
-	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
-		t.Fatalf("clean author impact: %v", err)
-	}
-	behaviorService := behaviorapp.NewBehaviorService(
-		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
-		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithDailyMetricsStore(persistence.NewDailyMetricsStore(mongoDB, nilLogger())),
-		behaviorapp.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
-	)
-
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{
-			ClientEventID:         "evt-intersection-follow-001",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_intersection_001",
-			ContentID:             "post_follow_001",
-			Action:                "follow",
-			AuthorID:              authorID,
-			IntersectionDimension: "identity",
-			IntersectionTagRefs:   []string{"Audience/学生"},
-		},
-		{
-			ClientEventID:         "evt-intersection-join-circle-001",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_intersection_001",
-			ContentID:             "circle_intersection_001",
-			Action:                "join_circle",
-			AuthorID:              authorID,
-			IntersectionDimension: "interest",
-			IntersectionTagRefs:   []string{"Topic/旅行"},
-		},
-		{
-			ClientEventID:         "evt-intersection-add-contact-001",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_intersection_001",
-			ContentID:             "post_contact_001",
-			Action:                "add_contact",
-			AuthorID:              authorID,
-			IntersectionDimension: "relationship",
-			IntersectionTagRefs:   []string{"Entity/通讯录"},
-		},
+	cursor, err := eventColl.Find(ctx, bson.M{
+		"userId":    userID,
+		"contentId": bson.M{"$in": contentIDs},
 	})
 	if err != nil {
-		t.Fatalf("process intersection conversions: %v", err)
+		t.Fatalf("query canonical behavior facts: %v", err)
 	}
-
-	var identityMetric struct {
-		FollowConversions int64 `bson:"followConversions"`
+	defer cursor.Close(ctx)
+	var facts []struct {
+		ContentID     string `bson:"contentId"`
+		Action        string `bson:"action"`
+		State         string `bson:"state"`
+		ChannelID     string `bson:"channelId"`
+		PolicyDigest  string `bson:"policyDigest"`
+		FeedRequestID string `bson:"feedRequestId"`
 	}
-	if err := mongoDB.Collection("rm_daily_metrics").FindOne(ctx, bson.M{
-		"dimension":    persistence.DailyMetricDimensionIntersection,
-		"dimensionKey": "identity",
-	}).Decode(&identityMetric); err != nil {
-		t.Fatalf("find identity metric: %v", err)
+	if err := cursor.All(ctx, &facts); err != nil {
+		t.Fatalf("decode canonical behavior facts: %v", err)
 	}
-	if identityMetric.FollowConversions != 1 {
-		t.Fatalf("followConversions = %d, want 1", identityMetric.FollowConversions)
+	if len(facts) != 3 {
+		t.Fatalf("behavior fact count=%d, want 3", len(facts))
 	}
-
-	store := persistence.NewAuthorImpactEvidenceStore(mongoDB, nilLogger())
-	summary, err := store.GetSummary(ctx, authorID, 10)
-	if err != nil {
-		t.Fatalf("get author impact summary: %v", err)
+	wantState := map[string]string{
+		visibleID: "visible", impressedID: "impressed", clickID: "click",
 	}
-	if summary.Total != 0 || len(summary.Items) != 0 {
-		t.Fatalf("generic social behavior must not forge author impact facts: %+v", summary)
-	}
-}
-
-func TestGetAuthorImpactReturnsPostBackedBehaviorAggregation(t *testing.T) {
-	ctx := context.Background()
-	authorID := "author_impact_http_001"
-	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
-		t.Fatalf("clean author impact: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanPosts(t)
-		cleanAuthorImpact(t, authorID)
-	})
-	created := submitPublishedPostWithAuthor(
-		t,
-		authorID,
-		`{"contentType":"image","title":"Impact aggregation target"}`,
-	)
-	postID := postIDFrom(t, created)
-	setPostTagRefsForAuthorImpactTest(t, postID, []string{"Topic/旅行/路线"})
-	payload := fmt.Sprintf(`{
-		"userId": "viewer_impact_http_001",
-		"events": [
-			{
-				"clientEventId":"evt-impact-http-001",
-				"occurredAt":%q,
-				"contentId": %q,
-				"action": "share",
-				"authorId": "forged_impact_author",
-				"intersectionDimension": "identity",
-				"intersectionTagRefs": ["Audience/学生"]
-			}
-		]
-	}`, time.Now().UTC().Format(time.RFC3339Nano), postID)
-	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
-	reportReq.Header.Set("Content-Type", "application/json")
-	reportRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(reportRec, reportReq)
-	if reportRec.Code != http.StatusNoContent {
-		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/author-impact", nil)
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("get author impact: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var body struct {
-		AuthorID string `json:"authorId"`
-		Total    int64  `json:"total"`
-		Items    []struct {
-			HelpType string `json:"helpType"`
-			Action   string `json:"action"`
-			Count    int64  `json:"count"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode author impact: %v", err)
-	}
-	if body.AuthorID != authorID || body.Total != 1 || len(body.Items) == 0 {
-		t.Fatalf("unexpected author impact body: %+v", body)
-	}
-	if body.Items[0].HelpType != rtimpact.HelpSpread || body.Items[0].Action != "share" || body.Items[0].Count != 1 {
-		t.Fatalf("unexpected author impact item: %+v", body.Items[0])
-	}
-}
-
-// TestAuthorImpactTravelCountTargetFromBehaviorAggregation 端到端验证 WS3 旅行影响力真算：
-// 真实行为聚合（viewer 在旅行 tag 内容上的 decision 行为）→ rm_author_impact 聚合 → 云侧
-// DecorateAuthorImpact 按 tagRef 派生下钻目标对象 route/photo_spot（§22.5），被计数对象 person。
-func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
-	ctx := context.Background()
-	authorID := "author_travel_impact_realcompute_001"
-	cleanAuthorImpact(t, authorID)
-	t.Cleanup(func() {
-		cleanPosts(t)
-		cleanAuthorImpact(t, authorID)
-	})
-	routePost := submitPublishedPostWithAuthor(
-		t,
-		authorID,
-		`{"contentType":"article","title":"路线攻略"}`,
-	)
-	routePostID := postIDFrom(t, routePost)
-	setPostTagRefsForAuthorImpactTest(t, routePostID, []string{"tag/travel/route"})
-	spotPost := submitPublishedPostWithAuthor(
-		t,
-		authorID,
-		`{"contentType":"article","title":"拍摄点攻略"}`,
-	)
-	spotPostID := postIDFrom(t, spotPost)
-	setPostTagRefsForAuthorImpactTest(t, spotPostID, []string{"tag/travel/photo_spot"})
-	behaviorService := behaviorapp.NewBehaviorService(
-		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
-		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
-		behaviorapp.WithAuthorImpactEvidenceStore(
-			persistence.NewAuthorImpactEvidenceStore(mongoDB, nilLogger()),
-		),
-	)
-
-	// viewer 在作者旅行攻略上的真实 decision 行为（content_depth → decision），
-	// 携带旅行 tagRef；两条同 route tag 聚合为 count=2。
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{
-			ClientEventID:         "evt-travel-route-001",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_travel_impact_001",
-			ContentID:             routePostID,
-			Action:                "content_depth",
-			AuthorID:              "forged_travel_author",
-			IntersectionDimension: "forged_dimension",
-			IntersectionTagRefs:   []string{"forged/tag"},
-		},
-		{
-			ClientEventID:         "evt-travel-route-002",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_travel_impact_002",
-			ContentID:             routePostID,
-			Action:                "content_depth",
-			AuthorID:              "forged_travel_author",
-			IntersectionDimension: "forged_dimension",
-			IntersectionTagRefs:   []string{"forged/tag"},
-		},
-		{
-			ClientEventID:         "evt-travel-spot-001",
-			OccurredAt:            occurredAt,
-			UserID:                "viewer_travel_impact_003",
-			ContentID:             spotPostID,
-			Action:                "content_depth",
-			AuthorID:              "forged_travel_author",
-			IntersectionDimension: "forged_dimension",
-			IntersectionTagRefs:   []string{"forged/tag"},
-		},
-	}); err != nil {
-		t.Fatalf("process travel behaviors: %v", err)
-	}
-
-	store := persistence.NewAuthorImpactEvidenceStore(mongoDB, nilLogger())
-	summary, err := store.GetSummary(ctx, authorID, 10)
-	if err != nil {
-		t.Fatalf("get author impact summary: %v", err)
-	}
-	// 云侧装饰（与 handler 同路径）后派生旅行下钻目标。
-	decorated := authorimpact.DecorateAuthorImpact(summary, false)
-
-	byTag := map[string]ports.AuthorImpactItem{}
-	for _, item := range decorated.Items {
-		byTag[item.TagRef] = item
-	}
-	route, ok := byTag["tag/travel/route"]
-	if !ok {
-		t.Fatalf("missing route impact; items=%+v", decorated.Items)
-	}
-	if route.Count != 2 {
-		t.Fatalf("route impact count = %d, want 2 (aggregated)", route.Count)
-	}
-	if route.CountTarget == nil || route.CountTarget.ObjectKind != "route" || route.CountTarget.RouteID != "homepageDetail" {
-		t.Fatalf("route impact countTarget = %+v, want objectKind=route routeId=homepageDetail", route.CountTarget)
-	}
-	if route.CountObjectKind != "person" {
-		t.Fatalf("route impact countObjectKind = %q, want person", route.CountObjectKind)
-	}
-	spot, ok := byTag["tag/travel/photo_spot"]
-	if !ok {
-		t.Fatalf("missing photo_spot impact; items=%+v", decorated.Items)
-	}
-	if spot.CountTarget == nil || spot.CountTarget.ObjectKind != "photo_spot" {
-		t.Fatalf("spot impact countTarget = %+v, want objectKind=photo_spot", spot.CountTarget)
+	for _, fact := range facts {
+		if fact.State != wantState[fact.ContentID] || fact.ChannelID != "following" ||
+			fact.PolicyDigest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+			fact.FeedRequestID != "frq_ss" {
+			t.Fatalf("canonical funnel fact mismatch: %+v", fact)
+		}
 	}
 }
 
@@ -1112,28 +755,6 @@ func setPostTagRefsForAuthorImpactTest(t *testing.T, postID string, tagRefs []st
 	}
 	if result.MatchedCount != 1 {
 		t.Fatalf("set authoritative post tagRefs matched %d posts for %q", result.MatchedCount, postID)
-	}
-}
-
-// drainBehaviorProjection 以生产同构方式驱动行为→特征投影（N0-2）：
-// 循环 Drain 直到 rm_behavior_events 持久轨全部消费（checkpoint 为全局游标，
-// 需要清空积压才能保证本测试新写入的事件已投影）。
-func drainBehaviorProjection(t *testing.T, ctx context.Context) {
-	t.Helper()
-	if testBehaviorProjectionRelay == nil {
-		t.Fatal("content-service api_integration requires a behavior projection relay")
-	}
-	testBehaviorProjectionMu.Lock()
-	defer testBehaviorProjectionMu.Unlock()
-
-	for {
-		n, err := testBehaviorProjectionRelay.Drain(ctx, 500)
-		if err != nil {
-			t.Fatalf("behavior projection relay drain: %v", err)
-		}
-		if n == 0 {
-			return
-		}
 	}
 }
 

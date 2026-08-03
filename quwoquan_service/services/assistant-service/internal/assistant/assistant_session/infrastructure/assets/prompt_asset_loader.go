@@ -1,5 +1,6 @@
-// Package assets 按需加载技能提示词资产。清单常驻内存，正文只在技能被选中时读取一次
-// 并缓存，避免每次运行都把全部垂类话术读进内存。
+// Package assets contains the build-time/test source reader for Skill prompt
+// assets. Production execution resolves prompt bodies only from the immutable
+// SkillPackageRelease frozen by AssistantRun.
 package assets
 
 import (

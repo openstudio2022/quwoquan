@@ -18,7 +18,7 @@
 
 - “四环境环境商用登录成熟度”的输入、可观察主路径、失败语义以及与父能力的交接。
 - 三类外部依赖防腐接口与分环境 fail-closed 配置。
-- alpha/beta/gamma 固定测试码 provider 与 prod 真实 provider 的构建隔离。
+- alpha/beta/gamma `ext.sms.local_capture` 随机 OTP 协议替代 Provider 与 prod 正式 Provider 的构建、凭据和运行隔离。
 - 删除任意验证码、debugCode、sandbox phone allowlist 与 pass-through 旁路。
 - LoginWithSocialProvider 微信/支付宝/QQ 票据置换与首登资料同步。
 - LoginWithAlipay / LoginWithQq metadata 契约与 codegen。
@@ -35,10 +35,13 @@
 - application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
 
 <a id="req-002"></a>
-### REQ-002 短信 OTP challenge、密封传输与固定码校验不泄漏
+### REQ-002 短信 OTP challenge、密封传输与受保护随机码读取不泄漏
 
 - application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
 - API integration 证明 response/outbox 不泄露验证码，provider 只在请求前于内存中解封。
+- 手机号输入可在 UI 保持大陆 11 位展示，但 `SendOtp`、`LoginWithPhone` 与手机号绑定 command 的 wire 值必须在命令边界一次性规范为 E.164；Provider Adapter 只接收同一 canonical recipient，禁止让替代实现双格式兼容。
+- alpha/beta/gamma 只能由环境 Binding 选择独立 `ext.sms.local_capture` 接收本次随机 OTP，prod 只能选择正式 Provider；禁止运行时 selector、Debug override 或 fallback。OTP 以目标环境密钥加密、按 challenge TTL 暂存并一次性读取，固定万能码、App `debugCode` 和公开 API 回传均禁止。
+- `POST /v1/debug/sms/otp/latest` 只存在于替代 Provider 内部控制面，要求目标环境 operator/UAT principal，不经 API Edge 暴露；回执、日志、指标与报告不得包含手机号明文或 OTP。
 
 <a id="req-003"></a>
 ### REQ-003 社交三方票据置换分环境实现且 prod 使用官方协议
@@ -88,8 +91,8 @@
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
 
-- alpha App 使用 Remote user-service，并通过受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 均不可达固定码实现或端侧登录 mock。
-- beta/gamma 固定使用各自受管 sandbox/nonprod tenant，不允许在同一候选运行时切换 Provider 或回退本地认证实现。
+- alpha/beta/gamma App 使用同一 Remote user-service composition，并分别通过 target-scoped `ext.sms.local_capture` 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 均不可达固定码实现或端侧登录 mock。
+- alpha/beta/gamma 的 SMS Binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider；不允许在同一候选运行时切换 Provider 或回退本地认证实现。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
 - 配置纯度门禁阻断已退休认证旁路。
@@ -100,9 +103,10 @@
 - 运营商一键：`OneTapPhoneResolver` 使用部署注入的运营商能力；未接入时返回结构化不可用。
 - 端侧 capability 必须区分 `available / notConfigured / clientNotInstalled / probeTimeout / sdkUnavailable / unsupportedPlatform`。未安装客户端或瞬时探测失败时入口保持可发现并就近解释。
 - 明确不支持的平台隐藏。
-- alpha/beta/gamma 受管非生产 Provider 配置缺失、或 prod 正式 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
-- 非生产 OTP 只允许通过受管 Provider 与保护身份池产生确定性的非生产账号会话；OTP 和非生产 Provider 材料不得进入仓库、receipt、prod 构建图、SBOM 或运行配置。
-- provider 模式的内部短信提交仅允许 service principal + operation scope + HTTPS/mTLS；`INTEGRATION_SERVICE_MTLS_CA_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE`、`INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE` 由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
+- alpha/beta/gamma target-scoped local-capture 配置缺失、或 prod 正式 Provider 配置/SDK 缺失，均由发布门禁阻断，不能靠静默隐藏伪装可用。
+- local-capture 替代 Provider 的证据标记 `nonPromotable=true`：它可证明 Alpha/Beta/Gamma 边界内端云 E2E 与替代协议一致性，但不能提升真实外部 Provider 集成或 Prod readiness。
+- 非生产 OTP 只允许通过当前环境 Binding 与保护身份池产生确定性的非生产账号会话；OTP 和非生产 Provider 材料不得进入仓库、receipt、prod 构建图、SBOM 或运行配置。
+- provider 模式的内部短信提交仅允许 service principal + operation scope：alpha/beta/gamma local-capture 使用 HTTPS、target-scoped bearer 与目标 CA，prod 正式 Provider 使用受保护 mTLS/credential material；各自材料由 Secret Manager/CI 注入，缺失时拒绝装配远端 OTP client。
 - 端侧文案统一走云端 userMessage 优先 → `UserErrorCode` baseline → 通用兜底；不直接读取原始异常字符串。
 - user-service 客户端响应和日志必须脱敏 OAuth URL、authCode、token、secret 与 provider 原始 body；客户端默认不接收 debugMessage。
 - `SendOtp`、手机号、微信、QQ、支付宝、一键登录与 hint 操作必须在 metadata 同源声明 commercial/security/privacy/reliability/telemetry/SLO；正式 provider 未取得生产凭据、受控 SDK 与真机 UAT 时保持 `blocked`，不得用本地协议测试改写为 ready。
@@ -148,8 +152,8 @@
 ### GWT-009 四环境端到端与商用纯净证据
 
 - GIVEN alpha、beta、gamma 与 prod 分别构建并执行登录路径。
-- WHEN 验证固定码、官方 provider、首登资料同步和失败恢复。
-- THEN 非生产 adapter 不可达生产包，prod 只保留真实认证与可复验的真机证据。
+- WHEN 验证 alpha/beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
+- THEN local-capture workload、凭据、路由与捕获存储不可达 Prod 包、SBOM 和部署图；三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider 回执和可复验真机证据提升。
 
 ## 6. 依赖
 

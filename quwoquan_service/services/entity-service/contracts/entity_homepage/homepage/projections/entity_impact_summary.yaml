@@ -10,25 +10,10 @@ description: '实体（共享主页）影响摘要（GetEntityImpact 响应真�
   '
 consumers:
 - app
-client_projection:
-  dart_class: EntityImpactSummary
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_impact_summary.g.dart
-  dart_imports:
-  - entity_impact_item.g.dart
-  fields:
-  - name: homepageId
-    dart_type: String
-    nullable: false
-    source: homepageId
-    default: ''''''
-  - name: total
-    dart_type: int
-    nullable: false
-    source: total
-    default: '0'
-  - name: items
-    dart_type: List<EntityImpactItem>
-    nullable: false
-    source: items
-    list_element_dart_class: EntityImpactItem
+fields:
+- name: homepageId
+  type: string
+- name: total
+  type: int
+- name: items
+  type: '[]EntityImpactItem'

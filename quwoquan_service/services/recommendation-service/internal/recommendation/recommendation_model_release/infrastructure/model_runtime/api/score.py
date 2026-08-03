@@ -223,9 +223,11 @@ def health(request: Request) -> dict[str, str]:
         or not feedback_consumer.healthy()
         or not exposure_consumer.healthy()
     )
-    content_release_only = (
-        getattr(request.app.state, "runtime_workload", "full") == "content-release"
-    )
+    content_slice_only = getattr(
+        request.app.state,
+        "runtime_workload",
+        "full",
+    ) in {"content-release", "content-commercial"}
     scoring_runtime_unready = (
         ranked_window_facade is None
         or experiment_policy_consumer is None
@@ -236,7 +238,7 @@ def health(request: Request) -> dict[str, str]:
             status_code=503,
             detail={"status": "not_ready"},
         )
-    if scoring_runtime_unready and content_release_only:
+    if scoring_runtime_unready and content_slice_only:
         return {"status": "content_release_only"}
     if scoring_runtime_unready:
         raise HTTPException(

@@ -1,0 +1,68 @@
+description: TripPlanTemplate 安全结构、公开来源与专业署名。
+fields:
+- {name: _id, type: string, constraints: [PK, NOT_NULL], role: authoritative_state}
+- {name: version, type: int64, constraints: [NOT_NULL], role: authoritative_state}
+- {name: ownerPersonaId, type: string, constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: title, type: string, constraints: [NOT_NULL], role: authoritative_state}
+- {name: summary, type: string, constraints: [NULLABLE], role: authoritative_state}
+- {name: dayCount, type: int, constraints: [NOT_NULL], role: authoritative_state}
+- {name: templateItemIds, type: '[]string', constraints: [NOT_NULL], role: authoritative_state}
+- {name: items, type: '[]TripPlanTemplateItem', constraints: [NOT_NULL], role: authoritative_state}
+- {name: attributionIds, type: '[]string', constraints: [NOT_NULL], role: authoritative_state}
+- {name: attributionPersonaIds, type: '[]string', constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: attributions, type: '[]TripPlanTemplateAttribution', constraints: [NOT_NULL], role: authoritative_state}
+- {name: status, type: enum, enum_ref: TripPlanTemplateStatus, constraints: [NOT_NULL], role: authoritative_state}
+- {name: createdAt, type: timestamp, constraints: [NOT_NULL], role: authoritative_state}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], role: authoritative_state}
+types:
+  GetTripPlanTemplateQuery:
+    fields:
+    - {name: templateId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+  ListTripPlanTemplatesQuery:
+    fields: []
+  TripPlanTemplatePlaceRef:
+    fields:
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  TripPlanTemplateItem:
+    fields:
+    - {name: templateItemId, type: string, constraints: [NOT_BLANK]}
+    - {name: dayOffset, type: int, constraints: [NOT_NULL]}
+    - {name: orderInDay, type: int, constraints: [NOT_NULL]}
+    - {name: kind, type: string, constraints: [NOT_BLANK]}
+    - {name: title, type: string, constraints: [NULLABLE]}
+    - {name: publicPlaceRef, type: object, object_ref: TripPlanTemplatePlaceRef, constraints: [NULLABLE]}
+    - {name: note, type: string, constraints: [NULLABLE]}
+    - {name: attributionIds, type: '[]string', constraints: [NOT_NULL]}
+  TripPlanTemplateAttribution:
+    fields:
+    - {name: attributionId, type: string, constraints: [NOT_BLANK]}
+    - {name: kind, type: enum, enum_ref: TripPlanTemplateAttributionKind, constraints: [NOT_NULL]}
+    - {name: referenceObjectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: referenceObjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: authorPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: title, type: string, constraints: [NOT_BLANK]}
+  CreateTripPlanTemplateRequest:
+    fields:
+    - {name: title, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: summary, type: string, constraints: [NULLABLE], client_dart_type: 'String?'}
+    - {name: dayCount, type: int, constraints: [NOT_NULL], client_dart_type: int}
+    - {name: items, type: '[]TripPlanTemplateItem', constraints: [NOT_NULL], client_dart_type: 'List<TripPlanTemplateItem>'}
+    - {name: attributions, type: '[]TripPlanTemplateAttribution', constraints: [NOT_NULL], client_dart_type: 'List<TripPlanTemplateAttribution>'}
+  PutTripPlanTemplateRequest:
+    fields:
+    - {name: templateId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: expectedVersion, type: int64, constraints: [NOT_NULL], client_dart_type: int}
+    - {name: title, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: summary, type: string, constraints: [NULLABLE], client_dart_type: 'String?'}
+    - {name: dayCount, type: int, constraints: [NOT_NULL], client_dart_type: int}
+    - {name: items, type: '[]TripPlanTemplateItem', constraints: [NOT_NULL], client_dart_type: 'List<TripPlanTemplateItem>'}
+    - {name: attributions, type: '[]TripPlanTemplateAttribution', constraints: [NOT_NULL], client_dart_type: 'List<TripPlanTemplateAttribution>'}
+  TripPlanTemplateListSlice:
+    fields:
+    - {name: templates, type: '[]TripPlanTemplate', constraints: [NOT_NULL]}
+enums:
+  TripPlanTemplateStatus:
+    values: [active, archived]
+  TripPlanTemplateAttributionKind:
+    values: [public_source, professional_commentary]

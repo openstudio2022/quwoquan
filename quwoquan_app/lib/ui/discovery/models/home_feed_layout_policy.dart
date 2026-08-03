@@ -85,7 +85,7 @@ class HomeFeedLayoutPolicy {
     return AppSpacing.responsiveGridColumns(context, availableWidth: width);
   }
 
-  bool shouldRenderFullSpan(PostBaseDto post) {
+  bool shouldRenderFullSpan(ContentPostViewData post) {
     if (!supportsFullSpanModules) return false;
     if (contentCardPolicy == 'articleFullSpan' && post.isArticleLike) {
       return true;

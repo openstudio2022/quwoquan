@@ -20,13 +20,29 @@ type Reader interface {
 	ListSessionTurns(context.Context, string, string, int, string) (turnviewmodel.AssistantTurnListView, error)
 }
 
-type QueryFacade struct{ reader Reader }
+type SessionOwnerReader interface {
+	OwnedSessionExists(context.Context, string, string) (bool, error)
+}
 
-func NewQueryFacade(reader Reader) *QueryFacade {
-	if reader == nil {
-		panic("assistant turn view reader is required")
+type QueryFacade struct {
+	reader       Reader
+	sessions     SessionOwnerReader
+	synchronizer Synchronizer
+}
+
+func NewQueryFacade(
+	reader Reader,
+	sessions SessionOwnerReader,
+	synchronizer Synchronizer,
+) *QueryFacade {
+	if reader == nil || sessions == nil || synchronizer == nil {
+		panic("assistant turn view query dependencies are required")
 	}
-	return &QueryFacade{reader: reader}
+	return &QueryFacade{
+		reader:       reader,
+		sessions:     sessions,
+		synchronizer: synchronizer,
+	}
 }
 
 func (f *QueryFacade) ListSessionTurns(
@@ -58,6 +74,21 @@ func (f *QueryFacade) ListSessionTurns(
 	}
 	if limit > 50 {
 		limit = 50
+	}
+	owned, ownerErr := f.sessions.OwnedSessionExists(ctx, userID, sessionID)
+	if ownerErr != nil {
+		return turnviewmodel.AssistantTurnListView{},
+			runerrors.AppErrorFromRunStorageUnavailable(ownerErr.Error())
+	}
+	if !owned {
+		return turnviewmodel.AssistantTurnListView{},
+			sessionerrors.AppErrorFromSessionNotFound(
+				turnviewmodel.ErrSessionNotFound.Error(),
+			)
+	}
+	if syncErr := f.synchronizer.CatchUp(ctx); syncErr != nil {
+		return turnviewmodel.AssistantTurnListView{},
+			runerrors.AppErrorFromRunStorageUnavailable(syncErr.Error())
 	}
 	view, readErr := f.reader.ListSessionTurns(
 		ctx,

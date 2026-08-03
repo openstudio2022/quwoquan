@@ -19,12 +19,18 @@ from internal.recommendation.ranked_recommendation_window.domain.experiment_poli
 
 
 class _Candidates:
-    def __init__(self, expected_scenario: str = "content_feed") -> None:
+    def __init__(
+        self,
+        expected_scenario: str = "content_feed",
+        object_card_candidates: list[dict] | None = None,
+    ) -> None:
         self.expected_scenario = expected_scenario
+        self.object_card_candidates = object_card_candidates or []
 
-    def list_for_ranking(self, *, scenario: str, limit: int):
+    def list_for_ranking(self, *, subject_id: str, scenario: str, limit: int):
+        assert subject_id == "persona-viewer"
         assert scenario == self.expected_scenario
-        assert limit == 500
+        assert limit == 300
         return [
             {
                 "contentId": "post-b",
@@ -60,6 +66,10 @@ class _Candidates:
             },
         ]
 
+    def list_object_card_candidates(self, *, limit: int):
+        assert limit == 400
+        return list(self.object_card_candidates)
+
 
 class _Features:
     def read_for_scoring(self, subject_id: str):
@@ -70,7 +80,18 @@ class _Features:
             "influenceScore": 0.2,
             "collaborativeFeatures": {"post-a": 0.3},
             "intersectionFeatures": {"strength": 0.4},
+            "negativeContentIds": [],
+            "hiddenAuthorIds": [],
+            "hiddenContentTypes": [],
         }
+
+
+class _HardExclusionFeatures(_Features):
+    def read_for_scoring(self, subject_id: str):
+        result = super().read_for_scoring(subject_id)
+        result["negativeContentIds"] = ["post-b"]
+        result["hiddenContentTypes"] = ["video"]
+        return result
 
 
 class _Scoring:
@@ -80,9 +101,13 @@ class _Scoring:
 
     def score(self, request):
         self.requests.append(request)
-        scores = [CandidateScore(contentId="post-b", score=0.5)]
-        if not self.incomplete:
-            scores.append(CandidateScore(contentId="post-a", score=0.8))
+        score_by_id = {"post-a": 0.8, "post-b": 0.5}
+        scores = [
+            CandidateScore(contentId=candidate.contentId, score=score_by_id[candidate.contentId])
+            for candidate in request.candidates
+        ]
+        if self.incomplete and scores:
+            scores = scores[:1]
         return ModelScoreResponse(scores=scores, modelReleaseId="release-001")
 
 
@@ -98,6 +123,7 @@ def _ranker(
     scoring: _Scoring,
     *,
     candidates: _Candidates | None = None,
+    features: _Features | None = None,
 ) -> MongoCandidateRanker:
     experiment_publisher = _AssignmentPublisher()
     experiments = ExperimentAssignments(experiment_publisher)
@@ -118,7 +144,7 @@ def _ranker(
     )
     return MongoCandidateRanker(
         candidates=candidates or _Candidates(),
-        feature_profiles=_Features(),
+        feature_profiles=features or _Features(),
         scoring=scoring,
         experiments=experiments,
         snapshot_digester=lambda user, item: hashlib.sha256(
@@ -140,7 +166,7 @@ def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-001",
-        limit=500,
+        limit=300,
     )
     assert result.model_release_id == "release-001"
     assert result.model_bucket == "model"
@@ -167,7 +193,7 @@ def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
         subject_id="persona-viewer",
         scenario="premium_stream",
         session_id="window-premium",
-        limit=500,
+        limit=300,
     )
     assert result.model_release_id == "release-001"
     assert scoring.requests[0].scenario == "content_feed"
@@ -179,5 +205,85 @@ def test_ranker_fails_closed_when_scoring_omits_candidate() -> None:
             subject_id="persona-viewer",
             scenario="content_feed",
             session_id="window-001",
-            limit=500,
+            limit=300,
         )
+
+
+def test_ranker_applies_profile_hard_exclusions_before_scoring() -> None:
+    scoring = _Scoring()
+    result = _ranker(scoring, features=_HardExclusionFeatures()).rank(
+        subject_id="persona-viewer",
+        scenario="content_feed",
+        session_id="window-excluded",
+        limit=300,
+    )
+    assert result.candidates == ()
+    assert scoring.requests == []
+
+
+def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity() -> None:
+    class _ObjectCardFeatures(_Features):
+        def read_for_scoring(self, subject_id: str):
+            result = super().read_for_scoring(subject_id)
+            result["sparseFeatures"].update(
+                {
+                    "entity:entity-a": 0.7,
+                    "entity:entity-b": 0.9,
+                    "entity:entity-negative": -1.0,
+                }
+            )
+            return result
+
+    candidates = _Candidates(
+        object_card_candidates=[
+            {
+                "primaryHomepageId": "homepage-a",
+                "primaryHomepageSnapshot": {
+                    "homepageId": "homepage-a",
+                    "canonicalEntityId": "entity-a",
+                    "title": "对象 A",
+                    "subtitle": "公开副标题",
+                    "coverUrl": "https://cdn.example/a.jpg",
+                    "tagRefs": ["旅行", "旅行", "摄影"],
+                },
+            },
+            {
+                "primaryHomepageId": "homepage-b",
+                "primaryHomepageSnapshot": {
+                    "homepageId": "homepage-b",
+                    "canonicalEntityId": "entity-b",
+                    "title": "对象 B",
+                    "tagRefs": [],
+                },
+            },
+            {
+                "primaryHomepageId": "homepage-negative",
+                "primaryHomepageSnapshot": {
+                    "homepageId": "homepage-negative",
+                    "canonicalEntityId": "entity-negative",
+                    "title": "不得进入窗口",
+                    "tagRefs": [],
+                },
+            },
+        ]
+    )
+
+    result = _ranker(
+        _Scoring(),
+        candidates=candidates,
+        features=_ObjectCardFeatures(),
+    ).rank(
+        subject_id="persona-viewer",
+        scenario="content_feed",
+        session_id="window-object-cards",
+        limit=300,
+    )
+
+    assert [card.object_id for card in result.object_cards] == [
+        "homepage-b",
+        "homepage-a",
+    ]
+    assert result.object_cards[1].tag_refs == ("旅行", "摄影")
+    assert {card.recall_path for card in result.object_cards} == {
+        "entity_card_affinity"
+    }

@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 )
 
 func TestCommentMongoAdapter_ListQueryUsesDeclaredIndex(t *testing.T) {

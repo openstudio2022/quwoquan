@@ -87,6 +87,17 @@ fields:
     description: 仅 granted 的签名 URL 绝对到期时间；拒绝决策为空。
     role: append_only_fact
 types:
+  MediaOriginalAccessGrant:
+    description: Short-lived signed original-media access result and its immutable audit identity.
+    fields:
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: originalUrl, type: url, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: redact, api_exposure: read, ops_exposure: redacted}
+      - {name: format, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sizeBytes, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: ttlSeconds, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
   RequestOriginalImageAccessRequest:
     fields:
       - {name: purpose, type: enum, enum_ref: MediaOriginalAccessPurpose, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
@@ -99,8 +110,6 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: purpose
-        type: string
+        type: enum
         enum_ref: MediaOriginalAccessPurpose
-        client_dart_type: ContentMediaOriginalAccessPurpose
-        client_default: ContentMediaOriginalAccessPurpose.view
-        client_wire: canonicalEnum
+        client_default: MediaOriginalAccessPurpose.view

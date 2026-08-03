@@ -8,7 +8,7 @@ import (
 
 	. "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
 
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 // spec_ref: GWT-004

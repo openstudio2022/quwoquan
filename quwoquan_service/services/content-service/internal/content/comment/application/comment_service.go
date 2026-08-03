@@ -17,7 +17,7 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 )
 
 const (

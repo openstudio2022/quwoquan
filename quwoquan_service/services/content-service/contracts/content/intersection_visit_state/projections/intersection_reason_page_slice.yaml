@@ -1,0 +1,9 @@
+read_model: IntersectionReasonPageSlice
+description: 当前可信 persona 的有界交集收件箱分页结果；items 只引用 RecommendationFeatureProfileView 的 canonical IntersectionReason，不复制交集事实。
+source_entities: [RecommendationFeatureProfileView, IntersectionVisitState]
+consumers: [app]
+fields:
+  - {name: items, type: '[]IntersectionReason', nullable: false}
+  - {name: dimension, type: string, nullable: true}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: hasMore, type: bool, nullable: false}

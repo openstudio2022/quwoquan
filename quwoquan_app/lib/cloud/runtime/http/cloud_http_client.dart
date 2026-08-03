@@ -152,6 +152,105 @@ class CloudHttpClient {
     }
   }
 
+  /// Opens exactly one generated SSE operation attempt.
+  ///
+  /// Authentication, same-origin enforcement, cancellation and non-2xx error
+  /// mapping are identical to [sendOperationJson]. The successful body remains
+  /// streaming and is decoded frame-by-frame by [HttpCloudJsonTransport].
+  Future<http.StreamedResponse> openOperationEventStream({
+    required String method,
+    required Uri uri,
+    required Uri gatewayOrigin,
+    required Map<String, String> headers,
+    required bool requireAuth,
+    required Future<void> abortTrigger,
+    required int maximumEventFrameBytes,
+  }) async {
+    if (!_sameOrigin(uri, gatewayOrigin)) {
+      throw CloudErrorMapper.invalidResponse(
+        message: 'Generated Cloud operation must target the Gateway origin',
+        requestPath: uri.path,
+        functionModule: 'cloud_http_client',
+      );
+    }
+    if (method.toUpperCase() != 'GET') {
+      throw CloudErrorMapper.invalidResponse(
+        message: 'Generated SSE operation must use GET',
+        requestPath: uri.path,
+        functionModule: 'cloud_http_client',
+      );
+    }
+    final stopwatch = Stopwatch()..start();
+    var latencyRecorded = false;
+    final request = http.AbortableRequest(
+      'GET',
+      uri,
+      abortTrigger: abortTrigger,
+    );
+    try {
+      request.headers.addAll(
+        await _completeBeforeAbort(
+          _mergeHeaders(
+            <String, String>{...headers, 'Accept': 'text/event-stream'},
+            requireAuth: requireAuth,
+            requestPath: uri.path,
+            abortTrigger: abortTrigger,
+          ),
+          abortTrigger: abortTrigger,
+          requestPath: uri.path,
+        ),
+      );
+      final streamed = await _sendSingleAttempt(request);
+      stopwatch.stop();
+      _latencyObserver?.call(
+        request.method,
+        uri.path,
+        stopwatch.elapsedMilliseconds,
+        streamed.statusCode,
+      );
+      latencyRecorded = true;
+      if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+        final response = await _readJsonResponseWithinLimit(
+          streamed,
+          requestPath: uri.path,
+          abortTrigger: abortTrigger,
+          maximumResponseBodyBytes: maximumEventFrameBytes,
+        );
+        await _guardGeneratedOperationStatus(
+          response,
+          uri.path,
+          presentedAccessToken: _bearerTokenFromHeaders(request.headers),
+          abortTrigger: abortTrigger,
+          maximumResponseBodyBytes: maximumEventFrameBytes,
+        );
+      }
+      final contentType = streamed.headers['content-type']?.toLowerCase() ?? '';
+      if (!contentType.startsWith('text/event-stream')) {
+        unawaited(streamed.stream.listen((_) {}).cancel());
+        throw CloudErrorMapper.invalidResponse(
+          message: 'Generated SSE operation requires text/event-stream',
+          requestPath: uri.path,
+          functionModule: 'cloud_http_client',
+        );
+      }
+      return streamed;
+    } catch (error) {
+      stopwatch.stop();
+      if (!latencyRecorded) {
+        _latencyObserver?.call(
+          request.method,
+          uri.path,
+          stopwatch.elapsedMilliseconds,
+          error is CloudException ? error.statusCode ?? -1 : -1,
+        );
+      }
+      if (error is CloudException || error is http.RequestAbortedException) {
+        rethrow;
+      }
+      throw _mapException(error, requestPath: uri.path);
+    }
+  }
+
   Future<bool> refreshOperationAuthorization({
     required Future<void> abortTrigger,
   }) {

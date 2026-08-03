@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
@@ -14,8 +15,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         CreateHomepageReviewCommand,
         DeleteHomepageReviewCommand,
         HomepageReviewListQuery,
-        HomepageReviewNotFoundException,
-        HomepageReviewQuery,
         HomepageReviewStatus,
         HomepageReviewView,
         MyHomepageReviewQuery,
@@ -490,12 +489,12 @@ final class _HomepageReviewTile extends StatelessWidget {
             ),
           ),
         ],
-        if (review.tagRefs.isNotEmpty) ...<Widget>[
+        if ((review.tagRefs ?? const <String>[]).isNotEmpty) ...<Widget>[
           SizedBox(height: AppSpacing.intraGroupXs),
           Wrap(
             spacing: AppSpacing.intraGroupXs,
             runSpacing: AppSpacing.intraGroupXs,
-            children: tagRefDisplayLabels(review.tagRefs)
+            children: tagRefDisplayLabels(review.tagRefs ?? const <String>[])
                 .map(
                   (label) => Container(
                     padding: EdgeInsets.symmetric(

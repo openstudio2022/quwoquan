@@ -256,7 +256,7 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsTombstone(t *testing.T) {
 		t.Fatalf("expected 200 delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
 	}
 
-	restartedStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	restartedStore := newMongoPostStore(mongoDB.Collection("posts"))
 	restartedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Persona-Id")) == "" {
 			personaID := identity.AnonymousFallbackPersonaID

@@ -4,7 +4,7 @@ description: '一个 UTC 小时桶内的 RTC 媒体 QoE 指标。当前小时是
   rate/P95 为 null，禁止合成 0% 或 0ms。
 
   '
-storage_backend: aliyun_sls
+storage_backend: elasticsearch
 projection_mode: authoritative_query
 source_entities:
 - EventRecord

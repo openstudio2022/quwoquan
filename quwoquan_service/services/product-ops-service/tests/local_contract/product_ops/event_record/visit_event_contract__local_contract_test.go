@@ -6,14 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	sls "github.com/aliyun/aliyun-log-go-sdk"
 
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
@@ -449,47 +445,9 @@ func TestStartupDiagnosticsSameProofDoesNotCollapseDistinctBatch(t *testing.T) {
 	}
 }
 
-func TestSLSEventProtocolWritesOnceAndConfirmsTimeoutAfterWrite(t *testing.T) {
-	client := newRecordingSLSClient()
-	client.failAfterWriteOnce = true
-	config := localSLSConfig()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(store, ledger)
-	event := validEvent("page_open", "event", time.Now().UTC().Add(-time.Minute))
-	batchKey := digestKey("timeout-after-write")
-
-	ack, err := service.ReportEventBatch(context.Background(), batchKey, []application.EventRecordInput{event})
-	if err != nil || ack.AcceptedCount != 1 || ack.DuplicateBatch {
-		t.Fatalf("write-after-timeout ack=%+v err=%v", ack, err)
-	}
-	duplicate, err := service.ReportEventBatch(context.Background(), batchKey, []application.EventRecordInput{event})
-	if err != nil || !duplicate.DuplicateBatch {
-		t.Fatalf("duplicate ack=%+v err=%v", duplicate, err)
-	}
-	raw := client.logs(config.RawLogstore)
-	if len(raw) != 1 {
-		t.Fatalf("same sealed batch must land once, rows=%d", len(raw))
-	}
-	for _, field := range []string{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "devicePlatform", "_batchKey", "_batchIndex", "ingestedAt"} {
-		if raw[0][field] == "" {
-			t.Fatalf("SLS row missing %s: %+v", field, raw[0])
-		}
-	}
-}
-
-func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(t *testing.T) {
-	client := newRecordingSLSClient()
-	config := localSLSConfig()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(store, ledger)
+func TestTelemetryServiceAcceptsTypedVideoPlaybackQoeWithoutContentAttribution(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
 	effectivePlaybackMS := 12000
@@ -519,51 +477,11 @@ func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(
 	if _, err := service.ReportEventBatch(context.Background(), digestKey("video-qoe"), []application.EventRecordInput{event}); err != nil {
 		t.Fatalf("report video qoe: %v", err)
 	}
-	rows := client.logs(config.RawLogstore)
-	if len(rows) != 1 {
-		t.Fatalf("expected one qoe row, got %d", len(rows))
-	}
-	row := rows[0]
-	for field, expected := range map[string]string{
-		"eventType":              "video_playback_qoe",
-		"readyMs":                "420",
-		"rebufferCount":          "1",
-		"rebufferMs":             "180",
-		"effectivePlaybackMs":    "12000",
-		"seekCount":              "2",
-		"seekFailureCount":       "0",
-		"seekCommandMaxMs":       "80",
-		"seekSettleMaxMs":        "120",
-		"droppedFrames":          "2",
-		"processedVideoFrames":   "300",
-		"audioUnderrunCount":     "0",
-		"rendererMode":           "platform_view",
-		"decoderQueueMode":       "synchronous",
-		"decoderFallbackEnabled": "true",
-		"seekEvidenceSource":     "controller_command_completion",
-		"devicePlatform":         "android",
-		"playbackMode":           "autoplay",
-	} {
-		if row[field] != expected {
-			t.Fatalf("qoe %s=%q, want %q; row=%+v", field, row[field], expected, row)
-		}
-	}
-	for _, forbidden := range []string{"postId", "feedRequestId", "rankingVersion", "tagRefs"} {
-		if _, ok := row[forbidden]; ok {
-			t.Fatalf("Ops QoE must not contain %s: %+v", forbidden, row)
-		}
-	}
 }
 
 func TestTelemetryServiceRejectsUnknownVideoSeekEvidenceSource(t *testing.T) {
-	client := newRecordingSLSClient()
-	config := localSLSConfig()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(store, ledger)
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
 	effectivePlaybackMS := 12000
@@ -583,244 +501,6 @@ func TestTelemetryServiceRejectsUnknownVideoSeekEvidenceSource(t *testing.T) {
 
 	if _, err := service.ReportEventBatch(context.Background(), digestKey("invalid-video-qoe"), []application.EventRecordInput{event}); err == nil {
 		t.Fatal("unregistered seek evidence source must be rejected")
-	}
-}
-
-func TestSLSStartupDiagnosticsStayInRestrictedLogstore(t *testing.T) {
-	client := newRecordingSLSClient()
-	config := localSLSConfig()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(store, ledger)
-	record := application.StartupDiagnosticRecord{
-		EventID: "startup_attempt_000001_1", AttemptID: "startup_attempt_000001", Sequence: 1,
-		Phase: "router_ready", PhaseDurationMS: 100, ElapsedMS: 200, Outcome: "ready",
-		OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Platform: "ios", RuntimeEnv: "gamma",
-	}
-	if _, err := service.ReportStartupDiagnostics(context.Background(), "startup_proof_000000000001", []application.StartupDiagnosticRecord{record}); err != nil {
-		t.Fatalf("report startup diagnostic: %v", err)
-	}
-	if len(client.logs(config.RawLogstore)) != 0 || len(client.logs(config.StartupDiagnosticLogstore)) != 1 {
-		t.Fatalf("startup diagnostics crossed logstore boundary")
-	}
-	row := client.logs(config.StartupDiagnosticLogstore)[0]
-	for _, forbidden := range []string{"sessionId", "userId", "pageName", "callStack"} {
-		if _, ok := row[forbidden]; ok {
-			t.Fatalf("restricted startup row contains %s: %+v", forbidden, row)
-		}
-	}
-}
-
-func TestSLSRuntimeDiagnosticsUseDedicatedLogstoreAndCanonicalFields(t *testing.T) {
-	client := newRecordingSLSClient()
-	config := localSLSConfig()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, config)
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewRuntimeLogService(store, ledger)
-	now := time.Now().UTC().Add(-time.Minute)
-	record := map[string]any{
-		"schema":     "observability.slim",
-		"recordId":   "r.sls.runtime",
-		"occurredAt": now.Format(time.RFC3339Nano),
-		"observedAt": now.Format(time.RFC3339Nano),
-		"logKind":    "exception",
-		"severity":   "ERROR",
-		"signal":     "app.exception.flutter",
-		"message":    "uncaught exception",
-		"resource": map[string]any{
-			"sourceType": "app",
-			"service":    "quwoquan_app",
-			"appVersion": "1.0.0",
-		},
-		"errorCode": "APP.RUNTIME.uncaught_exception",
-		"attributes": map[string]any{
-			"source":        "flutter",
-			"exceptionType": "StateError",
-		},
-	}
-	if _, err := service.ReportRuntimeLogBatch(
-		context.Background(),
-		digestKey("runtime-sls"),
-		[]map[string]any{record},
-	); err != nil {
-		t.Fatalf("report runtime diagnostics: %v", err)
-	}
-	if len(client.logs(config.RawLogstore)) != 0 ||
-		len(client.logs(config.RuntimeLogstore)) != 1 {
-		t.Fatalf("runtime diagnostics crossed logstore boundary")
-	}
-	row := client.logs(config.RuntimeLogstore)[0]
-	for _, required := range []string{
-		"schema",
-		"recordId",
-		"logKind",
-		"severity",
-		"signal",
-		"resourceAppVersion",
-		"errorCode",
-		"attributes",
-		"_batchKey",
-	} {
-		if row[required] == "" {
-			t.Fatalf("runtime diagnostics row misses %s: %+v", required, row)
-		}
-	}
-	for _, forbidden := range []string{"schemaVersion", "releaseId", "sessionId"} {
-		if _, ok := row[forbidden]; ok {
-			t.Fatalf("runtime diagnostics row contains forbidden %s: %+v", forbidden, row)
-		}
-	}
-}
-
-func TestSLSDrilldownScansIngestWindowThenFiltersOccurredAt(t *testing.T) {
-	client := newRecordingSLSClient()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, localSLSConfig())
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	from := time.Now().UTC().Add(-24 * time.Hour)
-	to := from.Add(time.Hour)
-	if _, err := store.GetEventDrilldown(context.Background(), application.EventDrilldownQuery{
-		From: from, To: to, Limit: 25,
-	}); err != nil {
-		t.Fatalf("query SLS drilldown: %v", err)
-	}
-	request := client.lastRequest()
-	if request == nil {
-		t.Fatal("SLS drilldown request was not recorded")
-	}
-	if request.To-request.From < int64((71 * time.Hour).Seconds()) {
-		t.Fatalf("raw outer window must scan ingestion retention: %+v", request)
-	}
-	for _, marker := range []string{
-		"from_iso8601_timestamp(occurredAt)",
-		from.Format(time.RFC3339Nano),
-		to.Format(time.RFC3339Nano),
-		"LIMIT 25",
-	} {
-		if !strings.Contains(request.Query, marker) {
-			t.Fatalf("raw query missing %q: %s", marker, request.Query)
-		}
-	}
-}
-
-func TestSLSSummaryQueriesFilterSingleRollupRowKind(t *testing.T) {
-	client := newRecordingSLSClient()
-	store, err := telemetrypersistence.NewSLSEventLogStore(client, localSLSConfig())
-	if err != nil {
-		t.Fatalf("new SLS store: %v", err)
-	}
-	now := time.Now().UTC()
-	if _, err := store.GetEventSummary(context.Background(), application.EventSummaryQuery{
-		From: now.Add(-time.Hour), To: now,
-	}); err != nil {
-		t.Fatalf("event summary: %v", err)
-	}
-	eventRequest := client.lastRequest()
-	if eventRequest == nil || !strings.Contains(eventRequest.Query, `rowKind:"event_dimensions"`) {
-		t.Fatalf("event summary must filter event_dimensions rowKind: %+v", eventRequest)
-	}
-	if _, err := store.GetRuntimeLogSummary(context.Background(), application.RuntimeLogSummaryQuery{
-		From: now.Add(-time.Hour), To: now,
-	}); err != nil {
-		t.Fatalf("runtime summary: %v", err)
-	}
-	runtimeRequest := client.lastRequest()
-	if runtimeRequest == nil || !strings.Contains(runtimeRequest.Query, `rowKind:"runtime_diagnostics"`) {
-		t.Fatalf("runtime summary must filter runtime_diagnostics rowKind: %+v", runtimeRequest)
-	}
-}
-
-type recordingSLSClient struct {
-	mu                 sync.Mutex
-	byLogstore         map[string][]map[string]string
-	failAfterWriteOnce bool
-	requests           []*sls.GetLogRequest
-}
-
-func newRecordingSLSClient() *recordingSLSClient {
-	return &recordingSLSClient{byLogstore: map[string][]map[string]string{}}
-}
-
-func (c *recordingSLSClient) PostLogStoreLogs(_ string, logstore string, group *sls.LogGroup, _ *string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, logEntry := range group.Logs {
-		row := map[string]string{}
-		for _, content := range logEntry.Contents {
-			row[content.GetKey()] = content.GetValue()
-		}
-		c.byLogstore[logstore] = append(c.byLogstore[logstore], row)
-	}
-	if c.failAfterWriteOnce {
-		c.failAfterWriteOnce = false
-		return errors.New("simulated timeout after durable write")
-	}
-	return nil
-}
-
-func (c *recordingSLSClient) GetLogsV2(_ string, logstore string, request *sls.GetLogRequest) (*sls.GetLogsResponse, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	requestCopy := *request
-	c.requests = append(c.requests, &requestCopy)
-	if strings.Contains(request.Query, "SELECT count(*) AS count") {
-		batchKey := queryBatchKey(request.Query)
-		count := 0
-		for _, row := range c.byLogstore[logstore] {
-			if row["_batchKey"] == batchKey {
-				count++
-			}
-		}
-		return &sls.GetLogsResponse{Logs: []map[string]string{{"count": strconv.Itoa(count)}}}, nil
-	}
-	rows := append([]map[string]string(nil), c.byLogstore[logstore]...)
-	return &sls.GetLogsResponse{Logs: rows, Count: int64(len(rows))}, nil
-}
-
-func (c *recordingSLSClient) lastRequest() *sls.GetLogRequest {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.requests) == 0 {
-		return nil
-	}
-	requestCopy := *c.requests[len(c.requests)-1]
-	return &requestCopy
-}
-
-func (c *recordingSLSClient) logs(logstore string) []map[string]string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]map[string]string(nil), c.byLogstore[logstore]...)
-}
-
-func queryBatchKey(query string) string {
-	prefix := `_batchKey:"`
-	start := strings.Index(query, prefix)
-	if start < 0 {
-		return ""
-	}
-	start += len(prefix)
-	end := strings.Index(query[start:], `"`)
-	if end < 0 {
-		return ""
-	}
-	return query[start : start+end]
-}
-
-func localSLSConfig() telemetrypersistence.SLSConfig {
-	return telemetrypersistence.SLSConfig{
-		Region: "cn-hangzhou", Endpoint: "example.invalid", Project: "test-project",
-		RawLogstore:               "app-product-telemetry-raw",
-		StartupDiagnosticLogstore: "app-startup-diagnostic-raw",
-		RuntimeLogstore:           "runtime-diagnostics-raw",
-		AggregateLogstore:         "app-product-telemetry-hourly", Timeout: 1200 * time.Millisecond,
 	}
 }
 

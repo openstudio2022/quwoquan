@@ -919,17 +919,19 @@ func (v *validator) validateServiceEntities(
 		}
 
 		body := strings.TrimSpace(op.ResponseBody)
+		responseEntity := strings.TrimSpace(op.ResponseEntity)
 		kind := strings.TrimSpace(op.ResponseBodyKind)
-		// response_body / response_body_kind 为可选的框架级响应契约；一旦任一出现即强校验配对与指向。
-		if body == "" && kind == "" {
+		// response_entity 是精确响应 wire 的唯一真相源。response_body 仅为尚未
+		// 迁移对象的旧 OpenAPI item hint，不得覆盖或否定 canonical entity。
+		if responseEntity == "" && body == "" && kind == "" {
 			continue
 		}
-		if kind == "" {
+		if kind == "" && body != "" {
 			v.errorf("%s/operations.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack)",
 				dirName, opName, body)
 			continue
 		}
-		if !responseBodyKinds[kind] {
+		if kind != "" && !responseBodyKinds[kind] {
 			v.errorf("%s/operations.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack)",
 				dirName, opName, kind)
 			continue
@@ -941,15 +943,21 @@ func (v *validator) validateServiceEntities(
 			}
 			continue
 		}
-		// object | page 必须指向存在的 projection read_model（或 client_projection.dart_class）。
-		if body == "" {
+		// object | page 优先使用 response_entity；仅旧对象回退 response_body。
+		resolvedResponse := responseEntity
+		if resolvedResponse == "" {
+			resolvedResponse = body
+		}
+		if resolvedResponse == "" {
 			v.errorf("%s/operations.yaml: operation %q response_body_kind=%s requires a response_body read model reference",
 				dirName, opName, kind)
 			continue
 		}
-		if !v.projectionReadModels[body] {
-			v.errorf("%s/operations.yaml: operation %q response_body %q is not a known projection read_model",
-				dirName, opName, body)
+		if !fieldsEntities[resolvedResponse] &&
+			!v.fieldEntities[resolvedResponse] &&
+			!v.projectionReadModels[resolvedResponse] {
+			v.errorf("%s/operations.yaml: operation %q canonical response %q is not a known fields entity or projection read_model",
+				dirName, opName, resolvedResponse)
 		}
 	}
 }

@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
-  required Iterable<PostBaseDto> posts,
+  required Iterable<ContentPostViewData> posts,
   required UserRelationshipState relationshipState,
   required PostInteractionState postInteractionState,
 }) {
@@ -70,7 +70,7 @@ void primeMediaViewerInteractionSnapshot(
       .mergeInteractionSnapshot(snapshot);
 }
 
-void applyConfirmedInteractionPost(WidgetRef ref, PostBaseDto post) {
+void applyConfirmedInteractionPost(WidgetRef ref, ContentPostViewData post) {
   ref
       .read(postInteractionStateProvider.notifier)
       .applyConfirmedCounters(
@@ -82,7 +82,7 @@ void applyConfirmedInteractionPost(WidgetRef ref, PostBaseDto post) {
 
 void applyConfirmedInteractionPosts(
   WidgetRef ref,
-  Iterable<PostBaseDto> posts,
+  Iterable<ContentPostViewData> posts,
 ) {
   ref.read(postInteractionStateProvider.notifier).applyConfirmedPosts(posts);
 }

@@ -52,7 +52,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertFalse(payload["overHardBudget"])
         self.assertEqual(payload["phases"][0]["name"], "alpha_up")
 
-    def test_matrix_orchestrator_is_serial_package_bound_content_consumer(self) -> None:
+    def test_matrix_orchestrator_is_serial_package_bound_full_integration(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix
 
         calls: list[str] = []
@@ -62,13 +62,13 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 calls.append(f"{name}:{getattr(args, 'env', '')}:{getattr(args, 'target', '')}:{getattr(args, 'command', '')}")
                 if name == "verify":
                     self.assertFalse(hasattr(args, "reuse_package"))
-                    self.assertEqual(args.profile, "smoke")
+                    self.assertEqual(args.profile, "integration")
                     self.assertEqual(args.nonprod_data_evidence, "")
                 if name == "up":
-                    self.assertEqual(args.workload, "content-release")
+                    self.assertEqual(args.workload, "full")
                     self.assertTrue(args.skip_build)
                 if name == "health":
-                    self.assertEqual(args.scope, "content-import")
+                    self.assertEqual(args.scope, "full")
                 payload = {
                     "exitCode": 0,
                     "summary": f"{name} ok",
@@ -221,7 +221,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertIn("L0_commit_gate", phase_names)
         self.assertIn("gamma-local_up", phase_names)
         self.assertIn("gamma-local_data_candidate_verify", phase_names)
-        self.assertIn("gamma-local_runtime_smoke_revalidate", phase_names)
+        self.assertIn("gamma-local_full_integration_verify", phase_names)
         self.assertIn("gamma-local_data_lifecycle_exit", phase_names)
         self.assertIn("gamma-local_acceptance_lease_acquire", phase_names)
         self.assertIn("gamma-local_acceptance_lease_revoke", phase_names)

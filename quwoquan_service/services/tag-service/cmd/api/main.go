@@ -24,7 +24,8 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
-	signalstream "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/messaging"
+	signalstream "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/adapters/inbound/stream"
+	indexpersistence "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/persistence"
 	feedbackhttp "quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/application/tagfeedback"
 	"quwoquan_service/services/tag-service/internal/tag/tag_feedback_fact/infrastructure/tagfeedbackstore"
@@ -149,7 +150,7 @@ func main() {
 
 	db := mongoClient.Database(mongoDBName)
 	tagNodeStore := persistence.NewMongoTagNodeStore(db.Collection("tag_nodes"))
-	objectTagStore := persistence.NewMongoObjectTagIndexStore(db.Collection("object_tag_index"))
+	objectTagStore := indexpersistence.NewMongoObjectTagIndexStore(db.Collection("object_tag_index"))
 	if err := tagNodeStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("tag-service ensure tag_nodes indexes: %v", err)
 	}
@@ -186,7 +187,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("tag-service message transport init failed: %v", err)
 	}
-	profileTagConsumer, err := signalstream.NewUserProfileTagConsumer(
+	profileTagConsumer, err := signalstream.NewConsumer(
 		messageTransport,
 		objectTagStore,
 		serviceName,

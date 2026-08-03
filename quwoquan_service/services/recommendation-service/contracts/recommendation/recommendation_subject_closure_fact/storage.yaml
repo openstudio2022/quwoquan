@@ -14,3 +14,10 @@ collections:
     description: events.user.account 消费失败的有界尝试计数；成功或进入脱敏 DLQ 后立即删除。
     indexes:
     - {name: ttl_recommendation_subject_closure_failures, keys: {updatedAt: 1}, ttl_days: 7}
+streams:
+  events.user.account.recommendation-service.dlq:
+    entity: RecommendationSubjectClosureFact
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: UserAccountClosed 隐私阻断消费达到重试上限后的脱敏终止记录。

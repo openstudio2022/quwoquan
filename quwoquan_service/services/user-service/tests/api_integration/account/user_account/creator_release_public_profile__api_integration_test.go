@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	creatormodel "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/domain/model"
 )
 
 func TestCreatorReleasePublicProfileUsesCanonicalIdentities(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	now := time.Now().UTC()
-	profile := usermodel.CreatorRuntimeProfile{
+	profile := creatormodel.CreatorRuntimeProfile{
 		CreatorID:   "creator-release-a",
 		PersonaID:   "builtin_release_creator_a",
 		Handle:      "release_creator_a",

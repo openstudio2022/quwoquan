@@ -7,6 +7,13 @@
     "releaseId",
     "sourceOwner",
     "releaseKind",
+    "releaseClass",
+    "productLifecycleState",
+    "containsUnverifiedAssets",
+    "rightsStatusCounts",
+    "authorizationRequiredAssetIds",
+    "researchAcceptedCount",
+    "commercialAcceptedCount",
     "canonicalMerkle",
     "executionIds",
     "sourceDigests"
@@ -17,6 +24,27 @@
     "releaseId": {"type": "string", "minLength": 1},
     "sourceOwner": {"const": "qwq_data"},
     "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "releaseClass": {"enum": ["research", "commercial"]},
+    "productLifecycleState": {"enum": ["research", "commercial"]},
+    "containsUnverifiedAssets": {"type": "boolean"},
+    "rightsStatusCounts": {
+      "type": "object",
+      "required": ["verified", "unverified", "restricted", "unknown"],
+      "additionalProperties": false,
+      "properties": {
+        "verified": {"type": "integer", "minimum": 0},
+        "unverified": {"type": "integer", "minimum": 0},
+        "restricted": {"type": "integer", "minimum": 0},
+        "unknown": {"type": "integer", "minimum": 0}
+      }
+    },
+    "authorizationRequiredAssetIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "researchAcceptedCount": {"type": "integer", "minimum": 0},
+    "commercialAcceptedCount": {"type": "integer", "minimum": 0},
     "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "executionIds": {
       "type": "array",
@@ -41,5 +69,18 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"releaseClass": {"const": "commercial"}}},
+      "then": {
+        "properties": {
+          "productLifecycleState": {"const": "commercial"},
+          "containsUnverifiedAssets": {"const": false},
+          "authorizationRequiredAssetIds": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"productLifecycleState": {"const": "research"}}}
+    }
+  ]
 }

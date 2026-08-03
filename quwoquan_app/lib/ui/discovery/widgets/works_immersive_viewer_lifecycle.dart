@@ -434,7 +434,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       WorksImmersiveViewerObservability.immersiveChannelId(widget.source);
 
   ({String? feedRequestId, String? policyDigest}) _feedAttributionForPost(
-    PostBaseDto post,
+    ContentPostViewData post,
   ) {
     if (_usesExternalFeed) {
       return (
@@ -464,7 +464,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     return max(0, initialFeedPosition + viewerIndex - _safeInitialPage);
   }
 
-  void _trackImpressionForPost(PostBaseDto post, {int? position}) {
+  void _trackImpressionForPost(ContentPostViewData post, {int? position}) {
     _articleHydrationAdmission.retainOnly(post.id);
     _rememberPostLocalState(post.id);
     final feedAttribution = _feedAttributionForPost(post);
@@ -537,7 +537,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackDocumentStructureFallback({
-    required PostBaseDto post,
+    required ContentPostViewData post,
     required ContentArticleRender article,
     required bool hydrated,
   }) {
@@ -556,7 +556,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   Future<void> _maybeHydrateArticleDetail(
-    PostBaseDto post, {
+    ContentPostViewData post, {
     bool force = false,
   }) async {
     final raw = _effectiveRawPostById(post.id);
@@ -573,7 +573,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   Future<void> _performArticleDetailHydration(
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool force,
     required WorksViewerArticleHydrationLease lease,
   }) async {
@@ -699,14 +699,14 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   bool _shouldShowArticleHydrationError(
-    PostBaseDto post,
+    ContentPostViewData post,
     ContentArticleRender article,
   ) {
     return article.documentSource == ArticleDetailDocumentSource.empty &&
         _failedArticleHydrationIds.contains(post.id);
   }
 
-  UiErrorSemantic _articleHydrationErrorSemantic(PostBaseDto post) {
+  UiErrorSemantic _articleHydrationErrorSemantic(ContentPostViewData post) {
     return runtime_error_display.runtimeErrorSemantic(
       context,
       error:
@@ -721,7 +721,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       WorksImmersiveViewerObservability.fallbackReasonName(reason);
 
   void _trackArticleReaderFallback(
-    PostBaseDto post,
+    ContentPostViewData post,
     ArticleReaderFallbackReason reason, {
     required bool bookReaderEnabled,
   }) {
@@ -733,7 +733,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackArticlePageFlipCommit(
-    PostBaseDto post,
+    ContentPostViewData post,
     ArticleReaderPageFlipCommit event,
   ) {
     _articleReaderObservability.trackPageFlipCommit(
@@ -747,7 +747,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackImagePageflipMotion(
-    PostBaseDto post,
+    ContentPostViewData post,
     MediaPageFlipMotionEvent event,
   ) {
     final feedAttribution = _feedAttributionForPost(post);
@@ -773,7 +773,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackArticlePageCurlAbort(
-    PostBaseDto post,
+    ContentPostViewData post,
     ArticleReaderPageCurlAbort event,
   ) {
     _articleReaderObservability.trackPageCurlAbort(
@@ -784,7 +784,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     );
   }
 
-  void _flushDwell(PostBaseDto post, {bool trackSkip = false}) {
+  void _flushDwell(ContentPostViewData post, {bool trackSkip = false}) {
     final enterTime = _pageEnterTime;
     final attribution = _activeTrackingAttribution;
     if (enterTime == null ||
@@ -855,6 +855,6 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     );
   }
 
-  ContentType _mapPostContentType(PostBaseDto post) =>
+  ContentType _mapPostContentType(ContentPostViewData post) =>
       WorksImmersiveViewerObservability.contentTypeForPost(post);
 }

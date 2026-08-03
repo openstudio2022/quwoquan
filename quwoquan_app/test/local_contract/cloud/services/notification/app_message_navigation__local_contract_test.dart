@@ -8,7 +8,7 @@ void main() {
     final message = AppMessage(
       messageId: 'msg_1',
       userId: 'user_1',
-      messageType: 'assistant',
+      messageType: NotificationType.assistant,
       source: 'assistant/proactive_intersection',
       sourceId: 'reason_1',
       destination: const AppMessageDestination(type: 'user', id: 'user_1'),
@@ -37,7 +37,7 @@ void main() {
     final message = AppMessage(
       messageId: 'msg_2',
       userId: 'user_1',
-      messageType: 'assistant',
+      messageType: NotificationType.assistant,
       source: 'assistant',
       sourceId: 'unknown',
       destination: const AppMessageDestination(type: 'user', id: 'user_1'),
@@ -46,6 +46,7 @@ void main() {
       target: const AppMessageTarget(
         targetType: 'unknown',
         targetId: 'unknown',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 6, 12),
@@ -58,7 +59,7 @@ void main() {
     final message = AppMessage(
       messageId: 'msg_report',
       userId: 'user_1',
-      messageType: 'content',
+      messageType: NotificationType.content,
       source: 'report_result',
       sourceId: 'report_1',
       destination: const AppMessageDestination(type: 'user', id: 'user_1'),
@@ -67,6 +68,7 @@ void main() {
       target: const AppMessageTarget(
         targetType: 'report',
         targetId: 'report_1',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 7, 20),
@@ -82,18 +84,16 @@ void main() {
     final message = AppMessage(
       messageId: 'msg_homepage',
       userId: 'persona_1',
-      messageType: 'entity',
+      messageType: NotificationType.content,
       source: 'homepage_claim_result',
       sourceId: 'claim_1',
-      destination: const AppMessageDestination(
-        type: 'user',
-        id: 'persona_1',
-      ),
+      destination: const AppMessageDestination(type: 'user', id: 'persona_1'),
       title: '主页认领审核完成',
       summary: '你的主页认领申请已通过',
       target: const AppMessageTarget(
         targetType: 'homepage',
         targetId: 'homepage_1',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 7, 20),

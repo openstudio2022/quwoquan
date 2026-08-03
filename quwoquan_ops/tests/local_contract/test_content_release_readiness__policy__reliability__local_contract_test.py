@@ -91,6 +91,10 @@ def test_content_release_readiness__binds_probe_for_every_capability__local_cont
         elif binding.source is ProbeSource.COMMERCIAL_DOCTOR:
             assert binding.source is ProbeSource.COMMERCIAL_DOCTOR
             assert binding.health_scope is None
+        elif binding.source is ProbeSource.RESEARCH_ISOLATION:
+            assert capability is ReadinessCapability.RESEARCH_ACCESS_ISOLATION
+            assert binding.health_scope is None
+            assert binding.control_action is None
         else:
             assert binding.source is ProbeSource.LOG_SINK_CONTROL
             assert binding.control_action == "all"
@@ -115,7 +119,13 @@ def test_content_release_readiness__doctor_bound_capabilities_are_commercial_onl
             binding = policy.probe_binding_for(capability)
             if requirement.phase is ReadinessPhase.COMMERCIAL:
                 continue
-            assert binding.source is ProbeSource.HEALTH_SCOPE
+            if requirement.phase is ReadinessPhase.RESEARCH:
+                assert binding.source in {
+                    ProbeSource.HEALTH_SCOPE,
+                    ProbeSource.RESEARCH_ISOLATION,
+                }
+            else:
+                assert binding.source is ProbeSource.HEALTH_SCOPE
 
 
 def test_content_release_readiness__rejects_undefined_phase_environment__local_contract() -> (
@@ -214,6 +224,33 @@ def test_content_consumer_feed_health_includes_session_id__local_contract() -> N
     assert str(feed["url"]).endswith("sessionId=stackctl-content-consumer-health") or (
         "sessionId=stackctl-content-consumer-health" in str(feed["url"])
     )
+
+
+def test_content_commercial_health_adds_product_ops_without_full_plane__local_contract() -> (
+    None
+):
+    topology = stackctl.load_environment_topology()
+    checks = stackctl._health_checks_for_target(
+        topology,
+        "alpha-local",
+        "content-commercial",
+        workload="content-commercial",
+    )
+    names = {str(item["name"]) for item in checks}
+
+    assert {
+        "api-health",
+        "product-ops-health",
+        "media-edge-health",
+        "content-service",
+        "entity-service",
+        "app-config",
+        "content-feed",
+        "product-ops-service",
+    }.issubset(names)
+    assert "assistant-service" not in names
+    assert "platform-ops-service" not in names
+    assert "integration-service" not in names
 
 
 def test_content_consumer_nonempty_feed_probe_skips_commercial_checks__local_contract(
@@ -408,7 +445,7 @@ def test_content_release_readiness__commercial_missing_capability_is_gate_block(
     monkeypatch.setattr(
         stackctl,
         "command_doctor",
-        lambda _args: {"exitCode": 1, "details": ["SLS is unavailable"]},
+        lambda _args: {"exitCode": 1, "details": ["Elasticsearch is unavailable"]},
     )
     monkeypatch.setattr(
         stackctl,
@@ -766,6 +803,18 @@ def _write_data_readiness_fixture(
         "releaseId": release_id,
         "releaseKind": "content",
         "sourceOwner": "qwq_data",
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "containsUnverifiedAssets": False,
+        "rightsStatusCounts": {
+            "verified": 3,
+            "unverified": 0,
+            "restricted": 0,
+            "unknown": 0,
+        },
+        "authorizationRequiredAssetIds": [],
+        "researchAcceptedCount": 3,
+        "commercialAcceptedCount": 3,
         "readinessPhase": "commercial",
         "manifestDigest": manifest_digest,
         "mediaManifestDigest": "sha256:"

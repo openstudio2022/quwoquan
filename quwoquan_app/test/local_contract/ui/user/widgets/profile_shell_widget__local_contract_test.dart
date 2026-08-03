@@ -325,10 +325,10 @@ class _ResolvedAvatarProfileRepository
 }
 
 class _NoUserPostsContentRepository extends MockContentRepository {
-  _NoUserPostsContentRepository() : super(seedPosts: const <PostBaseDto>[]);
+  _NoUserPostsContentRepository() : super(seedPosts: const <ContentPostViewData>[]);
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -336,8 +336,8 @@ class _NoUserPostsContentRepository extends MockContentRepository {
     String? cursor,
     int limit = 20,
   }) async {
-    return const CursorPage<PostBaseDto>(
-      items: <PostBaseDto>[],
+    return const CursorPage<ContentPostViewData>(
+      items: <ContentPostViewData>[],
       nextCursor: null,
     );
   }
@@ -631,7 +631,7 @@ void main() {
           userId: 'fixture_user_current',
           profileQuery: const _DefaultNicknameProfileRepository(),
           contentRepository: MockContentRepository(
-            seedPosts: <PostBaseDto>[
+            seedPosts: <ContentPostViewData>[
               _profileBackgroundPost('fixture_user_current'),
             ],
           ),

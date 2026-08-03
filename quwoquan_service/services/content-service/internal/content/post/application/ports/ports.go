@@ -3,51 +3,16 @@ package ports
 import (
 	"context"
 	"time"
+
+	behaviormodel "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model"
+	behaviorports "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/ports"
+	intersectionports "quwoquan_service/services/content-service/internal/content/intersection_visit_state/domain/ports"
 )
 
-// BehaviorEventStore persists raw behavior events for offline analytics.
-type BehaviorEventStore interface {
-	InsertBatch(ctx context.Context, events []RawBehaviorEvent) error
-	ListUserFootprint(ctx context.Context, userID string, actions []string, before time.Time, limit int) ([]RawBehaviorEvent, error)
-}
-
-// RawBehaviorEvent is the persistent form of a user behavior event.
-type RawBehaviorEvent struct {
-	ClientEventID          string    `bson:"clientEventId,omitempty"`
-	State                  string    `bson:"state,omitempty"`
-	UserID                 string    `bson:"userId"`
-	DeviceActorID          string    `bson:"deviceActorId,omitempty"`
-	SessionID              string    `bson:"sessionId"`
-	ContentID              string    `bson:"contentId"`
-	Action                 string    `bson:"action"`
-	ContentType            string    `bson:"contentType,omitempty"`
-	TaxonomyReleaseID      string    `bson:"taxonomyReleaseId,omitempty"`
-	Tags                   []string  `bson:"tagRefs,omitempty"`
-	Duration               float64   `bson:"duration,omitempty"`
-	AuthorID               string    `bson:"authorId,omitempty"`
-	ReferralSource         string    `bson:"referralSource,omitempty"`
-	EngagementDepth        int       `bson:"engagementDepth,omitempty"`
-	ConsumedRatio          float64   `bson:"consumedRatio,omitempty"`
-	TotalUnits             int       `bson:"totalUnits,omitempty"`
-	EffectivePlayMS        int       `bson:"effectivePlayMs,omitempty"`
-	EntityRefs             []string  `bson:"entityRefs,omitempty"`
-	FeedRequestID          string    `bson:"feedRequestId,omitempty"`
-	Position               int       `bson:"position,omitempty"`
-	CommentLength          int       `bson:"commentLength,omitempty"`
-	ChannelID              string    `bson:"channelId,omitempty"`
-	PolicyDigest           string    `bson:"policyDigest,omitempty"`
-	RecallPath             string    `bson:"recallPath,omitempty"`
-	ContentVertical        string    `bson:"contentVertical,omitempty"`
-	SupplySource           string    `bson:"supplySource,omitempty"`
-	IntersectionDimension  string    `bson:"intersectionDimension,omitempty"`
-	IntersectionTagRefs    []string  `bson:"intersectionTagRefs,omitempty"`
-	IntersectionID         string    `bson:"intersectionId,omitempty"`
-	IntersectionClass      string    `bson:"intersectionClass,omitempty"`
-	IntersectionSourceRef  string    `bson:"intersectionSourceRef,omitempty"`
-	IntersectionEvidenceID string    `bson:"intersectionEvidenceId,omitempty"`
-	OccurredAt             string    `bson:"occurredAt"`
-	CreatedAt              time.Time `bson:"createdAt"`
-}
+// Compatibility within the source tree is a Go type identity alias, not a
+// second wire or persistence model. ContentBehaviorFact remains the owner.
+type BehaviorEventStore = behaviorports.FactStore
+type RawBehaviorEvent = behaviormodel.Fact
 
 // WishlistEventStore persists explicit want-to-go / wishlist intent facts.
 // This is the stable source consumed by coWishlistedEntity intersection facts.
@@ -79,60 +44,6 @@ type WishlistEvent struct {
 	ClientEventID  string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-}
-
-const (
-	DailyMetricDimensionAction       = "action"
-	DailyMetricDimensionContent      = "content"
-	DailyMetricDimensionAuthor       = "author"
-	DailyMetricDimensionIntersection = "intersection"
-)
-
-var DailyMetricDimensions = []string{
-	DailyMetricDimensionAction,
-	DailyMetricDimensionContent,
-	DailyMetricDimensionAuthor,
-	DailyMetricDimensionIntersection,
-}
-
-type DailyMetricsStore interface {
-	IncrementMetric(ctx context.Context, date, dimension, dimensionKey, action string, dwellMs int64, depth int) error
-}
-
-type DailyMetric struct {
-	Date                  string    `bson:"date"`
-	Dimension             string    `bson:"dimension"`
-	DimensionKey          string    `bson:"dimensionKey"`
-	Impressions           int64     `bson:"impressions"`
-	Clicks                int64     `bson:"clicks"`
-	Dwells                int64     `bson:"dwells"`
-	Likes                 int64     `bson:"likes"`
-	Shares                int64     `bson:"shares"`
-	Comments              int64     `bson:"comments"`
-	Dislikes              int64     `bson:"dislikes"`
-	Reports               int64     `bson:"reports"`
-	FollowConversions     int64     `bson:"followConversions"`
-	JoinCircleConversions int64     `bson:"joinCircleConversions"`
-	AddContactConversions int64     `bson:"addContactConversions"`
-	TotalDwellMs          int64     `bson:"totalDwellMs"`
-	AvgDepth              float64   `bson:"avgDepth"`
-	UniqueUsers           int64     `bson:"uniqueUsers"`
-	CreatedAt             time.Time `bson:"createdAt"`
-}
-
-type AuthorImpactEvent struct {
-	AuthorID              string
-	Action                string
-	HelpType              string
-	IntersectionDimension string
-	IntersectionTagRefs   []string
-	Source                string
-	OccurredAt            time.Time
-}
-
-type AuthorImpactStore interface {
-	Record(ctx context.Context, event AuthorImpactEvent) error
-	GetSummary(ctx context.Context, authorID string, limit int64) (AuthorImpactSummary, error)
 }
 
 type AuthorImpactSummary struct {
@@ -194,21 +105,6 @@ type ImpactTarget struct {
 	RouteID    string `json:"routeId"`
 }
 
-type AuthorImpactEvidenceRecord struct {
-	AuthorID              string
-	ImpactID              string
-	SourceEventID         string
-	ActorID               string
-	ContentID             string
-	ContentType           string
-	HelpType              string
-	Action                string
-	IntersectionDimension string
-	TagRef                string
-	Source                string
-	OccurredAt            time.Time
-}
-
 type AuthorImpactEvidenceRaw struct {
 	EvidenceID            string
 	ImpactID              string
@@ -220,17 +116,15 @@ type AuthorImpactEvidenceRaw struct {
 	OccurredAt            time.Time
 }
 
-type AuthorImpactEvidenceStore interface {
-	Record(ctx context.Context, rec AuthorImpactEvidenceRecord) error
+// AuthorImpactProjectionReader is the only cross-context read port for the
+// Recommendation-owned author-impact projection. Content uses it solely to
+// decorate the summary and hydrate current Post visibility.
+type AuthorImpactProjectionReader interface {
 	GetSummary(ctx context.Context, authorID string, limit int64) (AuthorImpactSummary, error)
-	CountByImpact(ctx context.Context, authorID, impactID string) (int64, error)
 	ListPageWithTotal(ctx context.Context, authorID, impactID, cursor string, limit int64) ([]AuthorImpactEvidenceRaw, string, bool, int64, error)
 }
 
-type WatermarkStore interface {
-	LoadWatermarks(ctx context.Context, userID string) (map[string]int64, error)
-	SaveWatermarks(ctx context.Context, userID string, dims map[string]int64) error
-}
+type WatermarkStore = intersectionports.Store
 
 // ProjectorEvent 是读模型投影器消费的规范化生命周期事件。
 type ProjectorEvent struct {

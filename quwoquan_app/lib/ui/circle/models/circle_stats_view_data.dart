@@ -1,21 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-
-/// 将 metadata 生成的 stats wire 投影为页面 ViewData。
-extension CircleStatsWireProjection on CircleStatsWireDto {
-  CircleStatsViewData toViewData() {
-    return CircleStatsViewData(
-      members: memberCount,
-      posts: postCount,
-      discussions: discussionCount,
-      weeklyActive: weeklyActiveCount,
-      likes: likeCount,
-      storageUsedBytes: storageUsedBytes,
-      storageQuotaBytes: storageQuotaBytes,
-    );
-  }
-}
 
 /// 圈子详情页统计条与摘要行用的强类型视图数据（由 getCircleStats wire + CircleDto 派生）。
 class CircleStatsViewData {
@@ -47,19 +31,15 @@ class CircleStatsViewData {
   final int storageUsedBytes;
   final int storageQuotaBytes;
 
-  factory CircleStatsViewData.fromStatsWire(CircleStatsWireDto wire) {
-    return wire.toViewData();
-  }
-
-  factory CircleStatsViewData.fromSlice(CircleStatsSlice slice) {
+  factory CircleStatsViewData.fromWire(CircleStatsWire wire) {
     return CircleStatsViewData(
-      members: slice.memberCount,
-      posts: slice.postCount,
-      discussions: slice.discussionCount,
-      weeklyActive: slice.weeklyActiveCount,
-      likes: slice.likeCount,
-      storageUsedBytes: slice.storageUsedBytes,
-      storageQuotaBytes: slice.storageQuotaBytes,
+      members: wire.memberCount,
+      posts: wire.postCount,
+      discussions: wire.discussionCount,
+      weeklyActive: wire.weeklyActiveCount,
+      likes: wire.likeCount,
+      storageUsedBytes: wire.storageUsedBytes,
+      storageQuotaBytes: wire.storageQuotaBytes,
     );
   }
 

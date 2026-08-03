@@ -21,6 +21,10 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
+	consenterrors "quwoquan_service/services/assistant-service/generated/assistant/skill_consent"
+	entryhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/adapters/inbound/http"
+	entryapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/application"
 	learninghttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/adapters/inbound/http"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
@@ -31,28 +35,52 @@ import (
 	policymessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/messaging"
 	policyrollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
 	policyrolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
+	preferencehttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/adapters/inbound/http"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/toolaccess"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/connectorgateway"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
 	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	assistantdomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/creationgrounding"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/intersectionclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/notificationclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/scheduling"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/searchclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/userprofile"
+	taskhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/adapters/inbound/http"
+	taskapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/application"
 	turnviewhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/adapters/inbound/http"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
+	pagehttp "quwoquan_service/services/assistant-service/internal/assistant/page_context/adapters/inbound/http"
+	pageapplication "quwoquan_service/services/assistant-service/internal/assistant/page_context/application"
+	pagepersistence "quwoquan_service/services/assistant-service/internal/assistant/page_context/infrastructure/persistence"
 	skillcataloghttp "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/adapters/inbound/http"
 	skillcatalogapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
-	skillcatalogports "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/ports"
-	skillcatalogresource "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	skillcatalogmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
+	skillcatalogactive "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/activerelease"
 	consenthttp "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/adapters/inbound/http"
 	consentapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/application"
+	consentmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/model"
+	skillpackagehttp "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/adapters/inbound/http"
+	skillpackageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
+	skillpackagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
+	skillpackageartifact "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/infrastructure/artifact"
+	subscriptionhttp "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/adapters/inbound/http"
+	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
+	placementhttp "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/adapters/inbound/http"
+	placementapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/application"
+	placementmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/domain/model"
+	placementauthority "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/infrastructure/authority"
+	placementmessaging "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/infrastructure/messaging"
+	settinghttp "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/adapters/inbound/http"
+	settingapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/application"
 )
 
 const (
@@ -211,6 +239,44 @@ func run() error {
 	log.Printf("assistant-service learning projection storage=mongodb db=%s", cfg.MongoDB.Database)
 	log.Printf("assistant-service skill subscription storage=mongodb db=%s", cfg.MongoDB.Database)
 	log.Printf("assistant-service consent storage=postgres")
+	log.Printf("assistant-service Skill setting/placement storage=postgres")
+	trustedSkillPackageKeys, err := skillpackageapplication.DecodeTrustedPublicKeys(
+		cfg.SkillPackage.TrustedPublicKeysJSON,
+	)
+	if err != nil {
+		return dependencyError("assistant-skill-package", "trusted-keys", err)
+	}
+	skillPackageAssets, err := skillpackageartifact.NewResourceReader(
+		cfg.SkillPackage.AssetRoot,
+	)
+	if err != nil {
+		return dependencyError("assistant-skill-package", "asset-reader", err)
+	}
+	skillPackageService := skillpackageapplication.NewService(
+		deps.skillPackageStore,
+		deps.skillPackageStore,
+		skillPackageAssets,
+		skillpackageapplication.NewEd25519Verifier(trustedSkillPackageKeys),
+		skillpackageapplication.RuntimeIdentity{
+			APIVersion: skillpackagemodel.RuntimeAPIVersion,
+			Version:    skillpackagemodel.RuntimeVersion,
+		},
+		time.Now,
+	)
+	activeSkillCatalog := skillcatalogactive.NewCatalogSource(
+		skillPackageService,
+		skillcatalogactive.OfficialPackageID,
+		orchestration.ValidateAssistantDomainSkillCatalog,
+	)
+	activeSkillPrompts := skillcatalogactive.NewPromptResolver(
+		skillPackageService,
+		skillcatalogactive.OfficialPackageID,
+	)
+	settingQueries := settingapplication.NewQueryFacade(deps.settingStore)
+	healthChecker.Register("assistant_skill_package", func(ctx context.Context) error {
+		_, resolveErr := activeSkillCatalog.ResolveSnapshot(ctx)
+		return resolveErr
+	})
 
 	notificationCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -322,17 +388,6 @@ func run() error {
 	if err != nil {
 		return dependencyError("search-service", "initialization", err)
 	}
-	creationGroundingClient, err := creationgrounding.New(
-		canonicalSearch,
-		cfg.EntityService.BaseURL,
-		newObservedEgressClient(
-			"assistant-service.entity-homepage-query",
-			cfg.EntityService.TimeoutMs,
-		),
-	)
-	if err != nil {
-		return dependencyError("creation-grounding", "initialization", err)
-	}
 	intersectionAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
 		accessTokenConfig,
 		"assistant-service",
@@ -352,6 +407,60 @@ func run() error {
 	if err != nil {
 		return dependencyError("content-service", "intersection-reader", err)
 	}
+	travelAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{"travel.trip.read"},
+	)
+	if err != nil {
+		return dependencyError("travel-service", "credentials", err)
+	}
+	travelHTTPClient := newObservedEgressClient(
+		"assistant-service.travel-context",
+		cfg.TravelService.TimeoutMs,
+	)
+	travelContextReader, err := domainreader.NewTravelClient(
+		cfg.TravelService.BaseURL,
+		travelHTTPClient,
+		travelAuthorization,
+	)
+	if err != nil {
+		return dependencyError("travel-service", "context-reader", err)
+	}
+	healthChecker.Register("travel_service", func(ctx context.Context) error {
+		return checkServiceHealth(ctx, travelHTTPClient, cfg.TravelService.BaseURL)
+	})
+	connectorGrantScope, err := connectorgateway.RequiredScope()
+	if err != nil {
+		return dependencyError("integration-service", "operation-contract", err)
+	}
+	connectorGrantAuthorization, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{connectorGrantScope},
+	)
+	if err != nil {
+		return dependencyError("integration-service", "credentials", err)
+	}
+	connectorGrantHTTPClient := newObservedEgressClient(
+		"assistant-service.connector-capability-grant",
+		cfg.IntegrationService.TimeoutMs,
+	)
+	connectorGrantGateway, err := connectorgateway.New(
+		cfg.IntegrationService.BaseURL,
+		connectorGrantHTTPClient,
+		connectorGrantAuthorization,
+	)
+	if err != nil {
+		return dependencyError("integration-service", "connector-capability-gateway", err)
+	}
+	healthChecker.Register("integration_service", func(ctx context.Context) error {
+		return checkServiceHealth(
+			ctx,
+			connectorGrantHTTPClient,
+			cfg.IntegrationService.BaseURL,
+		)
+	})
 	var interestReader sessionports.ProactiveInterestReader
 	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
 		interestReader = userprofile.NewClient(
@@ -370,14 +479,59 @@ func run() error {
 		newObservedEgressClient,
 		deps.publicWebEvidence,
 		deps.publicWebBudget,
-		deps.sessionRunStore,
+		deps.runRepository,
 		deps.subscriptionStore,
 		interestReader,
 		deps.consentStore,
+		travelContextReader,
+		activeSkillCatalog,
+		activeSkillPrompts,
 	)
 	if err != nil {
 		return dependencyError("assistant-agent-loop", "initialization", err)
 	}
+	surfaceAuthorization, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"assistant-service",
+		[]string{"chat.member.list", "circle.members.self"},
+	)
+	if err != nil {
+		return dependencyError("skill-surface-authority", "credentials", err)
+	}
+	if err := placementauthority.RequireEnvironmentBindings(appEnv); err != nil {
+		return dependencyError("skill-surface-authority", "provider-binding", err)
+	}
+	surfaceChatHTTPClient := newObservedEgressClient(
+		"assistant-service.skill-surface-chat-authority",
+		cfg.ChatService.TimeoutMs,
+	)
+	surfaceCircleHTTPClient := newObservedEgressClient(
+		"assistant-service.skill-surface-circle-authority",
+		cfg.CircleService.TimeoutMs,
+	)
+	placementAuthority, err := placementauthority.NewClient(
+		cfg.ChatService.BaseURL,
+		cfg.CircleService.BaseURL,
+		surfaceChatHTTPClient,
+		surfaceCircleHTTPClient,
+		surfaceAuthorization,
+	)
+	if err != nil {
+		return dependencyError("skill-surface-authority", "initialization", err)
+	}
+	placementCommands := placementapplication.NewCommandFacade(
+		deps.placementStore,
+		placementAuthority,
+		activeSkillCatalog,
+		func() time.Time { return time.Now().UTC() },
+	)
+	placementQueries := placementapplication.NewQueryFacade(
+		deps.placementStore,
+		placementAuthority,
+	)
+	healthChecker.Register("circle_service", func(ctx context.Context) error {
+		return checkServiceHealth(ctx, surfaceCircleHTTPClient, cfg.CircleService.BaseURL)
+	})
 
 	if deps.preferenceStore == nil || deps.preferenceReader == nil {
 		return dependencyError(
@@ -386,7 +540,7 @@ func run() error {
 			errors.New("preference store and reader are required"),
 		)
 	}
-	sessionOwnerReader, ok := deps.sessionRunStore.(preferencefact.SessionOwnerReader)
+	sessionOwnerReader, ok := deps.sessionStore.(preferencefact.SessionOwnerReader)
 	if !ok {
 		return dependencyError(
 			"mongodb.assistant_sessions",
@@ -408,14 +562,14 @@ func run() error {
 		policyReleaseService,
 		nil,
 	)
-	frozenPolicyResolver := sessionports.FrozenPolicyResolverFunc(
+	frozenPolicyResolver := runruntime.PolicyResolverFunc(
 		func(
 			ctx context.Context,
 			policyID string,
 			personaID string,
 			skillID string,
 			domainID string,
-		) (assistantdomain.AssistantFrozenPolicySelection, error) {
+		) (runruntime.FrozenPolicySelection, error) {
 			resolved, resolveErr := policyRolloutService.ResolveFrozenSelection(
 				ctx,
 				policyID,
@@ -424,32 +578,222 @@ func run() error {
 				domainID,
 			)
 			if resolveErr != nil {
-				return assistantdomain.AssistantFrozenPolicySelection{}, resolveErr
+				return runruntime.FrozenPolicySelection{}, resolveErr
 			}
-			return projectFrozenPolicySelection(resolved), nil
+			return projectRunFrozenPolicySelection(resolved), nil
 		},
 	)
 	durableExecutor := runruntime.NewManagedRunExecutor(
-		orchestration.NewDurableRunExecutorWithPolicyResolver(
-			agentLoop,
-			func(
-				ctx context.Context,
-				request runruntime.ExecutionRequest,
-			) (assistantdomain.AssistantFrozenPolicySelection, error) {
-				return frozenPolicyResolver.ResolveFrozenPolicy(
-					ctx,
-					"assistant-default",
-					request.UserID,
-					request.RequestedSkillID,
-					request.RequestedDomainID,
-				)
-			},
-		),
+		orchestration.NewDurableRunExecutor(agentLoop),
 	)
 	runCancellation := runruntime.NewCancellationCoordinator(
 		durableExecutor,
 		10*time.Second,
 	)
+	consentQueries := consentapplication.NewQueryFacade(deps.consentStore)
+	authorizeSkillAccess := func(
+		ctx context.Context,
+		accountID string,
+		skillID string,
+		surfaceKind string,
+		surfaceID string,
+	) error {
+		accountID = strings.TrimSpace(accountID)
+		skillID = strings.TrimSpace(skillID)
+		surfaceKind = strings.TrimSpace(surfaceKind)
+		surfaceID = strings.TrimSpace(surfaceID)
+		if surfaceKind == "" {
+			enabled, settingErr := settingQueries.IsEnabled(ctx, accountID, skillID)
+			if settingErr != nil {
+				return runruntime.ErrSkillSettingUnavailable
+			}
+			if !enabled {
+				return runruntime.ErrSkillDisabled
+			}
+			consentErr := consentQueries.Require(ctx, accountID, skillID)
+			switch {
+			case errors.Is(consentErr, consentmodel.ErrConsentRequired):
+				return runerrors.AppErrorFromSkillConsentRequired(
+					"active consent is required for skill " + skillID,
+				)
+			case errors.Is(consentErr, consentmodel.ErrStorageUnavailable):
+				return consenterrors.AppErrorFromConsentUnavailable(
+					"skill consent reader is unavailable",
+				)
+			default:
+				return consentErr
+			}
+		}
+		if surfaceID == "" ||
+			(surfaceKind != placementmodel.SurfaceConversation &&
+				surfaceKind != placementmodel.SurfaceCircle) {
+			return runruntime.ErrSkillDisabled
+		}
+		if sharedErr := activeSkillCatalog.ValidateSharedSkillIDs(
+			ctx,
+			surfaceKind,
+			[]string{skillID},
+		); sharedErr != nil {
+			if errors.Is(sharedErr, skillcatalogmodel.ErrSkillNotShared) {
+				return runruntime.ErrSkillDisabled
+			}
+			return runruntime.ErrSkillPackageUnavailable
+		}
+		allowed, placementErr := placementQueries.AllowsSkill(
+			ctx,
+			surfaceKind,
+			surfaceID,
+			skillID,
+		)
+		if placementErr != nil {
+			if errors.Is(placementErr, placementmodel.ErrNotFound) {
+				return runruntime.ErrSkillDisabled
+			}
+			return runruntime.ErrSkillSettingUnavailable
+		}
+		if !allowed {
+			return runruntime.ErrSkillDisabled
+		}
+		return nil
+	}
+	agentLoop.SkillCandidates = orchestration.SkillCandidateAccessPolicyFunc(func(
+		ctx context.Context,
+		turn assistantdomain.AssistantTurn,
+	) ([]string, error) {
+		manifests, loadErr := activeSkillCatalog.Load(ctx)
+		if loadErr != nil {
+			return nil, runruntime.ErrSkillPackageUnavailable
+		}
+		surfaceKind := strings.TrimSpace(turn.RequestContext.SurfaceKind)
+		surfaceID := strings.TrimSpace(turn.RequestContext.SurfaceID)
+		allowed := make([]string, 0, len(manifests))
+		if surfaceKind == "" {
+			for _, manifest := range manifests {
+				if !manifest.IsReactive() {
+					continue
+				}
+				enabled, settingErr := settingQueries.IsEnabled(
+					ctx,
+					turn.UserID,
+					manifest.SkillID,
+				)
+				if settingErr != nil {
+					return nil, runruntime.ErrSkillSettingUnavailable
+				}
+				if enabled {
+					allowed = append(allowed, manifest.SkillID)
+				}
+			}
+			return allowed, nil
+		}
+		if surfaceID == "" ||
+			(surfaceKind != placementmodel.SurfaceConversation &&
+				surfaceKind != placementmodel.SurfaceCircle) {
+			return []string{}, nil
+		}
+		placement, placementErr := placementQueries.Get(
+			ctx,
+			turn.UserID,
+			turn.RequestContext.PersonaID,
+			surfaceKind,
+			surfaceID,
+		)
+		if placementErr != nil {
+			if errors.Is(placementErr, placementmodel.ErrNotFound) ||
+				errors.Is(placementErr, placementmodel.ErrForbidden) {
+				return []string{}, nil
+			}
+			return nil, runruntime.ErrSkillSettingUnavailable
+		}
+		for _, manifest := range manifests {
+			if !manifest.IsReactive() || !placement.Allows(manifest.SkillID) {
+				continue
+			}
+			for _, allowedSurfaceKind := range manifest.ActivationProfile.AllowedSurfaceKinds {
+				if strings.TrimSpace(allowedSurfaceKind) == surfaceKind {
+					allowed = append(allowed, manifest.SkillID)
+					break
+				}
+			}
+		}
+		return allowed, nil
+	})
+	agentLoop.SkillAccess = orchestration.SkillExecutionAccessPolicyFunc(func(
+		ctx context.Context,
+		turn assistantdomain.AssistantTurn,
+		skillID string,
+	) error {
+		return authorizeSkillAccess(
+			ctx,
+			turn.UserID,
+			skillID,
+			turn.RequestContext.SurfaceKind,
+			turn.RequestContext.SurfaceID,
+		)
+	})
+	toolCapabilityPolicy := toolaccess.NewPolicy(
+		deps.settingStore,
+		deps.consentStore,
+		connectorGrantGateway,
+	)
+	agentLoop.ToolAccess = orchestration.ToolExecutionAccessPolicyFunc(func(
+		ctx context.Context,
+		turn assistantdomain.AssistantTurn,
+		skill orchestration.SkillSelection,
+		toolName string,
+		metadata toolpkg.Metadata,
+	) error {
+		requirement := metadata.Capability
+		if strings.TrimSpace(requirement.CapabilityKey) == "" &&
+			strings.TrimSpace(requirement.ConnectorRequirement) == "" &&
+			len(requirement.ConsentScopes) == 0 &&
+			len(requirement.AllowedSurfaceKinds) == 0 &&
+			!requirement.RecheckAtExecution {
+			return nil
+		}
+		decision, authorizeErr := toolCapabilityPolicy.Authorize(
+			ctx,
+			toolaccess.Request{
+				AccountID:   turn.UserID,
+				SkillID:     skill.SkillID,
+				SurfaceKind: turn.RequestContext.SurfaceKind,
+				Requirement: toolaccess.Requirement{
+					CapabilityKey:        requirement.CapabilityKey,
+					ConnectorRequirement: requirement.ConnectorRequirement,
+					ConsentScopes:        requirement.ConsentScopes,
+					AllowedSurfaceKinds:  requirement.AllowedSurfaceKinds,
+					RecheckAtExecution:   requirement.RecheckAtExecution,
+				},
+			},
+		)
+		log.Printf(
+			"assistant tool capability_decision turnId=%s skillId=%s toolName=%s capability=%s surface=%s allowed=%t reason=%s",
+			turn.TurnID,
+			skill.SkillID,
+			strings.TrimSpace(toolName),
+			strings.TrimSpace(requirement.CapabilityKey),
+			decision.SurfaceKind,
+			decision.Allowed,
+			decision.Reason,
+		)
+		switch {
+		case authorizeErr == nil:
+			return nil
+		case errors.Is(authorizeErr, toolaccess.ErrConsentRequired):
+			return runerrors.AppErrorFromSkillConsentRequired(
+				"tool capability consent is not active",
+			)
+		case errors.Is(authorizeErr, toolaccess.ErrConnectorRequired),
+			errors.Is(authorizeErr, toolaccess.ErrSurfaceDenied):
+			return runerrors.AppErrorFromConnectorCapabilityRequired(
+				"required connector capability is not active for this surface",
+			)
+		default:
+			return runerrors.AppErrorFromConnectorGatewayUnavailable(
+				"connector capability policy could not be evaluated",
+			)
+		}
+	})
 	runCommands := runruntime.NewCommandService(
 		deps.runRepository,
 		runruntime.SessionAuthorizerFunc(func(
@@ -457,7 +801,7 @@ func run() error {
 			userID string,
 			sessionID string,
 		) error {
-			session, found, readErr := deps.sessionRunStore.GetSession(
+			session, found, readErr := deps.sessionStore.GetSession(
 				ctx,
 				sessionID,
 			)
@@ -469,22 +813,114 @@ func run() error {
 			}
 			return nil
 		}),
+		activeSkillCatalog,
+		runruntime.StartAccessPolicyFunc(func(
+			ctx context.Context,
+			request runruntime.StartAccessRequest,
+		) error {
+			return authorizeSkillAccess(
+				ctx,
+				request.AccountID,
+				request.SkillID,
+				request.SurfaceKind,
+				request.SurfaceID,
+			)
+		}),
 		time.Now,
 		runCancellation,
+		frozenPolicyResolver,
+	)
+	pageContextFacade := pageapplication.NewFacade(
+		pagepersistence.NewRedisStore(router.Scene("general")),
+		func() time.Time { return time.Now().UTC() },
+	)
+	runContextResolver := runapplication.NewContextResolver(
+		runapplication.CurrentPageContextReaderFunc(func(
+			ctx context.Context,
+			accountID string,
+		) (map[string]any, bool, error) {
+			current, readErr := pageContextFacade.Current(ctx, accountID)
+			if readErr != nil || current == nil {
+				return nil, false, readErr
+			}
+			objects := make([]any, 0, len(current.Snapshot.PageObjects))
+			for _, object := range current.Snapshot.PageObjects {
+				objects = append(objects, map[string]any{
+					"objectTypeRef": object.ObjectTypeRef,
+					"objectId":      object.ObjectID,
+				})
+			}
+			actions := make([]any, 0, len(current.Snapshot.UserActions))
+			for _, action := range current.Snapshot.UserActions {
+				actions = append(actions, map[string]any{
+					"action":        action.ActionType,
+					"objectTypeRef": action.ObjectTypeRef,
+					"objectId":      action.ObjectID,
+				})
+			}
+			return map[string]any{
+				"capturedAt":  current.CapturedAt.UTC(),
+				"pageType":    current.Snapshot.PageType,
+				"pageObjects": objects,
+				"userActions": actions,
+				"consentMatrix": map[string]any{
+					"canReadCurrentPage": current.Snapshot.ConsentGranted,
+				},
+			}, true, nil
+		}),
+		runapplication.IntersectionEvidenceAuthorizerFunc(func(
+			ctx context.Context,
+			personaID string,
+			references []runapplication.IntersectionEvidenceRef,
+		) ([]runapplication.AuthorizedIntersectionEvidence, error) {
+			requested := make([]assistantdomain.AssistantIntersectionEvidenceRef, 0, len(references))
+			for _, reference := range references {
+				requested = append(requested, assistantdomain.AssistantIntersectionEvidenceRef{
+					IntersectionID: reference.IntersectionID,
+					EvidenceID:     reference.EvidenceID,
+					SourceRef:      reference.SourceRef,
+					ObjectTypeRef:  reference.ObjectTypeRef,
+					ObjectID:       reference.ObjectID,
+				})
+			}
+			authorized, authorizeErr := intersectionInbox.ResolveAuthorizedIntersectionEvidence(
+				ctx,
+				personaID,
+				requested,
+			)
+			if authorizeErr != nil {
+				if errors.Is(authorizeErr, runapplication.ErrIntersectionEvidenceNotFound) {
+					return nil, runapplication.ErrIntersectionEvidenceNotFound
+				}
+				return nil, authorizeErr
+			}
+			result := make([]runapplication.AuthorizedIntersectionEvidence, 0, len(authorized))
+			for _, evidence := range authorized {
+				result = append(result, runapplication.AuthorizedIntersectionEvidence{
+					IntersectionID: evidence.IntersectionID,
+					EvidenceID:     evidence.EvidenceID,
+					SourceRef:      evidence.SourceRef,
+					ObjectTypeRef:  evidence.ObjectTypeRef,
+					ObjectID:       evidence.ObjectID,
+					PrimaryText:    evidence.PrimaryText,
+					Dimension:      evidence.Dimension,
+					VerifiedAt:     evidence.VerifiedAt,
+				})
+			}
+			return result, nil
+		}),
 	)
 	assistantOpts := []orchestration.AssistantServiceOption{
 		orchestration.WithLearningProjectionReader(deps.learningProjection),
 		orchestration.WithNotificationAppMessageCommandWriter(notificationWriter),
 		orchestration.WithSkillSubscriptionStore(deps.subscriptionStore),
 		orchestration.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
-		orchestration.WithSessionRunStore(deps.sessionRunStore),
+		orchestration.WithSessionStore(deps.sessionStore),
 		orchestration.WithPreferenceSnapshotReader(preferenceQueries),
-		orchestration.WithCreationSuggestGrounding(creationGroundingClient),
-		orchestration.WithXiaoquSearchReader(canonicalSearch),
 		orchestration.WithIntersectionInboxReader(intersectionInbox),
-		orchestration.WithIntersectionEvidenceReader(intersectionInbox),
 		orchestration.WithAgentLoop(agentLoop),
 		orchestration.WithRunCommandService(runCommands),
+		orchestration.WithSkillCatalog(activeSkillCatalog),
 	}
 	chatBase := strings.TrimSpace(cfg.ChatService.BaseURL)
 	if chatBase == "" {
@@ -536,47 +972,6 @@ func run() error {
 	learningOpsQueries := learningapplication.NewOpsQueryService(
 		deps.learningProjection,
 	)
-	assistantOpts = append(
-		assistantOpts,
-		orchestration.WithLearningFactWriter(
-			sessionports.LearningFactWriterFunc(func(
-				ctx context.Context,
-				command sessionports.ServiceScorecardFactCommand,
-			) error {
-				_, appendErr := learningFactService.AppendServiceFact(
-					ctx,
-					learningmodel.AppendCommand{
-						EventID:          command.EventID,
-						FactType:         learningmodel.FactTypeServiceScorecard,
-						AssistantTurnID:  command.AssistantTurnID,
-						ReferralSource:   "service",
-						DomainID:         command.DomainID,
-						MetricID:         command.MetricID,
-						MetricValue:      command.MetricValue,
-						MetricSource:     command.MetricSource,
-						TrainingEligible: false,
-						OccurredAt:       command.OccurredAt,
-					},
-				)
-				return appendErr
-			}),
-		),
-	)
-	assistantOpts = append(
-		assistantOpts,
-		orchestration.WithPolicySkillCandidateResolver(
-			sessionports.PolicySkillCandidateResolverFunc(
-				func(
-					ctx context.Context,
-					policyID string,
-					personaID string,
-				) ([]string, error) {
-					return policyRolloutService.ResolveSkillCandidates(ctx, policyID, personaID)
-				},
-			),
-		),
-		orchestration.WithFrozenPolicyResolver(frozenPolicyResolver),
-	)
 	service := orchestration.NewAssistantService(
 		deps.consentStore,
 		router.Scene("general"),
@@ -586,9 +981,45 @@ func run() error {
 		deps.consentStore,
 		func() time.Time { return time.Now().UTC() },
 	)
-	consentQueries := consentapplication.NewQueryFacade(deps.consentStore)
+	settingCommands := settingapplication.NewCommandFacade(
+		deps.settingStore,
+		activeSkillCatalog,
+		func() time.Time { return time.Now().UTC() },
+	)
 	serviceCtx, serviceCancel := context.WithCancel(context.Background())
 	defer serviceCancel()
+	runTerminalLearningRelay := runruntime.NewTerminalLearningRelay(
+		deps.runRepository,
+		runruntime.ServiceScorecardAppenderFunc(func(
+			ctx context.Context,
+			command runruntime.ServiceScorecardCommand,
+		) error {
+			_, appendErr := learningFactService.AppendServiceFact(
+				ctx,
+				learningmodel.AppendCommand{
+					EventID:          command.EventID,
+					FactType:         learningmodel.FactTypeServiceScorecard,
+					AssistantTurnID:  command.AssistantRunID,
+					ReferralSource:   "service",
+					DomainID:         command.DomainID,
+					MetricID:         command.MetricID,
+					MetricValue:      command.MetricValue,
+					MetricSource:     command.MetricSource,
+					TrainingEligible: false,
+					OccurredAt:       command.OccurredAt,
+				},
+			)
+			return appendErr
+		}),
+		instanceID+":assistant-run-terminal-learning",
+		learningOutboxRelayInterval,
+		128,
+	)
+	go runTerminalLearningRelay.Run(serviceCtx)
+	log.Printf(
+		"assistant-service run terminal learning relay enabled interval=%s",
+		learningOutboxRelayInterval,
+	)
 	subscriptionScheduler, err := scheduling.NewSkillSubscriptionScheduler(
 		service,
 		skillSubscriptionCronInterval,
@@ -741,6 +1172,22 @@ func run() error {
 	)
 	go consumer.Run(serviceCtx, 500*time.Millisecond)
 	log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
+	placementProjector := placementapplication.NewMembershipProjector(
+		deps.placementStore,
+		func() time.Time { return time.Now().UTC() },
+	)
+	placementConsumer := placementmessaging.NewAssistantMembershipConsumer(
+		messageTransport,
+		placementProjector,
+		instanceID,
+		slog.Default(),
+	)
+	go placementConsumer.Run(serviceCtx, 500*time.Millisecond)
+	log.Printf(
+		"assistant-service assistant membership consumer enabled stream=%s group=%s",
+		placementmessaging.AssistantMembershipStream,
+		placementmessaging.AssistantMembershipConsumerGroup,
+	)
 	runWorker := runruntime.NewDurableWorker(
 		deps.runRepository,
 		deps.runRepository,
@@ -754,38 +1201,44 @@ func run() error {
 	)
 	baseHandler := httpadapter.NewHandler(
 		service,
-		httpadapter.WithPreferenceFacades(
-			preferenceCommands,
-			preferenceQueries,
-		),
 		httpadapter.WithRunCommandService(runCommands),
+		httpadapter.WithRunPreferenceSnapshots(preferenceQueries),
+		httpadapter.WithRunContextResolver(runContextResolver),
 	).Routes()
-	skillCatalogQueries := skillcatalogapplication.NewQueryService(
-		skillcatalogresource.NewCatalogSource(),
-		skillcatalogports.ConsentReaderFunc(func(
-			ctx context.Context,
-			accountID string,
-		) (map[string]string, error) {
-			if deps.consentStore == nil {
-				return nil, errors.New("skill consent store is not configured")
-			}
-			consents, err := deps.consentStore.ListActiveConsents(ctx, accountID)
-			if err != nil {
-				return nil, err
-			}
-			scopes := make(map[string]string, len(consents))
-			for _, consent := range consents {
-				scopes[consent.SkillID] = consent.GrantedScope
-			}
-			return scopes, nil
-		}),
-	)
+	skillCatalogQueries := skillcatalogapplication.NewQueryService(activeSkillCatalog)
 	serviceMux := http.NewServeMux()
+	entryhttp.NewHandler(entryapplication.NewQueryFacade(
+		deps.entryViewReader,
+		pageContextFacade,
+	)).RegisterRoutes(serviceMux)
+	taskhttp.NewHandler(
+		taskapplication.NewQueryFacade(deps.taskViewReader),
+	).RegisterRoutes(serviceMux)
+	pagehttp.NewHandler(pageContextFacade).RegisterRoutes(serviceMux)
+	subscriptionhttp.NewHandler(
+		subscriptionapplication.NewUseCases(
+			deps.subscriptionStore,
+			chatGroundingClient,
+			service,
+			time.Now,
+		),
+	).RegisterRoutes(serviceMux)
+	preferencehttp.NewHandler(
+		preferenceCommands,
+		preferenceQueries,
+	).RegisterRoutes(serviceMux)
 	consenthttp.NewHandler(consentCommands, consentQueries).RegisterRoutes(serviceMux)
+	settinghttp.NewHandler(settingCommands, settingQueries).RegisterRoutes(serviceMux)
+	placementhttp.NewHandler(placementCommands, placementQueries).RegisterRoutes(serviceMux)
 	policyreleasehttp.NewHandler(policyReleaseService).RegisterRoutes(serviceMux)
 	policyrollouthttp.NewHandler(policyRolloutService).RegisterRoutes(serviceMux)
+	skillpackagehttp.NewHandler(skillPackageService).RegisterRoutes(serviceMux)
 	turnviewhttp.NewHandler(
-		turnviewapplication.NewQueryFacade(deps.turnViewReader),
+		turnviewapplication.NewQueryFacade(
+			deps.turnViewReader,
+			deps.sessionStore,
+			deps.turnViewProjector,
+		),
 	).RegisterRoutes(serviceMux)
 	learninghttp.NewHandler(
 		learningFactService,
@@ -877,44 +1330,31 @@ func logStartupFailure(err error) {
 	logger.Error("assistant-service startup failed", attributes...)
 }
 
-func projectFrozenPolicySelection(
-	resolved policyrolloutapplication.FrozenSelection,
-) assistantdomain.AssistantFrozenPolicySelection {
-	return assistantdomain.AssistantFrozenPolicySelection{
-		PolicyID:        resolved.PolicyID,
-		ReleaseDigest:   resolved.ReleaseDigest,
-		Cohort:          resolved.Cohort,
-		RolloutRevision: resolved.RolloutRevision,
-		RuleID:          resolved.RuleID,
-		Template: assistantdomain.AssistantFrozenPolicyTemplate{
-			TemplateID:   resolved.Template.TemplateID,
-			SkillID:      resolved.Template.SkillID,
-			DomainID:     resolved.Template.DomainID,
-			PromptPolicy: resolved.Template.PromptPolicy,
-			AllowedTools: append(
-				[]string(nil),
-				resolved.Template.AllowedTools...,
-			),
-			SearchIntensity: resolved.Template.SearchIntensity,
+func projectRunFrozenPolicySelection(
+	selection policyrolloutapplication.FrozenSelection,
+) runruntime.FrozenPolicySelection {
+	return runruntime.FrozenPolicySelection{
+		PolicyID:        selection.PolicyID,
+		ReleaseDigest:   selection.ReleaseDigest,
+		Cohort:          selection.Cohort,
+		RolloutRevision: selection.RolloutRevision,
+		RuleID:          selection.RuleID,
+		Template: runruntime.FrozenPolicyTemplate{
+			TemplateID:      selection.Template.TemplateID,
+			SkillID:         selection.Template.SkillID,
+			DomainID:        selection.Template.DomainID,
+			PromptPolicy:    selection.Template.PromptPolicy,
+			AllowedTools:    append([]string(nil), selection.Template.AllowedTools...),
+			SearchIntensity: selection.Template.SearchIntensity,
 		},
-		LearningContextPolicy: assistantdomain.AssistantFrozenLearningContextPolicy{
-			Enabled: resolved.LearningContextPolicy.Enabled,
-			AllowedSignals: append(
-				[]string(nil),
-				resolved.LearningContextPolicy.AllowedSignals...,
-			),
-			AllowedMetricIDs: append(
-				[]string(nil),
-				resolved.LearningContextPolicy.AllowedMetricIDs...,
-			),
-			AllowedReasonCodes: append(
-				[]string(nil),
-				resolved.LearningContextPolicy.AllowedReasonCodes...,
-			),
-			MinimumFeedbackSamples: resolved.LearningContextPolicy.MinimumFeedbackSamples,
-			WindowDays:             resolved.LearningContextPolicy.WindowDays,
-			SnapshotTrainingEligible: resolved.LearningContextPolicy.
-				SnapshotTrainingEligible,
+		LearningContextPolicy: runruntime.FrozenLearningContextPolicy{
+			Enabled:                  selection.LearningContextPolicy.Enabled,
+			AllowedSignals:           append([]string(nil), selection.LearningContextPolicy.AllowedSignals...),
+			AllowedMetricIDs:         append([]string(nil), selection.LearningContextPolicy.AllowedMetricIDs...),
+			AllowedReasonCodes:       append([]string(nil), selection.LearningContextPolicy.AllowedReasonCodes...),
+			MinimumFeedbackSamples:   selection.LearningContextPolicy.MinimumFeedbackSamples,
+			WindowDays:               selection.LearningContextPolicy.WindowDays,
+			SnapshotTrainingEligible: selection.LearningContextPolicy.SnapshotTrainingEligible,
 		},
 	}
 }

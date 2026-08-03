@@ -1,9 +1,9 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -37,24 +37,24 @@ bool conversationAvatarNeedsMembers({
 }
 
 class ConversationAvatarMembersNotifier
-    extends Notifier<Map<String, List<ChatConversationMemberDto>>> {
+    extends Notifier<Map<String, List<ConversationMemberListRow>>> {
   static const int _maxCachedConversations = 120;
 
-  final Map<String, Future<List<ChatConversationMemberDto>>> _inflight =
-      <String, Future<List<ChatConversationMemberDto>>>{};
+  final Map<String, Future<List<ConversationMemberListRow>>> _inflight =
+      <String, Future<List<ConversationMemberListRow>>>{};
 
   @override
-  Map<String, List<ChatConversationMemberDto>> build() {
+  Map<String, List<ConversationMemberListRow>> build() {
     ref.watch(chatMemberRepositoryProvider);
     ref.watch(currentUserIdProvider);
     _inflight.clear();
-    return const <String, List<ChatConversationMemberDto>>{};
+    return const <String, List<ConversationMemberListRow>>{};
   }
 
-  Future<List<ChatConversationMemberDto>> ensureLoaded(String conversationId) {
+  Future<List<ConversationMemberListRow>> ensureLoaded(String conversationId) {
     final id = conversationId.trim();
     if (id.isEmpty) {
-      return Future.value(const <ChatConversationMemberDto>[]);
+      return Future.value(const <ConversationMemberListRow>[]);
     }
     final cached = state[id];
     if (cached != null) {
@@ -74,7 +74,7 @@ class ConversationAvatarMembersNotifier
   }
 
   Future<void> prefetchInbox(
-    List<ChatInboxDto> items, {
+    List<ChatInboxViewData> items, {
     int offset = 0,
     int limit = kConversationAvatarInitialPrefetchLimit,
   }) async {
@@ -101,7 +101,7 @@ class ConversationAvatarMembersNotifier
     );
   }
 
-  Future<List<ChatConversationMemberDto>> _loadMembers(
+  Future<List<ConversationMemberListRow>> _loadMembers(
     String conversationId,
   ) async {
     final repo = ref.read(chatMemberRepositoryProvider);
@@ -112,11 +112,17 @@ class ConversationAvatarMembersNotifier
         limit: 9,
         sort: 'joined_asc',
       );
-      final normalized = List<ChatConversationMemberDto>.unmodifiable(
+      final normalized = List<ConversationMemberListRow>.unmodifiable(
         members
             .map(
-              (member) => member.copyWith(
+              (member) => ConversationMemberListRow(
+                userId: member.userId,
+                userHandle: member.userHandle,
+                displayName: member.displayName,
                 avatarUrl: resolveAvatarImageUrl(member.avatarUrl),
+                role: member.role,
+                memberType: member.memberType,
+                joinedAt: member.joinedAt,
                 isCurrentUser:
                     member.isCurrentUser || member.userId == currentUserId,
               ),
@@ -126,13 +132,13 @@ class ConversationAvatarMembersNotifier
       _store(conversationId, normalized);
       return normalized;
     } catch (_) {
-      _store(conversationId, const <ChatConversationMemberDto>[]);
-      return const <ChatConversationMemberDto>[];
+      _store(conversationId, const <ConversationMemberListRow>[]);
+      return const <ConversationMemberListRow>[];
     }
   }
 
-  void _store(String conversationId, List<ChatConversationMemberDto> members) {
-    final next = LinkedHashMap<String, List<ChatConversationMemberDto>>.from(
+  void _store(String conversationId, List<ConversationMemberListRow> members) {
+    final next = LinkedHashMap<String, List<ConversationMemberListRow>>.from(
       state,
     );
     next.remove(conversationId);
@@ -140,12 +146,12 @@ class ConversationAvatarMembersNotifier
     while (next.length > _maxCachedConversations) {
       next.remove(next.keys.first);
     }
-    state = Map<String, List<ChatConversationMemberDto>>.unmodifiable(next);
+    state = Map<String, List<ConversationMemberListRow>>.unmodifiable(next);
   }
 }
 
 final conversationAvatarMembersProvider =
     NotifierProvider<
       ConversationAvatarMembersNotifier,
-      Map<String, List<ChatConversationMemberDto>>
+      Map<String, List<ConversationMemberListRow>>
     >(ConversationAvatarMembersNotifier.new);

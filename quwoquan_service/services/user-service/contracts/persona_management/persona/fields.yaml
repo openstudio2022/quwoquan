@@ -404,6 +404,31 @@ fields:
     description: Persona aggregate optimistic concurrency version。
     role: authoritative_state
 types:
+  PersonaProfileSyncResult:
+    fields:
+      - {name: status, type: string, constraints: [NOT_NULL]}
+      - {name: appliedCount, type: int, constraints: [NOT_NULL]}
+      - {name: fieldsMask, type: '[]string', constraints: [NOT_NULL]}
+  ProfileUpdateSnapshot:
+    fields:
+      - {name: userId, type: string, constraints: [NOT_BLANK]}
+      - {name: nickname, type: string, constraints: [NOT_NULL]}
+      - {name: nicknameCustomized, type: boolean, constraints: [NOT_NULL]}
+      - {name: profileVersion, type: int, constraints: [NOT_NULL]}
+      - {name: accountState, type: string, constraints: [NULLABLE]}
+      - {name: avatarUrl, type: string, constraints: [NULLABLE]}
+      - {name: avatarAssetId, type: string, constraints: [NULLABLE]}
+      - {name: avatarVersion, type: int, constraints: [NOT_NULL]}
+      - {name: backgroundUrl, type: string, constraints: [NULLABLE]}
+      - {name: backgroundAssetId, type: string, constraints: [NULLABLE]}
+      - {name: bio, type: string, constraints: [NULLABLE]}
+      - {name: identityTags, type: '[]string', constraints: [NOT_NULL]}
+      - {name: gender, type: string, constraints: [NULLABLE]}
+      - {name: birthDate, type: date, constraints: [NULLABLE]}
+      - {name: region, type: string, constraints: [NULLABLE]}
+      - {name: regionTagRef, type: string, constraints: [NULLABLE]}
+      - {name: status, type: string, constraints: [NULLABLE]}
+      - {name: updatedAt, type: timestamp, constraints: [NULLABLE]}
   PersonaProfileMutation:
     description: Persona 公开资料编辑 mutation；显式携带同步范围与同步目标
     fields:
@@ -519,7 +544,7 @@ types:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 用户职业标签，V1 单选，必须由 tag-service validateRefs 校验
+        description: 用户职业标签，单选，必须由 tag-service validateRefs 校验
       - name: interestTagRefs
         source: interestTagRefs
         type: '[]tag_ref'
@@ -529,7 +554,7 @@ types:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 用户兴趣标签，V1 多选，必须由 tag-service validateRefs 校验
+        description: 用户兴趣标签，多选，必须由 tag-service validateRefs 校验
       - name: expectedTaxonomyReleaseId
         source: expectedTaxonomyReleaseId
         type: string

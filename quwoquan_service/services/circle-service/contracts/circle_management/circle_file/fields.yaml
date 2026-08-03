@@ -434,10 +434,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: fileType
-        type: CircleFileType
+        type: enum
         enum_ref: CircleFileType
-        client_dart_type: CircleFileType
-        client_wire: canonicalEnum
       - name: assetId
         type: string
         constraints:

@@ -1,0 +1,14 @@
+backend: mongodb
+role: external
+collections:
+  location_pois:
+    entity: Location
+    role: projection
+    description: 外部位置 authority 的规范化只读目录缓存；不得成为位置事实权威源。
+    indexes:
+    - name: idx_location_pois_name
+      keys:
+        name: 1
+    - name: idx_location_pois_geo
+      keys:
+        location: 2dsphere

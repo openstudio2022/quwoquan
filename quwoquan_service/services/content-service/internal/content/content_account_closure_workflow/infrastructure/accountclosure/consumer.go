@@ -23,16 +23,8 @@ const (
 	DeadLetterRetention       = 7 * 24 * time.Hour
 )
 
-type ApplyResult struct {
-	Replayed bool
-}
-
-type EventProcessor interface {
-	Apply(
-		ctx context.Context,
-		event UserAccountClosedEvent,
-	) (ApplyResult, error)
-}
+type ApplyResult = accountclosureapp.ApplyResult
+type EventProcessor = accountclosureapp.Processor
 
 // AccountRestrictionProjection owns the reversible resource restriction for
 // UserSuspended/UserRestored. It is deliberately separate from EventProcessor:

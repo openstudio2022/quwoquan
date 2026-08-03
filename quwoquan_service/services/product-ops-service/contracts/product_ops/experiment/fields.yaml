@@ -124,6 +124,98 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
+  CreateExperimentRequest:
+    description: 创建首个 Experiment revision 的唯一强类型请求；服务端生成 version、createdAt 与 updatedAt
+    fields:
+    - name: id
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: key
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: status
+      type: enum
+      enum_ref: ExperimentStatus
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: variants
+      type: '[]Variant'
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: audienceRule
+      type: AudienceRule
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: startsAt
+      type: timestamp
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: endsAt
+      type: timestamp
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+  CreateExperimentResult:
+    description: 首个 Experiment revision 与 durable policy activation 的提交结果
+    fields:
+    - name: id
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: key
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: status
+      type: enum
+      enum_ref: ExperimentStatus
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: experimentRevision
+      type: int
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: variants
+      type: '[]Variant'
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
   UpdateExperimentRolloutRequest:
     description: 更新 Experiment 状态和 draft 期变体权重的唯一强类型请求实体；experimentId 只从 path 绑定，expectedVersion 只从 If-Match 绑定
     fields:

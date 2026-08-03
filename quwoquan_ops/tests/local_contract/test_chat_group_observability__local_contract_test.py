@@ -20,7 +20,7 @@ CHAT_COMMERCIAL_METRICS = (
 )
 PROMETHEUS_CONFIG = ROOT / "quwoquan_ops/observability/monitoring/prometheus.yml"
 PRODUCT_TELEMETRY = (
-    ROOT / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+    ROOT / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
 )
 
 
@@ -119,7 +119,7 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
         self.assertIn("chat_read_watermark_command_total", expressions)
         self.assertIn("chat_inbox_projection_event_lag_seconds_bucket", expressions)
 
-    def test_chat_commercial_metrics_and_sls_funnel_share_low_cardinality_contract(self) -> None:
+    def test_chat_commercial_metrics_and_elasticsearch_funnel_share_low_cardinality_contract(self) -> None:
         metrics = CHAT_COMMERCIAL_METRICS.read_text(encoding="utf-8")
         for metric in (
             "chat_mention_command_total",
@@ -133,15 +133,13 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
         self.assertNotIn("user_id", metrics)
 
         telemetry = yaml.safe_load(PRODUCT_TELEMETRY.read_text(encoding="utf-8"))
-        jobs = telemetry["spec"]["scheduledSql"]["jobs"]
-        chat_job = next(job for job in jobs if job["name"] == "app-product-telemetry-chat-funnel-hourly")
-        self.assertEqual(chat_job["rowKind"], "chat_funnel")
-        self.assertIn("eventType:chat_interaction_outcome", chat_job["sql"])
-        self.assertIn("chatAction", chat_job["sql"])
-        self.assertIn("chatOutcome", chat_job["sql"])
-        self.assertNotIn("conversationId", chat_job["sql"])
-        self.assertNotIn("messageId", chat_job["sql"])
-        self.assertNotIn("userId", chat_job["sql"])
+        chat_job = next(job for job in telemetry["jobs"] if job["row_kind"] == "chat_funnel")
+        self.assertIn("chat_interaction_outcome", chat_job["filter"])
+        self.assertIn("chatAction", chat_job["dimensions"])
+        self.assertIn("chatOutcome", chat_job["dimensions"])
+        self.assertNotIn("conversationId", chat_job["dimensions"])
+        self.assertNotIn("messageId", chat_job["dimensions"])
+        self.assertNotIn("userId", chat_job["dimensions"])
 
 
 if __name__ == "__main__":

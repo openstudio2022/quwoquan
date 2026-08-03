@@ -68,3 +68,17 @@ errors:
   user_message:
     zh: 请勿将同一请求标识用于不同授权操作
     en: Do not reuse the same request identity for another consent command
+- code: ASSISTANT.USER.consent_scope_conflict
+  kind: USER
+  reason: consent_scope_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [GrantSkillConsent]
+  recovery_action: refresh
+  dart_const: consentScopeConflict
+  go_const: ErrConsentScopeConflict
+  l10n_key: assistant.error.consent_scope_conflict
+  user_message:
+    zh: 技能所需权限已变化，请撤销原授权后重新确认
+    en: The skill permission set changed; revoke the previous grant and confirm again

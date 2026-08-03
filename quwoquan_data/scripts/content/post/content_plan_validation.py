@@ -528,7 +528,7 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
                     else (
                         []
                         if str(asset.get("rightsAuditStatus") or "").strip()
-                        in {"verified", "unverified"}
+                        in {"verified", "unverified", "restricted", "unknown"}
                         else ["rightsAuditStatus"]
                     )
                 )

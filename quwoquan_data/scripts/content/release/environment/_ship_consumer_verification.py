@@ -14,6 +14,7 @@ from content.release.environment.homepage_api_verification import (
     HomepageApiVerificationError,
 )
 from content.release.environment.post_api_verification import PostApiVerificationError
+from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_readiness import (
     EnvironmentReleaseReadinessError,
 )
@@ -51,6 +52,16 @@ def verify_release_consumers(
     ):
         raise SystemExit("[ship] import run is not a completed environment release")
     header = read_json(payload_file(release, "release.json"))
+    lifecycle_evidence = {
+        "releaseClass": str(header.get("releaseClass") or ""),
+        "productLifecycleState": str(
+            header.get("productLifecycleState") or ""
+        ),
+        "containsUnverifiedAssets": bool(
+            header.get("containsUnverifiedAssets")
+        ),
+        "manifestDigest": payload_digest(release),
+    }
     try:
         release_kind = ReleaseKind(str(header.get("releaseKind") or ""))
     except ValueError as exc:
@@ -70,6 +81,7 @@ def verify_release_consumers(
                 "schema": "quwoquan_data.environment_release_result",
                 "environment": env,
                 "releaseId": release_id,
+                **lifecycle_evidence,
                 "runId": run_id,
                 "importRunId": str(args.import_run_id).strip(),
                 "status": ReleaseRunStatus.FAILED,
@@ -120,6 +132,7 @@ def verify_release_consumers(
                 "schema": "quwoquan_data.environment_release_result",
                 "environment": env,
                 "releaseId": release_id,
+                **lifecycle_evidence,
                 "runId": run_id,
                 "importRunId": str(args.import_run_id).strip(),
                 "status": ReleaseRunStatus.COMPLETED,
@@ -139,9 +152,9 @@ def verify_release_consumers(
     readiness_phase = str(
         getattr(args, "readiness_phase", "commercial") or "commercial"
     ).strip()
-    if readiness_phase not in {"consumer", "commercial"}:
+    if readiness_phase not in {"research", "consumer", "commercial"}:
         raise SystemExit(
-            "[ship] --readiness-phase must be consumer or commercial"
+            "[ship] --readiness-phase must be research, consumer or commercial"
         )
     post_report: Path | None = None
     if dependencies.release_has_posts(contract):
@@ -219,7 +232,7 @@ def verify_release_consumers(
         try:
             dependencies.require_environment_readiness(
                 environment=target.environment,
-                consumer=True,
+                phase=ShipReadinessPhase(readiness_phase),
                 run=run,
                 release_id=release_id,
                 verify_run_id=run_id,
@@ -233,6 +246,7 @@ def verify_release_consumers(
         "schema": "quwoquan_data.environment_release_result",
         "environment": env,
         "releaseId": release_id,
+        **lifecycle_evidence,
         "runId": run_id,
         "importRunId": str(args.import_run_id).strip(),
         "readinessPhase": readiness_phase,

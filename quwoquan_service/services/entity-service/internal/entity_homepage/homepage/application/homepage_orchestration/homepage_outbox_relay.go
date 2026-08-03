@@ -52,9 +52,8 @@ func (r *HomepageSearchRelay) RunOnce(
 		snapshot := aggregate.Snapshot()
 		view := homepageapp.ViewFromSnapshot(snapshot)
 		projection := ProjectorEvent{
-			Type:       ProjectorEventHomepageUpserted,
-			HomepageID: view.ID,
-			Homepage:   &view,
+			Type: ProjectorEventHomepageUpserted, HomepageID: view.ID,
+			SourceVersion: snapshot.Version, Homepage: &view,
 		}
 		if snapshot.Status == homepagemodel.StatusOffline {
 			projection.Type = ProjectorEventHomepageRemoved

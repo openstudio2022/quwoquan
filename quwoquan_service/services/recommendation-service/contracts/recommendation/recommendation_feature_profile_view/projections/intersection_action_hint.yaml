@@ -1,0 +1,28 @@
+read_model: IntersectionActionHint
+description: |
+  交集/影响力下一步行动建议。云侧按 kind/helpType 选择主 CTA 与次 CTA，端只读
+  actionKey、label、target、actionTier、requiredGates 与 dispatch 渲染和分发，禁止按
+  kind 猜测行动。actionKey 与 dispatch 的唯一真相源是 intersection_kind_registry.yaml；
+  当前注册表只包含已有真实承接的行动，未就绪行动不进入 wire。
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: actionKey
+  type: string
+- name: label
+  type: string
+- name: target
+  type: IntersectionTarget
+  nullable: true
+- name: isPrimary
+  type: bool
+- name: priority
+  type: int
+- name: actionTier
+  type: string
+- name: requiredGates
+  type: '[]string'
+- name: dispatch
+  type: string

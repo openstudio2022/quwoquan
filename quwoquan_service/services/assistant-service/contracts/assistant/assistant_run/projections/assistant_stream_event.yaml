@@ -1,4 +1,4 @@
-read_model: AssistantStreamEvent
+read_model: AssistantStreamEventWire
 description: 'Assistant Run 的流式事件是由独立共享 wire contract 承载的短生命周期读模型。
 
   它只用于 SSE 解码，不是持久化业务实体，也不在此处生成第二份 Dart DTO。
@@ -19,7 +19,3 @@ fields:
 - {name: createdAt}
 consumers:
 - app
-client_projection:
-  dart_class: AssistantStreamEventWire
-  output_path: assistant/generated/contracts/assistant_stream_event.g.dart
-  external_dart_path: quwoquan_app/lib/assistant/generated/contracts/assistant_stream_event.g.dart

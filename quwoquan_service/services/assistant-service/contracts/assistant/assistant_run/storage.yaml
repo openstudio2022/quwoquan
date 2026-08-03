@@ -63,6 +63,24 @@ collections:
     - name: idx_run_worker_lease_expiry
       keys:
         expiresAt: 1
+  assistant_run_work_queue:
+    entity: AssistantRun
+    description: AssistantRun durable worker 的唯一待执行队列；claim 使用 fencing token，租约过期后才允许重新领取。
+    indexes:
+    - name: idx_run_work_ready
+      keys:
+        status: 1
+        availableAt: 1
+        expiresAt: 1
+  assistant_run_terminal_outbox:
+    entity: AssistantRun
+    description: AssistantRun 终态与学习事实订阅之间的事务 outbox；终态 snapshot、journal 与该事件在同一 Mongo 事务提交，消费端以稳定 eventId 幂等追加 AssistantLearningFact。
+    indexes:
+    - name: idx_run_terminal_outbox_pending
+      keys:
+        processedAt: 1
+        claimUntil: 1
+        occurredAt: 1
   assistant_run_web_evidence:
     entity: AssistantRun
     description: Public Web Fetch Runtime 提交的 authoritative Target、Source、Document 与 Artifact ledger；四类不可变记录单次抓取事务写入，所有回查均由 runId 约束。

@@ -14,9 +14,7 @@ var (
 	ErrExperimentAssignmentInvalidArgument    = errors.New("OPS.USER.experiment_assignment_invalid_argument")
 	ErrExperimentAssignmentExperimentNotFound = errors.New("OPS.USER.experiment_assignment_experiment_not_found")
 	ErrExperimentAssignmentNotFound           = errors.New("OPS.USER.experiment_assignment_not_found")
-	ErrExperimentAssignmentNotRunning         = errors.New("OPS.USER.experiment_assignment_not_running")
 	ErrExperimentAssignmentStorageReadFailed  = errors.New("OPS.SYSTEM.experiment_assignment_storage_read_failed")
-	ErrExperimentAssignmentStorageWriteFailed = errors.New("OPS.SYSTEM.experiment_assignment_storage_write_failed")
 )
 
 // AppErrorFromExperimentAssignmentUnauthorized returns *AppError for OPS.USER.experiment_assignment_unauthorized (user_message from errors.yaml).
@@ -43,20 +41,8 @@ func AppErrorFromExperimentAssignmentNotFound(debugMessage string) *rerrors.AppE
 	return rerrors.NewAppError(code, "实验分配尚未生成", debugMessage).WithMetadata("assignment_not_found", 404).WithRecovery("retry", 0)
 }
 
-// AppErrorFromExperimentAssignmentNotRunning returns *AppError for OPS.USER.experiment_assignment_not_running (user_message from errors.yaml).
-func AppErrorFromExperimentAssignmentNotRunning(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentNotRunning.Error()))
-	return rerrors.NewAppError(code, "实验当前不可分配", debugMessage).WithMetadata("experiment_not_running", 409).WithRecovery("refresh", 0)
-}
-
 // AppErrorFromExperimentAssignmentStorageReadFailed returns *AppError for OPS.SYSTEM.experiment_assignment_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentStorageReadFailed.Error()))
 	return rerrors.NewAppError(code, "实验分配读取失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 2)
-}
-
-// AppErrorFromExperimentAssignmentStorageWriteFailed returns *AppError for OPS.SYSTEM.experiment_assignment_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromExperimentAssignmentStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "实验分配写入失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecovery("retry", 2)
 }

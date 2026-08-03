@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
+	resourcebuilder "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
@@ -34,20 +35,22 @@ func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
 			}
 		}
 		for _, required := range []string{
-			"activationProfileRef", "contextProfileRef", "capabilityProfileRef",
-			"presentationProfileRef", "evaluationProfileRef", "replayAssetRef",
+			"catalogProfileRef", "activationProfileRef", "inputProfileRef",
+			"contextProfileRef", "capabilityProfileRef", "orchestrationProfileRef",
+			"triggerProfileRef", "memoryProfileRef", "presentationProfileRef",
+			"evaluationProfileRef", "replayAssetRef",
 		} {
 			if strings.TrimSpace(document[required].(string)) == "" {
 				t.Fatalf("%s misses %s", path, required)
 			}
 		}
 	}
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, manifest := range catalog {
-		if len(manifest.ResolvedAssetRefs) != 6 {
+		if len(manifest.ResolvedAssetRefs) != 11 {
 			t.Fatalf("skill %s resolved assets=%v", manifest.SkillID, manifest.ResolvedAssetRefs)
 		}
 		for kind, proof := range manifest.ResolvedAssetRefs {
@@ -59,21 +62,24 @@ func TestSkillManifestsUseOnlyImmutableProfileRefs(t *testing.T) {
 }
 
 func TestSkillProfileDigestTamperingFailsClosed(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(assistantSkillAssetRoot(t), "profile_assets.json"))
+	bundle, err := resourcebuilder.NewSourceBuilderAt(assistantSkillAssetRoot(t)).
+		Compile(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	var assets skillpkg.ProfileAssetCatalog
-	if err := json.Unmarshal(raw, &assets); err != nil {
-		t.Fatal(err)
-	}
+	assets := bundle.Profiles
 	assets.CapabilityProfiles[0].AssetDigest = "sha256:tampered"
 	_, err = assets.ResolveManifest(skillpkg.Manifest{
-		ActivationProfileRef:   assets.ActivationProfiles[0].ProfileID,
-		ContextProfileRef:      assets.ContextProfiles[0].ProfileID,
-		CapabilityProfileRef:   assets.CapabilityProfiles[0].ProfileID,
-		PresentationProfileRef: assets.PresentationProfiles[0].ProfileID,
-		EvaluationProfileRef:   assets.EvaluationProfiles[0].ProfileID,
+		CatalogProfileRef:       assets.CatalogProfiles[0].ProfileID,
+		ActivationProfileRef:    assets.ActivationProfiles[0].ProfileID,
+		InputProfileRef:         assets.InputProfiles[0].ProfileID,
+		ContextProfileRef:       assets.ContextProfiles[0].ProfileID,
+		CapabilityProfileRef:    assets.CapabilityProfiles[0].ProfileID,
+		OrchestrationProfileRef: assets.OrchestrationProfiles[0].ProfileID,
+		TriggerProfileRef:       assets.TriggerProfiles[0].ProfileID,
+		MemoryProfileRef:        assets.MemoryProfiles[0].ProfileID,
+		PresentationProfileRef:  assets.PresentationProfiles[0].ProfileID,
+		EvaluationProfileRef:    assets.EvaluationProfiles[0].ProfileID,
 	})
 	if err == nil || !strings.Contains(err.Error(), "digest mismatch") {
 		t.Fatalf("tampered profile error=%v", err)

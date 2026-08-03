@@ -19,7 +19,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   final ContentMediaInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> initUpload(
+  Future<MediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionInitMediaUpload(
@@ -31,7 +31,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> completeUpload(
+  Future<MediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionCompleteMediaUpload(
@@ -43,7 +43,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> abortUpload(
+  Future<MediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) => client.contentMediaUploadSessionAbortMediaUpload(
@@ -55,7 +55,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaUploadSessionSlice> getUploadSession(
+  Future<MediaUploadSessionSlice> getUploadSession(
     GetContentMediaUploadSessionQuery query,
   ) => client.contentMediaUploadSessionGetMediaUploadSession(
     query,
@@ -66,7 +66,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaAssetSlice> getMediaAsset(
+  Future<MediaAssetSlice> getMediaAsset(
     GetContentMediaAssetQuery query,
   ) => client.contentMediaAssetGetMediaAsset(
     query,
@@ -77,7 +77,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+  Future<MediaAssetDiscardResult> discardMediaAsset(
     DiscardContentMediaAssetCommand command,
     ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetDiscardMediaAsset(
@@ -89,7 +89,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) => client.contentMediaOriginalAccessFactRequestOriginalImageAccess(
     command,
@@ -100,7 +100,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectAutoCover(
+  Future<MediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectAutoVideoCover(
@@ -112,7 +112,7 @@ final class RemoteContentMediaFacet implements ContentMediaFacet {
   );
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectManualCover(
+  Future<MediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   ) => client.contentMediaAssetSelectManualVideoCover(

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/research_scale_promotion.schema.json",
+  "title": "Research M100 promotion receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "promotionId",
+    "releaseId",
+    "releaseClass",
+    "productLifecycleState",
+    "manifestDigest",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "targetScale",
+    "carrierCounts",
+    "duplicateAssetCount",
+    "crossLaneWriteCount",
+    "articleIllustratedRate",
+    "resourceIsolationPassed",
+    "automaticRecoveryRate",
+    "campaignEvidenceRef",
+    "m1000Eligible",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.research_scale_promotion"},
+    "promotionId": {"type": "string", "minLength": 1},
+    "releaseId": {"type": "string", "minLength": 1},
+    "releaseClass": {"const": "research"},
+    "productLifecycleState": {"const": "research"},
+    "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "targetScale": {"const": "M100"},
+    "carrierCounts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["carrier", "researchAcceptedCount"],
+        "properties": {
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "researchAcceptedCount": {"type": "integer", "minimum": 100}
+        }
+      }
+    },
+    "duplicateAssetCount": {"const": 0},
+    "crossLaneWriteCount": {"const": 0},
+    "articleIllustratedRate": {"type": "number", "minimum": 0.9, "maximum": 1},
+    "resourceIsolationPassed": {"const": true},
+    "automaticRecoveryRate": {"type": "number", "minimum": 0.9, "maximum": 1},
+    "campaignEvidenceRef": {"type": "string", "minLength": 1},
+    "m1000Eligible": {"const": true},
+    "recordedAt": {"type": "string", "minLength": 1}
+  }
+}

@@ -98,6 +98,58 @@ func TestContractGraphRejectsDuplicateTransport(t *testing.T) {
 	}
 }
 
+func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := commercialQuery("AssistantRun", "StreamEvents", "/assistant/runs/{runId}/events")
+	operation = strings.Replace(
+		operation,
+		"    actor: persona_or_device\n",
+		"    actor: persona_or_device\n    request_body_kind: none\n    transport: sse\n    streaming: {resume_request_field: resumeToken, resume_response_field: eventId, terminal_field: eventType, terminal_values: [completed]}\n    response_admission: {maximum_body_bytes: 1048576}\n",
+		1,
+	)
+	operation = strings.Replace(
+		operation,
+		"        - {name: runId, field: runId}\n",
+		"        - {name: runId, field: runId}\n      query:\n        - {name: resumeToken, field: resumeToken, required: false}\n",
+		1,
+	)
+	writeObjectFixture(t, metadataDir, "assistant/assistant/assistant_run", aggregateObject("AssistantRun"), operation)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 1 {
+		t.Fatalf("operations=%d, want 1", len(contractGraph.Operations))
+	}
+	if got := contractGraph.Operations[0].Transport; got != "sse" {
+		t.Fatalf("transport=%q, want sse", got)
+	}
+	if issues := validate.Run(contractGraph, validate.ProfileBaseline); len(issues) != 0 {
+		t.Fatalf("valid SSE operation rejected: %+v", issues)
+	}
+}
+
+func TestContractGraphRejectsUnboundedSSETransport(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := commercialQuery("AssistantRun", "StreamEvents", "/assistant/runs/{runId}/events")
+	operation = strings.Replace(
+		operation,
+		"    actor: persona_or_device\n",
+		"    actor: persona_or_device\n    request_body_kind: none\n    transport: sse\n",
+		1,
+	)
+	writeObjectFixture(t, metadataDir, "assistant/assistant/assistant_run", aggregateObject("AssistantRun"), operation)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := validate.Run(graph.Build(catalog), validate.ProfileBaseline)
+	if !hasIssueCode(issues, "CONTRACT.TRANSPORT.SSE_FRAME_BUDGET_REQUIRED") {
+		t.Fatalf("unbounded SSE operation accepted: %+v", issues)
+	}
+}
+
 func TestObjectFirstLoaderRejectsRepeatedPathIdentity(t *testing.T) {
 	metadataDir := t.TempDir()
 	object := aggregateObject("Post") + "\ndomain: content\n"

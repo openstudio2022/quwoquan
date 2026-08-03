@@ -18,9 +18,14 @@
   "capabilityProfileRef": "capability.web_app3_device",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.realtime_info",
-  "replayAssetRef": "assistant.replay.local_life.v1",
+  "replayAssetRef": "assistant.replay.local_life",
   "promptAssets": [
     "local_life.reactive",
     "assistant.evidence_discipline"
-  ]
+  ],
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

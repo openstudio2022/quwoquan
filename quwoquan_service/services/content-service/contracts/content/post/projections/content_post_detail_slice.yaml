@@ -1,80 +1,58 @@
 read_model: ContentPostDetailSlice
-description: 'GetPost 返回的单对象详情 Slice，组合 Post 公开字段与详情扩展；
-
-  端侧使用同名 pure contract 严格解码。媒体序列保留公开
-
-  `mediaItems`，以便 Work Browser 使用与单视频字段同源的时长、封面和尺寸。
-
-  '
-source_entities:
-- Post
-- MediaAsset
-consumers:
-- app
-client_projection:
-  dart_class: ContentPostDetailSlice
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
+description: >-
+  GetPost 的 visibility-filtered flat wire projection；不包含聚合 version、embedding、
+  moderationStatus、设备审计或存储字段，不能回写为 Post。
+source_entities: [Post, MediaAsset]
+consumers: [app]
 fields:
-- name: postId
-- name: contentType
-- name: contentIdentity
-- name: assistantUsePolicy
-- name: authorId
-- name: authorDisplayName
-- name: authorAvatarUrl
-- name: authorBackgroundUrl
-- name: authorRoleLabel
-- name: authorIdentityTags
-- name: authorVerified
-- name: title
-- name: body
-- name: summary
-- name: tagRefs
-- name: entityRefs
-- name: semanticMentions
-- name: mediaAssetIds
-- name: imageUrls
-- name: mediaItems
-- name: coverUrl
-- name: thumbnailUrl
-- name: videoUrl
-- name: width
-- name: height
-- name: durationMs
-- name: articleMarkdown
-- name: markdownDialect
-- name: articleMarkdownDigest
-- name: articleAssetManifest
-- name: articleRenderProfile
-- name: contentVertical
-- name: paperThemeMode
-- name: paperTexture
-- name: entityMentions
-- name: articleTemplate
-- name: articleFontPreset
-- name: coverStrategy
-- name: coverFrameTimeMs
-- name: location
-- name: locationName
-- name: geoTagRef
-- name: visitedAt
-- name: primaryHomepageId
-- name: canonicalEntityId
-- name: primaryHomepageType
-- name: primaryHomepageSnapshot
-- name: status
-- name: moderationStatus
-- name: visibility
-- name: likeCount
-- name: commentCount
-- name: shareCount
-- name: viewCount
-- name: createdAt
-- name: updatedAt
-- name: publishedAt
-- name: recallPath
-- name: supplySource
-- name: intersectionReasons
-- name: isOfficial
-- name: badge
+  - {name: postId, type: string, nullable: false}
+  - {name: contentType, type: string, nullable: false}
+  - {name: contentIdentity, type: string, nullable: true}
+  - {name: assistantUsePolicy, type: string, nullable: true}
+  - {name: authorId, type: string, nullable: true}
+  - {name: authorDisplayName, type: string, nullable: true}
+  - {name: authorAvatarUrl, type: string, nullable: true}
+  - {name: title, type: string, nullable: true}
+  - {name: body, type: string, nullable: true}
+  - {name: summary, type: string, nullable: true}
+  - {name: tagRefs, type: '[]string', nullable: true}
+  - {name: entityRefs, type: '[]string', nullable: true}
+  - {name: semanticMentions, type: '[]PostSemanticMention', nullable: true}
+  - {name: mediaAssetIds, type: '[]string', nullable: true}
+  - {name: mediaUrls, type: '[]string', nullable: true}
+  - {name: mediaItems, type: '[]PostMediaItem', nullable: true}
+  - {name: coverUrl, type: string, nullable: true}
+  - {name: thumbnailUrl, type: string, nullable: true}
+  - {name: videoUrl, type: string, nullable: true}
+  - {name: sourceAttribution, type: SourceAttribution, nullable: true}
+  - {name: width, type: int, nullable: true}
+  - {name: height, type: int, nullable: true}
+  - {name: durationMs, type: int, nullable: true}
+  - {name: articleMarkdown, type: string, nullable: true}
+  - {name: markdownDialect, type: string, nullable: true}
+  - {name: articleMarkdownDigest, type: string, nullable: true}
+  - {name: articleAssetManifest, type: PostArticleAssetManifest, nullable: true}
+  - {name: articleRenderProfile, type: PostArticleRenderProfile, nullable: true}
+  - {name: contentVertical, type: string, nullable: true}
+  - {name: entityMentions, type: '[]PostEntityMention', nullable: true}
+  - {name: articleTemplate, type: string, nullable: true}
+  - {name: articleFontPreset, type: string, nullable: true}
+  - {name: coverStrategy, type: string, nullable: true}
+  - {name: coverFrameTimeMs, type: int, nullable: true}
+  - {name: location, type: GeoPoint, nullable: true}
+  - {name: locationName, type: string, nullable: true}
+  - {name: geoTagRef, type: string, nullable: true}
+  - {name: visitedAt, type: timestamp, nullable: true}
+  - {name: primaryHomepageId, type: string, nullable: true}
+  - {name: canonicalEntityId, type: string, nullable: true}
+  - {name: primaryHomepageType, type: string, nullable: true}
+  - {name: primaryHomepageSnapshot, type: PostHomepageSnapshot, nullable: true}
+  - {name: status, type: string, nullable: false}
+  - {name: visibility, type: string, nullable: false}
+  - {name: likeCount, type: int, nullable: false}
+  - {name: commentCount, type: int, nullable: false}
+  - {name: shareCount, type: int, nullable: false}
+  - {name: viewCount, type: int, nullable: false}
+  - {name: createdAt, type: timestamp, nullable: false}
+  - {name: updatedAt, type: timestamp, nullable: false}
+  - {name: publishedAt, type: timestamp, nullable: true}

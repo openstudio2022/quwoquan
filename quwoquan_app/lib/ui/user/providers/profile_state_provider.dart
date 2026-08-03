@@ -1,11 +1,10 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
@@ -18,7 +17,8 @@ import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide InteractionDirection;
 
 class ProfileState {
   const ProfileState({
@@ -49,7 +49,7 @@ class ProfileState {
   final InteractionSubTab interactionSubTab;
   final InteractionDirection interactionDirection;
 
-  final List<PostBaseDto> creations;
+  final List<ContentPostViewData> creations;
   final List<CircleDto> circles;
   final bool isIdentityLoading;
   final bool isIdentitySlow;
@@ -88,7 +88,7 @@ class ProfileState {
     CreationVisibility? activeVisibility,
     InteractionSubTab? interactionSubTab,
     InteractionDirection? interactionDirection,
-    List<PostBaseDto>? creations,
+    List<ContentPostViewData>? creations,
     List<CircleDto>? circles,
     bool? isIdentityLoading,
     bool? isIdentitySlow,
@@ -611,7 +611,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
     state = state.copyWith(isFollowing: nextFollowing);
   }
 
-  Future<GreetingRequestDto> sendGreeting({
+  Future<GreetingRequestViewData> sendGreeting({
     String? requestMessage,
     String source = 'profile',
     GreetingIntersectionRef? intersectionRef,
@@ -646,7 +646,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
     return greeting;
   }
 
-  Future<ChatConversationCreatedDto> openOrCreateDirectConversation() async {
+  Future<ChatConversationCreatedViewData>
+  openOrCreateDirectConversation() async {
     final targetUserId = state.profile?.personaId.isNotEmpty == true
         ? state.profile!.personaId
         : _userId;
@@ -662,7 +663,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
     return result;
   }
 
-  Future<GreetingReplyResultDto> replyGreetingIntoConversation(
+  Future<GreetingReplyResultViewData> replyGreetingIntoConversation(
     String requestId,
   ) async {
     final result = await ref

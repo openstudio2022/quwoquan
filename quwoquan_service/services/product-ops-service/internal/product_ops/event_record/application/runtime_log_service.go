@@ -57,7 +57,7 @@ type RuntimeLogSummary struct {
 type RuntimeLogDrilldownQuery struct {
 	Signal, Severity, ErrorCode, Fingerprint, SourceType, Service, AppVersion string
 	// ActorHash 支持"按用户查日志"（敏感权限已在 transport 层校验）；
-	// MessageContains 支持日志文本检索（SLS 全文索引短语匹配）。
+	// MessageContains 支持日志文本检索（Elasticsearch match_phrase）。
 	ActorHash, MessageContains string
 	From, To                   time.Time
 	Limit                      int

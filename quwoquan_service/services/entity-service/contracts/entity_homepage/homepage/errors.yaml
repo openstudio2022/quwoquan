@@ -10,7 +10,7 @@ errors:
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
+    operations: [entity.homepage_search_item_view.SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -101,7 +101,7 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
+    operations: [entity.homepage_search_item_view.SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: internalError
   go_const: ErrInternalError

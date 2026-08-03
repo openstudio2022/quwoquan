@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../object_scenario_seed_reader.dart';
@@ -24,7 +25,8 @@ final class AlphaAppMessageAdapter
     final messageType = query.messageType?.trim() ?? '';
     final matches = _messages
         .where((message) {
-          if (messageType.isNotEmpty && message.messageType != messageType) {
+          if (messageType.isNotEmpty &&
+              message.messageType.wireName != messageType) {
             return false;
           }
           if (query.read != null && message.read != query.read) {
@@ -33,7 +35,7 @@ final class AlphaAppMessageAdapter
           return true;
         })
         .take(query.limit);
-    return AppMessageInboxSlice(items: matches);
+    return AppMessageInboxSlice(items: matches.toList(growable: false));
   }
 
   @override

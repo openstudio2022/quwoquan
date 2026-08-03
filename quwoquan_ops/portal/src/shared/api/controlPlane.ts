@@ -325,7 +325,6 @@ export interface ControlPlaneMutationReceipt {
 // PremiumPoolEntryItem 对齐 product-ops-service 全局精选池条目：
 // upsert/rollback/takedown 全部真实落库并经 outbox 事件广播给 content-service。
 export interface PremiumPoolEntryItem {
-  id: string;
   contentId: string;
   scope: string;
   status: string;
@@ -338,6 +337,7 @@ export interface PremiumPoolEntryItem {
   featuredAt: string;
   expiresAt: string;
   takedownEjected: boolean;
+  revision: number;
   updatedAt: string;
 }
 
@@ -523,7 +523,7 @@ export interface RuntimeLogQuery {
   appVersion?: string;
   /** 按用户维度检索（服务端要求 sensitive 权限；与 revealCorrelation 同门）。 */
   actorHash?: string;
-  /** 日志文本检索（SLS 全文索引短语匹配 / memory contains）。 */
+  /** 日志文本检索（Elasticsearch match_phrase；memory 仅限对象级 local_contract）。 */
   messageContains?: string;
   from?: string;
   to?: string;
@@ -1200,17 +1200,27 @@ export async function upsertPremiumPoolEntry(payload: {
   rollbackToken?: string;
   expiresAt: string;
 }): Promise<PremiumPoolEntryItem> {
-  return postJSON<PremiumPoolEntryItem>(
+  return mutateJSON<PremiumPoolEntryItem>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    'POST',
     productControlPlaneOperationPath('UpsertPremiumPoolEntry'),
     payload,
+    {
+      'Idempotency-Key': premiumPoolMutationKey('upsert', payload.contentId),
+    },
   );
 }
 
 export async function rollbackPremiumPoolEntry(contentId: string): Promise<PremiumPoolEntryItem> {
   const path = productControlPlaneOperationPath('RollbackPremiumPoolEntry')
     .replace('{contentId}', encodeURIComponent(contentId));
-  return postJSON<PremiumPoolEntryItem>(envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'), path, {});
+  return mutateJSON<PremiumPoolEntryItem>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    'POST',
+    path,
+    {},
+    { 'Idempotency-Key': premiumPoolMutationKey('rollback', contentId) },
+  );
 }
 
 // takedown 为双签高危动作：单 principal 调用会返回 pending approval 状态，
@@ -1223,8 +1233,12 @@ export async function takedownPremiumPoolEntry(contentId: string): Promise<Premi
     'POST',
     path,
     {},
-    { 'Idempotency-Key': `portal-premium-pool-takedown-${contentId}` },
+    { 'Idempotency-Key': premiumPoolMutationKey('takedown', contentId) },
   );
+}
+
+function premiumPoolMutationKey(action: string, contentId: string): string {
+  return `portal-premium-pool-${action}-${contentId}-${globalThis.crypto.randomUUID()}`;
 }
 
 export async function fetchProductWorkflows(): Promise<WorkflowItem[]> {

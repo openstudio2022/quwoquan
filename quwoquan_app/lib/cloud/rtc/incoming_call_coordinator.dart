@@ -124,7 +124,7 @@ class IncomingCallCoordinator {
           callId: ringing.callId ?? event.callId,
           deliveryKey: deliveryKey,
           targetPersonaId: targetPersonaId,
-          callType: ringing.callType.toApiString(),
+          callType: ringing.callType.wireName,
           callerName: callerName,
           sourceLabel: sourceLabel,
           trustRelation: trustRelation,
@@ -303,7 +303,7 @@ class IncomingCallCoordinator {
         final settings = await ref
             .read(userSettingsQueryReaderProvider)
             .getCallSettings();
-        final ringtoneId = settings.defaultIncomingCallRingtoneId?.value;
+        final ringtoneId = settings.defaultIncomingCallRingtoneId;
         final result = await nativeCallKit.showIncomingCall(
           envelope: envelope,
           ringtoneId: ringtoneId,
@@ -406,7 +406,7 @@ class IncomingCallCoordinator {
         await _closeNativeSurface(callId);
       case CallKitAction.end:
         final state = ref.read(callSessionProvider);
-        if (state.session?.callId == callId &&
+        if (state.session?.id == callId &&
             (state.status == CallStatus.connecting ||
                 state.status == CallStatus.inCall)) {
           await ref.read(callSessionProvider.notifier).hangupCall();

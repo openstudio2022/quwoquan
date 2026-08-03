@@ -41,7 +41,7 @@ final class RemoteChatMessageQuery implements ChatMessageQuery {
   final ChatMessageQueryInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatMessagePageSlice> listMessages(ChatListMessagesQuery query) {
+  Future<MessagePageSlice> listMessages(ChatListMessagesQuery query) {
     return client.chatMessageListMessages(
       query,
       context: invocationContext(ChatRequestPageIds.listMessages),
@@ -68,7 +68,7 @@ final class RemoteChatMessageMutationWriter
   final ChatMessageInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatCommandAck> recallMessage(
+  Future<MessageCommandAck> recallMessage(
     ChatRecallMessageCommand command, {
     required String idempotencyKey,
   }) {

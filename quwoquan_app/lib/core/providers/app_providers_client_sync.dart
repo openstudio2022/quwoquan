@@ -337,14 +337,16 @@ final clientStateSyncOutboxProvider =
 /// assistant 域共享 Remote 实例：8 个窄 Facet provider 共用同一个
 /// [RemoteAssistantRepository]（一个类实现多个窄面，与 content 域同构）。
 final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
-  final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
-  final consentAccountId = accountId;
   return RemoteAssistantRepository(
-    httpClient: ref.watch(cloudHttpClientProvider),
     operationClient: ref.watch(generatedCloudOperationClientProvider),
-    sessionInvocationContext: (clientPageId) =>
-        _assistantOperationInvocationContext(ref, clientPageId: clientPageId),
-    consentAccountId: consentAccountId,
+    invocationContext:
+        (clientPageId, {idempotencyKey, networkSurface = false}) =>
+            _assistantOperationInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+              networkSurface: networkSurface,
+            ),
   );
 });
 
@@ -352,12 +354,36 @@ CloudOperationInvocationContext _assistantOperationInvocationContext(
   Ref ref, {
   required String clientPageId,
   String? idempotencyKey,
+  bool networkSurface = false,
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final personaId = ref.read(currentUserIdProvider).trim();
   return CloudOperationInvocationContext(
-    surfaceId: AppUiSurfaces.personalAssistantDialog.id,
-    routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+    surfaceId: networkSurface
+        ? AppUiSurfaces.globalSearchNetworkResults.id
+        : AppUiSurfaces.personalAssistantDialog.id,
+    routeId: networkSurface
+        ? AppUiSurfaces.globalSearchNetworkResults.routeId
+        : AppUiSurfaces.personalAssistantDialog.routeId,
+    clientPageId: clientPageId,
+    actor: CloudOperationActorContext(
+      accountId: accountId.isEmpty ? null : accountId,
+      personaId: personaId.isEmpty ? null : personaId,
+    ),
+    idempotencyKey: idempotencyKey,
+  );
+}
+
+CloudOperationInvocationContext _assistantSkillCenterInvocationContext(
+  Ref ref, {
+  required String clientPageId,
+  String? idempotencyKey,
+}) {
+  final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+  final personaId = ref.read(currentUserIdProvider).trim();
+  return CloudOperationInvocationContext(
+    surfaceId: AppUiSurfaces.assistantSkills.id,
+    routeId: AppUiSurfaces.assistantSkills.routeId,
     clientPageId: clientPageId,
     actor: CloudOperationActorContext(
       accountId: accountId.isEmpty ? null : accountId,
@@ -382,7 +408,28 @@ final assistantSkillSubscriptionFacetProvider =
       (ref) => RemoteAssistantSkillSubscriptionAdapter(
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, {idempotencyKey}) =>
-            _assistantOperationInvocationContext(
+            _assistantSkillCenterInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
+      ),
+    );
+
+final assistantSkillCatalogFacetProvider = Provider<AssistantSkillCatalogFacet>(
+  (ref) => RemoteAssistantSkillCatalogAdapter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) =>
+        _assistantSkillCenterInvocationContext(ref, clientPageId: clientPageId),
+  ),
+);
+
+final assistantSkillUserSettingFacetProvider =
+    Provider<AssistantSkillUserSettingFacet>(
+      (ref) => RemoteAssistantSkillUserSettingAdapter(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId, {idempotencyKey}) =>
+            _assistantSkillCenterInvocationContext(
               ref,
               clientPageId: clientPageId,
               idempotencyKey: idempotencyKey,
@@ -391,8 +438,32 @@ final assistantSkillSubscriptionFacetProvider =
     );
 
 final assistantSkillConsentFacetProvider = Provider<AssistantSkillConsentFacet>(
-  (ref) => ref.watch(_assistantRemoteProvider),
+  (ref) => RemoteAssistantSkillConsentAdapter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, {idempotencyKey}) =>
+        _assistantSkillCenterInvocationContext(
+          ref,
+          clientPageId: clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
+  ),
 );
+
+final assistantConnectorManagementFacetProvider =
+    Provider<ConnectorManagementFacet>((ref) {
+      return AppProductionComposition.generatedAdapter<
+        ConnectorManagementFacet
+      >(
+        AppProductionAdapter.connectorManagement,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (String clientPageId, {String? idempotencyKey}) =>
+            _assistantSkillCenterInvocationContext(
+              ref,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
+      );
+    });
 
 final assistantLearningFactAppendFacetProvider =
     Provider<AssistantLearningFactAppendFacet>(

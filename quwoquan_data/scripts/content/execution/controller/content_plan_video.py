@@ -28,6 +28,10 @@ from governance.coverage.license import (
     rights_proof_required,
     validate_image_rights,
 )
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +91,7 @@ def _source_frames(
     rejects: dict[str, int] = {}
     seen_sha: set[str] = set()
     require_rights_proof = rights_proof_required(ctx.spec.vertical)
+    lifecycle = load_content_distribution_policy().product_lifecycle_state
 
     def reject(reason: str) -> None:
         rejects[reason] = rejects.get(reason, 0) + 1
@@ -103,6 +108,7 @@ def _source_frames(
         if source_use_mode not in {
             "licensed_adaptation",
             "factual_reference_only",
+            "rights_audit_only",
         }:
             reject("source_use_mode_invalid")
             continue
@@ -154,7 +160,7 @@ def _source_frames(
                 reject("rights_audit_status_missing")
                 continue
             if (
-                rights_audit_status == RightsAuditStatus.UNVERIFIED.value
+                rights_audit_status != RightsAuditStatus.VERIFIED.value
                 and not rights_audit_issues
             ):
                 reject("rights_audit_issues_missing")
@@ -236,6 +242,12 @@ def _sourced_videos(
         evidence, issues = SourcedVideoEvidence.from_mapping(payload)
         if issues:
             reject("sourced_video_admission_blocked")
+            continue
+        if (
+            lifecycle is ProductLifecycleState.RESEARCH
+            and evidence.publication_admission != "research_release"
+        ):
+            reject("sourced_video_release_class_mismatch")
             continue
         if require_rights_proof and not (
             evidence.commercial_authorization_status == "verified"

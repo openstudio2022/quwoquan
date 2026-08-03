@@ -120,10 +120,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: state
-        type: string
+        type: enum
         enum_ref: ProfileInteractionReadState
-        client_dart_type: ContentProfileInteractionReadState
-        client_wire: canonicalEnum
 enums:
   ProfileInteractionReadState:
     values: [seen, read]

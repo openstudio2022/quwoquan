@@ -1,0 +1,21 @@
+description: CircleSearchItemView 只由 Circle 与 Homepage 的 typed 公共事件投影。
+api_routes: []
+runtime_entrypoints:
+- name: ProjectCircleSearchItem
+  kind: projector
+  phase: event_projection
+  source_events:
+  - circle.CircleCreated
+  - circle.CircleUpdated
+  - circle.CircleDeleted
+  - entity.HomepageUpdated
+  - entity.HomepageDeleted
+  checkpoint: circle_outbox_sequence
+  rebuild: replay_circle_and_homepage_public_events
+  tombstone: delete_search_item_keep_checkpoint
+  idempotency: aggregate_version
+  application:
+    kind: command
+    facet: CircleSearchItemViewProjector
+    method: apply
+    object_owner: CircleSearchItemView

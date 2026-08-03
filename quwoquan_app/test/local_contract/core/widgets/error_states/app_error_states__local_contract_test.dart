@@ -2,11 +2,17 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/ui_error_appearance.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 Finder _decorativeCircleWithin(Finder ancestor) {
@@ -32,6 +38,7 @@ void main() {
             scope: UiErrorScope.page,
             title: SearchText.recoveryReloadLaterTitle,
             message: SearchText.recoveryReloadLaterMessage,
+            sourceCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
               label: SearchText.reload,
@@ -142,11 +149,11 @@ void main() {
       ),
     );
 
-    expect(find.text('2 秒后加载'), findsOneWidget);
-    await tester.tap(find.text('2 秒后加载'));
+    expect(find.text('2 秒后再试'), findsOneWidget);
+    await tester.tap(find.text('2 秒后再试'));
     expect(retryCount, 0);
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('1 秒后加载'), findsOneWidget);
+    expect(find.text('1 秒后再试'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text(SearchText.reload), findsOneWidget);
     await tester.tap(find.text(SearchText.reload));
@@ -182,7 +189,7 @@ void main() {
               label: SearchText.reload,
             ),
           ),
-          onAction: (_) async {},
+          onRecovery: (_) async => UiRecoveryOutcome.recovered,
         ),
       ),
     );
@@ -208,6 +215,98 @@ void main() {
         .map((payload) => payload.extensions['result'])
         .toList(growable: false);
     expect(outcomes, <Object?>['shown', 'recovery_started', 'recovered']);
+  });
+
+  testWidgets('typed stillBlocked 是正常终态且不进入 bootstrap zone', (tester) async {
+    final pageContext = AppPageContextStore.instance..setPageName('home');
+    final recorder = _CapturingTelemetryRecorder();
+    final tracker = AppPageExperienceTracker(pageContextStore: pageContext)
+      ..attachReporter(recorder)
+      ..beginPageVisit(
+        pageName: 'home',
+        pageVisitId: 'visit-still-blocked',
+        openedAt: DateTime.now(),
+      );
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: AppPageErrorState(
+          experienceTracker: tracker,
+          semantic: const UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: SearchText.recoveryServiceUnavailableTitle,
+            message: SearchText.recoveryServiceUnavailableMessage,
+            sourceCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: SearchText.reload,
+            ),
+          ),
+          onRecovery: (_) async => UiRecoveryOutcome.stillBlocked,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.text(SearchText.recoveryServiceUnavailableTitle),
+      findsOneWidget,
+    );
+    expect(
+      recorder.records
+          .where((payload) => payload.eventType == 'page_error_outcome')
+          .map((payload) => payload.extensions['result']),
+      <Object?>['shown', 'recovery_started', 'still_blocked'],
+    );
+  });
+
+  testWidgets('未分类恢复回调异常被记录但不重抛', (tester) async {
+    final pageContext = AppPageContextStore.instance..setPageName('home');
+    final recorder = _CapturingTelemetryRecorder();
+    final tracker = AppPageExperienceTracker(pageContextStore: pageContext)
+      ..attachReporter(recorder)
+      ..beginPageVisit(
+        pageName: 'home',
+        pageVisitId: 'visit-unexpected-recovery',
+        openedAt: DateTime.now(),
+      );
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: AppPageErrorState(
+          experienceTracker: tracker,
+          semantic: const UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
+            sourceCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: SearchText.reload,
+            ),
+          ),
+          onRecovery: (_) async => throw StateError('programming defect'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      recorder.records
+          .where((payload) => payload.eventType == 'page_error_outcome')
+          .map((payload) => payload.extensions['result']),
+      <Object?>['shown', 'recovery_started', 'recovery_unexpected_failure'],
+    );
   });
 
   testWidgets('AppPageErrorState 不以遥测持久化阻塞用户恢复动作', (tester) async {
@@ -239,7 +338,10 @@ void main() {
               label: SearchText.reload,
             ),
           ),
-          onAction: (_) async => retryCount += 1,
+          onRecovery: (_) async {
+            retryCount += 1;
+            return UiRecoveryOutcome.recovered;
+          },
         ),
       ),
     );

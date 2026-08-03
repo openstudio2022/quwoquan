@@ -75,7 +75,7 @@
 - `POST /content/behaviors` 是行为回流入口
 - 新增行为字段与 action 必须 metadata-first
 - 端侧统一上报通道、分级采样、clientEventId 幂等与 feedRequestId 归因见 L3 `feedback-ingestion-sampling`。
-- 推荐排序运行时只通过 `runtime/recommendation` 引擎与 `recommendation/recommendation/recommendation_model_release/policy.yaml`（或其 codegen 产物）消费策略，禁止在 UI、Repository 或 intersection 另起 ranker。
+- 推荐排序运行时只通过 recommendation-service 的 CandidateIndex、FeatureProfile、RankedRecommendationWindow 与 active ModelRelease 消费策略；Content 只调用 generated ranked-page transport 并做 Post 权限 hydration，禁止在 Go、UI、Repository 或 intersection 另起 ranker。
 - 推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率；P0+ 归因指标必须能按 `channel/vertical/supply_source/recall_path/policy_digest/intersection_class` 分桶。
 - `科技 / 汽车` 与校园、旅行、摄影一致，手机端统一双列发现流；文章、长评、口碑等强解释内容通过详情页与对象页承接，而不是在首页单独切一套 full-span 主布局。
 

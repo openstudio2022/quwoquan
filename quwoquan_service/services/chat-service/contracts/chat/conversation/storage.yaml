@@ -16,6 +16,11 @@ collections:
         circleGroupId: 1
       sparse: true
       unique: true
+    - name: uq_conv_gathering
+      keys:
+        gatheringId: 1
+      sparse: true
+      unique: true
     - name: idx_conv_status
       keys:
         status: 1
@@ -58,6 +63,15 @@ collections:
       keys:
         status: 1
         sourceVersion: -1
+  circle_group_chat_sync_failures:
+    entity: Conversation
+    role: projection
+    description: CircleGroup 到 Conversation 绑定投影的有限重试状态；只保存事件引用、错误摘要和 TTL。
+    indexes:
+    - name: ttl_circle_group_chat_sync_failures
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
   chat_user_account_closed_inbox:
     entity: Conversation
     role: projection
@@ -80,6 +94,25 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
+streams:
+  events.chat.circle-group-conversations:
+    entity: Conversation
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Conversation outbox 中 CircleGroupConversationProvisioned 的唯一 durable transport。
+  events.rtc.call_ended-dlq:
+    entity: Conversation
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Chat 无法解释的 CallEnded typed event 脱敏失败记录。
+  events.user.account.chat-service.dlq:
+    entity: Conversation
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Chat 账号生命周期 consumer 的脱敏失败记录；原 payload 只留在 source PEL。
 redis_cache:
 - key: cache:conversation:{conversationId}
   ttl_seconds: 300

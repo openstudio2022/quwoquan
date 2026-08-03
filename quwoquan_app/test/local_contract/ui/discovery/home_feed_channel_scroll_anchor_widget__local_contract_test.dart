@@ -59,8 +59,8 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
     this._recommendObjectCards = const <FeedObjectCardDto>[],
   ]);
 
-  final List<PostBaseDto> recommend;
-  final List<PostBaseDto> campus;
+  final List<ContentPostViewData> recommend;
+  final List<ContentPostViewData> campus;
   List<FeedObjectCardDto> _recommendObjectCards;
 
   @override
@@ -77,10 +77,16 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 
   void replaceRecommend(
-    List<PostBaseDto> items, {
+    List<ContentPostViewData> items, {
     List<FeedObjectCardDto>? objectCards,
   }) {
     if (objectCards != null) {
@@ -106,7 +112,7 @@ final class _NoopPostInteractionStateNotifier
   PostInteractionState build() => const PostInteractionState();
 
   @override
-  void applyConfirmedPosts(Iterable<PostBaseDto> posts) {}
+  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {}
 }
 
 final class _WidgetPagedDiscoveryFeedQuery
@@ -133,7 +139,7 @@ final class _WidgetPagedDiscoveryFeedQuery
         : int.parse(cursor.substring('cursor_'.length));
     callCount += 1;
     return DiscoveryFeedPage(
-      items: List<PostBaseDto>.generate(
+      items: List<ContentPostViewData>.generate(
         20,
         (index) => _post('resident_$pageIndex', index, bodyRepeats: 2),
       ),
@@ -271,11 +277,11 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final recommend = List<PostBaseDto>.generate(
+      final recommend = List<ContentPostViewData>.generate(
         36,
         (index) => _post('recommend', index),
       );
-      final campus = List<PostBaseDto>.generate(
+      final campus = List<ContentPostViewData>.generate(
         20,
         (index) => _post('campus', index),
       );
@@ -358,8 +364,8 @@ void main() {
       // 模拟频道离开期间刷新在锚点之前插入一批高度更大的内容。此时保存的
       // absolute scrollOffset 已无法挂载原锚点，恢复必须消费 entryIndex/当前
       // stable identity 索引做粗定位，再以真实 RenderObject geometry 校正。
-      final refreshedRecommend = <PostBaseDto>[
-        ...List<PostBaseDto>.generate(
+      final refreshedRecommend = <ContentPostViewData>[
+        ...List<ContentPostViewData>.generate(
           14,
           (index) => _post('refresh_insert', index, bodyRepeats: 6),
         ),
@@ -407,11 +413,11 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final recommend = List<PostBaseDto>.generate(
+      final recommend = List<ContentPostViewData>.generate(
         24,
         (index) => _post('object_anchor', index),
       );
-      final campus = List<PostBaseDto>.generate(
+      final campus = List<ContentPostViewData>.generate(
         12,
         (index) => _post('object_anchor_campus', index),
       );

@@ -66,7 +66,7 @@ final class CachedContentPostReader
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -99,7 +99,7 @@ final class CachedContentPostReader
       if (cached != null) {
         _recordCacheHit(key: key, result: cached);
         final cachedPage = cached.value.toCursorPage();
-        return CursorPage<PostBaseDto>(
+        return CursorPage<ContentPostViewData>(
           items: cachedPage.items,
           nextCursor: cachedPage.nextCursor,
           totalCount: cachedPage.totalCount,
@@ -123,7 +123,7 @@ final class CachedContentPostReader
     }
   }
 
-  void _storeCursorPage(String key, CursorPage<PostBaseDto> page) {
+  void _storeCursorPage(String key, CursorPage<ContentPostViewData> page) {
     postCache.putProjections(page.items);
     for (final post in page.items) {
       _registerAuthorSnapshot(post);
@@ -140,7 +140,7 @@ final class CachedContentPostReader
     _registerAuthorSnapshot(payload.post);
   }
 
-  void _registerAuthorSnapshot(PostBaseDto post) {
+  void _registerAuthorSnapshot(ContentPostViewData post) {
     final avatarUrl = post.avatarUrl.trim();
     userProfileCache?.putAuthorSnapshot(
       userId: post.personaId.trim().isNotEmpty ? post.personaId : post.authorId,

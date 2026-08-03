@@ -38,11 +38,16 @@ type BehaviorFactDocument struct {
 	Action                 string        `bson:"action"`
 	State                  string        `bson:"state"`
 	ContentType            string        `bson:"contentType"`
+	ObjectID               string        `bson:"objectId"`
+	ObjectKind             string        `bson:"objectKind"`
+	DisplayName            string        `bson:"displayName"`
+	SourceSurface          string        `bson:"sourceSurface"`
 	Duration               float64       `bson:"duration"`
 	FeedRequestID          string        `bson:"feedRequestId"`
 	Tags                   []string      `bson:"tagRefs"`
 	EntityRefs             []string      `bson:"entityRefs"`
 	AuthorID               string        `bson:"authorId"`
+	ImpactHelpType         string        `bson:"impactHelpType"`
 	ChannelID              string        `bson:"channelId"`
 	RecallPath             string        `bson:"recallPath"`
 	ContentVertical        string        `bson:"contentVertical"`
@@ -234,6 +239,10 @@ func BuildStreamValues(row BehaviorFactDocument) (map[string]string, error) {
 		"sessionId":              strings.TrimSpace(row.SessionID),
 		"contentId":              strings.TrimSpace(row.ContentID),
 		"contentType":            strings.TrimSpace(row.ContentType),
+		"objectId":               strings.TrimSpace(row.ObjectID),
+		"objectKind":             strings.TrimSpace(row.ObjectKind),
+		"displayName":            strings.TrimSpace(row.DisplayName),
+		"sourceSurface":          strings.TrimSpace(row.SourceSurface),
 		"action":                 strings.TrimSpace(row.Action),
 		"state":                  strings.TrimSpace(row.State),
 		"duration":               row.Duration,
@@ -241,6 +250,7 @@ func BuildStreamValues(row BehaviorFactDocument) (map[string]string, error) {
 		"tagRefs":                row.Tags,
 		"entityRefs":             row.EntityRefs,
 		"authorId":               strings.TrimSpace(row.AuthorID),
+		"impactHelpType":         strings.TrimSpace(row.ImpactHelpType),
 		"channelId":              strings.TrimSpace(row.ChannelID),
 		"recallPath":             strings.TrimSpace(row.RecallPath),
 		"contentVertical":        strings.TrimSpace(row.ContentVertical),

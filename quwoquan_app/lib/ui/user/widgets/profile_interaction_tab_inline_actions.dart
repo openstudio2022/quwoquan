@@ -203,8 +203,8 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
             ReactToContentCommentCommand(
               commentId: commentId,
               reaction: next == 'like'
-                  ? ContentCommentReactionValue.like
-                  : ContentCommentReactionValue.none,
+                  ? CommentReactionType.like
+                  : CommentReactionType.none,
             ),
           );
       if (mounted) {

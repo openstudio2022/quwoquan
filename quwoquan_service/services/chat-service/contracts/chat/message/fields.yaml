@@ -357,10 +357,6 @@ types:
         type: string
         constraints:
           - NULLABLE
-      - name: assistantSkillId
-        type: string
-        constraints:
-          - NULLABLE
       - name: type
         type: enum
         enum_ref: MessageType
@@ -412,13 +408,11 @@ types:
         client_dart_type: String?
         client_normalization: trim_to_null
       - name: card
-        type: object
+        type: MessageCard
         constraints:
           - NULLABLE
           - REQUIRED_WHEN_type_card
           - FORBIDDEN_UNLESS_type_card
-        client_dart_type: ChatMessageCardCommand?
-        client_wire: toMap
       - name: replyToMessageId
         type: string
         constraints:
@@ -507,3 +501,18 @@ types:
         type: int
         client_dart_type: int
         client_default: "500"
+  MessageCommandAck:
+    description: Message 命令的对象本地稳定确认体。
+    fields:
+      - name: status
+        type: string
+        constraints: [NOT_NULL]
+  MessagePageSlice:
+    description: Message Reader 的稳定序号分页响应。
+    fields:
+      - name: items
+        type: '[]ChatMessageView'
+        constraints: [NOT_NULL]
+      - name: nextBeforeSeq
+        type: int64
+        constraints: [NULLABLE]

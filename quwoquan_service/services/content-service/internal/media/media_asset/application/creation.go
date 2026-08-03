@@ -1,10 +1,10 @@
-package application
+package media
 
 import (
 	"strings"
 	"time"
 
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	assetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 )
 

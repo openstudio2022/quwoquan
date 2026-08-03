@@ -136,15 +136,15 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .listActivities(
             ContentProfileInteractionPageQuery(
               personaId: key.personaId,
-              type: ContentProfileInteractionType.share,
+              type: InteractionActivityType.share,
               limit: pageSize,
             ),
             direction: key.direction == ShareInteractionDirection.received
-                ? ContentProfileInteractionDirection.received
-                : ContentProfileInteractionDirection.sent,
+                ? InteractionDirection.received
+                : InteractionDirection.sent,
           );
       final items = page.items
-          .map(ProfileInteractionActivityViewData.fromContentActivity)
+          .map(ProfileInteractionActivityViewData.fromWire)
           .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
           .toList(growable: false);
       if (!ref.mounted || requestGeneration != _generation) return;
@@ -178,18 +178,18 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .listActivities(
             ContentProfileInteractionPageQuery(
               personaId: key.personaId,
-              type: ContentProfileInteractionType.share,
+              type: InteractionActivityType.share,
               cursor: cursor,
               limit: pageSize,
             ),
             direction: key.direction == ShareInteractionDirection.received
-                ? ContentProfileInteractionDirection.received
-                : ContentProfileInteractionDirection.sent,
+                ? InteractionDirection.received
+                : InteractionDirection.sent,
           );
       if (!ref.mounted || requestGeneration != _generation) return;
       final existing = state.items.map((item) => item.interactionId).toSet();
       final appended = page.items
-          .map(ProfileInteractionActivityViewData.fromContentActivity)
+          .map(ProfileInteractionActivityViewData.fromWire)
           .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
           .where((item) => existing.add(item.interactionId))
           .toList(growable: false);
@@ -265,8 +265,8 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
               personaId: key.personaId,
               activityId: item.interactionId,
               state: writeState == 'read'
-                  ? ContentProfileInteractionReadState.read
-                  : ContentProfileInteractionReadState.seen,
+                  ? ProfileInteractionReadState.read
+                  : ProfileInteractionReadState.seen,
             ),
           );
       stopwatch.stop();

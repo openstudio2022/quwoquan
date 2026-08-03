@@ -12,7 +12,7 @@ errors:
   http_status: 401
   emitted_by:
   - surface: http
-    operations: [StartAssistantRun, GetAssistantRun, CancelAssistantRun, PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, StreamAssistantRunEvents, assistant.page_context.ReportPageContext, assistant.assistant_entry_view.GetAssistantEntry, assistant.assistant_task_view.ListAssistantTasks]
+    operations: [StartAssistantRun, GetAssistantRun, CancelAssistantRun, PauseAssistantRun, ResumeAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, StreamAssistantRunEvents]
   recovery_action: surface
   dart_const: runUnauthorized
   go_const: ErrRunUnauthorized
@@ -40,7 +40,7 @@ errors:
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [StartAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, assistant.assistant_turn_view.ListSessionTurns, StreamAssistantRunEvents, assistant.page_context.ReportPageContext, assistant.assistant_entry_view.GetAssistantEntry]
+    operations: [StartAssistantRun, SteerAssistantRun, ContinueAssistantToolUse, assistant.assistant_turn_view.ListSessionTurns, StreamAssistantRunEvents]
   recovery_action: surface
   dart_const: runInvalidArgument
   go_const: ErrRunInvalidArgument
@@ -91,21 +91,6 @@ errors:
   user_message:
     zh: 交集证据暂时无法核验，请稍后重试
     en: Intersection evidence cannot be verified right now
-- code: ASSISTANT.SYSTEM.page_context_unavailable
-  kind: SYSTEM
-  reason: unavailable
-  http_status: 503
-  emitted_by:
-  - surface: http
-    operations: [assistant.page_context.ReportPageContext]
-  recovery_action: retry
-  recovery_after_seconds: 3
-  dart_const: pageContextUnavailable
-  go_const: ErrPageContextUnavailable
-  l10n_key: assistant.error.page_context_unavailable
-  user_message:
-    zh: 页面上下文暂时无法保存，请稍后重试
-    en: Page context cannot be saved right now
 - code: ASSISTANT.USER.run_idempotency_conflict
   kind: USER
   reason: idempotency_conflict
@@ -150,6 +135,35 @@ errors:
   user_message:
     zh: 助手策略暂不可用，请稍后重试
     en: Assistant policy is temporarily unavailable
+- code: ASSISTANT.SYSTEM.run_skill_package_unavailable
+  kind: SYSTEM
+  reason: unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: runSkillPackageUnavailable
+  go_const: ErrRunSkillPackageUnavailable
+  l10n_key: assistant.error.run_skill_package_unavailable
+  user_message:
+    zh: 助手技能包暂不可用，请稍后重试
+    en: Assistant Skill package is temporarily unavailable
+- code: ASSISTANT.USER.run_skill_disabled
+  kind: USER
+  reason: skill_disabled
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
+  recovery_action: surface
+  dart_const: runSkillDisabled
+  go_const: ErrRunSkillDisabled
+  l10n_key: assistant.error.run_skill_disabled
+  user_message:
+    zh: 该技能在当前场景未启用，请检查个人或群聊技能设置
+    en: This skill is disabled by the current personal or shared-surface policy
 - code: ASSISTANT.USER.skill_consent_required
   kind: USER
   reason: forbidden
@@ -164,6 +178,31 @@ errors:
   user_message:
     zh: 该能力需要先授权后使用
     en: This capability requires consent before use
+- code: ASSISTANT.USER.connector_capability_required
+  kind: USER
+  reason: connector_capability_required
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: surface
+  dart_const: connectorCapabilityRequired
+  go_const: ErrConnectorCapabilityRequired
+  l10n_key: assistant.error.connector_capability_required
+  user_message:
+    zh: 请先连接并授权所需的外部应用能力
+    en: Connect and authorize the required external capability before continuing
+- code: ASSISTANT.SYSTEM.connector_gateway_unavailable
+  kind: SYSTEM
+  reason: connector_gateway_unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: connectorGatewayUnavailable
+  go_const: ErrConnectorGatewayUnavailable
+  l10n_key: assistant.error.connector_gateway_unavailable
+  user_message:
+    zh: 外部应用连接状态暂时无法确认，请稍后重试
+    en: Connector authorization cannot be verified right now; retry later
 - code: ASSISTANT.SYSTEM.stream_unavailable
   kind: SYSTEM
   reason: unavailable

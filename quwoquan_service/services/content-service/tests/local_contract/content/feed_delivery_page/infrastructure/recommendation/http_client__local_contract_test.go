@@ -62,7 +62,8 @@ func TestHTTPClientCreateUsesGeneratedBodyAndRetriesTransientStatus(t *testing.T
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if attempts.Load() != 2 || page.WindowId != "window-1" || len(page.Items) != 1 {
+	if attempts.Load() != 2 || page.WindowId != "window-1" || len(page.Items) != 1 ||
+		len(page.ObjectCards) != 1 || page.ObjectCards[0].ObjectId != "homepage-dali" {
 		t.Fatalf("attempts=%d page=%+v", attempts.Load(), page)
 	}
 }
@@ -73,7 +74,9 @@ func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
 			request.URL.EscapedPath() != "/internal/recommendation/ranked-pages/window%20identity" {
 			t.Fatalf("path=%q escaped=%q", request.URL.Path, request.URL.EscapedPath())
 		}
-		if request.URL.Query().Get("fromOrdinal") != "20" || request.URL.Query().Get("limit") != "10" {
+		if request.URL.Query().Get("subjectId") != "subject identity" ||
+			request.URL.Query().Get("fromOrdinal") != "20" ||
+			request.URL.Query().Get("limit") != "10" {
 			t.Fatalf("query=%v", request.URL.Query())
 		}
 		writeRankedPage(t, writer, "window identity", 20)
@@ -84,7 +87,14 @@ func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	page, err := client.GetPage(context.Background(), "window identity", 20, 10)
+	fromOrdinal := 20
+	limit := 10
+	page, err := client.GetPage(context.Background(), transport.GetRankedRecommendationPageQuery{
+		SubjectId:   "subject identity",
+		WindowId:    "window identity",
+		FromOrdinal: &fromOrdinal,
+		Limit:       &limit,
+	})
 	if err != nil {
 		t.Fatalf("get page: %v", err)
 	}
@@ -93,10 +103,65 @@ func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
 	}
 }
 
+func TestHTTPClientRejectsMalformedRankedObjectCard(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(writer).Encode(rankedPageWire(
+			"window-invalid-card",
+			0,
+			[]map[string]any{{
+				"objectKind": "entity_homepage",
+				"objectId":   "homepage-dali",
+				"title":      "大理古城",
+				"tagRefs":    []string{"travel.photography.landmark"},
+				"reasonKey":  "",
+				"recallPath": "candidate_index",
+			}},
+		)); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := recommendation.NewHTTPClient(server.URL, staticCredentials{})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	if _, err := client.Create(context.Background(), transport.CreateRankedRecommendationWindowCommand{
+		IdempotencyKey: "feed-request-invalid-card",
+		SubjectId:      "subject-invalid-card",
+		Scenario:       "content_feed",
+		Limit:          20,
+	}); err == nil {
+		t.Fatal("malformed ranked object card must fail closed")
+	}
+}
+
 func writeRankedPage(t *testing.T, writer http.ResponseWriter, windowID string, ordinal int) {
 	t.Helper()
 	writer.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(writer).Encode(map[string]any{
+	if err := json.NewEncoder(writer).Encode(rankedPageWire(
+		windowID,
+		ordinal,
+		[]map[string]any{{
+			"objectKind": "entity_homepage",
+			"objectId":   "homepage-dali",
+			"title":      "大理古城",
+			"tagRefs":    []string{"travel.photography.landmark"},
+			"reasonKey":  "shared_interest",
+			"recallPath": "candidate_index",
+		}},
+	)); err != nil {
+		t.Fatalf("encode response: %v", err)
+	}
+}
+
+func rankedPageWire(
+	windowID string,
+	ordinal int,
+	objectCards []map[string]any,
+) map[string]any {
+	return map[string]any{
 		"windowId":              windowID,
 		"scenario":              "content_feed",
 		"modelBucket":           "rule",
@@ -111,8 +176,7 @@ func writeRankedPage(t *testing.T, writer http.ResponseWriter, windowID string, 
 			"featureSnapshotDigest": strings.Repeat("b", 64),
 			"itemFeatureSnapshot":   map[string]any{"qualityScore": 1.0},
 		}},
-		"expiresAt": time.Now().UTC().Add(time.Minute),
-	}); err != nil {
-		t.Fatalf("encode response: %v", err)
+		"objectCards": objectCards,
+		"expiresAt":   time.Now().UTC().Add(time.Minute),
 	}
 }

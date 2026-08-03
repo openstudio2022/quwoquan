@@ -1,6 +1,6 @@
 commercial_defaults:
   block_reason: 端云实现与本地三层测试已闭环，待 beta/gamma/prod Remote 环境证据
-  gap_id: ASSISTANT_PREFERENCE_FACT_ENV_EVIDENCE
+  gap_id: ASSISTANT_PREFERENCE_ENV_EVIDENCE
   status: blocked
   target_story: session-preference-memory-control
 description: AssistantPreference 对象专属命令与查询 packet。
@@ -67,6 +67,8 @@ api_routes:
   operation: ListAssistantPreferences
   path: /assistant/preferences
   description: 列出当前 owner 的偏好事实，可按 scope、sessionId 和 status 筛选。
+  request_entity: ListAssistantPreferencesQuery
+  request_body_kind: none
   request_bindings:
     query:
     - {name: scope, field: scope, required: false}
@@ -119,6 +121,8 @@ api_routes:
   method: POST
   operation: RevokeAssistantPreference
   path: /assistant/preferences/{preferenceId}/revoke
+  request_entity: AssistantPreferenceByIdRequest
+  request_body_kind: none
   request_bindings:
     path:
     - {name: preferenceId, field: preferenceId}
@@ -168,6 +172,8 @@ api_routes:
   method: POST
   operation: RestoreAssistantPreference
   path: /assistant/preferences/{preferenceId}/restore
+  request_entity: AssistantPreferenceByIdRequest
+  request_body_kind: none
   request_bindings:
     path:
     - {name: preferenceId, field: preferenceId}

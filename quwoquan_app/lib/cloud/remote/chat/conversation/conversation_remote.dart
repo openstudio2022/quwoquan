@@ -22,7 +22,7 @@ final class RemoteChatConversationQuery implements ChatConversationQuery {
   final ChatConversationInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatConversationBatchSlice> batchGetConversations(
+  Future<ConversationBatchSlice> batchGetConversations(
     ChatBatchGetConversationsQuery query,
   ) {
     return client.chatConversationBatchGetConversations(
@@ -32,7 +32,7 @@ final class RemoteChatConversationQuery implements ChatConversationQuery {
   }
 
   @override
-  Future<ChatConversationPageSlice> listConversations(
+  Future<ConversationPageSlice> listConversations(
     ChatListConversationsQuery query,
   ) {
     return client.chatConversationListConversations(
@@ -50,7 +50,7 @@ final class RemoteChatConversationQuery implements ChatConversationQuery {
   }
 
   @override
-  Future<ChatConversationTimestampPageSlice> listConversationTimestamps(
+  Future<ConversationTimestampIndexSlice> listConversationTimestamps(
     ChatListConversationTimestampsQuery query,
   ) {
     return client.chatConversationListConversationTimestamps(
@@ -60,7 +60,7 @@ final class RemoteChatConversationQuery implements ChatConversationQuery {
   }
 
   @override
-  Future<ChatGroupHome> getGroupHome(ChatGetGroupHomeQuery query) {
+  Future<GroupHome> getGroupHome(ChatGetGroupHomeQuery query) {
     return client.chatConversationGetGroupHome(
       query,
       context: invocationContext(ChatRequestPageIds.getGroupHome),
@@ -68,10 +68,10 @@ final class RemoteChatConversationQuery implements ChatConversationQuery {
   }
 
   @override
-  Future<ChatMessageReceiptPageSlice> getMessageReceipts(
+  Future<MessageReceiptPageSlice> getMessageReceipts(
     ChatGetMessageReceiptsQuery query,
   ) {
-    return client.chatConversationGetReceipts(
+    return client.chatMessageReceiptFactGetReceipts(
       query,
       context: invocationContext(ChatRequestPageIds.getReceipts),
     );
@@ -119,7 +119,7 @@ final class RemoteChatConversationCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> dissolveConversation(
+  Future<ConversationCommandAck> dissolveConversation(
     ChatDissolveConversationCommand command, {
     required String idempotencyKey,
   }) {

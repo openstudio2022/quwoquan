@@ -57,7 +57,7 @@ class RtcCallInitiatedPayload {
   factory RtcCallInitiatedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallInitiatedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] == null ? null : CallType.fromString(payload['callType'] as String),
+      callType: payload['callType'] == null ? null : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       initiatorId: payload['initiatorId'] as String?,
       initiatorRingtoneId: payload['initiatorRingtoneId'] as String?,
       conversationId: payload['conversationId'] as String?,
@@ -99,7 +99,7 @@ class RtcCallRingingPayload {
       eventId: payload['eventId'] as String?,
       callId: payload['callId'] as String?,
       targetPersonaId: payload['targetPersonaId'] as String?,
-      callType: payload['callType'] == null ? CallType.audio : CallType.fromString(payload['callType'] as String),
+      callType: payload['callType'] == null ? CallType.audio : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       callerName: payload['callerName'] as String?,
       callerAvatarUrl: payload['callerAvatarUrl'] as String?,
       sourceLabel: payload['sourceLabel'] as String?,
@@ -176,10 +176,10 @@ class RtcCallEndedPayload {
   factory RtcCallEndedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallEndedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] == null ? null : CallType.fromString(payload['callType'] as String),
+      callType: payload['callType'] == null ? null : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       initiatorId: payload['initiatorId'] as String?,
       conversationId: payload['conversationId'] as String?,
-      endReason: payload['endReason'] == null ? null : EndReason.fromString(payload['endReason'] as String),
+      endReason: payload['endReason'] == null ? null : EndReason.fromWire(payload['endReason'], 'RtcSignalPayload.endReason'),
       durationMs: (payload['durationMs'] as num?)?.toInt(),
       participantCount: (payload['participantCount'] as num?)?.toInt(),
       startedAt: payload['startedAt'] as String?,

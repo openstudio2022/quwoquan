@@ -71,7 +71,7 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
             issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing image rights proof")
         if not require_rights_proof and str(
             raw.get("rightsAuditStatus") or ""
-        ) not in {"verified", "unverified"}:
+        ) not in {"verified", "unverified", "restricted", "unknown"}:
             issues.append(
                 f"{label}: asset {asset_id or file_name or '<unknown>'} missing rights audit status"
             )

@@ -119,9 +119,9 @@ func (DeterministicModelProvider) Complete(
 
 func reasoningToolName(skillID string) string {
 	switch skillID {
-	case orchestration.SkillDailyAssistant,
+	case "daily_assistant",
 		"calendar_task",
-		"travel_transport",
+		"travel_companion",
 		"work_productivity",
 		"local_life":
 		return "app_search"
@@ -131,8 +131,8 @@ func reasoningToolName(skillID string) string {
 }
 
 func finalAnswer(skillID, question, summary string) string {
-	if orchestration.IsP0ProactiveSkill(skillID) {
-		return proactiveFinalAnswer(skillID, question, summary)
+	if text := proactiveFinalAnswer(skillID, question, summary); text != "" {
+		return text
 	}
 	if text := domainSkillFinalAnswer(skillID, question, summary); text != "" {
 		return text

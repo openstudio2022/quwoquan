@@ -17,12 +17,13 @@ import (
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
+	assignmentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/infrastructure/persistence"
 )
 
 func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *testing.T) {
 	handler := newRealExperimentHTTPHandler(t)
 	guarded := realReadyExperimentAuthenticatedHandler(t, handler)
-	experimentID := seedRealExperiment(t, "draft")
+	experimentID := fmt.Sprintf("experiment-http-%d", time.Now().UnixNano())
 
 	unauthorized := performExperimentRequest(
 		guarded, http.MethodGet, "/control-plane/product/experiments", experimentRequestOptions{},
@@ -41,9 +42,28 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 	)
 	assertExperimentError(t, wrongScope, http.StatusForbidden, "GATEWAY.USER.forbidden")
 
+	writeToken := experimentAccessToken(t, "operator-1", "ops.experiment.write", []string{"operator"})
+	createBody := fmt.Sprintf(`{"id":%q,"key":%q,"status":"draft","variants":[{"key":"control","allocationBasisPoints":5000},{"key":"treatment","allocationBasisPoints":5000}],"audienceRule":{"kind":"all"}}`, experimentID, experimentID)
+	createdExperiment := performExperimentRequest(
+		guarded,
+		http.MethodPost,
+		"/control-plane/product/experiments",
+		experimentRequestOptions{
+			Body: createBody, Credential: writeToken,
+			Headers: http.Header{"Idempotency-Key": []string{"experiment-http-create"}},
+		},
+	)
+	if createdExperiment.Code != http.StatusCreated {
+		t.Fatalf("create experiment status=%d body=%s", createdExperiment.Code, createdExperiment.Body.String())
+	}
+	var createResult experimenthttp.CreateExperimentResult
+	decodeExperimentResponse(t, createdExperiment, &createResult)
+	if createResult.ID != experimentID || createResult.ExperimentRevision != 1 || createResult.Status != "draft" {
+		t.Fatalf("unexpected create result: %+v", createResult)
+	}
+
 	rolloutPath := "/control-plane/product/experiments/" + experimentID + ":rollout"
 	rolloutBody := `{"status":"running","variants":[{"key":"control","allocationBasisPoints":4000},{"key":"treatment","allocationBasisPoints":6000}]}`
-	writeToken := experimentAccessToken(t, "operator-1", "ops.experiment.write", []string{"operator"})
 	created := performExperimentRequest(guarded, http.MethodPost, rolloutPath, experimentRequestOptions{
 		Body: rolloutBody, Credential: writeToken, Headers: experimentRolloutHeaders(),
 	})
@@ -92,7 +112,7 @@ FROM product_ops_outbox WHERE aggregate_id=$1`, experimentID).Scan(&outboxCount,
 	if err != nil {
 		t.Fatalf("inspect experiment outbox: %v", err)
 	}
-	if outboxCount != 1 || unexpectedEventType {
+	if outboxCount != 2 || unexpectedEventType {
 		t.Fatalf("policy activation outbox count=%d unexpectedEventType=%v", outboxCount, unexpectedEventType)
 	}
 }
@@ -191,7 +211,14 @@ func newRealExperimentFacade(t *testing.T) *experimentapp.Facade {
 	if err := store.EnsureSchema(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	facade, err := experimentapp.NewFacade(store, store, store, store)
+	assignmentStore, err := assignmentpersistence.NewPostgresStore(controlPlanePGPool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := assignmentStore.EnsureSchema(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	facade, err := experimentapp.NewFacade(store, store, assignmentStore, assignmentStore)
 	if err != nil {
 		t.Fatal(err)
 	}

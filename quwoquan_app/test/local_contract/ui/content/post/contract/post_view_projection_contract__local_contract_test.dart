@@ -70,7 +70,7 @@ void main() {
   };
 
   ContentSurfaceView surfaceOf(Map<String, dynamic> raw) {
-    return ContentSurfaceViewMapper.fromDto(postBaseDtoFromMap(raw), wire: raw);
+    return ContentSurfaceViewMapper.fromDto(contentPostViewDataFromReadModelMap(raw), wire: raw);
   }
 
   String resolvedAvatar(String raw) => resolveAvatarImageUrl(raw);
@@ -545,12 +545,12 @@ void main() {
 
     test('micro type dispatches to MicroPostDto', () {
       expect(
-        postBaseDtoFromMap(momentWithImages),
+        contentPostViewDataFromReadModelMap(momentWithImages),
         isA<MicroPostDto>(),
         reason: 'contentType=micro must dispatch to MicroPostDto',
       );
       expect(
-        postBaseDtoFromMap(momentWithVideo),
+        contentPostViewDataFromReadModelMap(momentWithVideo),
         isA<MicroPostDto>(),
         reason: 'contentType=micro must dispatch to MicroPostDto',
       );
@@ -565,13 +565,13 @@ void main() {
     });
 
     test('moment imageUrls projected correctly', () {
-      final dto = postBaseDtoFromMap(momentWithImages) as MicroPostDto;
+      final dto = contentPostViewDataFromReadModelMap(momentWithImages) as MicroPostDto;
       expect(dto.imageUrls, hasLength(2));
       expect(dto.imageUrls.first, contains('img1.jpg'));
     });
 
     test('moment videoUrl projected correctly', () {
-      final dto = postBaseDtoFromMap(momentWithVideo) as MicroPostDto;
+      final dto = contentPostViewDataFromReadModelMap(momentWithVideo) as MicroPostDto;
       expect(
         dto.videoUrl,
         equals('media/video/s/test/content/moment_02/v1/moment_video.mp4'),
@@ -586,7 +586,7 @@ void main() {
     });
 
     test('moment with no images has empty imageUrls list (not null)', () {
-      final dto = postBaseDtoFromMap(momentWithVideo) as MicroPostDto;
+      final dto = contentPostViewDataFromReadModelMap(momentWithVideo) as MicroPostDto;
       expect(
         dto.imageUrls,
         isEmpty,

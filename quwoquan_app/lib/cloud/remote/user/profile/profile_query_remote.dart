@@ -28,7 +28,7 @@ final class RemoteProfileQuery implements ProfileQuery {
         : await _publicProfileQuery.getPersonaProfile(
             GetPersonaProfileQuery(personaId: normalized),
           );
-    return PersonaProfileViewData.fromPersonaProfileProjection(projection);
+    return PersonaProfileViewData.fromWire(projection);
   }
 
   @override
@@ -38,7 +38,7 @@ final class RemoteProfileQuery implements ProfileQuery {
     final projection = await _userHomepageQuery.getUserHomepageBundle(
       GetUserHomepageBundleQuery(personaId: personaId),
     );
-    return UserHomepageBundleViewData.fromUserHomepageBundleProjection(
+    return UserHomepageBundleViewData.fromWire(
       projection,
     );
   }
@@ -49,7 +49,7 @@ final class RemoteProfileQuery implements ProfileQuery {
   }
 
   @override
-  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+  Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
     required String query,
     int limit = 20,
   }) async {
@@ -57,7 +57,7 @@ final class RemoteProfileQuery implements ProfileQuery {
       SearchSocialRelationsQuery(query: query, limit: limit),
     );
     return result.items
-        .map(SocialRelationSearchItemView.fromProjection)
+        .map(SocialRelationSearchItemViewData.fromWire)
         .toList(growable: false);
   }
 }

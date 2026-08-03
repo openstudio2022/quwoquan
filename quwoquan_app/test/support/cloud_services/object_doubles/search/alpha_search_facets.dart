@@ -1,6 +1,7 @@
 import 'dart:convert' show utf8;
 
 import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../object_scenario_seed_reader.dart';
@@ -9,16 +10,16 @@ import '../object_scenario_seed_reader.dart';
 final class AlphaHotQueryReader implements SearchHotQueryReader {
   AlphaHotQueryReader() : _items = _loadItems();
 
-  final List<HotQuery> _items;
+  final List<SearchTermHeatItem> _items;
 
   @override
-  Future<HotQuerySlice> listHotQueries(ListHotQueriesQuery query) async {
-    return HotQuerySlice(
+  Future<SearchTermHeatSlice> listHotQueries(ListHotQueriesQuery query) async {
+    return SearchTermHeatSlice(
       items: _items.take(query.limit).toList(growable: false),
     );
   }
 
-  static List<HotQuery> _loadItems() {
+  static List<SearchTermHeatItem> _loadItems() {
     final decoded = objectScenarioSeedReader.document('search');
     final seedSets = decoded['seedSets'] as Map<String, dynamic>? ?? const {};
     final core = seedSets['search_hot_queries_core'] as Map<String, dynamic>?;
@@ -36,7 +37,10 @@ final class AlphaHotQueryReader implements SearchHotQueryReader {
           if (query.isEmpty || relevance is! num) {
             throw const FormatException('invalid search hot query fixture');
           }
-          return HotQuery(query: query, relevance: relevance.toDouble());
+          return SearchTermHeatItem(
+            query: query,
+            relevance: relevance.toDouble(),
+          );
         })
         .toList(growable: false);
     items.sort((left, right) => right.relevance.compareTo(left.relevance));
@@ -55,7 +59,7 @@ final class AlphaRecentSearchFacet
   static const int _maxEntries = 12;
 
   final DateTime Function() _clock;
-  final List<RecentSearchEntry> _entries = <RecentSearchEntry>[];
+  final List<RecentSearchEntryWire> _entries = <RecentSearchEntryWire>[];
 
   @override
   Future<RecentSearchEntrySlice> listRecentSearches(
@@ -70,7 +74,7 @@ final class AlphaRecentSearchFacet
   }
 
   @override
-  Future<RecentSearchEntry> upsertRecentSearch(
+  Future<RecentSearchEntryWire> upsertRecentSearch(
     UpsertRecentSearchCommand command,
   ) async {
     final entryId = _deriveEntryId(command);
@@ -83,7 +87,7 @@ final class AlphaRecentSearchFacet
     if (existingIndex > 0) {
       _entries.removeAt(existingIndex);
     }
-    final entry = RecentSearchEntry(
+    final entry = RecentSearchEntryWire(
       entryId: entryId,
       query: command.query,
       scope: command.scope,
@@ -146,7 +150,10 @@ final class AlphaSearchFeedbackWriter implements SearchFeedbackCommandWriter {
         '${command.searchRequestId}\u0000${command.eventType.wireValue}\u0000'
         '${command.objectId ?? ''}';
     _records.putIfAbsent(key, () => command);
-    return const SearchFeedbackAck(accepted: true);
+    return const SearchFeedbackAck(
+      accepted: true,
+      requestId: 'alpha-search-feedback',
+    );
   }
 }
 

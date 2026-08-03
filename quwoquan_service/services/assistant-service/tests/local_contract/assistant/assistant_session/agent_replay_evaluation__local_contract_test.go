@@ -11,20 +11,20 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/simulator"
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/assets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestAgentReplayEvaluationGate(t *testing.T) {
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("LoadAssistantDomainSkillCatalog(): %v", err)
 	}
 	corpus, err := simulator.LoadReplayCorpus(
-		assistantSkillAssetRoot(t) + "/replay_corpus.v1.json",
+		assistantSkillAssetRoot(t) + "/replay_corpus.json",
 	)
 	if err != nil {
 		t.Fatalf("LoadReplayCorpus(): %v", err)
@@ -32,7 +32,7 @@ func TestAgentReplayEvaluationGate(t *testing.T) {
 	assetsBySkill := assertReplayCorpusCoversCatalog(t, catalog, corpus)
 	productionRouter := skillpkg.NewRouter(catalog)
 	for _, manifest := range catalog {
-		if !manifest.IsProactive() {
+		if manifest.IsReactive() {
 			assertReplayCorpusHasProductionRoutedCase(
 				t,
 				productionRouter,
@@ -175,8 +175,7 @@ func assertReplayAssetChangesSkillReleaseDigest(
 	mutated.Cases = append([]simulator.ReplayCorpusCase(nil), asset.Cases...)
 	mutated.Cases[0].Input += "（digest mutation）"
 	_, proof, err := (simulator.ReplayCorpus{
-		SchemaVersion: 1,
-		Assets:        []simulator.ReplayCorpusAsset{mutated},
+		Assets: []simulator.ReplayCorpusAsset{mutated},
 	}).ResolveAsset(mutated.AssetID, mutated.SkillID)
 	if err != nil {
 		t.Fatalf("resolve mutated replay proof: %v", err)
@@ -226,8 +225,16 @@ func replayCasesForManifest(
 		toolScript := []assistant.ReplayToolStep{}
 		switch corpusCase.Scenario {
 		case "slot_clarification":
-			clarificationSlotIDs = []string{manifest.SlotSchema.RequiredSlots[0]}
+			slotID := strings.TrimSpace(corpusCase.ClarificationSlotID)
+			if slotID == "" && len(manifest.SlotSchema.RequiredSlots) > 0 {
+				slotID = manifest.SlotSchema.RequiredSlots[0]
+			}
+			if slotID == "" {
+				t.Fatalf("slot clarification replay %q has no clarificationSlotId", caseID)
+			}
+			clarificationSlotIDs = []string{slotID}
 			finalAnswerMode = "clarify"
+			modelScript = clarificationScript(slotID)
 		case "direct_answer":
 			modelScript = directAnswerScript(manifest, prompt)
 		case "failure_recovery":
@@ -293,6 +300,22 @@ func replayCasesForManifest(
 		})
 	}
 	return cases
+}
+
+func clarificationScript(slotID string) []assistant.ReplayModelStep {
+	return []assistant.ReplayModelStep{{
+		Stage: "reasoning",
+		Text:  "需要用户确认关键目标后才能安全继续。",
+		StructuredDelta: map[string]any{
+			"nextAction": "ask_user",
+			"askUser": map[string]any{
+				"slotId":   slotID,
+				"prompt":   "请先确认要处理的旅行信息。",
+				"required": true,
+			},
+		},
+		FinishReason: "stop",
+	}}
 }
 
 func toolCallScript(

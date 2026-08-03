@@ -33,10 +33,10 @@ func TestRateLimitBucketHasOneCanonicalNonHTTPRuntimeEntrypoint(t *testing.T) {
 			RuntimeKind string `yaml:"kind"`
 			Phase       string `yaml:"phase"`
 			Application struct {
-				Kind         string `yaml:"kind"`
-				Facet        string `yaml:"facet"`
-				Method       string `yaml:"method"`
-				SessionOwner string `yaml:"session_owner"`
+				Kind        string `yaml:"kind"`
+				Facet       string `yaml:"facet"`
+				Method      string `yaml:"method"`
+				ObjectOwner string `yaml:"object_owner"`
 			} `yaml:"application"`
 		} `yaml:"runtime_entrypoints"`
 	}
@@ -59,7 +59,7 @@ func TestRateLimitBucketHasOneCanonicalNonHTTPRuntimeEntrypoint(t *testing.T) {
 		entrypoint.Application.Kind != "session" ||
 		entrypoint.Application.Facet != "RateLimitAdmissionFacade" ||
 		entrypoint.Application.Method != "admit" ||
-		entrypoint.Application.SessionOwner != "RateLimitBucket" {
+		entrypoint.Application.ObjectOwner != "RateLimitBucket" {
 		t.Fatalf("runtime entrypoint drifted: %+v", entrypoint)
 	}
 }

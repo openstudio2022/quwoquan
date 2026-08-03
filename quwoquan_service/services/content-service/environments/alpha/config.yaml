@@ -19,12 +19,11 @@ externalBindings:
     state: enabled
   content.embedding.generation:
     state: enabled
-    adapter: ext.embed.openai_compatible
-    endpointRef: environment_binding:content.embedding
+    adapter: ext.embed.protocol_fixture
+    endpointRef: local_topology:integration.nonprod_provider_substitute
     endpointEnvs:
       endpoint: CONTENT_EMBEDDING_ENDPOINT
-    secretRefs:
-    - CONTENT_EMBEDDING_API_KEY
+    secretRefs: []
     timeoutMs: 10000
   runtime.object.storage:
     state: enabled

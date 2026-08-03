@@ -9,7 +9,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_manage
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_update_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
@@ -429,29 +428,19 @@ void main() {
     });
   });
 
-  group('RecentSearchEntryWireDto', () {
-    test('scope / updatedAt', () {
-      final dto = RecentSearchEntryWireDto.fromMap(<String, dynamic>{
+  group('RecentSearchEntryWire', () {
+    test('scope / updatedAt 严格解码并映射唯一 ViewData', () {
+      final wire = decodeRecentSearchEntryWire(<String, Object?>{
         'entryId': 'e1',
         'query': '摄影',
         'scope': 'content',
         'updatedAt': '2026-03-01T08:00:00Z',
       });
-      expect(dto.scope, 'content');
-      expect(dto.updatedAt, isNotNull);
-    });
-  });
-
-  group('RecentSearchEntryView — Wire 映射', () {
-    test('缺 entryId 时由 buildEntryId 生成', () {
-      final view = RecentSearchEntryView.fromRecentSearchEntryWire(
-        RecentSearchEntryWireDto.fromMap(<String, dynamic>{
-          'query': 'hello',
-          'scope': 'all',
-        }),
-      );
-      expect(view.query, 'hello');
-      expect(view.entryId, isNotEmpty);
+      expect(wire.scope, 'content');
+      expect(wire.updatedAt, DateTime.parse('2026-03-01T08:00:00Z'));
+      final view = RecentSearchEntryView.fromWire(wire);
+      expect(view.entryId, 'e1');
+      expect(view.scope, SearchScope.content);
     });
   });
 

@@ -10,13 +10,15 @@ collections:
     entity: RecommendationAuthorImpactProjection
     role: projection
     indexes:
-    - {name: uq_recommendation_author_impact, keys: {authorId: 1}, unique: true}
+    - {name: uq_recommendation_author_impact, keys: {authorId: 1, impactId: 1}, unique: true}
+    - {name: idx_recommendation_author_impact_rank, keys: {authorId: 1, count: -1, updatedAt: -1}}
   rm_author_impact_evidence:
     entity: RecommendationAuthorImpactEvidenceProjection
     role: projection
     description: 只保留不可反查 viewer 的事件、作者、内容和动作证据；可识别 viewer 只存在于可清理的 subject profile/u2i。
     indexes:
-    - {name: uq_recommendation_author_impact_evidence, keys: {eventId: 1, authorId: 1}, unique: true}
+    - {name: uq_recommendation_author_impact_evidence, keys: {eventId: 1, authorId: 1, impactId: 1}, unique: true}
+    - {name: idx_recommendation_author_impact_evidence_page, keys: {authorId: 1, impactId: 1, occurredAt: -1, _id: -1}}
   rm_collaborative_i2i:
     entity: RecommendationItemSimilarityProjection
     role: projection
@@ -33,9 +35,104 @@ collections:
     role: projection
     indexes:
     - {name: uq_recommendation_intersection_subject_feature, keys: {subjectId: 1, feature: 1}, unique: true}
+  rm_viewer_object_intersection:
+    entity: RecommendationIntersectionReasonProjection
+    role: projection
+    description: 以 subjectId + scope 为唯一身份的结构化交集理由快照；只由 typed 事件投影，Content 仅经对象 Reader 读取。
+    indexes:
+    - {name: uq_recommendation_intersection_subject_scope, keys: {subjectId: 1, scopeKind: 1, scopeKey: 1}, unique: true}
+    - {name: idx_recommendation_intersection_generated, keys: {generatedAt: -1}}
+  rm_intersection_supply:
+    entity: RecommendationIntersectionSupplyProjection
+    role: projection
+    description: 由权威事件汇总的交集供给去重计数；未知口径必须失败关闭为 invalid_argument。
+    indexes:
+    - {name: uq_recommendation_intersection_supply_key, keys: {supplyKey: 1}, unique: true}
+  recommendation_intersection_projection_inbox:
+    entity: RecommendationIntersectionProjectionInbox
+    role: inbox
+    description: 每个 typed source event 与目标快照 scope 的永久幂等收据；同一 source event 身份携带不同 digest 必须失败关闭。
+    indexes:
+    - {name: idx_recommendation_intersection_projection_source, keys: {sourceEventId: 1, scopeKind: 1}}
+  recommendation_intersection_persona_relationships:
+    entity: RecommendationIntersectionPersonaRelationshipProjection
+    role: projection
+    description: PersonaRelationship typed stream 的对象本地有向关系投影，只服务于交集快照重建。
+    indexes:
+    - {name: idx_recommendation_intersection_following, keys: {sourcePersonaId: 1, following: 1, targetPersonaId: 1}}
+    - {name: idx_recommendation_intersection_followers, keys: {targetPersonaId: 1, following: 1, sourcePersonaId: 1}}
+  recommendation_intersection_circle_memberships:
+    entity: RecommendationIntersectionCircleMembershipProjection
+    role: projection
+    description: CircleMembership typed stream 的对象本地成员投影；离开与移除必须保留 tombstone 状态。
+    indexes:
+    - {name: idx_recommendation_intersection_membership_persona, keys: {personaId: 1, active: 1, circleId: 1}}
+    - {name: idx_recommendation_intersection_membership_circle, keys: {circleId: 1, active: 1, personaId: 1}}
+  recommendation_intersection_behaviors:
+    entity: RecommendationIntersectionBehaviorProjection
+    role: projection
+    description: ContentBehaviorRecorded 的对象本地、不可变有界证据投影，按主体与时间重建交集。
+    indexes:
+    - {name: idx_recommendation_intersection_behavior_subject, keys: {subjectId: 1, occurredAt: -1, _id: -1}}
+    - {name: idx_recommendation_intersection_behavior_entity, keys: {action: 1, entityRefs: 1}}
+  recommendation_intersection_wishlist_state:
+    entity: RecommendationIntersectionWishlistProjection
+    role: projection
+    description: wishlist_add/remove 行为事实折叠出的当前状态；不读取 Content 的 EntityWishlistState 集合。
+    indexes:
+    - {name: idx_recommendation_intersection_wishlist_active, keys: {active: 1, entityId: 1}}
+  recommendation_intersection_persona_profiles:
+    entity: RecommendationIntersectionPersonaProfileProjection
+    role: projection
+    description: Post 生命周期事件携带的不可变公开作者展示证据；Reader 取最新 occurredAt，仅用于生成可解释文案，缺失时不得展示 raw personaId。
+    indexes:
+    - {name: idx_recommendation_intersection_persona_profile_latest, keys: {personaId: 1, occurredAt: -1, _id: -1}}
+  recommendation_intersection_declared_visits:
+    entity: RecommendationIntersectionDeclaredVisitProjection
+    role: projection
+    description: Post 生命周期 typed 事件中具有作者声明 visitedAt 的地点事实；浏览与想去均不得写入。
+    indexes:
+    - {name: idx_recommendation_intersection_declared_visit_active, keys: {active: 1, entityId: 1}}
   recommendation_feature_projection_checkpoints:
     entity: RecommendationFeatureProjectionCheckpoint
     role: inbox
     description: 每个 source eventId 与 subjectId 的永久幂等收据及本地主体 revision；不同上游 sequence 不做错误的大小比较。
     indexes:
     - {name: idx_recommendation_feature_checkpoint_subject, keys: {subjectId: 1, appliedAt: -1}}
+  recommendation_feature_projection_failures:
+    entity: RecommendationFeatureProjectionFailure
+    role: inbox
+    description: typed upstream delivery 的有界重试状态；成功或 DLQ 后立即删除，不承载领域事实。
+    indexes:
+    - {name: idx_recommendation_feature_failure_updated, keys: {updatedAt: -1}}
+streams:
+  events.user.persona_relationship.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 PersonaRelationship typed consumer 终止失败记录。
+  events.circle.memberships.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 CircleMembership typed consumer 终止失败记录。
+  events.content.behavior_facts.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 ContentBehaviorRecorded typed consumer 终止失败记录。
+  events.content.post_lifecycle.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 Post lifecycle typed consumer 终止失败记录。
+  events.tag.feedback.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 TagFeedbackRecorded typed consumer 终止失败记录。

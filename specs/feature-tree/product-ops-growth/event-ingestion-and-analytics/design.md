@@ -23,11 +23,11 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 Gamma 使用 Elasticsearch Port 替身，Prod 使用真实 SLS
-- 决策：Alpha/Beta 使用轻量本地日志替身验证协议。Gamma 绑定 `ext.obs.elasticsearch_local`，以本地 Elasticsearch 承载产品事件、启动诊断、运行日志和小时聚合四个逻辑分区。仅 Prod（含 gray rollout）绑定 `ext.obs.aliyun_sls` 并生成 Prod Remote receipt。
-- 理由：Gamma 必须在 production Remote composition 和完整第一方拓扑中验证真实网络、持久化、索引、聚合与查询行为，又不能依赖真实第三方租户或凭据；Elasticsearch 能提供可重复的外部存储边界，Prod hosted 再独立验证 SLS 鉴权、限流、Scheduled SQL、告警和回滚。
-- 被否决方案：Gamma 使用 PostgreSQL 冒充日志 Provider、继续使用 `local_log_sink` 文件占位、调用方直连 ES、ES/SLS 双写或失败 fallback，以及用 Gamma receipt 冒充 Prod SLS readiness。
-- 约束与影响：`ObservabilityLogSinkPort`、事件目录、product-ops API、查询 Slice 和错误语义保持唯一；Provider 差异只存在于 infrastructure Adapter 与环境组合根。ES 与 SLS 必须复用同一字段投影、脱敏和批次身份规则。
+### DEC-001 四环境使用同一 Elasticsearch 日志存储合同
+- 决策：Alpha、Beta、Gamma、Prod 均绑定 `ext.obs.elasticsearch`，以环境隔离的 Elasticsearch 集群承载产品事件、启动诊断、运行日志和小时聚合四个逻辑分区；环境组合根只提供集群 endpoint 与受保护认证材料，不选择第二种日志后端。
+- 理由：统一真实网络、持久化、索引、聚合、查询、告警和回滚语义，避免 Alpha/Beta 的 PostgreSQL 替身与 Prod SLS 形成无法由同一候选晋级的三轨实现。
+- 被否决方案：任一环境使用 PostgreSQL、SLS、文件或内存冒充日志 Provider，调用方直连 ES，多后端双写、失败 fallback，以及用一个环境的 receipt 冒充另一个环境 readiness。
+- 约束与影响：`ObservabilityLogSinkPort`、事件目录、product-ops API、查询 Slice、错误语义、索引模板、ILM 与 rollup 代数保持唯一；环境差异只允许 endpoint、认证、容量与保留执行资源不同。
 - 关联要求：`REQ-001`
 - 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)、[`event-schema-governance`](./event-schema-governance/spec.md)
 - 关联验收：`SIT-001`
@@ -41,6 +41,6 @@
 
 ## 6. 质量与观测
 
-- Alpha/Beta 验证轻量替身的 typed Port 契约。Gamma 创建并探测 ES 四分区及映射，执行写入、重复确认、summary/drilldown、页面体验、活跃会话和 RTC QoE 黑盒验收。Prod 创建 Project、四 Logstore、TTL、索引、RAM、Scheduled SQL 和告警。
+- 四环境分别创建并探测 ES 四分区及映射，执行写入、重复确认、summary/drilldown、页面体验、活跃会话和 RTC QoE 黑盒验收；Prod 额外证明正式认证、容量、快照、告警与回滚。
 - 安全：匿名 `/ops/events` 为 401、`/ops/recovery-failures` 只接收固定十字段并拒绝产品/身份字段、Portal 默认掩码。
-- App、Portal 或业务服务直连 ES/SLS，以及任一 Provider 失败后自动切换到另一存储，会重新制造双轨和隐私面，属于拒绝项。
+- App、Portal 或业务服务直连 ES，以及任一集群失败后自动切换到未声明存储，会重新制造双轨和隐私面，属于拒绝项。

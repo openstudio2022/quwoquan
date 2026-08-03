@@ -8,7 +8,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     });
   }
 
-  Widget _buildCommentSplitContent(PostBaseDto post) {
+  Widget _buildCommentSplitContent(ContentPostViewData post) {
     return ColoredBox(
       color: AppColors.worksBackground,
       child: _buildPostCanvas(
@@ -20,7 +20,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  PostBaseDto? _postById(List<PostBaseDto> posts, String postId) {
+  ContentPostViewData? _postById(List<ContentPostViewData> posts, String postId) {
     for (final post in posts) {
       if (post.id == postId) {
         return post;
@@ -31,7 +31,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   void _sharePost(
     BuildContext ctx,
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableIdentityTemplate,
   }) {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
@@ -60,7 +60,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   Future<void> _copyLink(
     BuildContext context,
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableIdentityTemplate,
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
@@ -77,7 +77,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   }
 
   ContentShareTemplate _buildShareTemplate({
-    required PostBaseDto post,
+    required ContentPostViewData post,
     required bool enableIdentityTemplate,
   }) {
     final raw = _rawPostById(post.id);
@@ -99,7 +99,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   MediaViewerResult _buildResult() {
     final posts = _buildFeed();
-    final postsById = <String, PostBaseDto>{
+    final postsById = <String, ContentPostViewData>{
       for (final post in posts) post.id: post,
     };
     final scopePostIds =
@@ -153,7 +153,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   }
 
   bool _canDeletePost(
-    PostBaseDto post,
+    ContentPostViewData post,
     ActivePersonaContextViewData? activePersonaContext,
   ) {
     final postPersonaId = post.personaId.trim();
@@ -177,7 +177,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   Future<void> _deleteCurrentPost(
     BuildContext context,
-    PostBaseDto post,
+    ContentPostViewData post,
   ) async {
     runWhenLoggedIn(ref, context, AuthGateReason.deletePost, () async {
       final displayName = post.displayName.trim().isNotEmpty
@@ -243,7 +243,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     });
   }
 
-  Future<void> _requestPostReport(PostBaseDto post) async {
+  Future<void> _requestPostReport(ContentPostViewData post) async {
     final reason = await showContentReportReasonSheet(context);
     if (reason == null || !mounted) {
       return;
@@ -277,8 +277,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   }
 
   Future<void> _submitPostReport(
-    PostBaseDto post,
-    ContentReportReason reason,
+    ContentPostViewData post,
+    ReportReason reason,
   ) async {
     final journeyTracker = ref.read(journeyEventTrackerProvider);
     final startedAt = DateTime.now();
@@ -288,7 +288,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           .createReport(
             CreateContentReportCommand(
               targetId: post.id,
-              targetType: ContentReportTargetType.post,
+              targetType: ReportTargetType.post,
               reason: reason,
             ),
           );
@@ -336,7 +336,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     }
   }
 
-  void _requestOriginalImageAccess(PostBaseDto post) {
+  void _requestOriginalImageAccess(ContentPostViewData post) {
     final imageIndex =
         (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
             .clamp(0, max(0, _imageUrlsForPost(post).length - 1))
@@ -380,7 +380,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   }
 
   Future<void> _loadOriginalImage({
-    required PostBaseDto post,
+    required ContentPostViewData post,
     required String mediaId,
     required int imageIndex,
   }) async {
@@ -466,7 +466,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     return types;
   }
 
-  Future<void> _requestBlockAuthor(PostBaseDto post) async {
+  Future<void> _requestBlockAuthor(ContentPostViewData post) async {
     final confirmed = await showAppActionSheet<bool>(
       context,
       title: ContentText.profileBlockConfirmTitle,
@@ -512,7 +512,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  Future<void> _applyBlockAuthor(PostBaseDto post) async {
+  Future<void> _applyBlockAuthor(ContentPostViewData post) async {
     try {
       await ref
           .read(
@@ -555,7 +555,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     }
   }
 
-  Future<void> _requestBlockKeyword(PostBaseDto post) async {
+  Future<void> _requestBlockKeyword(ContentPostViewData post) async {
     final suggested = suggestContentBlockedKeyword(<String>[
       post.title,
       post.normalizedBody,
@@ -592,7 +592,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  Future<void> _applyBlockKeyword(PostBaseDto post, String keyword) async {
+  Future<void> _applyBlockKeyword(ContentPostViewData post, String keyword) async {
     try {
       await ref.read(blockedKeywordWriterProvider).add(keyword);
       final attribution = _feedAttributionForPost(post);
@@ -638,7 +638,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     final posts = _buildFeed();
     final post = posts.isEmpty
         ? null
-        : posts[_currentPage.clamp(0, posts.length - 1)] as PostBaseDto?;
+        : posts[_currentPage.clamp(0, posts.length - 1)] as ContentPostViewData?;
     if (post == null) return;
     final journeyTracker = ref.read(journeyEventTrackerProvider);
     unawaited(
@@ -781,7 +781,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     );
   }
 
-  void _advanceAfterNegativeFeedback(PostBaseDto post) {
+  void _advanceAfterNegativeFeedback(ContentPostViewData post) {
     final posts = _buildFeed();
     final index = posts.indexWhere((candidate) => candidate.id == post.id);
     if (index >= 0 && index + 1 < posts.length && _pageController.hasClients) {

@@ -21,3 +21,11 @@ collections:
   gathering_outbox_sequences:
     entity: GatheringOutbox
     role: authoritative
+  gathering_reconciliation_checkpoints:
+    entity: GatheringReconciliationCheckpoint
+    role: projection
+    description: Gathering 到 Chat 会话与成员投影的 durable 单调 checkpoint；仅在聚合当前版本的全部期望状态收敛后推进。
+    indexes:
+    - name: uq_gathering_reconciliation_checkpoint
+      keys: {_id: 1}
+      unique: true

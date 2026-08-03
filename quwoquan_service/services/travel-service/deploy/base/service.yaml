@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: travel-service
+  labels:
+    app.kubernetes.io/name: travel-service
+spec:
+  selector:
+    app.kubernetes.io/name: travel-service
+  ports:
+    - name: http
+      port: 18093
+      targetPort: http

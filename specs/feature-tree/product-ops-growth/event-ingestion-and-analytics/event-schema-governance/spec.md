@@ -19,7 +19,7 @@
 - “事件 Schema 治理”的输入、可观察主路径、失败语义以及与父能力的交接。
 - event_catalog.yaml 与 app_pages.yaml 三端 codegen。
 - App/Service 双端 strict validation 与 canonical batch digest。
-- SLS raw/aggregate 单轨和 Portal 查询门面。
+- Elasticsearch raw/aggregate 单轨和 Portal 查询门面。
 - 推荐 BehaviorSignal、Assistant 学习、visit_record。
 
 ### Out of Scope

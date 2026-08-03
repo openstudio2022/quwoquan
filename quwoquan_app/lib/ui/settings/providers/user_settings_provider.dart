@@ -84,7 +84,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
     return _mutate(
       optimistic: () => state = state.copyWith(
-        notification: previous.copyWith(enablePush: value),
+        notification: _copyNotification(previous, enablePush: value),
       ),
       rollback: () => state = state.copyWith(notification: previous),
       command: () => _commands.updateNotificationSettings(
@@ -100,7 +100,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
     return _mutate(
       optimistic: () => state = state.copyWith(
-        notification: previous.copyWith(enableMarketing: value),
+        notification: _copyNotification(previous, enableMarketing: value),
       ),
       rollback: () => state = state.copyWith(notification: previous),
       command: () => _commands.updateNotificationSettings(
@@ -116,7 +116,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
     return _mutate(
       optimistic: () => state = state.copyWith(
-        call: previous.copyWith(allowCallerRingtoneOverride: value),
+        call: _copyCall(previous, allowCallerRingtoneOverride: value),
       ),
       rollback: () => state = state.copyWith(call: previous),
       command: () => _commands.updateCallSettings(
@@ -130,7 +130,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     if (previous == null) return Future<bool>.value(false);
     return _mutate(
       optimistic: () => state = state.copyWith(
-        privacy: previous.copyWith(allowStrangerMsg: value),
+        privacy: _copyPrivacy(previous, allowStrangerMsg: value),
       ),
       rollback: () => state = state.copyWith(privacy: previous),
       command: () => _commands.updatePrivacySettings(
@@ -144,7 +144,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     if (previous == null) return Future<bool>.value(false);
     return _mutate(
       optimistic: () => state = state.copyWith(
-        privacy: previous.copyWith(profileVisibility: value),
+        privacy: _copyPrivacy(previous, profileVisibility: value.wireName),
       ),
       rollback: () => state = state.copyWith(privacy: previous),
       command: () => _commands.updatePrivacySettings(
@@ -158,7 +158,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     if (previous == null) return Future<bool>.value(false);
     return _mutate(
       optimistic: () => state = state.copyWith(
-        privacy: previous.copyWith(assistantEnabled: value),
+        privacy: _copyPrivacy(previous, assistantEnabled: value),
       ),
       rollback: () => state = state.copyWith(privacy: previous),
       command: () => _commands.updatePrivacySettings(
@@ -167,25 +167,17 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     );
   }
 
-  Future<bool> setDefaultRingtone(contracts.OfficialRingtoneId ringtoneId) {
+  Future<bool> setDefaultRingtone(String ringtoneId) {
     final previous = state.call;
     if (previous == null) return Future<bool>.value(false);
     return _mutate(
       optimistic: () => state = state.copyWith(
-        call: previous.copyWith(
-          defaultIncomingCallRingtoneId:
-              contracts.NullableSettingMutation<
-                contracts.OfficialRingtoneId
-              >.set(ringtoneId),
-        ),
+        call: _copyCall(previous, defaultIncomingCallRingtoneId: ringtoneId),
       ),
       rollback: () => state = state.copyWith(call: previous),
       command: () => _commands.updateCallSettings(
         contracts.UpdateCallSettingsCommand(
-          defaultIncomingCallRingtoneId:
-              contracts.NullableSettingMutation<
-                contracts.OfficialRingtoneId
-              >.set(ringtoneId),
+          defaultIncomingCallRingtoneId: ringtoneId,
         ),
       ),
     );
@@ -198,7 +190,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
     return _mutate(
       optimistic: () => state = state.copyWith(
-        call: previous.copyWith(enableCallVibration: value),
+        call: _copyCall(previous, enableCallVibration: value),
       ),
       rollback: () => state = state.copyWith(call: previous),
       command: () => _commands.updateCallSettings(
@@ -214,7 +206,7 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
     return _mutate(
       optimistic: () => state = state.copyWith(
-        call: previous.copyWith(enableGroupCallRing: value),
+        call: _copyCall(previous, enableGroupCallRing: value),
       ),
       rollback: () => state = state.copyWith(call: previous),
       command: () => _commands.updateCallSettings(
@@ -240,6 +232,55 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     }
   }
 }
+
+contracts.NotificationSettingsView _copyNotification(
+  contracts.NotificationSettingsView value, {
+  bool? enablePush,
+  bool? enableMarketing,
+}) => contracts.NotificationSettingsView(
+  userId: value.userId,
+  enablePush: enablePush ?? value.enablePush,
+  enableMarketing: enableMarketing ?? value.enableMarketing,
+  quietHoursStart: value.quietHoursStart,
+  quietHoursEnd: value.quietHoursEnd,
+  version: value.version,
+  updatedAt: value.updatedAt,
+);
+
+contracts.PrivacySettingsView _copyPrivacy(
+  contracts.PrivacySettingsView value, {
+  bool? allowStrangerMsg,
+  String? profileVisibility,
+  bool? assistantEnabled,
+}) => contracts.PrivacySettingsView(
+  userId: value.userId,
+  allowStrangerMsg: allowStrangerMsg ?? value.allowStrangerMsg,
+  profileVisibility: profileVisibility ?? value.profileVisibility,
+  contentLanguage: value.contentLanguage,
+  feedPreference: value.feedPreference,
+  assistantEnabled: assistantEnabled ?? value.assistantEnabled,
+  blockedKeywords: value.blockedKeywords,
+  version: value.version,
+  updatedAt: value.updatedAt,
+);
+
+contracts.CallSettingsView _copyCall(
+  contracts.CallSettingsView value, {
+  String? defaultIncomingCallRingtoneId,
+  bool? allowCallerRingtoneOverride,
+  bool? enableCallVibration,
+  bool? enableGroupCallRing,
+}) => contracts.CallSettingsView(
+  userId: value.userId,
+  defaultIncomingCallRingtoneId:
+      defaultIncomingCallRingtoneId ?? value.defaultIncomingCallRingtoneId,
+  allowCallerRingtoneOverride:
+      allowCallerRingtoneOverride ?? value.allowCallerRingtoneOverride,
+  enableCallVibration: enableCallVibration ?? value.enableCallVibration,
+  enableGroupCallRing: enableGroupCallRing ?? value.enableGroupCallRing,
+  version: value.version,
+  updatedAt: value.updatedAt,
+);
 
 final userSettingsSectionsProvider =
     NotifierProvider<UserSettingsSectionsNotifier, UserSettingsSectionsState>(

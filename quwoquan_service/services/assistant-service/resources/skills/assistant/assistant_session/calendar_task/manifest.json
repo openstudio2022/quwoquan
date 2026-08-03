@@ -17,5 +17,10 @@
   "capabilityProfileRef": "capability.app2_device",
   "presentationProfileRef": "presentation.calendar",
   "evaluationProfileRef": "evaluation.task_execution",
-  "replayAssetRef": "assistant.replay.calendar_task.v1"
+  "replayAssetRef": "assistant.replay.calendar_task",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

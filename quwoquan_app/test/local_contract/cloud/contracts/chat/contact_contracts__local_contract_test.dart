@@ -46,7 +46,7 @@ void main() {
     });
 
     test('inbox query preserves opaque keyset cursor', () {
-      final payload = encodeChatConversationListInboxGeneratedRequest(
+      final payload = encodeChatChatInboxViewListInboxGeneratedRequest(
         ChatListInboxQuery(cursor: 'opaque-keyset', limit: 30),
       );
 

@@ -335,8 +335,12 @@ func run() error {
 		}
 	}()
 	notificationDB := mongoClient.Database(mongoDatabase)
+	deliveryLifecycle := deliverypersistence.NewMongoAccountLifecycle(notificationDB)
 	accountRestrictionProjection, err :=
-		persistence.NewMongoUserAccountRestrictionProjection(notificationDB)
+		persistence.NewMongoUserAccountRestrictionProjection(
+			notificationDB,
+			deliveryLifecycle,
+		)
 	if err != nil {
 		return fmt.Errorf("account restriction projection init failed: %w", err)
 	}
@@ -347,6 +351,7 @@ func run() error {
 	appMessageStore := persistence.NewMongoAppMessageStore(notificationDB)
 	accountClosureProjection, err := persistence.NewMongoUserAccountClosedProjection(
 		notificationDB,
+		deliveryLifecycle,
 	)
 	if err != nil {
 		return fmt.Errorf("UserAccountClosed projection init failed: %w", err)
@@ -355,6 +360,9 @@ func run() error {
 	indexErr := store.EnsureIndexes(indexCtx)
 	if indexErr == nil {
 		indexErr = appMessageStore.EnsureIndexes(indexCtx)
+	}
+	if indexErr == nil {
+		indexErr = deliveryLifecycle.EnsureIndexes(indexCtx)
 	}
 	if indexErr == nil {
 		indexErr = accountClosureProjection.EnsureIndexes(indexCtx)

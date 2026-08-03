@@ -15,6 +15,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.read]
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -101,11 +102,7 @@ api_routes:
           field: homepageId
     description: 提交主页下线/纠错上报
     request_entity: CreateHomepageStatusReportCommand
-    response_entity: HomepageStatusReport
-    client_contract:
-      dart_import: ../entity/homepage_commands.dart
-      response_type: HomepageStatusReportView
-      response_decoder: decodeHomepageStatusReportView
+    response_entity: HomepageStatusReportView
     security:
       auth_mode: required
       principal: persona
@@ -129,6 +126,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.write]
     reliability:
       timeout_ms: 5000
       cancellation: supported

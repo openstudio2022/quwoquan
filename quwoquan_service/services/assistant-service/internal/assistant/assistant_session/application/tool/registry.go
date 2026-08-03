@@ -104,6 +104,9 @@ func (r Registry) ValidateInput(toolName string, input map[string]any) error {
 }
 
 func (r *Registry) Register(meta Metadata, handler Handler) {
+	if err := validateConfirmationMetadata(meta); err != nil {
+		panic(err)
+	}
 	if r.metadata == nil {
 		r.metadata = map[string]Metadata{}
 	}
@@ -122,6 +125,9 @@ func (r *Registry) RegisterDeviceAction(meta Metadata) {
 		meta.ReadOnly {
 		panic("device action metadata must be confirmed and mutating")
 	}
+	if err := validateConfirmationMetadata(meta); err != nil {
+		panic(err)
+	}
 	if r.metadata == nil {
 		r.metadata = map[string]Metadata{}
 	}
@@ -130,6 +136,40 @@ func (r *Registry) RegisterDeviceAction(meta Metadata) {
 	}
 	r.metadata[meta.ToolName] = meta
 	delete(r.handlers, meta.ToolName)
+}
+
+func validateConfirmationMetadata(meta Metadata) error {
+	confirmation := meta.Confirmation
+	if !meta.RequiresConfirmation {
+		if strings.TrimSpace(confirmation.TemplateRef) != "" ||
+			len(confirmation.DisplayFields) > 0 {
+			return fmt.Errorf("tool %q has confirmation UI but does not require confirmation", meta.ToolName)
+		}
+		return nil
+	}
+	if strings.TrimSpace(confirmation.TemplateRef) == "" ||
+		strings.TrimSpace(confirmation.Title) == "" ||
+		strings.TrimSpace(confirmation.Description) == "" ||
+		strings.TrimSpace(confirmation.CompletionSummary) == "" ||
+		len(confirmation.DisplayFields) == 0 {
+		return fmt.Errorf("tool %q confirmation metadata is incomplete", meta.ToolName)
+	}
+	properties, _ := meta.InputSchema["properties"].(map[string]any)
+	seen := map[string]struct{}{}
+	for _, field := range confirmation.DisplayFields {
+		key := strings.TrimSpace(field.InputKey)
+		if key == "" || strings.TrimSpace(field.Label) == "" {
+			return fmt.Errorf("tool %q confirmation field is invalid", meta.ToolName)
+		}
+		if _, ok := properties[key]; !ok {
+			return fmt.Errorf("tool %q confirmation field %q is not in input schema", meta.ToolName, key)
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("tool %q confirmation field %q is duplicated", meta.ToolName, key)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
 }
 
 func (r Registry) Execute(ctx context.Context, req Request) (Result, error) {

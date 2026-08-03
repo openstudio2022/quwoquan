@@ -8,6 +8,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.release.environment.app_uat_envelope import (
+    AppUatEnvelopeError,
+    build_app_uat_envelope,
+)
 from core.io import read_json
 from core.release_layout import payload_file
 
@@ -27,6 +31,7 @@ def _read_object(path: Path, *, label: str, issues: list[str]) -> dict[str, Any]
 def environment_release_readiness_issues(
     readiness: Mapping[str, Any],
     *,
+    homepage_verification: Mapping[str, Any],
     post_verification: Mapping[str, Any],
     release: Path,
     output_root: Path,
@@ -173,6 +178,28 @@ def environment_release_readiness_issues(
     }
     if readiness.get("counts") != expected_counts:
         issues.append(f"{path}: counts drift from bound evidence")
+
+    if readiness.get("readinessPhase") == "commercial":
+        try:
+            expected_app_uat_envelope = build_app_uat_envelope(
+                release_root=release,
+                release_id=release_id,
+                entity_refs=desired_refs["entities"],
+                post_refs=desired_refs["posts"],
+                creator_ids=desired_refs["creators"],
+                tag_refs=desired_refs["tags"],
+                bindings=list(bindings),
+                homepage_report=homepage_verification,
+                queries_by_name=feed_queries,
+                verified_playable_video_ids=verified_playable_video_ids,
+            )
+        except AppUatEnvelopeError as exc:
+            issues.append(f"{path}: cannot project appUatEnvelope: {exc}")
+        else:
+            if readiness.get("appUatEnvelope") != expected_app_uat_envelope:
+                issues.append(
+                    f"{path}: appUatEnvelope drifts from immutable release closure"
+                )
 
     unsigned = dict(readiness)
     declared_checksum = str(unsigned.pop("verificationChecksum", ""))

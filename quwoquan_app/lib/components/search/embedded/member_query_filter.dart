@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 
 /// 群成员 `Map` 端侧过滤（无网络）。
 List<Map<String, dynamic>> filterMemberMapsByQuery(
@@ -41,12 +41,12 @@ bool _isMostlyAscii(String s) {
 }
 
 /// 群成员 DTO 端侧过滤（无网络）。
-List<ChatConversationMemberDto> filterMemberDtosByQuery(
-  List<ChatConversationMemberDto> source,
+List<ConversationMemberListRow> filterMemberDtosByQuery(
+  List<ConversationMemberListRow> source,
   String query,
 ) {
   final q = query.trim();
-  if (q.isEmpty) return List<ChatConversationMemberDto>.from(source);
+  if (q.isEmpty) return List<ConversationMemberListRow>.from(source);
 
   final lower = q.toLowerCase();
   bool containsQuery(String? s) {

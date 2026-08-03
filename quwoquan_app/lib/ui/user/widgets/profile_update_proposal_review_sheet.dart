@@ -27,7 +27,7 @@ final class _ProfileUpdateProposalReviewSheetState
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _track('expose', result: widget.proposal.status.name);
+      _track('expose', result: widget.proposal.status);
     });
   }
 
@@ -57,14 +57,14 @@ final class _ProfileUpdateProposalReviewSheetState
     });
     try {
       final writer = ref.read(profileEditProposalCommandWriterProvider);
-      if (widget.proposal.status == ProfileUpdateProposalStatus.pending) {
+      if (widget.proposal.status == 'pending') {
         await writer.confirm(
           ConfirmProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
       }
-      if (widget.proposal.status == ProfileUpdateProposalStatus.pending ||
-          widget.proposal.status == ProfileUpdateProposalStatus.confirmed ||
-          widget.proposal.status == ProfileUpdateProposalStatus.applying) {
+      if (widget.proposal.status == 'pending' ||
+          widget.proposal.status == 'confirmed' ||
+          widget.proposal.status == 'applying') {
         await writer.apply(
           ApplyProfileUpdateProposalCommand(proposalId: widget.proposal.id),
         );
@@ -157,17 +157,16 @@ final class _ProfileUpdateProposalReviewSheetState
 
   @override
   Widget build(BuildContext context) {
-    final changes = _changeRows(widget.proposal.changes);
+    final changes = _changeRows(widget.proposal);
     final reviewBasis = _reviewBasisRows(widget.proposal);
     final canApprove =
-        widget.proposal.status == ProfileUpdateProposalStatus.pending ||
-        widget.proposal.status == ProfileUpdateProposalStatus.confirmed ||
-        widget.proposal.status == ProfileUpdateProposalStatus.applying;
+        widget.proposal.status == 'pending' ||
+        widget.proposal.status == 'confirmed' ||
+        widget.proposal.status == 'applying';
     final canReject =
-        widget.proposal.status == ProfileUpdateProposalStatus.pending ||
-        widget.proposal.status == ProfileUpdateProposalStatus.confirmed;
-    final canRollback =
-        widget.proposal.status == ProfileUpdateProposalStatus.applied;
+        widget.proposal.status == 'pending' ||
+        widget.proposal.status == 'confirmed';
+    final canRollback = widget.proposal.status == 'applied';
     return AppBottomModalSurface(
       panelKey: const ValueKey<String>('profile-proposal-review-sheet'),
       onDismiss: _busy ? () {} : () => Navigator.of(context).pop(false),
@@ -261,9 +260,7 @@ final class _ProfileUpdateProposalReviewSheetState
                   if (canApprove) ...<Widget>[
                     ProfileIosActionButton(
                       key: const ValueKey<String>('profile-proposal-approve'),
-                      label:
-                          widget.proposal.status ==
-                              ProfileUpdateProposalStatus.applying
+                      label: widget.proposal.status == 'applying'
                           ? ProfileText.editProfileProposalResumeApply
                           : ProfileText.editProfileProposalApprove,
                       style: ProfileIosActionStyle.filled,
@@ -316,7 +313,7 @@ List<Widget> _reviewBasisRows(ProfileUpdateProposalView proposal) {
   ];
 }
 
-List<Widget> _changeRows(ProfileChangeSet changes) {
+List<Widget> _changeRows(ProfileUpdateProposalView changes) {
   final rows = <Widget>[];
   void add(String label, Object? value, {bool allowEmpty = false}) {
     if (value == null) return;
@@ -355,11 +352,9 @@ String _profileChangeFieldLabel(String field) => switch (field) {
   _ => ProfileText.editProfileProposalImpactScope,
 };
 
-String _sourceLabel(ProfileUpdateProposalSource source) => switch (source) {
-  ProfileUpdateProposalSource.assistant =>
-    ProfileText.editProfileProposalSourceAssistant,
-  ProfileUpdateProposalSource.external =>
-    ProfileText.editProfileProposalSourceExternal,
-  ProfileUpdateProposalSource.persona =>
-    ProfileText.editProfileProposalSourcePersona,
+String _sourceLabel(String source) => switch (source) {
+  'assistant' => ProfileText.editProfileProposalSourceAssistant,
+  'external' => ProfileText.editProfileProposalSourceExternal,
+  'persona' => ProfileText.editProfileProposalSourcePersona,
+  _ => ProfileText.editProfileProposalSourceExternal,
 };

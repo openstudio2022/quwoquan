@@ -8,12 +8,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
 	"strings"
 	"testing"
 	"time"
 
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
 )
 
 func TestFFmpegMediaProcessorFailsFastWhenRuntimeBinaryIsMissing(t *testing.T) {

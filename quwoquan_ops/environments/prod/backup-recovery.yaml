@@ -16,7 +16,7 @@ datasets:
     rtoMinutes: 240
     requiredRemoteCopy: true
     requiredIsolationTarget: true
-  - id: sls-archive
+  - id: elasticsearch-snapshot
     rpoMinutes: 60
     rtoMinutes: 240
     requiredRemoteCopy: true

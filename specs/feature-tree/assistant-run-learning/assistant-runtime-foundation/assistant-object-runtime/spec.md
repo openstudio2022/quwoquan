@@ -30,6 +30,7 @@
 - 同一 intent 的重复创建不得产生第二个运行；completed、failed、cancelled 终态不得互相迁移。
 - Grant/Revoke 必须消费 Idempotency-Key，并将授权事实、命令回执与审计事件在同一 PostgreSQL 事务提交；同键不同命令或 payload 必须返回 canonical conflict。
 - SkillConsent owner 只使用可信 `accountId`；生效性只由 `revokedAt` 是否为空裁决，`granted` 仅是由此推导的 API projection。
+- SkillSubscription 创建与状态迁移必须消费 `clientRequestId`/`Idempotency-Key` 单一命令身份，将聚合版本、命令回执和生命周期 outbox 在同一 MongoDB 事务提交；同键同意图返回首个结果，同键异意图返回 canonical conflict，状态 no-op 只写回执而不推进版本或 `updatedAt`。
 
 ## 4. 契约引用
 
@@ -46,6 +47,7 @@
 - THEN 原运行仍通过 metadata-owned `AssistantTurnEnvelope` 可读取；即使有限保留期的 SSE journal 已过期，completed 的 `answerText`，或 failed/cancelled 的 canonical terminal failure，以及状态、trace 与恢复状态仍来自 Run Store 的 canonical snapshot。
 - AND 敏感操作返回 canonical 授权失败，且不产生工具调用或成功事实。
 - AND Grant/Revoke 的首次提交、同键重放、同键冲突、撤权即时拒绝及事实/回执/事件原子性均有真实 PostgreSQL API integration 证据。
+- AND SkillSubscription 创建、状态迁移、no-op、同键重放与同键冲突均有真实 MongoDB API integration 证据，且聚合版本、命令回执和生命周期 outbox 的原子性可对账。
 
 ## 6. 依赖
 

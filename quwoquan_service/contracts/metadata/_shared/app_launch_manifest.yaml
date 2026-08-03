@@ -24,6 +24,18 @@ local_transport_targets:
   - gamma-local
   - prod-sim
 
+content_binding_contract:
+  fields:
+    - contentReleaseId
+    - contentManifestDigest
+    - contentReadinessReceiptDigest
+  digest_fields:
+    - contentManifestDigest
+    - contentReadinessReceiptDigest
+  required_launch_modes:
+    - direct_flutter_run
+    - canonical_launcher
+
 schemas:
   app_effective_launch_manifest:
     schema_value: app-effective-launch-manifest
@@ -36,6 +48,9 @@ schemas:
       - launchMode
       - dartDefinesDigest
       - runtimeConfigDigest
+      - contentReleaseId
+      - contentManifestDigest
+      - contentReadinessReceiptDigest
       - recoveryBaseUrl
       - publicWebBaseUrl
       - appDownloadBaseUrl
@@ -49,6 +64,9 @@ schemas:
       launchMode: { type: string, min_length: 1 }
       dartDefinesDigest: { type: string, format: sha256_identity }
       runtimeConfigDigest: { type: string, format: sha256_identity }
+      contentReleaseId: { type: string }
+      contentManifestDigest: { type: string }
+      contentReadinessReceiptDigest: { type: string }
       recoveryBaseUrl: { type: string, format: https_origin }
       publicWebBaseUrl: { type: string, format: https_origin }
       appDownloadBaseUrl: { type: string, format: https_url_no_query_fragment_credentials }
@@ -75,6 +93,7 @@ schemas:
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
       - recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。
+      - 内容绑定字段必须全空或全部完整；direct_flutter_run 与 canonical_launcher 必须绑定非空 releaseId 和两个 sha256 identity。
 
   app_launcher_handoff:
     schema_value: app-launcher-handoff
@@ -87,6 +106,9 @@ schemas:
       - launchMode
       - dartDefinesDigest
       - runtimeConfigDigest
+      - contentReleaseId
+      - contentManifestDigest
+      - contentReadinessReceiptDigest
       - recoveryBaseUrl
       - publicWebBaseUrl
       - appDownloadBaseUrl
@@ -103,6 +125,9 @@ schemas:
       launchMode: { type: string, source: app_effective_launch_manifest.launchMode }
       dartDefinesDigest: { type: string, source: app_effective_launch_manifest.dartDefinesDigest }
       runtimeConfigDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigDigest }
+      contentReleaseId: { type: string, source: app_effective_launch_manifest.contentReleaseId }
+      contentManifestDigest: { type: string, source: app_effective_launch_manifest.contentManifestDigest }
+      contentReadinessReceiptDigest: { type: string, source: app_effective_launch_manifest.contentReadinessReceiptDigest }
       recoveryBaseUrl: { type: string, source: app_effective_launch_manifest.recoveryBaseUrl }
       publicWebBaseUrl: { type: string, source: app_effective_launch_manifest.publicWebBaseUrl }
       appDownloadBaseUrl: { type: string, source: app_effective_launch_manifest.appDownloadBaseUrl }

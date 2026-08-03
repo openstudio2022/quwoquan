@@ -20,7 +20,7 @@ final class RemotePersonaQuery implements PersonaQuery {
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
     final result = await managementQuery.listPersonas(ListPersonasQuery());
     return result.items
-        .map(PersonaManagementItemViewData.fromPersonaManagementItemProjection)
+        .map(PersonaManagementItemViewData.fromWire)
         .toList(growable: false);
   }
 
@@ -29,7 +29,7 @@ final class RemotePersonaQuery implements PersonaQuery {
     final projection = await managementQuery.getPersonaManagementSummary(
       GetPersonaManagementSummaryQuery(),
     );
-    return PersonaManagementSummaryViewData.fromProjection(projection);
+    return PersonaManagementSummaryViewData.fromWire(projection);
   }
 
   @override
@@ -37,7 +37,7 @@ final class RemotePersonaQuery implements PersonaQuery {
     final projection = await managementQuery.getActivePersonaContext(
       GetActivePersonaContextQuery(),
     );
-    return ActivePersonaContextViewData.fromActivePersonaContextProjection(
+    return ActivePersonaContextViewData.fromWire(
       projection,
     );
   }
@@ -49,7 +49,7 @@ final class RemotePersonaQuery implements PersonaQuery {
     final projection = await managementQuery.getPersonaLifecycleGuard(
       GetPersonaLifecycleGuardQuery(personaId: personaId),
     );
-    return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardProjection(
+    return PersonaLifecycleGuardViewData.fromWire(
       projection,
     );
   }
@@ -59,6 +59,6 @@ final class RemotePersonaQuery implements PersonaQuery {
     final projection = await publicProfileQuery.getPersonaProfile(
       GetPersonaProfileQuery(personaId: personaId),
     );
-    return PersonaProfileViewData.fromPersonaProfileProjection(projection);
+    return PersonaProfileViewData.fromWire(projection);
   }
 }

@@ -1,7 +1,7 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'dart:async';
 
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
@@ -75,7 +75,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
         return false;
       }
       await _store.ensureReady();
-      final contactDtosByID = <String, ChatContactRowDto>{};
+      final contactDtosByID = <String, ChatContactRowViewData>{};
       final seenContactCursors = <String>{};
       String? contactCursor;
       while (true) {
@@ -179,7 +179,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
             batchIds,
           );
           final records = conversations
-              .map(ConversationCacheRecord.fromConversationDto)
+              .map(ConversationCacheRecord.fromConversationViewData)
               .toList(growable: false);
           _conversationCache.putAll(records);
           await _store.upsertConversationRecords(
@@ -254,7 +254,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
       final conversationDto = await _chatRepository.getConversation(
         conversationId,
       );
-      final conversation = ConversationCacheRecord.fromConversationDto(
+      final conversation = ConversationCacheRecord.fromConversationViewData(
         conversationDto,
       );
       _conversationCache.put(conversation);
@@ -280,7 +280,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
 
   Future<bool> ingestRealtimeMessage({
     required String conversationId,
-    required MessageDto message,
+    required ChatMessageViewData message,
   }) async {
     try {
       final namespace = await _resolveNamespace();
@@ -298,7 +298,7 @@ class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {
       if (conversation == null) {
         try {
           final dto = await _chatRepository.getConversation(conversationId);
-          conversation = ConversationCacheRecord.fromConversationDto(dto);
+          conversation = ConversationCacheRecord.fromConversationViewData(dto);
           _conversationCache.put(conversation);
           await _store.upsertConversationRecords(
             namespace: namespace,

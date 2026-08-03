@@ -1,5 +1,5 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
@@ -111,7 +111,7 @@ void refreshMessageReadState(WidgetRef ref, String conversationId) {
 
 void _storeMessageRowsInConversationCache(
   Ref ref,
-  Iterable<MessageHomeRowDto> rows,
+  Iterable<MessageHomeRow> rows,
 ) {
   final records = rows
       .where((row) => row.conversationId.trim().isNotEmpty)
@@ -132,7 +132,9 @@ List<ChatListItemViewModel> _cachedMessageRowsForFilter(
       .read(conversationCacheProvider)
       .getAll()
       .where((record) {
-        final item = ChatListItemViewModel.fromDto(record.toChatInboxDto());
+        final item = ChatListItemViewModel.fromDto(
+          record.toChatInboxViewData(),
+        );
         return _matchesMessageHomeFilter(item, filter);
       })
       .toList(growable: false);
@@ -150,7 +152,9 @@ List<ChatListItemViewModel> _cachedMessageRowsForFilter(
     return bTime.compareTo(aTime);
   });
   final rows = records
-      .map((record) => ChatListItemViewModel.fromDto(record.toChatInboxDto()))
+      .map(
+        (record) => ChatListItemViewModel.fromDto(record.toChatInboxViewData()),
+      )
       .toList(growable: false);
   return List<ChatListItemViewModel>.unmodifiable(rows);
 }
@@ -172,7 +176,7 @@ bool _matchesMessageHomeFilter(ChatListItemViewModel item, String filter) {
 }
 
 ConversationCacheRecord _conversationCacheRecordFromMessageHomeRow(
-  MessageHomeRowDto row,
+  MessageHomeRow row,
 ) {
   return ConversationCacheRecord(
     id: row.conversationId.trim(),

@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -35,7 +36,8 @@ class _InterestOnboardingPageState
     extends ConsumerState<InterestOnboardingPage> {
   static const int _maxLeafChoicesPerDimension = 32;
 
-  final Map<String, List<TagChild>> _options = <String, List<TagChild>>{};
+  final Map<String, List<TagChildView>> _options =
+      <String, List<TagChildView>>{};
   final Set<String> _selected = <String>{};
 
   /// 本次实际浏览的 taxonomy 发布号，取自云侧随每个目录节点下发的 releaseId。
@@ -77,7 +79,7 @@ class _InterestOnboardingPageState
     try {
       final coordinator = ref.read(interestOnboardingCoordinatorProvider);
       final query = ref.read(tagCatalogQueryProvider);
-      final options = <String, List<TagChild>>{};
+      final options = <String, List<TagChildView>>{};
       for (final dimension in _catalog.dimensions) {
         options[dimension.id] = await _loadLeafChoices(query, dimension.tagRef);
       }
@@ -116,13 +118,13 @@ class _InterestOnboardingPageState
   ///
   /// Keep the discovery bounded for first-run latency, but traverse the live
   /// catalog rather than carrying a client-side tag allowlist.
-  Future<List<TagChild>> _loadLeafChoices(
+  Future<List<TagChildView>> _loadLeafChoices(
     TagCatalogQuery query,
     String rootTagRef,
   ) async {
     final queue = <String>[rootTagRef.trim()];
     final visited = <String>{};
-    final leaves = <TagChild>[];
+    final leaves = <TagChildView>[];
     var cursor = 0;
 
     while (cursor < queue.length &&
@@ -145,10 +147,12 @@ class _InterestOnboardingPageState
     if (leaves.isEmpty) {
       throw StateError('onboarding catalog root has no selectable leaves');
     }
-    return List<TagChild>.unmodifiable(leaves);
+    return List<TagChildView>.unmodifiable(leaves);
   }
 
-  static String _requireSingleTaxonomyReleaseId(Iterable<TagChild> choices) {
+  static String _requireSingleTaxonomyReleaseId(
+    Iterable<TagChildView> choices,
+  ) {
     final releaseIds = <String>{};
     for (final choice in choices) {
       final releaseId = choice.releaseId.trim();
@@ -310,12 +314,15 @@ class _InterestOnboardingPageState
     );
   }
 
-  void _toggle(TagChild option, OnboardingInterestDimensionConfig dimension) {
+  void _toggle(
+    TagChildView option,
+    OnboardingInterestDimensionConfig dimension,
+  ) {
     final tagRef = option.tagRef.trim();
     if (tagRef.isEmpty) return;
     setState(() {
       if (_selected.remove(tagRef)) return;
-      final inDimension = (_options[dimension.id] ?? const <TagChild>[])
+      final inDimension = (_options[dimension.id] ?? const <TagChildView>[])
           .where((option) => _selected.contains(option.tagRef))
           .length;
       if (inDimension >= dimension.maxSelections ||
@@ -398,7 +405,8 @@ class _InterestOnboardingPageState
             spacing: AppSpacing.intraGroupMd,
             runSpacing: AppSpacing.intraGroupMd,
             children: <Widget>[
-              for (final option in _options[dimension.id] ?? const <TagChild>[])
+              for (final option
+                  in _options[dimension.id] ?? const <TagChildView>[])
                 CupertinoButton(
                   key: ValueKey<String>(
                     'interest-onboarding-option-${option.tagRef}',
@@ -414,9 +422,9 @@ class _InterestOnboardingPageState
                       ? null
                       : () => _toggle(option, dimension),
                   child: Text(
-                    option.displayLabel.trim().isEmpty
+                    (option.displayLabel ?? '').trim().isEmpty
                         ? option.label
-                        : option.displayLabel,
+                        : option.displayLabel!,
                     style: TextStyle(
                       color: _selected.contains(option.tagRef)
                           ? AppColors.white

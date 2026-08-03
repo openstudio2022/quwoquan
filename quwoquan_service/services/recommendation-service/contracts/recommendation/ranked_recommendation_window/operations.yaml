@@ -26,9 +26,10 @@ api_routes:
   actor: none
   commercial: {status: blocked, block_reason: 对象源与集成测试尚待闭环, gap_id: RECOMMENDATION_WINDOW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
   application: {kind: query, facet: RankedRecommendationWindowQueryFacade, method: getPage, reader: RankedRecommendationWindowReader, slice: RankedRecommendationPage}
+  request_entity: GetRankedRecommendationPageQuery
   request_bindings:
     path: [{name: windowId, field: windowId}]
-    query: [{name: fromOrdinal, field: fromOrdinal, required: false}, {name: limit, field: limit, required: false}]
+    query: [{name: subjectId, field: subjectId, required: true}, {name: fromOrdinal, field: fromOrdinal, required: false}, {name: limit, field: limit, required: false}]
   response_entity: RankedRecommendationPage
   reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
   error_codes: [RECOMMENDATION.USER.ranked_window_unauthorized, RECOMMENDATION.USER.ranked_window_forbidden, RECOMMENDATION.USER.ranked_window_invalid_argument, RECOMMENDATION.USER.ranked_window_not_found, RECOMMENDATION.USER.ranked_window_subject_closed, RECOMMENDATION.SYSTEM.ranked_window_failed]

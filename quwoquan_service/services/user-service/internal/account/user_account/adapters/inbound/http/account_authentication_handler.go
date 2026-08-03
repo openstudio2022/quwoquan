@@ -277,7 +277,11 @@ func (h *UserHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request)
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"accessToken":               result.AccessToken,
+		"refreshToken":              result.RefreshToken,
+		"sessionRememberTtlSeconds": result.SessionRememberTTLSeconds,
+	})
 }
 
 func (h *UserHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -288,5 +292,5 @@ func (h *UserHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": true})
 }

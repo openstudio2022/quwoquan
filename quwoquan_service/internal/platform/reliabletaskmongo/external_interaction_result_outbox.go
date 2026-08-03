@@ -76,16 +76,16 @@ func (s *Store) insertProviderAttemptOnce(
 	ctx context.Context,
 	record reliabletask.ProviderAttemptRecord,
 ) error {
-	if _, err := s.attempts.InsertOne(ctx, record); err == nil {
-		return nil
-	} else if !mongo.IsDuplicateKeyError(err) {
-		return err
-	}
 	var existing reliabletask.ProviderAttemptRecord
-	if err := s.attempts.FindOne(
+	err := s.attempts.FindOne(
 		ctx,
 		bson.M{"_id": record.AttemptID},
-	).Decode(&existing); err != nil {
+	).Decode(&existing)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		_, err = s.attempts.InsertOne(ctx, record)
+		return err
+	}
+	if err != nil {
 		return fmt.Errorf("read existing provider attempt: %w", err)
 	}
 	if existing.RequestID != record.RequestID ||
@@ -107,16 +107,16 @@ func (s *Store) insertResultOutboxOnce(
 	ctx context.Context,
 	record reliabletask.ExternalInteractionResultOutboxRecord,
 ) error {
-	if _, err := s.resultOutboxes.InsertOne(ctx, record); err == nil {
-		return nil
-	} else if !mongo.IsDuplicateKeyError(err) {
-		return err
-	}
 	var existing reliabletask.ExternalInteractionResultOutboxRecord
-	if err := s.resultOutboxes.FindOne(
+	err := s.resultOutboxes.FindOne(
 		ctx,
 		bson.M{"_id": record.EventID},
-	).Decode(&existing); err != nil {
+	).Decode(&existing)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		_, err = s.resultOutboxes.InsertOne(ctx, record)
+		return err
+	}
+	if err != nil {
 		return fmt.Errorf("read existing provider result outbox: %w", err)
 	}
 	if existing.RequestID != record.RequestID ||

@@ -33,4 +33,4 @@ business_rules:
 lifecycle:
   model: replace_current_candidate_ack
   optimistic_concurrency: store_commit
-  idempotency: instance_and_release_manifest_digest
+  idempotency: instance_release_effective_and_config_digest

@@ -1,9 +1,9 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
@@ -46,7 +46,7 @@ class ChatContactsRow {
   bool get isMutualFollow => relationState == 'mutual';
 
   factory ChatContactsRow.fromContactDto(
-    ChatContactRowDto dto, {
+    ChatContactRowViewData dto, {
     MediaEndpointConfig? mediaEndpointConfig,
   }) {
     var sub = '';
@@ -83,7 +83,7 @@ class ChatContactsRow {
   }
 
   factory ChatContactsRow.fromContactHomeDto(
-    ContactHomeRowDto dto, {
+    ContactHomeRow dto, {
     MediaEndpointConfig? mediaEndpointConfig,
   }) {
     final kind = switch (dto.kind) {
@@ -94,7 +94,9 @@ class ChatContactsRow {
     return ChatContactsRow(
       kind: kind,
       id: dto.id.isNotEmpty ? dto.id : dto.objectId,
-      personaId: dto.userId.trim().isEmpty ? null : dto.userId.trim(),
+      personaId: (dto.userId?.trim().isEmpty ?? true)
+          ? null
+          : dto.userId!.trim(),
       userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
       displayName: dto.title,
       avatarUrl: resolveAvatarImageUrl(
@@ -104,11 +106,13 @@ class ChatContactsRow {
       subtitle: kind == ChatContactsRowKind.user
           ? dto.summaryIntersections.take(2).join(' · ')
           : dto.subtitle.trim(),
-      relationState: dto.relationState,
+      relationState: dto.relationState ?? 'not_following',
       source: dto.kind,
-      isStarred: dto.isStarred,
-      circleId: dto.circleId.isNotEmpty ? dto.circleId : null,
-      conversationId: dto.conversationId.isNotEmpty ? dto.conversationId : null,
+      isStarred: dto.isStarred ?? false,
+      circleId: (dto.circleId?.isNotEmpty ?? false) ? dto.circleId : null,
+      conversationId: (dto.conversationId?.isNotEmpty ?? false)
+          ? dto.conversationId
+          : null,
     );
   }
 

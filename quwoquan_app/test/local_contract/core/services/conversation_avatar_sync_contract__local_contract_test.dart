@@ -10,8 +10,8 @@ import '../../../support/sqflite_ffi_test_support.dart';
 
 void main() {
   group('Conversation avatar cloud chain', () {
-    test('ConversationDto -> cache record preserves group avatar fields', () {
-      final dto = ConversationDto.fromMap(const <String, dynamic>{
+    test('ConversationViewData -> cache record preserves group avatar fields', () {
+      final dto = ConversationViewData.fromMap(const <String, dynamic>{
         'id': 'conv_cloud_group',
         'type': 'group',
         'title': '云侧群头像',
@@ -30,7 +30,7 @@ void main() {
         'updatedAt': '2026-05-19T01:00:00Z',
       });
 
-      final record = ConversationCacheRecord.fromConversationDto(dto);
+      final record = ConversationCacheRecord.fromConversationViewData(dto);
 
       expect(record.avatarUrl, dto.avatarUrl);
       expect(record.groupAvatarVersion, 7);

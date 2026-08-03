@@ -4,7 +4,7 @@ output_path: assistant/generated/contracts/assistant_stream_event.g.dart
 contract: assistant_stream_event
 kind: shared_wire_contract
 imports:
-  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
 fields:
   - { name: schema, type: string, required: true }
   - { name: eventId, type: string, required: true }

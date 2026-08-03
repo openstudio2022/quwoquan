@@ -8,6 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from content.release.environment.app_uat_envelope import (
+    AppUatEnvelopeError,
+    build_app_uat_envelope,
+)
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import attestation_root, payload_digest, payload_file
@@ -73,18 +77,23 @@ def write_environment_release_readiness(
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write append-only, release-bound proof for Ops readiness composition."""
-    if readiness_phase not in {"consumer", "commercial"}:
+    if readiness_phase not in {"research", "consumer", "commercial"}:
         raise EnvironmentReleaseReadinessError(
-            "readiness_phase must be consumer or commercial"
+            "readiness_phase must be research, consumer or commercial"
         )
 
     header_path = payload_file(release_root, "release.json")
     desired_path = payload_file(release_root, "desired_state.json")
     media_manifest_path = payload_file(release_root, "media_manifest.json")
+    asset_admission_path = payload_file(release_root, "asset_admission.json")
     attestation_path = attestation_root(release_root) / "release.json"
     header = _object(header_path, label="release header")
     desired = _object(desired_path, label="release desired state")
     media_manifest = _object(media_manifest_path, label="release media manifest")
+    asset_admission = _object(
+        asset_admission_path,
+        label="release asset admission",
+    )
     attestation = _object(attestation_path, label="release attestation")
     import_report = _object(import_report_path, label="content import report")
     creator_report = _object(creator_import_report_path, label="creator import report")
@@ -96,6 +105,7 @@ def write_environment_release_readiness(
         (desired, "release_desired_state", "release desired state"),
         (attestation, "release_attestation", "release attestation"),
         (media_manifest, "media_manifest", "release media manifest"),
+        (asset_admission, "release_asset_admission", "release asset admission"),
         (import_report, "import_report", "content import report"),
         (creator_report, "creator_import_report", "creator import report"),
         (tag_report, "tag_consumer_verification", "tag consumer verification"),
@@ -113,6 +123,7 @@ def write_environment_release_readiness(
             desired,
             attestation,
             media_manifest,
+            asset_admission,
             import_report,
             creator_report,
             tag_report,
@@ -123,6 +134,40 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError("readiness evidence releaseId drift")
     if header.get("releaseKind") != ReleaseKind.CONTENT:
         raise EnvironmentReleaseReadinessError("readiness receipt requires a content release")
+    release_class = str(header.get("releaseClass") or "")
+    product_lifecycle_state = str(header.get("productLifecycleState") or "")
+    expected_release_class = "research" if readiness_phase == "research" else "commercial" if readiness_phase == "commercial" else release_class
+    if readiness_phase in {"research", "commercial"} and (
+        release_class != expected_release_class
+        or product_lifecycle_state != expected_release_class
+    ):
+        raise EnvironmentReleaseReadinessError(
+            "readiness phase drifts from immutable release lifecycle"
+        )
+    lifecycle_fields = (
+        "releaseClass",
+        "productLifecycleState",
+        "containsUnverifiedAssets",
+        "rightsStatusCounts",
+        "authorizationRequiredAssetIds",
+        "researchAcceptedCount",
+        "commercialAcceptedCount",
+    )
+    if any(
+        document.get(field) != header.get(field)
+        for document in (attestation, asset_admission)
+        for field in lifecycle_fields
+    ):
+        raise EnvironmentReleaseReadinessError(
+            "release lifecycle/admission projection drift"
+        )
+    if readiness_phase == "commercial" and (
+        header.get("containsUnverifiedAssets") is not False
+        or header.get("authorizationRequiredAssetIds") != []
+    ):
+        raise EnvironmentReleaseReadinessError(
+            "commercial readiness cannot contain authorization-required assets"
+        )
     if (
         header.get("sourceOwner") != DataSourceOwner.QWQ_DATA
         or attestation.get("sourceOwner") != DataSourceOwner.QWQ_DATA
@@ -230,7 +275,7 @@ def write_environment_release_readiness(
         "typed_video",
         "homepage_recommend",
     }
-    if readiness_phase == "commercial":
+    if readiness_phase in {"research", "commercial"}:
         required_query_names.add("premium_stream")
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
@@ -254,7 +299,7 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if readiness_phase == "commercial":
+    if readiness_phase in {"research", "commercial"}:
         if not premium_ids or not premium_ids.issubset(release_post_ids):
             raise EnvironmentReleaseReadinessError(
                 "premium_stream does not prove a release-bound postId"
@@ -269,10 +314,30 @@ def write_environment_release_readiness(
         and int(row.get("mediaProbeCount") or 0) >= 2
     }
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
-    if readiness_phase == "commercial" and not premium_playable_video_ids:
+    if readiness_phase in {"research", "commercial"} and not premium_playable_video_ids:
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )
+
+    app_uat_envelope = None
+    if readiness_phase in {"research", "commercial"}:
+        try:
+            app_uat_envelope = build_app_uat_envelope(
+                release_root=release_root,
+                release_id=release_id,
+                entity_refs=entity_refs,
+                post_refs=post_refs,
+                creator_ids=creator_ids,
+                tag_refs=tag_refs,
+                bindings=bindings,
+                homepage_report=homepage_report,
+                queries_by_name=queries_by_name,
+                verified_playable_video_ids=verified_playable_video_ids,
+                release_class=release_class,
+                product_lifecycle_state=product_lifecycle_state,
+            )
+        except AppUatEnvelopeError as exc:
+            raise EnvironmentReleaseReadinessError(str(exc)) from exc
 
     assets = media_manifest.get("assets")
     if not isinstance(assets, list):
@@ -318,6 +383,19 @@ def write_environment_release_readiness(
         "releaseId": release_id,
         "releaseKind": ReleaseKind.CONTENT,
         "sourceOwner": DataSourceOwner.QWQ_DATA,
+        "releaseClass": release_class,
+        "productLifecycleState": product_lifecycle_state,
+        "containsUnverifiedAssets": bool(
+            header.get("containsUnverifiedAssets")
+        ),
+        "rightsStatusCounts": dict(header.get("rightsStatusCounts") or {}),
+        "authorizationRequiredAssetIds": list(
+            header.get("authorizationRequiredAssetIds") or []
+        ),
+        "researchAcceptedCount": int(header.get("researchAcceptedCount") or 0),
+        "commercialAcceptedCount": int(
+            header.get("commercialAcceptedCount") or 0
+        ),
         "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,
@@ -351,6 +429,8 @@ def write_environment_release_readiness(
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
     }
+    if app_uat_envelope is not None:
+        document["appUatEnvelope"] = app_uat_envelope
     document["verificationChecksum"] = _checksum(document)
     try:
         assert_valid(

@@ -8,38 +8,10 @@ description: 'ListSelectableGroupConversations 返回的群行（wire），用�
   avatarUrl 为服务端会话头像（可能为空，端侧按群占位兜底）。
 
   '
-client_projection:
-  dart_class: SelectableGroupConversationRowDto
-  base_class: ''
-  output_path: cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart
-  fields:
-  - name: conversationId
-    dart_type: String
-    nullable: false
-    source: conversationId
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: avatarUrl
-    dart_type: String
-    nullable: false
-    source: avatarUrl
-    default: ''''''
-  - name: circleId
-    dart_type: String
-    nullable: false
-    source: circleId
-    default: ''''''
-  - name: friendMemberCount
-    dart_type: int
-    nullable: false
-    source: friendMemberCount
-    default: '0'
-  - name: memberCount
-    dart_type: int
-    nullable: false
-    source: memberCount
-    default: '0'
+fields:
+- {name: conversationId, type: string}
+- {name: title, type: string}
+- {name: avatarUrl, type: string}
+- {name: circleId, type: string}
+- {name: friendMemberCount, type: int}
+- {name: memberCount, type: int}

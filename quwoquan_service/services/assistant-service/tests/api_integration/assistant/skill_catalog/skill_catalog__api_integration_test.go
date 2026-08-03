@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 package api_integration
 
 import (
@@ -18,41 +19,36 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 )
 
-type apiCatalogSource struct{}
+type apiCatalogSource struct{ err error }
 
-func (apiCatalogSource) ListCatalogItems(context.Context) ([]model.Item, error) {
+func (source apiCatalogSource) ListCatalogItems(context.Context) ([]model.Item, error) {
+	if source.err != nil {
+		return nil, source.err
+	}
 	return []model.Item{{
-		SkillID:         model.PersonalContentAccessSkillID,
-		DisplayName:     "个人内容访问",
-		Description:     "允许读取个人内容。",
-		RequiresConsent: true,
+		PackageID:                   "assistant.session.skills",
+		ReleaseDigest:               "sha256:" + strings.Repeat("2", 64),
+		SkillID:                     model.PersonalContentAccessSkillID,
+		DisplayName:                 "个人内容访问",
+		Description:                 "允许读取个人内容。",
+		RequiresConsent:             true,
+		RequiredConsentScopes:       []string{"assistant.personal_content.read"},
+		TargetUsers:                 []string{"all_users"},
+		DataUseSummary:              "仅在授权后读取",
+		ExampleRefs:                 []string{},
+		ActivationMode:              "reactive",
+		AllowedSurfaceKinds:         []string{"personal"},
+		ConfigurationSchemaDigest:   "sha256:" + strings.Repeat("1", 64),
+		ConfigurationSchema:         json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{}}`),
+		SetupTemplateRef:            "assistant.skill.setup.none",
+		ConfigurationRequiredFields: []string{},
 	}}, nil
 }
 
-type apiConsentReader struct {
-	err error
-}
-
-func (reader apiConsentReader) ListGrantedScopes(
-	_ context.Context,
-	accountID string,
-) (map[string]string, error) {
-	if reader.err != nil {
-		return nil, reader.err
-	}
-	if accountID == "account-a" {
-		return map[string]string{
-			model.PersonalContentAccessSkillID: "read_own_content",
-		}, nil
-	}
-	return map[string]string{}, nil
-}
-
 func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
-	handler := cataloghttp.NewHandler(application.NewQueryService(
-		apiCatalogSource{},
-		apiConsentReader{},
-	)).Routes()
+	handler := cataloghttp.NewHandler(
+		application.NewQueryService(apiCatalogSource{}),
+	).Routes()
 
 	anonymous := requestCatalog(handler, "", false)
 	assertHTTPError(
@@ -74,9 +70,51 @@ func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 		t.Fatalf("decode catalog view: %v", err)
 	}
 	if len(view.Items) != 1 ||
-		!strings.Contains(view.Items[0].Description, "read_own_content") {
-		t.Fatalf("owner scope missing: %+v", view.Items)
+		view.Items[0].PackageID != "assistant.session.skills" ||
+		view.Items[0].ReleaseDigest == "" ||
+		len(view.Items[0].RequiredConsentScopes) != 1 ||
+		view.Items[0].ConfigurationSchemaDigest == "" ||
+		view.Items[0].ActivationMode != "reactive" {
+		t.Fatalf("active package catalog metadata missing: %+v", view.Items)
 	}
+	var listWire map[string]any
+	if err := json.Unmarshal(owner.Body.Bytes(), &listWire); err != nil {
+		t.Fatalf("decode list wire: %v", err)
+	}
+	listed := listWire["items"].([]any)[0].(map[string]any)
+	if _, leaked := listed["configurationSchema"]; leaked {
+		t.Fatal("ListSkills leaked progressively disclosed configuration schema")
+	}
+
+	detail := requestCatalogAt(
+		handler,
+		"/assistant/skills/"+model.PersonalContentAccessSkillID,
+		"account-a",
+		true,
+	)
+	if detail.Code != http.StatusOK {
+		t.Fatalf("detail status=%d body=%s", detail.Code, detail.Body.String())
+	}
+	var detailView model.DetailView
+	if err := json.Unmarshal(detail.Body.Bytes(), &detailView); err != nil {
+		t.Fatalf("decode detail view: %v", err)
+	}
+	if detailView.Item.SkillID != model.PersonalContentAccessSkillID ||
+		len(detailView.ConfigurationSchema) == 0 {
+		t.Fatalf("active package catalog detail missing: %+v", detailView)
+	}
+	missing := requestCatalogAt(
+		handler,
+		"/assistant/skills/missing",
+		"account-a",
+		true,
+	)
+	assertHTTPError(
+		t,
+		missing,
+		http.StatusNotFound,
+		"ASSISTANT.USER.skill_catalog_not_found",
+	)
 	for _, path := range []string{
 		"/assistant/skills?limit=",
 		"/assistant/skills?limit=0",
@@ -93,13 +131,12 @@ func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 	}
 
 	unavailable := cataloghttp.NewHandler(application.NewQueryService(
-		apiCatalogSource{},
-		apiConsentReader{err: errors.New("consent unavailable")},
+		apiCatalogSource{err: errors.New("catalog unavailable")},
 	)).Routes()
 	failed := requestCatalog(unavailable, "account-a", true)
 	assertHTTPError(
 		t, failed, http.StatusServiceUnavailable,
-		"ASSISTANT.SYSTEM.skill_catalog_consent_unavailable",
+		"ASSISTANT.SYSTEM.skill_catalog_unavailable",
 	)
 }
 

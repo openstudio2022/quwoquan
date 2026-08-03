@@ -52,13 +52,10 @@ final class RemoteContentPostReaderAdapter
   ) async {
     final response = await _getPostSlice(postId);
     return ContentPostPublicationStatus(
-      postId: response.post.postId,
+      postId: response.postId,
       state: ContentPostPublicationState.fromWire(response.status),
-      moderationStatus: response.moderationStatus,
-      updatedAt:
-          response.post.updatedAt ??
-          response.post.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      moderationStatus: null,
+      updatedAt: response.updatedAt,
     );
   }
 
@@ -74,7 +71,7 @@ final class RemoteContentPostReaderAdapter
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -93,10 +90,9 @@ final class RemoteContentPostReaderAdapter
       ),
       context: invocationContext(ContentRequestPageIds.listUserPosts),
     );
-    return CursorPage<PostBaseDto>(
+    return CursorPage<ContentPostViewData>(
       items: response.items.map(projectionMapper.toDto).toList(growable: false),
       nextCursor: response.nextCursor,
-      totalCount: response.totalCount,
     );
   }
 
@@ -133,89 +129,5 @@ final class RemoteContentPostReaderAdapter
 
   ContentPostDetailPayload _detailPayloadFromSlice(
     ContentPostDetailSlice slice,
-  ) {
-    final wire = projectionMapper.toWire(slice.post)
-      ..addAll(<String, dynamic>{
-        if (slice.isOfficial != null) 'isOfficial': slice.isOfficial,
-        if (slice.badge != null) 'badge': slice.badge,
-        if (slice.articleTemplate != null)
-          'articleTemplate': slice.articleTemplate,
-        if (slice.articleFontPreset != null)
-          'articleFontPreset': slice.articleFontPreset,
-        if (slice.articleMarkdown != null)
-          'articleMarkdown': slice.articleMarkdown,
-        if (slice.markdownDialect != null)
-          'markdownDialect': slice.markdownDialect,
-        if (slice.articleMarkdownDigest != null)
-          'articleMarkdownDigest': slice.articleMarkdownDigest,
-        if (slice.articleAssetManifest != null)
-          'articleAssetManifest': _structuredValueToWire(
-            slice.articleAssetManifest!,
-          ),
-        if (slice.articleRenderProfile != null)
-          'articleRenderProfile': _structuredValueToWire(
-            slice.articleRenderProfile!,
-          ),
-        if (slice.mediaItems.isNotEmpty)
-          'mediaItems': slice.mediaItems
-              .map(
-                (item) => <String, dynamic>{
-                  'kind': item.kind,
-                  'url': item.url,
-                  if (item.mediaAssetId != null)
-                    'mediaAssetId': item.mediaAssetId,
-                  if (item.mediaAssetVersion != null)
-                    'mediaAssetVersion': item.mediaAssetVersion,
-                  if (item.hlsCmafMasterManifestUrl != null)
-                    'hlsCmafMasterManifestUrl': item.hlsCmafMasterManifestUrl,
-                  if (item.hlsCmafDescriptorVersion != null)
-                    'hlsCmafDescriptorVersion': item.hlsCmafDescriptorVersion,
-                  if (item.coverUrl != null) 'coverUrl': item.coverUrl,
-                  if (item.durationMs != null) 'durationMs': item.durationMs,
-                  if (item.width != null) 'width': item.width,
-                  if (item.height != null) 'height': item.height,
-                  if (item.title != null) 'title': item.title,
-                },
-              )
-              .toList(growable: false),
-        if (slice.contentVertical != null)
-          'contentVertical': slice.contentVertical,
-        if (slice.paperThemeMode != null)
-          'paperThemeMode': slice.paperThemeMode,
-        if (slice.paperTexture != null) 'paperTexture': slice.paperTexture,
-        if (slice.entityMentions.isNotEmpty)
-          'entityMentions': slice.entityMentions
-              .map(
-                (mention) => <String, dynamic>{
-                  'subjectType': mention.subjectType,
-                  'subjectId': mention.subjectId,
-                  'displayName': mention.displayName,
-                  'rangeStart': mention.rangeStart,
-                  'rangeEnd': mention.rangeEnd,
-                },
-              )
-              .toList(growable: false),
-        if (slice.coverUrl != null) 'coverUrl': slice.coverUrl,
-        if (slice.tagRefs != null) 'tagRefs': slice.tagRefs,
-        'status': slice.status,
-        if (slice.moderationStatus != null)
-          'moderationStatus': slice.moderationStatus,
-        if (slice.visibility != null) 'visibility': slice.visibility,
-      });
-    return ContentPostDetailPayload.fromWire(wire);
-  }
-
-  Object? _structuredValueToWire(ContentPostStructuredValue value) {
-    return switch (value) {
-      ContentPostStructuredObject() => value.fields.map(
-        (key, child) => MapEntry(key, _structuredValueToWire(child)),
-      ),
-      ContentPostStructuredArray() =>
-        value.values.map(_structuredValueToWire).toList(growable: false),
-      ContentPostStructuredText() => value.value,
-      ContentPostStructuredNumber() => value.value,
-      ContentPostStructuredBoolean() => value.value,
-      ContentPostStructuredNull() => null,
-    };
-  }
+  ) => ContentPostDetailPayload.fromWire(slice);
 }

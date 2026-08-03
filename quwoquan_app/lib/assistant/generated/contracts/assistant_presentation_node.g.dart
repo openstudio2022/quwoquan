@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantPresentationAccessibilityWire {
   const AssistantPresentationAccessibilityWire({
@@ -22,6 +22,26 @@ class AssistantPresentationAccessibilityWire {
       };
 
   factory AssistantPresentationAccessibilityWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'semanticLabel',
+      'semanticHint',
+      'excludeFromSemantics',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantPresentationAccessibilityWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('semanticLabel') && json['semanticLabel'] != null && (json['semanticLabel'] is! String)) {
+      throw const FormatException('AssistantPresentationAccessibilityWire field semanticLabel has an invalid wire value');
+    }
+    if (json.containsKey('semanticHint') && json['semanticHint'] != null && (json['semanticHint'] is! String)) {
+      throw const FormatException('AssistantPresentationAccessibilityWire field semanticHint has an invalid wire value');
+    }
+    if (json.containsKey('excludeFromSemantics') && json['excludeFromSemantics'] != null && (json['excludeFromSemantics'] is! bool)) {
+      throw const FormatException('AssistantPresentationAccessibilityWire field excludeFromSemantics has an invalid wire value');
+    }
     return AssistantPresentationAccessibilityWire(
       semanticLabel: (json['semanticLabel'] as String?)?.trim() ?? "",
       semanticHint: (json['semanticHint'] as String?)?.trim() ?? "",
@@ -63,6 +83,38 @@ class AssistantActionIntentWire {
       };
 
   factory AssistantActionIntentWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'intentId',
+      'operation',
+      'objectTypeRef',
+      'objectId',
+      'payload',
+      'requiresConfirmation',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantActionIntentWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('intentId') || json['intentId'] == null || (json['intentId'] is! String)) {
+      throw const FormatException('AssistantActionIntentWire field intentId has an invalid wire value');
+    }
+    if (!json.containsKey('operation') || json['operation'] == null || (json['operation'] is! String)) {
+      throw const FormatException('AssistantActionIntentWire field operation has an invalid wire value');
+    }
+    if (json.containsKey('objectTypeRef') && json['objectTypeRef'] != null && (json['objectTypeRef'] is! String)) {
+      throw const FormatException('AssistantActionIntentWire field objectTypeRef has an invalid wire value');
+    }
+    if (json.containsKey('objectId') && json['objectId'] != null && (json['objectId'] is! String)) {
+      throw const FormatException('AssistantActionIntentWire field objectId has an invalid wire value');
+    }
+    if (json.containsKey('payload') && json['payload'] != null && (json['payload'] is! Map)) {
+      throw const FormatException('AssistantActionIntentWire field payload has an invalid wire value');
+    }
+    if (json.containsKey('requiresConfirmation') && json['requiresConfirmation'] != null && (json['requiresConfirmation'] is! bool)) {
+      throw const FormatException('AssistantActionIntentWire field requiresConfirmation has an invalid wire value');
+    }
     return AssistantActionIntentWire(
       intentId: (json['intentId'] as String?)?.trim() ?? "",
       operation: (json['operation'] as String?)?.trim() ?? "",
@@ -107,6 +159,34 @@ class AssistantPresentationMediaRefWire {
       };
 
   factory AssistantPresentationMediaRefWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'mediaAssetId',
+      'alt',
+      'width',
+      'height',
+      'provenanceRef',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantPresentationMediaRefWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('mediaAssetId') || json['mediaAssetId'] == null || (json['mediaAssetId'] is! String)) {
+      throw const FormatException('AssistantPresentationMediaRefWire field mediaAssetId has an invalid wire value');
+    }
+    if (!json.containsKey('alt') || json['alt'] == null || (json['alt'] is! String)) {
+      throw const FormatException('AssistantPresentationMediaRefWire field alt has an invalid wire value');
+    }
+    if (json.containsKey('width') && json['width'] != null && (json['width'] is! num)) {
+      throw const FormatException('AssistantPresentationMediaRefWire field width has an invalid wire value');
+    }
+    if (json.containsKey('height') && json['height'] != null && (json['height'] is! num)) {
+      throw const FormatException('AssistantPresentationMediaRefWire field height has an invalid wire value');
+    }
+    if (!json.containsKey('provenanceRef') || json['provenanceRef'] == null || (json['provenanceRef'] is! String)) {
+      throw const FormatException('AssistantPresentationMediaRefWire field provenanceRef has an invalid wire value');
+    }
     return AssistantPresentationMediaRefWire(
       mediaAssetId: (json['mediaAssetId'] as String?)?.trim() ?? "",
       alt: (json['alt'] as String?)?.trim() ?? "",
@@ -158,6 +238,46 @@ class AssistantPresentationStyleWire {
       };
 
   factory AssistantPresentationStyleWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'tone',
+      'density',
+      'emphasis',
+      'variant',
+      'alignment',
+      'spacingRole',
+      'aspectRatio',
+      'responsiveSpan',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantPresentationStyleWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('tone') && json['tone'] != null && (json['tone'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field tone has an invalid wire value');
+    }
+    if (json.containsKey('density') && json['density'] != null && (json['density'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field density has an invalid wire value');
+    }
+    if (json.containsKey('emphasis') && json['emphasis'] != null && (json['emphasis'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field emphasis has an invalid wire value');
+    }
+    if (json.containsKey('variant') && json['variant'] != null && (json['variant'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field variant has an invalid wire value');
+    }
+    if (json.containsKey('alignment') && json['alignment'] != null && (json['alignment'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field alignment has an invalid wire value');
+    }
+    if (json.containsKey('spacingRole') && json['spacingRole'] != null && (json['spacingRole'] is! String)) {
+      throw const FormatException('AssistantPresentationStyleWire field spacingRole has an invalid wire value');
+    }
+    if (json.containsKey('aspectRatio') && json['aspectRatio'] != null && (json['aspectRatio'] is! num)) {
+      throw const FormatException('AssistantPresentationStyleWire field aspectRatio has an invalid wire value');
+    }
+    if (json.containsKey('responsiveSpan') && json['responsiveSpan'] != null && (json['responsiveSpan'] is! num)) {
+      throw const FormatException('AssistantPresentationStyleWire field responsiveSpan has an invalid wire value');
+    }
     return AssistantPresentationStyleWire(
       tone: parseAssistantPresentationToneStrict((json['tone'] as String?)?.trim() ?? "neutral"),
       density: parseAssistantPresentationDensityStrict((json['density'] as String?)?.trim() ?? "standard"),
@@ -227,6 +347,62 @@ class AssistantPresentationNodeWire {
       };
 
   factory AssistantPresentationNodeWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'nodeId',
+      'parentNodeId',
+      'order',
+      'kind',
+      'title',
+      'body',
+      'data',
+      'binding',
+      'style',
+      'media',
+      'action',
+      'accessibility',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantPresentationNodeWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('nodeId') || json['nodeId'] == null || (json['nodeId'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field nodeId has an invalid wire value');
+    }
+    if (json.containsKey('parentNodeId') && json['parentNodeId'] != null && (json['parentNodeId'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field parentNodeId has an invalid wire value');
+    }
+    if (json.containsKey('order') && json['order'] != null && (json['order'] is! num)) {
+      throw const FormatException('AssistantPresentationNodeWire field order has an invalid wire value');
+    }
+    if (!json.containsKey('kind') || json['kind'] == null || (json['kind'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field kind has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field title has an invalid wire value');
+    }
+    if (json.containsKey('body') && json['body'] != null && (json['body'] is! String)) {
+      throw const FormatException('AssistantPresentationNodeWire field body has an invalid wire value');
+    }
+    if (json.containsKey('data') && json['data'] != null && (json['data'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field data has an invalid wire value');
+    }
+    if (json.containsKey('binding') && json['binding'] != null && (json['binding'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field binding has an invalid wire value');
+    }
+    if (json.containsKey('style') && json['style'] != null && (json['style'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field style has an invalid wire value');
+    }
+    if (json.containsKey('media') && json['media'] != null && (json['media'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field media has an invalid wire value');
+    }
+    if (json.containsKey('action') && json['action'] != null && (json['action'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field action has an invalid wire value');
+    }
+    if (json.containsKey('accessibility') && json['accessibility'] != null && (json['accessibility'] is! Map)) {
+      throw const FormatException('AssistantPresentationNodeWire field accessibility has an invalid wire value');
+    }
     return AssistantPresentationNodeWire(
       nodeId: (json['nodeId'] as String?)?.trim() ?? "",
       parentNodeId: (json['parentNodeId'] as String?)?.trim() ?? "",

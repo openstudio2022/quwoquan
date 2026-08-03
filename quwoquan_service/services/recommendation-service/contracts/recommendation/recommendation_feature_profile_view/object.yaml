@@ -10,12 +10,18 @@ access:
 relationships:
 - {name: feedback, target_object: recommendation.RecommendationFeedbackFact, reference_fields: [lastFeedbackFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
 - {name: exposure, target_object: recommendation.RecommendationExposureFact, reference_fields: [lastExposureFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+- {name: excluded_content, target_object: content.Post, reference_fields: [negativeContentIds], kind: reference, cardinality: 'N:N', consistency: eventual, access: event, on_delete: detach}
+- {name: hidden_authors, target_object: user.Persona, reference_fields: [hiddenAuthorIds], kind: reference, cardinality: 'N:N', consistency: eventual, access: event, on_delete: tombstone}
 business_rules:
 - 特征只从 typed 事实和公开关系事件投影，任何在线排序调用不得回写长期特征。
+- TagFeedbackRecorded 只由本对象消费：click/dislike 分别设置显式正/负 tagAffinity，ignore 清除，correct 仅推进事实收据且不臆造偏好。
+- dislike/report、hide_author、hide_content_type 分别形成有界的内容、作者、内容类型硬排除集合；RankedRecommendationWindow 必须在评分前应用，Content 不得保留第二份排除状态。
 - 相同 source eventId 与 subjectId 仅应用一次；不同上游 sequence 不比较大小，成功应用后递增本地主体 revision，并在同一 Mongo 事务写入 profile、协同、交集、影响证据与幂等收据。
+- 作者影响摘要与证据仅由 ContentBehaviorRecorded 的服务端 impactHelpType、权威 authorId/contentId 和归因 tag 投影；Content 只能经 typed Reader 查询并做当前 Post 权限 hydration，不得读取或写入本对象集合。
+- 交集理由只从 PersonaRelationship、CircleMembership、ContentBehaviorFact 与 Post lifecycle 的 typed durable stream 写入对象本地证据投影；全局主体快照可服务任意 channel，精确 channel 快照存在时优先，禁止回读 User、Circle 或 Content 存储。
 - 账号关闭阻断后必须删除可识别特征，并由 closure fact 阻止旧事件重建。
 lifecycle:
-  source_events: [RecommendationExposureRecorded, RecommendationFeedbackRecorded, PersonaRelationshipChanged, IntersectionSnapshotPublished, RecommendationSubjectClosed]
+  source_events: [RecommendationExposureRecorded, RecommendationFeedbackRecorded, TagFeedbackRecorded, ContentBehaviorRecorded, PersonaFollowStateChanged, PersonaBlocked, PersonaUnblocked, CircleMembershipRequested, CircleMembershipJoined, CircleMembershipApproved, CircleMembershipLeft, CircleMembershipRoleChanged, CircleMembershipRejected, PostPublished, PostUpdated, PostSettingsUpdated, PostPromotedToWork, PostDeleted, PostPrivacyRedacted, PostPurged, RecommendationSubjectClosed]
   checkpoint: per_subject_applied_event_revision_with_source_event_receipt
   rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
   tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint

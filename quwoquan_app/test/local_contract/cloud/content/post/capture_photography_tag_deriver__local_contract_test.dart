@@ -22,7 +22,7 @@ void main() {
   group('器材派生', () {
     test('全画幅微单 + 变焦镜头 + 标准焦段', () {
       final refs = _deriver.derive(
-        const MediaCaptureMetadata(
+        const ExtractedMediaCaptureMetadata(
           cameraMake: 'SONY',
           cameraModel: 'ILCE-7M4',
           lensModel: 'FE 24-70mm F2.8 GM II',
@@ -37,7 +37,7 @@ void main() {
 
     test('手机厂商优先于机型串里的其他线索', () {
       final refs = _deriver.derive(
-        const MediaCaptureMetadata(cameraMake: 'Apple', cameraModel: 'iPhone 17 Pro'),
+        const ExtractedMediaCaptureMetadata(cameraMake: 'Apple', cameraModel: 'iPhone 17 Pro'),
       );
       expect(refs, contains('$kPhotographyTagRoot/器材/机身类型/手机拍摄'));
     });
@@ -45,13 +45,13 @@ void main() {
     test('无人机与运动相机不被误判成手机', () {
       expect(
         _deriver.derive(
-          const MediaCaptureMetadata(cameraMake: 'DJI', cameraModel: 'FC3582'),
+          const ExtractedMediaCaptureMetadata(cameraMake: 'DJI', cameraModel: 'FC3582'),
         ),
         contains('$kPhotographyTagRoot/器材/机身类型/无人机航拍'),
       );
       expect(
         _deriver.derive(
-          const MediaCaptureMetadata(cameraMake: 'GoPro', cameraModel: 'HERO12 Black'),
+          const ExtractedMediaCaptureMetadata(cameraMake: 'GoPro', cameraModel: 'HERO12 Black'),
         ),
         contains('$kPhotographyTagRoot/器材/机身类型/运动相机'),
       );
@@ -59,14 +59,14 @@ void main() {
 
     test('未知机型不猜机身类别', () {
       final refs = _deriver.derive(
-        const MediaCaptureMetadata(cameraMake: 'ACME', cameraModel: 'XYZ-1'),
+        const ExtractedMediaCaptureMetadata(cameraMake: 'ACME', cameraModel: 'XYZ-1'),
       );
       expect(refs.where((r) => r.contains('机身类型')), isEmpty);
     });
 
     test('焦段区间边界按左闭右开划分，不重叠', () {
       String? focalOf(double mm) {
-        final refs = _deriver.derive(MediaCaptureMetadata(focalLengthMm: mm));
+        final refs = _deriver.derive(ExtractedMediaCaptureMetadata(focalLengthMm: mm));
         final matched = refs.where((r) => r.contains('/焦段/'));
         expect(matched, hasLength(1));
         return matched.single.split('/').last;
@@ -83,7 +83,7 @@ void main() {
 
     test('镜头类别可叠加：微距变焦同时命中两类', () {
       final refs = _deriver.derive(
-        const MediaCaptureMetadata(lensModel: 'AF-S VR Micro 70-180mm Macro'),
+        const ExtractedMediaCaptureMetadata(lensModel: 'AF-S VR Micro 70-180mm Macro'),
       );
       expect(refs, contains('$kPhotographyTagRoot/器材/镜头类型/微距镜头'));
       expect(refs, contains('$kPhotographyTagRoot/器材/镜头类型/变焦镜头'));
@@ -91,7 +91,7 @@ void main() {
 
     test('定焦与变焦互斥', () {
       final prime = _deriver.derive(
-        const MediaCaptureMetadata(lensModel: 'FE 35mm F1.4 GM'),
+        const ExtractedMediaCaptureMetadata(lensModel: 'FE 35mm F1.4 GM'),
       );
       expect(prime, contains('$kPhotographyTagRoot/器材/镜头类型/定焦镜头'));
       expect(prime, isNot(contains('$kPhotographyTagRoot/器材/镜头类型/变焦镜头')));
@@ -102,7 +102,7 @@ void main() {
     test('快门三档按阈值判定，中间地带不打标', () {
       String? shutterOf(double seconds) {
         final refs = _deriver.derive(
-          MediaCaptureMetadata(shutterSpeedSeconds: seconds),
+          ExtractedMediaCaptureMetadata(shutterSpeedSeconds: seconds),
         );
         final matched = refs.where((r) => r.contains('/快门/'));
         return matched.isEmpty ? null : matched.single.split('/').last;
@@ -119,27 +119,27 @@ void main() {
 
     test('光圈与感光度只在两端打标', () {
       expect(
-        _deriver.derive(const MediaCaptureMetadata(apertureFNumber: 1.4)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(apertureFNumber: 1.4)),
         contains('$kPhotographyTagRoot/拍摄参数/光圈/大光圈虚化'),
       );
       expect(
-        _deriver.derive(const MediaCaptureMetadata(apertureFNumber: 16)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(apertureFNumber: 16)),
         contains('$kPhotographyTagRoot/拍摄参数/光圈/小光圈全景深'),
       );
       expect(
-        _deriver.derive(const MediaCaptureMetadata(apertureFNumber: 5.6)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(apertureFNumber: 5.6)),
         isEmpty,
       );
       expect(
-        _deriver.derive(const MediaCaptureMetadata(isoSensitivity: 6400)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(isoSensitivity: 6400)),
         contains('$kPhotographyTagRoot/拍摄参数/感光度/高感夜拍'),
       );
       expect(
-        _deriver.derive(const MediaCaptureMetadata(isoSensitivity: 100)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(isoSensitivity: 100)),
         contains('$kPhotographyTagRoot/拍摄参数/感光度/低感画质'),
       );
       expect(
-        _deriver.derive(const MediaCaptureMetadata(isoSensitivity: 800)),
+        _deriver.derive(const ExtractedMediaCaptureMetadata(isoSensitivity: 800)),
         isEmpty,
       );
     });
@@ -148,7 +148,7 @@ void main() {
   group('光线条件派生', () {
     String? windowAt(DateTime at) {
       final refs = _deriver.derive(
-        MediaCaptureMetadata(
+        ExtractedMediaCaptureMetadata(
           capturedAt: at,
           gpsLatitude: _hangzhouLat,
           gpsLongitude: _hangzhouLon,
@@ -178,13 +178,13 @@ void main() {
     test('缺经纬度或缺时间时不产出光线标签，不按钟点粗判', () {
       expect(
         _deriver.derive(
-          MediaCaptureMetadata(capturedAt: _hangzhou(6, 21, 12, 0)),
+          ExtractedMediaCaptureMetadata(capturedAt: _hangzhou(6, 21, 12, 0)),
         ),
         isEmpty,
       );
       expect(
         _deriver.derive(
-          const MediaCaptureMetadata(
+          const ExtractedMediaCaptureMetadata(
             gpsLatitude: _hangzhouLat,
             gpsLongitude: _hangzhouLon,
           ),
@@ -196,7 +196,7 @@ void main() {
     test('北极圈夏季午夜仍是白昼，按太阳高度角而非钟点判定', () {
       // 特罗姆瑟（69.65N）夏至午夜太阳不落。
       final refs = _deriver.derive(
-        MediaCaptureMetadata(
+        ExtractedMediaCaptureMetadata(
           capturedAt: DateTime.parse('2026-06-21T00:00:00+02:00'),
           gpsLatitude: 69.6492,
           gpsLongitude: 18.9553,
@@ -213,7 +213,7 @@ void main() {
   });
 
   group('披露裁剪与推导的联动', () {
-    const full = MediaCaptureMetadata(
+    const full = ExtractedMediaCaptureMetadata(
       cameraMake: 'SONY',
       cameraModel: 'ILCE-7M4',
       lensModel: 'FE 24-70mm F2.8 GM II',
@@ -224,8 +224,8 @@ void main() {
 
     test('只披露参数组时，器材子树整体消失', () {
       final refs = _deriver.derive(
-        full.discloseOnly(const <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.parameters,
+        full.discloseOnly(const <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.parameters,
         }),
       );
 
@@ -237,8 +237,8 @@ void main() {
 
     test('只披露器材组时，拍摄参数子树整体消失（焦段属参数组）', () {
       final refs = _deriver.derive(
-        full.discloseOnly(const <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.gear,
+        full.discloseOnly(const <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.gear,
         }),
       );
 
@@ -249,11 +249,11 @@ void main() {
     test('全部关闭后无任何派生标签', () {
       expect(
         _deriver.derive(
-          full.discloseOnly(const <MediaCaptureDisclosureGroup>{}),
+          full.discloseOnly(const <CaptureMetadataDisclosureGroup>{}),
         ),
         isEmpty,
       );
-      expect(_deriver.derive(MediaCaptureMetadata.empty), isEmpty);
+      expect(_deriver.derive(ExtractedMediaCaptureMetadata.empty), isEmpty);
     });
   });
 

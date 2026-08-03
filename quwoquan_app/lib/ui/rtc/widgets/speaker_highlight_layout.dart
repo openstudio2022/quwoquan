@@ -15,8 +15,8 @@ class SpeakerHighlightLayout extends StatelessWidget {
     this.highlightedContent,
   });
 
-  final List<CallParticipant> participants;
-  final CallParticipant? activeSpeaker;
+  final List<CallParticipantViewData> participants;
+  final CallParticipantViewData? activeSpeaker;
   final String? lockedSpeakerId;
   final ValueChanged<String>? onTapThumbnail;
   final Widget? highlightedContent;

@@ -1,0 +1,18 @@
+read_model: PresenceView
+description: Persona 设备级在线状态的当前权威查询切片；只由可信 Connection 生命周期事件投影，读取时按 TTL 边界清理陈旧设备。
+storage_backend: redis
+projection_mode: event_projection
+source_entities:
+- Connection
+consumers:
+- notification-service
+fields:
+- {name: personaId, type: string}
+- {name: accountId, type: string}
+- {name: deviceId, type: string}
+- {name: connId, type: string}
+- {name: nodeId, type: string}
+- {name: transport, type: enum, enum_ref: TransportType}
+- {name: lastHeartbeatAt, type: timestamp}
+- {name: expiresAt, type: timestamp}
+- {name: sequence, type: int64}

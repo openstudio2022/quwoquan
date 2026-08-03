@@ -13,7 +13,7 @@ abstract class _ChatConversationPageActionsState
 
   void _updateSelection(VoidCallback action) => setState(action);
 
-  ConversationDto? _conversationDto;
+  ConversationViewData? _conversationDto;
   String? _resolvedTitle;
   String? _otherParticipantId;
   RelationshipCapabilityDto? _relationshipCapability;

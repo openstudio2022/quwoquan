@@ -8,7 +8,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.d
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantRunObservabilityPayload {
   const AssistantRunObservabilityPayload({
@@ -40,6 +40,42 @@ class AssistantRunObservabilityPayload {
       };
 
   factory AssistantRunObservabilityPayload.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'traceId',
+      'modelProvider',
+      'skillId',
+      'domainId',
+      'phaseDurationsMs',
+      'tokenUsage',
+      'qualitySignals',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantRunObservabilityPayload response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('traceId') && json['traceId'] != null && (json['traceId'] is! String)) {
+      throw const FormatException('AssistantRunObservabilityPayload field traceId has an invalid wire value');
+    }
+    if (json.containsKey('modelProvider') && json['modelProvider'] != null && (json['modelProvider'] is! String)) {
+      throw const FormatException('AssistantRunObservabilityPayload field modelProvider has an invalid wire value');
+    }
+    if (json.containsKey('skillId') && json['skillId'] != null && (json['skillId'] is! String)) {
+      throw const FormatException('AssistantRunObservabilityPayload field skillId has an invalid wire value');
+    }
+    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
+      throw const FormatException('AssistantRunObservabilityPayload field domainId has an invalid wire value');
+    }
+    if (json.containsKey('phaseDurationsMs') && json['phaseDurationsMs'] != null && (json['phaseDurationsMs'] is! Map)) {
+      throw const FormatException('AssistantRunObservabilityPayload field phaseDurationsMs has an invalid wire value');
+    }
+    if (json.containsKey('tokenUsage') && json['tokenUsage'] != null && (json['tokenUsage'] is! Map)) {
+      throw const FormatException('AssistantRunObservabilityPayload field tokenUsage has an invalid wire value');
+    }
+    if (json.containsKey('qualitySignals') && json['qualitySignals'] != null && (json['qualitySignals'] is! Map)) {
+      throw const FormatException('AssistantRunObservabilityPayload field qualitySignals has an invalid wire value');
+    }
     return AssistantRunObservabilityPayload(
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       modelProvider: (json['modelProvider'] as String?)?.trim() ?? "",
@@ -107,6 +143,62 @@ class AssistantRunResponseWire {
       };
 
   factory AssistantRunResponseWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'sessionId',
+      'turnId',
+      'status',
+      'finalText',
+      'summary',
+      'journey',
+      'runArtifacts',
+      'runtime',
+      'presentation',
+      'observability',
+      'runtimeFailure',
+      'completedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantRunResponseWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('sessionId') || json['sessionId'] == null || (json['sessionId'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field sessionId has an invalid wire value');
+    }
+    if (!json.containsKey('turnId') || json['turnId'] == null || (json['turnId'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field turnId has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field status has an invalid wire value');
+    }
+    if (json.containsKey('finalText') && json['finalText'] != null && (json['finalText'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field finalText has an invalid wire value');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field summary has an invalid wire value');
+    }
+    if (json.containsKey('journey') && json['journey'] != null && (json['journey'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field journey has an invalid wire value');
+    }
+    if (json.containsKey('runArtifacts') && json['runArtifacts'] != null && (json['runArtifacts'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field runArtifacts has an invalid wire value');
+    }
+    if (json.containsKey('runtime') && json['runtime'] != null && (json['runtime'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field runtime has an invalid wire value');
+    }
+    if (json.containsKey('presentation') && json['presentation'] != null && (json['presentation'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field presentation has an invalid wire value');
+    }
+    if (json.containsKey('observability') && json['observability'] != null && (json['observability'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field observability has an invalid wire value');
+    }
+    if (json.containsKey('runtimeFailure') && json['runtimeFailure'] != null && (json['runtimeFailure'] is! Map)) {
+      throw const FormatException('AssistantRunResponseWire field runtimeFailure has an invalid wire value');
+    }
+    if (json.containsKey('completedAt') && json['completedAt'] != null && (json['completedAt'] is! String)) {
+      throw const FormatException('AssistantRunResponseWire field completedAt has an invalid wire value');
+    }
     return AssistantRunResponseWire(
       sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",

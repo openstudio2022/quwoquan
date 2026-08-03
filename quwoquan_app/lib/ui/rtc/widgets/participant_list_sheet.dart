@@ -112,7 +112,7 @@ class ParticipantListSheet extends ConsumerWidget {
 class _ParticipantRow extends StatelessWidget {
   const _ParticipantRow({required this.participant});
 
-  final CallParticipant participant;
+  final CallParticipantViewData participant;
 
   @override
   Widget build(BuildContext context) {

@@ -62,12 +62,14 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 		switch {
 		case f != nil && f.Type == "enum":
 			return fmt.Sprintf(
-				"      %s: %s == null ? %s : %s.fromString(%s as String),\n",
+				"      %s: %s == null ? %s : %s.fromWire(%s, '%s.%s'),\n",
 				dartField,
 				p,
 				defLit,
 				f.EnumRef,
 				p,
+				"RtcSignalPayload",
+				dartField,
 			)
 		case f != nil && (f.Type == "int" || f.Type == "long"):
 			return fmt.Sprintf("      %s: (%s as num?)?.toInt() ?? %s,\n", dartField, p, defLit)
@@ -81,11 +83,13 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 		switch {
 		case f != nil && f.Type == "enum":
 			return fmt.Sprintf(
-				"      %s: %s == null ? null : %s.fromString(%s as String),\n",
+				"      %s: %s == null ? null : %s.fromWire(%s, '%s.%s'),\n",
 				dartField,
 				p,
 				f.EnumRef,
 				p,
+				"RtcSignalPayload",
+				dartField,
 			)
 		case f != nil && (f.Type == "int" || f.Type == "long"):
 			return fmt.Sprintf("      %s: (%s as num?)?.toInt(),\n", dartField, p)
@@ -98,10 +102,12 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 	switch {
 	case f != nil && f.Type == "enum":
 		return fmt.Sprintf(
-			"      %s: %s.fromString(%s as String),\n",
+			"      %s: %s.fromWire(%s, '%s.%s'),\n",
 			dartField,
 			f.EnumRef,
 			p,
+			"RtcSignalPayload",
+			dartField,
 		)
 	case f != nil && (f.Type == "int" || f.Type == "long"):
 		return fmt.Sprintf("      %s: (%s as num?)?.toInt() ?? 0,\n", dartField, p)

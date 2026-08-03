@@ -18,15 +18,13 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
-	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
 type FeedService struct {
-	engine           *rtrec.Engine
 	postReader       postports.PostFeedReader
 	intersections    feedIntersectionProvider
-	objectCards      ObjectCardProvider
 	objectCardPolicy func() recpolicy.ObjectCardConfig
 	filterObserver   FeedFilterObserver
 	viewerBlocks     FeedViewerBlockReader
@@ -37,9 +35,8 @@ type FeedService struct {
 	deliveryEvents   deliveryapp.FeedPageDeliveredPublisher
 }
 
-func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
+func NewFeedService(reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
 	s := &FeedService{
-		engine:      engine,
 		postReader:  reader,
 		cursorCodec: defaultFeedCursorCodec,
 	}
@@ -283,7 +280,9 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		return nil, contentgenerated.AppErrorFromInvalidArgument("feed cursor does not match request route")
 	}
 	releaseBoundRecommend := !usePostReaderQuery &&
-		(route.FeedType == rtrec.FeedDiscovery || route.FeedType == rtrec.FeedSimilar) &&
+		(route.FeedType == rtrec.FeedDiscovery ||
+			route.FeedType == rtrec.FeedSimilar ||
+			route.FeedType == rtrec.FeedFollow) &&
 		normalizeFeedSort(req.Sort) == rtrec.FeedSortRecommend
 	if releaseBoundRecommend {
 		if sessionErr := validateRankedFeedSessionID(req.SessionID); sessionErr != nil {
@@ -340,24 +339,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	var nextRecommendationContinuation *rtrec.RankedFeedContinuation
 	policyDigest := ""
 	seenPostIDs := map[string]struct{}{}
-	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则，
-	// 必须在推荐召回和显式类型/身份查询两种具名读路径生效。
-	feedbackExclusions := rtrec.FeedbackExclusions{
-		NegativeContentIDs: map[string]bool{},
-		HiddenAuthors:      map[string]bool{},
-		HiddenContentTypes: map[string]bool{},
-	}
-	if !identity.IsAnonymousFallbackPersonaID(req.UserID) {
-		var exclusionErr error
-		feedbackExclusions, exclusionErr = s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
-		if exclusionErr != nil {
-			terminalStage = rtrec.FailureStageHardExclusionStateUnavailable
-			return nil, requiredDependencyFailure(
-				terminalStage,
-				fmt.Errorf("read hard feedback exclusions: %w", exclusionErr),
-			)
-		}
-	}
 	activeSupply := ActiveSupplySnapshot{}
 	if releaseBoundRecommend || releaseBoundVideoBook {
 		if s.activeSupply == nil {
@@ -398,7 +379,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			)
 		}
 		requiresPremiumVideo := route.Surface == "premium_stream" || releaseBoundVideoBook
-		if (!requiresPremiumVideo && !activeSupply.DiscoveryReady()) ||
+		if (!requiresPremiumVideo && !activeSupply.ContentReady()) ||
 			(requiresPremiumVideo && !activeSupply.PlayableVideoReady()) {
 			if requestedCursor != "" {
 				terminalStage = rtrec.FailureStageActiveSupplyMissing
@@ -438,15 +419,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		authorID := string(post.AuthorPersonaID)
 		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(authorID))]; blocked {
-			return false
-		}
-		if feedbackExclusions.NegativeContentIDs[strings.TrimSpace(postID)] {
-			return false
-		}
-		if feedbackExclusions.HiddenAuthors[strings.TrimSpace(authorID)] {
-			return false
-		}
-		if feedbackExclusions.HiddenContentTypes[strings.TrimSpace(string(post.ContentType))] {
 			return false
 		}
 		if !postMatchesVertical(post, route.Vertical) {
@@ -562,15 +534,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			PolicyDigest:        replay.policyDigest,
 		}, nil
 	}
-	// N3-3 served 记账口径：engine 推迟记账（DeferDeliveryAccounting），装配层
-	// 按「真正进入响应」的最终下发集回调 RecordDelivery——hydration 失败、
-	// 拉黑、负反馈、垂类/关键词过滤丢弃的候选不再被记 served（否则曝光过滤
-	// 会拉黑用户从未见过的内容，训练样本分母也被污染）。
-	type deliveryBatch struct {
-		attribution rtrec.DeliveryAttribution
-		items       []rtrec.FeedItem
-	}
-	deliveryBatches := make([]deliveryBatch, 0, 4)
 	hydrationRequested := 0
 	hydrationFound := 0
 	var rankedDelivery *rankedRecommendationDelivery
@@ -645,101 +608,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			}
 			recommendationContinuation = nextRecommendationContinuation
 		}
-	} else {
-		for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
-			recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-				UserID:                  req.UserID,
-				PersonaID:               req.ViewerPersonaID,
-				SessionID:               req.SessionID,
-				RankedWindowSubjectID:   identity.RankedFeedWindowSubjectID(req.UserID, req.SessionID),
-				FeedType:                route.FeedType,
-				Sort:                    normalizeFeedSort(req.Sort),
-				Continuation:            recommendationContinuation,
-				Limit:                   limit - len(views),
-				Surface:                 route.Surface,
-				ChannelID:               route.ChannelID,
-				Vertical:                route.Vertical,
-				FeedRequestID:           feedRequestID,
-				ActiveReleaseID:         activeSupply.ActiveReleaseID,
-				ActiveManifestDigest:    activeSupply.ManifestDigest,
-				FeedbackExclusions:      &feedbackExclusions,
-				DeferDeliveryAccounting: true,
-			})
-			if err != nil {
-				if errors.Is(err, rtrec.ErrInvalidFeedCursor) {
-					return nil, contentgenerated.AppErrorFromInvalidArgument(err.Error())
-				}
-				stage := rtrec.FailureStageOf(err)
-				if stage != rtrec.FailureStageNone {
-					terminalStage = stage
-					return nil, requiredDependencyFailure(stage, err)
-				}
-				return nil, err
-			}
-			if recResp.TerminalOutcome == rtrec.FeedTerminalDegraded &&
-				terminalOutcome == rtrec.FeedTerminalSuccess {
-				terminalOutcome = rtrec.FeedTerminalDegraded
-				terminalStage = recResp.FailureStage
-			}
-			nextRecommendationContinuation = recResp.NextContinuation
-			responsePolicyDigest := strings.TrimSpace(recResp.PolicyDigest)
-			if responsePolicyDigest == "" ||
-				(policyDigest != "" && policyDigest != responsePolicyDigest) {
-				terminalStage = rtrec.FailureStageRankedWindowUnavailable
-				return nil, requiredDependencyFailure(
-					terminalStage,
-					fmt.Errorf("recommendation policy digest changed within one feed response"),
-				)
-			}
-			policyDigest = responsePolicyDigest
-			// N3-1：单次 $in 批量取回本轮召回条目（消除逐条 FindPublishedFeedPost
-			// 的 N+1 往返），装配顺序仍严格跟随引擎排序。
-			recallIDs := make([]postports.PostID, 0, len(recResp.Items))
-			for _, item := range recResp.Items {
-				recallIDs = append(recallIDs, postports.NewPostID(item.ContentID))
-			}
-			hydrationRequested += len(recallIDs)
-			postsByID, readErr := s.postReader.FindPublishedFeedPosts(
-				ctx,
-				postports.NewPostFeedHydrationRequest(
-					recallIDs,
-					activeSupply.ActiveReleaseID,
-					activeSupply.ManifestDigest,
-				),
-			)
-			if readErr != nil {
-				return nil, storageReadFailure("hydrate recommended feed posts", readErr)
-			}
-			attemptDelivery := make([]rtrec.FeedItem, 0, len(recResp.Items))
-			for _, item := range recResp.Items {
-				post, ok := postsByID[postports.NewPostID(item.ContentID)]
-				if !ok || !releaseBoundHydrationMatches(
-					&post,
-					&item,
-					activeSupply.ActiveReleaseID,
-					activeSupply.ManifestDigest,
-				) {
-					continue
-				}
-				hydrationFound++
-				if appendPost(&post, &item) {
-					attemptDelivery = append(attemptDelivery, item)
-				}
-				if len(views) >= limit {
-					break
-				}
-			}
-			if len(attemptDelivery) > 0 {
-				deliveryBatches = append(deliveryBatches, deliveryBatch{
-					attribution: recResp.Attribution,
-					items:       attemptDelivery,
-				})
-			}
-			if nextRecommendationContinuation == nil {
-				break
-			}
-			recommendationContinuation = nextRecommendationContinuation
-		}
 	}
 	if !usePostReaderQuery && hydrationRequested > 0 && hydrationFound == 0 {
 		terminalStage = rtrec.FailureStageHydrationFullMiss
@@ -750,7 +618,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	}
 	if initialRecommend && !canonicalReleaseDelivered {
 		views = nil
-		deliveryBatches = nil
 		if rankedDelivery != nil {
 			rankedDelivery.delivered = nil
 		}
@@ -810,10 +677,18 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			AttachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
-	// 混合对象卡只注入推荐主链路首刷/续页（引擎路由页面），浏览流具名查询不混排。
+	// 对象卡候选与理由只取自同一个 Recommendation 不可变窗口；Content
+	// 仅在 Post hydration 后计算本页 anchor 并与 FeedDeliveryPage 同时落盘。
 	var objectCards []ObjectCardView
-	if !usePostReaderQuery && route.Surface == "home" {
-		objectCards = s.resolveObjectCards(ctx, req.UserID, len(views))
+	if !usePostReaderQuery && route.Surface == "home" && rankedDelivery != nil {
+		objectCards, err = s.resolveObjectCards(
+			rankedDelivery.page.ObjectCards,
+			len(views),
+		)
+		if err != nil {
+			terminalStage = rtrec.FailureStageRankedWindowUnavailable
+			return nil, requiredDependencyFailure(terminalStage, err)
+		}
 	}
 	if len(views) == 0 {
 		terminalOutcome = rtrec.FeedTerminalEmpty
@@ -931,25 +806,13 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			rankedDelivery.event(
 				deliveryPageID,
 				feedRequestID,
-				rankedRecommendationSubject(req),
+				rankedRecommendationSubject(req, route),
 				req.ViewerPersonaID,
 				s.cursorCodec.now().UTC(),
 			),
 		); publishErr != nil {
 			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
 			return nil, requiredDependencyFailure(terminalStage, publishErr)
-		}
-	}
-	for _, batch := range deliveryBatches {
-		// 交付页事实先成功落下，再登记 served；否则响应失败却污染曝光分母。
-		if err := s.engine.RecordDelivery(
-			ctx,
-			req.UserID,
-			req.SessionID,
-			batch.attribution,
-			batch.items,
-		); err != nil {
-			return nil, err
 		}
 	}
 	paginationExpiresAt := earlierTime(nextCursorExpiry, previousCursorExpiry)

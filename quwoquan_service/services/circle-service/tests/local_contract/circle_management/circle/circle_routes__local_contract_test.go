@@ -10,16 +10,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// 手写 mux 防漂移：metadata 声明的每个 circle 域 path_template 必须能在
-// CircleHandler 的路由源码中找到对应分支；新增 operation 却未接线时本测试红。
+// composition 防漂移：metadata 声明的每个 circle 域 path_template 必须能在
+// 对象本地 adapter 与 Circle 根分派器中找到对应分支；新增 operation 却未接线时本测试红。
 func TestCircleHandlerRoutesCoverMetadataPathTemplates(t *testing.T) {
 	root := repositoryRoot(t)
 	handlerSource := readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_handler.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_membership_handler.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_file_handler.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_group_handler.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/circle_group_membership_handler.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle/adapters/inbound/http/post_placement_handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_membership/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_file/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_group/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_group_membership/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_behavior_fact/adapters/inbound/http/handler.go")) +
+		readFile(t, filepath.Join(root, "services/circle-service/cmd/api/circle_object_routes.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/cmd/api/main.go"))
 
 	metadataDir := filepath.Join(root, "services/circle-service/contracts/circle_management")

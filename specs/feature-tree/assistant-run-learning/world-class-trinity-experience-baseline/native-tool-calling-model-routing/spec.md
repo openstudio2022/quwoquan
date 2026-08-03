@@ -81,10 +81,12 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 原生工具调用与档位降级尚未实现
+### OPEN-001 受管 Provider 原生工具调用验收尚未闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺原生工具调用与模型档位路由实现。当前模型请求不携带工具定义字段，工具选择依赖回答正文约定键名；模型标识与采样参数固定在代码内，既无档位概念也无降级链，单一提供方故障即导致该次运行失败。
-- 完成判定：`GWT-001` 与 `GWT-002` 由真实测试直接 `spec_ref`，且 Prod 完成外部 Provider conformance 回执。
+- 影响或价值：尚缺受管 Provider 对 `tools/tool_choice`、三档模型绑定、超时降级和流式失败边界的环境 conformance 回执，因此本地实现不能代替生产能力声明。
+- 已完成实现：模型请求携带 canonical Tool metadata 生成的强类型工具声明。Provider capability 决定原生协议或结构化输出降级。档位按 stage、problem class 与 search intensity 决定，模型 ID 只从环境配置读取。不可用或超时仅向下逐档降级，流式输出开始后禁止切换。
+- 已完成本地证据：`GWT-001/GWT-002` 直连 local contract 已覆盖原生工具调用、参数 delta 组装、结构化降级、确定性档位路由、全部档位失败和流式开始后停止降级。
+- 完成判定：在同一受管候选上复验 native tool capability、fast/balanced/reasoning 配置、主档不可用、全部档位不可用和流式中断，并取得 Prod 外部 Provider conformance 回执。

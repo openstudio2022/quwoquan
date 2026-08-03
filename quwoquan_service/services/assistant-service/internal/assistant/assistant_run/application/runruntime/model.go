@@ -92,42 +92,87 @@ type GoalRevision struct {
 	AppliedAt   time.Time `bson:"appliedAt"`
 }
 
+type FrozenPolicyTemplate struct {
+	TemplateID      string   `bson:"templateId"`
+	SkillID         string   `bson:"skillId"`
+	DomainID        string   `bson:"domainId"`
+	PromptPolicy    string   `bson:"promptPolicy"`
+	AllowedTools    []string `bson:"allowedTools"`
+	SearchIntensity string   `bson:"searchIntensity"`
+}
+
+type FrozenLearningContextPolicy struct {
+	Enabled                  bool     `bson:"enabled"`
+	AllowedSignals           []string `bson:"allowedSignals"`
+	AllowedMetricIDs         []string `bson:"allowedMetricIds"`
+	AllowedReasonCodes       []string `bson:"allowedReasonCodes"`
+	MinimumFeedbackSamples   int      `bson:"minimumFeedbackSamples"`
+	WindowDays               int      `bson:"windowDays"`
+	SnapshotTrainingEligible bool     `bson:"snapshotTrainingEligible"`
+}
+
+type FrozenPolicySelection struct {
+	PolicyID              string                      `bson:"policyId"`
+	ReleaseDigest         string                      `bson:"releaseDigest"`
+	Cohort                string                      `bson:"cohort"`
+	RolloutRevision       int                         `bson:"rolloutRevision"`
+	RuleID                string                      `bson:"ruleId"`
+	Template              FrozenPolicyTemplate        `bson:"template"`
+	LearningContextPolicy FrozenLearningContextPolicy `bson:"learningContextPolicy"`
+}
+
+type RequestContext struct {
+	ClientSessionID string `bson:"clientSessionId,omitempty"`
+	PageID          string `bson:"pageId,omitempty"`
+	SurfaceKind     string `bson:"surfaceKind,omitempty"`
+	SurfaceID       string `bson:"surfaceId,omitempty"`
+	RouteID         string `bson:"routeId,omitempty"`
+	OperationID     string `bson:"operationId,omitempty"`
+	TraceID         string `bson:"traceId,omitempty"`
+	PersonaID       string `bson:"personaId,omitempty"`
+}
+
 type Run struct {
-	RunID                   string                              `bson:"runId"`
-	UserID                  string                              `bson:"userId"`
-	SessionID               string                              `bson:"sessionId"`
-	ClientRequestID         string                              `bson:"clientRequestId"`
-	ExecutionInputDigest    string                              `bson:"executionInputDigest"`
-	TraceID                 string                              `bson:"traceId"`
-	IntentKind              string                              `bson:"intentKind"`
-	InputText               string                              `bson:"inputText"`
-	RequestedSkillID        string                              `bson:"requestedSkillId,omitempty"`
-	RequestedDomainID       string                              `bson:"requestedDomainId,omitempty"`
-	Trigger                 map[string]any                      `bson:"trigger,omitempty"`
-	ContextSnapshot         map[string]any                      `bson:"contextSnapshot,omitempty"`
-	SurfaceCapabilities     map[string]any                      `bson:"surfaceCapabilities,omitempty"`
-	SessionPreferenceFacts  []preferencemodel.Snapshot          `bson:"sessionPreferenceFacts,omitempty"`
-	LongTermPreferenceFacts []preferencemodel.Snapshot          `bson:"longTermPreferenceFacts,omitempty"`
-	Revision                int64                               `bson:"revision"`
-	JournalSequence         int64                               `bson:"journalSequence"`
-	GoalRevision            int64                               `bson:"goalRevision"`
-	State                   generated.AssistantRunState         `bson:"state"`
-	ReasoningProfile        generated.AssistantReasoningProfile `bson:"reasoningProfile"`
-	DefinitionOfDone        DefinitionOfDone                    `bson:"definitionOfDone"`
-	TaskGraph               TaskGraph                           `bson:"taskGraph"`
-	Items                   []RunItem                           `bson:"items"`
-	Checkpoint              *Checkpoint                         `bson:"checkpoint,omitempty"`
-	PresentationDocument    map[string]any                      `bson:"presentationDocument,omitempty"`
-	GoalHistory             []GoalRevision                      `bson:"goalHistory"`
-	PendingSteer            []string                            `bson:"pendingSteer"`
-	PauseRequested          bool                                `bson:"pauseRequested"`
-	PauseReason             string                              `bson:"pauseReason"`
-	SuspendedFrom           generated.AssistantRunState         `bson:"suspendedFrom"`
-	TerminalReason          string                              `bson:"terminalReason"`
-	TerminalSnapshot        map[string]any                      `bson:"terminalSnapshot"`
-	CreatedAt               time.Time                           `bson:"createdAt"`
-	UpdatedAt               time.Time                           `bson:"updatedAt"`
-	CompletedAt             *time.Time                          `bson:"completedAt,omitempty"`
+	RunID                     string                              `bson:"runId"`
+	UserID                    string                              `bson:"userId"`
+	PersonaID                 string                              `bson:"personaId,omitempty"`
+	SessionID                 string                              `bson:"sessionId"`
+	ClientRequestID           string                              `bson:"clientRequestId"`
+	ExecutionInputDigest      string                              `bson:"executionInputDigest"`
+	TraceID                   string                              `bson:"traceId"`
+	RequestContext            RequestContext                      `bson:"requestContext"`
+	IntentKind                string                              `bson:"intentKind"`
+	InputText                 string                              `bson:"inputText"`
+	RequestedSkillID          string                              `bson:"requestedSkillId,omitempty"`
+	RequestedDomainID         string                              `bson:"requestedDomainId,omitempty"`
+	SkillPackageID            string                              `bson:"skillPackageId"`
+	SkillPackageReleaseDigest string                              `bson:"skillPackageReleaseDigest"`
+	FrozenPolicySelection     FrozenPolicySelection               `bson:"frozenPolicySelection"`
+	Trigger                   map[string]any                      `bson:"trigger,omitempty"`
+	ContextSnapshot           map[string]any                      `bson:"contextSnapshot,omitempty"`
+	SurfaceCapabilities       map[string]any                      `bson:"surfaceCapabilities,omitempty"`
+	SessionPreferenceFacts    []preferencemodel.Snapshot          `bson:"sessionPreferenceFacts,omitempty"`
+	LongTermPreferenceFacts   []preferencemodel.Snapshot          `bson:"longTermPreferenceFacts,omitempty"`
+	Revision                  int64                               `bson:"revision"`
+	JournalSequence           int64                               `bson:"journalSequence"`
+	GoalRevision              int64                               `bson:"goalRevision"`
+	State                     generated.AssistantRunState         `bson:"state"`
+	ReasoningProfile          generated.AssistantReasoningProfile `bson:"reasoningProfile"`
+	DefinitionOfDone          DefinitionOfDone                    `bson:"definitionOfDone"`
+	TaskGraph                 TaskGraph                           `bson:"taskGraph"`
+	Items                     []RunItem                           `bson:"items"`
+	Checkpoint                *Checkpoint                         `bson:"checkpoint,omitempty"`
+	PresentationDocument      map[string]any                      `bson:"presentationDocument,omitempty"`
+	GoalHistory               []GoalRevision                      `bson:"goalHistory"`
+	PendingSteer              []string                            `bson:"pendingSteer"`
+	PauseRequested            bool                                `bson:"pauseRequested"`
+	PauseReason               string                              `bson:"pauseReason"`
+	SuspendedFrom             generated.AssistantRunState         `bson:"suspendedFrom"`
+	TerminalReason            string                              `bson:"terminalReason"`
+	TerminalSnapshot          map[string]any                      `bson:"terminalSnapshot"`
+	CreatedAt                 time.Time                           `bson:"createdAt"`
+	UpdatedAt                 time.Time                           `bson:"updatedAt"`
+	CompletedAt               *time.Time                          `bson:"completedAt,omitempty"`
 }
 
 type VerificationEvidence struct {
@@ -146,19 +191,23 @@ type VerificationVerdict struct {
 }
 
 var (
-	ErrInvalidRun         = errors.New("invalid assistant run")
-	ErrInvalidTransition  = errors.New("invalid assistant run transition")
-	ErrRevisionConflict   = errors.New("assistant run revision conflict")
-	ErrInvalidTaskGraph   = errors.New("invalid assistant task graph")
-	ErrTaskNotReady       = errors.New("assistant task is not ready")
-	ErrItemStateConflict  = errors.New("assistant run item state conflict")
-	ErrCompletionRejected = errors.New("assistant run completion rejected")
-	ErrUnsafePayload      = errors.New("assistant run item contains unsafe reasoning payload")
-	ErrRunNotFound        = errors.New("assistant run not found")
-	ErrLeaseConflict      = errors.New("assistant run worker lease conflict")
-	ErrJournalGap         = errors.New("assistant run journal gap")
-	ErrJournalCorrupt     = errors.New("assistant run journal is corrupt")
-	ErrNoWork             = errors.New("assistant run queue has no ready work")
-	ErrExecutionFenced    = errors.New("assistant run execution is fenced")
-	ErrExecutionCancelled = errors.New("assistant run execution was cancelled")
+	ErrInvalidRun              = errors.New("invalid assistant run")
+	ErrInvalidTransition       = errors.New("invalid assistant run transition")
+	ErrRevisionConflict        = errors.New("assistant run revision conflict")
+	ErrInvalidTaskGraph        = errors.New("invalid assistant task graph")
+	ErrTaskNotReady            = errors.New("assistant task is not ready")
+	ErrItemStateConflict       = errors.New("assistant run item state conflict")
+	ErrCompletionRejected      = errors.New("assistant run completion rejected")
+	ErrUnsafePayload           = errors.New("assistant run item contains unsafe reasoning payload")
+	ErrRunNotFound             = errors.New("assistant run not found")
+	ErrLeaseConflict           = errors.New("assistant run worker lease conflict")
+	ErrJournalGap              = errors.New("assistant run journal gap")
+	ErrJournalCorrupt          = errors.New("assistant run journal is corrupt")
+	ErrNoWork                  = errors.New("assistant run queue has no ready work")
+	ErrExecutionFenced         = errors.New("assistant run execution is fenced")
+	ErrExecutionCancelled      = errors.New("assistant run execution was cancelled")
+	ErrSkillPackageUnavailable = errors.New("assistant Skill package is unavailable")
+	ErrSkillDisabled           = errors.New("assistant Skill is disabled by the effective account or surface policy")
+	ErrSkillSettingUnavailable = errors.New("assistant Skill setting is unavailable")
+	ErrPolicyUnavailable       = errors.New("assistant policy selection is unavailable")
 )

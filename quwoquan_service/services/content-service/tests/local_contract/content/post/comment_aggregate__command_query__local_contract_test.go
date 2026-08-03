@@ -16,7 +16,7 @@ import (
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

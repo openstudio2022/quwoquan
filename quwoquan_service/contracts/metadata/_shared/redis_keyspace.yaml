@@ -188,9 +188,9 @@ key_patterns:
     quota_index_pattern: "rec:ranked_feed_window_index:{rfw-<quotaShard>}"
     quota_metadata_pattern: "rec:ranked_feed_window_metadata:{rfw-<quotaShard>}"
     quota_config:
-      shard_count: sys.content-service.feed.ranked_window_quota_shard_count
-      records_per_shard: sys.content-service.feed.ranked_window_maximum_live_records_per_shard
-      bytes_per_shard: sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard
+      shard_count: sys.recommendation-service.ranked_window.quota_shard_count
+      records_per_shard: sys.recommendation-service.ranked_window.maximum_live_records_per_shard
+      bytes_per_shard: sys.recommendation-service.ranked_window.maximum_live_bytes_per_shard
     create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
     description: |
       subjectHash 为 canonical 窗口配额主体的 SHA-256 前 128 bit 十六进制：具名/
@@ -635,7 +635,7 @@ key_patterns:
     redis_scene: realtime
     ttl_seconds: null
     type: pubsub_channel
-    description: 运营配置变更广播通道（V2 实现，V1 预留）
+    description: 运营配置变更的当前唯一广播通道
 
   - pattern: "rt:channel:{channelId}"
     redis_scene: realtime

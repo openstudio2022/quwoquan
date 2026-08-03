@@ -81,6 +81,9 @@ func (p *CircleGroupConversationProvisionedStreamPublisher) PublishRecordedDomai
 	}); err != nil {
 		return fmt.Errorf("append CircleGroupConversationProvisioned stream: %w", err)
 	}
+	if err := p.redis.XTrimOlderThan(ctx, CircleGroupConversationProvisionedStream, CircleGroupConversationProvisionedStreamRetention); err != nil {
+		return fmt.Errorf("trim CircleGroupConversationProvisioned stream retention: %w", err)
+	}
 	if err := p.redis.Expire(ctx, CircleGroupConversationProvisionedStream, CircleGroupConversationProvisionedStreamRetention); err != nil {
 		return fmt.Errorf("refresh CircleGroupConversationProvisioned stream retention: %w", err)
 	}

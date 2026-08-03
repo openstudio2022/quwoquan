@@ -269,6 +269,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         )
                       : _ShellContentFrame(
                           constrained: capabilities.wideScreenLayout,
+                          bottomObstruction: bottomNavHidden
+                              ? AppSpacing.zero
+                              : AppSpacing.bottomNavBarHeight(context) +
+                                    MediaQuery.viewPaddingOf(context).bottom,
                           child: Stack(
                             children: [
                               IndexedStack(
@@ -535,22 +539,31 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 }
 
 class _ShellContentFrame extends StatelessWidget {
-  const _ShellContentFrame({required this.constrained, required this.child});
+  const _ShellContentFrame({
+    required this.constrained,
+    required this.bottomObstruction,
+    required this.child,
+  });
 
   final bool constrained;
+  final double bottomObstruction;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final scopedChild = AppViewportObstructionScope(
+      obstruction: EdgeInsets.only(bottom: bottomObstruction),
+      child: child,
+    );
     if (!constrained || !AppSpacing.isWideLayout(context)) {
-      return child;
+      return scopedChild;
     }
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           maxWidth: AppSpacing.webContentMaxWidth,
         ),
-        child: child,
+        child: scopedChild,
       ),
     );
   }

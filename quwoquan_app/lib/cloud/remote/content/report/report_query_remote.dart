@@ -15,7 +15,7 @@ final class RemoteContentReportQueryAdapter
   final ReportQueryInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentMyReportPage> listMyReports(ContentMyReportsQuery query) {
+  Future<MyReportPageSlice> listMyReports(ContentMyReportsQuery query) {
     return client.contentReportListMyReports(
       query,
       context: invocationContext(ContentRequestPageIds.listMyReports),

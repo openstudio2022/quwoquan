@@ -8,7 +8,7 @@ storage_backend: mongodb
 collections:
 - circles
 - circle_memberships
-- posts
+- circle_feed_items
 - circle_post_placements
 source_entities:
 - Circle
@@ -23,7 +23,13 @@ source_events:
 - CircleMembershipApproved
 - CircleMembershipLeft
 - PostPublished
+- PostUpdated
+- PostSettingsUpdated
+- PostPromotedToWork
+- PostModerationRejected
 - PostDeleted
+- PostPrivacyRedacted
+- PostPurged
 - CirclePostPlaced
 - CirclePostPlacementPresentationChanged
 - CirclePostPlacementRemoved

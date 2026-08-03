@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/post/geo_tag_ref_resolver.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_app/core/geo/administrative_tag_path.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -12,12 +13,12 @@ final class _TagCatalogDouble implements TagCatalogQuery {
   final List<String> resolveCalls = <String>[];
 
   @override
-  Future<TagResolve> resolveTag(String tagRef) async {
+  Future<TagResolveView> resolveTag(String tagRef) async {
     resolveCalls.add(tagRef);
     if (!known.contains(tagRef)) {
       throw StateError('TAG.USER.tag_not_found: $tagRef');
     }
-    return TagResolve(
+    return TagResolveView(
       tagRef: tagRef,
       group: 'Topic',
       label: tagRef.split('/').last,
@@ -25,11 +26,13 @@ final class _TagCatalogDouble implements TagCatalogQuery {
   }
 
   @override
-  Future<List<TagChild>> listChildren(String parentTagRef, {int limit = 50}) =>
-      throw UnimplementedError();
+  Future<List<TagChildView>> listChildren(
+    String parentTagRef, {
+    int limit = 50,
+  }) => throw UnimplementedError();
 
   @override
-  Future<TagValidationResult> validateRefs({
+  Future<TagValidationResultView> validateRefs({
     required String expectedTaxonomyReleaseId,
     required List<String> tagRefs,
   }) => throw UnimplementedError();
@@ -133,25 +136,19 @@ void main() {
     });
 
     test('泰国按府 + 市镇切段', () {
-      expect(
-        administrativeTagRefCandidatesFromAddress('泰国清迈府清迈市塔佩路'),
-        <String>[
-          '$kAdministrativeTagRoot/泰国/清迈府/清迈市',
-          '$kAdministrativeTagRoot/泰国/清迈府',
-          '$kAdministrativeTagRoot/泰国',
-        ],
-      );
+      expect(administrativeTagRefCandidatesFromAddress('泰国清迈府清迈市塔佩路'), <String>[
+        '$kAdministrativeTagRoot/泰国/清迈府/清迈市',
+        '$kAdministrativeTagRoot/泰国/清迈府',
+        '$kAdministrativeTagRoot/泰国',
+      ]);
     });
 
     test('韩国按广域市/道 + 区切段', () {
-      expect(
-        administrativeTagRefCandidatesFromAddress('韩国釜山广域市海云台区'),
-        <String>[
-          '$kAdministrativeTagRoot/韩国/釜山广域市/海云台区',
-          '$kAdministrativeTagRoot/韩国/釜山广域市',
-          '$kAdministrativeTagRoot/韩国',
-        ],
-      );
+      expect(administrativeTagRefCandidatesFromAddress('韩国釜山广域市海云台区'), <String>[
+        '$kAdministrativeTagRoot/韩国/釜山广域市/海云台区',
+        '$kAdministrativeTagRoot/韩国/釜山广域市',
+        '$kAdministrativeTagRoot/韩国',
+      ]);
     });
 
     test('无层级词约定的国家只产出国家级候选，不按空格瞎切', () {
@@ -171,10 +168,7 @@ void main() {
     });
 
     test('未收录的国家不产出 geoTagRef', () {
-      expect(
-        administrativeTagRefCandidatesFromAddress('冈比亚班珠尔某街'),
-        isEmpty,
-      );
+      expect(administrativeTagRefCandidatesFromAddress('冈比亚班珠尔某街'), isEmpty);
     });
   });
 

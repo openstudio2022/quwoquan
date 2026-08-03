@@ -12,12 +12,13 @@ import '../../../support/assistant_remote_test_support.dart';
 void main() {
   test('Remote 偏好 Facet 使用 metadata 路径并完成设置、列表、遗忘与恢复', () async {
     final transport = _PreferenceClient();
-    final httpClient = CloudHttpClient(client: transport);
+    final httpClient = CloudHttpClient(
+      client: transport,
+      authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+    );
     final repository = RemoteAssistantRepository(
-      httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      sessionInvocationContext: assistantRemoteTestInvocationContext,
-      consentAccountId: 'assistant-preference-test',
+      invocationContext: assistantRemoteTestInvocationContext,
     );
 
     final created = await repository.setAssistantPreference(
@@ -69,12 +70,11 @@ void main() {
   test('Remote 偏好 Facet 保留 canonical preference_not_found', () async {
     final httpClient = CloudHttpClient(
       client: _PreferenceClient(statusCode: 404),
+      authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
     );
     final repository = RemoteAssistantRepository(
-      httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      sessionInvocationContext: assistantRemoteTestInvocationContext,
-      consentAccountId: 'assistant-preference-test',
+      invocationContext: assistantRemoteTestInvocationContext,
     );
 
     await expectLater(
@@ -93,12 +93,13 @@ void main() {
 
   test('Remote 偏好 Facet 提交会话确认事实的来源与确认标记', () async {
     final transport = _PreferenceClient();
-    final httpClient = CloudHttpClient(client: transport);
+    final httpClient = CloudHttpClient(
+      client: transport,
+      authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+    );
     final repository = RemoteAssistantRepository(
-      httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      sessionInvocationContext: assistantRemoteTestInvocationContext,
-      consentAccountId: 'assistant-preference-test',
+      invocationContext: assistantRemoteTestInvocationContext,
     );
 
     await repository.setAssistantPreference(

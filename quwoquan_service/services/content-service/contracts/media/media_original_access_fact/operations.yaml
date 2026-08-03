@@ -62,10 +62,9 @@ api_routes:
       - expiresAt
       - ttlSeconds
       - auditId
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaOriginalAccessGrant
-      response_decoder: decodeContentMediaOriginalAccessGrant
+    response_entity: MediaOriginalAccessGrant
+    response_body: MediaOriginalAccessGrant
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona

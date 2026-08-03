@@ -42,6 +42,8 @@ class ChatApiMetadata {
     'ListSelectableGroupContactMembers': '/chat/selectable-group-conversations/{conversationId}/contact-members',
     'ListSelectableGroupConversations': '/chat/selectable-group-conversations',
     'MarkAsRead': '/chat/conversations/{conversationId}/messages/{messageId}/read',
+    'ProjectGatheringConversation': '/internal/chat/gathering-conversations/{gatheringId}',
+    'ProjectGatheringConversationMembership': '/internal/chat/gathering-conversations/{gatheringId}/members/{personaId}',
     'RecallMessage': '/chat/conversations/{conversationId}/messages/{messageId}/recall',
     'RecoverChatAccountClosureDeadLetter': '/internal/chat/account-closure/dead-letters:recover',
     'RemoveAssistant': '/chat/conversations/{conversationId}/assistant',
@@ -81,6 +83,8 @@ class ChatApiMetadata {
     'ListSelectableGroupContactMembers': 'GET',
     'ListSelectableGroupConversations': 'GET',
     'MarkAsRead': 'POST',
+    'ProjectGatheringConversation': 'PUT',
+    'ProjectGatheringConversationMembership': 'PUT',
     'RecallMessage': 'POST',
     'RecoverChatAccountClosureDeadLetter': 'POST',
     'RemoveAssistant': 'DELETE',
@@ -121,6 +125,8 @@ class ChatApiMetadata {
     'ListSelectableGroupContactMembers': 'required',
     'ListSelectableGroupConversations': 'required',
     'MarkAsRead': 'required',
+    'ProjectGatheringConversation': 'required',
+    'ProjectGatheringConversationMembership': 'required',
     'RecallMessage': 'required',
     'RecoverChatAccountClosureDeadLetter': 'required',
     'RemoveAssistant': 'required',
@@ -139,37 +145,19 @@ class ChatApiMetadata {
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
-    'BatchGetConversations': 'ChatConversationWireDto',
-    'CreateConversation': 'ChatConversationWireDto',
-    'GetConversation': 'ChatConversationWireDto',
-    'GetGroupHome': 'GroupHomeDto',
-    'ListAssistantGroundingMessages': 'ChatMessageDto',
-    'ListContactHome': 'ContactHomeRowDto',
-    'ListContacts': 'ChatContactRowDto',
-    'ListConversations': 'ChatConversationWireDto',
-    'ListGroupCandidates': 'ChatContactRowDto',
-    'ListInbox': 'ChatInboxDto',
-    'ListMembers': 'ChatConversationMemberDto',
-    'ListMessageHome': 'MessageHomeRowDto',
-    'ListMessages': 'ChatMessageDto',
-    'ListSelectableGroupContactMembers': 'ChatContactRowDto',
-    'ListSelectableGroupConversations': 'SelectableGroupConversationRowDto',
-    'UpdateAnnouncement': 'ChatConversationWireDto',
-    'UpdateConversationTitle': 'ChatConversationWireDto',
-    'UpdateGroupGovernanceSettings': 'ChatConversationWireDto',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
-    'AddMembers': 'ack',
+    'AddMembers': 'object',
     'BatchGetConversations': 'page',
     'CreateConversation': 'object',
-    'DissolveConversation': 'ack',
+    'DissolveConversation': 'object',
     'GetConversation': 'object',
     'GetGroupHome': 'object',
     'GetReceipts': 'page',
-    'InviteAssistant': 'ack',
-    'LeaveConversation': 'ack',
+    'InviteAssistant': 'object',
+    'LeaveConversation': 'object',
     'ListAssistantGroundingMessages': 'page',
     'ListContactHome': 'page',
     'ListContacts': 'page',
@@ -182,18 +170,18 @@ class ChatApiMetadata {
     'ListMessages': 'page',
     'ListSelectableGroupContactMembers': 'page',
     'ListSelectableGroupConversations': 'page',
-    'MarkAsRead': 'ack',
-    'RecallMessage': 'ack',
-    'RemoveAssistant': 'ack',
-    'RemoveMember': 'ack',
+    'MarkAsRead': 'object',
+    'RecallMessage': 'object',
+    'RemoveAssistant': 'object',
+    'RemoveMember': 'object',
     'SendAssistantDeliveryMessage': 'object',
     'SendMessage': 'object',
     'SyncMessages': 'object',
-    'TransferOwnership': 'ack',
+    'TransferOwnership': 'object',
     'UpdateAnnouncement': 'object',
-    'UpdateConversationSettings': 'ack',
+    'UpdateConversationSettings': 'object',
     'UpdateConversationTitle': 'object',
-    'UpdateGroupAdmins': 'ack',
+    'UpdateGroupAdmins': 'object',
     'UpdateGroupGovernanceSettings': 'object',
   };
 
@@ -219,6 +207,8 @@ class ChatApiMetadata {
   static const String listSelectableGroupContactMembersOperation = 'ListSelectableGroupContactMembers';
   static const String listSelectableGroupConversationsOperation = 'ListSelectableGroupConversations';
   static const String markAsReadOperation = 'MarkAsRead';
+  static const String projectGatheringConversationOperation = 'ProjectGatheringConversation';
+  static const String projectGatheringConversationMembershipOperation = 'ProjectGatheringConversationMembership';
   static const String recallMessageOperation = 'RecallMessage';
   static const String recoverChatAccountClosureDeadLetterOperation = 'RecoverChatAccountClosureDeadLetter';
   static const String removeAssistantOperation = 'RemoveAssistant';
@@ -316,6 +306,19 @@ class ChatApiMetadata {
     return _fillPath(markAsReadPathTemplate, <String, String>{
       'conversationId': conversationId,
       'messageId': messageId,
+    });
+  }
+  static const String projectGatheringConversationPathTemplate = '/internal/chat/gathering-conversations/{gatheringId}';
+  static String projectGatheringConversationPath({required String gatheringId}) {
+    return _fillPath(projectGatheringConversationPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+    });
+  }
+  static const String projectGatheringConversationMembershipPathTemplate = '/internal/chat/gathering-conversations/{gatheringId}/members/{personaId}';
+  static String projectGatheringConversationMembershipPath({required String gatheringId, required String personaId}) {
+    return _fillPath(projectGatheringConversationMembershipPathTemplate, <String, String>{
+      'gatheringId': gatheringId,
+      'personaId': personaId,
     });
   }
   static const String recallMessagePathTemplate = '/chat/conversations/{conversationId}/messages/{messageId}/recall';

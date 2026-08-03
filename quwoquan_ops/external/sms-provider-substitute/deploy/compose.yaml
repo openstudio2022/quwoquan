@@ -1,0 +1,41 @@
+services:
+  sms-provider-substitute:
+    profiles: ["debug-sms-substitute"]
+    image: "quwoquan/sms-provider-substitute-debug:${QWQ_COMPOSE_IMAGE_VERSION:-local}"
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+    environment:
+      APP_ENV: "${QWQ_COMPOSE_ENV:?QWQ_COMPOSE_ENV is required}"
+      SMS_SUBSTITUTE_CONFIGURATION_DIGEST: "${QWQ_COMPOSE_CONFIG_VERSION:?runtime configuration digest is required}"
+      SMS_SUBSTITUTE_ADDR: ":9443"
+      SMS_SUBSTITUTE_PROVIDER_TOKEN: "${SMS_SUBSTITUTE_PROVIDER_TOKEN:?target SMS Provider token is required}"
+      SMS_SUBSTITUTE_OPERATOR_TOKEN: "${SMS_SUBSTITUTE_OPERATOR_TOKEN:?target SMS operator token is required}"
+      SMS_SUBSTITUTE_CAPTURE_KEY_B64: "${SMS_SUBSTITUTE_CAPTURE_KEY_B64:?target SMS capture key is required}"
+      SMS_SUBSTITUTE_TLS_CERT_FILE: "/run/secrets/sms-provider-substitute/server.crt"
+      SMS_SUBSTITUTE_TLS_KEY_FILE: "/run/secrets/sms-provider-substitute/server.key"
+      SMS_SUBSTITUTE_SCENARIO: "${SMS_SUBSTITUTE_SCENARIO:-success}"
+    ports:
+      - "${QWQ_COMPOSE_SMS_SUBSTITUTE_PORT:?target SMS substitute port is required}:9443"
+    volumes:
+      - ${QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_CERT_FILE:?target SMS certificate is required}:/run/secrets/sms-provider-substitute/server.crt:ro
+      - ${QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_KEY_FILE:?target SMS key is required}:/run/secrets/sms-provider-substitute/server.key:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1:9443/healthz"]
+      interval: 5s
+      timeout: 2s
+      start_period: 5s
+      retries: 12
+    restart: unless-stopped
+
+  integration-service:
+    environment:
+      INTEGRATION_SMS_SUBSTITUTE_CA_FILE: "/run/secrets/sms-provider-substitute/ca.crt"
+    volumes:
+      - ${QWQ_COMPOSE_SMS_SUBSTITUTE_CA_FILE:?target SMS CA is required}:/run/secrets/sms-provider-substitute/ca.crt:ro
+    depends_on:
+      sms-provider-substitute:
+        condition: service_healthy

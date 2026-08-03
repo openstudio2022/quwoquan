@@ -16,12 +16,13 @@
 
 - 四个 carrier execution 共享不含运行身份的 canonical entity catalog digest，各自冻结 target set、quota 与终态。
 - 各载体复用同一创建、审核、promotion 和 ship 生命周期。
-- 批次级/跨载体聚合门只作目标与统计；对象级质量与权利门保持 fail-closed。
+- 批次级/跨载体聚合门只作目标与统计；四载体共用 acquisition/rights/distribution admission，research 只放宽未验证的分发权利，不放宽访问控制、内容安全、隐私、未成年人、恶意文件、去重、实体相关性、质量或可播放性。
 
 ### Out of Scope
 
 - 为不同地区或载体维护第二套发布目录与运行台账。
-- 为「能发布」而放松对象级质量、权利、去重或真实媒体门。
+- 绕过登录、付费墙、验证码、访问控制、DRM 或平台技术限制取得素材。
+- 直接生成图片或视频，或将 deterministic image-sequence 冒充已取得的可播放视频。
 
 ## 3. 行为要求
 
@@ -39,9 +40,36 @@
 - campaign report 必须保留 named main branch、status、phase、review/publish return code、clone ref、qualified/finalized count 与 cleanup 终态；报告是运行回执，不得成为新的内容或 release 真相源。
 - 复制会话准出（COPY_READY）可要求每路达到约定 quota/count 证明，但不得阻止未达复制门的合格内容发布。
 
+### REQ-002 生命周期与统一素材 admission
+
+- 受治理配置唯一声明 `productLifecycleState=research|commercial` 与同值 `releaseClass`；环境名、临时环境变量或 fixture 不得推断该状态。
+- 每个实体头像/主页媒体、文章图、图片作品与视频资产都必须记录 `acquisitionStatus`、`rightsStatus=verified|unverified|restricted|unknown`、`authorizationRequired`、`distributionDecision=research_allowed|commercial_allowed|blocked` 以及 `sourceUrl/platform/creator/capturedAt/contentSha256/license/termsUrl/authorizationProof/rightsIssues`。
+- `research` 允许已取得且权利状态为 verified/unverified/unknown 的资产，restricted、未取得、生成素材或缺来源/权利缺口字段仍阻断；`commercial` 只允许 verified 且具有商业授权证据的 `commercial_allowed`。
+- research immutable release 必须冻结权利状态计数、精确 authorization-required asset IDs、四载体 `researchAcceptedCount`、逐来源 assets funnel 和 `containsUnverifiedAssets`；未授权资产不得计入 `commercialAcceptedCount` 或生成 commercial readiness。
+
+### REQ-003 专业图片、文章配图与热门视频
+
+- research 图片检索目录版本化，按 category/entity/season/style/viewpoint/popularity 展开，Pinterest 为第一发现源、图虫为补充；只允许公开直链、平台支持接口或人工提供文件，不新增规避访问控制的抓取器。
+- CLI 与 receipt 对每个 `displayName/provider` 输出 `planned/discovered/downloaded/accepted/rejectedAssetCount` 及 verified/unverified/restricted/unknown 计数；下载成功不得把 rights 状态升级为 verified。
+- 文章图片只来自同一 article sourceUnit，至少封面与正文图；批次 illustrated rate 不低于 90%，text-only 不高于 10%。
+- 视频候选记录 play/like/comment/share/favorite 与 observedAt，并只在同平台、同主题、同时间桶内按 percentile 排序；缺指标必须标为不可参与热度排序，不得补零伪装。只有公开可取得、可解码、可播放、无 DRM、未绕过访问控制且通过安全/相关性门的真实视频文件可进入 research release。
+
+### REQ-004 四环境 research 隔离、商用切换与规模门
+
+- research activation 前，四环境分别证明身份白名单、匿名内容和媒体关闭、无公开 CDN/匿名 URL、分享/导出/索引关闭、内部 App 签名与研究态标识、媒体短期签名 URL 和访问审计；任一缺失立即 `GATE_BLOCK`。
+- `appUatEnvelope` 从本 release 对象闭包投影并显式带 `releaseClass=research/productLifecycleState=research`，不可被 commercial package/activation/UAT 复用。
+- 商用切换冻结新的 source digest 与 immutable commercial release，对 research 对象逐项替换/撤下/删除，清理缓存和签名 URL，验证四环境未授权 readback 为 0 后重新完成 Creator/attribution/article/image/video/Premium/discovery/rollback/replay/真机 UAT。
+- `qwq-data release commercial-transition` 只从 research/commercial 两个不可变 release 与四环境 cache/media/signed-URL 清理及未授权 readback=0 证据生成逐资产 create-once migration receipt；不得修改旧 research release 或用手工布尔值替代环境证据。
+- M100 要求四载体各 `researchAcceptedCount>=100`、跨 lane 写入与重复为 0、文章配图率至少 90%；`qwq-data release research-promote-scale` 还必须绑定同一 manifest digest、资源隔离与治理阈值以上的自动恢复率，才写 create-once M100 promotion receipt。M1000 只能消费该 receipt。Cursor semantic author 保持 `cursor_sdk/auto`，真实 capacity soak 未通过时不得用下载数或框架测试冒充内容稳产。
+
 ## 4. 契约引用
 
-- release：`quwoquan_data/schema/release/release_manifest.schema.json`
+- release：`quwoquan_data/schema/release/release_header.schema.json`
+- asset admission：`quwoquan_data/schema/release/release_asset_admission.schema.json`
+- lifecycle policy：`quwoquan_data/schema/governance/content_distribution_policy.schema.json`
+- environment readiness：`quwoquan_data/schema/release/environment_release_readiness.schema.json`
+- research M100 promotion：`quwoquan_data/schema/release/research_scale_promotion.schema.json`
+- commercial transition：`quwoquan_data/schema/release/commercial_transition.schema.json`
 - ship：`quwoquan_data/schema/release/ship_report.schema.json`
 - campaign report：`quwoquan_data/schema/execution/content_campaign_report.schema.json`
 - lane receipt：`quwoquan_data/schema/execution/content_campaign_lane_receipt.schema.json`
@@ -62,6 +90,15 @@
 - THEN lane 级 review/publish 失败只阻塞该 lane。
 - THEN 所有已创建 detached clone 均被清理。
 
+<a id="gwt-002"></a>
+### GWT-002 research release 可内部消费但不可冒充商用
+
+- GIVEN 四载体对象共享同一 source revision/digest/entity catalog digest，研究素材已取得且完整记录来源与权利缺口。
+- WHEN 生成并请求激活 `releaseClass=research` 的 immutable release。
+- THEN unverified/unknown 可记为 `research_allowed`，restricted/未取得/生成/缺字段素材被阻断，文章配图率低于 90% 或视频不可播放同样阻断。
+- THEN activation/readiness/App UAT receipt 绑定同一 `releaseId+manifestDigest+releaseClass+productLifecycleState`，匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。
+- THEN commercial readiness 不存在，且任何未授权 asset ID 不得进入 `commercialAcceptedCount`。
+
 ## 6. 依赖
 
 - 前置要求：父能力的 execution、review 与 release 契约。
@@ -71,10 +108,10 @@
 
 ## 7. 开放事项
 
-### OPEN-001 多载体环境消费证据
+### OPEN-001 多载体 research 环境消费与规模证据
 
 - 类型：`external_blocker`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：发布合同完成不等于四类载体已在目标环境被真实消费。
-- 完成判定：`GWT-001` 与目标环境四载体消费 UAT 均有直接 `spec_ref`。
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前尚无受保护白名单内部身份 adapter 的四环境 readback，现有匿名 guest verifier 明确不可作为 research 证据；Cursor `cursor_sdk/auto` capacity soak 也未通过，且现存文章批次为 text-only，不能形成 M100 research promotion receipt。
+- 完成判定：`GWT-001/GWT-002` 有 local_contract、受保护身份 API integration 与四环境内部 App user_acceptance 直接证据；四载体各达 M100、文章配图率至少 90%，并产出同一 release 的 activation/readiness/App UAT receipt。

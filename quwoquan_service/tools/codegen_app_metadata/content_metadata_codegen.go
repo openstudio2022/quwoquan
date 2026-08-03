@@ -35,7 +35,7 @@ func renderContentMetadataDart(
 	writeSortedIntMap(&b, postSnapshotFieldByteLimits)
 	b.WriteString("  };\n\n")
 
-	b.WriteString("  // Current feed projection defaults (use FeedItemDto for new code).\n")
+	b.WriteString("  // Current feed projection defaults.\n")
 	b.WriteString("  static const Map<String, dynamic> feedProjectionDefaults = <String, dynamic>{\n")
 	writeSortedMap(&b, feedDefaults)
 	b.WriteString("  };\n\n")

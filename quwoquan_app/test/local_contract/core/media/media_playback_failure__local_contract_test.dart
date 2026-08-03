@@ -8,15 +8,21 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
   group('MediaPlaybackFailure', () {
-    test('证书失败只呈现中性暂时不可播放标题与唯一重试动作', () {
+    test('证书失败只呈现连接未成功的用户语义与唯一重试动作', () {
       final failure = MediaPlaybackFailure.fromKind(
         MediaCandidateFailureKind.certificateVerifyFailed,
       );
 
       expect(failure.userScene, VideoPlaybackUserScene.temporary);
-      expect(failure.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
-      expect(failure.copy.title, SearchText.recoveryReloadLaterTitle);
-      expect(failure.copy.message, SearchText.recoveryReloadLaterMessage);
+      expect(
+        failure.userRecoveryGroup,
+        AppUserRecoveryGroup.connectionUnavailable,
+      );
+      expect(failure.copy.title, SearchText.recoveryConnectionUnavailableTitle);
+      expect(
+        failure.copy.message,
+        SearchText.recoveryConnectionUnavailableMessage,
+      );
       expect(failure.isRetryable, isTrue);
       expect(failure.runtimeFailure.code, failure.errorCode.code);
       expect(failure.runtimeFailure.kind, RuntimeFailureKind.unavailable);
@@ -81,15 +87,21 @@ void main() {
       expect(failure.isRetryable, isTrue);
     });
 
-    test('服务繁忙对用户采用与短暂失败一致的恢复语义', () {
+    test('服务繁忙对用户采用服务未完成请求的恢复语义', () {
       final failure = MediaPlaybackFailure.fromKind(
         MediaCandidateFailureKind.http5xx,
       );
 
       expect(failure.userScene, VideoPlaybackUserScene.busy);
-      expect(failure.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
-      expect(failure.copy.title, SearchText.recoveryReloadLaterTitle);
-      expect(failure.copy.message, SearchText.recoveryReloadLaterMessage);
+      expect(
+        failure.userRecoveryGroup,
+        AppUserRecoveryGroup.serviceUnavailable,
+      );
+      expect(failure.copy.title, SearchText.recoveryServiceUnavailableTitle);
+      expect(
+        failure.copy.message,
+        SearchText.recoveryServiceUnavailableMessage,
+      );
       expect(failure.isRetryable, isTrue);
     });
   });

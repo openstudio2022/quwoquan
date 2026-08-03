@@ -7,8 +7,10 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
+import 'package:quwoquan_app/cloud/services/user/phone_number_wire.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
@@ -368,8 +370,8 @@ class _RegionPickerPage extends ConsumerStatefulWidget {
 }
 
 class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
-  TagChild? _province;
-  List<TagChild> _items = const <TagChild>[];
+  TagChildView? _province;
+  List<TagChildView> _items = const <TagChildView>[];
   Object? _error;
   bool _loading = true;
   int _requestSerial = 0;
@@ -380,13 +382,16 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
     unawaited(_loadChildren(TagTaxonomyRefs.chinaAdminRegionRoot));
   }
 
-  Future<void> _loadChildren(String parentTagRef, {TagChild? province}) async {
+  Future<void> _loadChildren(
+    String parentTagRef, {
+    TagChildView? province,
+  }) async {
     final serial = ++_requestSerial;
     setState(() {
       _province = province;
       _loading = true;
       _error = null;
-      _items = const <TagChild>[];
+      _items = const <TagChildView>[];
     });
     try {
       final items = await ref
@@ -511,13 +516,13 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
     );
   }
 
-  String _selectedProvinceText(TagChild option) {
+  String _selectedProvinceText(TagChildView option) {
     final selected = widget.selectedTagRef.startsWith('${option.tagRef}/');
     return selected ? ProfileText.editProfileSelectedRegion : '';
   }
 
-  String _tagDisplayLabel(TagChild option) {
-    final display = option.displayLabel.trim();
+  String _tagDisplayLabel(TagChildView option) {
+    final display = (option.displayLabel ?? '').trim();
     if (display.isNotEmpty) {
       return display;
     }

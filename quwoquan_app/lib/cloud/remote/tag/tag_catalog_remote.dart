@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef TagCatalogInvocationContextFactory =
@@ -15,7 +16,7 @@ final class RemoteGeneratedTagCatalogQuery implements TagCatalogQuery {
   final TagCatalogInvocationContextFactory invocationContext;
 
   @override
-  Future<List<TagChild>> listChildren(
+  Future<List<TagChildView>> listChildren(
     String parentTagRef, {
     int limit = TagApiDefaults.childrenLimit,
   }) async {
@@ -27,7 +28,7 @@ final class RemoteGeneratedTagCatalogQuery implements TagCatalogQuery {
   }
 
   @override
-  Future<TagResolve> resolveTag(String tagRef) {
+  Future<TagResolveView> resolveTag(String tagRef) {
     return client.tagTagNodeViewResolveTag(
       ResolveTagQuery(tagRef: tagRef),
       context: invocationContext(TagRequestPageIds.resolveTag),
@@ -35,7 +36,7 @@ final class RemoteGeneratedTagCatalogQuery implements TagCatalogQuery {
   }
 
   @override
-  Future<TagValidationResult> validateRefs({
+  Future<TagValidationResultView> validateRefs({
     required String expectedTaxonomyReleaseId,
     required List<String> tagRefs,
   }) {

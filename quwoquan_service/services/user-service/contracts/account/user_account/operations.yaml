@@ -27,7 +27,7 @@ api_routes:
     commercial:
       status: ready
     path: /user/personas
-    response_entity: PersonaManagementItemView
+    response_entity: ListPersonasResult
     response_fields:
       - personaId
       - displayName
@@ -86,10 +86,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_management_query_contracts.dart
-      response_type: ListPersonasResult
-      response_decoder: decodeListPersonasResult
+    response_body: ListPersonasResult
+    response_body_kind: object
     request_entity: ListPersonasQuery
     request_body_kind: none
   - actor: account
@@ -105,7 +103,7 @@ api_routes:
     commercial:
       status: ready
     path: /user/personas/summary
-    response_entity: PersonaManagementQuotaView
+    response_entity: PersonaManagementSummaryView
     response_fields:
       - ownerUserId
       - totalCount
@@ -148,10 +146,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_management_query_contracts.dart
-      response_type: PersonaManagementSummaryProjection
-      response_decoder: decodePersonaManagementSummaryProjection
+    response_body: PersonaManagementSummaryView
+    response_body_kind: object
     request_entity: GetPersonaManagementSummaryQuery
     request_body_kind: none
   - actor: account
@@ -218,10 +214,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_management_query_contracts.dart
-      response_type: ActivePersonaContextProjection
-      response_decoder: decodeActivePersonaContextProjection
+    response_body: ActivePersonaContextView
+    response_body_kind: object
     request_entity: GetActivePersonaContextQuery
     request_body_kind: none
   - actor: account
@@ -284,10 +278,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_management_query_contracts.dart
-      response_type: PersonaLifecycleGuardProjection
-      response_decoder: decodePersonaLifecycleGuardProjection
+    response_body: PersonaLifecycleGuardView
+    response_body_kind: object
     request_entity: GetPersonaLifecycleGuardQuery
     request_body_kind: none
   - actor: none
@@ -318,6 +310,9 @@ api_routes:
       - avatarUrl
       - backgroundUrl
       - bio
+      - headline
+      - expertiseClaims
+      - disclosure
       - identityTags
       - followerCount
       - followingCount
@@ -364,10 +359,8 @@ api_routes:
       principal: public
       token_transport: bearer
       visibility: public
-    client_contract:
-      dart_import: ../user/public_profile_query_contracts.dart
-      response_type: PersonaProfileProjection
-      response_decoder: decodePersonaProfileProjection
+    response_body: PersonaProfileView
+    response_body_kind: object
     request_entity: GetPersonaProfileQuery
     request_body_kind: none
   - actor: none
@@ -435,10 +428,6 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_homepage_query_contracts.dart
-      response_type: UserHomepageBundleProjection
-      response_decoder: decodeUserHomepageBundleProjection
     request_entity: GetUserHomepageBundleQuery
     request_body_kind: none
   - actor: persona
@@ -486,7 +475,6 @@ api_routes:
     response_entity: PersonaProfileView
     response_fields:
       - personaId
-      - ownerUserId
       - subjectType
       - userHandle
       - displayName
@@ -494,6 +482,9 @@ api_routes:
       - avatarUrl
       - backgroundUrl
       - bio
+      - headline
+      - expertiseClaims
+      - disclosure
       - identityTags
       - followerCount
       - followingCount
@@ -511,10 +502,8 @@ api_routes:
       principal: owner
       token_transport: bearer
       visibility: private
-    client_contract:
-      dart_import: ../user/public_profile_query_contracts.dart
-      response_type: PersonaProfileProjection
-      response_decoder: decodePersonaProfileProjection
+    response_body: PersonaProfileView
+    response_body_kind: object
     request_entity: GetMeProfileQuery
     request_body_kind: none
   - actor: persona
@@ -543,7 +532,7 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: SocialRelationSearchItemView
+    response_entity: SearchSocialRelationsResult
     authorization:
       principal: persona
       ownership_policy: active_persona_search
@@ -574,10 +563,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/public_profile_query_contracts.dart
-      response_type: SearchSocialRelationsResult
-      response_decoder: decodeSearchSocialRelationsResult
+    response_body: SearchSocialRelationsResult
+    response_body_kind: page
     request_entity: SearchSocialRelationsQuery
     request_body_kind: none
   - actor: account
@@ -761,10 +748,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/profile_edit_query_contracts.dart
-      response_type: ProfileEditSnapshotProjection
-      response_decoder: decodeProfileEditSnapshotProjection
+    response_body: ProfileEditSnapshotWire
+    response_body_kind: object
     request_entity: GetProfileEditSnapshotQuery
     request_body_kind: none
   - actor: persona
@@ -825,10 +810,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/public_profile_query_contracts.dart
-      response_type: ProfileQrCardProjection
-      response_decoder: decodeProfileQrCardProjection
+    response_body: ProfileQrCardWire
+    response_body_kind: object
     request_entity: GetProfileQrCardQuery
     request_body_kind: none
   - actor: none
@@ -886,10 +869,8 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/public_profile_query_contracts.dart
-      response_type: ProfileQrResolveProjection
-      response_decoder: decodeProfileQrResolveProjection
+    response_body: ProfileQrResolveWire
+    response_body_kind: object
     request_entity: ResolveProfileQrTokenQuery
     request_body_kind: none
     request_bindings:
@@ -1017,10 +998,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_account_contracts.dart
-      response_type: CloseAccountResult
-      response_decoder: decodeCloseAccountResult
+    response_body: CloseAccountResultWire
+    response_body_kind: object
   - actor: none
     application:
       kind: command

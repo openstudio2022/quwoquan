@@ -59,10 +59,6 @@ api_routes:
     slo:
       latency_p95_ms: 600
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/post_placement_contracts.dart
-      response_type: CirclePostPlacementCommandResult
-      response_decoder: decodeCirclePostPlacementCommandResult
     request_body_kind: object
   - method: DELETE
     path: /circles/{circleId}/post-placements/{placementId}
@@ -115,10 +111,6 @@ api_routes:
       latency_p95_ms: 600
       availability_percent: 99.9
     description: 删除是服务端加载当前版本并重放的命名状态迁移；幂等键只来自 OperationInvocationContext。
-    client_contract:
-      dart_import: ../circle/post_placement_contracts.dart
-      response_type: CirclePostPlacementCommandResult
-      response_decoder: decodeCirclePostPlacementCommandResult
     request_entity: RemoveCirclePostCommand
     request_body_kind: none
   - method: PATCH
@@ -171,10 +163,6 @@ api_routes:
     slo:
       latency_p95_ms: 600
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/post_placement_contracts.dart
-      response_type: CirclePostPlacementCommandResult
-      response_decoder: decodeCirclePostPlacementCommandResult
     request_body_kind: object
   - method: PATCH
     path: /circles/{circleId}/post-placements/{placementId}/feature
@@ -226,8 +214,4 @@ api_routes:
     slo:
       latency_p95_ms: 600
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/post_placement_contracts.dart
-      response_type: CirclePostPlacementCommandResult
-      response_decoder: decodeCirclePostPlacementCommandResult
     request_body_kind: object

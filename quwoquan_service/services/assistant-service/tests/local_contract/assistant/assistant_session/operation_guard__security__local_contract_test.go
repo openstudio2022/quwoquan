@@ -53,7 +53,7 @@ func TestGeneratedAssistantPrivilegedOperationHandlerLeavesOwnerRoutesIntact(
 	)
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/assistant/suggested-actions",
+		"/assistant/sessions",
 		nil,
 	)
 	recorder := httptest.NewRecorder()

@@ -25,7 +25,9 @@ services:
       REDIS_REC_ADDR: redis:6379
       ASSISTANT_MODEL_COMPLETION_URL: "${ASSISTANT_MODEL_COMPLETION_URL:-}"
       ASSISTANT_CHAT_BASE_URL: "http://chat-service:18081"
+      ASSISTANT_CIRCLE_BASE_URL: "http://circle-service:18082"
       ASSISTANT_NOTIFICATION_BASE_URL: "http://notification-service:18087"
+      ASSISTANT_INTEGRATION_BASE_URL: "http://integration-service:18086"
       ASSISTANT_USER_SERVICE_BASE_URL: "http://user-service:18081"
       ASSISTANT_MODEL_API_KEY: "${ASSISTANT_MODEL_API_KEY:-}"
       ASSISTANT_PUBLIC_SEARCH_URL: "${ASSISTANT_PUBLIC_SEARCH_URL:-}"
@@ -47,9 +49,15 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_healthy
+      integration-service:
+        condition: service_healthy
       chat-service:
         condition: service_healthy
+      circle-service:
+        condition: service_healthy
       user-service:
+        condition: service_healthy
+      travel-service:
         condition: service_healthy
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro

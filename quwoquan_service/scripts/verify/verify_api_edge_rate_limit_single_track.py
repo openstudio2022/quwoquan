@@ -113,7 +113,7 @@ def collect_issues() -> list[str]:
                 "kind": "session",
                 "facet": "RateLimitAdmissionFacade",
                 "method": "admit",
-                "session_owner": "RateLimitBucket",
+                "object_owner": "RateLimitBucket",
             },
         }
         if entrypoints[0] != expected:

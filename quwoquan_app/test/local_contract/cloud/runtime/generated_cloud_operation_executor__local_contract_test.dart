@@ -1107,6 +1107,7 @@ CloudOperationContract _commerciallyReady(
     availabilityPercent: source.availabilityPercent,
     requestEntity: source.requestEntity,
     requestBodyKind: source.requestBodyKind,
+    transport: source.transport,
     requestPathBindings: source.requestPathBindings,
     requestQueryBindings: source.requestQueryBindings,
     requestHeaderBindings:
@@ -1116,6 +1117,7 @@ CloudOperationContract _commerciallyReady(
     responseBody: source.responseBody,
     responseBodyKind: source.responseBodyKind,
     surfaceIds: source.surfaceIds,
+    streaming: source.streaming,
   );
 }
 

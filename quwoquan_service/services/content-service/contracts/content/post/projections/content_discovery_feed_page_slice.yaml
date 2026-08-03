@@ -15,9 +15,6 @@ source_projections:
 - FeedObjectCard
 consumers:
 - app
-client_projection:
-  dart_class: ContentDiscoveryFeedPageSlice
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
 fields:
 - name: items
   type: '[]ContentPostProjection'

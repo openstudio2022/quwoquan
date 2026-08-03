@@ -1,5 +1,16 @@
 description: 用户聊天收件箱视图（用于聊天首页列表，基于 per-user 投影）
 fields:
+- name: userId
+  source: userId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+  reference: true
 - name: conversationId
   source: conversationId
   type: ObjectId
@@ -8,6 +19,17 @@ fields:
   classification: PUBLIC
   log_policy: allow
   api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+- name: lastMessageId
+  source: lastMessageId
+  type: ObjectId
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: drop
   ops_exposure: read
   role: projection
   reference: true
@@ -96,6 +118,28 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+- name: readSeq
+  source: readSeq
+  type: int64
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: inboxProjectedSeq
+  source: inboxProjectedSeq
+  type: int64
+  constraints:
+  - NOT_NULL
+  - DEFAULT_0
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
 - name: unreadCount
   source: unreadCount
   type: int
@@ -140,3 +184,81 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+- name: circleId
+  source: circleId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+  reference: true
+types:
+  ChatListInboxQuery:
+    fields:
+    - name: cursor
+      type: string
+      constraints:
+      - NULLABLE
+      client_dart_type: String?
+    - name: limit
+      type: int
+      client_dart_type: int
+      client_default: "50"
+  ChatInboxItemView:
+    description: ChatInboxView 对 App 暴露的最小稳定行；不泄露内部 checkpoint、readSeq 或 tombstone 字段。
+    fields:
+    - name: id
+      type: string
+      constraints: [NOT_NULL]
+    - name: type
+      type: string
+      constraints: [NOT_NULL]
+    - name: title
+      type: string
+      constraints: [NOT_NULL]
+    - name: avatarUrl
+      type: string
+      constraints: [NOT_NULL]
+    - name: groupAvatarVersion
+      type: int64
+      constraints: [NOT_NULL]
+    - name: lastMessagePreview
+      type: string
+      constraints: [NOT_NULL]
+    - name: lastMessageType
+      type: enum
+      enum_ref: MessageType
+      constraints: [NOT_NULL]
+    - name: lastMessageTime
+      type: timestamp
+      constraints: [NOT_NULL]
+    - name: lastSeq
+      type: int64
+      constraints: [NOT_NULL]
+    - name: unreadCount
+      type: int
+      constraints: [NOT_NULL]
+    - name: mentionUnreadCount
+      type: int
+      constraints: [NOT_NULL]
+    - name: muted
+      type: bool
+      constraints: [NOT_NULL]
+    - name: pinned
+      type: bool
+      constraints: [NOT_NULL]
+    - name: circleId
+      type: string
+      constraints: [NULLABLE]
+  ChatInboxPageSlice:
+    description: ChatInboxView Reader 的稳定 keyset 分页响应。
+    fields:
+    - name: items
+      type: '[]ChatInboxItemView'
+      constraints: [NOT_NULL]
+    - name: nextCursor
+      type: string
+      constraints: [NULLABLE]

@@ -5,6 +5,7 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -14,21 +15,82 @@ plugins {
 }
 
 fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
+    val environment =
+        System.getenv("QWQ_ENVIRONMENT")?.trim().orEmpty().ifEmpty { "alpha" }
+    check(environment in setOf("alpha", "beta", "gamma")) {
+        "GATE_BLOCK: QWQ_ENVIRONMENT must be alpha|beta|gamma for direct Flutter Debug."
+    }
+    val target = "$environment-local"
+    val preflightExecution =
+        providers.exec {
+            commandLine(
+                "python3",
+                rootProject.file("../../quwoquan_ops/cli/stackctl.py").absolutePath,
+                "--output-format",
+                "json",
+                "app-debug-preflight",
+                "--target",
+                target,
+            )
+            environment("PYTHONDONTWRITEBYTECODE", "1")
+            isIgnoreExitValue = true
+        }
+    val preflightText = preflightExecution.standardOutput.asText.get().trim()
+    val preflightResult = preflightExecution.result.get()
+    val preflight =
+        runCatching {
+            @Suppress("UNCHECKED_CAST")
+            JsonSlurper().parseText(preflightText) as Map<String, Any?>
+        }.getOrElse {
+            throw GradleException(
+                "GATE_BLOCK: app-debug-preflight returned no machine-readable receipt for " +
+                    "$target.",
+            )
+        }
+    if (preflightResult.exitValue != 0 || preflight["status"] != "passed") {
+        val details =
+            (preflight["details"] as? List<*>)
+                ?.map { it.toString() }
+                ?.filter { it.isNotBlank() }
+                .orEmpty()
+        throw GradleException(
+            "GATE_BLOCK: app-debug-preflight failed for $target: " +
+                (details.firstOrNull() ?: "unknown typed blocker"),
+        )
+    }
+    val contentBinding = mutableMapOf<String, String>()
+    for ((handoffKey, receiptKey) in listOf(
+        "contentReleaseId" to "releaseId",
+        "contentManifestDigest" to "manifestDigest",
+        "contentReadinessReceiptDigest" to "readinessReceiptDigest",
+    )) {
+        val value = preflight[receiptKey]?.toString()?.trim().orEmpty()
+        check(value.isNotEmpty()) {
+            "GATE_BLOCK: app-debug-preflight receipt is missing $receiptKey."
+        }
+        contentBinding[handoffKey] = value
+    }
     val output =
         providers.exec {
             commandLine(
                 "python3",
                 rootProject.file("../scripts/device/build_launcher_handoff.py").absolutePath,
                 "--env",
-                "alpha",
+                environment,
                 "--target",
-                "alpha-local",
+                target,
                 "--launch-mode",
                 "direct_flutter_run",
                 "--app-instance-id",
                 "direct-flutter-run",
                 "--app-instance-namespace",
                 "direct-flutter-run",
+                "--content-release-id",
+                contentBinding.getValue("contentReleaseId"),
+                "--content-manifest-digest",
+                contentBinding.getValue("contentManifestDigest"),
+                "--content-readiness-receipt-digest",
+                contentBinding.getValue("contentReadinessReceiptDigest"),
             )
             environment("PYTHONDONTWRITEBYTECODE", "1")
         }.standardOutput.asText.get()
@@ -45,6 +107,17 @@ fun handoffStringMap(handoff: Map<String, Any?>?, key: String): Map<String, Stri
         ?.associate { entry -> entry.key.toString() to entry.value.toString() }
         .orEmpty()
 
+fun handoffLocalPorts(handoff: Map<String, Any?>?): List<Int> =
+    handoffStringMap(handoff, "dartDefines")
+        .values
+        .mapNotNull { value ->
+            runCatching { URI(value).port }
+                .getOrNull()
+                ?.takeIf { it > 0 }
+        }
+        .distinct()
+        .sorted()
+
 val googleServicesConfig = projectDir.resolve("google-services.json")
 val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.trim().orEmpty()
 val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
@@ -59,6 +132,12 @@ val explicitRuntimeConfigDigest =
     System.getenv("QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST")?.trim().orEmpty()
 val explicitEffectiveLaunchManifestDigest =
     System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")?.trim().orEmpty()
+val explicitContentReleaseId =
+    System.getenv("QWQ_CONTENT_RELEASE_ID")?.trim().orEmpty()
+val explicitContentManifestDigest =
+    System.getenv("QWQ_CONTENT_MANIFEST_DIGEST")?.trim().orEmpty()
+val explicitContentReadinessReceiptDigest =
+    System.getenv("QWQ_CONTENT_READINESS_RECEIPT_DIGEST")?.trim().orEmpty()
 val directDebugHandoff =
     if (
         listOf(
@@ -98,6 +177,18 @@ val expectedRuntimeConfigDigest =
 val effectiveLaunchManifestDigest =
     explicitEffectiveLaunchManifestDigest.ifEmpty {
         handoffString(directDebugHandoff, "effectiveLaunchManifestDigest")
+    }
+val contentReleaseId =
+    explicitContentReleaseId.ifEmpty {
+        handoffString(directDebugHandoff, "contentReleaseId")
+    }
+val contentManifestDigest =
+    explicitContentManifestDigest.ifEmpty {
+        handoffString(directDebugHandoff, "contentManifestDigest")
+    }
+val contentReadinessReceiptDigest =
+    explicitContentReadinessReceiptDigest.ifEmpty {
+        handoffString(directDebugHandoff, "contentReadinessReceiptDigest")
     }
 require(effectiveAppRuntimeEnvironment in setOf("alpha", "beta", "gamma", "prod")) {
     "QWQ_APP_RUNTIME_ENV must be alpha|beta|gamma|prod"
@@ -322,6 +413,21 @@ android {
             "QWQ_RUNTIME_DART_DEFINES_JSON",
             escapedBuildConfigValue(nativeRuntimeDefinesJson),
         )
+        buildConfigField(
+            "String",
+            "QWQ_CONTENT_RELEASE_ID",
+            escapedBuildConfigValue(contentReleaseId),
+        )
+        buildConfigField(
+            "String",
+            "QWQ_CONTENT_MANIFEST_DIGEST",
+            escapedBuildConfigValue(contentManifestDigest),
+        )
+        buildConfigField(
+            "String",
+            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
+            escapedBuildConfigValue(contentReadinessReceiptDigest),
+        )
         // Patrol remains the default runner for Dart tests. Native Gate tests
         // explicitly select AndroidJUnitRunner so they can validate recovery
         // without starting Patrol or a second Flutter product flow.
@@ -444,7 +550,7 @@ fun requireCompleteRuntimeDartDefines(
     if (expectedEnvironment != null) {
         check(valuesByKey["APP_RUNTIME_ENV"] == expectedEnvironment) {
             "Flutter build runtime environment must be $expectedEnvironment for $taskName; " +
-                "use quwoquan_app/run.sh -d <device>."
+                "select the same canonical environment with QWQ_ENVIRONMENT or run.sh --env."
         }
     }
 }
@@ -503,10 +609,21 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
         if (buildContext == "direct-debug") {
             check(
                 isDirectDebugHandoff &&
-                    runtimeEnvironment == "alpha" &&
-                    launchTarget == "alpha-local",
+                    runtimeEnvironment in setOf("alpha", "beta", "gamma") &&
+                    launchTarget == "$runtimeEnvironment-local",
             ) {
-                "GATE_BLOCK: direct Flutter Debug must use the canonical alpha-local handoff."
+                "GATE_BLOCK: direct Flutter Debug must use the selected canonical local handoff."
+            }
+            check(contentReleaseId.isNotEmpty()) {
+                "GATE_BLOCK: Android Debug content release identity is absent."
+            }
+            check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
+                "GATE_BLOCK: Android Debug content manifest digest is absent."
+            }
+            check(
+                contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
+            ) {
+                "GATE_BLOCK: Android Debug content readiness receipt digest is absent."
             }
             val trustCommand =
                 mutableListOf(
@@ -516,20 +633,110 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     "json",
                     "device-trust",
                     "--target",
-                    "alpha-local",
+                    launchTarget,
                     "--platform",
                     "android-emulator",
                     "--action",
                     "install",
+                    "--allow-unprovisioned-system-trust",
                     "--lease-id",
                     "direct-flutter-run:${serial.ifEmpty { "auto" }}",
                 )
             if (serial.isNotEmpty()) {
                 trustCommand.addAll(listOf("--device", serial))
             }
+            val trustOutput = ByteArrayOutputStream()
             exec {
                 commandLine(trustCommand)
-                standardOutput = ByteArrayOutputStream()
+                standardOutput = trustOutput
+            }
+            @Suppress("UNCHECKED_CAST")
+            val trustReceipt =
+                JsonSlurper().parseText(
+                    trustOutput.toString(StandardCharsets.UTF_8),
+                ) as Map<String, Any?>
+            val trustEvidence = trustReceipt["evidence"] as? Map<*, *>
+            val directDevice = trustEvidence?.get("device")?.toString()?.trim().orEmpty()
+            check(directDevice.isNotEmpty()) {
+                "GATE_BLOCK: Android direct Debug trust receipt is missing the selected device."
+            }
+            val directPorts = handoffLocalPorts(directDebugHandoff)
+            check(directPorts.isNotEmpty()) {
+                "GATE_BLOCK: Android direct Debug handoff has no local topology ports."
+            }
+            directPorts.forEach { port ->
+                exec {
+                    commandLine(
+                        android.adbExecutable,
+                        "-s",
+                        directDevice,
+                        "reverse",
+                        "tcp:$port",
+                        "tcp:$port",
+                    )
+                }
+            }
+            val reverseOutput = ByteArrayOutputStream()
+            exec {
+                commandLine(
+                    android.adbExecutable,
+                    "-s",
+                    directDevice,
+                    "reverse",
+                    "--list",
+                )
+                standardOutput = reverseOutput
+            }
+            val reverseText = reverseOutput.toString(StandardCharsets.UTF_8)
+            val missingPorts = directPorts.filter { port ->
+                reverseText.lineSequence().none { line ->
+                    line.split(Regex("\\s+")).count { token -> token == "tcp:$port" } >= 2
+                }
+            }
+            check(missingPorts.isEmpty()) {
+                "GATE_BLOCK: Android direct Debug adb reverse is incomplete for " +
+                    "$directDevice; missing ${missingPorts.joinToString(", ")}."
+            }
+            val leaseOutput = ByteArrayOutputStream()
+            exec {
+                commandLine(
+                    "python3",
+                    rootProject.file("../../quwoquan_ops/cli/stackctl.py").absolutePath,
+                    "--output-format",
+                    "json",
+                    "consumer-lease",
+                    "acquire",
+                    "--target",
+                    launchTarget,
+                    "--platform",
+                    "android",
+                    "--device",
+                    directDevice,
+                    "--consumer",
+                    "direct-flutter-run",
+                    "--package-name",
+                    "com.quwoquan.quwoquan_app",
+                    "--ports",
+                    directPorts.joinToString(","),
+                    "--handoff-digest",
+                    effectiveLaunchManifestDigest,
+                    "--release-id",
+                    contentReleaseId,
+                    "--manifest-digest",
+                    contentManifestDigest,
+                    "--readiness-receipt-digest",
+                    contentReadinessReceiptDigest,
+                )
+                environment("PYTHONDONTWRITEBYTECODE", "1")
+                standardOutput = leaseOutput
+            }
+            @Suppress("UNCHECKED_CAST")
+            val leaseReceipt =
+                JsonSlurper().parseText(
+                    leaseOutput.toString(StandardCharsets.UTF_8),
+                ) as Map<String, Any?>
+            check(leaseReceipt["exitCode"] == 0) {
+                "GATE_BLOCK: Android direct Debug failed to acquire its runtime consumer lease."
             }
             return@doLast
         }
@@ -538,6 +745,17 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
         }
         check(buildContext == "runtime") {
             "GATE_BLOCK: QWQ_APP_BUILD_CONTEXT must be runtime or package-only."
+        }
+        check(contentReleaseId.isNotEmpty()) {
+            "GATE_BLOCK: Android runtime content release identity is absent."
+        }
+        check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
+            "GATE_BLOCK: Android runtime content manifest digest is absent."
+        }
+        check(
+            contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
+        ) {
+            "GATE_BLOCK: Android runtime content readiness receipt digest is absent."
         }
         check(launchTarget in setOf("alpha-local", "beta-local", "gamma-local", "prod-sim")) {
             "GATE_BLOCK: Android debug/profile runtime launch requires an explicit local target; " +
@@ -624,7 +842,7 @@ afterEvaluate {
                             "with explicit runtime dart-defines: " + suppliedKeys.joinToString(", ")
                     }
                     logger.lifecycle(
-                        "[android-runtime] direct Debug uses canonical alpha-local handoff.",
+                        "[android-runtime] direct Debug uses canonical $appLaunchTarget handoff.",
                     )
                 } else {
                     requireCompleteRuntimeDartDefines(

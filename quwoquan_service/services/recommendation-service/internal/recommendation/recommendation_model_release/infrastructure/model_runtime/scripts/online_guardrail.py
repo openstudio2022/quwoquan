@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Online business metric guardrail: monitors CTR and engagement rate from
-rec_learning_events. If metrics deviate significantly from baseline it emits
+Online business metric guardrail: monitors CTR and engagement rate from the
+canonical exposure and feedback facts. If metrics deviate from baseline it emits
 a fail-closed evidence record; the Ops rollout controller owns any rollback.
 
 Usage:
@@ -25,33 +25,47 @@ BASELINE_ENGAGEMENT_RATE = 0.15
 CTR_DROP_THRESHOLD = 0.5
 ENGAGEMENT_DROP_THRESHOLD = 0.4
 MIN_IMPRESSIONS = 200
+FEEDBACK_QUERY_BATCH_SIZE = 5000
+
+
+def _feedback_action_counts(feedbacks, exposure_ids: list[str], since: datetime) -> dict[str, int]:
+    action_counts: dict[str, int] = {}
+    for offset in range(0, len(exposure_ids), FEEDBACK_QUERY_BATCH_SIZE):
+        batch = exposure_ids[offset : offset + FEEDBACK_QUERY_BATCH_SIZE]
+        pipeline = [
+            {
+                "$match": {
+                    "exposureId": {"$in": batch},
+                    "occurredAt": {"$gte": since},
+                }
+            },
+            {"$group": {"_id": "$feedbackType", "count": {"$sum": 1}}},
+        ]
+        for document in feedbacks.aggregate(pipeline):
+            action = str(document.get("_id") or "").strip()
+            if action:
+                action_counts[action] = action_counts.get(action, 0) + int(
+                    document.get("count") or 0
+                )
+    return action_counts
 
 
 def compute_online_metrics(db, scenario: str, window_hours: int) -> dict:
-    """Compute real-time CTR and engagement rate from learning events."""
-    coll = db["rec_learning_events"]
+    """Compute metrics by joining feedback to the exact delivered exposures."""
+    exposures = db["recommendation_exposure_facts"]
+    feedbacks = db["recommendation_feedback_facts"]
     since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-
-    impression_count = coll.count_documents({
-        "eventType": "rec_impression",
+    exposure_query = {
         "scenario": scenario,
-        "createdAt": {"$gte": since},
-    })
-
-    engagement_pipeline = [
-        {"$match": {
-            "eventType": "rec_engagement",
-            "scenario": scenario,
-            "createdAt": {"$gte": since},
-        }},
-        {"$group": {
-            "_id": "$labels.action",
-            "count": {"$sum": 1},
-        }},
+        "exposedAt": {"$gte": since},
+    }
+    impression_count = exposures.count_documents(exposure_query)
+    exposure_ids = [
+        str(document.get("_id") or "").strip()
+        for document in exposures.find(exposure_query, {"_id": 1})
     ]
-    action_counts = {}
-    for doc in coll.aggregate(engagement_pipeline):
-        action_counts[doc["_id"]] = doc["count"]
+    exposure_ids = [exposure_id for exposure_id in exposure_ids if exposure_id]
+    action_counts = _feedback_action_counts(feedbacks, exposure_ids, since)
 
     click_count = action_counts.get("click", 0)
     total_engagement = sum(
@@ -62,20 +76,9 @@ def compute_online_metrics(db, scenario: str, window_hours: int) -> dict:
     ctr = click_count / max(impression_count, 1)
     engagement_rate = total_engagement / max(impression_count, 1)
 
-    model_pipeline = [
-        {"$match": {
-            "eventType": "rec_impression",
-            "scenario": scenario,
-            "createdAt": {"$gte": since},
-            "context.score": {"$exists": True, "$gt": 0},
-        }},
-        {"$group": {
-            "_id": None,
-            "count": {"$sum": 1},
-        }},
-    ]
-    model_imp_result = list(coll.aggregate(model_pipeline))
-    model_impression_count = model_imp_result[0]["count"] if model_imp_result else 0
+    model_impression_count = exposures.count_documents(
+        {**exposure_query, "modelBucket": "model"}
+    )
 
     return {
         "window_hours": window_hours,
@@ -118,7 +121,7 @@ def main():
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--window-hours", type=int, default=4)
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
-    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_content"))
+    p.add_argument("--db", default=os.environ.get("DB", "quwoquan_recommendation"))
     p.add_argument("--env", default="gamma", choices=("alpha", "beta", "gamma", "prod"))
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--out", default="", help="Write result JSON")

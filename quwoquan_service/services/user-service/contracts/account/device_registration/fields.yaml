@@ -556,10 +556,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: endpointKind
-        type: DevicePushEndpointKind
+        type: enum
         enum_ref: DevicePushEndpointKind
-        client_dart_type: DevicePushEndpointKind
-        client_wire: canonicalEnum
   DevicePushEndpointUpsertCommand:
     fields:
       - name: deviceId
@@ -569,10 +567,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: endpointKind
-        type: DevicePushEndpointKind
+        type: enum
         enum_ref: DevicePushEndpointKind
-        client_dart_type: DevicePushEndpointKind
-        client_wire: canonicalEnum
       - name: token
         type: string
         constraints:

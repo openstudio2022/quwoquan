@@ -56,7 +56,7 @@
 - THEN 对外只暴露标准化接口，禁止端侧直接调用供应商 API。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 - AND 请求状态、provider attempt、dead letter 与指标快照必须读取同一 MongoDB 可靠任务事实；死信恢复以 `Idempotency-Key` 持久化唯一 command receipt，同键重放返回首次回执、同键换任务失败关闭。
-- AND 本 Story 的 Alpha/Beta/Gamma Provider 只使用受管 sandbox/nonprod tenant，不替代第一方 HTTP/application/store；Prod 正式 Provider 商用证据仍由 `capability-provider-commercial-readiness-gate` 独立准出。
+- AND 本 Story 的 Alpha/Beta/Gamma Provider 只使用 Binding 选中的受管 protocol substitute/local infrastructure Adapter，替代仅发生在第三方 typed Port 边界，不替代第一方 HTTP/application/store；Prod 正式 Provider 商用证据仍由 `capability-provider-commercial-readiness-gate` 独立准出。
 
 ## 6. 依赖
 

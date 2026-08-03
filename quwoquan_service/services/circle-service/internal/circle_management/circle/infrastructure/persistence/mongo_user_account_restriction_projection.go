@@ -47,7 +47,7 @@ type MongoUserAccountRestrictionProjection struct {
 	watermarks       *mongo.Collection
 	memberships      *mongo.Collection
 	groupMemberships *mongo.Collection
-	posts            *mongo.Collection
+	feedItems        *mongo.Collection
 	placements       *mongo.Collection
 	now              func() time.Time
 }
@@ -69,7 +69,7 @@ func NewMongoUserAccountRestrictionProjection(
 		watermarks:       db.Collection(circleAccountRestrictionWatermarkCollection),
 		memberships:      db.Collection("circle_memberships"),
 		groupMemberships: db.Collection("circle_group_memberships"),
-		posts:            db.Collection("posts"),
+		feedItems:        db.Collection("circle_feed_items"),
 		placements:       db.Collection("circle_post_placements"),
 		now:              time.Now,
 	}, nil
@@ -264,8 +264,8 @@ func (projection *MongoUserAccountRestrictionProjection) applyOwnedMutations(
 	}{
 		{"circle membership", projection.memberships, "personaId"},
 		{"circle group membership", projection.groupMemberships, "personaId"},
-		{"circle post", projection.posts, "authorId"},
-		{"circle post placement", projection.placements, "authorId"},
+		{"circle feed item", projection.feedItems, "authorId"},
+		{"circle post placement", projection.placements, "ownerPersonaId"},
 	}
 	var affected int64
 	for _, target := range targets {

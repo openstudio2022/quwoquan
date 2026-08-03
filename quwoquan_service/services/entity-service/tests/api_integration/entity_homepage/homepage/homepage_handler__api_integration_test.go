@@ -24,8 +24,10 @@ import (
 	entityguard "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/operationguard"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
+	claimhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/adapters/inbound/http"
 	claimapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/application"
 	claimpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/infrastructure/persistence"
+	statushttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/adapters/inbound/http"
 	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 	statuspersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/infrastructure/persistence"
 )
@@ -47,7 +49,9 @@ func trustedPersonaHandler(next http.Handler, personaID string) http.Handler {
 	})
 }
 
-func newMongoGovernanceHomepageService(t *testing.T) *application.HomepageService {
+func newMongoGovernanceHomepageService(
+	t *testing.T,
+) (*application.HomepageService, *claimapp.Facade, *statusapp.Facade) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	container, err := tryRunReviewMongoContainer(ctx)
@@ -100,15 +104,13 @@ func newMongoGovernanceHomepageService(t *testing.T) *application.HomepageServic
 	if err != nil {
 		t.Fatalf("new status report facade: %v", err)
 	}
-	service.SetClaimFacade(claimFacade)
-	service.SetStatusReportFacade(statusFacade)
-	return service
+	return service, claimFacade, statusFacade
 }
 
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/spec.md#sit-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-candidate-intake-and-publish/spec.md#gwt-001
 func TestHomepageCandidatePublishAndShell(t *testing.T) {
-	homepageService := newMongoGovernanceHomepageService(t)
+	homepageService, _, _ := newMongoGovernanceHomepageService(t)
 	tokenConfig := rtauth.TokenConfig{
 		Secret:       []byte("0123456789abcdef0123456789abcdef"),
 		Issuer:       "quwoquan.entity.homepage.integration",
@@ -764,9 +766,12 @@ func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
 func TestHomepageGovernanceLifecycle(t *testing.T) {
-	homepageService := newMongoGovernanceHomepageService(t)
+	homepageService, claimFacade, statusFacade := newMongoGovernanceHomepageService(t)
+	handler := httpadapter.NewHandler(homepageService).
+		WithClaimRequestHandler(claimhttp.NewHandler(claimFacade)).
+		WithStatusReportHandler(statushttp.NewHandler(statusFacade))
 	server := httptest.NewServer(trustedPersonaHandler(
-		httpadapter.NewHandler(homepageService).Routes(),
+		handler.Routes(),
 		"fixture_operator",
 	))
 	defer server.Close()

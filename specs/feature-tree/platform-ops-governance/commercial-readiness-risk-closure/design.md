@@ -64,7 +64,7 @@
 ### DEC-004 发布执行面唯一，Portal 仅观察且 Config ACK 是发布前置条件
 
 - 决策：唯一可变发布执行面为受保护的 CI/CD 调用 `stackctl`。
-- Portal 只能读取由控制面、Prometheus、SLS 或业务投影返回的状态，不能 apply、扩量或回滚。
+- Portal 只能读取由控制面、Prometheus、Elasticsearch 或业务投影返回的状态，不能 apply、扩量或回滚。
 - 发布页仅呈现当前候选摘要下按服务聚合的实例 ACK，不得从本地 release 文件推导阶段、生成 workflow/rollback token 或把默认值显示为成功。
 - 决策补充：每个受管实例以 service principal 调用 generated ConfigSnapshot resolve/report operation；其 service/environment/instance 身份、ReleaseManifest digest、configVersion 和 desired/effective hash 由控制面验证。`stackctl` 在 hosted rollout 中只接受所有必需实例在有效期内对候选摘要 `in-sync` 的 config-convergence readiness。
 - 理由：由 Portal、容器内脚本或调用方参数分别驱动发布会形成第二执行面，且匿名或未绑定的 ACK 无法证明当前候选已实际加载。

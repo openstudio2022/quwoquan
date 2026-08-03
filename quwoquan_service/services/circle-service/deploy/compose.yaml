@@ -20,6 +20,9 @@ services:
       CIRCLE_MONGO_DATABASE: quwoquan_circle
       CIRCLE_REDIS_ADDR: redis:6379
       CONTENT_SERVICE_BASE_URL: http://content-service:18080
+      CHAT_SERVICE_BASE_URL: http://chat-service:18081
+      USER_SERVICE_BASE_URL: http://user-service:18081
+      ENTITY_SERVICE_BASE_URL: http://entity-service:18084
       SEARCH_ES_ENABLED: "true"
       SEARCH_ES_ENDPOINTS: "http://elasticsearch:9200"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
@@ -38,6 +41,12 @@ services:
       redis:
         condition: service_healthy
       elasticsearch:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      entity-service:
         condition: service_healthy
     ports:
       - "${QWQ_COMPOSE_CIRCLE_PORT:-19300}:18082"

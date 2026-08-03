@@ -168,3 +168,9 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: bool?
+  ConversationUserStateCommandAck:
+    description: ConversationUserState 命令的对象本地稳定确认体。
+    fields:
+      - name: status
+        type: string
+        constraints: [NOT_NULL]

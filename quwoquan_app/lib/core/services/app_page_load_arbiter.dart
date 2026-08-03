@@ -123,14 +123,19 @@ final class AppPageLoadArbiter {
   static int _priority(AppUserRecoveryGroup group) {
     return switch (group) {
       AppUserRecoveryGroup.updateApp => 0,
-      AppUserRecoveryGroup.loginAgain => 1,
+      AppUserRecoveryGroup.loginAgain ||
+      AppUserRecoveryGroup.guestSessionUnavailable => 1,
       AppUserRecoveryGroup.enablePermission => 2,
       AppUserRecoveryGroup.connectNetwork => 3,
-      AppUserRecoveryGroup.waitThenReload => 4,
-      AppUserRecoveryGroup.reloadLater => 5,
-      AppUserRecoveryGroup.noAccess => 6,
+      AppUserRecoveryGroup.connectionUnavailable => 4,
+      AppUserRecoveryGroup.requestTimedOut => 5,
+      AppUserRecoveryGroup.serviceUnavailable => 6,
+      AppUserRecoveryGroup.invalidContent => 7,
+      AppUserRecoveryGroup.waitThenReload => 8,
+      AppUserRecoveryGroup.reloadLater => 9,
+      AppUserRecoveryGroup.noAccess => 10,
       AppUserRecoveryGroup.contentGone ||
-      AppUserRecoveryGroup.contentUnavailable => 7,
+      AppUserRecoveryGroup.contentUnavailable => 11,
     };
   }
 }

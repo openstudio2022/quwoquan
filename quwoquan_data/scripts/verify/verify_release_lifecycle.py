@@ -293,6 +293,7 @@ def environment_lifecycle_issues(
                 issues.extend(
                     environment_release_readiness_issues(
                         readiness,
+                        homepage_verification=homepage,
                         post_verification=post,
                         release=release,
                         output_root=outputs,

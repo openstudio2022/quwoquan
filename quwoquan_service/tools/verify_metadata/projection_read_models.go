@@ -5,7 +5,7 @@ import (
 )
 
 // loadProjectionReadModels 收集全仓 projections/*.yaml 的 read_model 闭集（跨域可见），
-// 作为 operations.yaml operation response_body 的唯一指向性真相源。
+// 与 fields entity 一起验证 canonical response_entity 的真实归属。
 func (v *validator) loadProjectionReadModels() {
 	v.projectionReadModels = map[string]bool{}
 	for _, path := range v.source.Paths("", ".yaml") {
@@ -24,7 +24,7 @@ func (v *validator) loadProjectionReadModels() {
 		if rm := strings.TrimSpace(parsed.ReadModel); rm != "" {
 			v.projectionReadModels[rm] = true
 		}
-		// 兼容 response_body 直接指向 client_projection.dart_class 的写法。
+		// 迁移期间识别历史 client projection 名称，但它不能覆盖 response_entity。
 		if dc := strings.TrimSpace(parsed.ClientProjection.DartClass); dc != "" {
 			v.projectionReadModels[dc] = true
 		}

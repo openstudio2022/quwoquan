@@ -105,6 +105,7 @@ func (r Runner) Run(ctx context.Context, replay assistant.ReplayCase) (Transcrip
 		},
 		r.now,
 	)
+	loop.Catalog = skillpkg.StaticLoader{Manifests: r.Catalog}
 	loop.PromptAssets = r.PromptAssets
 	events, failure, err := loop.RunTurn(ctx, turn)
 	if err != nil {
@@ -232,6 +233,33 @@ type scriptedToolExecutor struct {
 	now   func() time.Time
 	steps []assistant.ReplayToolStep
 	calls []ReplayToolCall
+}
+
+func (e *scriptedToolExecutor) ModelToolDeclarations(
+	allowedToolNames []string,
+) []ports.ModelToolDefinition {
+	allowed := make(map[string]bool, len(allowedToolNames))
+	for _, name := range allowedToolNames {
+		allowed[name] = true
+	}
+	seen := map[string]bool{}
+	definitions := make([]ports.ModelToolDefinition, 0, len(e.steps))
+	for _, step := range e.steps {
+		name := strings.TrimSpace(step.ToolName)
+		if name == "" || seen[name] || !allowed[name] {
+			continue
+		}
+		seen[name] = true
+		definitions = append(definitions, ports.ModelToolDefinition{
+			Name:        name,
+			Description: "replay-declared tool",
+			Parameters: map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+			},
+		})
+	}
+	return definitions
 }
 
 func (e *scriptedToolExecutor) Execute(_ context.Context, req app.ToolRequest) (app.ToolExecution, error) {

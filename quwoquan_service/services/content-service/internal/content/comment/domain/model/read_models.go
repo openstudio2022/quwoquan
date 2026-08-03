@@ -123,7 +123,7 @@ type CountsDelta struct {
 }
 
 // ViewerRelation 是 viewer 对评论作者的可证实关系事实投影
-// （persona_follow_projection），不是推荐推断；未登录恒 none。
+// （Comment 对象本地 PersonaRelationship 事件投影），不是推荐推断；未登录恒 none。
 type ViewerRelation string
 
 const (

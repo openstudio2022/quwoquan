@@ -15,16 +15,21 @@ import (
 func TestBuildStreamValuesUsesDeterministicFactIdentity(t *testing.T) {
 	t.Parallel()
 	row := behaviorstream.BehaviorFactDocument{
-		ID:            bson.NewObjectID(),
-		ClientEventID: "client-event-001",
-		UserID:        "persona-001",
-		SessionID:     "session-001",
-		ContentID:     "post-001",
-		ContentType:   "post",
-		Action:        "like",
-		FeedRequestID: "feed-request-001",
-		OccurredAt:    "2026-07-31T08:00:00Z",
-		CreatedAt:     time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC),
+		ID:             bson.NewObjectID(),
+		ClientEventID:  "client-event-001",
+		UserID:         "persona-001",
+		SessionID:      "session-001",
+		ContentID:      "post-001",
+		ContentType:    "post",
+		ObjectID:       "homepage-001",
+		ObjectKind:     "entity",
+		DisplayName:    "西湖",
+		SourceSurface:  "entityHomepage",
+		Action:         "like",
+		ImpactHelpType: "decision",
+		FeedRequestID:  "feed-request-001",
+		OccurredAt:     "2026-07-31T08:00:00Z",
+		CreatedAt:      time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC),
 	}
 	values, err := behaviorstream.BuildStreamValues(row)
 	if err != nil {
@@ -43,6 +48,13 @@ func TestBuildStreamValuesUsesDeterministicFactIdentity(t *testing.T) {
 	}
 	if payload["clientEventId"] != row.ClientEventID || payload["contentId"] != row.ContentID {
 		t.Fatalf("payload mismatch: %+v", payload)
+	}
+	if payload["impactHelpType"] != row.ImpactHelpType {
+		t.Fatalf("impact help type mismatch: %+v", payload)
+	}
+	if payload["objectId"] != row.ObjectID || payload["objectKind"] != row.ObjectKind ||
+		payload["displayName"] != row.DisplayName || payload["sourceSurface"] != row.SourceSurface {
+		t.Fatalf("object projection payload mismatch: %+v", payload)
 	}
 }
 

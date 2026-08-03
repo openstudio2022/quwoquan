@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
@@ -6,7 +6,7 @@ import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart'
 
 /// 统一内容展示种类（媒体形态）。
 ///
-/// 通过 `PostBaseDto` 的契约派生 getter（`isVideoLike`/`isArticleLike`/`hasImages`）
+/// 通过 `ContentPostViewData` 的契约派生 getter（`isVideoLike`/`isArticleLike`/`hasImages`）
 /// 判别，禁止对 DTO 子类做 `is/as/whereType`（遵循 04-dart-polymorphism）。
 enum ContentSurfaceKind { micro, image, video, article }
 

@@ -91,6 +91,13 @@ collections:
       persona 单轨通道 rt:rtc:persona:{personaId}，不存在 user/account channel alias。
 
       '
+streams:
+  events.rtc.call_ended:
+    entity: CallSession
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: CallEnded outbox 的唯一 durable transport；Chat、Realtime、Notification 只消费 typed event。
 redis_cache:
 - key: cache:rtc:call:{callId}
   ttl_seconds: 60

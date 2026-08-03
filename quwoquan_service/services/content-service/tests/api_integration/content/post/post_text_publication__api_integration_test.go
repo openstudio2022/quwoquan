@@ -17,7 +17,7 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	contenthttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	postgovernance "quwoquan_service/services/content-service/internal/content/post/infrastructure/governance"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
@@ -346,7 +346,7 @@ func newTextPublicationHTTPHarness(
 	safetyGate postports.PublicationSafetyGate,
 ) textPublicationHTTPHarness {
 	t.Helper()
-	store := persistence.NewMongoPostStore(
+	store := newMongoPostStore(
 		requireMongoDB(t).Collection("posts"),
 	)
 	if err := store.EnsureIndexes(context.Background()); err != nil {

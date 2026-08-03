@@ -13,6 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/accountrestriction"
+	recentsearchstore "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/persistence"
+	feedbackstore "quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
 	accountrestrictioninfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/accountrestriction"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/accountclosure"
@@ -31,6 +33,8 @@ func TestUserAccountClosedTerminalMarkerRetainsSourcePELReference(
 	projection, err := accountclosure.NewMongoProjection(
 		mongoDB,
 		restrictionProjection,
+		newClosureRecentSearchStore(t),
+		newClosureFeedbackStore(t),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +96,8 @@ func TestUserAccountClosedProjectionDeletesPrivateSearchStateAndRejectsConflict(
 	projection, err := accountclosure.NewMongoProjection(
 		mongoDB,
 		restrictionProjection,
+		newClosureRecentSearchStore(t),
+		newClosureFeedbackStore(t),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -249,6 +255,24 @@ func TestUserAccountClosedProjectionDeletesPrivateSearchStateAndRejectsConflict(
 	); !errors.Is(err, application.ErrUserAccountClosedEventIDConflict) {
 		t.Fatalf("eventId conflict err=%v", err)
 	}
+}
+
+func newClosureRecentSearchStore(t *testing.T) *recentsearchstore.Store {
+	t.Helper()
+	store := recentsearchstore.NewStore(mongoDB)
+	if err := store.EnsureIndexes(t.Context()); err != nil {
+		t.Fatalf("ensure RecentSearchState indexes: %v", err)
+	}
+	return store
+}
+
+func newClosureFeedbackStore(t *testing.T) *feedbackstore.Store {
+	t.Helper()
+	store := feedbackstore.NewStore(mongoDB)
+	if err := store.EnsureIndexes(t.Context()); err != nil {
+		t.Fatalf("ensure SearchFeedbackFact indexes: %v", err)
+	}
+	return store
 }
 
 func insertSearchClosureFixtures(t *testing.T, now time.Time) {

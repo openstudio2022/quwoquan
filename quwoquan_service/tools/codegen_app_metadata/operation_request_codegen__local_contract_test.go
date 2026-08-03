@@ -356,6 +356,46 @@ func TestRenderRequestModelPreservesConstOnlyWithoutRuntimeWork(t *testing.T) {
 	}
 }
 
+func TestRenderRequestModelWireDecoderUsesCanonicalFieldDecodersAndDefaults(
+	t *testing.T,
+) {
+	var rendered strings.Builder
+	if err := renderRequestModel(
+		&rendered,
+		requestModelSpec{
+			Name: "SubmitCommand",
+			Fields: []fieldDef{
+				{
+					Name:            "mentions",
+					Type:            "[]Mention",
+					ClientDefault:   "const []",
+					ClientOmitEmpty: true,
+				},
+				{
+					Name:           "deviceInfo",
+					Type:           "DeviceInfo",
+					ClientDartType: "DeviceInfo?",
+					Constraints:    []string{"NULLABLE"},
+				},
+			},
+		},
+		nil,
+	); err != nil {
+		t.Fatalf("render request decoder: %v", err)
+	}
+	for _, expected := range []string{
+		"factory SubmitCommand.fromWire(",
+		`map.containsKey("mentions") ? List<Mention>.unmodifiable(`,
+		": const []",
+		"Mention.fromWire(_generatedRequestObject(entry.value",
+		`map["deviceInfo"] == null ? null : DeviceInfo.fromWire(`,
+	} {
+		if !strings.Contains(rendered.String(), expected) {
+			t.Fatalf("generated request decoder misses %q:\n%s", expected, rendered.String())
+		}
+	}
+}
+
 func TestRenderRequestModelValidatesNormalizedValue(t *testing.T) {
 	var rendered strings.Builder
 	if err := renderRequestModel(
@@ -680,8 +720,8 @@ func TestValidateRequestModelBindingsRejectsIncompleteSingleTrack(t *testing.T) 
 	}
 }
 
-func TestRequestFieldWireExpressionRejectsUnspecifiedCustomSerialization(t *testing.T) {
-	_, err := requestFieldWireExpression(
+func TestRequestFieldWireExpressionInfersGeneratedValueObjectSerialization(t *testing.T) {
+	got, err := requestFieldWireExpression(
 		"request.subject",
 		fieldDef{
 			Name:           "subject",
@@ -691,8 +731,52 @@ func TestRequestFieldWireExpressionRejectsUnspecifiedCustomSerialization(t *test
 		false,
 		nil,
 	)
-	if err == nil || !strings.Contains(err.Error(), "requires canonical client_wire") {
-		t.Fatalf("error = %v, want missing client_wire failure", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "request.subject.toWire()" {
+		t.Fatalf("custom value object wire expression = %q", got)
+	}
+}
+
+func TestCanonicalExternalSearchEnumsUseTheirGeneratedWireValue(t *testing.T) {
+	for _, enumRef := range []string{
+		"CanonicalSearchMode",
+		"SearchFeedbackEventType",
+	} {
+		if got := canonicalEnumWireGetter(enumRef); got != "wireValue" {
+			t.Fatalf("%s wire getter = %q, want wireValue", enumRef, got)
+		}
+	}
+	if got := canonicalEnumWireGetter("Visibility"); got != "wireName" {
+		t.Fatalf("Visibility wire getter = %q, want wireName", got)
+	}
+}
+
+func TestRequestFieldWireExpressionSerializesCanonicalDatetime(t *testing.T) {
+	field := fieldDef{
+		Name:        "capturedAt",
+		Type:        "datetime",
+		Constraints: []string{"NULLABLE"},
+	}
+	dartType, nullable, err := requestFieldDartType(field)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dartType != "DateTime?" || !nullable {
+		t.Fatalf("datetime type = %q nullable=%v", dartType, nullable)
+	}
+	got, err := requestFieldWireExpression(
+		"request.capturedAt",
+		field,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "request.capturedAt!.toUtc().toIso8601String()" {
+		t.Fatalf("datetime wire expression = %q", got)
 	}
 }
 
@@ -777,7 +861,7 @@ func TestRequestFieldWireExpressionRejectsCanonicalEnumWithoutCatalog(t *testing
 	}
 }
 
-func TestValidateCanonicalRequestEnumFieldRejectsMissingTruthAndLegacyWire(t *testing.T) {
+func TestValidateCanonicalRequestEnumFieldUsesEnumRefAsSingleTruth(t *testing.T) {
 	enums := map[string][]string{
 		"ReviewState": {"pending_review", "accepted"},
 	}
@@ -797,16 +881,6 @@ func TestValidateCanonicalRequestEnumFieldRejectsMissingTruthAndLegacyWire(t *te
 			want: "requires explicit enum_ref",
 		},
 		{
-			name: "implicit enum name serialization",
-			field: fieldDef{
-				Name:           "state",
-				Type:           "ReviewState",
-				EnumRef:        "ReviewState",
-				ClientDartType: "ReviewState",
-			},
-			want: "requires client_wire canonicalEnum",
-		},
-		{
 			name: "legacy name serialization",
 			field: fieldDef{
 				Name:           "state",
@@ -815,8 +889,19 @@ func TestValidateCanonicalRequestEnumFieldRejectsMissingTruthAndLegacyWire(t *te
 				ClientDartType: "ReviewState",
 				ClientWire:     "name",
 			},
-			want: "requires client_wire canonicalEnum",
+			want: "only permits implicit enum_ref serialization",
 		},
+	}
+	if err := validateCanonicalRequestEnumField(
+		fieldDef{
+			Name:           "state",
+			Type:           "ReviewState",
+			EnumRef:        "ReviewState",
+			ClientDartType: "ReviewState",
+		},
+		enums,
+	); err != nil {
+		t.Fatalf("implicit canonical enum_ref serialization rejected: %v", err)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -946,7 +1031,11 @@ func TestAcceptedAppRequestDefaultsAreConsistent(t *testing.T) {
 }
 
 func TestGeneratedOperationRequestsRejectsEmptyGreen(t *testing.T) {
-	_, err := writeGeneratedOperationRequests(t.TempDir(), appContractLock{})
+	_, err := writeGeneratedOperationRequests(
+		t.TempDir(),
+		appContractLock{},
+		nil,
+	)
 	if err == nil || !strings.Contains(err.Error(), "empty-green") {
 		t.Fatalf("error = %v, want empty-green failure", err)
 	}

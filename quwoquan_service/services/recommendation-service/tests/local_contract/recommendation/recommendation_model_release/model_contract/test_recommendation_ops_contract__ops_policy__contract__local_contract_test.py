@@ -7,42 +7,50 @@ from pathlib import Path
 
 
 import feature_drift_monitor
+import activation_gate
 import online_guardrail
 
 
-class _FakeGuardrailCollection:
+class _FakeExposureCollection:
     def __init__(
         self,
         impression_count: int,
-        action_counts: dict[str, int],
         model_impression_count: int,
     ) -> None:
         self._impression_count = impression_count
-        self._action_counts = action_counts
         self._model_impression_count = model_impression_count
 
     def count_documents(self, query):  # noqa: D401, ANN001
-        if query.get("eventType") == "rec_impression" and "context.score" in query:
+        if query.get("modelBucket") == "model":
             return self._model_impression_count
         return self._impression_count
 
+    def find(self, query, projection=None):  # noqa: D401, ANN001
+        return [{"_id": f"exposure-{index}"} for index in range(self._impression_count)]
+
+
+class _FakeFeedbackCollection:
+    def __init__(self, action_counts: dict[str, int]) -> None:
+        self._action_counts = action_counts
+
     def aggregate(self, pipeline):  # noqa: D401, ANN001
-        match = pipeline[0]["$match"]
-        if match.get("eventType") == "rec_engagement":
-            return [{"_id": action, "count": count} for action, count in self._action_counts.items()]
-        if match.get("eventType") == "rec_impression":
-            return [{"_id": None, "count": self._model_impression_count}]
-        return []
+        return [
+            {"_id": action, "count": count}
+            for action, count in self._action_counts.items()
+        ]
 
 
 class _FakeGuardrailDb:
-    def __init__(self, collection: object) -> None:
-        self._collection = collection
+    def __init__(self, exposures: object, feedbacks: object) -> None:
+        self._exposures = exposures
+        self._feedbacks = feedbacks
 
     def __getitem__(self, name: str) -> object:
-        if name != "rec_learning_events":
-            raise KeyError(name)
-        return self._collection
+        if name == "recommendation_exposure_facts":
+            return self._exposures
+        if name == "recommendation_feedback_facts":
+            return self._feedbacks
+        raise KeyError(name)
 
 
 class _FakeGuardrailClient:
@@ -50,7 +58,7 @@ class _FakeGuardrailClient:
         self._db = db
 
     def __getitem__(self, name: str) -> object:
-        if name != "quwoquan_content":
+        if name != "quwoquan_recommendation":
             raise KeyError(name)
         return self._db
 
@@ -143,15 +151,19 @@ def _build_feature_docs(
 
 
 def test_online_guardrail_main_emits_ops_rollout_gate_block(tmp_path, monkeypatch) -> None:
-    collection = _FakeGuardrailCollection(
+    exposures = _FakeExposureCollection(
         impression_count=400,
-        action_counts={"click": 8, "like": 12, "share": 4},
         model_impression_count=260,
+    )
+    feedbacks = _FakeFeedbackCollection(
+        action_counts={"click": 8, "like": 12, "share": 4},
     )
     monkeypatch.setattr(
         online_guardrail,
         "MongoClient",
-        lambda *args, **kwargs: _FakeGuardrailClient(_FakeGuardrailDb(collection)),
+        lambda *args, **kwargs: _FakeGuardrailClient(
+            _FakeGuardrailDb(exposures, feedbacks)
+        ),
     )
     out_path = tmp_path / "guardrail_report.json"
     monkeypatch.setattr(
@@ -177,6 +189,40 @@ def test_online_guardrail_main_emits_ops_rollout_gate_block(tmp_path, monkeypatc
     assert report["action"] == "ops_rollout_required"
     assert report["environment"] == "gamma"
     assert "CTR=" in report["reason"] or "EngagementRate=" in report["reason"]
+
+
+def test_activation_gate_reuses_immutable_stage_evidence() -> None:
+    candidate = {
+        "releaseId": "content-feed-20260802-001",
+        "scenario": "content_feed",
+        "status": "pass",
+        "evaluationMetrics": {"auc": 0.72, "ndcg_20": 0.24},
+    }
+    active = {
+        "evaluationMetrics": {"auc": 0.71, "ndcg_20": 0.23},
+    }
+
+    passed, reason = activation_gate.evaluate_activation_evidence(candidate, active)
+
+    assert passed is True
+    assert "AUC=" in reason
+
+
+def test_activation_gate_rejects_nonpassing_or_incomplete_evidence() -> None:
+    passed, reason = activation_gate.evaluate_activation_evidence(
+        {
+            "releaseId": "content-feed-20260802-002",
+            "scenario": "content_feed",
+            "status": "blocked",
+            "evaluationMetrics": {"auc": 0.72, "ndcg_20": 0.24},
+        }
+    )
+    assert passed is False
+    assert "not a passing" in reason
+
+    passed, reason = activation_gate.evaluate_activation_evidence({})
+    assert passed is False
+    assert "releaseId and scenario" in reason
 
 
 def test_feature_drift_monitor_main_reports_alert_and_baseline_date(tmp_path, monkeypatch) -> None:

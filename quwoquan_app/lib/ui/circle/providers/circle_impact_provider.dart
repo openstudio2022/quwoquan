@@ -6,7 +6,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 ///
 /// 失败、加载、空数据由消费方收起，不在端侧拼装影响事实。
 final circleImpactProvider = FutureProvider.autoDispose
-    .family<CircleImpactSlice, String>((ref, circleId) {
+    .family<CircleImpactSummary, String>((ref, circleId) {
       return ref
           .watch(circleDetailQueryProvider)
           .impact(CircleImpactQuery(circleId: circleId));

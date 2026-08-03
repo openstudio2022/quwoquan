@@ -48,7 +48,7 @@ func main() {
 	writeGoFile(filepath.Join(outputDir, "errors.go"), rendered)
 
 	var routes serviceRoutesFile
-	const routesSource = "realtime/realtime/connection/operations.yaml"
+	const routesSource = "realtime/realtime/presence_view/operations.yaml"
 	if err := source.Decode(routesSource, &routes); err != nil {
 		exitErr(fmt.Errorf("load %s: %w", routesSource, err))
 	}

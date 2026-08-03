@@ -2,7 +2,7 @@
 
 > 对应规格：[L2 spec](./spec.md)
 
-> 设计触发原因：“以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异；integration-service 只是 runtime 治理的一种部署形态”需要 `capability-provider-commercial-readiness-gate`、`integration-service-foundation`、`provider-adapter-conformance-suite` 共享状态 owner、契约或质量边界。
+> 设计触发原因：“以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异；integration-service 只是 runtime 治理的一种部署形态”需要 `capability-provider-commercial-readiness-gate`、`integration-service-foundation`、`provider-adapter-conformance-suite`、`user-connector-capability-gateway` 共享状态 owner、契约或质量边界。
 
 ## 1. 背景、目标与非目标
 
@@ -14,6 +14,7 @@
 - [`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)：替代 Adapter 通过、旧 digest、不同 commit/image/config 或缺目标厂商证据均不能提升目标 adapter_ready。
 - [`integration-service-foundation`](./integration-service-foundation/spec.md)：对外只暴露标准化接口，禁止端侧直接调用供应商 API。
 - [`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)：success、validation、auth、network/DNS、timeout、throttle、retry、idempotency、callback ordering、redaction、observability 均被同一 Adapter 执行。
+- [`user-connector-capability-gateway`](./user-connector-capability-gateway/spec.md)：把官方 Connector 定义、账号连接、受保护凭证、能力授权和 invocation receipt 留在 Integration Service，Assistant 只消费厂商无关 capability。
 
 ## 3. 端云与数据流
 
@@ -30,7 +31,7 @@
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
-- 影响 Story：[`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)、[`integration-service-foundation`](./integration-service-foundation/spec.md)、[`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)
+- 影响 Story：[`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)、[`integration-service-foundation`](./integration-service-foundation/spec.md)、[`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)、[`user-connector-capability-gateway`](./user-connector-capability-gateway/spec.md)
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
@@ -52,12 +53,12 @@
 
 <a id="dec-003"></a>
 ### DEC-003 Alpha/Beta/Gamma 受管非生产 Provider 与 Prod hosted receipt
-- 决策：Alpha、Beta、Gamma required 验收启用受管非生产租户的非内存 Provider Adapter；endpoint/secret 只由受保护环境注入，stackctl 仅校验、传递并脱敏，不生成凭据。Gamma 继续运行 gamma-local 完整第一方拓扑、production Remote composition、黑盒 API 与真机 Journey。Prod（含 gray）使用独立生产租户，并以绑定 Prod topology 的 hosted Remote receipt 证明 adapter health、callback drain、last-good 和生产回滚。
-- 理由：Alpha/Beta/Gamma 负责可重复验证 Port 语义、故障模型与真实第一方用户结果；领域可在 Gamma 使用 Elasticsearch、Redis、MinIO 等完整本地引擎替身提高持久化和网络证据强度。只有 Prod 验证真实 SDK、鉴权、限流、回调、推送与 RTC 媒体链。
-- 被否决方案：以 nonprod evidence 提升 Prod readiness、在 Gamma 注入生产租户凭据、缺 Provider 时跨实现 fallback，以及以页面 Mock、进程内 fixture/recorder/capture 或 schema secretRefs 旁路绕过 Binding。
+- 决策：Alpha、Beta、Gamma 的 required 验收由环境 Binding 显式选择受管 `protocol_fixture/local_*` Port 对等 Adapter；Assistant/Content 通过 integration-service 独立内部 listener 走真实 HTTP/wire decoder，SMS/Push/Location/User 在服务端 typed Port 边界替代，RTC 运行真实本地 LiveKit。App 不含 Mock 或 Provider 选择器。Gamma 仍运行完整第一方 Remote composition、黑盒 API 与真机 Journey。Prod 只选择真实厂商 Adapter 和生产租户，非生产内部 listener 不启动。
+- 理由：Alpha/Beta/Gamma 需要无生产凭据、可重复、可故障注入的端云功能闭环；显式替代 Adapter 仍执行正式 Port、命令、事件、HTTP 与观测链，而 Prod hosted receipt 另行证明真实 SDK、鉴权、限流、回调、推送与 RTC 媒体链。
+- 被否决方案：以 nonprod evidence 提升 Prod readiness、在 Gamma 注入生产租户凭据、缺 Provider 时运行时 fallback、App/UI Mock，以及不经 Binding 的临时环境变量 override。
 - 约束与影响：governance 要求 Alpha/Beta/Gamma 选择 fixture/local_* Port 对等 Adapter；Prod 禁止 mock、fixture、recorder 与本地替代 Adapter。
-- 约束与影响：Alpha/Beta/Gamma 启动验证受保护注入的 sandbox/nonprod 材料及本地基础设施 topology；Prod 验证外部注入的生产 Provider 材料、secret file 与远端安全 authority，并拒绝 localhost。
-- 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。OSS 与 SLS 必须登记 capability 并走 Binding。
+- 约束与影响：Alpha/Beta/Gamma 的替代 endpoint 只由 stackctl 从 local topology 投影，LiveKit key/secret 仅存放在 target-scoped deploy secret root；Prod 验证外部注入的生产 Provider 材料并拒绝替代 Adapter。
+- 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。Object Storage 与四环境 Elasticsearch Log sink 都必须登记 capability 并走 Binding。
 - 关联要求：`REQ-006`
 - 关联验收：`SIT-002`、`SIT-003`
 

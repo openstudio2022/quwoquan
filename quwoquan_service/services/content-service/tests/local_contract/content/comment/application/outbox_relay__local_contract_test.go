@@ -8,7 +8,7 @@ import (
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

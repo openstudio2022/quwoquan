@@ -76,15 +76,21 @@ class MethodChannelAssistantDeviceActionBridge
         'createCalendarReminder',
         request.toChannelArguments(),
       );
-      final status = switch ((raw?['status'] as String?)?.trim()) {
-        'created' => AssistantDeviceActionStatus.created,
+      final rawStatus = _trimmedString(raw?['status']);
+      final deviceObjectId = _trimmedString(raw?['deviceObjectId']);
+      final status = switch (rawStatus) {
+        'created' when deviceObjectId.isNotEmpty =>
+          AssistantDeviceActionStatus.created,
+        'created' => AssistantDeviceActionStatus.failed,
         'denied' => AssistantDeviceActionStatus.denied,
         'unavailable' => AssistantDeviceActionStatus.unavailable,
         _ => AssistantDeviceActionStatus.failed,
       };
       return AssistantDeviceActionResult(
         status: status,
-        deviceObjectId: (raw?['deviceObjectId'] as String?)?.trim() ?? '',
+        deviceObjectId: status == AssistantDeviceActionStatus.created
+            ? deviceObjectId
+            : '',
       );
     } on MissingPluginException {
       return const AssistantDeviceActionResult(
@@ -95,5 +101,9 @@ class MethodChannelAssistantDeviceActionBridge
         status: AssistantDeviceActionStatus.failed,
       );
     }
+  }
+
+  static String _trimmedString(Object? value) {
+    return value is String ? value.trim() : '';
   }
 }

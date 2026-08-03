@@ -1,2 +1,15 @@
 backend: mongodb
 role: append_only
+collections:
+  external_interaction_dead_letters:
+    entity: ExternalInteractionDeadLetterFact
+    role: authoritative
+    indexes:
+    - name: uq_external_dead_letter_task
+      keys:
+        taskId: 1
+      unique: true
+    - name: idx_external_dead_letter_request_created
+      keys:
+        requestId: 1
+        createdAt: 1

@@ -50,6 +50,9 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     parser.add_argument("--reverse-actual-ports", default="")
     parser.add_argument("--reverse-receipt-digest", default="")
     parser.add_argument("--consumer-lease-id", default="")
+    parser.add_argument("--content-release-id", default="")
+    parser.add_argument("--content-manifest-digest", default="")
+    parser.add_argument("--content-readiness-receipt-digest", default="")
     return parser
 
 
@@ -144,6 +147,11 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
         "launchMode": args.launch_mode,
         "dartDefinesDigest": defines_digest,
         "runtimeConfigDigest": config_digest,
+        "contentReleaseId": args.content_release_id.strip(),
+        "contentManifestDigest": args.content_manifest_digest.strip(),
+        "contentReadinessReceiptDigest": (
+            args.content_readiness_receipt_digest.strip()
+        ),
         "recoveryBaseUrl": defines["CLOUD_GATEWAY_BASE_URL"],
         "publicWebBaseUrl": defines["PUBLIC_WEB_BASE_URL"],
         "appDownloadBaseUrl": defines["APP_DOWNLOAD_BASE_URL"],

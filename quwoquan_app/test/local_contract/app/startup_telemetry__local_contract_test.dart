@@ -73,7 +73,7 @@ void main() {
     expect(await store.readEvents(), isEmpty);
   });
 
-  test('SLS 或 product-ops 不可用时保留 journal 且不阻断安全终态', () async {
+  test('canonical log sink 不可用时保留 journal 且不阻断安全终态', () async {
     final store = _MemoryStartupJournalStore();
     final reporter = StartupTelemetryReporter(
       journal: StartupJournal(store),

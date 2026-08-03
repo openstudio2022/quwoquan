@@ -80,19 +80,23 @@ void main() {
         ),
       );
       final sessionFacet = RemoteAssistantRepository(
-        httpClient: httpClient,
         operationClient: generatedClient,
-        sessionInvocationContext: (clientPageId) =>
-            CloudOperationInvocationContext(
-              surfaceId: AppUiSurfaces.personalAssistantDialog.id,
-              routeId: AppUiSurfaces.personalAssistantDialog.routeId,
-              clientPageId: clientPageId,
-              actor: const CloudOperationActorContext(
-                personaId: _personaId,
-                deviceActorId: 'gamma-assistant-learning-device',
-              ),
-            ),
-        consentAccountId: 'gamma-assistant-learning-api-integration',
+        invocationContext:
+            (clientPageId, {idempotencyKey, networkSurface = false}) =>
+                CloudOperationInvocationContext(
+                  surfaceId: networkSurface
+                      ? AppUiSurfaces.globalSearchNetworkResults.id
+                      : AppUiSurfaces.personalAssistantDialog.id,
+                  routeId: networkSurface
+                      ? AppUiSurfaces.globalSearchNetworkResults.routeId
+                      : AppUiSurfaces.personalAssistantDialog.routeId,
+                  clientPageId: clientPageId,
+                  actor: const CloudOperationActorContext(
+                    personaId: _personaId,
+                    deviceActorId: 'gamma-assistant-learning-device',
+                  ),
+                  idempotencyKey: idempotencyKey,
+                ),
       );
       final learningFacet = RemoteAssistantLearningFactAppendAdapter(
         client: generatedClient,

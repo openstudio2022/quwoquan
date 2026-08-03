@@ -21,6 +21,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
+import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'comment_input_overlay_components.dart';
@@ -43,9 +44,9 @@ class CommentInputOverlay {
     required String postId,
     required AppUiSurface sourceSurface,
     CommentConfig config = const CommentConfig(),
-    ContentCommentListItem? replyTo,
+    CommentViewData? replyTo,
     String surfaceMode = 'overlay',
-    List<ContentCommentMention>? mentionCandidates,
+    List<CommentMention>? mentionCandidates,
     FutureOr<void> Function(CommentComposerPayload payload)? onSubmit,
   }) async {
     final result = await showAppBottomModal<bool>(
@@ -64,14 +65,13 @@ class CommentInputOverlay {
     return result ?? false;
   }
 
-  static final List<ContentCommentMention> _defaultMentions =
-      <ContentCommentMention>[
-        ContentCommentMention(
-          subjectType: 'assistant',
-          subjectId: 'assistant_xiaoqu',
-          displayName: AssistantText.assistantEntryXiaoqu,
-        ),
-      ];
+  static final List<CommentMention> _defaultMentions = <CommentMention>[
+    CommentMention(
+      subjectType: 'assistant',
+      subjectId: 'assistant_xiaoqu',
+      displayName: AssistantText.assistantEntryXiaoqu,
+    ),
+  ];
 }
 
 class _CommentInputSheet extends ConsumerStatefulWidget {
@@ -88,10 +88,10 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
 
   final String postId;
   final CommentConfig config;
-  final ContentCommentListItem? replyTo;
+  final CommentViewData? replyTo;
   final String surfaceMode;
   final AppUiSurface sourceSurface;
-  final List<ContentCommentMention> mentionCandidates;
+  final List<CommentMention> mentionCandidates;
   final bool loadFollowingCandidates;
   final FutureOr<void> Function(CommentComposerPayload payload)? onSubmit;
 
@@ -102,12 +102,11 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
 class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final List<ContentCommentMention> _selectedMentions =
-      <ContentCommentMention>[];
+  final List<CommentMention> _selectedMentions = <CommentMention>[];
   final List<String> _attachmentMediaIds = <String>[];
 
   late CommentConfig _effectiveConfig;
-  late List<ContentCommentMention> _mentionCandidates;
+  late List<CommentMention> _mentionCandidates;
   bool _showEmojiPanel = false;
   bool _showMentionPanel = false;
   bool _mentionCandidatesLoading = false;
@@ -125,9 +124,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     super.initState();
     _draftActorScope = ref.read(currentUserIdProvider).trim();
     _effectiveConfig = widget.config;
-    _mentionCandidates = List<ContentCommentMention>.of(
-      widget.mentionCandidates,
-    );
+    _mentionCandidates = List<CommentMention>.of(widget.mentionCandidates);
     _controller.addListener(_onTextChanged);
     // 输入态曝光：运营漏斗起点（区分回复 vs 顶层评论、来源宿主）。
     ref
@@ -310,7 +307,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           .read(personaRelationshipQueryProvider(widget.sourceSurface))
           .listFollowing(personaId: personaId, limit: 20);
       if (!mounted) return;
-      final merged = <String, ContentCommentMention>{
+      final merged = <String, CommentMention>{
         for (final candidate in _mentionCandidates)
           candidate.subjectId: candidate,
       };
@@ -320,7 +317,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         if (subjectId.isEmpty || displayName.isEmpty) continue;
         merged.putIfAbsent(
           subjectId,
-          () => ContentCommentMention(
+          () => CommentMention(
             subjectType: 'user',
             subjectId: subjectId,
             displayName: displayName,
@@ -341,7 +338,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     }
   }
 
-  void _addMention(ContentCommentMention candidate) {
+  void _addMention(CommentMention candidate) {
     final displayName = candidate.displayName?.trim() ?? '';
     if (displayName.isEmpty) return;
     final exists = _selectedMentions.any(
@@ -403,8 +400,8 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             telemetry: ref.read(appTelemetryReporterProvider),
           ).uploadPreparedSource(
             source: source,
-            mediaType: ContentMediaType.image,
-            mimeType: contentMediaMimeTypeForPath(path, ContentMediaType.image),
+            mediaType: MediaType.image,
+            mimeType: contentMediaMimeTypeForPath(path, MediaType.image),
             uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
           );
       if (!mounted) return;
@@ -446,7 +443,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     return CommentComposerPayload(
       content: _controller.text.trim(),
       attachmentMediaIds: List<String>.unmodifiable(safeAttachments),
-      mentions: List<ContentCommentMention>.unmodifiable(_selectedMentions),
+      mentions: List<CommentMention>.unmodifiable(_selectedMentions),
     );
   }
 
@@ -481,9 +478,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               attachmentMediaIds: List<String>.unmodifiable(
                 _attachmentMediaIds,
               ),
-              mentions: List<ContentCommentMention>.unmodifiable(
-                _selectedMentions,
-              ),
+              mentions: List<CommentMention>.unmodifiable(_selectedMentions),
             ),
           );
       unawaited(

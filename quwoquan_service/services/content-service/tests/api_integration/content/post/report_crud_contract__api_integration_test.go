@@ -16,10 +16,11 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rtoperation "quwoquan_service/runtime/operation"
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
-	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	reporthttp "quwoquan_service/services/content-service/internal/trust_safety/report/adapters/inbound/http"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
+	reportmessaging "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/messaging"
+	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
 )
 
 func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
@@ -76,7 +77,7 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	relay := reportapp.NewOutboxRelay(
 		reportRepo,
 		reportRepo,
-		contentmessaging.NewReportOutboxPublisher(dispatched),
+		reportmessaging.NewReportOutboxPublisher(dispatched),
 		"api-integration-report-events",
 	)
 	if count, err := relay.Drain(context.Background(), 100); err != nil {
@@ -107,7 +108,7 @@ func TestReportStoreRejectsNonCanonicalReporterAccountOwnership(t *testing.T) {
 	defer suite.TearDown(t)
 	suite.CleanPG(t)
 
-	if _, err := persistence.NewPGReportStore(suite.PG); err != nil {
+	if _, err := reportpersistence.NewPGReportStore(suite.PG); err != nil {
 		t.Fatalf("initialize report schema: %v", err)
 	}
 	if _, err := suite.PG.Exec(
@@ -153,7 +154,7 @@ INSERT INTO report_command_receipts (
 		t.Fatalf("insert invalid report receipt: %v", err)
 	}
 
-	if _, err := persistence.NewPGReportStore(suite.PG); err == nil ||
+	if _, err := reportpersistence.NewPGReportStore(suite.PG); err == nil ||
 		!strings.Contains(err.Error(), "must be canonical before startup") {
 		t.Fatalf("invalid report ownership error=%v; want fail-closed canonical error", err)
 	}
@@ -450,9 +451,9 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 func newReportTestHandler(
 	t *testing.T,
 	db *sql.DB,
-) (*persistence.PGReportStore, http.Handler) {
+) (*reportpersistence.PGReportStore, http.Handler) {
 	t.Helper()
-	reportRepo, err := persistence.NewPGReportStore(db)
+	reportRepo, err := reportpersistence.NewPGReportStore(db)
 	if err != nil {
 		t.Fatalf("init pg report store: %v", err)
 	}
@@ -465,7 +466,7 @@ func newReportTestHandler(
 		nil,
 		nil,
 		nil,
-		reportapp.BindFacades(reportService),
+		reporthttp.NewHandler(reportapp.BindFacades(reportService)),
 		nil,
 	).Routes()
 	return reportRepo, handler

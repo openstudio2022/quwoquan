@@ -16,36 +16,38 @@ final class RemoteCallLifecycleCommandWriter
   final RtcCallInvocationContextFactory invocationContext;
 
   @override
-  Future<RtcInitiateCallResultDto> initiateCall(
-    RtcInitiateCallCommand command,
-  ) => client.rtcCallSessionInitiateCall(
-    command,
-    context: invocationContext(RtcRequestPageIds.initiateCall, command: true),
-  );
+  Future<RtcInitiateCallResult> initiateCall(RtcInitiateCallCommand command) =>
+      client.rtcCallSessionInitiateCall(
+        command,
+        context: invocationContext(
+          RtcRequestPageIds.initiateCall,
+          command: true,
+        ),
+      );
 
   @override
-  Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) =>
+  Future<RtcAnswerCallResult> answerCall(RtcCallIdCommand command) =>
       client.rtcCallSessionAnswerCall(
         command,
         context: invocationContext(RtcRequestPageIds.answerCall, command: true),
       );
 
   @override
-  Future<CallSessionDto> rejectCall(RtcCallIdCommand command) =>
+  Future<CallSession> rejectCall(RtcCallIdCommand command) =>
       client.rtcCallSessionRejectCall(
         command,
         context: invocationContext(RtcRequestPageIds.rejectCall, command: true),
       );
 
   @override
-  Future<CallSessionDto> cancelCall(RtcCallIdCommand command) =>
+  Future<CallSession> cancelCall(RtcCallIdCommand command) =>
       client.rtcCallSessionCancelCall(
         command,
         context: invocationContext(RtcRequestPageIds.cancelCall, command: true),
       );
 
   @override
-  Future<CallSessionDto> hangupCall(RtcCallIdCommand command) =>
+  Future<CallSession> hangupCall(RtcCallIdCommand command) =>
       client.rtcCallSessionHangupCall(
         command,
         context: invocationContext(RtcRequestPageIds.hangupCall, command: true),

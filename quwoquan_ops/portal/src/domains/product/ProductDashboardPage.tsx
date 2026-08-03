@@ -490,7 +490,7 @@ export function ProductDashboardPage() {
       <SectionCard title="全局精选池" subtitle="入池 / 回滚 / 双签下架经事件广播给 feed 投影；操作入口在推荐运营页">
         <div className="stack-list">
           {premiumEntries.slice(0, 5).map((entry) => (
-            <div className="policy-item" key={entry.id}>
+            <div className="policy-item" key={entry.contentId}>
               <div>
                 <p className="item-title">{entry.contentId}</p>
                 <p className="item-subtitle">
@@ -561,7 +561,7 @@ export function ProductDashboardPage() {
 
       <SectionCard
         title="应用体验黄金指标"
-        subtitle="ANR 与卡顿率按 SLS/Postgres 权威事件中的 sessionId 去重，再以启动 session 为分母；没有启动分母时明确显示无采样。"
+        subtitle="ANR 与卡顿率按 Elasticsearch 权威事件中的 sessionId 去重，再以启动 session 为分母；没有启动分母时明确显示无采样。"
       >
         {appExperienceError ? <RuntimeErrorBadge error={appExperienceError} /> : null}
         {appExperience ? (

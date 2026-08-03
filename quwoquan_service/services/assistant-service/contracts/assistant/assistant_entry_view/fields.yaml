@@ -4,6 +4,11 @@ fields:
 - {name: preferenceId, source: preferenceId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 types:
+  AssistantEntryQuery:
+    description: 读取当前账号 AssistantEntryView 的可选页面上下文查询。
+    fields:
+    - {name: pageType, source: pageType, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: objectId, source: objectId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
   AssistantEntryChip:
     description: 助手入口的一项可执行 chip。
     fields:

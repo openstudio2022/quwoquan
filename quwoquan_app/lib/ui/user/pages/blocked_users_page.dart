@@ -23,7 +23,7 @@ class BlockedUsersPage extends ConsumerStatefulWidget {
 }
 
 class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
-  final List<BlockedUserListItem> _items = <BlockedUserListItem>[];
+  final List<BlockedListItemView> _items = <BlockedListItemView>[];
   final Set<String> _unblocking = <String>{};
   String? _nextCursor;
   Object? _rawError;
@@ -88,7 +88,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     }
   }
 
-  Future<void> _confirmUnblock(BlockedUserListItem item) async {
+  Future<void> _confirmUnblock(BlockedListItemView item) async {
     if (_unblocking.contains(item.targetPersonaId)) {
       return;
     }
@@ -116,7 +116,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     await _unblock(item);
   }
 
-  Future<void> _unblock(BlockedUserListItem item) async {
+  Future<void> _unblock(BlockedListItemView item) async {
     setState(() => _unblocking.add(item.targetPersonaId));
     try {
       final result = await ref
@@ -334,7 +334,7 @@ class _BlockedUserRow extends StatelessWidget {
     required this.onUnblock,
   });
 
-  final BlockedUserListItem item;
+  final BlockedListItemView item;
   final bool isDark;
   final bool busy;
   final VoidCallback onUnblock;
@@ -352,7 +352,7 @@ class _BlockedUserRow extends StatelessWidget {
             child: SizedBox.square(
               dimension: AppSpacing.avatarUserMd,
               child: AppMediaImage(
-                imageSource: item.avatarUrl,
+                imageSource: item.avatarUrl ?? '',
                 fit: BoxFit.cover,
                 placeholder: Icon(
                   CupertinoIcons.person_crop_circle_fill,

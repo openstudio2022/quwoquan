@@ -92,7 +92,7 @@ class _CountingProfileContentRepository extends MockContentRepository {
   int listUserPostsCalls = 0;
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -101,8 +101,8 @@ class _CountingProfileContentRepository extends MockContentRepository {
     int limit = 20,
   }) async {
     listUserPostsCalls += 1;
-    return CursorPage<PostBaseDto>(
-      items: <PostBaseDto>[_profilePostDto('content_repo_post')],
+    return CursorPage<ContentPostViewData>(
+      items: <ContentPostViewData>[_profilePostDto('content_repo_post')],
       nextCursor: null,
     );
   }
@@ -332,8 +332,8 @@ void main() {
   });
 }
 
-PostBaseDto _profilePostDto(String id) {
-  return postBaseDtoFromMap(<String, dynamic>{
+ContentPostViewData _profilePostDto(String id) {
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     'type': 'micro',
     'identity': 'moment',

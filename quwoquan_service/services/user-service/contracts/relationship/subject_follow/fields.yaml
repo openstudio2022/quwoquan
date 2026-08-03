@@ -290,10 +290,8 @@ types:
   FollowSubjectCommand:
     fields:
       - name: subjectType
-        type: FollowSubjectKind
+        type: enum
         enum_ref: FollowSubjectKind
-        client_dart_type: FollowSubjectKind
-        client_wire: canonicalEnum
       - name: subjectId
         type: string
         constraints:
@@ -309,10 +307,8 @@ types:
   UnfollowSubjectCommand:
     fields:
       - name: subjectType
-        type: FollowSubjectKind
+        type: enum
         enum_ref: FollowSubjectKind
-        client_dart_type: FollowSubjectKind
-        client_wire: canonicalEnum
       - name: subjectId
         type: string
         constraints:

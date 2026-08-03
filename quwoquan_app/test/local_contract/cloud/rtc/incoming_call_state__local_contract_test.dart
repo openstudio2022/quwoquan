@@ -96,13 +96,13 @@ final class _CallQuery implements CallQuery {
   String? requestedCallId;
 
   @override
-  Future<CallSessionDto> getCall(RtcGetCallQuery query) async {
+  Future<CallSession> getCall(RtcGetCallQuery query) async {
     requestedCallId = query.callId;
     if (fail) {
       throw StateError('fixture get call failed');
     }
     final now = DateTime.utc(2026, 7, 19);
-    return CallSessionDto(
+    return CallSession(
       callId: query.callId,
       callType: CallType.audio,
       status: CallStatus.ringing,
@@ -110,13 +110,13 @@ final class _CallQuery implements CallQuery {
       roomId: 'rtc-room-${query.callId}',
       maxParticipants: 2,
       participantCount: 2,
-      participants: <CallParticipantDto>[
-        const CallParticipantDto(
+      participants: <CallParticipant>[
+        const CallParticipant(
           userId: 'persona-caller',
           role: ParticipantRole.initiator,
           status: ParticipantStatus.ringing,
         ),
-        const CallParticipantDto(
+        const CallParticipant(
           userId: 'persona-current',
           role: ParticipantRole.invitee,
           status: ParticipantStatus.ringing,
@@ -129,5 +129,5 @@ final class _CallQuery implements CallQuery {
 
   @override
   Future<RtcCallHistoryPage> listCalls(RtcListCallsQuery query) async =>
-      const RtcCallHistoryPage(items: <CallSessionDto>[]);
+      const RtcCallHistoryPage(items: <CallSession>[]);
 }

@@ -52,10 +52,9 @@ api_routes:
       path:
         - name: postId
           field: postId
-    client_contract:
-      dart_import: ../content/content_reaction_contracts.dart
-      response_type: ContentReactionCommandResult
-      response_decoder: decodeContentReactionCommandResult
+    response_entity: ContentReactionCommandResult
+    response_body: ContentReactionCommandResult
+    response_body_kind: object
     security:
       auth_mode: optional
       principal: owner
@@ -111,10 +110,9 @@ api_routes:
       path:
         - name: postId
           field: postId
-    client_contract:
-      dart_import: ../content/content_reaction_contracts.dart
-      response_type: ContentReactionCommandResult
-      response_decoder: decodeContentReactionCommandResult
+    response_entity: ContentReactionCommandResult
+    response_body: ContentReactionCommandResult
+    response_body_kind: object
     security:
       auth_mode: optional
       principal: owner
@@ -172,10 +170,9 @@ api_routes:
       path:
         - name: commentId
           field: commentId
-    client_contract:
-      dart_import: ../content/content_reaction_contracts.dart
-      response_type: ContentCommentReactionCommandResult
-      response_decoder: decodeContentCommentReactionCommandResult
+    response_entity: ContentCommentReactionCommandResult
+    response_body: ContentCommentReactionCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -226,11 +223,9 @@ api_routes:
       path:
         - name: postId
           field: postId
-    response_entity: ContentReaction
-    client_contract:
-      dart_import: ../content/content_reaction_contracts.dart
-      response_type: ContentPostReactionStateSlice
-      response_decoder: decodeContentPostReactionStateSlice
+    response_entity: ContentReactionStateSlice
+    response_body: ContentReactionStateSlice
+    response_body_kind: object
     security:
       auth_mode: optional
       principal: owner

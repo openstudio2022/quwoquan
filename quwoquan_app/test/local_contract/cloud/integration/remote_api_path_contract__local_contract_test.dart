@@ -63,10 +63,49 @@ const _personaManagementItem = <String, Object?>{
   'isPrimary': false,
   'isActive': false,
   'status': 'active',
-  'hasPublishedContent': false,
   'inheritsProfileFromOwner': true,
   'overriddenProfileFields': <String>[],
+  'updatedAt': '2026-07-20T00:00:00Z',
+};
+
+const _personaProfile = <String, Object?>{
+  'personaId': 'u1',
   'subjectType': 'persona',
+  'userHandle': 'u1',
+  'displayName': 'User One',
+  'nicknameCustomized': false,
+  'followerCount': 0,
+  'followingCount': 0,
+  'postCount': 0,
+  'circleCount': 0,
+  'likeCount': 0,
+  'profileVisibility': 'public',
+  'isolationLevel': 'open',
+  'inheritsFromOwner': true,
+  'updatedAt': '2026-07-20T00:00:00Z',
+};
+
+const _homepageDetail = <String, Object?>{
+  'homepageId': 'hp1',
+  'title': '测试主页',
+  'homepageType': 'sight',
+  'status': 'published',
+  'claimStatus': 'unclaimed',
+  'categoryTags': <String>[],
+  'viewerFollow': <String, Object?>{
+    'viewerFollowsHomepage': false,
+    'followerCount': 0,
+  },
+  'verified': false,
+  'ratingCount': 0,
+  'contentPreview': <Object?>[],
+  'questionPreview': <Object?>[],
+  'relatedGroups': <Object?>[],
+  'relationEdges': <Object?>[],
+  'introductionAssets': <Object?>[],
+  'sourceUrls': <String>[],
+  'createdAt': '2026-07-20T00:00:00Z',
+  'updatedAt': '2026-07-20T00:00:00Z',
 };
 
 const _activePersonaContext = <String, Object?>{
@@ -113,13 +152,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'GET' &&
         path == EntityApiMetadata.getHomepageShellPath(homepageId: 'hp1')) {
       return http.Response(
-        json.encode({
-          'homepage': {
-            'homepageId': 'hp1',
-            'homepageType': 'sight',
-            'title': '测试主页',
-          },
-        }),
+        json.encode({'homepage': _homepageDetail}),
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -132,6 +165,14 @@ MockClient _captureClient(List<_CapturedRequest> log) {
           'objectId': 'hp1',
           'canonicalEntityId': 'entity:hp1',
           'title': '测试主页',
+          'objectPageTemplate': 'homepage',
+          'tagRefs': <String>[],
+          'stats': <String, Object?>{},
+          'intersectionReasons': <Object?>[],
+          'highlightItems': <Object?>[],
+          'contentSections': <String, Object?>{},
+          'relatedObjects': <Object?>[],
+          'relationEdges': <Object?>[],
         }),
         200,
         headers: {'content-type': 'application/json'},
@@ -157,7 +198,11 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     }
     if (request.method == 'POST' &&
         path == ContentApiMetadata.createReportPath) {
-      return http.Response('', 204);
+      return http.Response(
+        'null',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     }
     if (request.method == 'POST' && path == SearchApiMetadata.searchPath) {
       return http.Response(
@@ -214,12 +259,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'GET' &&
         path == UserApiMetadata.getPersonaProfilePath(personaId: 'u1')) {
       return http.Response(
-        json.encode(<String, dynamic>{
-          'personaId': 'u1',
-          'ownerUserId': 'owner-u1',
-          'userHandle': 'u1',
-          'displayName': 'User One',
-        }),
+        json.encode(_personaProfile),
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -274,6 +314,8 @@ MockClient _captureClient(List<_CapturedRequest> log) {
             'totalCount': 1,
             'quotaLimit': 5,
             'remainingCount': 4,
+            'activePersonaId': 'persona_1',
+            'primaryPersonaId': 'persona_1',
           },
           'activeContext': _activePersonaContext,
         }),
@@ -308,8 +350,8 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     }
     if (request.method == 'POST' && path == UserApiMetadata.createPersonaPath) {
       return http.Response(
-        json.encode({
-          'personaId': 'persona_1',
+        json.encode(<String, Object?>{
+          ..._personaManagementItem,
           'displayName': request.body.isEmpty
               ? ''
               : (jsonDecode(request.body)
@@ -322,7 +364,10 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'PATCH' &&
         path == UserApiMetadata.updatePersonaPath(personaId: 'persona_1')) {
       return http.Response(
-        json.encode({'personaId': 'persona_1', 'displayName': '新分身名'}),
+        json.encode(<String, Object?>{
+          ..._personaManagementItem,
+          'displayName': '新分身名',
+        }),
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -389,7 +434,83 @@ MockClient _captureClient(List<_CapturedRequest> log) {
           'items': <dynamic>[],
           'outcome': 'empty',
           'emptyReason': 'no_eligible_content',
+          'feedRequestId': 'feed-request-1',
+          'objectCards': <dynamic>[],
         }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    if (request.method == 'GET' &&
+        path == CircleApiMetadata.searchCirclesPath) {
+      return http.Response(
+        '{"items":[],"facetBuckets":[]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == CircleApiMetadata.getCircleStatsPath(circleId: 'c1')) {
+      return http.Response(
+        json.encode(<String, Object?>{
+          'circleId': 'c1',
+          'memberCount': 0,
+          'postCount': 0,
+          'discussionCount': 0,
+          'weeklyActiveCount': 0,
+          'likeCount': 0,
+          'storageUsedBytes': 0,
+          'storageQuotaBytes': 0,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == ContentApiMetadata.getMyFootprintPath) {
+      return http.Response(
+        '{"items":[]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == ContentApiMetadata.listUserPostsPath(personaId: 'author-1')) {
+      return http.Response(
+        '{"items":[],"hasMore":false}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        (path ==
+                ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
+                  personaId: 'persona-1',
+                ) ||
+            path ==
+                ContentApiMetadata.listProfileInteractionActivitiesSentPath(
+                  personaId: 'persona-1',
+                ))) {
+      return http.Response(
+        '{"items":[],"hasMore":false}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        path == EntityApiMetadata.searchHomepagesPath) {
+      return http.Response(
+        '{"items":[]}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'GET' &&
+        (path == IntegrationApiMetadata.getNearbyLocationsPath ||
+            path == IntegrationApiMetadata.searchLocationsPath)) {
+      return http.Response(
+        '{"items":[]}',
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -646,8 +767,8 @@ void main() {
           UpdateCircleSectionsCommand(
             circleId: 'c1',
             sections: [
-              CircleSectionConfigInput(
-                sectionType: 'feed',
+              CircleSectionConfig(
+                sectionType: CircleSectionType.works,
                 visible: true,
                 order: 0,
               ),
@@ -808,8 +929,8 @@ void main() {
       await adapter.createReport(
         CreateContentReportCommand(
           targetId: 'p1',
-          targetType: ContentReportTargetType.post,
-          reason: ContentReportReason.spam,
+          targetType: ReportTargetType.post,
+          reason: ReportReason.spam,
         ),
       );
       expect(log.last.method, 'POST');
@@ -1016,65 +1137,57 @@ void main() {
       );
     });
 
-    test('received activities 在环境证据缺失时 fail-closed', () async {
-      await expectLater(
-        adapter.listActivities(
-          ContentProfileInteractionPageQuery(
-            personaId: 'persona-1',
-            type: ContentProfileInteractionType.share,
-            limit: 9,
-          ),
-          direction: ContentProfileInteractionDirection.received,
+    test('received activities → canonical received path', () async {
+      await adapter.listActivities(
+        ContentProfileInteractionPageQuery(
+          personaId: 'persona-1',
+          type: InteractionActivityType.share,
+          limit: 9,
         ),
-        throwsA(
-          isA<CloudException>().having(
-            (error) => error.message,
-            'message',
-            contains('not commercially enabled'),
-          ),
+        direction: InteractionDirection.received,
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
+          personaId: 'persona-1',
         ),
       );
-      expect(log, isEmpty);
     });
 
-    test('sent activities 在环境证据缺失时 fail-closed', () async {
-      await expectLater(
-        adapter.listActivities(
-          ContentProfileInteractionPageQuery(
-            personaId: 'persona-1',
-            type: ContentProfileInteractionType.comment,
-          ),
-          direction: ContentProfileInteractionDirection.sent,
+    test('sent activities → canonical sent path', () async {
+      await adapter.listActivities(
+        ContentProfileInteractionPageQuery(
+          personaId: 'persona-1',
+          type: InteractionActivityType.comment,
         ),
-        throwsA(
-          isA<CloudException>().having(
-            (error) => error.message,
-            'message',
-            contains('not commercially enabled'),
-          ),
+        direction: InteractionDirection.sent,
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        ContentApiMetadata.listProfileInteractionActivitiesSentPath(
+          personaId: 'persona-1',
         ),
       );
-      expect(log, isEmpty);
     });
 
-    test('append read fact 在环境证据缺失时 fail-closed', () async {
-      await expectLater(
-        adapter.appendReadFact(
-          AppendContentProfileInteractionReadFactCommand(
-            personaId: 'persona-1',
-            activityId: 'activity-1',
-            state: ContentProfileInteractionReadState.read,
-          ),
-        ),
-        throwsA(
-          isA<CloudException>().having(
-            (error) => error.message,
-            'message',
-            contains('not commercially enabled'),
-          ),
+    test('append read fact → canonical mutation path', () async {
+      await adapter.appendReadFact(
+        AppendContentProfileInteractionReadFactCommand(
+          personaId: 'persona-1',
+          activityId: 'activity-1',
+          state: ProfileInteractionReadState.read,
         ),
       );
-      expect(log, isEmpty);
+      expect(log.last.method, 'POST');
+      expect(
+        log.last.path,
+        ContentApiMetadata.updateProfileInteractionStatePath(
+          personaId: 'persona-1',
+          interactionId: 'activity-1',
+        ),
+      );
     });
   });
 
@@ -1249,9 +1362,9 @@ void main() {
       final result = await personaWriter.retirePersona(
         RetirePersonaCommand(personaId: 'persona_1'),
       );
-      expect(result.requestedAction, 'retire');
+      expect(result.requestedAction, PersonaLifecycleAction.retire);
       expect(result.allowed, isTrue);
-      expect(result.reason, 'allowed');
+      expect(result.reason, PersonaLifecycleGuardReason.allowed);
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
@@ -1416,7 +1529,8 @@ void main() {
         log.last.headers,
         clientPageId: EntityRequestPageIds.searchHomepages,
         surfaceId: AppUiSurfaces.homepagePicker.id,
-        operationId: AppCloudOperationIds.entityHomepageSearchHomepages,
+        operationId:
+            AppCloudOperationIds.entityHomepageSearchItemViewSearchHomepages,
       );
     });
 

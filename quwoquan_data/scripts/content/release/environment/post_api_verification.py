@@ -393,9 +393,15 @@ def write_post_api_verification(
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
-    if readiness_phase not in {"consumer", "commercial"}:
+    if readiness_phase not in {"research", "consumer", "commercial"}:
         raise PostApiVerificationError(
-            "post API verification readiness_phase must be consumer or commercial"
+            "post API verification readiness_phase must be research, consumer or commercial"
+        )
+    if readiness_phase == "research":
+        raise PostApiVerificationError(
+            "GATE_BLOCK research API verification requires a protected, "
+            "whitelisted internal identity adapter; anonymous guest access "
+            "cannot be reused as research evidence"
         )
     try:
         cases, creators_by_author = read_post_and_creator_cases(
@@ -415,7 +421,7 @@ def write_post_api_verification(
         feed_status, feed_queries = _verify_typed_feed(
             client,
             cases,
-            include_premium_stream=readiness_phase == "commercial",
+            include_premium_stream=readiness_phase in {"research", "commercial"},
         )
         creator_rows = [
             _verify_author_profile(client, creator)

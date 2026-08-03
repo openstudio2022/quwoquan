@@ -230,7 +230,7 @@ final class _ScreenShareCallSessionNotifier extends CallSessionNotifier {
   CallSessionState build() {
     final now = DateTime.utc(2026, 7, 20);
     return CallSessionState(
-      session: CallSessionDto(
+      session: CallSession(
         callId: 'call-controls',
         callType: CallType.video,
         status: CallStatus.inCall,

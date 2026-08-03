@@ -126,6 +126,17 @@ types:
         type: timestamp
         constraints:
           - NOT_NULL
+  CircleGroupMembershipPageSlice:
+    description: CircleGroupMembershipReader 的稳定游标分页结果。
+    fields:
+      - name: items
+        type: '[]CircleGroupMembershipSlice'
+        constraints:
+          - NOT_NULL
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
   CircleGroupMembershipCommandResult:
     description: CircleGroupMembership 命令的稳定提交回执。
     fields:
@@ -291,12 +302,10 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: state
-        type: CircleGroupMembershipState
+        type: enum
         enum_ref: CircleGroupMembershipState
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupMembershipState?
-        client_wire: canonicalEnum
       - name: cursor
         type: string
         constraints:
@@ -367,10 +376,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: role
-        type: CircleGroupMembershipRole
+        type: enum
         enum_ref: CircleGroupMembershipRole
-        client_dart_type: CircleGroupMembershipRole
-        client_wire: canonicalEnum
   MyCircleGroupMembershipQuery:
     fields:
       - name: circleId

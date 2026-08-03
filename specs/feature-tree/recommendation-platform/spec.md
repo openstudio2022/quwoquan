@@ -4,18 +4,20 @@
 
 ## 1. 目标与用户价值
 
-为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
+为候选、特征、排序、交集解释、稳定窗口、训练、推理和评估提供一个领域真相，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 typed HTTP 与内容交付协作。
 
 ## 2. 领域边界
 
 ### 本领域拥有
 
-- 拥有训练数据集引用、模型版本、评估结果、晋升决定和推理服务版本的生命周期与写入决定权。
+- 拥有候选索引、长期特征、交集特征与可见解释、对象卡候选、稳定排序窗口、训练数据集引用、模型发布、评估结果、晋升决定和推理服务的生命周期与写入决定权。
+- `recommendation-service` 的 Python 实现是候选、召回、特征、排序和窗口的唯一运行时；Content 只消费 typed 排序结果并对 Post 做当前权限 hydration，不保留 Go 业务排序器或推荐存储副本。
 - 只能通过本领域公开 command 修改其拥有事实。
 
 ### 本领域不拥有
 
-- 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
+- 不拥有 Post、Persona、Circle、Homepage、Tag 或实验策略的权威事实；跨域协作必须使用对方公开 command、query、projection 或 typed event。
+- 不决定 Post 当前可见性，也不把推荐候选或交集推断伪装成上游业务事实。
 - 不复制 metadata 中的字段、path、错误码和 wire 语义。
 
 ### 上下游协作
@@ -54,6 +56,8 @@
 <a id="req-001"></a>
 ### REQ-001 recommendation platform 领域边界验收
 
+- CandidateIndex、FeatureProfile、RankedRecommendationWindow、推荐隐私阻断、交集解释与对象卡选择均由 recommendation-service 单轨拥有；Content 不得直接读推荐集合或保留第二排序实现。
+- 上游事实只经 typed event/query 进入对象本地 projection；任何 Recommendation 查询只读本服务 `storage.yaml` 声明的集合。
 - 领域边界、上下游依赖、工程映射和服务治理清晰。
 - evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
 

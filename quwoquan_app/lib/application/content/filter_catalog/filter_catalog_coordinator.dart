@@ -11,7 +11,7 @@ final class ResolvedFilterCatalog {
     this.cacheVerifiedAt,
   });
 
-  final FilterCatalogSnapshot snapshot;
+  final FilterCatalogSlice snapshot;
   final FilterCatalogSource source;
   final DateTime? cacheVerifiedAt;
 }
@@ -22,24 +22,24 @@ final class VerifiedFilterCatalogCacheEntry {
     required this.verifiedAt,
   });
 
-  final FilterCatalogSnapshot snapshot;
+  final FilterCatalogSlice snapshot;
   final DateTime verifiedAt;
 }
 
 abstract interface class VerifiedFilterCatalogStore {
   Future<VerifiedFilterCatalogCacheEntry?> read();
 
-  Future<void> write(FilterCatalogSnapshot snapshot);
+  Future<void> write(FilterCatalogSlice snapshot);
 
   Future<void> clear();
 }
 
 abstract interface class FilterCatalogBootstrapReader {
-  Future<FilterCatalogSnapshot> read();
+  Future<FilterCatalogSlice> read();
 }
 
 abstract interface class FilterCatalogIntegrityVerifier {
-  bool hasValidCanonicalDigest(FilterCatalogSnapshot snapshot);
+  bool hasValidCanonicalDigest(FilterCatalogSlice snapshot);
 }
 
 abstract interface class FilterCatalogResolutionObserver {
@@ -112,7 +112,7 @@ final class FilterCatalogCoordinator {
     throw _filterCatalogUnavailableFailure();
   }
 
-  Future<void> _writeVerifiedBestEffort(FilterCatalogSnapshot snapshot) async {
+  Future<void> _writeVerifiedBestEffort(FilterCatalogSlice snapshot) async {
     try {
       await verifiedStore.write(snapshot);
     } catch (error) {
@@ -128,7 +128,7 @@ final class FilterCatalogCoordinator {
     }
   }
 
-  void _validate(FilterCatalogSnapshot snapshot) {
+  void _validate(FilterCatalogSlice snapshot) {
     if (snapshot.releaseId.trim().isEmpty ||
         snapshot.status != FilterCatalogReleaseStatus.active ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(snapshot.canonicalDigest) ||
@@ -138,10 +138,10 @@ final class FilterCatalogCoordinator {
         snapshot.categories.length > 32 ||
         snapshot.presets.isEmpty ||
         snapshot.presets.length > 256) {
-      throw const FormatException('invalid FilterCatalogSnapshot envelope');
+      throw const FormatException('invalid FilterCatalogSlice envelope');
     }
 
-    final categories = <String, FilterCatalogCategory>{};
+    final categories = <String, FilterCategoryDefinition>{};
     final categorySorts = <int>{};
     for (final category in snapshot.categories) {
       if (category.categoryId.trim().isEmpty ||
@@ -153,7 +153,7 @@ final class FilterCatalogCoordinator {
       categories[category.categoryId] = category;
     }
 
-    FilterCatalogPreset? original;
+    FilterPresetDefinition? original;
     final presetIds = <String>{};
     final presetSorts = <String, Set<int>>{};
     for (final preset in snapshot.presets) {
@@ -194,7 +194,7 @@ final class FilterCatalogCoordinator {
     if (original == null ||
         !original.enabled ||
         original.defaultStrength != 0 ||
-        !original.adjustments.isIdentity ||
+        !_isIdentityAdjustments(original.adjustments) ||
         snapshot.recommendedFallbackPresetIds.toSet().length !=
             snapshot.recommendedFallbackPresetIds.length ||
         !snapshot.recommendedFallbackPresetIds.every(presetIds.contains) ||
@@ -203,6 +203,23 @@ final class FilterCatalogCoordinator {
     }
   }
 }
+
+bool _isIdentityAdjustments(FilterAdjustmentValues values) =>
+    values.lightSense == 0 &&
+    values.brightness == 0 &&
+    values.exposure == 0 &&
+    values.contrast == 0 &&
+    values.saturation == 0 &&
+    values.vibrance == 0 &&
+    values.texture == 0 &&
+    values.sharpen == 0 &&
+    values.structure == 0 &&
+    values.highlight == 0 &&
+    values.shadow == 0 &&
+    values.temperature == 0 &&
+    values.tint == 0 &&
+    values.grain == 0 &&
+    values.fade == 0;
 
 RuntimeFailure _filterCatalogUnavailableFailure() {
   final error = ContentErrorCode.filterCatalogUnavailable;

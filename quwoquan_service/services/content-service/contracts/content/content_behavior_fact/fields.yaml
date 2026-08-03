@@ -50,6 +50,15 @@ fields:
     api_exposure: write
     ops_exposure: read
     role: append_only_fact
+  - name: impactHelpType
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+    description: 服务端基于权威 Post author 与影响力注册表派生；客户端不得写入，Recommendation 只消费该标准值形成作者影响投影。
   - name: feedRequestId
     type: string
     constraints: [NULLABLE]
@@ -89,5 +98,3 @@ types:
     fields:
       - name: events
         type: '[]object'
-        client_dart_type: List<ContentBehaviorEventWire>
-        client_wire: toWireMap

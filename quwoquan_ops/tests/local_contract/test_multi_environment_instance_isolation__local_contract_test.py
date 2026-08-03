@@ -1,3 +1,5 @@
+"""spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/spec.md#gwt-001"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -88,9 +90,9 @@ def test_manual_podman_path_rewrites_owned_resources_into_target_namespace() -> 
     assert "LOCAL_GAMMA_RESOURCE_PREFIX" in script
     assert "compgen -A variable LOCAL_GAMMA_" in script
     assert '[[ "$port_variable" == LOCAL_GAMMA_*_PORT ]]' in script
-    assert '".colima/_lima/colima/ssh.sock [mux]"' in script
-    assert 'lsof -tiTCP:"$port" -sTCP:LISTEN' in script
     assert 'cancelled_ports="${cancelled_ports}${port} "' in script
+    assert "restart_colima_for_stale_target_ports" not in script
+    assert "colima stop" not in script
     assert 'command podman "${isolated_args[@]}"' in script
     assert (
         'value="${LOCAL_GAMMA_RESOURCE_PREFIX}_local-${QWQ_LOCAL_RELEASE_ENV}-'

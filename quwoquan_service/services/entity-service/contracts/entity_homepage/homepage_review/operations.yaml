@@ -49,11 +49,7 @@ api_routes:
           field: homepageId
     description: 发表主页评价；同一 persona 对同一主页复用一条记录，软删后再次发表为复活
     request_entity: CreateHomepageReviewCommand
-    response_entity: HomepageReview
-    client_contract:
-      dart_import: ../entity/homepage_review_contracts.dart
-      response_type: HomepageReviewView
-      response_decoder: decodeHomepageReviewView
+    response_entity: HomepageReviewView
     security:
       auth_mode: required
       principal: persona
@@ -109,11 +105,7 @@ api_routes:
           field: reviewId
     description: 作者修改自己的评价；服务端内部 version CAS
     request_entity: UpdateHomepageReviewCommand
-    response_entity: HomepageReview
-    client_contract:
-      dart_import: ../entity/homepage_review_contracts.dart
-      response_type: HomepageReviewView
-      response_decoder: decodeHomepageReviewView
+    response_entity: HomepageReviewView
     security:
       auth_mode: required
       principal: persona
@@ -168,11 +160,7 @@ api_routes:
         - name: reviewId
           field: reviewId
     description: 作者软删自己的评价；目标状态已满足时持久化 no-op receipt
-    response_entity: HomepageReview
-    client_contract:
-      dart_import: ../entity/homepage_review_contracts.dart
-      response_type: HomepageReviewView
-      response_decoder: decodeHomepageReviewView
+    response_entity: HomepageReviewView
     security:
       auth_mode: required
       principal: persona
@@ -230,11 +218,7 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: HomepageReview
-    client_contract:
-      dart_import: ../entity/homepage_review_contracts.dart
-      response_type: HomepageReviewPageSlice
-      response_decoder: decodeHomepageReviewPageSlice
+    response_entity: HomepageReviewPageSlice
     security:
       auth_mode: optional
       principal: public
@@ -286,11 +270,7 @@ api_routes:
         - name: homepageId
           field: homepageId
     description: 当前 persona 对该主页的评价（active 或 deleted 均返回，供编辑/复活表单预填；从未评价过返回 404）
-    response_entity: HomepageReview
-    client_contract:
-      dart_import: ../entity/homepage_review_contracts.dart
-      response_type: HomepageReviewView
-      response_decoder: decodeHomepageReviewView
+    response_entity: HomepageReviewView
     security:
       auth_mode: required
       principal: persona

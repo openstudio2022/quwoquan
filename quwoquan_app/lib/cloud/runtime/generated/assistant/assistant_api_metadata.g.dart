@@ -16,6 +16,8 @@ class AssistantApiMetadata {
     '/assistant/preferences',
     '/assistant/runs',
     '/assistant/sessions',
+    '/assistant/skill-placements',
+    '/assistant/skill-settings',
     '/assistant/skill-subscriptions',
     '/assistant/skills',
     '/assistant/tasks',
@@ -35,7 +37,10 @@ class AssistantApiMetadata {
     'GetAssistantRun': '/assistant/runs/{runId}',
     'GetAssistantSession': '/assistant/sessions/{sessionId}',
     'GetLearningOpsSummary': '/assistant/ops/learning-summary',
+    'GetSkillCatalogItem': '/assistant/skills/{skillId}',
     'GetSkillSubscription': '/assistant/skill-subscriptions/{subscriptionId}',
+    'GetSkillSurfacePlacement': '/assistant/skill-placements/{surfaceKind}/{surfaceId}',
+    'GetSkillUserSetting': '/assistant/skills/{skillId}/setting',
     'GrantSkillConsent': '/assistant/skills/{skillId}/consent',
     'ListAssistantPreferences': '/assistant/preferences',
     'ListAssistantSessions': '/assistant/sessions',
@@ -43,8 +48,11 @@ class AssistantApiMetadata {
     'ListConsents': '/assistant/consents',
     'ListSessionTurns': '/assistant/sessions/{sessionId}/turns',
     'ListSkillSubscriptions': '/assistant/skill-subscriptions',
+    'ListSkillUserSettings': '/assistant/skill-settings',
     'ListSkills': '/assistant/skills',
     'PauseAssistantRun': '/assistant/runs/{runId}/pause',
+    'PutSkillSurfacePlacement': '/assistant/skill-placements/{surfaceKind}/{surfaceId}',
+    'PutSkillUserSetting': '/assistant/skills/{skillId}/setting',
     'ReportPageContext': '/assistant/page-context',
     'RestoreAssistantPreference': '/assistant/preferences/{preferenceId}/restore',
     'ResumeAssistantRun': '/assistant/runs/{runId}/resume',
@@ -75,7 +83,10 @@ class AssistantApiMetadata {
     'GetAssistantRun': 'GET',
     'GetAssistantSession': 'GET',
     'GetLearningOpsSummary': 'GET',
+    'GetSkillCatalogItem': 'GET',
     'GetSkillSubscription': 'GET',
+    'GetSkillSurfacePlacement': 'GET',
+    'GetSkillUserSetting': 'GET',
     'GrantSkillConsent': 'POST',
     'ListAssistantPreferences': 'GET',
     'ListAssistantSessions': 'GET',
@@ -83,8 +94,11 @@ class AssistantApiMetadata {
     'ListConsents': 'GET',
     'ListSessionTurns': 'GET',
     'ListSkillSubscriptions': 'GET',
+    'ListSkillUserSettings': 'GET',
     'ListSkills': 'GET',
     'PauseAssistantRun': 'POST',
+    'PutSkillSurfacePlacement': 'PUT',
+    'PutSkillUserSetting': 'PUT',
     'ReportPageContext': 'POST',
     'RestoreAssistantPreference': 'POST',
     'ResumeAssistantRun': 'POST',
@@ -116,7 +130,10 @@ class AssistantApiMetadata {
     'GetAssistantRun': 'required',
     'GetAssistantSession': 'required',
     'GetLearningOpsSummary': 'required',
+    'GetSkillCatalogItem': 'required',
     'GetSkillSubscription': 'required',
+    'GetSkillSurfacePlacement': 'required',
+    'GetSkillUserSetting': 'required',
     'GrantSkillConsent': 'required',
     'ListAssistantPreferences': 'required',
     'ListAssistantSessions': 'required',
@@ -124,8 +141,11 @@ class AssistantApiMetadata {
     'ListConsents': 'required',
     'ListSessionTurns': 'required',
     'ListSkillSubscriptions': 'required',
+    'ListSkillUserSettings': 'required',
     'ListSkills': 'required',
     'PauseAssistantRun': 'required',
+    'PutSkillSurfacePlacement': 'required',
+    'PutSkillUserSetting': 'required',
     'ReportPageContext': 'required',
     'RestoreAssistantPreference': 'required',
     'ResumeAssistantRun': 'required',
@@ -163,7 +183,10 @@ class AssistantApiMetadata {
   static const String getAssistantRunOperation = 'GetAssistantRun';
   static const String getAssistantSessionOperation = 'GetAssistantSession';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
+  static const String getSkillCatalogItemOperation = 'GetSkillCatalogItem';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
+  static const String getSkillSurfacePlacementOperation = 'GetSkillSurfacePlacement';
+  static const String getSkillUserSettingOperation = 'GetSkillUserSetting';
   static const String grantSkillConsentOperation = 'GrantSkillConsent';
   static const String listAssistantPreferencesOperation = 'ListAssistantPreferences';
   static const String listAssistantSessionsOperation = 'ListAssistantSessions';
@@ -171,8 +194,11 @@ class AssistantApiMetadata {
   static const String listConsentsOperation = 'ListConsents';
   static const String listSessionTurnsOperation = 'ListSessionTurns';
   static const String listSkillSubscriptionsOperation = 'ListSkillSubscriptions';
+  static const String listSkillUserSettingsOperation = 'ListSkillUserSettings';
   static const String listSkillsOperation = 'ListSkills';
   static const String pauseAssistantRunOperation = 'PauseAssistantRun';
+  static const String putSkillSurfacePlacementOperation = 'PutSkillSurfacePlacement';
+  static const String putSkillUserSettingOperation = 'PutSkillUserSetting';
   static const String reportPageContextOperation = 'ReportPageContext';
   static const String restoreAssistantPreferenceOperation = 'RestoreAssistantPreference';
   static const String resumeAssistantRunOperation = 'ResumeAssistantRun';
@@ -227,10 +253,29 @@ class AssistantApiMetadata {
     });
   }
   static const String getLearningOpsSummaryPath = '/assistant/ops/learning-summary';
+  static const String getSkillCatalogItemPathTemplate = '/assistant/skills/{skillId}';
+  static String getSkillCatalogItemPath({required String skillId}) {
+    return _fillPath(getSkillCatalogItemPathTemplate, <String, String>{
+      'skillId': skillId,
+    });
+  }
   static const String getSkillSubscriptionPathTemplate = '/assistant/skill-subscriptions/{subscriptionId}';
   static String getSkillSubscriptionPath({required String subscriptionId}) {
     return _fillPath(getSkillSubscriptionPathTemplate, <String, String>{
       'subscriptionId': subscriptionId,
+    });
+  }
+  static const String getSkillSurfacePlacementPathTemplate = '/assistant/skill-placements/{surfaceKind}/{surfaceId}';
+  static String getSkillSurfacePlacementPath({required String surfaceKind, required String surfaceId}) {
+    return _fillPath(getSkillSurfacePlacementPathTemplate, <String, String>{
+      'surfaceKind': surfaceKind,
+      'surfaceId': surfaceId,
+    });
+  }
+  static const String getSkillUserSettingPathTemplate = '/assistant/skills/{skillId}/setting';
+  static String getSkillUserSettingPath({required String skillId}) {
+    return _fillPath(getSkillUserSettingPathTemplate, <String, String>{
+      'skillId': skillId,
     });
   }
   static const String grantSkillConsentPathTemplate = '/assistant/skills/{skillId}/consent';
@@ -250,11 +295,25 @@ class AssistantApiMetadata {
     });
   }
   static const String listSkillSubscriptionsPath = '/assistant/skill-subscriptions';
+  static const String listSkillUserSettingsPath = '/assistant/skill-settings';
   static const String listSkillsPath = '/assistant/skills';
   static const String pauseAssistantRunPathTemplate = '/assistant/runs/{runId}/pause';
   static String pauseAssistantRunPath({required String runId}) {
     return _fillPath(pauseAssistantRunPathTemplate, <String, String>{
       'runId': runId,
+    });
+  }
+  static const String putSkillSurfacePlacementPathTemplate = '/assistant/skill-placements/{surfaceKind}/{surfaceId}';
+  static String putSkillSurfacePlacementPath({required String surfaceKind, required String surfaceId}) {
+    return _fillPath(putSkillSurfacePlacementPathTemplate, <String, String>{
+      'surfaceKind': surfaceKind,
+      'surfaceId': surfaceId,
+    });
+  }
+  static const String putSkillUserSettingPathTemplate = '/assistant/skills/{skillId}/setting';
+  static String putSkillUserSettingPath({required String skillId}) {
+    return _fillPath(putSkillUserSettingPathTemplate, <String, String>{
+      'skillId': skillId,
     });
   }
   static const String reportPageContextPath = '/assistant/page-context';

@@ -159,7 +159,7 @@ class _ConnectedContentShareSheetState
         widget.template.shareSummary,
         widget.template.landingUrl,
       ].where((value) => value.trim().isNotEmpty).join('\n'),
-      objectRef: ChatMessageCardObjectRef(
+      objectRef: MessageCardObjectRef(
         objectTypeRef: 'post',
         objectId: widget.template.postId,
         routeId: 'contentDetail',
@@ -612,9 +612,13 @@ class _ConnectedContentShareSheetState
       await writer.appendOutboundShare(
         CreateContentOutboundShareCommand(
           postId: widget.template.postId,
-          channel: OutboundShareChannel.fromString(result.actionId),
-          destinationKind: OutboundShareDestinationKind.fromString(
-            result.destinationKind!,
+          channel: OutboundShareChannel.fromWire(
+            result.actionId,
+            'ContentShareActionResult.actionId',
+          ),
+          destinationKind: OutboundShareDestinationKind.fromWire(
+            result.destinationKind,
+            'ContentShareActionResult.destinationKind',
           ),
           destination: result.destination,
           referralId: referralId,

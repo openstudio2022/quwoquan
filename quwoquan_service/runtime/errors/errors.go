@@ -25,6 +25,7 @@ const (
 	ModuleRealtime     Module = "REALTIME"
 	ModuleOps          Module = "OPS"
 	ModuleAssistant    Module = "ASSISTANT"
+	ModuleTravel       Module = "TRAVEL"
 	ModuleNotification Module = "NOTIFICATION"
 	ModuleSearch       Module = "SEARCH"
 	ModuleTag          Module = "TAG"
@@ -208,6 +209,7 @@ var allowedModules = map[Module]struct{}{
 	ModuleRealtime:     {},
 	ModuleOps:          {},
 	ModuleAssistant:    {},
+	ModuleTravel:       {},
 	ModuleNotification: {},
 	ModuleSearch:       {},
 	ModuleTag:          {},

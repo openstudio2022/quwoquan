@@ -56,7 +56,7 @@
 
 ## 4. 业务能力
 
-- [`event-ingestion-and-analytics`](./event-ingestion-and-analytics/spec.md)：App 产品事件/异常、受限启动诊断、SLS 明细/聚合、Portal 查询和推荐反馈边界的端到端验收。
+- [`event-ingestion-and-analytics`](./event-ingestion-and-analytics/spec.md)：App 产品事件/异常、受限启动诊断、Elasticsearch 明细/聚合、Portal 查询和推荐反馈边界的端到端验收。
 - [`experiment-bucketing-and-rollout`](./experiment-bucketing-and-rollout/spec.md)：推荐/搜索服务端权威分桶、实际流量事实归因，以及未绑定 Product Ops 控制面的 fail-closed 单轨验收。
 - [`feedback-optimization-loop`](./feedback-optimization-loop/spec.md)：反馈优化大循环：行为反馈 → 兴趣/人群画像派生 → 元数据驱动的推荐策略解析与自调建议 → 人审发布。算法侧闭环（content 派生 + user 投影 + recpolicy 热加载引擎 + 顾问 suggest-only）。
 - [`outbound-share-distribution`](./outbound-share-distribution/spec.md)：5 类对象统一对外分享分发（微信卡片/海报/口令/系统分享），携带归因并可靠回流。

@@ -20,7 +20,7 @@ services:
       PLATFORM_OPS_SERVICE_ADDR: ":18088"
       REPO_ROOT: /app
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
-      # ConfigLayer outbox dispatcher 的事件发布总线（events.ops.*）。
+      # ConfigInstanceReport transactional outbox 的 typed event 总线。
       PLATFORM_OPS_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"

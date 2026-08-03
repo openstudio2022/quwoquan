@@ -54,6 +54,9 @@ enums:
     - rotated
     - revoked
     - expired
+  FederatedLoginStatus:
+    - authenticated
+    - phoneBindingRequired
 types:
   LoginOneTapCommand:
     fields:
@@ -299,3 +302,42 @@ types:
           - NOT_BLANK
         client_dart_type: String
         client_normalization: trim
+  ActivePersonaEnvelope:
+    fields:
+      - {name: personaId, type: string, constraints: [NOT_BLANK]}
+  AccountHintSnapshot:
+    fields:
+      - {name: displayName, type: string, constraints: [NOT_NULL]}
+      - {name: nicknameCustomized, type: boolean, constraints: [NOT_NULL]}
+      - {name: avatarUrl, type: string, constraints: [NOT_NULL]}
+      - {name: avatarAssetId, type: string, constraints: [NOT_NULL]}
+      - {name: maskedPhone, type: string, constraints: [NOT_NULL]}
+      - {name: identityOrigin, type: string, constraints: [NOT_NULL]}
+  AuthSessionGrant:
+    fields:
+      - {name: accessToken, type: string, constraints: [NOT_BLANK]}
+      - {name: refreshToken, type: string, constraints: [NOT_BLANK]}
+      - {name: ownerId, type: string, constraints: [NOT_BLANK]}
+      - {name: accountState, type: string, constraints: [NOT_NULL]}
+      - {name: identityOrigin, type: string, constraints: [NOT_NULL]}
+      - {name: logicalShard, type: int, constraints: [NOT_NULL]}
+      - {name: anonymousRetentionPolicy, type: string, constraints: [NOT_NULL]}
+      - {name: personaCount, type: int, constraints: [NOT_NULL]}
+      - {name: sessionRememberTtlSeconds, type: int, constraints: [NOT_NULL]}
+      - {name: activePersona, type: ActivePersonaEnvelope, constraints: [NULLABLE]}
+      - {name: accountHint, type: AccountHintSnapshot, constraints: [NULLABLE]}
+  FederatedLoginOutcome:
+    fields:
+      - {name: status, type: enum, enum_ref: FederatedLoginStatus, constraints: [NOT_NULL]}
+      - {name: session, type: AuthSessionGrant, constraints: [NULLABLE]}
+      - {name: bindingTicket, type: string, constraints: [NULLABLE]}
+      - {name: provider, type: string, constraints: [NULLABLE]}
+      - {name: expiresInSeconds, type: int, constraints: [NOT_NULL]}
+  TokenRefreshGrant:
+    fields:
+      - {name: accessToken, type: string, constraints: [NOT_BLANK]}
+      - {name: refreshToken, type: string, constraints: [NOT_BLANK]}
+      - {name: sessionRememberTtlSeconds, type: int, constraints: [NOT_NULL]}
+  LogoutAck:
+    fields:
+      - {name: revoked, type: boolean, constraints: [NOT_NULL]}

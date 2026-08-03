@@ -1,11 +1,67 @@
 package presentation
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 )
+
+// PlatformTemplateSkillID identifies semantic templates that are shared by
+// every official Skill in the same immutable package. A Skill still has to
+// reference the template explicitly in its PresentationProfile; this value is
+// not a fallback to files outside the frozen release.
+const PlatformTemplateSkillID = "quwoquan.official"
+
+func DecodeTemplate(raw []byte) (Template, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	decoder.UseNumber()
+	var template Template
+	if err := decoder.Decode(&template); err != nil {
+		return Template{}, fmt.Errorf("%w: decode: %v", ErrInvalidTemplate, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return Template{}, fmt.Errorf("%w: trailing document", ErrInvalidTemplate)
+	}
+	if err := validateDecodedTemplateDigest(raw, template.AssetDigest); err != nil {
+		return Template{}, err
+	}
+	if err := ValidateTemplate(template); err != nil {
+		return Template{}, err
+	}
+	return template, nil
+}
+
+func validateDecodedTemplateDigest(raw []byte, declared string) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var document map[string]any
+	if err := decoder.Decode(&document); err != nil {
+		return fmt.Errorf("%w: digest input", ErrInvalidTemplate)
+	}
+	delete(document, "assetDigest")
+	canonical, err := json.Marshal(document)
+	if err != nil {
+		return fmt.Errorf("%w: digest input", ErrInvalidTemplate)
+	}
+	digest := sha256.Sum256(canonical)
+	actual := "sha256:" + hex.EncodeToString(digest[:])
+	if strings.TrimSpace(declared) != actual {
+		return fmt.Errorf(
+			"%w: asset digest mismatch declared=%s actual=%s",
+			ErrInvalidTemplate,
+			strings.TrimSpace(declared),
+			actual,
+		)
+	}
+	return nil
+}
 
 type Catalog struct {
 	byRef map[string]Template
@@ -31,7 +87,8 @@ func (c *Catalog) Resolve(ref, skillID string) (Template, error) {
 		return Template{}, ErrTemplateUnavailable
 	}
 	template, ok := c.byRef[strings.TrimSpace(ref)]
-	if !ok || template.SkillID != strings.TrimSpace(skillID) {
+	if !ok || (template.SkillID != strings.TrimSpace(skillID) &&
+		template.SkillID != PlatformTemplateSkillID) {
 		return Template{}, ErrTemplateUnavailable
 	}
 	return cloneTemplate(template), nil

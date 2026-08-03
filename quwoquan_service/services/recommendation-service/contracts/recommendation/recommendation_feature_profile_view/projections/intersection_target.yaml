@@ -1,0 +1,21 @@
+read_model: IntersectionTarget
+description: "交集可点击目标（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。\n唯一表达「这一片段 / 视觉点击后去哪」：objectType + objectId\
+  \ + objectKind + routeId。\n端侧 IntersectionTargetNavigator 据此映射为 codegen 路由（AppRoutePaths.*）跳转，\n禁止 UI\
+  \ 硬编码 path（routeId 为云侧下发的「路由逻辑名」，非 path 字面量）。\n整个 target 缺省（nullable）表示该片段 / 视觉不可点击。\n\n闭集枚举（端按字符串解析，未知值优雅降级为不可点击）：\n\
+  \  objectType: user | circle | homepage | post | tag | dimension\n              （精确对象类型，支撑 strict probe\
+  \ 与跨 surface 归因；homepage 不再退化为兴趣类泛词）\n  objectKind: person | circle | school | place | enterprise |\
+  \ content | tag\n  routeId:    userProfile | circleDetail | homepageDetail | workBrowser | myIntersections\n\
+  \              （端侧路由常量逻辑名，端不本地拼装 path；空/未知时按不可导航失败关闭）\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: objectType
+  type: string
+- name: objectId
+  type: string
+- name: objectKind
+  type: string
+- name: routeId
+  type: string

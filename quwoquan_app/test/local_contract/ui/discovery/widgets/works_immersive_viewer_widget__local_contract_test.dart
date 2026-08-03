@@ -523,7 +523,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   final Duration appendDelay = const Duration(seconds: 4);
   int appendCallCount = 0;
 
-  List<PostBaseDto> _postsForCategory(String category) {
+  List<ContentPostViewData> _postsForCategory(String category) {
     List<FeedItemDto> source;
     switch (category) {
       case 'photo':
@@ -542,10 +542,10 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
             .toList(growable: false);
         break;
       default:
-        return const <PostBaseDto>[];
+        return const <ContentPostViewData>[];
     }
     return source
-        .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
+        .map((item) => contentPostViewDataFromReadModelMap(item.toDiscoveryWireMap()))
         .toList(growable: false);
   }
 
@@ -643,11 +643,11 @@ class _RecordingContentMediaFacet implements ContentMediaFacet {
   final List<String> requestedMediaIds = <String>[];
 
   @override
-  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) async {
     requestedMediaIds.add(command.mediaId);
-    return ContentMediaOriginalAccessGrant(
+    return MediaOriginalAccessGrant(
       mediaId: command.mediaId,
       status: 'granted',
       originalUrl: originalUrl,
@@ -1134,7 +1134,7 @@ class _DeferredPostWorksViewer extends StatefulWidget {
     required this.revealDelay,
   });
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final Map<String, dynamic> rawRow;
   final Duration revealDelay;
 
@@ -1144,7 +1144,7 @@ class _DeferredPostWorksViewer extends StatefulWidget {
 }
 
 class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
-  List<PostBaseDto> _posts = const <PostBaseDto>[];
+  List<ContentPostViewData> _posts = const <ContentPostViewData>[];
 
   @override
   void initState() {
@@ -1155,7 +1155,7 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
         return;
       }
       setState(() {
-        _posts = <PostBaseDto>[widget.post];
+        _posts = <ContentPostViewData>[widget.post];
       });
     });
   }
@@ -1498,7 +1498,7 @@ void main() {
                 posts: <ContentSurfaceView>[
                   ContentSurfaceViewMapper.fromDto(post),
                 ],
-                dtoPosts: <PostBaseDto>[post],
+                dtoPosts: <ContentPostViewData>[post],
                 initialIndex: 0,
                 rawPostsById: _viewerRawByPostId({
                   post.id: <String, dynamic>{
@@ -1574,7 +1574,7 @@ void main() {
                 posts: <ContentSurfaceView>[
                   ContentSurfaceViewMapper.fromDto(post),
                 ],
-                dtoPosts: <PostBaseDto>[post],
+                dtoPosts: <ContentPostViewData>[post],
                 initialIndex: 0,
                 rawPostsById: _viewerRawByPostId({
                   post.id: <String, dynamic>{
@@ -2383,7 +2383,7 @@ void main() {
     final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toMap(),
+        ...post.toPresentationMap(),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2563,7 +2563,7 @@ void main() {
         'media/video/s/video-series-duplicate/post/video-1/v1/shared.mp4';
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toMap(),
+        ...post.toPresentationMap(),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2638,7 +2638,7 @@ void main() {
     final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
-        ...post.toMap(),
+        ...post.toPresentationMap(),
         'workId': post.id,
         'workType': 'video',
         'workIdentity': 'work',
@@ -2784,7 +2784,7 @@ void main() {
       ];
       return _viewerRawByPostId({
         post.id: <String, dynamic>{
-          ...post.toMap(),
+          ...post.toPresentationMap(),
           'workId': post.id,
           'workType': 'video',
           'workIdentity': 'work',
@@ -3603,7 +3603,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           showTopNavigation: false,
-          externalPosts: <PostBaseDto>[post],
+          externalPosts: <ContentPostViewData>[post],
           externalPostViews: <ContentSurfaceView>[
             ContentSurfaceViewMapper.fromDto(post),
           ],
@@ -3697,7 +3697,7 @@ void main() {
             body: WorksImmersiveViewer(
               showWorksToolbar: true,
               showTopNavigation: false,
-              externalPosts: <PostBaseDto>[post],
+              externalPosts: <ContentPostViewData>[post],
               externalPostViews: <ContentSurfaceView>[
                 ContentSurfaceViewMapper.fromDto(post),
               ],
@@ -3788,7 +3788,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           showTopNavigation: false,
-          externalPosts: const <PostBaseDto>[],
+          externalPosts: const <ContentPostViewData>[],
           externalPostViews: const <ContentSurfaceView>[],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -3835,7 +3835,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           showTopNavigation: false,
-          externalPosts: <PostBaseDto>[post],
+          externalPosts: <ContentPostViewData>[post],
           externalPostViews: <ContentSurfaceView>[
             ContentSurfaceViewMapper.fromDto(post),
           ],
@@ -5834,7 +5834,7 @@ void main() {
               'body': '分发摘要正文',
               'coverUrl': article.coverUrl,
             },
-            photo.id: photo.toMap(),
+            photo.id: photo.toPresentationMap(),
           }),
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},

@@ -1,7 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentDiscoveryFeedEmptyReason, ContentDiscoveryFeedOutcome;
+    show ContentFeedEmptyReason, ContentFeedOutcome, FeedObjectCard;
 
 /// 首页发现流强类型 envelope。
 ///
@@ -11,9 +10,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 class DiscoveryFeedPage {
   const DiscoveryFeedPage({
     required this.items,
-    this.outcome = ContentDiscoveryFeedOutcome.content,
+    this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
-    this.objectCards = const <FeedObjectCardDto>[],
+    this.objectCards = const <FeedObjectCard>[],
     this.nextCursor,
     this.previousCursor,
     this.paginationExpiresAt,
@@ -24,13 +23,13 @@ class DiscoveryFeedPage {
     this.revalidation,
   });
 
-  final List<PostBaseDto> items;
-  final ContentDiscoveryFeedOutcome outcome;
-  final ContentDiscoveryFeedEmptyReason? emptyReason;
+  final List<ContentPostViewData> items;
+  final ContentFeedOutcome outcome;
+  final ContentFeedEmptyReason? emptyReason;
 
   /// 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在 items[anchorIndex] 之前；
   /// 空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
-  final List<FeedObjectCardDto> objectCards;
+  final List<FeedObjectCard> objectCards;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
@@ -58,7 +57,7 @@ class DiscoveryFeedPage {
 
   bool get isCanonicalEmpty =>
       items.isEmpty &&
-      outcome == ContentDiscoveryFeedOutcome.empty &&
+      outcome == ContentFeedOutcome.empty &&
       emptyReason != null;
 
   bool get isStaleWhileRevalidate => revalidation != null;

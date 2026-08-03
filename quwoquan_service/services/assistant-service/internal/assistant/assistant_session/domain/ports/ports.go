@@ -11,57 +11,9 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
-type SkillSubscriptionStore interface {
-	CreateSkillSubscription(context.Context, assistant.SkillSubscription) (assistant.SkillSubscription, error)
-	UpsertSkillSubscription(context.Context, assistant.SkillSubscription) (assistant.SkillSubscription, error)
-	GetSkillSubscription(context.Context, string, string) (assistant.SkillSubscription, error)
-	ListSkillSubscriptions(context.Context, string, string, int) ([]assistant.SkillSubscription, error)
-	ListActiveSkillSubscriptionsForDelivery(context.Context, time.Time, int) ([]assistant.SkillSubscription, error)
-	UpdateSkillSubscriptionStatus(
-		context.Context,
-		string,
-		string,
-		string,
-		*time.Time,
-		time.Time,
-	) (assistant.SkillSubscription, error)
-	BeginSkillSubscriptionDelivery(
-		context.Context,
-		string,
-		string,
-		string,
-		time.Time,
-	) (assistant.SkillSubscription, bool, error)
-	CompleteSkillSubscriptionDelivery(
-		context.Context,
-		string,
-		string,
-		string,
-		time.Time,
-		time.Time,
-	) (assistant.SkillSubscription, error)
-	RecordSkillSubscriptionDeliveryFailure(
-		context.Context,
-		string,
-		string,
-		string,
-		string,
-		time.Time,
-		time.Time,
-	) (assistant.SkillSubscription, error)
-	ClearPendingSkillSubscriptionDelivery(
-		context.Context,
-		string,
-		string,
-		string,
-		time.Time,
-		time.Time,
-	) error
-}
-
-// SessionRunStore 是 AssistantSession 与 AssistantRun(Turn) 两个聚合的
-// 对象专属持久化端口。业务状态一律持久化，禁止进程内 map 承载。
-type SessionRunStore interface {
+// SessionStore is the AssistantSession aggregate boundary. AssistantRun state,
+// journal and receipts belong exclusively to assistant_run.Repository.
+type SessionStore interface {
 	InsertSession(
 		context.Context,
 		assistant.AssistantSession,
@@ -70,13 +22,13 @@ type SessionRunStore interface {
 		context.Context,
 		string,
 	) (assistant.AssistantSession, bool, error)
-	UpdateSessionTurnPointer(
+	OwnedSessionExists(context.Context, string, string) (bool, error)
+	ListSessions(
 		context.Context,
 		string,
+		int,
 		string,
-		string,
-		time.Time,
-	) error
+	) ([]assistant.AssistantSession, string, error)
 	CompareAndSwapSessionSummary(
 		context.Context,
 		string,
@@ -86,40 +38,6 @@ type SessionRunStore interface {
 		assistant.AssistantSessionContextSummary,
 		time.Time,
 	) (bool, error)
-	InsertTurn(
-		context.Context,
-		assistant.AssistantTurn,
-	) (assistant.AssistantTurn, bool, error)
-	GetTurn(context.Context, string) (assistant.AssistantTurn, bool, error)
-	GetTurnByClientRequest(
-		context.Context,
-		string,
-		string,
-		string,
-	) (assistant.AssistantTurn, bool, error)
-	CompleteTurn(
-		context.Context,
-		assistant.AssistantTurn,
-	) (assistant.AssistantTurn, error)
-	ListCompletedTurns(
-		context.Context,
-		string,
-		string,
-		int,
-	) ([]assistant.AssistantTurn, error)
-	ListCompletedTurnsAfterSequence(
-		context.Context,
-		string,
-		string,
-		int64,
-		int,
-	) ([]assistant.AssistantTurn, error)
-	ListSessions(
-		context.Context,
-		string,
-		int,
-		string,
-	) ([]assistant.AssistantSession, string, error)
 }
 
 type PreferenceSnapshotReader interface {
@@ -142,92 +60,6 @@ type LearningProjectionReader interface {
 	) (*learningmodel.LearningProjection, error)
 }
 
-type ServiceScorecardFactCommand struct {
-	EventID         string
-	AssistantTurnID string
-	DomainID        string
-	MetricID        string
-	MetricValue     float64
-	MetricSource    string
-	OccurredAt      time.Time
-}
-
-type LearningFactWriter interface {
-	AppendServiceScorecard(context.Context, ServiceScorecardFactCommand) error
-}
-
-type LearningFactWriterFunc func(
-	context.Context,
-	ServiceScorecardFactCommand,
-) error
-
-func (writer LearningFactWriterFunc) AppendServiceScorecard(
-	ctx context.Context,
-	command ServiceScorecardFactCommand,
-) error {
-	return writer(ctx, command)
-}
-
-type FrozenPolicyResolver interface {
-	ResolveFrozenPolicy(
-		context.Context,
-		string,
-		string,
-		string,
-		string,
-	) (assistant.AssistantFrozenPolicySelection, error)
-}
-
-type FrozenPolicyResolverFunc func(
-	context.Context,
-	string,
-	string,
-	string,
-	string,
-) (assistant.AssistantFrozenPolicySelection, error)
-
-func (resolve FrozenPolicyResolverFunc) ResolveFrozenPolicy(
-	ctx context.Context,
-	policyID string,
-	personaID string,
-	skillID string,
-	domainID string,
-) (assistant.AssistantFrozenPolicySelection, error) {
-	return resolve(ctx, policyID, personaID, skillID, domainID)
-}
-
-// PolicySkillCandidateResolver 给出策略在人群下可服务的技能集合。
-type PolicySkillCandidateResolver interface {
-	ResolvePolicySkillCandidates(
-		context.Context,
-		string,
-		string,
-	) ([]string, error)
-}
-
-type PolicySkillCandidateResolverFunc func(
-	context.Context,
-	string,
-	string,
-) ([]string, error)
-
-func (resolve PolicySkillCandidateResolverFunc) ResolvePolicySkillCandidates(
-	ctx context.Context,
-	policyID string,
-	personaID string,
-) ([]string, error) {
-	return resolve(ctx, policyID, personaID)
-}
-
-// IntersectionEvidenceReader 必须以调用 actor 授权读取当前事实，不能信任展示内容。
-type IntersectionEvidenceReader interface {
-	ResolveAuthorizedIntersectionEvidence(
-		context.Context,
-		string,
-		[]assistant.AssistantIntersectionEvidenceRef,
-	) ([]assistant.AuthorizedIntersectionEvidence, error)
-}
-
 type IntersectionReminderReason struct {
 	ReasonID    string
 	UserID      string
@@ -246,14 +78,6 @@ type IntersectionInboxReader interface {
 		time.Time,
 		int,
 	) ([]IntersectionReminderReason, error)
-}
-
-type CreationSuggestGrounding interface {
-	ResolveTagRefs(context.Context, []string) ([]string, error)
-	ResolveHomepages(
-		context.Context,
-		[]string,
-	) ([]assistant.AssistantSuggestedHomepageView, error)
 }
 
 type ChatGroundingMessage struct {
@@ -277,7 +101,6 @@ type ChatGroundingObjectRef struct {
 type ChatGroundingSendMessageRequest struct {
 	ChatConversationID string
 	CreatorPersonaID   string
-	AssistantSkillID   string
 	Type               string
 	Content            string
 	ClientMsgID        string
@@ -289,11 +112,9 @@ type ChatGroundingClient interface {
 		string,
 		string,
 		string,
-		string,
 	) (bool, error)
 	ListMessages(
 		context.Context,
-		string,
 		string,
 		string,
 		int64,

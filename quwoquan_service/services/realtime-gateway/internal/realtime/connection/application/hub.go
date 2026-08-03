@@ -11,10 +11,11 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	runtimemessaging "quwoquan_service/runtime/messaging"
+	connectionmodel "quwoquan_service/services/realtime-gateway/internal/realtime/connection/domain/model"
 )
 
 const (
-	defaultLeaseTTL          = 60 * time.Second
+	defaultLeaseTTL          = connectionmodel.SessionTTL
 	defaultHeartbeatInterval = 20 * time.Second
 	// A disconnected relay never weakens the durable gate or periodic
 	// authority check, but must recover promptly so cross-node eviction keeps
@@ -32,16 +33,11 @@ type ConnectionSink interface {
 }
 
 type activeConnection struct {
-	connID      string
-	identity    TrustedIdentity
-	authEpoch   int64
-	transport   string
-	fence       int64
-	sink        ConnectionSink
-	connectedAt time.Time
-	cancel      context.CancelFunc
-	onClose     func()
-	closeOnce   sync.Once
+	session   *connectionmodel.Session
+	sink      ConnectionSink
+	cancel    context.CancelFunc
+	onClose   func()
+	closeOnce sync.Once
 }
 
 func (connection *activeConnection) close() {
@@ -76,7 +72,7 @@ func (connection *activeConnection) finalize(reason string) {
 // 维护 lease/fencing 与 presence 投影。
 type Hub struct {
 	leases        LeaseStore
-	presence      PresenceStore
+	presence      PresenceProjector
 	events        EventSource
 	authority     rtauth.AccountSecurityAuthority
 	security      AccountSecurityGate
@@ -95,7 +91,7 @@ type Hub struct {
 
 func NewHub(
 	leases LeaseStore,
-	presence PresenceStore,
+	presence PresenceProjector,
 	events EventSource,
 	authority rtauth.AccountSecurityAuthority,
 	security AccountSecurityGate,
@@ -298,27 +294,40 @@ func (h *Hub) Attach(
 		connID,
 		h.nodeID,
 		transport,
+		fence,
 	); err != nil {
+		_ = h.leases.Release(ctx, identity, connID)
+		return nil, err
+	}
+	session, err := connectionmodel.StartSession(
+		connID,
+		connectionmodel.Identity{
+			AccountID: identity.AccountID,
+			PersonaID: identity.PersonaID,
+			DeviceID:  identity.DeviceID,
+		},
+		authEpoch,
+		transport,
+		fence,
+		time.Now().UTC(),
+	)
+	if err != nil {
+		_ = h.presence.Detach(ctx, identity, connID, fence)
 		_ = h.leases.Release(ctx, identity, connID)
 		return nil, err
 	}
 	subscription, err := h.events.SubscribeIdentity(ctx, identity)
 	if err != nil {
-		_ = h.presence.Detach(ctx, identity, connID)
+		_ = h.presence.Detach(ctx, identity, connID, fence)
 		_ = h.leases.Release(ctx, identity, connID)
 		return nil, err
 	}
 
 	connCtx, cancel := context.WithCancel(ctx)
 	connection := &activeConnection{
-		connID:      connID,
-		identity:    identity,
-		authEpoch:   authEpoch,
-		transport:   transport,
-		fence:       fence,
-		sink:        sink,
-		connectedAt: time.Now().UTC(),
-		cancel:      cancel,
+		session: session,
+		sink:    sink,
+		cancel:  cancel,
 	}
 	connection.onClose = func() {
 		cancel()
@@ -329,7 +338,7 @@ func (h *Hub) Attach(
 			3*time.Second,
 		)
 		defer cancelCleanup()
-		_ = h.presence.Detach(background, identity, connID)
+		_ = h.presence.Detach(background, identity, connID, fence)
 		_ = h.leases.Release(background, identity, connID)
 		_ = h.security.UnregisterSession(background, identity, connID)
 	}
@@ -367,7 +376,7 @@ func (h *Hub) EvictAccount(event AccountSecurityEvent) {
 	h.mu.Lock()
 	for _, personaConnections := range h.connections {
 		for _, connection := range personaConnections {
-			if connection.identity.AccountID == event.AccountID {
+			if connection.session.Identity.AccountID == event.AccountID {
 				connections = append(connections, connection)
 			}
 		}
@@ -414,16 +423,16 @@ func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 			if err := VerifyAccountSecurity(
 				ctx,
 				h.authority,
-				connection.identity.AccountID,
-				connection.authEpoch,
+				connection.session.Identity.AccountID,
+				connection.session.AuthEpoch,
 			); err != nil {
 				connection.terminate("account_security_rejected")
 				return
 			}
 			if err := h.security.Admit(
 				ctx,
-				connection.identity,
-				connection.authEpoch,
+				connection.trustedIdentity(),
+				connection.session.AuthEpoch,
 			); err != nil {
 				connection.terminate("account_security_rejected")
 				return
@@ -431,17 +440,21 @@ func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 			// fencing：新连接取号后旧 token 失效，旧连接不得继续续租/回写。
 			currentFence, err := h.leases.CurrentFence(
 				ctx,
-				connection.identity,
+				connection.trustedIdentity(),
 			)
-			if err == nil && currentFence > connection.fence && !h.hasNewerLocal(connection) {
+			if err == nil && currentFence > connection.session.Fence && !h.hasNewerLocal(connection) {
 				// 更高 fence 属于其他节点的新连接；本连接保持只读推送，
 				// 但停止续租共享状态由对端接管（单节点部署下不触发）。
 				continue
 			}
+			if err := connection.session.Renew(time.Now().UTC()); err != nil {
+				connection.terminate("session_expired")
+				return
+			}
 			if err := h.leases.Renew(
 				ctx,
-				connection.identity,
-				connection.connID,
+				connection.trustedIdentity(),
+				connection.session.ConnectionID,
 				h.leaseTTL,
 			); err != nil {
 				h.logger.Warn("realtime lease renew failed",
@@ -450,10 +463,11 @@ func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 			}
 			if err := h.presence.Heartbeat(
 				ctx,
-				connection.identity,
-				connection.connID,
+				connection.trustedIdentity(),
+				connection.session.ConnectionID,
 				h.nodeID,
-				connection.transport,
+				connection.session.Transport,
+				connection.session.Fence,
 			); err != nil {
 				h.logger.Warn("realtime presence heartbeat failed",
 					"nodeId", h.nodeID,
@@ -467,12 +481,12 @@ func (h *Hub) keepAlive(ctx context.Context, connection *activeConnection) {
 func (h *Hub) register(connection *activeConnection) *activeConnection {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	personaConnections := h.connections[connection.identity.PersonaID]
+	personaConnections := h.connections[connection.session.Identity.PersonaID]
 	if personaConnections == nil {
 		personaConnections = map[string]*activeConnection{}
-		h.connections[connection.identity.PersonaID] = personaConnections
+		h.connections[connection.session.Identity.PersonaID] = personaConnections
 	}
-	personaConnections[connection.connID] = connection
+	personaConnections[connection.session.ConnectionID] = connection
 	if len(personaConnections) <= h.maxPerPersona {
 		return nil
 	}
@@ -481,36 +495,44 @@ func (h *Hub) register(connection *activeConnection) *activeConnection {
 		ordered = append(ordered, existing)
 	}
 	sort.Slice(ordered, func(i, j int) bool {
-		return ordered[i].connectedAt.Before(ordered[j].connectedAt)
+		return ordered[i].session.StartedAt.Before(ordered[j].session.StartedAt)
 	})
 	oldest := ordered[0]
-	delete(personaConnections, oldest.connID)
+	delete(personaConnections, oldest.session.ConnectionID)
 	return oldest
 }
 
 func (h *Hub) unregister(connection *activeConnection) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	personaConnections := h.connections[connection.identity.PersonaID]
+	personaConnections := h.connections[connection.session.Identity.PersonaID]
 	if personaConnections == nil {
 		return
 	}
-	if current, ok := personaConnections[connection.connID]; ok && current == connection {
-		delete(personaConnections, connection.connID)
+	if current, ok := personaConnections[connection.session.ConnectionID]; ok && current == connection {
+		delete(personaConnections, connection.session.ConnectionID)
 	}
 	if len(personaConnections) == 0 {
-		delete(h.connections, connection.identity.PersonaID)
+		delete(h.connections, connection.session.Identity.PersonaID)
 	}
 }
 
 func (h *Hub) hasNewerLocal(connection *activeConnection) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for _, existing := range h.connections[connection.identity.PersonaID] {
-		if existing.identity.DeviceID == connection.identity.DeviceID &&
-			existing.fence > connection.fence {
+	for _, existing := range h.connections[connection.session.Identity.PersonaID] {
+		if existing.session.Identity.DeviceID == connection.session.Identity.DeviceID &&
+			existing.session.Fence > connection.session.Fence {
 			return true
 		}
 	}
 	return false
+}
+
+func (connection *activeConnection) trustedIdentity() TrustedIdentity {
+	return TrustedIdentity{
+		AccountID: connection.session.Identity.AccountID,
+		PersonaID: connection.session.Identity.PersonaID,
+		DeviceID:  connection.session.Identity.DeviceID,
+	}
 }

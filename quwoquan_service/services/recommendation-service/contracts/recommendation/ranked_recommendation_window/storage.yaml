@@ -16,13 +16,36 @@ streams:
     retention_seconds: 604800
     description: Recommendation 无法解释的 ExperimentPolicyActivated typed contract 消息。
 redis_cache:
-- key: recommendation:ranked-window:{windowId}
+- key: rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:{windowId}
   type: string
-  ttl_seconds: 900
-  scene: recommendation
-  description: 固化 subject、scenario、模型身份、用户特征与逐项候选特征的有界不可变排序窗口；单窗口编码不得超过 2 MiB，读取禁止 EXPIRE 续期。
-- key: recommendation:ranked-window-subject:{subjectId}
-  type: set
-  ttl_seconds: 900
-  scene: recommendation
-  description: 仅用于 UserAccountClosed 立即定位并删除活动窗口的本域隐私索引；索引续期不改变任何窗口的固定过期时间。
+  ttl_seconds: 600
+  scene: rec
+  max_value_bytes: 2097152
+  max_items: 300
+  max_object_cards: 20
+  quota_shards: 256
+  quota_index: rec:ranked_feed_window_index:{rfw-<quotaShard>}
+  quota_metadata: rec:ranked_feed_window_metadata:{rfw-<quotaShard>}
+  max_active_per_scope: 8
+  max_live_records_per_quota_shard: 128
+  max_live_bytes_per_quota_shard: 134217728
+  global_max_live_records: 32768
+  global_max_live_bytes: 34359738368
+  create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
+  description: 固化 subject、scenario、模型身份、用户特征、逐项候选特征与对象卡的有界不可变排序窗口；subjectHash 为 subjectId 的 SHA-256 前 128 bit，分片满只拒绝 contender，读取禁止 EXPIRE 续期。
+- key: rec:ranked_feed_window_index:{rfw-<quotaShard>}
+  type: sorted_set
+  ttl_seconds: 600
+  scene: rec
+  max_members: 128
+  member: rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:{windowId}
+  score: redis_server_expires_at_microseconds
+  description: 同槽有界准入索引；score 为 Redis server expiry 微秒，每分片最多 128 个 live member。
+- key: rec:ranked_feed_window_metadata:{rfw-<quotaShard>}
+  type: hash
+  ttl_seconds: 600
+  scene: rec
+  max_fields: 128
+  field: rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:{windowId}
+  value: <subjectHash>:<payloadBytes>
+  description: 同槽 owner digest 与精确 payload bytes；与 index/value 一一对应，不维护可漂移计数器。

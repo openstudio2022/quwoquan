@@ -6,9 +6,8 @@ import (
 )
 
 var (
-	ErrMessageNotFound                 = errors.New("message not found")
-	ErrMessageIdempotencyConflict      = errors.New("message idempotency conflict")
-	ErrMessageReceiptFactAlreadyExists = errors.New("message receipt fact already exists")
+	ErrMessageNotFound            = errors.New("message not found")
+	ErrMessageIdempotencyConflict = errors.New("message idempotency conflict")
 )
 
 // Message is the aggregate root for one immutable send followed by an optional
@@ -110,13 +109,4 @@ func (m Message) PreviewText() string {
 		}
 		return m.Content
 	}
-}
-
-// MessageReceiptFact is an append-only read fact emitted for a Message.
-type MessageReceiptFact struct {
-	ID             string    `json:"id" bson:"_id"`
-	MessageID      string    `json:"messageId" bson:"messageId"`
-	ConversationID string    `json:"conversationId" bson:"conversationId"`
-	UserID         string    `json:"userId" bson:"userId"`
-	ReadAt         time.Time `json:"readAt" bson:"readAt"`
 }

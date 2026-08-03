@@ -96,7 +96,10 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
                             isDark: isDark,
                             label: SettingsText.settingsProfileVisibilityPublic,
                             value: ProfileVisibility.public,
-                            selected: settings.profileVisibility,
+                            selected: ProfileVisibility.fromWire(
+                              settings.profileVisibility,
+                              'PrivacySettingsView.profileVisibility',
+                            ),
                           ),
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           _visibilityRow(
@@ -104,7 +107,10 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
                             label:
                                 SettingsText.settingsProfileVisibilityPrivate,
                             value: ProfileVisibility.privateProfile,
-                            selected: settings.profileVisibility,
+                            selected: ProfileVisibility.fromWire(
+                              settings.profileVisibility,
+                              'PrivacySettingsView.profileVisibility',
+                            ),
                           ),
                         ],
                       ),

@@ -1,3 +1,4 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -11,7 +12,6 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群管理员设置页 — 多选最多 3 人
@@ -40,7 +40,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   }
 
   /// 从 Provider state 初始化选中集合（只初始化一次）
-  void _initSelectedIds(List<ChatConversationMemberDto> members) {
+  void _initSelectedIds(List<ConversationMemberListRow> members) {
     if (_initialized) return;
     _initialized = true;
     for (final m in members) {
@@ -192,7 +192,13 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
 
     final selectedMembers = allMembers
         .where((m) => _selectedIds.contains(m.userId))
-        .map((e) => e.toMap())
+        .map(
+          (member) => <String, Object?>{
+            'userId': member.userId,
+            'displayName': member.displayName,
+            'avatarUrl': member.avatarUrl,
+          },
+        )
         .toList();
 
     return SettingsInsetMemberPickerPageScaffold(

@@ -126,6 +126,18 @@ fields:
     description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）；仅由 CircleGroupCreated durable event provisioner 写入
     role: authoritative_state
     reference: true
+  - name: gatheringId
+    source: gatheringId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联 Gathering；仅由 circle-service 的受信任投影命令写入，一对一绑定群会话。
+    role: authoritative_state
+    reference: true
   - name: entityId
     source: entityId
     type: string
@@ -371,6 +383,18 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  GatheringConversationProjectionCommand:
+    description: circle-service 提交的 Gathering 群会话创建事实；禁止客户端构造。
+    fields:
+      - {name: gatheringId, source: path.gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: sourceEventId, type: string, constraints: [NOT_BLANK]}
+      - {name: ownerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: title, type: string, constraints: [NOT_BLANK]}
+      - {name: maxGroupSize, type: int, constraints: [NOT_NULL]}
+  GatheringConversationProjectionResult:
+    fields:
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
   GreetingIntersectionSnapshot:
     description: user-service 重解析并在 Greeting 升级时冻结的破冰交集依据
     fields:
@@ -443,17 +467,6 @@ types:
         constraints:
           - NULLABLE
         client_dart_type: String?
-      - name: cursor
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-      - name: limit
-        type: int
-        client_dart_type: int
-        client_default: "50"
-  ChatListInboxQuery:
-    fields:
       - name: cursor
         type: string
         constraints:
@@ -590,20 +603,6 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
-  ChatGetMessageReceiptsQuery:
-    fields:
-      - name: conversationId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: messageId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
   ChatUpdateConversationTitleCommand:
     fields:
       - name: conversationId
@@ -691,3 +690,100 @@ types:
         type: int
         client_dart_type: int
         client_default: "100"
+  ConversationCommandAck:
+    description: Conversation 命令的对象本地稳定确认体。
+    fields:
+      - name: status
+        type: string
+        constraints: [NOT_NULL]
+  ConversationPageSlice:
+    description: Conversation Reader 的稳定 keyset 分页响应。
+    fields:
+      - name: items
+        type: '[]ChatConversation'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]
+  ConversationTimestampIndexSlice:
+    description: Conversation 增量缓存索引的稳定响应。
+    fields:
+      - name: items
+        type: '[]ChatConversationTimestamp'
+        constraints: [NOT_NULL]
+  ConversationBatchSlice:
+    description: Conversation 批量 Reader 的稳定响应。
+    fields:
+      - name: items
+        type: '[]ChatConversation'
+        constraints: [NOT_NULL]
+  MessageHomePageSlice:
+    description: 消息首页聚合 Reader 的稳定分页响应。
+    fields:
+      - name: items
+        type: '[]MessageHomeRow'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]
+  ContactPageSlice:
+    description: 联系人 Reader 的稳定 keyset 分页响应。
+    fields:
+      - name: items
+        type: '[]ChatContactListRow'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]
+  ContactHomePageSlice:
+    description: 联系首页聚合 Reader 的稳定响应。
+    fields:
+      - name: items
+        type: '[]ContactHomeRow'
+        constraints: [NOT_NULL]
+  GroupCandidateRow:
+    description: 新建或扩充群聊时可选的互关联系人行。
+    fields:
+      - {name: userId, type: string, constraints: [NOT_NULL]}
+      - {name: userHandle, type: string, constraints: [NOT_NULL]}
+      - {name: displayName, type: string, constraints: [NOT_NULL]}
+      - {name: avatarUrl, type: string, constraints: [NOT_NULL]}
+      - {name: bio, type: string, constraints: [NOT_NULL]}
+      - {name: metFrom, type: string, constraints: [NOT_NULL]}
+      - {name: lastInteraction, type: string, constraints: [NOT_NULL]}
+      - {name: relationState, type: string, constraints: [NOT_NULL]}
+      - {name: source, type: string, constraints: [NOT_NULL]}
+      - {name: isStarred, type: bool, constraints: [NOT_NULL]}
+  GroupCandidatePageSlice:
+    description: 群候选 Reader 的稳定有界响应。
+    fields:
+      - name: items
+        type: '[]GroupCandidateRow'
+        constraints: [NOT_NULL]
+  SelectableGroupConversationPageSlice:
+    description: 可选群会话 Reader 的稳定分页响应。
+    fields:
+      - name: items
+        type: '[]SelectableGroupConversationRow'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]
+  SelectableGroupContactMemberRow:
+    description: 指定群内可选互关联系人的稳定公开行。
+    fields:
+      - {name: userId, type: string, constraints: [NOT_NULL]}
+      - {name: userHandle, type: string, constraints: [NOT_NULL]}
+      - {name: displayName, type: string, constraints: [NOT_NULL]}
+      - {name: avatarUrl, type: string, constraints: [NOT_NULL]}
+      - {name: relationState, type: string, constraints: [NOT_NULL]}
+      - {name: source, type: string, constraints: [NOT_NULL]}
+  SelectableGroupContactPageSlice:
+    description: 指定群内可选互关联系人 Reader 的稳定分页响应。
+    fields:
+      - name: items
+        type: '[]SelectableGroupContactMemberRow'
+        constraints: [NOT_NULL]
+      - name: nextCursor
+        type: string
+        constraints: [NULLABLE]

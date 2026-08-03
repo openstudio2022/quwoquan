@@ -20,10 +20,6 @@ api_routes:
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalCommandResult
-      response_decoder: decodeProfileUpdateProposalCommandResult
     description: 为目标 Persona 创建强类型资料修改提案
     reliability:
       timeout_ms: 1500
@@ -86,10 +82,6 @@ api_routes:
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalCommandResult
-      response_decoder: decodeProfileUpdateProposalCommandResult
     description: owner 确认提案；目标 Persona 版本由提案快照携带并在服务端校验
     reliability:
       timeout_ms: 1500
@@ -154,10 +146,6 @@ api_routes:
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalCommandResult
-      response_decoder: decodeProfileUpdateProposalCommandResult
     description: 经 Persona Command Facade 幂等应用已确认提案
     reliability:
       timeout_ms: 1500
@@ -222,10 +210,6 @@ api_routes:
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalCommandResult
-      response_decoder: decodeProfileUpdateProposalCommandResult
     description: owner 拒绝 pending/confirmed 提案
     reliability:
       timeout_ms: 1500
@@ -290,10 +274,6 @@ api_routes:
     response_entity: ProfileUpdateProposalCommandResult
     response_body: ProfileUpdateProposalCommandResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalCommandResult
-      response_decoder: decodeProfileUpdateProposalCommandResult
     description: owner 在受控窗口内按 immutable apply audit 幂等回滚已应用提案
     reliability:
       timeout_ms: 1500
@@ -358,10 +338,6 @@ api_routes:
     response_entity: ProfileUpdateProposalView
     response_body: ProfileUpdateProposalView
     response_body_kind: object
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalView
-      response_decoder: decodeProfileUpdateProposalView
     description: owner 读取单条提案
     reliability:
       timeout_ms: 800
@@ -427,13 +403,9 @@ api_routes:
       method: listProposals
       reader: ListProfileUpdateProposalsReader
       slice: ProfileUpdateProposalSlice
-    response_entity: ProfileUpdateProposalView
-    response_body: ProfileUpdateProposalView
+    response_entity: ProfileUpdateProposalSlice
+    response_body: ProfileUpdateProposalSlice
     response_body_kind: page
-    client_contract:
-      dart_import: ../user/profile_update_proposal_contracts.dart
-      response_type: ProfileUpdateProposalSlice
-      response_decoder: decodeProfileUpdateProposalSlice
     description: owner 按稳定 cursor 分页读取目标 Persona 的提案
     reliability:
       timeout_ms: 800

@@ -44,6 +44,10 @@ type ToolCatalogProvider interface {
 	ModelToolDeclarations(allowedToolNames []string) []ports.ModelToolDefinition
 }
 
+type ToolMetadataProvider interface {
+	ToolMetadata(toolName string) (toolpkg.Metadata, bool)
+}
+
 func (c DefaultToolCoordinator) ModelToolDeclarations(
 	allowedToolNames []string,
 ) []ports.ModelToolDefinition {
@@ -60,6 +64,14 @@ func (c DefaultToolCoordinator) ModelToolDeclarations(
 		})
 	}
 	return definitions
+}
+
+func (c DefaultToolCoordinator) ToolMetadata(toolName string) (toolpkg.Metadata, bool) {
+	registry := c.Registry
+	if registry.IsZero() {
+		registry = toolpkg.BaseRegistry()
+	}
+	return registry.Metadata(toolName)
 }
 
 func modelToolDeclarationsFor(
@@ -144,6 +156,13 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 				"placement":            meta.Placement,
 				"input":                requested.Input,
 				"requiresConfirmation": true,
+				"confirmation": map[string]any{
+					"templateRef":       meta.Confirmation.TemplateRef,
+					"title":             meta.Confirmation.Title,
+					"description":       meta.Confirmation.Description,
+					"completionSummary": meta.Confirmation.CompletionSummary,
+					"displayFields":     confirmationDisplayFields(meta.Confirmation.DisplayFields),
+				},
 			},
 		}
 		return ToolExecution{Requested: requested, Completed: completed}, nil
@@ -169,6 +188,17 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	completed.Status = "completed"
 	completed.Result = result.Output
 	return ToolExecution{Requested: requested, Completed: completed}, nil
+}
+
+func confirmationDisplayFields(fields []toolpkg.ConfirmationDisplayField) []any {
+	result := make([]any, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, map[string]any{
+			"inputKey": field.InputKey,
+			"label":    field.Label,
+		})
+	}
+	return result
 }
 
 func (c DefaultToolCoordinator) now() time.Time {

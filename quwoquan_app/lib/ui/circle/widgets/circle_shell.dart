@@ -38,7 +38,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CircleJoinPolicy,
         CircleVisibility,
-        ContentReportTargetType,
+        ReportTargetType,
         CreateContentReportCommand;
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
@@ -56,7 +56,7 @@ import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 part 'circle_shell_components.dart';
 part 'circle_shell_builders.dart';
 
-/// 圈子/组织详情壳层（V3 统一对象页骨架 ObjectPageShell + standard 吸顶模式）。
+/// 圈子/组织详情壳层（统一对象页骨架 ObjectPageShell + standard 吸顶模式）。
 /// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳只提供圈子业务插槽。
 class CircleShell extends ConsumerStatefulWidget {
   const CircleShell({
@@ -443,7 +443,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
             .createReport(
               CreateContentReportCommand(
                 targetId: widget.circleId,
-                targetType: ContentReportTargetType.circle,
+                targetType: ReportTargetType.circle,
                 reason: reason,
               ),
             );

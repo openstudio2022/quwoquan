@@ -11,6 +11,9 @@ import (
 )
 
 var generatedRouteTable = []generatedRouteDef{
+	{method: "GET", pathTemplate: "/content/intersections", operation: "ListMyIntersections"},
+	{method: "GET", pathTemplate: "/content/intersections/object", operation: "GetObjectIntersections"},
+	{method: "GET", pathTemplate: "/content/intersections/summary", operation: "GetMyIntersectionSummary"},
 	{method: "POST", pathTemplate: "/content/intersections/visit", operation: "MarkIntersectionsVisited"},
 }
 

@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 实体（共享主页）影响摘要数据源（按 homepageId 缓存）。

@@ -14,6 +14,7 @@ import (
 )
 
 const listSkillsOperation = "assistant.skill_catalog.ListSkills"
+const getSkillCatalogItemOperation = "assistant.skill_catalog.GetSkillCatalogItem"
 
 type Handler struct {
 	queries *application.QueryService
@@ -24,11 +25,49 @@ func NewHandler(queries *application.QueryService) *Handler {
 }
 
 func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
+	detailDescriptor := mustOperationDescriptor(getSkillCatalogItemOperation)
+	mux.HandleFunc(
+		detailDescriptor.Method+" "+detailDescriptor.PathTemplate,
+		handler.handleGetSkillCatalogItem,
+	)
 	descriptor := mustOperationDescriptor(listSkillsOperation)
 	mux.HandleFunc(
 		descriptor.Method+" "+descriptor.PathTemplate,
 		handler.handleListSkills,
 	)
+}
+
+func (handler *Handler) handleGetSkillCatalogItem(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	accountID, err := requireVerifiedAccount(request)
+	if err != nil {
+		writeHTTPError(writer, request, err)
+		return
+	}
+	if handler == nil || handler.queries == nil {
+		writeHTTPError(
+			writer,
+			request,
+			catalogerrors.AppErrorFromSkillCatalogUnavailable(
+				"skill catalog query service is not configured",
+			),
+		)
+		return
+	}
+	view, err := handler.queries.GetSkillCatalogItem(
+		request.Context(),
+		application.GetSkillCatalogItemQuery{
+			AccountID: accountID,
+			SkillID:   request.PathValue("skillId"),
+		},
+	)
+	if err != nil {
+		writeHTTPError(writer, request, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, view)
 }
 
 func (handler *Handler) Routes() http.Handler {

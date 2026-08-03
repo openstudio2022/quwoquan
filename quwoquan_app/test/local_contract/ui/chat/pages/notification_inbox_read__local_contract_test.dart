@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -23,7 +24,7 @@ final class _JourneyAppMessageFacet
     AppMessage(
       messageId: 'ua-msg-1',
       userId: 'ua-user',
-      messageType: 'content',
+      messageType: NotificationType.content,
       source: 'comment',
       sourceId: 'cmt-ua-1',
       destination: const AppMessageDestination(type: 'user', id: 'ua-user'),
@@ -32,6 +33,7 @@ final class _JourneyAppMessageFacet
       target: const AppMessageTarget(
         targetType: 'post',
         targetId: 'post-ua-1',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 7, 19, 8),

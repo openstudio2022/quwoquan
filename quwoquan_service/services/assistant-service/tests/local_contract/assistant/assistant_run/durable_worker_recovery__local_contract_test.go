@@ -44,10 +44,17 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 		stored.TerminalSnapshot["answerText"] != "可回查答案" {
 		t.Fatalf("unexpected terminal run: %#v", stored)
 	}
-	presentation, ok := stored.TerminalSnapshot["presentationDocument"].(map[string]any)
-	if !ok || presentation["revision"] != int64(2) ||
+	selectedPolicy, ok := stored.TerminalSnapshot["selectedPolicyRef"].(map[string]any)
+	if !ok || selectedPolicy["releaseDigest"] != stored.FrozenPolicySelection.ReleaseDigest {
+		t.Fatalf("terminal selectedPolicyRef=%#v", selectedPolicy)
+	}
+	if _, leaked := stored.TerminalSnapshot["presentationDocument"]; leaked {
+		t.Fatalf("terminal snapshot leaked presentation document: %#v", stored.TerminalSnapshot)
+	}
+	presentation := stored.PresentationDocument
+	if presentation["revision"] != int64(2) ||
 		stored.PresentationDocument["committedAt"] == "" {
-		t.Fatalf("terminal presentation was not committed: %#v", stored)
+		t.Fatalf("run presentation was not committed: %#v", stored)
 	}
 	if !stored.TaskGraph.AllCompleted() {
 		t.Fatalf("task graph was not completed: %#v", stored.TaskGraph)
@@ -274,8 +281,11 @@ func workerCommandService(
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		testPolicyResolver(),
 	)
 }
 

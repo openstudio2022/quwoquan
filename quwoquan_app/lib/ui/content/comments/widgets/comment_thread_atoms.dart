@@ -151,7 +151,7 @@ class _CommentAttachments extends StatelessWidget {
     this.compact = false,
   });
 
-  final List<ContentCommentAttachment> attachments;
+  final List<CommentAttachmentViewData> attachments;
   final bool isDark;
   final bool compact;
 
@@ -210,10 +210,10 @@ class _ReplyPreviewItem extends ConsumerWidget {
   });
 
   final String postId;
-  final ContentCommentListItem reply;
+  final CommentViewData reply;
   final bool isDark;
   final bool highlighted;
-  final ValueChanged<ContentCommentListItem>? onReplySelected;
+  final ValueChanged<CommentViewData>? onReplySelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -372,10 +372,8 @@ class _ReplyPreviewItem extends ConsumerWidget {
         ),
         SizedBox(width: AppSpacing.xs),
         _CommentReactionGroup(
-          likeSelected:
-              reply.viewerReaction == ContentCommentReactionValue.like,
-          dislikeSelected:
-              reply.viewerReaction == ContentCommentReactionValue.dislike,
+          likeSelected: reply.viewerReaction == CommentReactionType.like,
+          dislikeSelected: reply.viewerReaction == CommentReactionType.dislike,
           showDeleteAction: reply.canDelete,
           likeCount: reply.likeCount,
           dislikeCount: reply.dislikeCount,
@@ -441,7 +439,7 @@ class _CommentActions extends StatelessWidget {
     this.onPin,
   });
 
-  final ContentCommentListItem comment;
+  final CommentViewData comment;
   final bool isDark;
   final VoidCallback onMore;
   final VoidCallback? onReply;
@@ -698,9 +696,9 @@ class _CommentSortSwitcher extends StatelessWidget {
     required this.onChanged,
   });
 
-  final ContentCommentSort sort;
+  final CommentSort sort;
   final bool isDark;
-  final ValueChanged<ContentCommentSort> onChanged;
+  final ValueChanged<CommentSort> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -710,14 +708,14 @@ class _CommentSortSwitcher extends StatelessWidget {
         children: [
           _sortOption(
             label: ContentText.commentSortHot,
-            selected: sort == ContentCommentSort.hot,
-            onTap: () => onChanged(ContentCommentSort.hot),
+            selected: sort == CommentSort.hot,
+            onTap: () => onChanged(CommentSort.hot),
           ),
           SizedBox(width: AppSpacing.md),
           _sortOption(
             label: ContentText.commentSortLatest,
-            selected: sort == ContentCommentSort.latest,
-            onTap: () => onChanged(ContentCommentSort.latest),
+            selected: sort == CommentSort.latest,
+            onTap: () => onChanged(CommentSort.latest),
           ),
         ],
       ),

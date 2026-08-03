@@ -8,14 +8,15 @@ import (
 	"time"
 
 	runtimeexperiments "quwoquan_service/runtime/experiments"
+	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
 var (
+	ErrInvalidArgument     = errors.New("experiment invalid argument")
 	ErrNotFound            = errors.New("experiment not found")
 	ErrDisabled            = errors.New("experiment is disabled")
 	ErrVersionConflict     = errors.New("experiment version conflict")
 	ErrIdempotencyConflict = errors.New("experiment idempotency conflict")
-	ErrAssignmentNotFound  = errors.New("experiment assignment not found")
 )
 
 type Variant struct {
@@ -38,15 +39,6 @@ type Experiment struct {
 	EndsAt       string       `json:"endsAt,omitempty"`
 	CreatedAt    string       `json:"createdAt"`
 	UpdatedAt    string       `json:"updatedAt"`
-}
-
-type AssignmentFact struct {
-	ID                 string `json:"id"`
-	ExperimentID       string `json:"experimentId"`
-	SubjectKey         string `json:"subjectKey"`
-	Variant            string `json:"variant"`
-	ExperimentRevision int64  `json:"experimentRevision"`
-	AssignedAt         string `json:"assignedAt"`
 }
 
 type Event struct {
@@ -127,26 +119,26 @@ func (e Experiment) UpdateRollout(status string, variants []Variant, now time.Ti
 	return next, next.Validate()
 }
 
-func (e Experiment) Assign(subjectKey string, now time.Time) (AssignmentFact, error) {
+func (e Experiment) Assign(subjectKey string, now time.Time) (assignmentdomain.Fact, error) {
 	subjectKey = strings.TrimSpace(subjectKey)
 	if subjectKey == "" {
-		return AssignmentFact{}, errors.New("subject key is required")
+		return assignmentdomain.Fact{}, errors.New("subject key is required")
 	}
 	if e.Status != "running" {
-		return AssignmentFact{}, ErrDisabled
+		return assignmentdomain.Fact{}, ErrDisabled
 	}
 	startsAt, err := parseOptionalTimestamp("startsAt", e.StartsAt)
 	if err != nil {
-		return AssignmentFact{}, err
+		return assignmentdomain.Fact{}, err
 	}
 	endsAt, err := parseOptionalTimestamp("endsAt", e.EndsAt)
 	if err != nil {
-		return AssignmentFact{}, err
+		return assignmentdomain.Fact{}, err
 	}
 	now = now.UTC()
 	if (!startsAt.IsZero() && now.Before(startsAt)) ||
 		(!endsAt.IsZero() && !now.Before(endsAt)) {
-		return AssignmentFact{}, ErrDisabled
+		return assignmentdomain.Fact{}, ErrDisabled
 	}
 	experimentRevision := e.Version
 	buckets := make([]runtimeexperiments.BucketDef, 0, len(e.Variants))
@@ -158,16 +150,16 @@ func (e Experiment) Assign(subjectKey string, now time.Time) (AssignmentFact, er
 	}
 	selected, err := runtimeexperiments.AssignBucket(e.ID, subjectKey, buckets)
 	if err != nil {
-		return AssignmentFact{}, err
+		return assignmentdomain.Fact{}, err
 	}
-	return AssignmentFact{
+	return assignmentdomain.NewFact(assignmentdomain.Fact{
 		ID:                 assignmentID(e.ID, experimentRevision, subjectKey),
 		ExperimentID:       e.ID,
 		SubjectKey:         subjectKey,
 		Variant:            selected,
 		ExperimentRevision: experimentRevision,
 		AssignedAt:         now.UTC().Format(time.RFC3339),
-	}, nil
+	})
 }
 
 func parseRequiredTimestamp(name, value string) (time.Time, error) {

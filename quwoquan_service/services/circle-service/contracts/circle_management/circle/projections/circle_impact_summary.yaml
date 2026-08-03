@@ -10,25 +10,10 @@ description: '圈子影响摘要（GetCircleImpact 响应真相源）。
   '
 consumers:
 - app
-client_projection:
-  dart_class: CircleImpactSummary
-  base_class: ''
-  output_path: cloud/runtime/generated/circle/circle_impact_summary.g.dart
-  dart_imports:
-  - circle_impact_item.g.dart
-  fields:
-  - name: circleId
-    dart_type: String
-    nullable: false
-    source: circleId
-    default: ''''''
-  - name: total
-    dart_type: int
-    nullable: false
-    source: total
-    default: '0'
-  - name: items
-    dart_type: List<CircleImpactItem>
-    nullable: false
-    source: items
-    list_element_dart_class: CircleImpactItem
+fields:
+- name: circleId
+  type: string
+- name: total
+  type: int64
+- name: items
+  type: '[]CircleImpactItem'

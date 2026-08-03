@@ -28,6 +28,23 @@ func RankedRecommendationOptions(
 	)
 }
 
+// RankedRecommendationOptionsWithObjectCards freezes typed object-card
+// candidates into the same test RankedRecommendationWindow as ranked Post
+// identities. This mirrors the production cross-service boundary and prevents
+// Content tests from restoring a private Mongo recommendation reader.
+func RankedRecommendationOptionsWithObjectCards(
+	engine *rtrec.Engine,
+	cards []transport.RecommendationObjectCard,
+	options ...feedapp.FeedServiceOption,
+) []feedapp.FeedServiceOption {
+	gateway := newEngineRankedGateway(engine)
+	gateway.objectCards = cloneRecommendationObjectCards(cards)
+	return append(options,
+		feedapp.WithRankedRecommendationGateway(gateway),
+		feedapp.WithFeedPageDeliveredPublisher(noopDeliveryPublisher{}),
+	)
+}
+
 // CapturedRankedRecommendationOptions exposes the canonical outbound command
 // and final delivery event to local-contract tests. It intentionally records
 // only the new generated boundary; tests cannot assert retired in-process
@@ -64,11 +81,9 @@ func (probe *RankedRecommendationProbe) Create(
 
 func (probe *RankedRecommendationProbe) GetPage(
 	ctx context.Context,
-	windowID string,
-	fromOrdinal int,
-	limit int,
+	request transport.GetRankedRecommendationPageQuery,
 ) (transport.RankedRecommendationPage, error) {
-	return probe.gateway.GetPage(ctx, windowID, fromOrdinal, limit)
+	return probe.gateway.GetPage(ctx, request)
 }
 
 func (probe *RankedRecommendationProbe) Publish(
@@ -103,15 +118,18 @@ func (noopDeliveryPublisher) Publish(
 }
 
 type engineRankedGateway struct {
-	engine  *rtrec.Engine
-	mu      sync.Mutex
-	windows map[string]engineWindow
+	engine      *rtrec.Engine
+	objectCards []transport.RecommendationObjectCard
+	mu          sync.Mutex
+	windows     map[string]engineWindow
 }
 
 type engineWindow struct {
-	scenario string
-	metadata testWindowMetadata
-	items    []rtrec.FeedItem
+	subjectID   string
+	scenario    string
+	metadata    testWindowMetadata
+	items       []rtrec.FeedItem
+	objectCards []transport.RecommendationObjectCard
 }
 
 type testWindowMetadata struct {
@@ -165,12 +183,17 @@ func (gateway *engineRankedGateway) Create(
 		command.Limit,
 		metadata,
 		response.Items,
+		gateway.objectCards,
 	)
 	gateway.mu.Lock()
 	gateway.windows[windowID] = engineWindow{
-		scenario: command.Scenario,
-		metadata: metadata,
-		items:    append([]rtrec.FeedItem(nil), response.Items...),
+		subjectID: command.SubjectId,
+		scenario:  command.Scenario,
+		metadata:  metadata,
+		items:     append([]rtrec.FeedItem(nil), response.Items...),
+		objectCards: cloneRecommendationObjectCards(
+			gateway.objectCards,
+		),
 	}
 	gateway.mu.Unlock()
 	return page, nil
@@ -178,23 +201,29 @@ func (gateway *engineRankedGateway) Create(
 
 func (gateway *engineRankedGateway) GetPage(
 	ctx context.Context,
-	windowID string,
-	fromOrdinal int,
-	limit int,
+	request transport.GetRankedRecommendationPageQuery,
 ) (transport.RankedRecommendationPage, error) {
 	gateway.mu.Lock()
-	state, ok := gateway.windows[strings.TrimSpace(windowID)]
+	state, ok := gateway.windows[strings.TrimSpace(request.WindowId)]
 	gateway.mu.Unlock()
-	if !ok || fromOrdinal < 0 || fromOrdinal >= len(state.items) || limit <= 0 {
+	if request.FromOrdinal == nil || request.Limit == nil {
+		return transport.RankedRecommendationPage{}, fmt.Errorf("test ranked window continuation is invalid")
+	}
+	fromOrdinal := *request.FromOrdinal
+	limit := *request.Limit
+	if !ok || strings.TrimSpace(request.SubjectId) != strings.TrimSpace(state.subjectID) ||
+		fromOrdinal < 0 ||
+		fromOrdinal >= len(state.items) || limit <= 0 {
 		return transport.RankedRecommendationPage{}, fmt.Errorf("test ranked window continuation is invalid")
 	}
 	page := testRankedPage(
-		windowID,
+		request.WindowId,
 		state.scenario,
 		fromOrdinal,
 		limit,
 		state.metadata,
 		state.items,
+		state.objectCards,
 	)
 	return page, nil
 }
@@ -206,6 +235,7 @@ func testRankedPage(
 	limit int,
 	metadata testWindowMetadata,
 	allItems []rtrec.FeedItem,
+	objectCards []transport.RecommendationObjectCard,
 ) transport.RankedRecommendationPage {
 	end := fromOrdinal + limit
 	if end > len(allItems) {
@@ -237,6 +267,7 @@ func testRankedPage(
 		FeatureSnapshotAt:     metadata.featureSnapshotAt,
 		UserFeatureSnapshot:   map[string]any{},
 		Items:                 items,
+		ObjectCards:           cloneRecommendationObjectCards(objectCards),
 		ExpiresAt:             metadata.expiresAt,
 	}
 	if metadata.modelBucket == "model" {
@@ -252,12 +283,26 @@ func testRankedPage(
 	return page
 }
 
+func cloneRecommendationObjectCards(
+	cards []transport.RecommendationObjectCard,
+) []transport.RecommendationObjectCard {
+	if len(cards) == 0 {
+		return nil
+	}
+	cloned := make([]transport.RecommendationObjectCard, len(cards))
+	copy(cloned, cards)
+	for index := range cloned {
+		cloned[index].TagRefs = append([]string(nil), cards[index].TagRefs...)
+	}
+	return cloned
+}
+
 func newTestWindowMetadata(
 	windowID string,
 	response *rtrec.FeedResponse,
 ) testWindowMetadata {
 	now := time.Now().UTC()
-	expiresAt := now.Add(15 * time.Minute)
+	expiresAt := now.Add(rtrec.RankedFeedWindowTTL)
 	if response.NextContinuation != nil &&
 		!response.NextContinuation.ExpiresAt.IsZero() {
 		expiresAt = response.NextContinuation.ExpiresAt.UTC()
@@ -286,10 +331,14 @@ func newTestWindowMetadata(
 }
 
 func scenarioFeedType(scenario string) rtrec.FeedType {
-	if strings.TrimSpace(scenario) == "premium_stream" {
+	switch strings.TrimSpace(scenario) {
+	case "following":
+		return rtrec.FeedFollow
+	case "premium_stream":
 		return rtrec.FeedSimilar
+	default:
+		return rtrec.FeedDiscovery
 	}
-	return rtrec.FeedDiscovery
 }
 
 func scenarioSurface(scenario string) string {

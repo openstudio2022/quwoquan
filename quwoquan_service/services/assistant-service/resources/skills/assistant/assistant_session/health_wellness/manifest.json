@@ -18,5 +18,10 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.evidence_lookup",
-  "replayAssetRef": "assistant.replay.health_wellness.v1"
+  "replayAssetRef": "assistant.replay.health_wellness",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

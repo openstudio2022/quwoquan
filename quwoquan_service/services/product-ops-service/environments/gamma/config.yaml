@@ -12,7 +12,7 @@ externalBindings:
     state: enabled
   runtime.log.sink:
     state: enabled
-    adapter: ext.obs.elasticsearch_local
+    adapter: ext.obs.elasticsearch
     endpointRef: local_topology:gamma.elasticsearch
     endpointEnvs:
       endpoint: PRODUCT_OPS_ELASTICSEARCH_ENDPOINT

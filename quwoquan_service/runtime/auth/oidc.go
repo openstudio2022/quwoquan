@@ -130,12 +130,12 @@ func NewOIDCVerifierFromEnv(prefix string) (*OIDCVerifier, error) {
 }
 
 // OperatorOIDCRequiredForEnvironment is the shared commercial control-plane
-// environment policy. Alpha and Beta may use their typed local operator port;
-// Gamma, Prod, release verification, and unknown environments must fail
+// environment policy. Alpha, Beta, and Gamma may use their target-scoped typed
+// non-production operator port; Prod, release verification, and unknown environments must fail
 // startup unless the real operator OIDC verifier is configured.
 func OperatorOIDCRequiredForEnvironment(appEnv string) bool {
 	switch strings.ToLower(strings.TrimSpace(appEnv)) {
-	case "alpha", "beta":
+	case "alpha", "beta", "gamma":
 		return false
 	default:
 		return true

@@ -25,6 +25,7 @@ import (
 	learningmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/messaging"
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
+	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
@@ -37,7 +38,7 @@ func newLearningFactIntegrationHandler(t *testing.T) http.Handler {
 	}
 	service := learningapplication.NewService(
 		store,
-		learningpersistence.NewMongoRunOwnerReader(integrationMongoDB),
+		runpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		nil,
 	)
 	mux := http.NewServeMux()
@@ -131,21 +132,25 @@ func createLearningFactRun(
 		"/assistant/sessions/"+session.SessionID+"/runs",
 		userID,
 		map[string]any{
-			"input":           map[string]any{"text": "记录学习事实"},
+			"intent": map[string]any{
+				"kind": "answer", "answer": map[string]any{"text": "记录学习事实"},
+			},
 			"clientRequestId": requestID + ":turn",
 		},
 	)
 	if start.Code != http.StatusCreated {
 		t.Fatalf("create learning fact turn status=%d body=%s", start.Code, start.Body.String())
 	}
-	var turn assistant.AssistantTurn
-	if err := json.Unmarshal(start.Body.Bytes(), &turn); err != nil {
-		t.Fatalf("decode learning fact turn: %v", err)
+	var run struct {
+		RunID string `json:"runId"`
 	}
-	if turn.TurnID == "" {
-		t.Fatal("learning fact turn is missing turnId")
+	if err := json.Unmarshal(start.Body.Bytes(), &run); err != nil {
+		t.Fatalf("decode learning fact run: %v", err)
 	}
-	return turn.TurnID
+	if run.RunID == "" {
+		t.Fatal("learning fact run is missing runId")
+	}
+	return run.RunID
 }
 
 func learningFactRequest(

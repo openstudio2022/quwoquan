@@ -69,5 +69,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：`circle_join_rate`、交集转化、`xiaoqu.mention.triggered`、`content.homepage.attach` 与端侧 API 延迟/错误率尚未全部形成可触发指标和告警路由。
-- 完成判定：事件进入 canonical catalog，recording rule/SLS projection、dashboard、阈值、值班路由与测试同源；缺数据明确显示不可用而非合成趋势。
+- 完成判定：事件进入 canonical catalog，recording rule/Elasticsearch projection、dashboard、阈值、值班路由与测试同源；缺数据明确显示不可用而非合成趋势。
 - 依赖：各 owner 领域事件生产者与 observability pipeline。

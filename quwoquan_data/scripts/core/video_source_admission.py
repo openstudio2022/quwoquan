@@ -12,6 +12,7 @@ VIDEO_SOURCE_KINDS = {
     "tourism_video_site",
 }
 PUBLICATION_ADMISSIONS = {
+    "research_release",
     "commercial_release",
     "risk_accepted_attribution_only",
 }
@@ -179,6 +180,10 @@ def verify_video_commercial_admission(
         if not admissions or not admissions <= PUBLICATION_ADMISSIONS:
             issues.append(
                 f"video matrix {source_id}: invalid publicationAdmissions"
+            )
+        if "research_release" not in admissions:
+            issues.append(
+                f"video matrix {source_id}: research_release admission is required"
             )
         source = sources.get(source_id) or {}
         if "risk_accepted_attribution_only" in admissions and (

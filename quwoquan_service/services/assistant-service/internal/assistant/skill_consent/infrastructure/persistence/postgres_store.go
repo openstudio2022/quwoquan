@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS skill_consents (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL,
   skill_id TEXT NOT NULL,
-  granted_scope TEXT NOT NULL,
+  granted_scopes JSONB NOT NULL,
   granted_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ NULL
 );
@@ -86,7 +86,7 @@ func (store *PgStore) ListActiveConsents(
 		return nil, model.ErrStorageUnavailable
 	}
 	rows, err := store.pool.Query(ctx, `
-SELECT id, account_id, skill_id, granted_scope, granted_at, revoked_at
+SELECT id, account_id, skill_id, granted_scopes, granted_at, revoked_at
 FROM skill_consents
 WHERE account_id = $1 AND revoked_at IS NULL
 ORDER BY granted_at DESC`, strings.TrimSpace(accountID))
@@ -96,16 +96,9 @@ ORDER BY granted_at DESC`, strings.TrimSpace(accountID))
 	defer rows.Close()
 	items := make([]model.Consent, 0)
 	for rows.Next() {
-		var item model.Consent
-		if err := rows.Scan(
-			&item.ID,
-			&item.AccountID,
-			&item.SkillID,
-			&item.GrantedScope,
-			&item.GrantedAt,
-			&item.RevokedAt,
-		); err != nil {
-			return nil, fmt.Errorf("%w: scan active consent: %v", model.ErrStorageUnavailable, err)
+		item, scanErr := scanConsent(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
 		items = append(items, item)
 	}
@@ -160,24 +153,31 @@ func (store *PgStore) Apply(
 	switch command.Operation {
 	case model.CommandGrant:
 		if found {
+			if !model.EqualScopes(current.GrantedScopes, command.GrantedScopes) {
+				return model.MutationResult{}, model.ErrScopeConflict
+			}
 			result.Consent = &current
 			break
 		}
 		consent := model.Consent{
-			ID:           uuid.NewString(),
-			AccountID:    command.AccountID,
-			SkillID:      command.SkillID,
-			GrantedScope: command.GrantedScope,
-			GrantedAt:    command.OccurredAt,
+			ID:            uuid.NewString(),
+			AccountID:     command.AccountID,
+			SkillID:       command.SkillID,
+			GrantedScopes: append([]string(nil), command.GrantedScopes...),
+			GrantedAt:     command.OccurredAt,
+		}
+		grantedScopes, err := json.Marshal(consent.GrantedScopes)
+		if err != nil {
+			return model.MutationResult{}, unavailable("encode granted scopes", err)
 		}
 		if _, err := tx.Exec(ctx, `
 INSERT INTO skill_consents (
-  id, account_id, skill_id, granted_scope, granted_at, revoked_at
+  id, account_id, skill_id, granted_scopes, granted_at, revoked_at
 ) VALUES ($1, $2, $3, $4, $5, NULL)`,
 			consent.ID,
 			consent.AccountID,
 			consent.SkillID,
-			consent.GrantedScope,
+			grantedScopes,
 			consent.GrantedAt,
 		); err != nil {
 			return model.MutationResult{}, unavailable("insert consent", err)
@@ -314,19 +314,11 @@ func lockActiveConsent(
 	tx pgx.Tx,
 	accountID, skillID string,
 ) (model.Consent, bool, error) {
-	var consent model.Consent
-	err := tx.QueryRow(ctx, `
-SELECT id, account_id, skill_id, granted_scope, granted_at, revoked_at
+	consent, err := scanConsent(tx.QueryRow(ctx, `
+SELECT id, account_id, skill_id, granted_scopes, granted_at, revoked_at
 FROM skill_consents
 WHERE account_id = $1 AND skill_id = $2 AND revoked_at IS NULL
-FOR UPDATE`, accountID, skillID).Scan(
-		&consent.ID,
-		&consent.AccountID,
-		&consent.SkillID,
-		&consent.GrantedScope,
-		&consent.GrantedAt,
-		&consent.RevokedAt,
-	)
+FOR UPDATE`, accountID, skillID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Consent{}, false, nil
 	}
@@ -347,13 +339,13 @@ func appendEvent(
 		eventName = model.EventRevoked
 	}
 	event := model.Event{
-		EventID:      uuid.NewString(),
-		EventName:    eventName,
-		AggregateID:  consent.ID,
-		AccountID:    consent.AccountID,
-		SkillID:      consent.SkillID,
-		GrantedScope: consent.GrantedScope,
-		OccurredAt:   command.OccurredAt,
+		EventID:       uuid.NewString(),
+		EventName:     eventName,
+		AggregateID:   consent.ID,
+		AccountID:     consent.AccountID,
+		SkillID:       consent.SkillID,
+		GrantedScopes: append([]string(nil), consent.GrantedScopes...),
+		OccurredAt:    command.OccurredAt,
 	}
 	payload, err := json.Marshal(event)
 	if err != nil {
@@ -379,4 +371,34 @@ INSERT INTO skill_consent_events (
 
 func unavailable(stage string, err error) error {
 	return fmt.Errorf("%w: %s: %v", model.ErrStorageUnavailable, stage, err)
+}
+
+type rowScanner interface {
+	Scan(...any) error
+}
+
+func scanConsent(row rowScanner) (model.Consent, error) {
+	var consent model.Consent
+	var grantedScopes []byte
+	if err := row.Scan(
+		&consent.ID,
+		&consent.AccountID,
+		&consent.SkillID,
+		&grantedScopes,
+		&consent.GrantedAt,
+		&consent.RevokedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Consent{}, pgx.ErrNoRows
+		}
+		return model.Consent{}, unavailable("scan active consent", err)
+	}
+	if err := json.Unmarshal(grantedScopes, &consent.GrantedScopes); err != nil ||
+		len(consent.GrantedScopes) == 0 {
+		if err == nil {
+			err = errors.New("granted scopes are empty")
+		}
+		return model.Consent{}, unavailable("decode granted scopes", err)
+	}
+	return consent, nil
 }

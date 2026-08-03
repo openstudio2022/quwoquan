@@ -334,6 +334,55 @@ func (s *MemoryStore) PurgeDataContentExecution(
 	return result, nil
 }
 
+func (s *MemoryStore) CountDataContentOutboxes(
+	ctx context.Context,
+	executionID string,
+	stage string,
+) (int64, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	stage = strings.TrimSpace(stage)
+	if executionID == "" || (stage != "author" && stage != "publish") {
+		return 0, errors.New("data content executionId and stage are required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var count int64
+	for _, outbox := range s.outboxes {
+		if outbox.TaskType == DataContentTaskType &&
+			outbox.Payload["executionId"] == executionID &&
+			outbox.Payload["stage"] == stage {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *MemoryStore) ListDataContentExecutionTasks(
+	ctx context.Context,
+	executionID string,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tasks := make([]ReliableAsyncTask, 0)
+	for _, task := range s.tasks {
+		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
+			continue
+		}
+		task.Payload = CloneStringMap(task.Payload)
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
+	})
+	return tasks, nil
+}
+
 func (s *MemoryStore) listReadyTasksLocked(
 	taskTypes []string,
 	limit int,

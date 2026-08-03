@@ -27,7 +27,7 @@ class _WorksVideoBottomChrome extends StatefulWidget {
   final Widget? intersection;
   final String title;
   final String caption;
-  final SourceAttributionDto? sourceAttribution;
+  final SourceAttribution? sourceAttribution;
   final bool isExpanded;
   final VoidCallback onToggleCaption;
   final VideoPlaybackSession? session;

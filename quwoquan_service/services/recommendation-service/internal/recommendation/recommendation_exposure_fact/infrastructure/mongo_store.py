@@ -9,6 +9,12 @@ from pymongo.errors import DuplicateKeyError
 from internal.recommendation.recommendation_exposure_fact.application.appender import ExposureFact
 
 
+def _bson_datetime(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(
+        microsecond=(value.microsecond // 1000) * 1000
+    )
+
+
 class MongoExposureFactStore:
     def __init__(self, database: Any) -> None:
         self._facts = database["recommendation_exposure_facts"]
@@ -52,13 +58,13 @@ class MongoExposureFactStore:
             "modelBucket": fact.model_bucket,
             "modelChannel": fact.model_channel,
             "modelReleaseId": fact.model_release_id,
-            "featureSnapshotAt": fact.feature_snapshot_at,
+            "featureSnapshotAt": _bson_datetime(fact.feature_snapshot_at),
             "featureSnapshotDigest": fact.feature_snapshot_digest,
             "rankingSnapshotDigest": fact.ranking_snapshot_digest,
             "userFeatureSnapshot": dict(fact.user_feature_snapshot),
             "itemFeatureSnapshot": dict(fact.item_feature_snapshot),
-            "exposedAt": fact.exposed_at,
-            "recordedAt": fact.recorded_at,
+            "exposedAt": _bson_datetime(fact.exposed_at),
+            "recordedAt": _bson_datetime(fact.recorded_at),
         }
 
     @staticmethod

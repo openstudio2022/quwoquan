@@ -8,7 +8,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/page_access_internal_routes.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -21,6 +20,8 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_app/ui/user/services/qr_payload_parser.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ProfileQrResolveWire;
 
 /// 扫一扫页：全屏相机预览 + 取景框 + 扫描线动画 + 图库识别 + 我的二维码入口。
 class ScanContactQrPage extends ConsumerStatefulWidget {
@@ -130,7 +131,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     setState(() => _handling = true);
     unawaited(_controller?.stop());
     try {
-      final ProfileQrResolveWireDto resolved = await ref
+      final ProfileQrResolveWire resolved = await ref
           .read(profileEditQueryProvider(AppUiSurfaces.addContactScan))
           .resolveProfileQrToken(token: parsed.token, handle: parsed.handle);
       if (!mounted) {

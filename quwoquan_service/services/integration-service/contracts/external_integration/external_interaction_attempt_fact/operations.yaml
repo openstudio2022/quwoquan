@@ -1,0 +1,14 @@
+description: ExternalInteractionAttemptFact 只由 ExternalInteraction 调用边界在本地追加。
+api_routes: []
+runtime_entrypoints:
+- name: AppendExternalInteractionAttempt
+  kind: internal_port
+  phase: transactional_append
+  source_objects:
+  - integration.ExternalInteraction
+  idempotency: transaction_identity
+  application:
+    kind: command
+    facet: ExternalInteractionAttemptFactAppender
+    method: append
+    object_owner: ExternalInteractionAttemptFact

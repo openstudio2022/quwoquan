@@ -124,9 +124,9 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：领域边界、canonical search-service、分层测试与直接 `spec_ref`
-  已落地；Gamma-local 已使用统一材料器提供日志 Port 替身，不要求真实 SLS 租户或
-  凭据，当前仍缺 production Remote 真机 Journey CaseResult 与同源黄金指标样本。
+  已落地；Gamma-local 使用 canonical observability capability，不依赖外部日志租户，
+  当前仍缺 production Remote 真机 Journey CaseResult 与同源黄金指标样本。
 - 目标：关闭直属能力中所有发布阻断，并证明搜索结果、最近搜索、标签过滤、
-  搜索反馈和 SLS 漏斗来自同一 commercial contract。
+  搜索反馈和观测漏斗来自同一 commercial contract。
 - 完成判定：`DOM-001` 的 Gamma-local 真机 CaseResult、requestId/traceId 与 SLO 证据完整，
   且直属节点无未关闭的发布阻断。

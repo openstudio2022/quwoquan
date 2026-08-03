@@ -363,6 +363,103 @@ types:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+  RtcMediaSessionAccess:
+    description: 由 RTC 媒体 transport 为当前受信任 participant 签发的短期访问凭据；服务端不持久化原文。
+    fields:
+      - name: accessToken
+        source: accessToken
+        type: string
+        constraints:
+          - NOT_NULL
+          - NOT_BLANK
+        classification: SENSITIVE
+        log_policy: redacted
+        api_exposure: read
+        ops_exposure: mask
+  RtcInitiateCallResult:
+    description: 发起通话的唯一 typed response；同时返回已提交的 CallSession 与当前发起人的媒体访问凭据。
+    fields:
+      - name: session
+        source: session
+        type: CallSession
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: mediaAccess
+        source: mediaAccess
+        type: RtcMediaSessionAccess
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: redacted
+        api_exposure: read
+        ops_exposure: mask
+  RtcAnswerCallResult:
+    description: 接听通话的唯一 typed response；同时返回已提交的 CallSession 与当前接听人的媒体访问凭据。
+    fields:
+      - name: session
+        source: session
+        type: CallSession
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: mediaAccess
+        source: mediaAccess
+        type: RtcMediaSessionAccess
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: redacted
+        api_exposure: read
+        ops_exposure: mask
+  RtcJoinCredentials:
+    description: 加入通话的唯一 typed response；同时返回已提交的 CallSession 与当前参与人的媒体访问凭据。
+    fields:
+      - name: session
+        source: session
+        type: CallSession
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: mediaAccess
+        source: mediaAccess
+        type: RtcMediaSessionAccess
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: redacted
+        api_exposure: read
+        ops_exposure: mask
+  RtcCallHistoryPage:
+    description: 当前 persona 可见的 CallSession 稳定分页结果。
+    fields:
+      - name: items
+        source: items
+        type: '[]CallSession'
+        constraints:
+          - NOT_NULL
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: nextCursor
+        source: nextCursor
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
   InitiateCallRequest:
     description: InitiateCall 的唯一 HTTP body；身份只由认证上下文注入，不接受 body 身份字段。
     fields:
@@ -444,12 +541,10 @@ types:
         client_dart_type: int
         client_default: "20"
       - name: status
-        type: CallStatus
+        type: enum
         enum_ref: CallStatus
         constraints:
           - NULLABLE
-        client_dart_type: CallStatus?
-        client_wire: canonicalEnum
       - name: missed
         type: bool
         client_dart_name: missedOnly
@@ -481,10 +576,8 @@ types:
   RtcInitiateCallCommand:
     fields:
       - name: callType
-        type: CallType
+        type: enum
         enum_ref: CallType
-        client_dart_type: CallType
-        client_wire: canonicalEnum
       - name: inviteeIds
         type: '[]string'
         client_dart_type: List<String>

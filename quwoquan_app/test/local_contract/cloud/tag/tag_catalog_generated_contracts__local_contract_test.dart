@@ -16,8 +16,7 @@ void main() {
       );
       final validation = encodeTagTagNodeViewValidateTagRefsGeneratedRequest(
         ValidateTagRefsQuery(
-          expectedTaxonomyReleaseId:
-              _taxonomyReleaseId,
+          expectedTaxonomyReleaseId: _taxonomyReleaseId,
           tagRefs: const ['Topic/旅行', 'Place/中国'],
         ),
       );
@@ -28,22 +27,19 @@ void main() {
         'limit': '30',
       });
       expect(validation.body, {
-        'expectedTaxonomyReleaseId':
-            _taxonomyReleaseId,
+        'expectedTaxonomyReleaseId': _taxonomyReleaseId,
         'tagRefs': ['Topic/旅行', 'Place/中国'],
       });
     });
 
     test('decodes resolve, children and validation responses', () {
-      final resolved = decodeTagResolve({
-        'data': {
-          'tagRef': 'Topic/旅行',
-          'group': 'Topic',
-          'label': '旅行',
-          'labelEn': 'Travel',
-          'aliases': '',
-          'ancestors': '',
-        },
+      final resolved = decodeTagResolveView({
+        'tagRef': 'Topic/旅行',
+        'group': 'Topic',
+        'label': '旅行',
+        'labelEn': 'Travel',
+        'aliases': ['旅游'],
+        'ancestors': ['Topic'],
       });
       final children = decodeTagChildrenSlice({
         'items': [
@@ -60,19 +56,15 @@ void main() {
           },
         ],
       });
-      final validation = decodeTagValidationResult({
-        'taxonomyReleaseId':
-            _taxonomyReleaseId,
+      final validation = decodeTagValidationResultView({
+        'taxonomyReleaseId': _taxonomyReleaseId,
         'valid': ['Topic/旅行'],
         'invalid': ['Topic/不存在'],
       });
 
       expect(resolved.label, '旅行');
       expect(children.items.single.parentTagRef, 'Topic/旅行');
-      expect(
-        validation.taxonomyReleaseId,
-        _taxonomyReleaseId,
-      );
+      expect(validation.taxonomyReleaseId, _taxonomyReleaseId);
       expect(validation.valid, ['Topic/旅行']);
       expect(validation.invalid, ['Topic/不存在']);
     });
@@ -81,9 +73,7 @@ void main() {
       'malformed Remote projections fail closed instead of synthesizing data',
       () {
         expect(
-          () => decodeTagResolve({
-            'data': {'tagRef': 'Topic/旅行'},
-          }),
+          () => decodeTagResolveView({'tagRef': 'Topic/旅行'}),
           throwsA(isA<FormatException>()),
         );
         expect(
@@ -109,7 +99,7 @@ void main() {
           throwsA(isA<FormatException>()),
         );
         expect(
-          () => decodeTagValidationResult({
+          () => decodeTagValidationResultView({
             'taxonomyReleaseId': 'tag-release',
             'valid': 'Topic/旅行',
             'invalid': const <String>[],
@@ -119,17 +109,21 @@ void main() {
       },
     );
 
-    test('Tag feedback ack requires an explicit bool', () {
+    test('Tag feedback result requires an explicit bool', () {
       expect(
-        decodeTagFeedbackAck(<String, Object?>{'accepted': true}).accepted,
+        decodeTagFeedbackResultView(<String, Object?>{
+          'accepted': true,
+        }).accepted,
         isTrue,
       );
       expect(
-        decodeTagFeedbackAck(<String, Object?>{'accepted': false}).accepted,
+        decodeTagFeedbackResultView(<String, Object?>{
+          'accepted': false,
+        }).accepted,
         isFalse,
       );
       expect(
-        () => decodeTagFeedbackAck(<String, Object?>{}),
+        () => decodeTagFeedbackResultView(<String, Object?>{}),
         throwsA(isA<FormatException>()),
       );
     });
@@ -141,7 +135,7 @@ void main() {
       );
 
       expect(
-        encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(request).body,
+        encodeTagTagFeedbackFactReportTagFeedbackGeneratedRequest(request).body,
         <String, Object?>{'tagRef': 'Topic/旅行', 'action': 'correct'},
       );
     });
@@ -150,12 +144,12 @@ void main() {
       final encoded = <String>{};
       for (final action in TagFeedbackAction.values) {
         final body =
-            encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(
+            encodeTagTagFeedbackFactReportTagFeedbackGeneratedRequest(
                   ReportTagFeedbackCommand(tagRef: 'Topic/旅行', action: action),
                 ).body
                 as Map<String, Object?>;
-        expect(body['action'], action.wireValue);
-        expect(encoded.add(action.wireValue), isTrue);
+        expect(body['action'], action.wireName);
+        expect(encoded.add(action.wireName), isTrue);
       }
     });
 
@@ -164,7 +158,7 @@ void main() {
       // ignore 只回到无偏好，correct 不改特征。
       expect(TagFeedbackAction.values, contains(TagFeedbackAction.dislike));
       expect(
-        encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(
+        encodeTagTagFeedbackFactReportTagFeedbackGeneratedRequest(
           ReportTagFeedbackCommand(
             tagRef: 'Topic/摄影/器材/无人机',
             action: TagFeedbackAction.dislike,

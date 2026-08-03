@@ -17,6 +17,22 @@ class DeviceContextFactsWire {
       };
 
   factory DeviceContextFactsWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'coarseLocation',
+      'surface',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('DeviceContextFactsWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('coarseLocation') && json['coarseLocation'] != null && (json['coarseLocation'] is! Map)) {
+      throw const FormatException('DeviceContextFactsWire field coarseLocation has an invalid wire value');
+    }
+    if (json.containsKey('surface') && json['surface'] != null && (json['surface'] is! String)) {
+      throw const FormatException('DeviceContextFactsWire field surface has an invalid wire value');
+    }
     return DeviceContextFactsWire(
       coarseLocation: (json['coarseLocation'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       surface: (json['surface'] as String?)?.trim() ?? "",
@@ -56,6 +72,38 @@ class DeviceContextWire {
       };
 
   factory DeviceContextWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'deviceContextId',
+      'userId',
+      'deviceId',
+      'updatedAt',
+      'capabilities',
+      'facts',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('DeviceContextWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('deviceContextId') || json['deviceContextId'] == null || (json['deviceContextId'] is! String)) {
+      throw const FormatException('DeviceContextWire field deviceContextId has an invalid wire value');
+    }
+    if (!json.containsKey('userId') || json['userId'] == null || (json['userId'] is! String)) {
+      throw const FormatException('DeviceContextWire field userId has an invalid wire value');
+    }
+    if (!json.containsKey('deviceId') || json['deviceId'] == null || (json['deviceId'] is! String)) {
+      throw const FormatException('DeviceContextWire field deviceId has an invalid wire value');
+    }
+    if (!json.containsKey('updatedAt') || json['updatedAt'] == null || (json['updatedAt'] is! String)) {
+      throw const FormatException('DeviceContextWire field updatedAt has an invalid wire value');
+    }
+    if (json.containsKey('capabilities') && json['capabilities'] != null && (json['capabilities'] is! List || (json['capabilities'] as List).any((item) => item is! String))) {
+      throw const FormatException('DeviceContextWire field capabilities has an invalid wire value');
+    }
+    if (json.containsKey('facts') && json['facts'] != null && (json['facts'] is! Map)) {
+      throw const FormatException('DeviceContextWire field facts has an invalid wire value');
+    }
     return DeviceContextWire(
       deviceContextId: (json['deviceContextId'] as String?)?.trim() ?? "",
       userId: (json['userId'] as String?)?.trim() ?? "",

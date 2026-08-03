@@ -100,11 +100,13 @@ class RunnerTests: XCTestCase {
     defer {
       try? eventStore.remove(event, span: .thisEvent, commit: true)
     }
+    XCTAssertFalse(event.url?.absoluteString.contains(idempotencyKey) ?? true)
+    UserDefaults.standard.removeObject(forKey: preferenceKey)
 
     let replay = invokeCalendarReminder(
       plugin: plugin,
       arguments: arguments,
-      label: "idempotent calendar replay"
+      label: "idempotent calendar restart recovery"
     )
     XCTAssertEqual(replay["status"] as? String, "created")
     XCTAssertEqual(replay["deviceObjectId"] as? String, identifier)

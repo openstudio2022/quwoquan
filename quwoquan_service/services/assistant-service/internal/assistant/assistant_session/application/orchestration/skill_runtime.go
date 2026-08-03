@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -13,6 +14,8 @@ import (
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
+
+var ErrNoEligibleSkill = errors.New("no eligible assistant skill is available for this surface")
 
 type SkillSelection struct {
 	SkillID      string
@@ -62,7 +65,9 @@ type ScopedSkillRuntime interface {
 	) (SkillSelection, error)
 }
 
-type DefaultSkillRuntime struct{}
+type DefaultSkillRuntime struct {
+	Loader skillpkg.Loader
+}
 
 func (rt DefaultSkillRuntime) SelectSkill(
 	ctx context.Context,
@@ -71,26 +76,17 @@ func (rt DefaultSkillRuntime) SelectSkill(
 	return rt.SelectSkillWithin(ctx, turn, nil)
 }
 
-func (DefaultSkillRuntime) SelectSkillWithin(
+func (rt DefaultSkillRuntime) SelectSkillWithin(
 	ctx context.Context,
 	turn assistant.AssistantTurn,
 	allowedSkillIDs []string,
 ) (SkillSelection, error) {
-	if IsP0ProactiveSkill(turn.SkillID) {
-		domainID := strings.TrimSpace(turn.DomainID)
-		if domainID == "" {
-			domainID = "assistant"
-		}
-		return SkillSelection{
-			SkillID:      turn.SkillID,
-			DomainID:     domainID,
-			DisplayName:  displaySkillName(turn.SkillID),
-			ToolPolicy:   p0SkillToolPolicy(turn.SkillID),
-			MaxToolCalls: p0SkillMaxToolCalls(turn.SkillID),
-		}, nil
+	loader := rt.Loader
+	if loader == nil {
+		loader = skillpkg.StaticLoader{}
 	}
 	return ManifestSkillRuntime{
-		Loader: assistantDomainSkillCatalogLoader{},
+		Loader: loader,
 	}.SelectSkillWithin(ctx, turn, allowedSkillIDs)
 }
 
@@ -114,16 +110,19 @@ func (r ModelDrivenSkillRuntime) SelectSkillWithin(
 ) (SkillSelection, error) {
 	loader := r.Loader
 	if loader == nil {
-		loader = assistantDomainSkillCatalogLoader{}
+		loader = skillpkg.StaticLoader{}
 	}
-	catalog, err := loader.Load()
+	catalog, err := loader.Load(ctx)
 	if err != nil {
 		return SkillSelection{}, err
 	}
-	if IsP0ProactiveSkill(turn.SkillID) {
-		return DefaultSkillRuntime{}.SelectSkill(ctx, turn)
+	if manifest, found := manifestByID(catalog, turn.SkillID); found && manifest.IsProactive() {
+		return selectionFromManifest(manifest), nil
 	}
 	catalog = restrictSkillCatalog(reactiveSkillCatalog(catalog), allowedSkillIDs)
+	if allowedSkillIDs != nil && len(catalog) == 0 {
+		return SkillSelection{}, ErrNoEligibleSkill
+	}
 	if manifest, ok := manifestByExplicitIDOrHint(catalog, turn); ok {
 		log.Printf("assistant skill selector manifest_selected turnId=%s skillId=%s", turn.TurnID, manifest.SkillID)
 		return selectionFromManifest(manifest), nil
@@ -135,7 +134,11 @@ func (r ModelDrivenSkillRuntime) SelectSkillWithin(
 				Turn:     turn,
 				Client:   contextassembly.ClientContext{SurfaceID: turn.RequestContext.SurfaceID},
 				DomainID: turn.DomainID,
-				Channel:  channelpkg.Resolve(turn.TurnType, turn.Trigger),
+				Channel: channelpkg.ResolveForSurface(
+					turn.TurnType,
+					turn.Trigger,
+					turn.RequestContext.SurfaceKind,
+				),
 			})
 		if assemblyErr != nil {
 			return SkillSelection{}, assemblyErr
@@ -168,18 +171,28 @@ func (r ModelDrivenSkillRuntime) SelectSkillWithin(
 	if fallback == nil {
 		fallback = ManifestSkillRuntime{Loader: skillpkg.StaticLoader{Manifests: catalog}}
 	}
-	selection, err := fallback.SelectSkill(ctx, turn)
+	var selection SkillSelection
+	if allowedSkillIDs != nil {
+		scopedFallback, ok := fallback.(ScopedSkillRuntime)
+		if !ok {
+			return SkillSelection{}, fmt.Errorf("scoped Skill fallback is not supported")
+		}
+		selection, err = scopedFallback.SelectSkillWithin(ctx, turn, allowedSkillIDs)
+	} else {
+		selection, err = fallback.SelectSkill(ctx, turn)
+	}
 	if err == nil {
 		log.Printf("assistant skill selector degraded_fallback turnId=%s skillId=%s", turn.TurnID, selection.SkillID)
 	}
 	return selection, err
 }
 
-// reactiveSkillCatalog 去掉主动订阅技能。主动技能由调度触发，不参与用户提问的技能选择。
+// reactiveSkillCatalog 只保留可由用户调用的 Skill。hybrid Skill 同时参与响应式路由与
+// 显式订阅触发，从而保持一个用户入口和一条 AssistantRun 管线。
 func reactiveSkillCatalog(catalog []skillpkg.Manifest) []skillpkg.Manifest {
 	reactive := make([]skillpkg.Manifest, 0, len(catalog))
 	for _, manifest := range catalog {
-		if manifest.IsProactive() {
+		if !manifest.IsReactive() {
 			continue
 		}
 		reactive = append(reactive, manifest)
@@ -187,13 +200,14 @@ func reactiveSkillCatalog(catalog []skillpkg.Manifest) []skillpkg.Manifest {
 	return reactive
 }
 
-// restrictSkillCatalog 把目录收窄到策略能服务的技能。集合为空表示不做限制；集合与目录没有
-// 交集时保留原目录，避免因为策略与目录暂时不同步而让选择完全无解。
+// restrictSkillCatalog 把目录收窄到策略能服务的技能。nil 表示调用方没有施加限制；
+// 非 nil 空集合表示当前 surface 没有可执行 Skill，必须 fail closed。策略与目录不一致
+// 也返回空集合，不能退回完整目录绕过用户/管理员设置。
 func restrictSkillCatalog(
 	catalog []skillpkg.Manifest,
 	allowedSkillIDs []string,
 ) []skillpkg.Manifest {
-	if len(allowedSkillIDs) == 0 {
+	if allowedSkillIDs == nil {
 		return catalog
 	}
 	allowed := make(map[string]bool, len(allowedSkillIDs))
@@ -204,7 +218,7 @@ func restrictSkillCatalog(
 		}
 	}
 	if len(allowed) == 0 {
-		return catalog
+		return []skillpkg.Manifest{}
 	}
 	restricted := make([]skillpkg.Manifest, 0, len(allowed))
 	for _, manifest := range catalog {
@@ -217,7 +231,7 @@ func restrictSkillCatalog(
 			"assistant skill selector policy_candidates_absent_from_catalog candidates=%v",
 			allowedSkillIDs,
 		)
-		return catalog
+		return []skillpkg.Manifest{}
 	}
 	return restricted
 }
@@ -262,28 +276,6 @@ func manifestByExplicitIDOrHint(catalog []skillpkg.Manifest, turn assistant.Assi
 	return best, true
 }
 
-// p0SkillToolPolicy 取自主动技能自己的清单，避免代码内再维护一份工具策略。
-func p0SkillToolPolicy(skillID string) []string {
-	manifest, found := proactiveSkillManifest(skillID)
-	if !found {
-		return []string{}
-	}
-	toolPolicy := manifest.ToolPolicy.PreferredTools
-	if len(toolPolicy) == 0 {
-		toolPolicy = manifest.ToolPolicy.AllowedTools
-	}
-	return append([]string{}, toolPolicy...)
-}
-
-// p0SkillMaxToolCalls 与工具策略同源：主动技能的预算也只在自己的清单里声明。
-func p0SkillMaxToolCalls(skillID string) int {
-	manifest, found := proactiveSkillManifest(skillID)
-	if !found {
-		return 0
-	}
-	return manifest.ToolPolicy.MaxToolCalls
-}
-
 type ManifestSkillRuntime struct {
 	Loader skillpkg.Loader
 }
@@ -296,7 +288,7 @@ func (r ManifestSkillRuntime) SelectSkill(
 }
 
 func (r ManifestSkillRuntime) SelectSkillWithin(
-	_ context.Context,
+	ctx context.Context,
 	turn assistant.AssistantTurn,
 	allowedSkillIDs []string,
 ) (SkillSelection, error) {
@@ -304,19 +296,35 @@ func (r ManifestSkillRuntime) SelectSkillWithin(
 	if loader == nil {
 		loader = skillpkg.StaticLoader{}
 	}
-	catalog, err := loader.Load()
+	catalog, err := loader.Load(ctx)
 	if err != nil {
 		return SkillSelection{}, err
 	}
+	if manifest, found := manifestByID(catalog, turn.SkillID); found && manifest.IsProactive() {
+		return selectionFromManifest(manifest), nil
+	}
 	catalog = restrictSkillCatalog(reactiveSkillCatalog(catalog), allowedSkillIDs)
+	if allowedSkillIDs != nil && len(catalog) == 0 {
+		return SkillSelection{}, ErrNoEligibleSkill
+	}
 	return selectionFromManifest(skillpkg.NewRouter(catalog).Route(turn)), nil
 }
 
-func selectionFromManifest(manifest skillpkg.Manifest) SkillSelection {
-	toolPolicy := manifest.ToolPolicy.PreferredTools
-	if len(toolPolicy) == 0 {
-		toolPolicy = manifest.ToolPolicy.AllowedTools
+func manifestByID(catalog []skillpkg.Manifest, skillID string) (skillpkg.Manifest, bool) {
+	skillID = strings.TrimSpace(skillID)
+	if skillID == "" {
+		return skillpkg.Manifest{}, false
 	}
+	for _, manifest := range catalog {
+		if strings.TrimSpace(manifest.SkillID) == skillID {
+			return manifest, true
+		}
+	}
+	return skillpkg.Manifest{}, false
+}
+
+func selectionFromManifest(manifest skillpkg.Manifest) SkillSelection {
+	toolPolicy := manifest.ToolPolicy.AllowedTools
 	return SkillSelection{
 		SkillID:        manifest.SkillID,
 		DomainID:       manifest.DomainID,

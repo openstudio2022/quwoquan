@@ -11,6 +11,23 @@ import (
 	"strings"
 )
 
+var appGeneratedOutputRoots = []string{
+	"lib/app/navigation/generated",
+	"lib/application/content/media/generated",
+	"lib/assistant/generated",
+	"lib/cloud/runtime/generated",
+	"lib/cloud/assistant/generated",
+	"lib/cloud/chat/generated",
+	"lib/cloud/circle/generated",
+	"lib/cloud/content/generated",
+	"lib/cloud/entity/generated",
+	"lib/cloud/rtc/generated",
+	"lib/cloud/user/generated",
+	"packages/quwoquan_cloud_contracts/lib/src/generated",
+	"packages/quwoquan_cloud_contracts/lib/src/rtc",
+	"packages/quwoquan_cloud_contracts/lib/generated",
+}
+
 const appOnlyEmitter = "app-only-emitter"
 
 type generatedOutput struct {
@@ -74,6 +91,65 @@ func recordGeneratedFile(path string, content []byte) {
 		SHA256:              hex.EncodeToString(sum[:]),
 		Bytes:               len(content),
 	}
+}
+
+func removeUntrackedGeneratedOutputs() error {
+	if generatedManifestAppRoot == "" {
+		return fmt.Errorf("App generated manifest root is not initialized")
+	}
+	for _, relativeRoot := range appGeneratedOutputRoots {
+		root := filepath.Join(generatedManifestAppRoot, filepath.FromSlash(relativeRoot))
+		if _, err := os.Stat(root); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("inspect App generated root %s: %w", root, err)
+		}
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() || filepath.Ext(path) != ".dart" {
+				return nil
+			}
+			relative, err := filepath.Rel(generatedManifestAppRoot, path)
+			if err != nil {
+				return err
+			}
+			normalized := filepath.ToSlash(relative)
+			if _, current := generatedManifestOutputs[normalized]; current {
+				return nil
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			header := make([]byte, 300)
+			count, readErr := file.Read(header)
+			closeErr := file.Close()
+			if readErr != nil && count == 0 {
+				return readErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+			header = header[:count]
+			normalizedHeader := strings.ToLower(string(header))
+			if !strings.Contains(normalizedHeader, "generated") ||
+				!strings.Contains(normalizedHeader, "do not edit") {
+				return nil
+			}
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("remove untracked generated output %s: %w", path, err)
+			}
+			fmt.Printf("retired generated: %s\n", path)
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("scan App generated root %s: %w", root, err)
+		}
+	}
+	return nil
 }
 
 func writeGeneratedManifest(path string) error {

@@ -13,7 +13,7 @@ import (
 	recpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	testsupport "quwoquan_service/services/content-service/tests/support"
 )
@@ -183,7 +183,7 @@ func TestListFeedCarriesVersionBoundHLSCMAFDelivery(t *testing.T) {
 		PublishedAt: time.Date(2026, time.July, 28, 12, 0, 0, 0, time.UTC),
 	}}}
 
-	response, err := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...).ListFeed(
+	response, err := NewFeedService(reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...).ListFeed(
 		ctx,
 		ListFeedRequest{
 			UserID: "user_feed_adaptive", SessionID: "session_feed_adaptive",
@@ -327,56 +327,26 @@ func feedDisplayReadyReason(id, postID, weightTier string) intersection.Intersec
 	}
 }
 
-// TestListFeed_PostReaderQuery_FiltersDislikedContent 守护具名查询与推荐召回
-// 共用的强负反馈事实：生产读路径用 *SessionCache 包裹 *HotPath，
-// engine.LoadFeedbackExclusions 必须通过同一 pipeline 快照剔除
-// dislike/not_interested 内容，不允许另建顺序读取路径。
-func TestListFeed_PostReaderQuery_FiltersDislikedContent(t *testing.T) {
+// TestListFeed_PostReaderQueryDoesNotOwnRecommendationExclusions 守护对象边界：
+// 显式 Post 查询只执行 Content 权限/可见性规则；强负反馈由 Recommendation
+// 在 RankedRecommendationWindow 评分前唯一应用，Content 不保留第二份状态。
+func TestListFeed_PostReaderQueryDoesNotOwnRecommendationExclusions(t *testing.T) {
 	ctx := context.Background()
-	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
-	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
-	// 生产读路径接线：SessionCache 包裹 HotPath（L1 缓存 + singleflight）。
-	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 1000)
-	// 显式 image 类型请求直接选择具名 PostReader 查询，不经推荐召回。
-	engine := rtrec.NewEngine(sessionCache, nil, rtrec.WithExposureGovernance(sessionCache, sessionCache))
-
 	reader := fixtureFeedReader{posts: []postmodel.Post{
 		{ID: "p_ok", ContentType: "image", AuthorId: "author_a", Visibility: "public", Status: "published"},
-		{ID: "p_disliked", ContentType: "image", AuthorId: "author_b", Visibility: "public", Status: "published"},
+		{ID: "p_visible", ContentType: "image", AuthorId: "author_b", Visibility: "public", Status: "published"},
 	}}
-	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
-
-	const userID = "user-neg-1"
-	const sessionID = "sess-neg-1"
-
-	// 上报 dislike 单条内容（写入 rec:negative:{user}）。
-	if err := hotPath.ProcessSignal(ctx, rtrec.BehaviorSignal{
-		UserID: userID, SessionID: sessionID, ContentID: "p_disliked", Action: "dislike",
-	}); err != nil {
-		t.Fatalf("record dislike: %v", err)
-	}
+	svc := NewFeedService(reader, feedDeliveryPageStoreOption())
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{
-		UserID: userID, SessionID: sessionID, Type: "image", Limit: 20,
+		UserID: "user-query", SessionID: "session-query", Type: "image", Limit: 20,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
 
-	var sawOK, sawDisliked bool
-	for _, item := range resp.Items {
-		switch item.PostID {
-		case "p_ok":
-			sawOK = true
-		case "p_disliked":
-			sawDisliked = true
-		}
-	}
-	if sawDisliked {
-		t.Fatalf("disliked content must not appear via post reader query path, items=%+v", resp.Items)
-	}
-	if !sawOK {
-		t.Fatalf("non-disliked content must surface via post reader query, items=%+v", resp.Items)
+	if len(resp.Items) != 2 {
+		t.Fatalf("explicit Post query must not consult Recommendation exclusion state: %+v", resp.Items)
 	}
 }
 
@@ -395,8 +365,12 @@ func TestListFeed_ChannelRecommendRoutesRankedWindow(t *testing.T) {
 		{ID: "p_rec", ContentType: "image", AuthorId: "author_a", Status: "published", Visibility: "public"},
 		{ID: "p_reader_only", ContentType: "image", AuthorId: "author_b", Status: "published", Visibility: "public"},
 	}}
-	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	probe, options := testsupport.CapturedRankedRecommendationOptions(
+		engine,
+		WithFeedViewerBlockReader(terminalAllowAllBlockReader{}),
+		readyActiveSupplyOption(),
+	)
+	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_channel", SessionID: "s_channel", ChannelID: "recommend", Limit: 10})
 	if err != nil {
@@ -429,7 +403,7 @@ func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
 		{ID: "p_timeline", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_b", Status: "published", Visibility: "public"},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "u_mixed", SessionID: "s_mixed",
@@ -449,9 +423,9 @@ func TestListFeed_ChannelIgnoresLegacyIdentityType(t *testing.T) {
 	}
 }
 
-// TestListFeed_ChannelFollowingRoutesFollowFeed 守护 B16：following 频道走 FeedFollow
-// 关注召回主路；候选池 fail-closed（由 GateFollowFeedSource 保证只有关注召回可供给）。
-func TestListFeed_ChannelFollowingRoutesFollowFeed(t *testing.T) {
+// TestListFeed_ChannelFollowingRoutesRankedWindow 守护 B16：Content 只发送
+// following 场景和可信 Persona subject；关注集合与候选过滤由 Recommendation 拥有。
+func TestListFeed_ChannelFollowingRoutesRankedWindow(t *testing.T) {
 	ctx := context.Background()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
 	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
@@ -463,14 +437,20 @@ func TestListFeed_ChannelFollowingRoutesFollowFeed(t *testing.T) {
 		{ID: "p_followed", ContentType: "image", AuthorId: "author_followed", Status: "published", Visibility: "public"},
 		{ID: "p_stranger", ContentType: "image", AuthorId: "author_stranger", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
+	probe, options := testsupport.CapturedRankedRecommendationOptions(
+		engine,
+		WithFeedViewerBlockReader(terminalAllowAllBlockReader{}),
+		readyActiveSupplyOption(),
+	)
+	svc := NewFeedService(reader, options...)
 
-	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_follow", SessionID: "s_follow", ChannelID: "following", Limit: 10})
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_follow", ViewerPersonaID: "persona_follow", SessionID: "s_follow", ChannelID: "following", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
 	}
-	if source.last.FeedType != rtrec.FeedFollow {
-		t.Fatalf("following channel must route FeedFollow, got %+v", source.last)
+	commands := probe.CreateCommands()
+	if len(commands) != 1 || commands[0].Scenario != "following" || commands[0].SubjectId != "persona_follow" {
+		t.Fatalf("following must use one canonical Persona-scoped ranked window, got %+v", commands)
 	}
 	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_followed" {
 		t.Fatalf("following channel must not fill from post reader timeline, got %+v", resp.Items)
@@ -491,7 +471,7 @@ func TestListFeed_ChannelTravelRoutesVertical(t *testing.T) {
 		{ID: "p_travel_ch", ContentType: "image", AuthorId: "author_a", ContentVertical: "travel_photography", Status: "published", Visibility: "public"},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_travel_ch", SessionID: "s_travel_ch", ChannelID: "travel", Limit: 10})
 	if err != nil {
@@ -519,7 +499,7 @@ func TestListFeed_TravelVerticalRoutesRecommendation(t *testing.T) {
 		{ID: "p_general", ContentType: "image", AuthorId: "author_b", TagRefs: []string{"Topic/美食"}, Status: "published", Visibility: "public"},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_route", SessionID: "s_route", SubCategory: "travel", Limit: 10})
 	if err != nil {
@@ -546,7 +526,7 @@ func TestListFeed_PremiumStreamRoutesToSimilarPresetSurface(t *testing.T) {
 		{ID: "p_premium", ContentType: "video", AuthorId: "author_p", Status: "published", Visibility: "public", VideoUrl: "https://media.example.test/premium.mp4", DurationMs: 5000},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium", SessionID: "s_premium", Type: "premium", Limit: 10})
 	if err != nil {
@@ -573,7 +553,7 @@ func TestListFeed_PremiumStreamDoesNotUsePostReaderQuery(t *testing.T) {
 		{ID: "p_premium_eligible", ContentType: "video", AuthorId: "author_p", Status: "published", Visibility: "public", VideoUrl: "https://media.example.test/premium-eligible.mp4", DurationMs: 5000},
 		{ID: "p_ordinary_published", ContentType: "image", AuthorId: "author_o", Status: "published", Visibility: "public"},
 	}}
-	svc := NewFeedService(engine, reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
+	svc := NewFeedService(reader, testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium_no_reader", SessionID: "s_premium_no_reader", Type: "premium", Limit: 10})
 	if err != nil {
@@ -605,7 +585,7 @@ func TestListFeed_RecordsOnlyHydratedItemsAsServed(t *testing.T) {
 		},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	svc := NewFeedService(engine, reader, options...)
+	svc := NewFeedService(reader, options...)
 
 	response, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "u-final-delivery", SessionID: "s-final-delivery",
@@ -666,7 +646,7 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 	}}}
 
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
-	response, err := NewFeedService(engine, reader, options...).ListFeed(ctx, ListFeedRequest{
+	response, err := NewFeedService(reader, options...).ListFeed(ctx, ListFeedRequest{
 		UserID: "u-release", SessionID: "s-release",
 		ChannelID: "recommend", FeedRequestID: "frq-release", Limit: 1,
 	})

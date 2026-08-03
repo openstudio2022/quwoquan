@@ -8,12 +8,12 @@ import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 /// 只读取 JPEG 的 APP1/Exif 段，不解码像素：扫描 marker 找到 TIFF 块后交给
 /// `package:image` 的 EXIF 解析器。纯 Dart 实现，无 `dart:io`，Web / 鸿蒙同样可用。
 ///
-/// 任何解析失败都返回 [MediaCaptureMetadata.empty] 而非抛出：拍摄元数据是增强信号，
+/// 任何解析失败都返回 [ExtractedMediaCaptureMetadata.empty] 而非抛出：拍摄元数据是增强信号，
 /// 缺失不得阻断发布。
-MediaCaptureMetadata extractMediaCaptureMetadata(Uint8List bytes) {
+ExtractedMediaCaptureMetadata extractMediaCaptureMetadata(Uint8List bytes) {
   final tiff = _locateExifTiffBlock(bytes);
   if (tiff == null) {
-    return MediaCaptureMetadata.empty;
+    return ExtractedMediaCaptureMetadata.empty;
   }
   final exif = img.ExifData();
   try {
@@ -22,12 +22,12 @@ MediaCaptureMetadata extractMediaCaptureMetadata(Uint8List bytes) {
     exif.read(img.InputBuffer(tiff, bigEndian: true));
   } catch (_) {
     // 截断或损坏的 EXIF 段：按「相机未记录」处理。
-    return MediaCaptureMetadata.empty;
+    return ExtractedMediaCaptureMetadata.empty;
   }
   try {
     return _metadataFromExif(exif);
   } catch (_) {
-    return MediaCaptureMetadata.empty;
+    return ExtractedMediaCaptureMetadata.empty;
   }
 }
 
@@ -107,11 +107,11 @@ bool _hasExifSignature(Uint8List bytes, int start, int end) {
   return true;
 }
 
-MediaCaptureMetadata _metadataFromExif(img.ExifData exif) {
+ExtractedMediaCaptureMetadata _metadataFromExif(img.ExifData exif) {
   final image = exif.imageIfd;
   final photo = exif.exifIfd;
   final gps = exif.gpsIfd;
-  return MediaCaptureMetadata(
+  return ExtractedMediaCaptureMetadata(
     cameraMake: _ascii(image['Make']),
     cameraModel: _ascii(image['Model']),
     lensModel: _ascii(photo['LensModel']),

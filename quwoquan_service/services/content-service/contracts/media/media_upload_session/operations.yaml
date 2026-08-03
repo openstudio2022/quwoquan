@@ -54,10 +54,9 @@ api_routes:
       - uploadUrl
       - expiresAt
       - replayed
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaUploadSessionCommandResult
-      response_decoder: decodeContentMediaUploadSessionCommandResult
+    response_entity: MediaUploadSessionCommandResult
+    response_body: MediaUploadSessionCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       token_transport: bearer
@@ -119,10 +118,9 @@ api_routes:
       - status
       - expiresAt
       - replayed
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaUploadSessionCommandResult
-      response_decoder: decodeContentMediaUploadSessionCommandResult
+    response_entity: MediaUploadSessionCommandResult
+    response_body: MediaUploadSessionCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       token_transport: bearer
@@ -179,10 +177,9 @@ api_routes:
       - status
       - expiresAt
       - replayed
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaUploadSessionCommandResult
-      response_decoder: decodeContentMediaUploadSessionCommandResult
+    response_entity: MediaUploadSessionCommandResult
+    response_body: MediaUploadSessionCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       token_transport: bearer
@@ -242,10 +239,9 @@ api_routes:
       - createdAt
       - updatedAt
       - expiresAt
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaUploadSessionSlice
-      response_decoder: decodeContentMediaUploadSessionSlice
+    response_entity: MediaUploadSessionSlice
+    response_body: MediaUploadSessionSlice
+    response_body_kind: object
     security:
       auth_mode: required
       token_transport: bearer

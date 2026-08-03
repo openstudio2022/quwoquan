@@ -1,0 +1,64 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Connector 目录需完成签名 release、真实存储、App 管理页和三环境 readback 后准出
+  gap_id: INTEGRATION_CONNECTOR_DEFINITION_COMMERCIAL_EVIDENCE
+  target_story: user-connector-capability-gateway
+api_routes:
+- method: PUT
+  path: /internal/integrations/connectors/{connectorId}
+  operation: PublishConnectorDefinition
+  actor: none
+  request_entity: PublishConnectorDefinitionRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: connectorId, field: connectorId}]}
+  response_entity: PublishConnectorDefinitionReceipt
+  authorization: {principal: service, ownership_policy: signed_connector_release_publisher}
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_definition_invalid_argument, INTEGRATION.USER.connector_definition_idempotency_conflict, INTEGRATION.SYSTEM.connector_catalog_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_catalog_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorDefinitionCommandFacade, method: publishDefinition, aggregate_owner: ConnectorDefinition, mutation_target: ConnectorDefinition, invariant_target: ConnectorDefinition}
+  description: 由签名 release publisher 幂等发布官方 Connector 定义；运行时/App 不可调用。
+- method: GET
+  path: /integrations/connectors
+  operation: ListConnectorDefinitions
+  actor: account
+  request_entity: ListConnectorDefinitionsQuery
+  request_body_kind: none
+  request_bindings: {query: [{name: capability, field: capability}, {name: limit, field: limit}]}
+  response_entity: ConnectorDefinitionListSlice
+  authorization: {principal: account, ownership_policy: authenticated_catalog_read}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_unauthorized, INTEGRATION.USER.connector_invalid_argument, INTEGRATION.SYSTEM.connector_catalog_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_catalog_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorDefinitionQueryFacade, method: listDefinitions, reader: ConnectorDefinitionReader, slice: ConnectorDefinitionListSlice}
+  description: 有界读取官方 Connector 目录，可按 canonical capability 过滤。
+- method: GET
+  path: /integrations/connectors/{connectorId}
+  operation: GetConnectorDefinition
+  actor: account
+  request_entity: GetConnectorDefinitionQuery
+  request_body_kind: none
+  request_bindings: {path: [{name: connectorId, field: connectorId}]}
+  response_entity: ConnectorDefinition
+  authorization: {principal: account, ownership_policy: authenticated_catalog_read}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_unauthorized, INTEGRATION.USER.connector_definition_not_found, INTEGRATION.SYSTEM.connector_catalog_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: PUBLIC, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_catalog_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorDefinitionQueryFacade, method: getDefinition, reader: ConnectorDefinitionReader, slice: ConnectorDefinition}
+  description: 读取一个官方 Connector 定义；不返回任何凭证或 Provider 配置。
+consumers:
+- name: app
+  capabilities: [list_connector_definitions, get_connector_definition]
+- name: assistant-service
+  capabilities: [resolve_connector_capability]
+- name: connector-release-publisher
+  capabilities: [publish_connector_definition]

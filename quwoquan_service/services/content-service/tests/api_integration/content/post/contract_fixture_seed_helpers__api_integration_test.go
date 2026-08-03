@@ -2,21 +2,18 @@ package api_integration
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/runtime/contractfixture"
-	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 type contractSeedEvidence struct {
@@ -146,7 +143,6 @@ func seedContentContractFixture(t *testing.T, seedRefs ...string) contractSeedEv
 func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet contentFixtureSeedSet) int {
 	t.Helper()
 	inserted := 0
-	discoveryProjector := recinfra.NewDiscoveryFeedProjector(mongoDB)
 	for _, fp := range seedSet.Posts {
 		post := contentPostFromFixture(fp)
 		if _, err := mongoDB.Collection("posts").InsertOne(ctx, post); err != nil {
@@ -154,32 +150,6 @@ func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet conten
 		}
 		if err := seedContentFixturePlaybackProjection(ctx, fp, post.ID); err != nil {
 			t.Fatalf("seed content playback projection %s: %v", post.ID, err)
-		}
-		payload, err := contentFixtureProjectionPayload(post)
-		if err != nil {
-			t.Fatalf("encode content projection payload %s: %v", post.ID, err)
-		}
-		if err := discoveryProjector.Project(ctx, recinfra.ProjectorEvent{
-			Type:          postevent.PostPublished,
-			AggregateType: "Post",
-			AggregateID:   post.ID,
-			Payload:       payload,
-			OccurredAt:    post.PublishedAt,
-		}); err != nil {
-			t.Fatalf("seed content discovery projection %s: %v", post.ID, err)
-		}
-		projected, err := mongoDB.Collection("rm_discovery_feed").CountDocuments(
-			ctx,
-			bson.M{"postId": post.ID},
-		)
-		if err != nil || projected != 1 {
-			t.Fatalf(
-				"seed content discovery projection %s missing (count=%d err=%v payload=%#v)",
-				post.ID,
-				projected,
-				err,
-				payload,
-			)
 		}
 		inserted++
 	}
@@ -287,25 +257,9 @@ func seedContentFixturePlaybackProjection(
 	return err
 }
 
-func contentFixtureProjectionPayload(post *postmodel.Post) (map[string]any, error) {
-	encoded, err := json.Marshal(post)
-	if err != nil {
-		return nil, err
-	}
-	payload := map[string]any{}
-	if err := json.Unmarshal(encoded, &payload); err != nil {
-		return nil, err
-	}
-	// PostPublished 的 canonical wire 主键是 postId；领域 aggregate 的 json
-	// 序列化字段为 id，测试种子必须显式映射，不能让 projector 静默 no-op。
-	payload["postId"] = post.ID
-	delete(payload, "id")
-	return payload, nil
-}
-
 func resetContentFixtureNamespace(t *testing.T) {
 	t.Helper()
-	for _, coll := range []string{"posts", "rm_discovery_feed"} {
+	for _, coll := range []string{"posts"} {
 		_, err := mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},

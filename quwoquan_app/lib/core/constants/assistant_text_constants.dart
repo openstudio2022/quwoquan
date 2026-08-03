@@ -50,12 +50,34 @@ abstract final class AssistantText {
   static const String assistantSkillCategoryOther = '其他';
   static const String assistantSkillSubscribed = '已订阅';
   static const String assistantSkillPaused = '已暂停';
+  static const String assistantSkillEnabled = '已启用';
+  static const String assistantSkillDisabled = '已停用';
   static const String assistantSkillConsentRequired = '需授权';
-  static const String assistantSkillSubscriptionUnavailable = '暂不可订阅';
+  static const String assistantSkillConsentGranted = '数据已授权';
+  static const String assistantSkillConsentGrant = '允许所需数据';
+  static const String assistantSkillConsentRevoke = '撤回数据授权';
+  static const String assistantSkillProactiveReminder = '主动提醒';
+  static const String assistantSkillProactiveNotConfigured = '未设置主动提醒';
+  static const String assistantSkillPackageSkillCount = '个技能';
   static const String assistantSkillStatusPendingSync = '状态待同步';
-  static const String assistantSkillSubscriptionUnavailableTitle = '暂不可订阅';
-  static const String assistantSkillSubscriptionUnavailableMessage =
-      '该技能暂未提供可配置订阅入口';
+  static const String assistantSkillDetailsAndSettings = '详情与设置';
+  static const String assistantConnectorTitle = '连接的应用';
+  static const String assistantConnectorDescription =
+      '小趣只会使用你明确授权的能力，凭证不会进入技能、聊天或圈子。';
+  static const String assistantConnectorEmpty = '暂无可连接的应用';
+  static const String assistantConnectorConnected = '已连接';
+  static const String assistantConnectorDisconnected = '未连接';
+  static const String assistantConnectorRevoked = '已断开';
+  static const String assistantConnectorPendingNative = '等待设备授权能力接入';
+  static const String assistantConnectorDisconnect = '断开连接';
+  static const String assistantConnectorDisconnectConfirmTitle = '确认断开应用？';
+  static const String assistantConnectorDisconnectConfirmBody =
+      '断开后，小趣会在下一个安全边界停止使用该应用能力。';
+  static const String assistantConnectorRecentActivity = '最近活动';
+  static const String assistantSkillDataControlTitle = '权限与记忆';
+  static const String assistantSkillDataControlDescription =
+      '查看已授权的内容访问和已确认记忆，可随时撤销或忘记。';
+  static const String assistantSkillDataControlAction = '管理权限与记忆';
   static const String assistantTaskStatusPending = '待处理';
   static const String assistantTaskStatusInProgress = '进行中';
   static const String assistantTaskStatusCompleted = '已完成';
@@ -137,8 +159,11 @@ abstract final class AssistantText {
   static const String assistantActionNeedsMoreInfo = '我还需要你再补充一点信息，这样才能继续。';
   static const String assistantActionResultUnavailable =
       '这个操作我暂时还没拿到可展示结果，请再试一次。';
+  static const String assistantDeviceActionPermissionDenied =
+      '未获得系统日历权限，本次没有创建日程。请允许日历权限后重试。';
   static const String assistantDeviceActionUnavailable =
-      '系统日历不可用或未获授权，本次没有创建日程。';
+      '当前设备没有可写的系统日历，本次没有创建日程。';
+  static const String assistantDeviceActionFailed = '系统日历创建失败，本次没有创建日程，请重试。';
   static const String assistantCardCompare = '对比卡片';
   static const String assistantCardTrend = '趋势卡片';
   static const String assistantCardDiagram = '结构图';

@@ -16,6 +16,7 @@ import (
 	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
+	reviewhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/adapters/inbound/http"
 	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
 	reviewmodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/domain/model"
 	reviewports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/domain/ports"
@@ -189,7 +190,7 @@ func newReviewTestServer(t *testing.T) (*httptest.Server, *memoryReviewStore) {
 		step++
 		return base.Add(time.Duration(step) * time.Second)
 	})
-	handler := httpadapter.NewHandler(homepageService).WithReviewFacade(facade)
+	handler := httpadapter.NewHandler(homepageService).WithReviewHandler(reviewhttp.NewHandler(facade))
 	server := httptest.NewServer(reviewActorMiddleware(handler.Routes()))
 	t.Cleanup(server.Close)
 	return server, store

@@ -1,0 +1,25 @@
+read_model: IntersectionPropagationPath
+description: "交集传播链当前值对象。\n承载「沿边的可证下游传播」：路径节点视觉 + 跳数 + 二级传播绝对人数 + 一句话摘要。\n\
+  红线（§21.4 / author·circle impact 对齐）：只承载可证绝对计数与路径节点视觉，\n禁止 reach / conversion / 漏斗 / 增长率等运营比率指标进入本契约。\n\
+  端只读渲染（传播视图件，复用 IntersectionVisualCluster / IntersectionTargetNavigator），\n云侧同源产出；本期端 Mock 原型，云侧多跳真算后置（§21.10）。\n\
+  \n闭集枚举（端按字符串解析，未知值优雅降级为通用路径）：\n  pathKind: personToPerson | personToCircle | personToContentToPerson\n\
+  \n字段语义：\n  summaryText 为云侧产出的一句话（如「8人通过你建立了新连接」），端只读直出（G2）。\n  summaryTarget 为该摘要的可点击下钻目标（可空表示不可点击）。\n\
+  \  nodes 为传播路径节点视觉（起点 → 桥接 → 终点，按 assetKind 渲染头像/封面）。\n  hopCount 为路径跳数（单跳=1）；secondarySpreadCount 为二级传播绝对人数（守红线，非比率）。\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: pathKind
+  type: string
+- name: hopCount
+  type: int
+- name: secondarySpreadCount
+  type: int
+- name: summaryText
+  type: string
+- name: summaryTarget
+  type: IntersectionTarget
+  nullable: true
+- name: nodes
+  type: '[]IntersectionVisual'

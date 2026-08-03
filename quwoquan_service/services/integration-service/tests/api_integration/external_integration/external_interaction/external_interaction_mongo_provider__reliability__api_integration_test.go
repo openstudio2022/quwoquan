@@ -113,7 +113,7 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		},
 	}
 	service, err := application.NewExternalInteractionService(
-		integrationReliableStore,
+		canonicalMongoExternalStore(t),
 		map[string]reliabletask.ExternalProvider{"aliyun_sms": smsProvider},
 		policies,
 		references,
@@ -177,7 +177,7 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 
 	reopenedStore := reliabletaskmongo.NewExternalInteraction(integrationMongoDB)
 	reopenedService, err := application.NewExternalInteractionService(
-		reopenedStore,
+		canonicalMongoExternalStoreFrom(t, reopenedStore),
 		map[string]reliabletask.ExternalProvider{"aliyun_sms": smsProvider},
 		policies,
 		references,

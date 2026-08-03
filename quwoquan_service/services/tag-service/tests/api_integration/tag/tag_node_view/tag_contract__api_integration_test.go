@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
+	indexmodel "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/model"
+	indexports "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/ports"
+	indexpersistence "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/persistence"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
-	ports "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
-	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 )
 
 // seedLaunchSubset 导入首发（校园+旅游）只读子集，对齐 operations.yaml contract_test。
@@ -34,7 +35,7 @@ func seedLaunchSubset(t *testing.T) {
 		}
 	}
 	activateReleaseForSeed(t, "test-release", len(nodes))
-	objs := []*model.ObjectTagIndex{
+	objs := []*indexmodel.ObjectTagIndex{
 		{ObjectID: "u1", ObjectType: "user", TagRefs: []string{"Topic/旅行", "Topic/摄影", "Entity/机构/学校/北京大学"}},
 		{ObjectID: "u2", ObjectType: "user", TagRefs: []string{"Topic/摄影", "Entity/机构/学校/北京大学"}},
 		{ObjectID: "p1", ObjectType: "post", TagRefs: []string{"Topic/旅行"}},
@@ -548,7 +549,7 @@ func TestSearchByTags(t *testing.T) {
 
 func TestObjectTagQueriesPreserveCompositeObjectIdentity(t *testing.T) {
 	seedLaunchSubset(t)
-	if _, err := objStore.Create(t.Context(), &model.ObjectTagIndex{
+	if _, err := objStore.Create(t.Context(), &indexmodel.ObjectTagIndex{
 		ObjectID:   "u1",
 		ObjectType: "post",
 		TagRefs: []string{
@@ -668,7 +669,7 @@ func TestObjectTagReleaseImportReconcilesWithoutRewritingIdentity(t *testing.T) 
 		"release-2",
 		"data-pipeline",
 	)
-	if !errors.Is(err, persistence.ErrReleaseProjectionConflict) {
+	if !errors.Is(err, indexpersistence.ErrReleaseProjectionConflict) {
 		t.Fatalf("same release payload rewrite err=%v", err)
 	}
 	err = objStore.UpsertObjectTagsFromRelease(
@@ -679,7 +680,7 @@ func TestObjectTagReleaseImportReconcilesWithoutRewritingIdentity(t *testing.T) 
 		"release-3",
 		"another-owner",
 	)
-	if !errors.Is(err, persistence.ErrReleaseProjectionConflict) {
+	if !errors.Is(err, indexpersistence.ErrReleaseProjectionConflict) {
 		t.Fatalf("cross-owner takeover err=%v", err)
 	}
 }
@@ -778,7 +779,7 @@ func TestUserProfileTagProjectionConvergesOnHighestSourceVersion(t *testing.T) {
 	occurredAt := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)
 	applied, err := objStore.ApplyUserProfileTagProjection(
 		ctx,
-		ports.UserProfileTagProjection{
+		indexports.UserProfileTagProjection{
 			EventID:           "profile-tags-newer",
 			UserID:            "projection-user",
 			TagRefs:           []string{"Audience/用户/兴趣偏好/科技/AI"},
@@ -792,7 +793,7 @@ func TestUserProfileTagProjectionConvergesOnHighestSourceVersion(t *testing.T) {
 	}
 	applied, err = objStore.ApplyUserProfileTagProjection(
 		ctx,
-		ports.UserProfileTagProjection{
+		indexports.UserProfileTagProjection{
 			EventID:           "profile-tags-stale",
 			UserID:            "projection-user",
 			TagRefs:           []string{"Audience/用户/兴趣偏好/生活/咖啡"},

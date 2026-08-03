@@ -1,6 +1,5 @@
 kind: aggregate_root
-description: 「我的交集」收件箱的 per-dimension 已读水位；一 user 一文档，维度水位只经 $max 单调推进（晚到的旧时间戳不会回退已推进的位），重放天然收敛，因此不维护命令回执。
-  Redis（ix:watermark hash）只是加速读缓存，本对象是耐久真相源。
+description: 当前可信 persona 的交集收件箱边界；聚合根以 per-dimension 已读水位维护收件箱阅读生命周期，named Slice 从 RecommendationFeatureProfileView 与该水位组合出摘要、分页列表和对象页交集。水位只经 $max 单调推进，Redis 只是加速读缓存，Mongo 是耐久真相源。
 identity:
   fields:
   - userId
@@ -13,6 +12,7 @@ relationships: []
 capabilities:
 - commandable
 - queryable
+- projectable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -20,6 +20,13 @@ business_rules:
 - 维度集合固定为 identity/location/content/interest/relationship
 - 各维度水位只能单调推进；命令未指定维度时推进全部维度
 - 重放（任意次 MarkIntersectionsVisited）语义等价且无副作用放大
+- 交集事实与排序身份只来自 RecommendationFeatureProfileView，本对象不得复制或改写交集事实
+- 摘要和列表必须应用当前 persona 的耐久水位；对象页 Slice 必须绑定请求中的公开对象且禁止 self-target
 lifecycle:
   optimistic_concurrency: none
   idempotency: naturally_convergent_monotonic_watermark
+  projection:
+    sources: [RecommendationFeatureProfileView, IntersectionVisitState]
+    checkpoint: request_consistent_source_revision
+    rebuild: recompute_from_authoritative_recommendation_projection_and_watermark
+    tombstone: drop_hidden_or_closed_subjects_before_response

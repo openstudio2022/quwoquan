@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ToolUseWire {
   const ToolUseWire({
@@ -52,6 +52,66 @@ class ToolUseWire {
       };
 
   factory ToolUseWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'toolUseId',
+      'turnId',
+      'toolName',
+      'placement',
+      'input',
+      'status',
+      'requiresConfirmation',
+      'confirmationState',
+      'continuationToken',
+      'result',
+      'failure',
+      'createdAt',
+      'completedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ToolUseWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('toolUseId') || json['toolUseId'] == null || (json['toolUseId'] is! String)) {
+      throw const FormatException('ToolUseWire field toolUseId has an invalid wire value');
+    }
+    if (!json.containsKey('turnId') || json['turnId'] == null || (json['turnId'] is! String)) {
+      throw const FormatException('ToolUseWire field turnId has an invalid wire value');
+    }
+    if (!json.containsKey('toolName') || json['toolName'] == null || (json['toolName'] is! String)) {
+      throw const FormatException('ToolUseWire field toolName has an invalid wire value');
+    }
+    if (json.containsKey('placement') && json['placement'] != null && (json['placement'] is! String)) {
+      throw const FormatException('ToolUseWire field placement has an invalid wire value');
+    }
+    if (json.containsKey('input') && json['input'] != null && (json['input'] is! Map)) {
+      throw const FormatException('ToolUseWire field input has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('ToolUseWire field status has an invalid wire value');
+    }
+    if (json.containsKey('requiresConfirmation') && json['requiresConfirmation'] != null && (json['requiresConfirmation'] is! bool)) {
+      throw const FormatException('ToolUseWire field requiresConfirmation has an invalid wire value');
+    }
+    if (json.containsKey('confirmationState') && json['confirmationState'] != null && (json['confirmationState'] is! String)) {
+      throw const FormatException('ToolUseWire field confirmationState has an invalid wire value');
+    }
+    if (json.containsKey('continuationToken') && json['continuationToken'] != null && (json['continuationToken'] is! String)) {
+      throw const FormatException('ToolUseWire field continuationToken has an invalid wire value');
+    }
+    if (json.containsKey('result') && json['result'] != null && (json['result'] is! Map)) {
+      throw const FormatException('ToolUseWire field result has an invalid wire value');
+    }
+    if (json.containsKey('failure') && json['failure'] != null && (json['failure'] is! Map)) {
+      throw const FormatException('ToolUseWire field failure has an invalid wire value');
+    }
+    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
+      throw const FormatException('ToolUseWire field createdAt has an invalid wire value');
+    }
+    if (json.containsKey('completedAt') && json['completedAt'] != null && (json['completedAt'] is! String)) {
+      throw const FormatException('ToolUseWire field completedAt has an invalid wire value');
+    }
     return ToolUseWire(
       toolUseId: (json['toolUseId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",

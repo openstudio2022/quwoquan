@@ -48,6 +48,16 @@ relationships:
   target_object: user.Persona
 - access: named_reader
   cardinality: N:1
+  consistency: strong
+  kind: reference
+  name: frozenSkillPackage
+  on_delete: retain
+  reference_fields:
+  - skillPackageId
+  - skillPackageReleaseDigest
+  target_object: assistant.SkillPackageRelease
+- access: named_reader
+  cardinality: N:1
   consistency: eventual
   kind: reference
   name: pageObject
@@ -80,8 +90,11 @@ business_rules:
 - 搜索与创作辅助必须进入同一 AssistantRun 状态机、事务 outbox、终态快照和 SSE journal，不存在独立模型执行路由。
 - run 必须绑定 actor persona、sessionId、输入摘要与当前 consent snapshot
 - run 创建时必须原子读取并固化最多 16 个 session 与 16 个 long_term active 偏好快照
+- run 创建时必须读取当前 active SkillPackageRelease 并冻结 packageId/releaseDigest；恢复、重放和后台续跑只能消费该不可变发布，不得追随后续 active pointer
 - 同一 clientRequestId 只启动一个 run，重放返回同一 run identity
 - run 从 accepted 经定向、规划、执行、观察、反思、检查点、综合与验证阶段推进；等待、暂停和终态转换必须由同一 CAS revision 约束
+- tool 可用集合必须是 active Skill capability allowlist、平台策略、surface 策略、用户 Consent、当前 Connector grant 与运行时 availability 的交集；任一 required 输入缺失都 fail closed
+- 每次 PreToolUse 安全边界必须按 Tool metadata 的 capability policy 重新读取 Consent 与 ConnectorConnection；Run 启动时的 snapshot 不得授权撤权后的调用，群/圈不得读取个人 connection
 - tool 调用必须经过 operation allowlist 与目标上下文公开 Facade
 - AssistantLearningFact 与 Turn 均在 Run 聚合边界外独立产生和投影，不嵌入 Run 聚合
 lifecycle:

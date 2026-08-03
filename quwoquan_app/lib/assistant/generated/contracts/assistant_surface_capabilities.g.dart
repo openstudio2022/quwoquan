@@ -35,6 +35,46 @@ class AssistantSurfaceCapabilitiesWire {
       };
 
   factory AssistantSurfaceCapabilitiesWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'surfaceId',
+      'supportedNodeKinds',
+      'viewportClass',
+      'platform',
+      'theme',
+      'textScale',
+      'reducedMotion',
+      'offline',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantSurfaceCapabilitiesWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('surfaceId') || json['surfaceId'] == null || (json['surfaceId'] is! String)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field surfaceId has an invalid wire value');
+    }
+    if (json.containsKey('supportedNodeKinds') && json['supportedNodeKinds'] != null && (json['supportedNodeKinds'] is! List || (json['supportedNodeKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field supportedNodeKinds has an invalid wire value');
+    }
+    if (json.containsKey('viewportClass') && json['viewportClass'] != null && (json['viewportClass'] is! String)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field viewportClass has an invalid wire value');
+    }
+    if (!json.containsKey('platform') || json['platform'] == null || (json['platform'] is! String)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field platform has an invalid wire value');
+    }
+    if (json.containsKey('theme') && json['theme'] != null && (json['theme'] is! String)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field theme has an invalid wire value');
+    }
+    if (json.containsKey('textScale') && json['textScale'] != null && (json['textScale'] is! num)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field textScale has an invalid wire value');
+    }
+    if (json.containsKey('reducedMotion') && json['reducedMotion'] != null && (json['reducedMotion'] is! bool)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field reducedMotion has an invalid wire value');
+    }
+    if (json.containsKey('offline') && json['offline'] != null && (json['offline'] is! bool)) {
+      throw const FormatException('AssistantSurfaceCapabilitiesWire field offline has an invalid wire value');
+    }
     return AssistantSurfaceCapabilitiesWire(
       surfaceId: (json['surfaceId'] as String?)?.trim() ?? "",
       supportedNodeKinds: _assistantStringList(json['supportedNodeKinds']),

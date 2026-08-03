@@ -102,11 +102,6 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
-	writeFile(
-		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "assistant", "assistant_runtime_enums.g.dart"),
-		renderAssistantRuntimeEnumsDart(enumCatalog),
-	)
-
 	subagentPlanSchema, err := readAssistantSubagentPlanSchema(filepath.Join(baseDir, "subagent_plan", "schema.yaml"))
 	if err == nil {
 		writeFile(filepath.Join(appDir, "lib", subagentPlanSchema.OutputPath), renderSubagentPlanDart(subagentPlanSchema))
@@ -296,13 +291,8 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	}
 
 	assistantSharedWireSchemas := []string{
-		"runtime_failure",
-		"assistant_session",
-		"assistant_run_envelope",
-		"skill_subscription",
 		"device_context",
 		"tool_use",
-		"assistant_stream_event",
 		"assistant_trace_event",
 		"assistant_run_response",
 		"assistant_process_timeline",
@@ -320,21 +310,6 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	for _, schemaName := range assistantSharedWireSchemas {
 		schemaPath := filepath.Join(baseDir, schemaName, "schema.yaml")
 		source := filepath.Join("assistant", schemaName, "schema.yaml")
-		switch schemaName {
-		case "assistant_session", "skill_subscription":
-			schemaPath = filepath.Join(
-				baseDir,
-				"assistant",
-				schemaName,
-				"schema.yaml",
-			)
-			source = filepath.Join(
-				"assistant",
-				"assistant",
-				schemaName,
-				"schema.yaml",
-			)
-		}
 		schema, err := readAssistantContractSchema(schemaPath)
 		if err == nil {
 			writeFile(

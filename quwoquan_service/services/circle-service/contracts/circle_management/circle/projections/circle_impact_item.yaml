@@ -12,105 +12,43 @@ description: '圈子影响单条事实（「圈子影响」模块行真相源）
   '
 consumers:
 - app
-client_projection:
-  dart_class: CircleImpactItem
-  base_class: ''
-  output_path: cloud/runtime/generated/circle/circle_impact_item.g.dart
-  dart_imports:
-  - ../recommendation/intersection_text_span.g.dart
-  - ../recommendation/intersection_visual.g.dart
-  - ../recommendation/intersection_target.g.dart
-  - ../recommendation/intersection_propagation_path.g.dart
-  - ../recommendation/intersection_representative_actor.g.dart
-  - ../recommendation/intersection_action_hint.g.dart
-  fields:
-  - name: helpType
-    dart_type: String
-    nullable: false
-    source: helpType
-    default: ''''''
-  - name: action
-    dart_type: String
-    nullable: false
-    source: action
-    default: ''''''
-  - name: intersectionDimension
-    dart_type: String
-    nullable: false
-    source: intersectionDimension
-    default: ''''''
-  - name: tagRef
-    dart_type: String
-    nullable: false
-    source: tagRef
-    default: ''''''
-  - name: source
-    dart_type: String
-    nullable: false
-    source: source
-    default: ''''''
-  - name: count
-    dart_type: int
-    nullable: false
-    source: count
-    default: '0'
-  - name: primaryText
-    dart_type: String
-    nullable: false
-    source: primaryText
-    default: ''''''
-  - name: subtitleText
-    dart_type: String
-    nullable: false
-    source: subtitleText
-    default: ''''''
-  - name: impactId
-    dart_type: String
-    nullable: false
-    source: impactId
-    default: ''''''
-  - name: primarySpans
-    dart_type: List<IntersectionTextSpan>
-    nullable: false
-    source: primarySpans
-    list_element_dart_class: IntersectionTextSpan
-  - name: sampleVisuals
-    dart_type: List<IntersectionVisual>
-    nullable: false
-    source: sampleVisuals
-    list_element_dart_class: IntersectionVisual
-  - name: representativeActor
-    dart_type: IntersectionRepresentativeActor
-    nullable: true
-    source: representativeActor
-    map_from_string_key_class: IntersectionRepresentativeActor
-  - name: actionHints
-    dart_type: List<IntersectionActionHint>
-    nullable: false
-    source: actionHints
-    list_element_dart_class: IntersectionActionHint
-  - name: countTarget
-    dart_type: IntersectionTarget
-    nullable: true
-    source: countTarget
-    map_from_string_key_class: IntersectionTarget
-  - name: evidenceSnapshotId
-    dart_type: String
-    nullable: false
-    source: evidenceSnapshotId
-    default: ''''''
-  - name: countObjectKind
-    dart_type: String
-    nullable: false
-    source: countObjectKind
-    default: ''''''
-  - name: propagationPath
-    dart_type: IntersectionPropagationPath
-    nullable: true
-    source: propagationPath
-    map_from_string_key_class: IntersectionPropagationPath
-  - name: iconKey
-    dart_type: String
-    nullable: false
-    source: iconKey
-    default: ''''''
+fields:
+- name: helpType
+  type: string
+- name: action
+  type: string
+- name: intersectionDimension
+  type: string
+- name: tagRef
+  type: string
+- name: source
+  type: string
+- name: count
+  type: int64
+- name: primaryText
+  type: string
+- name: subtitleText
+  type: string
+- name: impactId
+  type: string
+- name: primarySpans
+  type: '[]IntersectionTextSpan'
+- name: sampleVisuals
+  type: '[]IntersectionVisual'
+- name: representativeActor
+  type: IntersectionRepresentativeActor
+  nullable: true
+- name: actionHints
+  type: '[]IntersectionActionHint'
+- name: countTarget
+  type: IntersectionTarget
+  nullable: true
+- name: evidenceSnapshotId
+  type: string
+- name: countObjectKind
+  type: string
+- name: propagationPath
+  type: IntersectionPropagationPath
+  nullable: true
+- name: iconKey
+  type: string

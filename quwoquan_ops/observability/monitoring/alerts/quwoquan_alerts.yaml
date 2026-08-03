@@ -1,6 +1,6 @@
-# 产品事件原始明细与小时聚合以阿里云 SLS 为单一事实源；本文件只消费
-# product-ops-service 的有界传输指标。Scheduled SQL freshness/失败告警在
-# environments/cloud-providers/aliyun/sls/product_telemetry.yaml 定义。
+# 产品事件原始明细与小时聚合以 Product Ops Elasticsearch 合同为单一事实源；
+# 本文件只消费 product-ops-service 的有界传输指标。聚合 freshness/失败策略在
+# observability/elasticsearch/product_telemetry_alerts.yaml 定义。
 
 groups:
   - name: quwoquan_l2_auth_login
@@ -98,7 +98,7 @@ groups:
           domain: user-auth
         annotations:
           summary: "客户端登录操作 {{ $labels.operation }} 失败率超过 5%"
-          description: "按 failure_kind 下钻 OTP、运营商或第三方授权失败，并用 SLS 运维事件关联 sourceCode/requestId/traceId。"
+          description: "按 failure_kind 下钻 OTP、运营商或第三方授权失败，并用 Elasticsearch 运维事件关联 sourceCode/requestId/traceId。"
 
       - alert: LoginPhoneBindingAbandonmentHigh
         expr: |
@@ -287,7 +287,7 @@ groups:
           domain: product-telemetry
         annotations:
           summary: "产品遥测不可用批次比例超过 1%"
-          description: "检查 product-ops runtime.log.sink health、网络与写入超时；App 会保留加密 outbox。Gamma 检查 ES，Prod 检查 SLS/VPC/RAM。"
+          description: "检查四环境 product-ops runtime.log.sink 的 Elasticsearch health、鉴权、网络与写入超时；App 会保留加密 outbox。"
 
       - alert: ProductTelemetryLogSinkWriteErrors
         expr: sum(increase(ops_telemetry_logstore_operation_duration_seconds_count{operation=~"put_event_batch|put_startup_diagnostic",result="error"}[10m])) > 0
@@ -312,7 +312,7 @@ groups:
           domain: product-telemetry
         annotations:
           summary: "产品遥测日志端口写入 P95 超过 1 秒"
-          description: "接近服务端超时预算；检查 Gamma ES 或 Prod SLS 网络、配额与批量大小。"
+          description: "接近服务端超时预算；检查 Elasticsearch 网络、配额与批量大小。"
 
       - alert: RuntimeLogSpoolBacklogHigh
         expr: runtime_log_export_spool_pending > 100
@@ -323,7 +323,7 @@ groups:
           domain: runtime-observability
         annotations:
           summary: "服务 {{ $labels.service }} 运行日志 spool 积压超过 100 批"
-          description: "检查 product-ops runtime-log ingest、机器 token、网络和 SLS；spool 会按指数退避保留关键日志。"
+          description: "检查 product-ops runtime-log ingest、机器 token、网络和 Elasticsearch；spool 会按指数退避保留关键日志。"
 
       - alert: RuntimeLogDeadLetterPresent
         expr: runtime_log_export_dead_letter_pending > 0
@@ -348,7 +348,7 @@ groups:
           description: "ERROR/WARN spool 已满；立即恢复 ingest 并扩容持久卷。"
 
       # Prometheus 只承载低基数近实时预警；Portal 的精确 ANR/卡顿会话率仍从
-      # SLS/Postgres 权威事件按 session 去重计算，禁止在时序标签中放 sessionId。
+      # Elasticsearch 权威事件按 session 去重计算，禁止在时序标签中放 sessionId。
       - alert: AppANREventRateHigh
         expr: |
           sum(rate(ops_app_experience_events_total{event_type="app_anr_outcome",result="detected"}[10m]))
@@ -429,11 +429,11 @@ groups:
           domain: app-experience
         annotations:
           summary: "App 体验黄金指标没有启动分母"
-          description: "检查 App telemetry outbox、product-ops ingest、SLS 与 Prometheus scrape；缺样本必须显示 unavailable。"
+          description: "检查 App telemetry outbox、product-ops ingest、Elasticsearch 与 Prometheus scrape；缺样本必须显示 unavailable。"
 
   - name: quwoquan_l1_startup_welcome
     # 以下规则只消费 product-ops-service 的受限匿名启动阶段事实。
-    # 产品 app_startup 分位数与错误率由 SLS 小时聚合提供，不复制到 Prometheus label。
+    # 产品 app_startup 分位数与错误率由 Elasticsearch 小时聚合提供，不复制到 Prometheus label。
     rules:
       - alert: StartupFlutterFirstFrameP95High
         expr: |
@@ -2611,7 +2611,7 @@ groups:
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
           summary: "内容发布后台重试已耗尽"
-          description: "按 content_type、object_state 和 failReasonCode 在 SLS content_publication_funnel 下钻；不得把终态任务伪装为成功。"
+          description: "按 content_type、object_state 和 failReasonCode 在 Elasticsearch content_publication_funnel 下钻；不得把终态任务伪装为成功。"
 
       - alert: ArticleReaderEnterLatencyHigh
         expr: |
@@ -2622,7 +2622,7 @@ groups:
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
           summary: "文章阅读器进入 P95 超过 1.2s"
-          description: "文章阅读器 SLI 为成功 enter 事件的客户端可用时延；按 SLS article_reader_lifecycle 的 surfaceId、errorCode 和 recoveryAction 下钻。"
+          description: "文章阅读器 SLI 为成功 enter 事件的客户端可用时延；按 Elasticsearch article_reader_lifecycle 的 surfaceId、errorCode 和 recoveryAction 下钻。"
 
       - alert: ArticleReaderErrorRateHigh
         expr: |
@@ -2640,7 +2640,7 @@ groups:
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
           summary: "文章阅读器重试恢复失败"
-          description: "用户触发的阅读器恢复仍失败；按 SLS article_reader_lifecycle 的 errorCode 和 recoveryAction 定位 Remote 或数据面问题。"
+          description: "用户触发的阅读器恢复仍失败；按 Elasticsearch article_reader_lifecycle 的 errorCode 和 recoveryAction 定位 Remote 或数据面问题。"
 
       - alert: VideoPreviewTrackLoadFailureRateHigh
         expr: |
@@ -2650,7 +2650,7 @@ groups:
         labels: { severity: warning, layer: l2, domain: content }
         annotations:
           summary: "视频预览轨道加载失败率超过 1%"
-          description: "核对 CDN manifest、签名/缓存、轨道 descriptor 版本绑定，并通过 SLS video_preview_track_load 明细定位失败类型。"
+          description: "核对 CDN manifest、签名/缓存、轨道 descriptor 版本绑定，并通过 Elasticsearch video_preview_track_load 明细定位失败类型。"
 
       - alert: ContentMediaProcessingWorkerUnhealthy
         expr: |

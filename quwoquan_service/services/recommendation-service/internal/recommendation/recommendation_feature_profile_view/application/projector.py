@@ -11,6 +11,8 @@ class FeatureProfileStore(Protocol):
 
     def apply_exposure_if_absent(self, mutation: "ExposureFeatureMutation") -> bool: ...
 
+    def apply_tag_feedback_if_absent(self, mutation: "TagFeedbackMutation") -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ExposureFeatureMutation:
@@ -27,6 +29,10 @@ class BehaviorFeatureMutation:
     subject_id: str
     author_id: str | None
     target_id: str
+    content_type: str | None
+    impact_help_type: str | None
+    intersection_dimension: str | None
+    intersection_tag_refs: tuple[str, ...]
     feedback_fact_id: str
     exposure_fact_id: str
     action: str
@@ -35,6 +41,16 @@ class BehaviorFeatureMutation:
     collaborative_signal: float
     intersection_increments: Mapping[str, float]
     occurred_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class TagFeedbackMutation:
+    event_id: str
+    subject_id: str
+    actor_kind: str
+    tag_ref: str
+    action: str
+    recorded_at: datetime
 
 
 class Projector:
@@ -131,6 +147,12 @@ class Projector:
             collaborative_signal = 1.0
         elif state == "negative":
             collaborative_signal = -1.0
+        impact_help_type = str(payload.get("impactHelpType") or "").strip() or None
+        if impact_help_type is not None and (
+            len(impact_help_type) > 64
+            or not impact_help_type.replace("_", "").isalnum()
+        ):
+            raise ValueError("behavior impact help type is outside the canonical identifier grammar")
         return self._store.apply_behavior_if_absent(
             BehaviorFeatureMutation(
                 event_id=normalized_event,
@@ -138,6 +160,15 @@ class Projector:
                 subject_id=normalized_subject,
                 author_id=str(payload.get("authorId") or "").strip() or None,
                 target_id=target_id,
+                content_type=str(payload.get("contentType") or "").strip() or None,
+                impact_help_type=impact_help_type,
+                intersection_dimension=(
+                    str(payload.get("intersectionDimension") or "").strip() or None
+                ),
+                intersection_tag_refs=_bounded_strings(
+                    payload.get("intersectionTagRefs"),
+                    maximum=50,
+                ),
                 feedback_fact_id=feedback_fact_id.strip(),
                 exposure_fact_id=exposure_fact_id.strip(),
                 action=action,
@@ -146,6 +177,41 @@ class Projector:
                 collaborative_signal=collaborative_signal,
                 intersection_increments=intersection,
                 occurred_at=occurred_at,
+            )
+        )
+
+    def project_tag_feedback(
+        self,
+        *,
+        event_id: str,
+        subject_id: str,
+        actor_kind: str,
+        tag_ref: str,
+        action: str,
+        recorded_at: datetime,
+    ) -> bool:
+        normalized_event = event_id.strip()
+        normalized_subject = subject_id.strip()
+        normalized_actor_kind = actor_kind.strip()
+        normalized_tag = tag_ref.strip()
+        normalized_action = action.strip()
+        if (
+            not normalized_event
+            or not normalized_subject
+            or normalized_actor_kind not in {"persona", "device"}
+            or not normalized_tag
+            or normalized_action not in {"click", "dislike", "ignore", "correct"}
+            or recorded_at.tzinfo is None
+        ):
+            raise ValueError("tag feedback feature projection input is invalid")
+        return self._store.apply_tag_feedback_if_absent(
+            TagFeedbackMutation(
+                event_id=normalized_event,
+                subject_id=normalized_subject,
+                actor_kind=normalized_actor_kind,
+                tag_ref=normalized_tag,
+                action=normalized_action,
+                recorded_at=recorded_at,
             )
         )
 

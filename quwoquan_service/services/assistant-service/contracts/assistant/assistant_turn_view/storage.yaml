@@ -1,2 +1,21 @@
 backend: mongodb
 role: projection
+collections:
+  assistant_turn_views:
+    entity: AssistantTurnView
+    role: projection
+    description: 由 canonical AssistantRun 终态 typed source 重建的会话轮次读模型。
+    indexes:
+      - name: idx_turn_views_owner_session_created
+        keys:
+          userId: 1
+          sessionId: 1
+          createdAt: -1
+          _id: -1
+      - name: idx_turn_views_source_updated
+        keys:
+          sourceUpdatedAt: 1
+  assistant_turn_view_checkpoints:
+    entity: AssistantTurnViewCheckpoint
+    role: checkpoint
+    description: AssistantRun 终态源的单调 updatedAt/runId checkpoint；与投影在同一事务提交。

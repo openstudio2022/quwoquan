@@ -20,6 +20,8 @@ capabilityProbes:
     doctor: true
   legal_approval:
     doctor: true
+  research_access_isolation:
+    researchIsolation: true
 phases:
   import:
     alpha:
@@ -83,6 +85,47 @@ phases:
         - content_media
         - content_services
         - app_consumer
+  research:
+    alpha:
+      target: alpha-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - research_access_isolation
+    beta:
+      target: beta-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - research_access_isolation
+    gamma:
+      target: gamma-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - research_access_isolation
+    prod:
+      target: prod-hosted
+      workload: full
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - research_access_isolation
   commercial:
     alpha:
       target: alpha-local

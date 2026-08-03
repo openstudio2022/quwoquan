@@ -266,8 +266,9 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
             "ordinal": 1,
             "sourceId": "wikimedia_commons_video",
             "sourceKind": "tourism_video_site",
-            "title": "西湖航拍",
-            "relevance": "展示西湖水域和苏堤的真实旅行视角",
+                "title": "西湖航拍",
+                "relevance": "展示西湖水域和苏堤的真实旅行视角",
+                "rightsStatus": "verified",
         },
         source_video_path=source,
         original_creator_name="山海旅行者",
@@ -277,7 +278,7 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         attribution_text="山海旅行者 · Wikimedia Commons · CC BY-SA 4.0",
         rights_basis="CC BY-SA 4.0",
         commercial_authorization_status="verified",
-        publication_admission="commercial_release",
+        publication_admission="research_release",
         authorization_proof_url="https://commons.wikimedia.org/wiki/File:West_Lake.webm",
         terms_url="https://creativecommons.org/licenses/by-sa/4.0/",
         risk_acceptance_id=None,
@@ -293,8 +294,8 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     source_meta = json.loads(
         (evidence_path.parent / "meta.json").read_text(encoding="utf-8")
     )
-    assert source_meta["sourceUseMode"] == "licensed_adaptation"
-    assert source_meta["rightsMode"] == "attribution_no_watermark"
+    assert source_meta["sourceUseMode"] == "rights_audit_only"
+    assert source_meta["rightsMode"] == "rights_audit_only"
     asset_index = json.loads(
         (evidence_path.parent / "assets/index.json").read_text(encoding="utf-8")
     )

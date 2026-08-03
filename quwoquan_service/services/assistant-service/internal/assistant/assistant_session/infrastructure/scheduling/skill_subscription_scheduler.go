@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
 
 type SkillSubscriptionCronTicker interface {
 	TickSkillSubscriptionCron(
 		context.Context,
-		assistant.SkillSubscriptionCronTickInput,
-	) (assistant.SkillSubscriptionCronTickResult, error)
+		skillmodel.SkillSubscriptionCronTickInput,
+	) (skillmodel.SkillSubscriptionCronTickResult, error)
 }
 
 type SkillSubscriptionScheduler struct {
@@ -60,7 +60,7 @@ func (s *SkillSubscriptionScheduler) Run(ctx context.Context) {
 func (s *SkillSubscriptionScheduler) RunOnce(ctx context.Context) error {
 	_, err := s.ticker.TickSkillSubscriptionCron(
 		ctx,
-		assistant.SkillSubscriptionCronTickInput{},
+		skillmodel.SkillSubscriptionCronTickInput{},
 	)
 	return err
 }

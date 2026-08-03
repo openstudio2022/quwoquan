@@ -10,33 +10,9 @@ source_entities:
 - UserProfile
 consumers:
 - app
-client_projection:
-  dart_class: UserProfileStatsWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart
-  fields:
-  - name: followingCount
-    dart_type: int
-    nullable: false
-    source: followingCount
-    default: '0'
-  - name: circleCount
-    dart_type: int
-    nullable: false
-    source: circleCount
-    default: '0'
-  - name: followerCount
-    dart_type: int
-    nullable: false
-    source: followerCount
-    default: '0'
-  - name: likeCount
-    dart_type: int
-    nullable: false
-    source: likeCount
-    default: '0'
-  - name: postCount
-    dart_type: int
-    nullable: false
-    source: postCount
-    default: '0'
+fields:
+- {name: followingCount, type: int, nullable: false}
+- {name: circleCount, type: int, nullable: false}
+- {name: followerCount, type: int, nullable: false}
+- {name: likeCount, type: int, nullable: false}
+- {name: postCount, type: int, nullable: false}

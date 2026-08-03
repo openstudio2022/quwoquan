@@ -53,10 +53,8 @@ api_routes:
       visibility: private
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: NotificationSettingsView
-      response_decoder: decodeNotificationSettingsView
+    response_body: NotificationSettingsView
+    response_body_kind: object
     request_entity: UserSettingsQuery
     request_body_kind: none
   - method: GET
@@ -107,10 +105,8 @@ api_routes:
       visibility: private
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: PrivacySettingsView
-      response_decoder: decodePrivacySettingsView
+    response_body: PrivacySettingsView
+    response_body_kind: object
     request_entity: UserSettingsQuery
     request_body_kind: none
   - method: GET
@@ -220,10 +216,8 @@ api_routes:
       visibility: private
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: CallSettingsView
-      response_decoder: decodeCallSettingsView
+    response_body: CallSettingsView
+    response_body_kind: object
     request_entity: UserSettingsQuery
     request_body_kind: none
   - method: GET
@@ -274,10 +268,8 @@ api_routes:
       visibility: private
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: AppearanceSettingsView
-      response_decoder: decodeAppearanceSettingsView
+    response_body: AppearanceSettingsView
+    response_body_kind: object
     request_entity: UserSettingsQuery
     request_body_kind: none
   - method: PATCH
@@ -337,10 +329,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: UserSettingsCommandResult
-      response_decoder: decodeUserSettingsCommandResult
+    response_body: UserSettingsCommandResult
+    response_body_kind: object
     request_body_kind: object
   - method: PATCH
     path: /user/settings/privacy
@@ -399,10 +389,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: UserSettingsCommandResult
-      response_decoder: decodeUserSettingsCommandResult
+    response_body: UserSettingsCommandResult
+    response_body_kind: object
     request_body_kind: object
   - method: PATCH
     path: /user/settings/calls
@@ -462,10 +450,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: UserSettingsCommandResult
-      response_decoder: decodeUserSettingsCommandResult
+    response_body: UserSettingsCommandResult
+    response_body_kind: object
     request_body_kind: object
   - method: PATCH
     path: /user/settings/appearance
@@ -530,8 +516,6 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/user_settings_contracts.dart
-      response_type: AppearanceSettingsView
-      response_decoder: decodeAppearanceSettingsView
+    response_body: AppearanceSettingsView
+    response_body_kind: object
     request_body_kind: object

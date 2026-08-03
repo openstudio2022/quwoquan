@@ -43,6 +43,7 @@ type fieldDef struct {
 	ClientOmitEmpty     bool              `yaml:"client_omit_empty"`
 	ClientSpreadBody    bool              `yaml:"client_spread_body"`
 	ItemEntity          string            `yaml:"item_entity"`
+	ObjectRef           string            `yaml:"object_ref"`
 	MaxUTF8Bytes        int               `yaml:"max_utf8_bytes"`
 }
 

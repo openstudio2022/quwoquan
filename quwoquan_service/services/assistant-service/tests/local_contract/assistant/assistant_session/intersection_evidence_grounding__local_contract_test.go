@@ -3,14 +3,16 @@ package local_contract
 
 import (
 	"context"
-	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
 type assistantSessionIntersectionEvidenceGroundingRecordingIntersectionEvidenceReader struct {
@@ -43,21 +45,6 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 			VerifiedAt:     time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 		}},
 	}
-	service := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(persistence.NewMemorySessionRunStore()),
-		orchestration.WithIntersectionEvidenceReader(reader),
-		testFrozenPolicyOption(),
-	)
-	session, err := service.CreateSession(
-		t.Context(),
-		"persona-owner",
-		assistant.CreateSessionInput{ClientRequestID: "intersection-evidence-session"},
-	)
-	if err != nil {
-		t.Fatalf("CreateSession() error = %v", err)
-	}
 	ref := assistant.AssistantIntersectionEvidenceRef{
 		IntersectionID: "intersection-client",
 		EvidenceID:     "snapshot-client",
@@ -65,79 +52,138 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 		ObjectTypeRef:  "post",
 		ObjectID:       "post-client",
 	}
-	turn, err := service.CreateTurn(
+	useCases := newIntersectionRunUseCases(reader)
+	run, err := useCases.Start(
 		t.Context(),
 		"persona-owner",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "解释这条交集"},
-			ClientRequestID: "intersection-evidence-turn",
-			ContextSnapshot: assistant.AssistantContextSnapshot{
-				IntersectionEvidenceRefs: []assistant.AssistantIntersectionEvidenceRef{ref},
+		"intersection-evidence-session",
+		"trace-intersection",
+		runapplication.StartInput{
+			ClientRequestID: "intersection-evidence-run",
+			Intent: rundomain.Intent{
+				Kind:   "answer",
+				Answer: &rundomain.AnswerIntent{Text: "解释这条交集"},
 			},
-			RequestContext: testRunRequestContext("persona-owner"),
+			ContextSnapshot: map[string]any{
+				"intersectionEvidenceRefs": []any{map[string]any{
+					"intersectionId": ref.IntersectionID,
+					"evidenceId":     ref.EvidenceID,
+					"sourceRef":      ref.SourceRef,
+					"objectTypeRef":  ref.ObjectTypeRef,
+					"objectId":       ref.ObjectID,
+				}},
+			},
+			TrustedPersonaID: "persona-owner",
 		},
 	)
 	if err != nil {
-		t.Fatalf("CreateTurn() error = %v", err)
+		t.Fatalf("Start() error = %v", err)
 	}
 	if reader.personaID != "persona-owner" || len(reader.refs) != 1 ||
 		reader.refs[0] != ref {
 		t.Fatalf("reader actor/refs = %q %#v", reader.personaID, reader.refs)
 	}
-	if len(turn.IntersectionEvidence) != 1 ||
-		turn.IntersectionEvidence[0].PrimaryText != "服务端核验的共同学校事实" ||
-		turn.IntersectionEvidence[0].ObjectID != "post-server" {
-		t.Fatalf("turn must persist only reader facts, got %#v", turn.IntersectionEvidence)
+	encoded, err := json.Marshal(run.ContextSnapshot["authorizedIntersectionEvidence"])
+	if err != nil {
+		t.Fatal(err)
 	}
-	prompt := prompting.FormatAuthorizedIntersectionEvidenceForPrompt(
-		turn.IntersectionEvidence,
-	)
-	if !strings.Contains(prompt, "服务端核验的共同学校事实") ||
-		strings.Contains(prompt, "intersection-client") {
-		t.Fatalf("grounding prompt = %q", prompt)
+	var authorized []runapplication.AuthorizedIntersectionEvidence
+	if err := json.Unmarshal(encoded, &authorized); err != nil {
+		t.Fatal(err)
+	}
+	if len(authorized) != 1 ||
+		authorized[0].PrimaryText != "服务端核验的共同学校事实" ||
+		authorized[0].ObjectID != "post-server" {
+		t.Fatalf("run must persist only authorized facts, got %#v", authorized)
 	}
 }
 
 func TestCreateTurnFailsClosedForMissingIntersectionEvidence(t *testing.T) {
 	reader := &assistantSessionIntersectionEvidenceGroundingRecordingIntersectionEvidenceReader{
-		err: orchestration.ErrIntersectionEvidenceNotFound,
+		err: runapplication.ErrIntersectionEvidenceNotFound,
 	}
-	service := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(persistence.NewMemorySessionRunStore()),
-		orchestration.WithIntersectionEvidenceReader(reader),
-		testFrozenPolicyOption(),
-	)
-	session, err := service.CreateSession(
+	_, err := newIntersectionRunUseCases(reader).Start(
 		t.Context(),
 		"persona-owner",
-		assistant.CreateSessionInput{ClientRequestID: "missing-intersection-session"},
-	)
-	if err != nil {
-		t.Fatalf("CreateSession() error = %v", err)
-	}
-	_, err = service.CreateTurn(
-		t.Context(),
-		"persona-owner",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "解释这条交集"},
-			ClientRequestID: "missing-intersection-turn",
-			ContextSnapshot: assistant.AssistantContextSnapshot{
-				IntersectionEvidenceRefs: []assistant.AssistantIntersectionEvidenceRef{{
-					IntersectionID: "forged",
-					EvidenceID:     "stale",
-					SourceRef:      "same_school",
-					ObjectTypeRef:  "post",
-					ObjectID:       "other-persona-post",
+		"missing-intersection-session",
+		"trace-missing-intersection",
+		runapplication.StartInput{
+			ClientRequestID: "missing-intersection-run",
+			Intent: rundomain.Intent{
+				Kind:   "answer",
+				Answer: &rundomain.AnswerIntent{Text: "解释这条交集"},
+			},
+			ContextSnapshot: map[string]any{
+				"intersectionEvidenceRefs": []any{map[string]any{
+					"intersectionId": "forged",
+					"evidenceId":     "stale",
+					"sourceRef":      "same_school",
+					"objectTypeRef":  "post",
+					"objectId":       "other-persona-post",
 				}},
 			},
-			RequestContext: testRunRequestContext("persona-owner"),
+			TrustedPersonaID: "persona-owner",
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.intersection_evidence_not_found") {
 		t.Fatalf("CreateTurn() error = %v, want structured not-found failure", err)
 	}
+}
+
+func newIntersectionRunUseCases(
+	reader *assistantSessionIntersectionEvidenceGroundingRecordingIntersectionEvidenceReader,
+) *runapplication.UseCases {
+	runtime := assistantruntest.NewMemoryRuntime()
+	commands := runruntime.NewCommandService(
+		runtime,
+		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		nil,
+		nil,
+		testRunPolicyResolver(),
+	)
+	authorizer := runapplication.IntersectionEvidenceAuthorizerFunc(func(
+		ctx context.Context,
+		personaID string,
+		references []runapplication.IntersectionEvidenceRef,
+	) ([]runapplication.AuthorizedIntersectionEvidence, error) {
+		requested := make([]assistant.AssistantIntersectionEvidenceRef, 0, len(references))
+		for _, reference := range references {
+			requested = append(requested, assistant.AssistantIntersectionEvidenceRef{
+				IntersectionID: reference.IntersectionID,
+				EvidenceID:     reference.EvidenceID,
+				SourceRef:      reference.SourceRef,
+				ObjectTypeRef:  reference.ObjectTypeRef,
+				ObjectID:       reference.ObjectID,
+			})
+		}
+		evidence, err := reader.ResolveAuthorizedIntersectionEvidence(ctx, personaID, requested)
+		if err != nil {
+			if err == runapplication.ErrIntersectionEvidenceNotFound {
+				return nil, runapplication.ErrIntersectionEvidenceNotFound
+			}
+			return nil, err
+		}
+		result := make([]runapplication.AuthorizedIntersectionEvidence, 0, len(evidence))
+		for _, item := range evidence {
+			result = append(result, runapplication.AuthorizedIntersectionEvidence{
+				IntersectionID: item.IntersectionID,
+				EvidenceID:     item.EvidenceID,
+				SourceRef:      item.SourceRef,
+				ObjectTypeRef:  item.ObjectTypeRef,
+				ObjectID:       item.ObjectID,
+				PrimaryText:    item.PrimaryText,
+				Dimension:      item.Dimension,
+				VerifiedAt:     item.VerifiedAt,
+			})
+		}
+		return result, nil
+	})
+	return runapplication.NewUseCases(
+		commands,
+		runapplication.WithContextResolver(
+			runapplication.NewContextResolver(nil, authorizer),
+		),
+	)
 }

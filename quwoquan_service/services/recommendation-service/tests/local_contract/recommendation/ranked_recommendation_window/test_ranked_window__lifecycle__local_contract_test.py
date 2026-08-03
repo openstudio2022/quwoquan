@@ -8,8 +8,10 @@ from internal.recommendation.ranked_recommendation_window.application.facade imp
     SubjectClosedError,
 )
 from internal.recommendation.ranked_recommendation_window.domain.model import (
+    MAX_WINDOW_OBJECT_CARDS,
     MAX_WINDOW_ITEMS,
     WINDOW_TTL,
+    RecommendationObjectCard,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -25,8 +27,12 @@ class _Store:
             self.window = window
         return self.window
 
-    def get(self, window_id):
-        if self.window and self.window.window_id == window_id:
+    def get(self, subject_id, window_id):
+        if (
+            self.window
+            and self.window.subject_id == subject_id
+            and self.window.window_id == window_id
+        ):
             return self.window
         return None
 
@@ -42,7 +48,7 @@ def _ranking(count: int = 5) -> RankingResult:
         model_bucket="model",
         model_channel="champion",
         model_release_id="release-001",
-        policy_digest="sha256:policy-001",
+        policy_digest="sha256:2f8a57089882835170b77224eb7ef2db78c5d5d26ae4637b210dbe195713f094",
         feature_snapshot_at=datetime(2020, 7, 31, 11, tzinfo=timezone.utc),
         ranking_snapshot_digest="ranking-digest-001",
         user_feature_snapshot={"engagement": 0.7},
@@ -86,7 +92,7 @@ def test_ranked_window_has_fixed_expiry_and_stable_ordinals() -> None:
             model_bucket="model",
             model_channel="champion",
             model_release_id="release-001",
-            policy_digest="sha256:policy-001",
+            policy_digest="sha256:2f8a57089882835170b77224eb7ef2db78c5d5d26ae4637b210dbe195713f094",
             feature_snapshot_at=now,
             ranking_snapshot_digest="ranking-digest-001",
             user_feature_snapshot={"engagement": 0.7},
@@ -125,7 +131,12 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
     assert page.window_id == "window-fixed"
     assert [item.content_id for item in page.items] == ["post-0", "post-1", "post-2"]
     assert page.next_ordinal == 3
-    assert facade.read_page(window_id="window-fixed", from_ordinal=3, limit=2).next_ordinal is None
+    assert facade.read_page(
+        subject_id="persona-001",
+        window_id="window-fixed",
+        from_ordinal=3,
+        limit=2,
+    ).next_ordinal is None
 
     replay = facade.create_window(
         idempotency_key="request-001",
@@ -139,8 +150,8 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
     with pytest.raises(IdempotencyConflictError):
         facade.create_window(
             idempotency_key="request-001",
-            subject_id="persona-other",
-            scenario="content_feed",
+            subject_id="persona-001",
+            scenario="content_feed_other",
             limit=3,
         )
 
@@ -163,7 +174,12 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
     )
     closures.closed.add("account-001")
     with pytest.raises(SubjectClosedError):
-        facade.read_page(window_id="window-fixed", from_ordinal=0, limit=3)
+        facade.read_page(
+            subject_id="account-001",
+            window_id="window-fixed",
+            from_ordinal=0,
+            limit=3,
+        )
     with pytest.raises(SubjectClosedError):
         facade.create_window(
             idempotency_key="request-002",
@@ -184,7 +200,7 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
                 model_bucket="rule",
                 model_channel=None,
                 model_release_id=None,
-                policy_digest="sha256:policy-001",
+                policy_digest="sha256:2f8a57089882835170b77224eb7ef2db78c5d5d26ae4637b210dbe195713f094",
                 feature_snapshot_at=datetime.now(timezone.utc),
                 ranking_snapshot_digest="ranking-digest-001",
                 user_feature_snapshot={},
@@ -202,3 +218,58 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
             request_digest="request-digest-001",
             ranking=_ranking(MAX_WINDOW_ITEMS + 1),
         )
+
+
+def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
+    ranking = _ranking()
+    card = RecommendationObjectCard(
+        object_kind="entity_homepage",
+        object_id="homepage-001",
+        title="公开对象页",
+        subtitle=None,
+        cover_url=None,
+        tag_refs=("旅行",),
+        reason_key="affinity",
+        recall_path="entity_card_affinity",
+    )
+    window = RankedRecommendationWindow.create(
+        window_id="window-object-card",
+        subject_id="persona-001",
+        scenario="content_feed",
+        request_digest="request-object-card",
+        ranking=RankingResult(
+            model_bucket=ranking.model_bucket,
+            model_channel=ranking.model_channel,
+            model_release_id=ranking.model_release_id,
+            policy_digest=ranking.policy_digest,
+            feature_snapshot_at=ranking.feature_snapshot_at,
+            ranking_snapshot_digest=ranking.ranking_snapshot_digest,
+            user_feature_snapshot=ranking.user_feature_snapshot,
+            candidates=ranking.candidates,
+            object_cards=(card,),
+        ),
+    )
+    assert window.object_cards == (card,)
+
+    for invalid_cards in (
+        (card, card),
+        tuple(card for _ in range(MAX_WINDOW_OBJECT_CARDS + 1)),
+    ):
+        with pytest.raises(ValueError):
+            RankedRecommendationWindow.create(
+                window_id="window-invalid-object-card",
+                subject_id="persona-001",
+                scenario="content_feed",
+                request_digest="request-invalid-object-card",
+                ranking=RankingResult(
+                    model_bucket=ranking.model_bucket,
+                    model_channel=ranking.model_channel,
+                    model_release_id=ranking.model_release_id,
+                    policy_digest=ranking.policy_digest,
+                    feature_snapshot_at=ranking.feature_snapshot_at,
+                    ranking_snapshot_digest=ranking.ranking_snapshot_digest,
+                    user_feature_snapshot=ranking.user_feature_snapshot,
+                    candidates=ranking.candidates,
+                    object_cards=invalid_cards,
+                ),
+            )

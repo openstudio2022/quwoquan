@@ -148,4 +148,47 @@ tables:
       columns:
       - published_at
       - occurred_at
+  report_outbox_sequence:
+    entity: Report
+    infrastructure_only: true
+    description: 为 Report 事务 outbox 分配唯一单调序列；只由 Report repository transaction 使用。
+    pk: name
+    columns:
+    - name: name
+      type: VARCHAR(64)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: value
+      type: BIGINT
+      constraints:
+      - NOT_NULL
+  report_outbox_checkpoints:
+    entity: Report
+    infrastructure_only: true
+    description: Report outbox projector 的对象本地可重放 checkpoint；不得作为领域事实来源。
+    pk: consumer
+    columns:
+    - name: consumer
+      type: VARCHAR(128)
+      constraints:
+      - PK
+      - NOT_NULL
+    - name: checkpoint
+      type: TEXT
+      constraints:
+      - NOT_NULL
+      default: "''"
+    - name: updated_at
+      type: TIMESTAMPTZ
+      constraints:
+      - NOT_NULL
+      default: NOW()
+streams:
+  events.content.report_lifecycle:
+    entity: Report
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Report resolved/dismissed outbox facts 的唯一 durable Notification transport。
 role: authoritative

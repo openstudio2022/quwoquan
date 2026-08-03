@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -206,12 +206,12 @@ final class RemoteSearchRepository implements SearchRepository {
     );
   }
 
-  CircleSearchItemView _circleItem(
+  CircleSearchHitViewData _circleItem(
     CanonicalSearchHit hit, {
     required String objectID,
   }) {
     final payload = hit.payload;
-    return CircleSearchItemView(
+    return CircleSearchHitViewData(
       circleId: payload?.circleId ?? objectID,
       name: hit.title,
       description: hit.snippet,
@@ -232,20 +232,13 @@ final class RemoteSearchRepository implements SearchRepository {
     );
   }
 
-  IntersectionReason? _intersectionReason(
+  CanonicalSearchIntersectionReason? _intersectionReason(
     CanonicalSearchIntersectionReason? reason,
   ) {
     if (reason == null || (reason.primaryText?.trim() ?? '').isEmpty) {
       return null;
     }
-    return IntersectionReason(
-      primaryText: reason.primaryText ?? '',
-      intersectionId: reason.intersectionId ?? '',
-      dimension: reason.dimension ?? '',
-      intersectionClass: reason.intersectionClass ?? '',
-      source: reason.sourceRef ?? '',
-      displayBinding: 'host_plain',
-    );
+    return reason;
   }
 
   List<RetrieveTarget> _canonicalTargets(SearchRequest request) {

@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-context-proactive-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/active-skill-package-catalog/spec.md#gwt-001
 package skill_package_release_integration
 
 import (
@@ -183,12 +183,19 @@ func integrationRelease(
 	t.Helper()
 	kinds := []string{
 		model.AssetManifest,
-		model.AssetPrompt,
+		model.AssetCatalog,
 		model.AssetActivation,
+		model.AssetInput,
+		model.AssetInputSchema,
 		model.AssetContext,
 		model.AssetCapability,
+		model.AssetOrchestration,
+		model.AssetTrigger,
+		model.AssetMemory,
 		model.AssetPresentation,
+		model.AssetPresentationTemplate,
 		model.AssetEvaluation,
+		model.AssetPrompt,
 		model.AssetReplay,
 	}
 	descriptors := make([]model.Asset, 0, len(kinds))

@@ -121,6 +121,41 @@ void main() {
       expect(feedback.recoveryAction, 'retryVerifyOtp');
     });
 
+    test('OTP 发送的网络、超时、服务不可用与 Provider 失败保持分轨', () {
+      final cases = <RuntimeFailureKind, (String, String)>{
+        RuntimeFailureKind.network: (
+          '网络连接异常，请检查后重试',
+          'loginNetworkUnavailable',
+        ),
+        RuntimeFailureKind.timeout: ('请求超时，请重试', 'loginRequestTimeout'),
+        RuntimeFailureKind.unavailable: (
+          '登录服务暂不可用，请重试',
+          'loginOtpServiceUnavailable',
+        ),
+      };
+      for (final entry in cases.entries) {
+        final feedback = loginFeedbackForError(
+          _cloudErrorWithoutCode(kind: entry.key),
+          origin: LoginFailureOrigin.otpSend,
+          locale: 'zh',
+        );
+        expect(feedback.message, entry.value.$1, reason: entry.key.name);
+        expect(feedback.copyKey, entry.value.$2, reason: entry.key.name);
+        expect(feedback.recoveryAction, 'resendOtp');
+        expect(feedback.sourceCode, isNull);
+        expect(feedback.failureKind, entry.key.name);
+      }
+
+      final provider = loginFeedbackForError(
+        _cloudError(UserErrorCode.otpProviderFailed),
+        origin: LoginFailureOrigin.otpSend,
+        locale: 'zh',
+      );
+      expect(provider.message, '验证码发送失败');
+      expect(provider.copyKey, 'loginOtpSendFailed');
+      expect(provider.sourceCode, UserErrorCode.otpProviderFailed.code);
+    });
+
     test('account_suspended 固定使用 generated 安全文案且与注销、临时锁定分轨', () {
       final suspended = loginFeedbackForError(
         CloudException(
@@ -421,6 +456,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(auth.sendOtpCalls, 1);
+      expect(auth.lastSendOtp?.phone, '+8618013819016');
       expect(find.text('输入验证码'), findsOneWidget);
       expect(find.text('60秒后可重新获取'), findsOneWidget);
       expect(find.text('重新获取验证码'), findsNothing);
@@ -440,6 +476,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(auth.phoneLoginCalls, 1);
+      expect(auth.lastPhoneLogin?.phone, '+8618013819016');
       expect(auth.lastPhoneLogin?.otpCode, '286419');
       expect(loggedIn, 1);
     });
@@ -581,7 +618,8 @@ void main() {
 
     testWidgets('首次社交登录必须完成手机号绑定后才签发并应用 session', (tester) async {
       final auth = _RecordingAuthFacets(
-        socialOutcome: const FederatedLoginOutcome.phoneBindingRequired(
+        socialOutcome: const FederatedLoginOutcome(
+          status: FederatedLoginStatus.phonebindingrequired,
           bindingTicket: 'binding-ticket-1',
           provider: 'wechat',
           expiresInSeconds: 180,
@@ -612,6 +650,7 @@ void main() {
       await tester.pump();
       expect(auth.lastSendOtp?.sourceOperation, 'bind_phone');
       expect(auth.lastSendOtp?.bindingTicket, 'binding-ticket-1');
+      expect(auth.lastSendOtp?.phone, '+8618013819016');
 
       await tester.enterText(
         find.byKey(const ValueKey<String>('loginOtpHiddenField')),
@@ -622,13 +661,15 @@ void main() {
       expect(credential.completeCalls, 1);
       expect(credential.lastComplete?.bindingTicket, 'binding-ticket-1');
       expect(credential.lastComplete?.challengeId, 'challenge-1');
+      expect(credential.lastComplete?.phone, '+8618013819016');
       expect(store.saveLoginGrantCalls, 1);
       expect(loggedIn, 1);
     });
 
     testWidgets('绑定流程返回会取消 ticket 并回入口，绝不触发登录完成', (tester) async {
       final auth = _RecordingAuthFacets(
-        socialOutcome: const FederatedLoginOutcome.phoneBindingRequired(
+        socialOutcome: const FederatedLoginOutcome(
+          status: FederatedLoginStatus.phonebindingrequired,
           bindingTicket: 'binding-ticket-return',
           provider: 'wechat',
           expiresInSeconds: 180,
@@ -989,7 +1030,11 @@ AuthSessionGrant _grant({String origin = 'phone'}) =>
       'sessionRememberTtlSeconds': 2592000,
       'accountHint': <String, dynamic>{
         'displayName': '趣友',
+        'nicknameCustomized': false,
+        'avatarUrl': '',
+        'avatarAssetId': '',
         'maskedPhone': '180****9016',
+        'identityOrigin': origin,
       },
     });
 
@@ -1004,7 +1049,11 @@ class _RecordingAuthFacets
     OtpChallengeIssueResult? otpResult,
   }) : socialOutcome =
            socialOutcome ??
-           FederatedLoginOutcome.authenticated(_grant(origin: 'wechat')),
+           FederatedLoginOutcome(
+             status: FederatedLoginStatus.authenticated,
+             session: _grant(origin: 'wechat'),
+             expiresInSeconds: 0,
+           ),
        otpResult =
            otpResult ??
            const OtpChallengeIssueResult(
@@ -1090,9 +1139,9 @@ class _RecordingAuthFacets
   @override
   Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
     CreateAlipayAuthorizationRequestCommand command,
-  ) async => const AlipayAuthorizationGrant(
+  ) async => AlipayAuthorizationGrant(
     authorizationPayload: 'alipay-payload',
-    expiresAt: '2099-01-01T00:00:00Z',
+    expiresAt: DateTime.utc(2099),
   );
 
   @override
@@ -1123,7 +1172,7 @@ class _RecordingCredentialWriter implements AppCredentialBindingCommandWriter {
   Future<CredentialBindingCommandResult> bindPhoneCredential(
     BindPhoneCredentialCommand command,
   ) async => const CredentialBindingCommandResult(
-    credentialType: 'phone',
+    credentialType: CredentialType.phone,
     isActive: true,
     version: 1,
     idempotentReplay: false,
@@ -1133,7 +1182,7 @@ class _RecordingCredentialWriter implements AppCredentialBindingCommandWriter {
   Future<CredentialBindingCommandResult> bindCarrierPhoneCredential(
     BindCarrierPhoneCredentialCommand command,
   ) async => const CredentialBindingCommandResult(
-    credentialType: 'phone',
+    credentialType: CredentialType.phone,
     isActive: true,
     version: 1,
     idempotentReplay: false,
@@ -1143,7 +1192,10 @@ class _RecordingCredentialWriter implements AppCredentialBindingCommandWriter {
   Future<CredentialBindingCommandResult> unbindCredential(
     UnbindCredentialCommand command,
   ) async => CredentialBindingCommandResult(
-    credentialType: command.credentialType,
+    credentialType: CredentialType.fromWire(
+      command.credentialType,
+      'UnbindCredentialCommand.credentialType',
+    ),
     isActive: false,
     version: 2,
     idempotentReplay: false,

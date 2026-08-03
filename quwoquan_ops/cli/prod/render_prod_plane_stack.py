@@ -1453,11 +1453,8 @@ def _write_env_file(
                 "PROD_RTC_MEDIA_CONNECTION_URL=wss://sfu-unavailable.invalid",
                 "PROD_RTC_MEDIA_API_KEY=provider-unavailable",
                 "PROD_RTC_MEDIA_API_SECRET=provider-unavailable",
-                "PRODUCT_OPS_SLS_ENDPOINT=https://sls-unavailable.invalid",
-                "PRODUCT_OPS_SLS_REGION=provider-unavailable",
-                "PRODUCT_OPS_SLS_PROJECT=provider-unavailable",
-                "ALIBABA_CLOUD_ACCESS_KEY_ID=provider-unavailable",
-                "ALIBABA_CLOUD_ACCESS_KEY_SECRET=provider-unavailable",
+                "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT=http://elasticsearch:9200",
+                "PRODUCT_OPS_ELASTICSEARCH_API_KEY=prevalidation-not-release-evidence",
             ]
         )
     elif instance == "gray":

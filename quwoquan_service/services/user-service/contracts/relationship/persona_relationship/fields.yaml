@@ -145,6 +145,18 @@ members:
         ops_exposure: read
         role: owned_value
 types:
+  FollowingRelationshipPageSlice:
+    fields:
+      - {name: items, type: '[]FollowingListItemView', constraints: [NOT_NULL]}
+      - {name: nextCursor, type: string, constraints: [NULLABLE]}
+  FollowerRelationshipPageSlice:
+    fields:
+      - {name: items, type: '[]FollowerListItemView', constraints: [NOT_NULL]}
+      - {name: nextCursor, type: string, constraints: [NULLABLE]}
+  BlockedUserSlice:
+    fields:
+      - {name: items, type: '[]BlockedListItemView', constraints: [NOT_NULL]}
+      - {name: nextCursor, type: string, constraints: [NULLABLE]}
   RelationshipDirection:
     fields:
       - name: sourcePersonaId

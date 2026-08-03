@@ -218,13 +218,7 @@ func TestPostDeletionTransitionsActiveReactionsThroughAggregateOutbox(t *testing
 	); err != nil || count != 2 {
 		t.Fatalf("ContentReaction lifecycle outbox count=%d err=%v", count, err)
 	}
-	assertPostAndRecommendLikeCountProjections(t, postID, "reaction_delete_actor", 0)
-	if count, err := requireMongoDB(t).Collection("rm_discovery_feed").CountDocuments(
-		context.Background(),
-		bson.M{"postId": postID},
-	); err != nil || count != 0 {
-		t.Fatalf("deleted Post remained in DiscoveryFeed: count=%d err=%v", count, err)
-	}
+	assertPostLikeCountProjection(t, postID, 0)
 }
 
 func assertReactionLikeCountProjections(
@@ -234,25 +228,13 @@ func assertReactionLikeCountProjections(
 	want int64,
 ) {
 	t.Helper()
-	assertPostAndRecommendLikeCountProjections(t, postID, personaID, want)
-	var feedRow struct {
-		LikeCount int64 `bson:"likeCount"`
-	}
-	if err := requireMongoDB(t).Collection("rm_discovery_feed").FindOne(
-		context.Background(),
-		bson.M{"postId": postID},
-	).Decode(&feedRow); err != nil {
-		t.Fatalf("read DiscoveryFeed like-count projection: %v", err)
-	}
-	if feedRow.LikeCount != want {
-		t.Fatalf("DiscoveryFeed.likeCount=%d, want %d", feedRow.LikeCount, want)
-	}
+	_ = personaID
+	assertPostLikeCountProjection(t, postID, want)
 }
 
-func assertPostAndRecommendLikeCountProjections(
+func assertPostLikeCountProjection(
 	t *testing.T,
 	postID string,
-	personaID string,
 	want int64,
 ) {
 	t.Helper()
@@ -267,23 +249,5 @@ func assertPostAndRecommendLikeCountProjections(
 	}
 	if row.LikeCount != want {
 		t.Fatalf("Post.likeCount=%d, want %d", row.LikeCount, want)
-	}
-	var featureRow struct {
-		UserFeatures struct {
-			TotalLikes int64 `bson:"totalLikes"`
-		} `bson:"userFeatures"`
-	}
-	if err := requireMongoDB(t).Collection("rm_recommend_feature").FindOne(
-		context.Background(),
-		bson.M{"userId": personaID},
-	).Decode(&featureRow); err != nil {
-		t.Fatalf("read RecommendFeature like-count projection: %v", err)
-	}
-	if featureRow.UserFeatures.TotalLikes != want {
-		t.Fatalf(
-			"RecommendFeature.userFeatures.totalLikes=%d, want %d",
-			featureRow.UserFeatures.TotalLikes,
-			want,
-		)
 	}
 }

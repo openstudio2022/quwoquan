@@ -18,6 +18,10 @@ import (
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
+	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
+	receiptapp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/application"
+	receiptpersistence "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/infrastructure/persistence"
 )
 
 // apiIntegrationIdempotencySeq 为 doPost 等命令 helper 提供进程内唯一幂等键。
@@ -30,9 +34,12 @@ func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStorage
 		CircleGroupConversations: store,
 		Messages:                 store,
 		MessageProjection:        store,
-		Members:                  store,
-		UserStates:               store,
-		ReceiptFacts:             store,
+		Members:                  membershippersistence.NewMongoStore(mongoDB),
+		RosterProjection:         store,
+		UserStates:               userstatepersistence.NewMongoStore(mongoDB),
+		ReceiptFacts: receiptapp.NewAppender(
+			receiptpersistence.NewMongoStore(mongoDB),
+		),
 		ConversationCommands: persistence.NewMongoAggregateCommandStore(
 			mongoDB, "conversations_command_receipts", "conversations_outbox",
 		),
@@ -206,6 +213,11 @@ func commandOperationContext(req *http.Request, path, userId string) *http.Reque
 
 func doGet(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
+	if testInboxViewProjector != nil {
+		if _, err := testInboxViewProjector.Drain(context.Background(), 100); err != nil {
+			t.Fatalf("doGet %s: drain ChatInboxView projector: %v", path, err)
+		}
+	}
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
@@ -221,6 +233,7 @@ func doPatch(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Account-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
@@ -236,6 +249,7 @@ func doPut(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Account-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
@@ -250,6 +264,7 @@ func doDelete(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodDelete, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
+	req.Header.Set("X-Client-Account-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
@@ -265,7 +280,6 @@ func seedConversationWithAssistantMember(
 	conversationID string,
 	ownerUserID string,
 	title string,
-	assistantSkillID string,
 ) {
 	t.Helper()
 	db := requireMongoDB(t)
@@ -302,18 +316,17 @@ func seedConversationWithAssistantMember(
 		t.Fatalf("seed owner member %s: %v", conversationID, err)
 	}
 	assistantMember := &model.ConversationMember{
-		ID:               conversationID + "_assistant_member",
-		ConversationId:   conversationID,
-		UserId:           "assistant",
-		DisplayName:      "Display_assistant",
-		AvatarUrl:        "https://test.avatar/assistant",
-		AvatarAssetId:    "ua_assistant",
-		AvatarVersion:    1,
-		MemberType:       "assistant",
-		Role:             "member",
-		AssistantSkillId: assistantSkillID,
-		InvitedBy:        ownerUserID,
-		JoinedAt:         now.Add(time.Second),
+		ID:             conversationID + "_assistant_member",
+		ConversationId: conversationID,
+		UserId:         "assistant",
+		DisplayName:    "Display_assistant",
+		AvatarUrl:      "https://test.avatar/assistant",
+		AvatarAssetId:  "ua_assistant",
+		AvatarVersion:  1,
+		MemberType:     "assistant",
+		Role:           "member",
+		InvitedBy:      ownerUserID,
+		JoinedAt:       now.Add(time.Second),
 	}
 	if _, err := db.Collection("conversation_memberships").InsertOne(context.Background(), assistantMember); err != nil {
 		t.Fatalf("seed assistant member %s: %v", conversationID, err)
@@ -330,6 +343,11 @@ func drainAggregateOutboxRelays(t *testing.T, path string) {
 		}
 		if _, err := relay.Drain(context.Background(), 100); err != nil {
 			t.Fatalf("%s: drain aggregate outbox: %v", path, err)
+		}
+	}
+	if testInboxViewProjector != nil {
+		if _, err := testInboxViewProjector.Drain(context.Background(), 100); err != nil {
+			t.Fatalf("%s: drain ChatInboxView projector: %v", path, err)
 		}
 	}
 }

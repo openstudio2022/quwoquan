@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	followingpersistence "quwoquan_service/services/user-service/internal/profile_projection/following_subject/infrastructure/persistence"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestFollowingSubjectCanonicalPersonaIdentity(t *testing.T) {
 			t.Fatalf("insert canonical following_subjects row: %v", err)
 		}
 
-		store := persistence.NewMongoFollowingSubjectStore(mongoDB)
+		store := followingpersistence.NewMongoFollowingSubjectStore(mongoDB)
 		if err := store.EnsureIndexes(ctx); err != nil {
 			t.Fatalf("create canonical following_subjects indexes: %v", err)
 		}
@@ -49,7 +49,7 @@ func TestFollowingSubjectCanonicalPersonaIdentity(t *testing.T) {
 			t.Fatalf("insert non-canonical following_subjects row: %v", err)
 		}
 
-		store := persistence.NewMongoFollowingSubjectStore(mongoDB)
+		store := followingpersistence.NewMongoFollowingSubjectStore(mongoDB)
 		err := store.EnsureIndexes(ctx)
 		if err == nil || !strings.Contains(err.Error(), "non-canonical viewer Persona identity") {
 			t.Fatalf("expected canonical identity rejection, got %v", err)

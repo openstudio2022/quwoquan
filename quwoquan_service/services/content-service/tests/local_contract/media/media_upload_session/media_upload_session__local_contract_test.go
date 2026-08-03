@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	sessionapp "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	sessionmodel "quwoquan_service/services/content-service/internal/media/media_upload_session/domain/model"
 	sessionports "quwoquan_service/services/content-service/internal/media/media_upload_session/domain/ports"

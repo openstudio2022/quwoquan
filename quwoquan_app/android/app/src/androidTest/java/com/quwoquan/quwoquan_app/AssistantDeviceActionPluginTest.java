@@ -97,12 +97,50 @@ public final class AssistantDeviceActionPluginTest {
                 context.getContentResolver(),
                 eventId[0],
                 "小趣 Android 原生合同测试");
+            assertReadableReminder(context.getContentResolver(), eventId[0], 10);
+            assertEventMarker(
+                context.getContentResolver(),
+                eventId[0],
+                idempotencyKey,
+                context.getPackageName());
 
             Map<String, Object> replay = invoke(plugin, arguments);
             assertEquals("created", replay.get("status"));
             assertEquals(
                 Long.toString(eventId[0]),
                 replay.get("deviceObjectId"));
+
+            context
+                .getSharedPreferences(
+                    "quwoquan.assistant.device_actions",
+                    Context.MODE_PRIVATE)
+                .edit()
+                .remove(idempotencyKey)
+                .commit();
+            Map<String, Object> recovered = invoke(plugin, arguments);
+            assertEquals("created", recovered.get("status"));
+            assertEquals(
+                Long.toString(eventId[0]),
+                recovered.get("deviceObjectId"));
+
+            context
+                .getContentResolver()
+                .delete(
+                    ContentUris.withAppendedId(
+                        CalendarContract.Events.CONTENT_URI, eventId[0]),
+                    null,
+                    null);
+            Map<String, Object> recreated = invoke(plugin, arguments);
+            assertEquals("created", recreated.get("status"));
+            long recreatedEventId =
+                Long.parseLong(recreated.get("deviceObjectId").toString());
+            assertFalse(recreatedEventId == eventId[0]);
+            eventId[0] = recreatedEventId;
+            assertReadableEvent(
+                context.getContentResolver(),
+                eventId[0],
+                "小趣 Android 原生合同测试");
+            assertReadableReminder(context.getContentResolver(), eventId[0], 10);
           });
     } finally {
       if (eventId[0] > 0) {
@@ -185,6 +223,53 @@ public final class AssistantDeviceActionPluginTest {
             null)) {
       assertTrue(cursor != null && cursor.moveToFirst());
       assertEquals(title, cursor.getString(0));
+    }
+  }
+
+  private static void assertReadableReminder(
+      ContentResolver resolver,
+      long eventId,
+      int expectedMinutes) {
+    try (Cursor cursor =
+        resolver.query(
+            CalendarContract.Reminders.CONTENT_URI,
+            new String[] {
+              CalendarContract.Reminders.MINUTES,
+              CalendarContract.Reminders.METHOD
+            },
+            CalendarContract.Reminders.EVENT_ID + "=?",
+            new String[] {Long.toString(eventId)},
+            null)) {
+      assertTrue(cursor != null && cursor.moveToFirst());
+      assertEquals(expectedMinutes, cursor.getInt(0));
+      assertEquals(CalendarContract.Reminders.METHOD_ALERT, cursor.getInt(1));
+      assertFalse(cursor.moveToNext());
+    }
+  }
+
+  private static void assertEventMarker(
+      ContentResolver resolver,
+      long eventId,
+      String idempotencyKey,
+      String expectedPackage) {
+    try (Cursor cursor =
+        resolver.query(
+            ContentUris.withAppendedId(
+                CalendarContract.Events.CONTENT_URI, eventId),
+            new String[] {
+              CalendarContract.Events.CUSTOM_APP_PACKAGE,
+              CalendarContract.Events.CUSTOM_APP_URI
+            },
+            null,
+            null,
+            null)) {
+      assertTrue(cursor != null && cursor.moveToFirst());
+      assertEquals(expectedPackage, cursor.getString(0));
+      String marker = cursor.getString(1);
+      assertEquals(
+          AssistantDeviceActionPlugin.eventMarker(idempotencyKey),
+          marker);
+      assertFalse(marker.contains(idempotencyKey));
     }
   }
 

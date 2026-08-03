@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	. "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
 	"sync"
 	"testing"
 	"time"
 
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
-	mediaports "quwoquan_service/services/content-service/internal/content/post/domain/media/ports"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 )
 
 type fakeOutboxSource struct {

@@ -67,7 +67,9 @@ func (l *AgentLoop) runSubagentsInParallel(
 			}
 			runCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			result, err := l.React.Run(runCtx, turn, selection)
+			reactRuntime := l.React
+			reactRuntime.PreToolUse = l.preToolUse()
+			result, err := reactRuntime.Run(runCtx, turn, selection)
 			runs[index].Result = result
 			runs[index].Err = err
 			if err != nil {
@@ -306,7 +308,7 @@ func (l *AgentLoop) skillSelectionForSubagent(
 	if err != nil {
 		return SkillSelection{}, err
 	}
-	manifest, found, err := assistantDomainSkillManifest(plan.SkillID)
+	manifest, found, err := l.resolveSkillManifest(ctx, plan.SkillID)
 	if err != nil {
 		return SkillSelection{}, err
 	}

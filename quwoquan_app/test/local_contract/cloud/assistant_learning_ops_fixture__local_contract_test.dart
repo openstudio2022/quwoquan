@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// F5: same JSON as [quwoquan_service/services/assistant-service/tests/support/contract_fixtures/assistant_learning_ops_summary.sample.json].
 File _learningOpsFixtureFile() {

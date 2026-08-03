@@ -27,12 +27,16 @@ func writeGeneratedOperationContracts(
 	b.WriteString(activeContractSHA256)
 	b.WriteString("\n\n")
 	imports := map[string]struct{}{
+		"dart:async":                        {},
 		"../operation_cancellation.dart":    {},
 		"../operation_request_payload.dart": {},
 	}
+	ownerAliases := map[string]string{}
 	for _, operation := range operations {
 		if operation.ClientContract != nil {
 			imports[operation.ClientContract.DartImport] = struct{}{}
+			ownerAliases[operation.ClientContract.DartImport] =
+				canonicalOperationOwnerAlias(operation.Domain)
 		}
 	}
 	importPaths := make([]string, 0, len(imports))
@@ -41,7 +45,11 @@ func writeGeneratedOperationContracts(
 	}
 	sort.Strings(importPaths)
 	for _, importPath := range importPaths {
-		fmt.Fprintf(&b, "import %q;\n", importPath)
+		if alias := ownerAliases[importPath]; alias != "" {
+			fmt.Fprintf(&b, "import %q as %s;\n", importPath, alias)
+		} else {
+			fmt.Fprintf(&b, "import %q;\n", importPath)
+		}
 	}
 	b.WriteString("\n")
 	b.WriteString("/// ContractGraph 内已暴露给 App 的稳定 operation ABI。\n")
@@ -87,6 +95,8 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.availabilityPercent,\n")
 	b.WriteString("    required this.requestEntity,\n")
 	b.WriteString("    required this.requestBodyKind,\n")
+	b.WriteString("    required this.transport,\n")
+	b.WriteString("    this.streaming,\n")
 	b.WriteString("    required this.requestPathBindings,\n")
 	b.WriteString("    required this.requestQueryBindings,\n")
 	b.WriteString("    required this.requestHeaderBindings,\n")
@@ -125,6 +135,7 @@ func writeGeneratedOperationContracts(
 		"telemetryMetric",
 		"requestEntity",
 		"requestBodyKind",
+		"transport",
 		"responseEntity",
 		"responseBody",
 		"responseBodyKind",
@@ -148,6 +159,19 @@ func writeGeneratedOperationContracts(
 	b.WriteString("  final List<CloudOperationRequestBinding> requestHeaderBindings;\n")
 	b.WriteString("  final List<CloudOperationRequestBinding> requestInjectedBindings;\n")
 	b.WriteString("  final List<String> surfaceIds;\n")
+	b.WriteString("  final CloudOperationStreamingContract? streaming;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("final class CloudOperationStreamingContract {\n")
+	b.WriteString("  const CloudOperationStreamingContract({\n")
+	b.WriteString("    required this.resumeRequestField,\n")
+	b.WriteString("    required this.resumeResponseField,\n")
+	b.WriteString("    required this.terminalField,\n")
+	b.WriteString("    required this.terminalValues,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final String resumeRequestField;\n")
+	b.WriteString("  final String resumeResponseField;\n")
+	b.WriteString("  final String terminalField;\n")
+	b.WriteString("  final List<String> terminalValues;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("final class CloudOperationRequestBinding {\n")
 	b.WriteString("  const CloudOperationRequestBinding({\n")
@@ -239,6 +263,16 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required CloudOperationRequestEncoder requestEncoder,\n")
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
+	b.WriteString("abstract interface class CloudOperationStreamExecutor {\n")
+	b.WriteString("  Stream<TResponse> stream<TResponse>(\n")
+	b.WriteString("    CloudOperationContract operation, {\n")
+	b.WriteString("    required CloudOperationInvocationContext context,\n")
+	b.WriteString(
+		"    required CloudOperationResponseDecoder<TResponse> responseDecoder,\n",
+	)
+	b.WriteString("    required CloudOperationRequestEncoder requestEncoder,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
 	b.WriteString("final class GeneratedCloudOperationClient {\n")
 	b.WriteString("  const GeneratedCloudOperationClient(this._executor);\n\n")
 	b.WriteString("  final CloudOperationExecutor _executor;\n\n")
@@ -259,19 +293,49 @@ func writeGeneratedOperationContracts(
 			)
 		}
 		methodName := canonicalOperationIdentifier(operation.CanonicalOperationID)
-		fmt.Fprintf(
-			&b,
-			"  Future<%s> %s(\n",
+		ownerAlias := ownerAliases[client.DartImport]
+		responseType := qualifiedOperationOwnerSymbol(
+			ownerAlias,
 			client.ResponseType,
-			methodName,
 		)
-		fmt.Fprintf(&b, "    %s request, {\n", artifact.RequestType)
+		requestType := qualifiedOperationOwnerSymbol(
+			ownerAlias,
+			artifact.RequestType,
+		)
+		returnType := "Future<" + responseType + ">"
+		if operation.Transport == "sse" {
+			returnType = "Stream<" + responseType + ">"
+		}
+		fmt.Fprintf(&b, "  %s %s(\n", returnType, methodName)
+		fmt.Fprintf(&b, "    %s request, {\n", requestType)
 		b.WriteString("    required CloudOperationInvocationContext context,\n")
 		b.WriteString("  }) {\n")
+		if operation.Transport == "sse" {
+			b.WriteString("    final executor = _executor;\n")
+			b.WriteString("    if (executor is! CloudOperationStreamExecutor) {\n")
+			fmt.Fprintf(
+				&b,
+				"      return Stream<%s>.error(StateError(%q));\n",
+				responseType,
+				operation.CanonicalOperationID+" requires a stream-capable executor",
+			)
+			b.WriteString("    }\n")
+			b.WriteString(
+				"    final streamExecutor = executor as CloudOperationStreamExecutor;\n",
+			)
+		}
+		invocationTarget := "_executor"
+		invocationMethod := "send"
+		if operation.Transport == "sse" {
+			invocationTarget = "streamExecutor"
+			invocationMethod = "stream"
+		}
 		fmt.Fprintf(
 			&b,
-			"    return _executor.send<%s>(\n",
-			client.ResponseType,
+			"    return %s.%s<%s>(\n",
+			invocationTarget,
+			invocationMethod,
+			responseType,
 		)
 		fmt.Fprintf(
 			&b,
@@ -281,12 +345,14 @@ func writeGeneratedOperationContracts(
 		b.WriteString("      context: context,\n")
 		fmt.Fprintf(
 			&b,
-			"      responseDecoder: %s,\n",
+			"      responseDecoder: %s.%s,\n",
+			ownerAlias,
 			client.ResponseDecoder,
 		)
 		fmt.Fprintf(
 			&b,
-			"      requestEncoder: () => %s(request),\n",
+			"      requestEncoder: () => %s.%s(request),\n",
+			ownerAlias,
 			artifact.Encoder,
 		)
 		b.WriteString("    );\n")
@@ -332,6 +398,7 @@ func writeGeneratedOperationContracts(
 			{"telemetryMetric", operation.Telemetry.Metric},
 			{"requestEntity", operation.RequestEntity},
 			{"requestBodyKind", operation.RequestBodyKind},
+			{"transport", operation.Transport},
 			{"responseEntity", operation.ResponseEntity},
 			{"responseBody", operation.ResponseBody},
 			{"responseBodyKind", operation.ResponseBodyKind},
@@ -376,6 +443,30 @@ func writeGeneratedOperationContracts(
 				"    maximumResponseBodyBytes: %d,\n",
 				operation.ResponseAdmission.MaximumBodyBytes,
 			)
+		}
+		if operation.Streaming != nil {
+			b.WriteString("    streaming: CloudOperationStreamingContract(\n")
+			fmt.Fprintf(
+				&b,
+				"      resumeRequestField: %q,\n",
+				operation.Streaming.ResumeRequestField,
+			)
+			fmt.Fprintf(
+				&b,
+				"      resumeResponseField: %q,\n",
+				operation.Streaming.ResumeResponseField,
+			)
+			fmt.Fprintf(
+				&b,
+				"      terminalField: %q,\n",
+				operation.Streaming.TerminalField,
+			)
+			fmt.Fprintf(
+				&b,
+				"      terminalValues: %s,\n",
+				dartStringListLiteral(operation.Streaming.TerminalValues),
+			)
+			b.WriteString("    ),\n")
 		}
 		fmt.Fprintf(
 			&b,
@@ -495,6 +586,18 @@ func writeGeneratedOperationContracts(
 		policy.String(),
 	)
 	return nil
+}
+
+func canonicalOperationOwnerAlias(domain string) string {
+	return canonicalOperationIdentifier(strings.TrimSpace(domain)) + "Contracts"
+}
+
+func qualifiedOperationOwnerSymbol(alias, symbol string) string {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" || symbol == "void" {
+		return symbol
+	}
+	return alias + "." + symbol
 }
 
 func writeOperationRequestBindings(

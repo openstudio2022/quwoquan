@@ -28,10 +28,11 @@ func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	// target 归一身份：persona 优先 personaId，owner 态回落 userId。
+	// target 归一身份：persona/creator 使用 personaId；账号主页回落公开 userHandle，
+	// 不把 owner 映射重新塞回公开 Profile wire。
 	targetPersonaID := strings.TrimSpace(anyString(profile["personaId"]))
 	if targetPersonaID == "" {
-		targetPersonaID = strings.TrimSpace(anyString(profile["userId"]))
+		targetPersonaID = strings.TrimSpace(anyString(profile["userHandle"]))
 	}
 
 	// viewer 解析（游客容忍）：无鉴权头 = 游客态，不报错，跳过关系能力。

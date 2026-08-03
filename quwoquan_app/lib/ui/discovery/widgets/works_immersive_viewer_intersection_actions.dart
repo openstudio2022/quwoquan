@@ -2,7 +2,7 @@ part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerIntersectionActions
     on _WorksImmersiveViewerState {
-  IntersectionTarget _postIntersectionContextTarget(PostBaseDto post) {
+  IntersectionTarget _postIntersectionContextTarget(ContentPostViewData post) {
     return IntersectionTarget(
       objectType: 'post',
       objectId: post.id,
@@ -31,7 +31,7 @@ extension _WorksImmersiveViewerIntersectionActions
     return true;
   }
 
-  IntersectionReason? _primaryIntersectionReasonFor(PostBaseDto post) {
+  IntersectionReason? _primaryIntersectionReasonFor(ContentPostViewData post) {
     final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
     final contextTarget = _postIntersectionContextTarget(post);
     for (final reason in reasons) {
@@ -46,7 +46,7 @@ extension _WorksImmersiveViewerIntersectionActions
     return null;
   }
 
-  void _showIntersectionDetail(BuildContext context, PostBaseDto post) {
+  void _showIntersectionDetail(BuildContext context, ContentPostViewData post) {
     final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
     if (reasons.isEmpty) return;
     showAppBottomModal<void>(
@@ -73,7 +73,7 @@ extension _WorksImmersiveViewerIntersectionActions
 
   void _openAssistantForIntersectionReason(
     BuildContext context,
-    PostBaseDto post,
+    ContentPostViewData post,
     List<IntersectionReason> reasons,
   ) {
     if (reasons.isEmpty) return;
@@ -104,7 +104,7 @@ extension _WorksImmersiveViewerIntersectionActions
   }
 
   List<AssistantIntersectionEvidenceRef> _intersectionEvidenceRefsForReasons(
-    PostBaseDto post,
+    ContentPostViewData post,
     List<IntersectionReason> reasons,
   ) {
     final refs = <String, AssistantIntersectionEvidenceRef>{};
@@ -132,7 +132,7 @@ extension _WorksImmersiveViewerIntersectionActions
 
   void _openIntersectionSpan(
     BuildContext context,
-    PostBaseDto post,
+    ContentPostViewData post,
     IntersectionReason reason,
     IntersectionTextSpan span,
   ) {
@@ -155,7 +155,7 @@ extension _WorksImmersiveViewerIntersectionActions
 
   void _openIntersectionFallback(
     BuildContext context,
-    PostBaseDto post,
+    ContentPostViewData post,
     IntersectionReason reason,
   ) {
     final navigator = IntersectionTargetNavigator(
@@ -209,7 +209,7 @@ extension _WorksImmersiveViewerIntersectionActions
   }
 
   void _trackIntersectionTargetClick({
-    required PostBaseDto post,
+    required ContentPostViewData post,
     required IntersectionTarget target,
     required IntersectionNavAttribution attribution,
   }) {

@@ -74,14 +74,20 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertIn("--dart-define", source)
         self.assertIn('export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"', source)
         self.assertNotIn('stackctl.py" up', source)
-        self.assertNotIn('stackctl.py" health', source)
-        self.assertIn('stackctl.py" status', source)
-        self.assertIn("diagnostic only", source)
+        self.assertIn('app-debug-preflight --target "$QWQ_LAUNCH_TARGET"', source)
 
-    def test_hot_restart_smoke_uses_canonical_launcher_and_one_R_command(self) -> None:
+    def test_hot_restart_smoke_covers_both_surfaces_and_three_restarts(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
         self.assertIn('APP_DIR / "run.sh"', source)
+        self.assertIn('["flutter", "run", "-d", args.device_id]', source)
+        self.assertIn('"direct_flutter_run"', source)
+        self.assertIn('environment["QWQ_ENVIRONMENT"] = args.env', source)
         self.assertIn('os.write(master_fd, b"R")', source)
+        self.assertIn('default=3', source)
+        self.assertIn('range(args.hot_restart_count)', source)
+        self.assertIn('_terminate_stale_device_runtime(', source)
+        self.assertIn('device_id in command', source)
+        self.assertIn('frontend_server.dart.snapshot', source)
         self.assertIn("extract_dart_startup_attempts", source)
         self.assertIn("nativeDidFinishLaunchingCount", source)
 

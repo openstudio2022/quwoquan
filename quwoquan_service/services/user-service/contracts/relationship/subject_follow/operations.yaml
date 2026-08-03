@@ -26,10 +26,8 @@ api_routes:
       - state
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/subject_follow_contracts.dart
-      response_type: SubjectFollowCommandResult
-      response_decoder: decodeSubjectFollowCommandResult
+    response_body: SubjectFollowCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -99,10 +97,8 @@ api_routes:
       - state
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/subject_follow_contracts.dart
-      response_type: SubjectFollowCommandResult
-      response_decoder: decodeSubjectFollowCommandResult
+    response_body: SubjectFollowCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self

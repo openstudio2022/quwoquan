@@ -8,33 +8,9 @@ source_entities:
 - RecentSearchState
 consumers:
 - app
-client_projection:
-  dart_class: RecentSearchEntryWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart
-  fields:
-  - name: entryId
-    dart_type: String
-    nullable: false
-    source: entryId
-    default: ''''''
-  - name: query
-    dart_type: String
-    nullable: false
-    source: query
-    default: ''''''
-  - name: scope
-    dart_type: String
-    nullable: false
-    source: scope
-    default: '''all'''
-  - name: facet
-    dart_type: String
-    nullable: true
-    source: facet
-    default: 'null'
-  - name: updatedAt
-    dart_type: DateTime
-    nullable: true
-    source: updatedAt
-    default: 'null'
+fields:
+- {name: entryId, type: string, nullable: false}
+- {name: query, type: string, nullable: false}
+- {name: scope, type: string, nullable: false}
+- {name: facet, type: string, nullable: true}
+- {name: updatedAt, type: timestamp, nullable: false}

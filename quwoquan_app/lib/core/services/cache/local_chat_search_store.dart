@@ -34,7 +34,7 @@ abstract interface class LocalChatSearchReader {
     int limit = 20,
   });
 
-  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+  Future<CacheReadResult<List<ChatMessageViewData>>> readTimeline({
     required LocalSearchNamespace namespace,
     required String conversationId,
     int beforeSeq = 0,

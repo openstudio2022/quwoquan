@@ -35,4 +35,28 @@ collections:
     entity: ContentBehaviorStreamCheckpoint
     role: checkpoint
     description: rm_behavior_events 到 events.content.behavior_facts 的独立可靠投递水位与多副本租约；不得与本地投影共用 checkpoint。
+  entity_wishlist_events:
+    entity: EntityWishlistState
+    role: projection
+    description: ContentBehaviorFact 中 wishlist_add/wishlist_remove 的当前状态投影；只由行为事实 projector 写入，可从权威行为事实重建。
+  rm_daily_metrics:
+    entity: ContentBehaviorDailyMetrics
+    role: projection
+    description: ContentBehaviorFact 按日、维度与维度键聚合的有界运营指标；只由行为事实处理器写入，可从 rm_behavior_events 重建。
+    indexes:
+    - name: ttl_content_behavior_daily_metrics
+      keys: {createdAt: 1}
+      expireAfterSeconds: 7776000
+    - name: uq_content_behavior_daily_metric_dimension
+      keys: {date: 1, dimension: 1, dimensionKey: 1}
+      unique: true
+    - name: idx_content_behavior_daily_metric_dimension_date
+      keys: {dimension: 1, date: -1}
+streams:
+  events.content.behavior_facts:
+    entity: ContentBehaviorFact
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: ContentBehaviorFact 权威事实向 RecommendationFeedbackFact 的唯一 durable transport。
 role: append_only

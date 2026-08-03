@@ -20,7 +20,7 @@ api_routes:
       reader: ListFollowingSubjectsReader
       slice: ListFollowingSubjectsSlice
     description: 首页关注频道顶部关注对象列表（用户 / 圈子 / 地点和事物主页）
-    response_entity: FollowingSubjectItemView
+    response_entity: FollowingSubjectSlice
     response_fields:
       - subjectId
       - subjectType
@@ -36,10 +36,8 @@ api_routes:
       - unreadChangeCount
       - hasUnreadChanges
       - latestChangeReason
-    client_contract:
-      dart_import: ../user/following_subject_contracts.dart
-      response_type: FollowingSubjectSlice
-      response_decoder: decodeFollowingSubjectSlice
+    response_body: FollowingSubjectSlice
+    response_body_kind: page
     authorization:
       principal: persona
       ownership_policy: self

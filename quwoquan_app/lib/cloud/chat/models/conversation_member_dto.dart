@@ -8,7 +8,6 @@ class ConversationMemberDto {
   final String? avatarUrl;
   final String memberType;
   final String role;
-  final String? assistantSkillId;
   final String? invitedBy;
   final DateTime joinedAt;
 
@@ -20,7 +19,6 @@ class ConversationMemberDto {
     this.avatarUrl,
     required this.memberType,
     required this.role,
-    this.assistantSkillId,
     this.invitedBy,
     required this.joinedAt,
   });
@@ -34,7 +32,6 @@ class ConversationMemberDto {
       avatarUrl: map['avatarUrl'] as String?,
       memberType: (map['memberType'] ?? 'user') as String,
       role: (map['role'] ?? 'member') as String,
-      assistantSkillId: map['assistantSkillId'] as String?,
       invitedBy: map['invitedBy'] as String?,
       joinedAt:
           DateTime.tryParse((map['joinedAt'] ?? '') as String) ??
@@ -50,7 +47,6 @@ class ConversationMemberDto {
     if (avatarUrl != null) 'avatarUrl': avatarUrl,
     'memberType': memberType,
     'role': role,
-    if (assistantSkillId != null) 'assistantSkillId': assistantSkillId,
     if (invitedBy != null) 'invitedBy': invitedBy,
     'joinedAt': joinedAt.toIso8601String(),
   };

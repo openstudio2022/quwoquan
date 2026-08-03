@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/application/content/onboarding/interest_onboarding.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -11,6 +12,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/interest_onboarding_provider.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/discovery/pages/interest_onboarding_page.dart';
 
 void main() {
@@ -116,7 +118,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byType(AppPageErrorState),
+    );
+    expect(errorState.semantic.message.trim(), isNotEmpty);
+    expect(errorState.semantic.primaryAction?.label, SearchText.reload);
     query.shouldFail = false;
     await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
@@ -307,7 +313,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
   final List<String> parentRequests = <String>[];
 
   @override
-  Future<List<TagChild>> listChildren(
+  Future<List<TagChildView>> listChildren(
     String parentTagRef, {
     int limit = TagApiDefaults.childrenLimit,
   }) async {
@@ -317,7 +323,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
     }
     switch (parentTagRef) {
       case 'Topic':
-        return <TagChild>[
+        return <TagChildView>[
           _child(
             tagRef: 'Topic/兴趣',
             label: '兴趣',
@@ -326,7 +332,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
           ),
         ];
       case 'Topic/兴趣':
-        return <TagChild>[
+        return <TagChildView>[
           _child(
             tagRef: 'Topic/兴趣/旅行',
             label: '旅行',
@@ -334,7 +340,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
           ),
         ];
       case 'Audience':
-        return <TagChild>[
+        return <TagChildView>[
           _child(
             tagRef: 'Audience/用户/摄影爱好者',
             label: '摄影爱好者',
@@ -342,7 +348,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
           ),
         ];
       case 'Format':
-        return <TagChild>[
+        return <TagChildView>[
           _child(
             tagRef: 'Format/内容/图文',
             label: '图文',
@@ -350,7 +356,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
           ),
         ];
       case 'Entity':
-        return <TagChild>[
+        return <TagChildView>[
           _child(
             tagRef: 'Entity/地点/旅行目的地',
             label: '旅行目的地',
@@ -358,17 +364,17 @@ final class _TagCatalogQuery implements TagCatalogQuery {
           ),
         ];
       default:
-        return const <TagChild>[];
+        return const <TagChildView>[];
     }
   }
 
-  TagChild _child({
+  TagChildView _child({
     required String tagRef,
     required String label,
     required String parentTagRef,
     bool hasChildren = false,
   }) {
-    return TagChild(
+    return TagChildView(
       tagRef: tagRef,
       label: label,
       displayLabel: label,
@@ -377,15 +383,15 @@ final class _TagCatalogQuery implements TagCatalogQuery {
       depth: tagRef.split('/').length - 1,
       hasChildren: hasChildren,
       releaseId: releaseId,
-      lifecycleStatus: 'active',
+      lifecycleStatus: TagLifecycleStatus.active,
     );
   }
 
   @override
-  Future<TagResolve> resolveTag(String tagRef) => _unsupported();
+  Future<TagResolveView> resolveTag(String tagRef) => _unsupported();
 
   @override
-  Future<TagValidationResult> validateRefs({
+  Future<TagValidationResultView> validateRefs({
     required String expectedTaxonomyReleaseId,
     required List<String> tagRefs,
   }) => _unsupported();

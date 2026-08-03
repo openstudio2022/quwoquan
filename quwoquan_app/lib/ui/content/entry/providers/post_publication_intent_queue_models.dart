@@ -3,6 +3,7 @@ part of 'post_publication_intent_queue_provider.dart';
 enum LocalPostPublicationBlockReason {
   personaChanged,
   invalidReceipt,
+  continuationRejected,
   rejected,
   remoteFailure,
 }
@@ -26,6 +27,7 @@ final class LocalPostPublicationIntent {
     this.blockReason,
     this.blocked = false,
     this.preparedMediaAssets = const <ContentMediaPreparationCheckpoint>[],
+    this.publicationContinuation,
   });
 
   final SubmitContentPostPublicationCommand command;
@@ -43,6 +45,7 @@ final class LocalPostPublicationIntent {
   final LocalPostPublicationBlockReason? blockReason;
   final bool blocked;
   final List<ContentMediaPreparationCheckpoint> preparedMediaAssets;
+  final CreateDraftPublicationContinuationRef? publicationContinuation;
 
   bool get publicationAccepted =>
       postId?.trim().isNotEmpty == true &&
@@ -75,6 +78,7 @@ final class LocalPostPublicationIntent {
     bool clearBlockReason = false,
     bool? blocked,
     List<ContentMediaPreparationCheckpoint>? preparedMediaAssets,
+    CreateDraftPublicationContinuationRef? publicationContinuation,
   }) {
     return LocalPostPublicationIntent(
       command: command ?? this.command,
@@ -94,12 +98,21 @@ final class LocalPostPublicationIntent {
       blockReason: clearBlockReason ? null : (blockReason ?? this.blockReason),
       blocked: blocked ?? this.blocked,
       preparedMediaAssets: preparedMediaAssets ?? this.preparedMediaAssets,
+      publicationContinuation:
+          publicationContinuation ?? this.publicationContinuation,
     );
   }
 
   factory LocalPostPublicationIntent.fromStorageMap(Map<String, Object?> map) {
-    final command = decodeSubmitContentPostPublicationCommand(
-      map['commandBody'],
+    final encodedCommand = map['commandBody'];
+    if (encodedCommand is! Map) {
+      throw const FormatException(
+        'LocalPostPublicationIntent.commandBody must be an object',
+      );
+    }
+    final command = SubmitContentPostPublicationCommand.fromWire(
+      Map<String, Object?>.from(encodedCommand),
+      'LocalPostPublicationIntent.commandBody',
     );
     return LocalPostPublicationIntent(
       command: command,
@@ -131,6 +144,11 @@ final class LocalPostPublicationIntent {
       preparedMediaAssets: _preparedMediaAssetsFromStorage(
         map['preparedMediaAssets'],
       ),
+      publicationContinuation: map['publicationContinuation'] is Map
+          ? CreateDraftPublicationContinuationRef.fromStorageMap(
+              Map<String, dynamic>.from(map['publicationContinuation'] as Map),
+            )
+          : null,
     );
   }
 
@@ -155,6 +173,8 @@ final class LocalPostPublicationIntent {
       'preparedMediaAssets': preparedMediaAssets
           .map((checkpoint) => checkpoint.toStorageMap())
           .toList(growable: false),
+      if (publicationContinuation != null)
+        'publicationContinuation': publicationContinuation!.toStorageMap(),
     };
   }
 }

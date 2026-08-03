@@ -2,24 +2,30 @@ package application
 
 import (
 	"context"
+	"strings"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	membershipevent "quwoquan_service/services/chat-service/generated/chat/conversation_membership/contract/event"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	membershipapp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/application"
 )
 
-type InviteAssistantRequest struct {
-	ConversationId string
-	SkillId        string
-	InvitedBy      string
-}
+type InviteAssistantRequest = membershipapp.InviteAssistantRequest
 
 func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistantRequest) error {
+	if strings.TrimSpace(req.InvitedByAccountID) == "" {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"邀请者身份无效",
+			"InviteAssistant requires a trusted inviter account",
+		)
+	}
 	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy)
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "InviteAssistant"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "InviteAssistant"); err != nil {
 		return err
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.InvitedBy)
@@ -49,14 +55,13 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 
 	now := time.Now()
 	member := &model.ConversationMember{
-		ID:               generateID(),
-		ConversationId:   req.ConversationId,
-		UserId:           "assistant",
-		MemberType:       "assistant",
-		Role:             "member",
-		AssistantSkillId: req.SkillId,
-		InvitedBy:        req.InvitedBy,
-		JoinedAt:         now,
+		ID:             generateID(),
+		ConversationId: req.ConversationId,
+		UserId:         "assistant",
+		MemberType:     "assistant",
+		Role:           "member",
+		InvitedBy:      req.InvitedBy,
+		JoinedAt:       now,
 	}
 	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.members.CreateMember(txCtx, member); err != nil {
@@ -66,7 +71,7 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 		if err != nil {
 			return err
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		events := []AggregateOutboxEvent{{
@@ -79,14 +84,14 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 			ConversationID: req.ConversationId,
 			ActorID:        req.InvitedBy,
 			Payload: map[string]any{
-				"memberId":         member.ID,
-				"userId":           member.UserId,
-				"memberType":       member.MemberType,
-				"role":             member.Role,
-				"assistantSkillId": member.AssistantSkillId,
-				"invitedBy":        member.InvitedBy,
-				"memberCount":      newCount,
-				"joinedAt":         member.JoinedAt,
+				"memberId":           member.ID,
+				"userId":             member.UserId,
+				"memberType":         member.MemberType,
+				"role":               member.Role,
+				"invitedBy":          member.InvitedBy,
+				"invitedByAccountId": req.InvitedByAccountID,
+				"memberCount":        newCount,
+				"joinedAt":           member.JoinedAt,
 			},
 		}}
 		rosterEvent, rosterErr := s.rosterUpdatedEvent(
@@ -107,17 +112,21 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 	return nil
 }
 
-type RemoveAssistantRequest struct {
-	ConversationId string
-	RemovedBy      string
-}
+type RemoveAssistantRequest = membershipapp.RemoveAssistantRequest
 
 func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistantRequest) error {
+	if strings.TrimSpace(req.RemovedByAccountID) == "" {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"移除操作者身份无效",
+			"RemoveAssistant requires a trusted operator account",
+		)
+	}
 	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.RemovedBy)
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "RemoveAssistant"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "RemoveAssistant"); err != nil {
 		return err
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.RemovedBy)
@@ -153,7 +162,7 @@ func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistant
 		if err != nil {
 			return err
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		events := []AggregateOutboxEvent{{
@@ -166,12 +175,12 @@ func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistant
 			ConversationID: req.ConversationId,
 			ActorID:        req.RemovedBy,
 			Payload: map[string]any{
-				"memberId":         assistant.ID,
-				"userId":           assistant.UserId,
-				"memberType":       assistant.MemberType,
-				"assistantSkillId": assistant.AssistantSkillId,
-				"removedBy":        req.RemovedBy,
-				"memberCount":      newCount,
+				"memberId":           assistant.ID,
+				"userId":             assistant.UserId,
+				"memberType":         assistant.MemberType,
+				"removedBy":          req.RemovedBy,
+				"removedByAccountId": req.RemovedByAccountID,
+				"memberCount":        newCount,
 			},
 		}}
 		rosterEvent, rosterErr := s.rosterUpdatedEvent(

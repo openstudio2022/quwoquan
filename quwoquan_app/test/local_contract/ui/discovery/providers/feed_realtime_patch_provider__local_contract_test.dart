@@ -28,7 +28,7 @@ void main() {
   });
 
   ProviderContainer buildContainer({
-    required List<PostBaseDto> items,
+    required List<ContentPostViewData> items,
     String feedRequestId = 'frq_test_1',
     String? policyDigest = _policyA,
     bool authenticated = true,
@@ -94,7 +94,7 @@ void main() {
     });
 
     test('author 维度：移除视口之外同作者项，保留视口内与他作者项', () {
-      final items = <PostBaseDto>[
+      final items = <ContentPostViewData>[
         _post('p0', authorId: 'authorA'),
         _post('p1', authorId: 'authorA'),
         _post('p2', authorId: 'authorB'),
@@ -387,11 +387,11 @@ void main() {
 
 // ── 测试夹具 ──────────────────────────────────────────────────────────────
 
-List<PostBaseDto> _posts(int count) =>
-    List<PostBaseDto>.generate(count, (i) => _post('p$i'));
+List<ContentPostViewData> _posts(int count) =>
+    List<ContentPostViewData>.generate(count, (i) => _post('p$i'));
 
-PostBaseDto _post(String id, {String authorId = 'author-default'}) {
-  return postBaseDtoFromMap(<String, dynamic>{
+ContentPostViewData _post(String id, {String authorId = 'author-default'}) {
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     '_id': id,
     'postId': id,

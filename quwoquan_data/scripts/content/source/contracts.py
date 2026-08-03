@@ -39,6 +39,8 @@ class MatchVerdict(StrEnum):
 class RightsAuditStatus(StrEnum):
     VERIFIED = "verified"
     UNVERIFIED = "unverified"
+    RESTRICTED = "restricted"
+    UNKNOWN = "unknown"
 
 
 class ModelReleaseStatus(StrEnum):

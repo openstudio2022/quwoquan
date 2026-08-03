@@ -4,7 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -294,7 +294,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
     );
   }
 
-  bool _matchesRemoval(FeedRealtimePatch patch, PostBaseDto item) {
+  bool _matchesRemoval(FeedRealtimePatch patch, ContentPostViewData item) {
     // 显式命中的单条内容（post 维度由 targetPostIds 承载）。
     if (patch.targetPostIds.contains(item.id)) {
       return true;

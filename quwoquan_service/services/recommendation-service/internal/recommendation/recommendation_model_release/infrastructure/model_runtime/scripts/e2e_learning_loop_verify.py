@@ -3,12 +3,11 @@
 e2e_learning_loop_verify.py — End-to-end verification of the online learning loop.
 
 Steps verified:
-1. Behavior events exist in rec_learning_events (with scenario field)
+1. Canonical exposure and feedback facts exist and join by exposureId
 2. Training samples exist in rec_training_samples
 3. recommendation-service can score through the active ModelRelease Reader
-5. rec_learning_events contain both impression and engagement types
-6. Seed data bootstrap produces expected collections
-7. Feature store has user profiles
+4. Candidate and feature projections exist in Recommendation-owned storage
+5. Local dry-run facts produce immutable training samples
 
 Usage:
   python3 e2e_learning_loop_verify.py --mongodb-uri mongodb://localhost:27017
@@ -58,14 +57,22 @@ def _dry_run_db_name(db_name: str) -> str:
     return f"{db_name}_dryrun"
 
 
-def check_learning_events(db, scenario: str) -> tuple[bool, str]:
-    coll = db["rec_learning_events"]
-    total = coll.count_documents({"scenario": scenario})
-    if total == 0:
-        return False, f"No learning events with scenario={scenario}"
-    impressions = coll.count_documents({"scenario": scenario, "eventType": "rec_impression"})
-    engagements = coll.count_documents({"scenario": scenario, "eventType": "rec_engagement"})
-    return True, f"events: total={total}, impressions={impressions}, engagements={engagements}"
+def check_learning_facts(db, scenario: str) -> tuple[bool, str]:
+    exposures = db["recommendation_exposure_facts"]
+    feedbacks = db["recommendation_feedback_facts"]
+    exposure_query = {"scenario": scenario}
+    exposure_count = exposures.count_documents(exposure_query)
+    if exposure_count == 0:
+        return False, f"No exposure facts with scenario={scenario}"
+    exposure_ids = [
+        str(document.get("_id") or "").strip()
+        for document in exposures.find(exposure_query, {"_id": 1})
+    ]
+    exposure_ids = [exposure_id for exposure_id in exposure_ids if exposure_id]
+    feedback_count = feedbacks.count_documents({"exposureId": {"$in": exposure_ids}})
+    if feedback_count == 0:
+        return False, f"No feedback facts attributed to scenario={scenario} exposures"
+    return True, f"facts: exposures={exposure_count}, feedback={feedback_count}"
 
 
 def check_training_samples(db, scenario: str) -> tuple[bool, str]:
@@ -242,7 +249,7 @@ def main():
     checks = [
         ("Discovery Feed", lambda: check_discovery_feed(db)),
         ("User Feature Store", lambda: check_user_feature_store(db)),
-        ("Learning Events", lambda: check_learning_events(db, args.scenario)),
+        ("Exposure/Feedback Facts", lambda: check_learning_facts(db, args.scenario)),
         ("Training Samples", lambda: check_training_samples(db, args.scenario)),
         ("Seed→Train Loop", lambda: check_seed_train_loop(db, args.scenario)),
     ]

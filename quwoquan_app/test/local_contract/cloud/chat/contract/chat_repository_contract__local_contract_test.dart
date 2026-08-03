@@ -247,10 +247,7 @@ void main() {
 
     test('inviteAssistant 不抛出异常', () async {
       await expectLater(
-        repo.inviteAssistant(
-          conversationId: 'fixture_conv_group',
-          skillId: 'general',
-        ),
+        repo.inviteAssistant(conversationId: 'fixture_conv_group'),
         completes,
       );
     });

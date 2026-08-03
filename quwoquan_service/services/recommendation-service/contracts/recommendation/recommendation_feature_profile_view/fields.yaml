@@ -7,5 +7,96 @@ fields:
 - {name: influenceScore, source: influenceScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: collaborativeFeatures, source: collaborativeFeatures, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 - {name: intersectionFeatures, source: intersectionFeatures, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+- {name: negativeContentIds, source: negativeContentIds, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: hiddenAuthorIds, source: hiddenAuthorIds, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: hiddenContentTypes, source: hiddenContentTypes, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 - {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+types:
+  ListRecommendationSubjectIntersectionsQuery:
+    description: 按可信主体与交集类别读取 RecommendationFeatureProfileView 物化的结构化交集理由；channel 是精确分片筛选，未物化该分片时读取 channel 为空的全局快照。
+    fields:
+    - {name: subjectId, source: path.subjectId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: intersectionClass, source: query.intersectionClass, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, description: 只允许 fact 或 affinity。}
+    - {name: channel, source: query.channel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, description: 可选精确分片；响应 channel 为空表示同一主体与类别的全局快照适用于当前请求，不是旧字段或兼容回退。}
+  ListRecommendationObjectIntersectionsQuery:
+    description: 按可信主体与目标对象精确读取物化交集理由。
+    fields:
+    - {name: subjectId, source: path.subjectId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: objectType, source: path.objectType, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: objectId, source: path.objectId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+  GetRecommendationIntersectionSupplyQuery:
+    description: 按交集 kind 注册表中的供给口径读取去重对象数。
+    fields:
+    - {name: supplyKey, source: path.supplyKey, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RecommendationIntersectionReasonSlice:
+    description: 同一主体与交集类别的有界结构化理由快照；channel 非空为精确分片，channel 为空为 canonical 全局快照。
+    fields:
+    - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: intersectionClass, source: intersectionClass, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: channel, source: channel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, description: 实际命中的快照分片；空值明确表示全局快照。}
+    - {name: reasons, source: reasons, type: '[]IntersectionReason', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: generatedAt, source: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  RecommendationObjectIntersectionReasonSlice:
+    description: 同一主体与目标对象的有界结构化交集理由快照。
+    fields:
+    - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: objectType, source: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: reasons, source: reasons, type: '[]IntersectionReason', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: generatedAt, source: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  RecommendationIntersectionSupply:
+    description: 交集冷启动稀释闸门使用的权威供给计数快照。
+    fields:
+    - {name: supplyKey, source: supplyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: distinctObjectCount, source: distinctObjectCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: computedAt, source: computedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  GetRecommendationAuthorImpactQuery:
+    description: RecommendationFeatureProfileView 作者影响摘要内部查询。
+    fields:
+    - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  ListRecommendationAuthorImpactEvidenceQuery:
+    description: RecommendationFeatureProfileView 作者影响证据内部分页查询。
+    fields:
+    - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: impactId, source: impactId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: write, ops_exposure: none}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RecommendationAuthorImpactItem:
+    description: RecommendationFeatureProfileView 拥有的作者影响聚合行；Content 仅可将其 hydrate 为公开展示视图。
+    fields:
+    - {name: impactId, source: impactId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: helpType, source: helpType, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: action, source: action, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: intersectionDimension, source: intersectionDimension, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: tagRef, source: tagRef, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: source, source: source, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: count, source: count, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: representativeContentId, source: representativeContentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+  RecommendationAuthorImpactSummary:
+    description: 作者影响力投影的内部查询结果，不含展示文案或当前 Post 可见性判断。
+    fields:
+    - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: total, source: total, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: items, source: items, type: '[]RecommendationAuthorImpactItem', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  RecommendationAuthorImpactEvidence:
+    description: 不含 viewer 身份的单条作者影响事实；Content 仅按 contentId 执行当前权限 hydration。
+    fields:
+    - {name: evidenceId, source: evidenceId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: impactId, source: impactId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: contentId, source: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: contentType, source: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: helpType, source: helpType, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: action, source: action, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: intersectionDimension, source: intersectionDimension, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  RecommendationAuthorImpactEvidencePage:
+    description: 作者影响证据的稳定 keyset 分页结果。
+    fields:
+    - {name: impactId, source: impactId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: totalCount, source: totalCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: items, source: items, type: '[]RecommendationAuthorImpactEvidence', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: nextCursor, source: nextCursor, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: read, ops_exposure: none}
+    - {name: hasMore, source: hasMore, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

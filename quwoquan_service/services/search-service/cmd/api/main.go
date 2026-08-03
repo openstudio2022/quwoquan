@@ -35,6 +35,8 @@ import (
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/application"
 	recentmetrics "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/metrics"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/persistence"
+	signalfactadapter "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/adapters/inbound/fact"
+	signalfactapplication "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/application"
 	"quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/infrastructure/searchsignals"
 	feedbackhttp "quwoquan_service/services/search-service/internal/search/search_feedback_fact/adapters/inbound/http"
 	feedbackapplication "quwoquan_service/services/search-service/internal/search/search_feedback_fact/application"
@@ -198,6 +200,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
 	}
+	searchSignalAppender, err := signalfactapplication.NewAppender(searchSignalPublisher)
+	if err != nil {
+		log.Fatalf("%s search signal appender init failed: %v", serviceName, err)
+	}
+	searchSignalPort, err := signalfactadapter.NewAppender(searchSignalAppender)
+	if err != nil {
+		log.Fatalf("%s search signal inbound port init failed: %v", serviceName, err)
+	}
 	experimentAssignmentPublisher, err := experimentassignment.NewPublisher(messageTransport)
 	if err != nil {
 		log.Fatalf("%s experiment assignment publisher init failed: %v", serviceName, err)
@@ -269,7 +279,7 @@ func main() {
 		feedbackSink = feedbackStore
 		feedbackSignalRelay, err = feedbackstore.NewSignalRelay(
 			feedbackStore,
-			searchSignalPublisher,
+			searchSignalPort,
 			feedbackMetrics,
 			logger,
 		)
@@ -282,7 +292,12 @@ func main() {
 		}
 		go feedbackSignalRelay.Run(ctx)
 		queryLogSink = queryStore
-		heatStore := queryheatstore.NewStore(db, queryheat.Config{}, logger)
+		heatStore := queryheatstore.NewStore(
+			db,
+			feedbackStore,
+			queryheat.Config{},
+			logger,
+		)
 		// Hot-query related-terms cache: collapses the per-search Mongo read for
 		// repeated hot queries into one read per key per TTL window (backpressure
 		// on the Mongo side under concurrency). Best-effort, read-through.
@@ -315,6 +330,8 @@ func main() {
 		accountClosureProjection, err := accountclosureinfra.NewMongoProjection(
 			db,
 			accountRestrictionProjection,
+			recentStore,
+			feedbackStore,
 		)
 		if err != nil {
 			log.Fatalf(
@@ -376,7 +393,7 @@ func main() {
 	searchSvc := searchapplication.NewSearchService(accountRestrictedBackend)
 	requestFactRecorder := requestapplication.NewRecorder(
 		queryLogSink,
-		searchSignalPublisher,
+		searchSignalPort,
 		logger,
 	)
 	feedbackSvc := feedbackapplication.NewService(feedbackSink)

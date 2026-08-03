@@ -11,7 +11,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 )
 
 func TestListUserPosts(t *testing.T) {
@@ -61,13 +61,13 @@ func TestListUserPostsEmpty(t *testing.T) {
 func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 	ctx := context.Background()
 	db := requireMongoDB(t)
-	relationships := db.Collection("persona_follow_projection")
+	access := db.Collection(accessinfra.ContentPersonaAccessProjectionCollection)
 	authorID := "author_block_list_test"
 	viewerID := "viewer_blocked_list_test"
 	cleanup := func() {
 		cleanPosts(t)
-		_, _ = relationships.DeleteMany(ctx, bson.M{"sourcePersonaId": bson.M{"$in": []string{authorID, viewerID}}})
-		_, _ = db.Collection("persona_relationship_projection_inbox").DeleteMany(ctx, bson.M{"eventId": bson.M{"$regex": "^block_list_"}})
+		_, _ = access.DeleteMany(ctx, bson.M{"sourcePersonaId": bson.M{"$in": []string{authorID, viewerID}}})
+		_, _ = db.Collection(accessinfra.ContentPersonaAccessInboxCollection).DeleteMany(ctx, bson.M{"eventId": bson.M{"$regex": "^block_list_"}})
 	}
 	cleanup()
 	t.Cleanup(cleanup)
@@ -83,13 +83,13 @@ func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 	}
 
 	// 经真实投影链路写入 block 事实（author 拉黑 viewer）。
-	projector := recinfra.NewPersonaRelationshipProjection(db)
+	projector := accessinfra.NewPersonaAccessProjection(db)
 	if err := projector.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure projection indexes: %v", err)
 	}
-	if err := projector.Apply(ctx, recinfra.PersonaRelationshipProjectionEvent{
+	if err := projector.Apply(ctx, accessinfra.PersonaRelationshipEvent{
 		EventID:         "block_list_evt_1",
-		EventName:       recinfra.PersonaBlocked,
+		EventName:       accessinfra.PersonaBlocked,
 		PairID:          "block_list_pair",
 		SourcePersonaID: authorID,
 		TargetPersonaID: viewerID,

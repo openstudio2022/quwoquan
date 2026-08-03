@@ -1,7 +1,6 @@
 entity: EventRecord
-description: 'Product telemetry rollup algebra shared by the SLS Scheduled SQL and the postgres_telemetry_local
-  rollup worker. A backend may change execution syntax, but may not change the row identity, late-arrival,
-  privacy, or percentile semantics.
+description: 'Product telemetry rollup algebra executed by the single Elasticsearch adapter in all environments.
+  An environment may change capacity, but may not change the row identity, late-arrival, privacy, or percentile semantics.
 
   '
 common:
@@ -47,6 +46,134 @@ jobs:
   - name: sessionHll
     algebra: mergeable_hll(sessionId)
     error_bound: 0.02
+- row_kind: product_action_funnel
+  source: raw_records
+  filter: eventType = product_action
+  dimensions:
+  - journey
+  - action
+  - pageName
+  - result
+  - failReasonCode
+  - recoveryAction
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: sessionHll
+    algebra: mergeable_hll(sessionId)
+    error_bound: 0.02
+  - name: durationHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms: [0, 50, 100, 250, 500, 1000, 2000, 3000, 5000, 10000, 30000]
+- row_kind: login_lifecycle
+  source: raw_records
+  filter: (eventType = login_funnel OR eventType = login_operation)
+  dimensions:
+  - eventType
+  - action
+  - operationId
+  - step
+  - provider
+  - otpPurpose
+  - consentState
+  - result
+  - failReasonCode
+  - failureKind
+  - recoveryAction
+  - copyKey
+  - feedbackSurface
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: sessionHll
+    algebra: mergeable_hll(sessionId)
+    error_bound: 0.02
+  - name: durationHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms: [0, 50, 100, 250, 500, 800, 1200, 2000, 3000, 5000, 10000, 15000, 30000, 60000, 90000, 300000]
+- row_kind: chat_funnel
+  source: raw_records
+  filter: eventType = chat_interaction_outcome
+  dimensions:
+  - pageName
+  - chatAction
+  - chatOutcome
+  - chatSource
+  - mentionScope
+  - governanceAction
+  - watermarkResult
+  - memberCountBucket
+  - unreadCountBucket
+  - failReasonCode
+  - recoveryAction
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: sessionHll
+    algebra: mergeable_hll(sessionId)
+    error_bound: 0.02
+- row_kind: content_publication_funnel
+  source: raw_records
+  filter: eventType = content_publication
+  dimensions:
+  - pageName
+  - publicationStage
+  - contentType
+  - objectState
+  - surfaceId
+  - result
+  - backgroundRetryTerminal
+  - failReasonCode
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: publishToVisibleHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms: [0, 1000, 5000, 15000, 30000, 60000, 120000, 300000, 600000, 1800000, 3600000]
+- row_kind: article_reader_lifecycle
+  source: raw_records
+  filter: eventType IN (article_reader_enter, article_reader_dwell, article_reader_exit, article_reader_error, article_reader_recovery)
+  dimensions:
+  - eventType
+  - pageName
+  - surfaceId
+  - objectType
+  - result
+  - errorCode
+  - recoveryAction
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: sessionHll
+    algebra: mergeable_hll(sessionId)
+    error_bound: 0.02
+  - name: durationHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms: [0, 50, 100, 250, 500, 800, 1200, 2000, 3000, 5000, 10000, 30000, 60000, 300000, 1800000]
+- row_kind: video_preview_track_load
+  source: raw_records
+  filter: eventType = video_preview_track_load
+  dimensions: [pageName, result, failReasonCode]
+  measures:
+  - name: count
+    algebra: count_distinct_row_identity
+  - name: durationHistogram
+    algebra: fixed_histogram(durationMs)
+    buckets_ms: [0, 50, 100, 250, 500, 1000, 2000, 3000, 5000, 10000, 30000]
+- row_kind: search_funnel
+  source: raw_records
+  filter: eventType IN (search_query_submit, search_result_impression, search_result_click, search_refine, search_zero_result, search_result_dwell)
+  dimensions: [action]
+  measures:
+  - name: querySubmitCount
+    algebra: count_distinct_where(requestId, eventType = search_query_submit)
+  - name: nonEmptyResultCount
+    algebra: count_distinct_where(requestId, eventType = search_result_impression)
+  - name: effectiveActionRequestCount
+    algebra: count_distinct_where(requestId, eventType = search_result_click OR (eventType = search_result_dwell AND durationMs >= 3000))
+  - name: firstActionableHistogram
+    algebra: fixed_histogram_where(durationMs, eventType = search_result_impression)
+    buckets_ms: [0, 50, 100, 250, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000]
 - row_kind: performance
   source: raw_records
   filter: (eventType = performance_sample OR eventType = app_startup)
@@ -72,10 +199,21 @@ jobs:
     - 30000
   - name: errorCount
     algebra: count_distinct_row_identity_where(hasError = true)
+  - name: firstFrameHistogram
+    algebra: fixed_histogram(tClickToFirstFrameMs)
+    buckets_ms: [0, 50, 100, 250, 500, 1000, 2000, 3000, 5000, 10000, 30000]
+  - name: shellHistogram
+    algebra: fixed_histogram(tFirstFrameToShellMs)
+    buckets_ms: [0, 50, 100, 250, 500, 1000, 2000, 3000, 5000, 10000, 30000]
+  - name: contentHistogram
+    algebra: fixed_histogram(tClickToContentMs)
+    buckets_ms: [0, 50, 100, 250, 500, 1000, 2000, 3000, 5000, 10000, 30000]
 - row_kind: video_qoe
   source: raw_records
   filter: eventType = video_playback_qoe
   dimensions:
+  - devicePlatform
+  - networkClass
   - playbackMode
   - result
   - rendererMode
@@ -113,8 +251,12 @@ jobs:
     - 30000
   - name: rebufferCount
     algebra: sum(rebufferCount)
+  - name: rebufferSessionCount
+    algebra: count_distinct_row_identity_where(rebufferCount > 0)
   - name: rebufferMs
     algebra: sum(rebufferMs)
+  - name: effectivePlaybackMs
+    algebra: sum(effectivePlaybackMs)
   - name: seekCount
     algebra: sum(seekCount)
   - name: seekFailureCount
@@ -143,6 +285,16 @@ jobs:
     - 1000
     - 2000
     - 5000
+  - name: nativeFirstFrameSuccessCount
+    algebra: count_distinct_row_identity_where(ttffMs IS NOT NULL)
+  - name: droppedFrames
+    algebra: sum(droppedFrames)
+  - name: processedVideoFrames
+    algebra: sum(processedVideoFrames)
+  - name: audioUnderrunCount
+    algebra: sum(audioUnderrunCount)
+  - name: terminalFailureCount
+    algebra: count_distinct_row_identity_where(result != success)
 - row_kind: rtc_qoe
   source: raw_records
   filter: eventType = rtc_media_qoe

@@ -14,8 +14,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
+	membershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/messaging"
 	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
 )
 
@@ -131,17 +131,17 @@ func TestCircleMembershipRealMongoTransactionReplayProjectionAndStream(t *testin
 	assertCircleMemberCount(t, "circle-membership", 0)
 
 	streamRelay := membershipapp.NewOutboxRelay(
-		store, store, messaging.NewCircleMembershipStreamPublisher(circleMessageTransport),
+		store, store, membershipmessaging.NewCircleMembershipStreamPublisher(circleMessageTransport),
 		"circle-membership-stream-test",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 2 {
 		t.Fatalf("membership stream drain count=%d err=%v", count, err)
 	}
 	const group = "circle-membership-api-test"
-	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, messaging.CircleMembershipStream, group, "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, membershipmessaging.CircleMembershipStream, group, "0"); err != nil {
 		t.Fatal(err)
 	}
-	messages, err := redisRouter.Scene("general").XReadGroup(ctx, group, "reader", map[string]string{messaging.CircleMembershipStream: ">"}, 10, 0)
+	messages, err := redisRouter.Scene("general").XReadGroup(ctx, group, "reader", map[string]string{membershipmessaging.CircleMembershipStream: ">"}, 10, 0)
 	if err != nil || len(messages) != 2 {
 		t.Fatalf("membership stream messages=%d err=%v", len(messages), err)
 	}

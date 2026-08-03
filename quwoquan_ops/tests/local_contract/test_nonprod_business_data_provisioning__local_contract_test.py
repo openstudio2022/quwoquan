@@ -37,7 +37,9 @@ class NonprodBusinessDataProvisioningContractTest(unittest.TestCase):
             self.assertTrue(any("app_gamma_seed_manifest" in issue for issue in issues))
             self.assertTrue(any("datasetEpoch" in issue for issue in issues))
 
-    def test_nonprod_environment_rejects_in_process_provider_adapter(self) -> None:
+    def test_nonprod_binding_allows_governed_adapter_but_deploy_rejects_in_process_adapter(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = root / (
@@ -46,6 +48,17 @@ class NonprodBusinessDataProvisioningContractTest(unittest.TestCase):
             config.parent.mkdir(parents=True)
             config.write_text(
                 "adapter: ext.auth.carrier_one_tap_protocol_fixture\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(scan_repository(root), [])
+
+            deploy = root / (
+                "quwoquan_service/services/user-service/"
+                "environments/alpha/deploy/compose.yaml"
+            )
+            deploy.parent.mkdir(parents=True)
+            deploy.write_text(
+                "IN_PROCESS_ADAPTER: protocol_fixture\n",
                 encoding="utf-8",
             )
 

@@ -12,7 +12,7 @@ final class RemoteCallScreenShareWriter implements CallScreenShareWriter {
   final RtcCallInvocationContextFactory invocationContext;
 
   @override
-  Future<CallSessionDto> startScreenShare(RtcCallIdCommand command) =>
+  Future<CallSession> startScreenShare(RtcCallIdCommand command) =>
       client.rtcCallSessionStartScreenShare(
         command,
         context: invocationContext(
@@ -22,7 +22,7 @@ final class RemoteCallScreenShareWriter implements CallScreenShareWriter {
       );
 
   @override
-  Future<CallSessionDto> stopScreenShare(RtcCallIdCommand command) =>
+  Future<CallSession> stopScreenShare(RtcCallIdCommand command) =>
       client.rtcCallSessionStopScreenShare(
         command,
         context: invocationContext(

@@ -67,9 +67,9 @@ void main() {
     });
   });
 
-  group('RecentSearchEntry 解码', () {
+  group('RecentSearchEntryWire 解码', () {
     test('服务端 wire 逐字段解码；entryId 只读采纳', () {
-      final entry = decodeRecentSearchEntry(<String, Object?>{
+      final entry = decodeRecentSearchEntryWire(<String, Object?>{
         'entryId': 'recent_1234567890abcdef',
         'query': '成都旅行',
         'scope': 'all',
@@ -85,7 +85,7 @@ void main() {
 
     test('缺 NOT_NULL 字段抛 FormatException', () {
       expect(
-        () => decodeRecentSearchEntry(<String, Object?>{'query': 'x'}),
+        () => decodeRecentSearchEntryWire(<String, Object?>{'query': 'x'}),
         throwsFormatException,
       );
     });
@@ -97,6 +97,7 @@ void main() {
             'entryId': 'recent_a',
             'query': 'a',
             'scope': 'all',
+            'updatedAt': '2026-07-19T08:00:00.000Z',
           },
         ],
       });
@@ -107,7 +108,7 @@ void main() {
   group('ReportSearchFeedbackCommand', () {
     test('wire 只含 request entity body fields', () {
       final payload =
-          encodeSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
+          encodeSearchSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
             ReportSearchFeedbackCommand(
               searchRequestId: 'req-1',
               eventType: SearchFeedbackEventType.click,
@@ -152,7 +153,7 @@ void main() {
         throwsArgumentError,
       );
       final payload =
-          encodeSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
+          encodeSearchSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
             ReportSearchFeedbackCommand(
               searchRequestId: 'req-1',
               eventType: SearchFeedbackEventType.dwell,
@@ -165,11 +166,17 @@ void main() {
 
     test('ack 解码', () {
       expect(
-        decodeSearchFeedbackAck(<String, Object?>{'accepted': true}).accepted,
+        decodeSearchFeedbackAck(<String, Object?>{
+          'accepted': true,
+          'requestId': 'req-1',
+        }).accepted,
         isTrue,
       );
       expect(
-        decodeSearchFeedbackAck(<String, Object?>{'accepted': false}).accepted,
+        decodeSearchFeedbackAck(<String, Object?>{
+          'accepted': false,
+          'requestId': 'req-2',
+        }).accepted,
         isFalse,
       );
       expect(
@@ -177,7 +184,10 @@ void main() {
         throwsA(isA<FormatException>()),
       );
       expect(
-        () => decodeSearchFeedbackAck(<String, Object?>{'accepted': 'yes'}),
+        () => decodeSearchFeedbackAck(<String, Object?>{
+          'accepted': 'yes',
+          'requestId': 'req-3',
+        }),
         throwsA(isA<FormatException>()),
       );
     });
@@ -185,15 +195,16 @@ void main() {
 
   group('ListHotQueriesQuery', () {
     test('limit 经 query parameter 编码且有界', () {
-      final payload = encodeSearchSearchQueryListHotQueriesGeneratedRequest(
-        ListHotQueriesQuery(limit: 6),
-      );
+      final payload =
+          encodeSearchSearchRequestFactListHotQueriesGeneratedRequest(
+            ListHotQueriesQuery(limit: 6),
+          );
       expect(payload.queryParameters, <String, String>{'limit': '6'});
       expect(() => ListHotQueriesQuery(limit: 21), throwsArgumentError);
     });
 
     test('严格解码 query/relevance 并保留服务端顺序', () {
-      final slice = decodeHotQuerySlice(<String, Object?>{
+      final slice = decodeSearchTermHeatSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{'query': '旅行摄影', 'relevance': 9.8},
           <String, Object?>{'query': '城市漫步', 'relevance': 9.1},
@@ -201,7 +212,7 @@ void main() {
       });
       expect(slice.items.map((item) => item.query), <String>['旅行摄影', '城市漫步']);
       expect(
-        () => decodeHotQuerySlice(<String, Object?>{
+        () => decodeSearchTermHeatSlice(<String, Object?>{
           'items': <Object?>[
             <String, Object?>{'query': '缺分值'},
           ],

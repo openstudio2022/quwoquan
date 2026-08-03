@@ -1,0 +1,28 @@
+backend: mongodb
+role: authoritative
+collections:
+  connector_invocations:
+    entity: ConnectorInvocation
+    role: authoritative
+    indexes:
+    - {name: idx_connector_invocations_account_created, keys: {accountId: 1, createdAt: -1}}
+    - {name: idx_connector_invocations_connection_created, keys: {connectionId: 1, createdAt: -1}}
+    - {name: idx_connector_invocations_run_status, keys: {assistantRunId: 1, status: 1, updatedAt: -1}}
+    - {name: idx_connector_invocations_worker_claim, keys: {status: 1, leaseExpiresAt: 1, updatedAt: 1}}
+  connector_invocation_command_receipts:
+    entity: ConnectorInvocation
+    role: authoritative
+    description: 与 invocation、脱敏 receipt 和 outbox 同一 Mongo transaction 提交的幂等回执。
+    indexes:
+    - {name: uq_connector_invocation_receipt_owner_key, keys: {accountId: 1, idempotencyKey: 1}, unique: true}
+  connector_invocation_outbox:
+    entity: ConnectorInvocation
+    role: append_only
+    description: 只含脱敏状态、capability 和 continuation reference 的调用事件。
+  connector_invocation_payload_refs:
+    entity: ConnectorInvocation
+    role: operational
+    description: invocation worker 使用的短期受保护 payloadRef；不进入聚合、查询响应或事件，终态/TTL 后清理。
+    indexes:
+    - {name: uq_connector_invocation_payload_ref, keys: {invocationId: 1}, unique: true}
+    - {name: ttl_connector_invocation_payload_refs, keys: {expiresAt: 1}, ttl_seconds: 0}

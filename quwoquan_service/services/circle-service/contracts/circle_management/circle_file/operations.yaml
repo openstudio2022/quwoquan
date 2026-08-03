@@ -61,10 +61,6 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/file_contracts.dart
-      response_type: CircleFilePageSlice
-      response_decoder: decodeCircleFilePageSlice
     request_entity: CircleFileListQuery
     request_body_kind: none
   - method: POST
@@ -117,10 +113,6 @@ api_routes:
     slo:
       latency_p95_ms: 900
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/file_contracts.dart
-      response_type: CircleFileCommandResult
-      response_decoder: decodeCircleFileCommandResult
     request_entity: CreateCircleFileCommand
     request_body_kind: object
   - method: GET
@@ -170,10 +162,6 @@ api_routes:
     slo:
       latency_p95_ms: 350
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/file_contracts.dart
-      response_type: CircleFileSlice
-      response_decoder: decodeCircleFileSlice
     request_entity: CircleFileQuery
     request_body_kind: none
   - method: PATCH
@@ -233,10 +221,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/file_contracts.dart
-      response_type: CircleFileCommandResult
-      response_decoder: decodeCircleFileCommandResult
     request_entity: UpdateCircleFileCommand
     request_body_kind: object
   - method: DELETE
@@ -290,10 +274,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/file_contracts.dart
-      response_type: CircleFileCommandResult
-      response_decoder: decodeCircleFileCommandResult
     request_entity: DeleteCircleFileCommand
     request_body_kind: none
 contract_test:

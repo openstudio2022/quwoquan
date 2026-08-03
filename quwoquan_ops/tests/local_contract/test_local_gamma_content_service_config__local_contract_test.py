@@ -33,6 +33,14 @@ OBJECT_STORAGE_LIFECYCLE_FILE = (
     / "object-storage-lifecycle.json"
 )
 START_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
+PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE = (
+    ROOT
+    / "quwoquan_service"
+    / "services"
+    / "product-ops-service"
+    / "deploy"
+    / "local-elasticsearch.compose.yaml"
+)
 T3_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_t3.py"
 
 
@@ -215,16 +223,16 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
 
     def test_gamma_elasticsearch_uses_native_architecture_with_arm_sve_guard(self) -> None:
-        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        compose = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")
         script = START_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn("platform: linux/amd64", compose)
         self.assertIn(
-            "CLI_JAVA_OPTS: \"${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}\"",
+            "CLI_JAVA_OPTS: \"${QWQ_COMPOSE_ELASTICSEARCH_CLI_JAVA_OPTS:-}\"",
             compose,
         )
         self.assertIn(
-            "ES_JAVA_OPTS: \"${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}\"",
+            "ES_JAVA_OPTS: \"${QWQ_COMPOSE_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}\"",
             compose,
         )
         self.assertIn('case "$(uname -m)" in', script)
@@ -262,8 +270,21 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "\n}\n\nwait_local_gamma_host_ready", 1
         )[0]
 
-        self.assertIn('if [[ "$WORKLOAD" == "content-release" ]]; then', platform_ready)
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then',
+            platform_ready,
+        )
         self.assertIn("gamma_platform_ops_ready", script)
+
+    def test_rebuildable_state_purge_is_explicit_and_target_scoped(self) -> None:
+        script = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("--purge-rebuildable-state", script)
+        self.assertIn("down_args+=(--volumes --remove-orphans)", script)
+        self.assertIn(
+            'docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME"',
+            script,
+        )
 
     def test_recommendation_service_receives_the_selected_workload(self) -> None:
         service_block = service_compose("recommendation-service")
@@ -308,10 +329,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         ):
             self.assertIn(key, service_block)
         self.assertIn('QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"', service_block)
-        self.assertIn(
-            'strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")) != "content-release"',
-            user_main,
-        )
+        self.assertIn("if !contentSliceExternalAuthDisabled()", user_main)
         self.assertIn("WithExternalInteractionClient(externalInteractionClient)", user_main)
 
     def test_full_gamma_optional_services_have_nonproduction_runtime_prerequisites(self) -> None:
@@ -326,11 +344,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         assistant_compose = service_compose("assistant-service")
 
-        self.assertIn('case "integration", "alpha":', product_runtime_config)
-        self.assertIn(
-            'case "beta-integration", "beta_integration", "beta":',
-            product_runtime_config,
-        )
+        self.assertIn("case logsink.ElasticsearchAdapterID:", product_runtime_config)
+        self.assertIn('case "alpha", "beta", "gamma", "prod":', product_runtime_config)
         self.assertIn("POSTGRES_DSN:", assistant_compose)
         self.assertIn(
             "postgres:\n        condition: service_healthy",
@@ -339,10 +354,9 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
 
     def test_gamma_uses_nonmemory_provider_adapters_without_compose_overlay(self) -> None:
         provider_services = {
-            "assistant-service": "ext.llm.xiaomi_mimo",
-            "integration-service": "ext.map.baidu",
+            "assistant-service": "ext.llm.protocol_fixture",
+            "integration-service": "ext.map.protocol_fixture",
             "rtc-service": "infra.livekit_sfu",
-            "user-service": "ext.auth.carrier_one_tap",
         }
         for service, adapter in provider_services.items():
             service_root = ROOT / "quwoquan_service" / "services" / service
@@ -354,6 +368,18 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             self.assertFalse(
                 (service_root / "environments" / "gamma" / "deploy" / "compose.yaml").exists()
             )
+
+        user_root = ROOT / "quwoquan_service" / "services" / "user-service"
+        user_gamma_config = (
+            user_root / "environments" / "gamma" / "config.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("identity.carrier.one_tap:\n    state: enabled", user_gamma_config)
+        self.assertIn("adapter: ext.auth.carrier_one_tap_protocol_fixture", user_gamma_config)
+        self.assertIn("identity.social.login:\n    state: enabled", user_gamma_config)
+        self.assertIn("adapter: ext.auth.federated_identity_protocol_fixture", user_gamma_config)
+        self.assertFalse(
+            (user_root / "environments" / "gamma" / "deploy" / "compose.yaml").exists()
+        )
 
     def test_full_gamma_edge_media_builds_rtc_from_its_packaged_provenance(self) -> None:
         rtc_compose = service_compose("rtc-service")
@@ -433,8 +459,15 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "-e WECHAT_OAUTH_TOKEN_URL",
         ):
             self.assertIn(expected, start_script)
-        self.assertIn("../gamma/local/Caddyfile", compose)
-        self.assertNotIn("../local-gamma/Caddyfile", compose)
+        self.assertIn(
+            "${LOCAL_GAMMA_CADDYFILE:?packaged Caddyfile is required}:/etc/caddy/Caddyfile:ro",
+            compose,
+        )
+        self.assertNotIn("../gamma/local/Caddyfile", compose)
+        self.assertIn(
+            'LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/Caddyfile"',
+            start_script,
+        )
 
     def test_skip_build_fails_before_compose_for_missing_provenance_image(self) -> None:
         start_script = START_SCRIPT.read_text(encoding="utf-8")
@@ -452,8 +485,14 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         lifecycle = json.loads(OBJECT_STORAGE_LIFECYCLE_FILE.read_text(encoding="utf-8"))
 
         self.assertIn(
-            "./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro",
+            "${LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE:?packaged object-storage lifecycle file is required}:"
+            "/etc/qwq-object-storage/lifecycle.json:ro",
             init_block,
+        )
+        self.assertIn(
+            "${LOCAL_GAMMA_LIVEKIT_CONFIG_FILE:?packaged LiveKit config file is required}:"
+            "/etc/livekit/livekit.yaml:ro",
+            compose,
         )
         self.assertIn(
             "SSL_CERT_FILE: /etc/ssl/certs/quwoquan-local-managed.crt",
@@ -485,16 +524,16 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
 
     def test_local_single_node_search_is_not_blocked_by_colima_build_cache_watermark(self) -> None:
-        content = COMPOSE_FILE.read_text(encoding="utf-8")
-        service_block = content.split("  elasticsearch:\n", 1)[1].split(
-            "\n  search-service:\n", 1
-        )[0]
+        service_block = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")
 
         self.assertIn(
             'cluster.routing.allocation.disk.threshold_enabled: "false"',
             service_block,
         )
-        self.assertIn("local-gamma-es:/usr/share/elasticsearch/data", service_block)
+        self.assertIn(
+            "product-ops-elasticsearch-data:/usr/share/elasticsearch/data",
+            service_block,
+        )
 
     def test_user_service_uses_protected_nonprod_provider_bindings(self) -> None:
         service_block = service_compose("user-service")
@@ -589,8 +628,13 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn("      api-edge:", gamma_proxy)
         self.assertIn("condition: service_healthy", gamma_proxy)
         self.assertNotIn("tag-service:", gamma_proxy)
+        self.assertIn("gamma_full_workload_dependencies_ready", start_script)
         self.assertIn(
-            'curl -fsS "http://127.0.0.1:${tag_port}/healthz"',
+            'curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz"',
+            start_script,
+        )
+        self.assertIn(
+            'if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then',
             start_script,
         )
         self.assertNotIn("seed_tag_service_data", start_script)
@@ -602,7 +646,10 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
 
         key = "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
         self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
-        self.assertIn(f"-e {key}", start_script)
+        self.assertIn(
+            "product-ops-service/deploy/local-elasticsearch.compose.yaml",
+            start_script,
+        )
         self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", service_block)
         self.assertNotIn("PRODUCT_OPS_LOCAL_LOG_SINK", start_script)
 

@@ -80,13 +80,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             proposalSlice?.items
                 .where(
                   (proposal) =>
-                      proposal.status == ProfileUpdateProposalStatus.pending ||
-                      proposal.status ==
-                          ProfileUpdateProposalStatus.confirmed ||
-                      proposal.status == ProfileUpdateProposalStatus.applying ||
-                      proposal.status == ProfileUpdateProposalStatus.applied ||
-                      proposal.status ==
-                          ProfileUpdateProposalStatus.rollingBack,
+                      proposal.status == 'pending' ||
+                      proposal.status == 'confirmed' ||
+                      proposal.status == 'applying' ||
+                      proposal.status == 'applied' ||
+                      proposal.status == 'rolling_back',
                 )
                 .toList(growable: false) ??
             const <ProfileUpdateProposalView>[];
@@ -481,11 +479,11 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _profileProposals = proposals.items
             .where(
               (proposal) =>
-                  proposal.status == ProfileUpdateProposalStatus.pending ||
-                  proposal.status == ProfileUpdateProposalStatus.confirmed ||
-                  proposal.status == ProfileUpdateProposalStatus.applying ||
-                  proposal.status == ProfileUpdateProposalStatus.applied ||
-                  proposal.status == ProfileUpdateProposalStatus.rollingBack,
+                  proposal.status == 'pending' ||
+                  proposal.status == 'confirmed' ||
+                  proposal.status == 'applying' ||
+                  proposal.status == 'applied' ||
+                  proposal.status == 'rolling_back',
             )
             .toList(growable: false);
         _profileProposalLoadError = null;
@@ -767,20 +765,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 }
 
-String _profileProposalStatusLabel(
-  ProfileUpdateProposalStatus status,
-) => switch (status) {
-  ProfileUpdateProposalStatus.pending => ProfileText.editProfileProposalPending,
-  ProfileUpdateProposalStatus.confirmed =>
-    ProfileText.editProfileProposalConfirmed,
-  ProfileUpdateProposalStatus.applying =>
-    ProfileText.editProfileProposalApplying,
-  ProfileUpdateProposalStatus.applied =>
-    ProfileText.editProfileProposalAppliedStatus,
-  ProfileUpdateProposalStatus.rollingBack =>
-    ProfileText.editProfileProposalRollingBackStatus,
-  ProfileUpdateProposalStatus.rolledBack =>
-    ProfileText.editProfileProposalRolledBack,
-  ProfileUpdateProposalStatus.rejected || ProfileUpdateProposalStatus.expired =>
-    ProfileText.editProfileProposalConfirmed,
+String _profileProposalStatusLabel(String status) => switch (status) {
+  'pending' => ProfileText.editProfileProposalPending,
+  'confirmed' => ProfileText.editProfileProposalConfirmed,
+  'applying' => ProfileText.editProfileProposalApplying,
+  'applied' => ProfileText.editProfileProposalAppliedStatus,
+  'rolling_back' => ProfileText.editProfileProposalRollingBackStatus,
+  'rolled_back' => ProfileText.editProfileProposalRolledBack,
+  'rejected' || 'expired' => ProfileText.editProfileProposalConfirmed,
+  _ => ProfileText.editProfileProposalConfirmed,
 };

@@ -26,6 +26,20 @@ configs:
   rollout: progressive
   sensitive: false
   default: 3000
+- key: sys.assistant-service.circle_service.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: http://circle-service:18082
+- key: sys.assistant-service.circle_service.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 3000
 - key: sys.assistant-service.content_service.base_url
   type: string
   scope: workload
@@ -54,6 +68,34 @@ configs:
   rollout: progressive
   sensitive: false
   default: 3000
+- key: sys.assistant-service.travel_service.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: http://travel-service:18093
+- key: sys.assistant-service.travel_service.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 3000
+- key: sys.assistant-service.integration_service.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: http://integration-service:18086
+- key: sys.assistant-service.integration_service.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 1200
 - key: sys.assistant-service.model.native_tool_calling
   type: bool
   scope: workload
@@ -121,6 +163,19 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+- key: sys.assistant-service.skill_package.asset_root
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: /app/resources/skills/packages/official
+- key: sys.assistant-service.skill_package.trusted_public_keys_json
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
 - key: sys.assistant-service.postgres.conn_max_lifetime_minutes
   type: int
   scope: workload

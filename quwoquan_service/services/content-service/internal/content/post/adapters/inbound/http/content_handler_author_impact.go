@@ -16,7 +16,7 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
-	if h.authorImpactEvidenceStore == nil {
+	if h.authorImpactProjectionReader == nil {
 		writeHTTPError(
 			w,
 			r,
@@ -43,7 +43,7 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 		}
 		limit = parsed
 	}
-	summary, err := h.authorImpactEvidenceStore.GetSummary(
+	summary, err := h.authorImpactProjectionReader.GetSummary(
 		r.Context(),
 		authorID,
 		limit,
@@ -104,7 +104,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 	}
 	viewerID := strings.TrimSpace(ResolveUserID(r))
 	viewerIsAuthor := viewerID != "" && viewerID == authorID
-	if h.authorImpactEvidenceStore == nil {
+	if h.authorImpactProjectionReader == nil {
 		writeHTTPError(
 			w,
 			r,
@@ -114,7 +114,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 		)
 		return
 	}
-	raws, nextCursor, hasMore, total, err := h.authorImpactEvidenceStore.ListPageWithTotal(r.Context(), authorID, impactID, cursor, limit)
+	raws, nextCursor, hasMore, total, err := h.authorImpactProjectionReader.ListPageWithTotal(r.Context(), authorID, impactID, cursor, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

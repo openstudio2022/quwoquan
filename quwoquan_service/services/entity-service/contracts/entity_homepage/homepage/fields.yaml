@@ -311,6 +311,16 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  HomepageGeoPointInput:
+    fields:
+      - name: lat
+        type: float64
+        constraints:
+          - NOT_NULL
+      - name: lng
+        type: float64
+        constraints:
+          - NOT_NULL
   IntakeHomepageCandidateCommand:
     fields:
       - name: title
@@ -880,40 +890,9 @@ types:
         client_dart_type: String?
         client_normalization: trim_to_null
       - name: location
-        type: object
+        type: HomepageGeoPointInput
         constraints:
           - NULLABLE
-        client_dart_type: HomepageGeoPointInput?
-        client_wire: toMap
-  HomepageSearchQuery:
-    fields:
-      - name: query
-        type: string
-        client_dart_type: String
-      - name: homepageType
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-      - name: city
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-      - name: status
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-      - name: cursor
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
-      - name: limit
-        type: int
-        client_dart_type: int
-        client_default: "20"
   HomepageByIdQuery:
     fields:
       - name: homepageId
@@ -970,8 +949,6 @@ types:
         client_dart_type: String?
         client_normalization: trim_to_null
       - name: location
-        type: object
+        type: HomepageGeoPointInput
         constraints:
           - NULLABLE
-        client_dart_type: HomepageGeoPointInput?
-        client_wire: toMap

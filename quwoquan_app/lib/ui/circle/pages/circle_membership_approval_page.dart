@@ -121,7 +121,7 @@ class _CircleMembershipApprovalPageState
         } else {
           _pendingItems.addAll(page.items);
         }
-        _nextCursor = page.nextCursor;
+        _nextCursor = page.cursor;
         _isLoading = false;
         _isLoadingMore = false;
       });

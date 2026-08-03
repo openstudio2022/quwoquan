@@ -63,3 +63,18 @@
 - 前置要求：[`cross-domain-search`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 小趣搜索真实 provider 聚合与可执行验收尚未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；当前 App Widget 测试只覆盖确定性 typed double 与错误态，Assistant Service 尚未拥有
+  `SearchXiaoquResults` 的 canonical operation、真实 `canonical_search` 聚合 handler 以及直接引用
+  本节点 GWT 的 `api_integration / user_acceptance` 证据。
+- 在正式 operation、provider degrade envelope、真实 citation readback 和直接 `spec_ref` 测试闭合前，
+  不得把现有 UI 替身测试提升为本 GWT 已通过，也不得以非生产 provider substitute 冒充真实网页来源。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

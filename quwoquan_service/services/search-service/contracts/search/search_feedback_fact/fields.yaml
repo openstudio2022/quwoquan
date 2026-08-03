@@ -129,6 +129,25 @@ fields:
     ops_exposure: read
     role: append_only_fact
 types:
+  SearchFeedbackAck:
+    description: SearchFeedbackFact 接受幂等命令后的强类型回执。
+    fields:
+      - name: accepted
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: requestId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
   SearchFeedbackCommandReceipt:
     description: ReportSearchFeedback 命令回执；先持久化 applying，再追加事实并转为 completed，保证崩溃后可由同一 Idempotency-Key 收敛
     fields:
@@ -340,10 +359,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: eventType
-        type: SearchFeedbackEventType
+        type: enum
         enum_ref: SearchFeedbackEventType
-        client_dart_type: SearchFeedbackEventType
-        client_wire: canonicalEnum
       - name: objectId
         type: string
         constraints:

@@ -31,7 +31,7 @@ func TestNormalizeFeedLimitClampsUntrustedWireValue(t *testing.T) {
 }
 
 func TestRecommendationFeedRejectsMissingOrUnboundedSessionID(t *testing.T) {
-	service := feedapp.NewFeedService(nil, nil)
+	service := feedapp.NewFeedService(nil)
 	for _, testCase := range []struct {
 		name      string
 		sessionID string

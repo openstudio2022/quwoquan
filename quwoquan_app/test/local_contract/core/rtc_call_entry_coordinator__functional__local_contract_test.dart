@@ -243,13 +243,13 @@ final class _RecordingCallLifecycleWriter
       <RtcInitiateCallCommand>[];
 
   @override
-  Future<RtcInitiateCallResultDto> initiateCall(
+  Future<RtcInitiateCallResult> initiateCall(
     RtcInitiateCallCommand command,
   ) async {
     initiateCommands.add(command);
     final now = DateTime.utc(2026, 7, 20);
-    return RtcInitiateCallResultDto(
-      session: CallSessionDto(
+    return RtcInitiateCallResult(
+      session: CallSession(
         callId: 'call-${initiateCommands.length}',
         callType: command.callType,
         status: CallStatus.ringing,
@@ -259,30 +259,30 @@ final class _RecordingCallLifecycleWriter
         roomId: 'room-${initiateCommands.length}',
         participantCount: command.inviteeIds.length + 1,
         participants: command.inviteeIds
-            .map((userId) => CallParticipantDto(userId: userId))
+            .map((userId) => CallParticipant(userId: userId))
             .toList(growable: false),
         createdAt: now,
         updatedAt: now,
       ),
-      mediaAccess: const RtcMediaSessionAccessDto(
+      mediaAccess: const RtcMediaSessionAccess(
         accessToken: 'fixture-media-access',
       ),
     );
   }
 
   @override
-  Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) =>
+  Future<RtcAnswerCallResult> answerCall(RtcCallIdCommand command) =>
       throw UnimplementedError();
 
   @override
-  Future<CallSessionDto> cancelCall(RtcCallIdCommand command) =>
+  Future<CallSession> cancelCall(RtcCallIdCommand command) =>
       throw UnimplementedError();
 
   @override
-  Future<CallSessionDto> hangupCall(RtcCallIdCommand command) =>
+  Future<CallSession> hangupCall(RtcCallIdCommand command) =>
       throw UnimplementedError();
 
   @override
-  Future<CallSessionDto> rejectCall(RtcCallIdCommand command) =>
+  Future<CallSession> rejectCall(RtcCallIdCommand command) =>
       throw UnimplementedError();
 }

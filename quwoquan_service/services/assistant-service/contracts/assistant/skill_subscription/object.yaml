@@ -38,6 +38,7 @@ capabilities:
 - idempotent_commands
 business_rules:
 - owner persona、skillId 和 trigger 创建后不可变
+- cron 必须在 trigger.timezone 指定的 IANA 时区计算并将 nextAttemptAt 持久化为 UTC；禁止使用 Worker 本地时区或把 App 本地时刻误当 UTC
 - destination 必须在当前 consent scope 内
 - 只有 active subscription 可获取调度租约
 - 同一 schedule window 只能产生一次触发事件

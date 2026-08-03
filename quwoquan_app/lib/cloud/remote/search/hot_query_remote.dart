@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_request_page_ids.g.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'recent_search_remote.dart' show SearchInvocationContextFactory;
@@ -16,7 +17,7 @@ final class RemoteSearchHotQueryReader implements SearchHotQueryReader {
   final SearchInvocationContextFactory invocationContext;
 
   @override
-  Future<HotQuerySlice> listHotQueries(ListHotQueriesQuery query) {
+  Future<SearchTermHeatSlice> listHotQueries(ListHotQueriesQuery query) {
     return client.searchSearchRequestFactListHotQueries(
       query,
       context: invocationContext(SearchRequestPageIds.listHotQueries),

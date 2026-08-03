@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, BehaviorEvent, ReferralSource;
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -22,12 +22,12 @@ import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring
 Future<void> openHomeFeedPost(
   BuildContext context,
   WidgetRef ref, {
-  required PostBaseDto post,
+  required ContentPostViewData post,
   required int mediaIndex,
   required String channelId,
-  List<PostBaseDto>? feedPosts,
+  List<ContentPostViewData>? feedPosts,
 }) async {
-  final viewerPosts = (feedPosts ?? const <PostBaseDto>[])
+  final viewerPosts = (feedPosts ?? const <ContentPostViewData>[])
       .where((candidate) => candidate.supportsUnifiedViewer)
       .toList(growable: false);
   if (viewerPosts.isEmpty) {
@@ -39,7 +39,7 @@ Future<void> openHomeFeedPost(
   final navFeedRequestId = feedAttribution?.feedRequestId;
   final navPolicyDigest = feedAttribution?.policyDigest;
   // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
-  final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
+  final feedPosition = (feedPosts ?? const <ContentPostViewData>[]).indexWhere(
     (item) => item.id == post.id,
   );
   ref

@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 // Barrel re-export：消费者继续 import 本文件即可访问 kind 映射与句式合成公开 API；
 // 拆分（R03 体量收敛）对 intersection_repository / T1 合约测试零改动。

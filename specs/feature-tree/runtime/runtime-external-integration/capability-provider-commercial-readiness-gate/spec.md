@@ -16,7 +16,7 @@
 
 - Adapter/Capability 双层状态计算、启动 preflight 和 readiness
 - required/optional 降级语义、Provider 切换、config+image 回滚
-- Alpha/Beta/Gamma sandbox/nonprod Provider 与 prod gray_initial 分层准出
+- Alpha/Beta/Gamma protocol substitute/local infrastructure 与 Prod 真实厂商分层准出
 
 ### Out of Scope
 
@@ -45,7 +45,7 @@
 <a id="req-004"></a>
 ### REQ-004 非生产 Provider 九格与 Prod hosted 正式厂商证据独立计算
 
-- Alpha/Beta/Gamma 九格验证受管 **sandbox/nonprod** Adapter 健康、Port 同源 assertion 与逐级增强的第一方黑盒结果；required 数据集不接受进程内 fixture/mock/recorder/capture。
+- Alpha/Beta/Gamma 九格验证环境选中的受管 **protocol substitute/local infrastructure** Adapter 健康、Port 同源 assertion 与逐级增强的第一方黑盒结果；required 数据集不接受 App/UI Mock、运行时 fallback 或未经 Binding 的 override。
 - Prod deploy gate 要求当前版本 **真实厂商** Adapter 证据；缺凭据、远端租户或审批时保持 blocked。
 - Prod smoke 不反写非生产九格；Alpha/Beta/Gamma nonprod receipt 不得提升 Prod 目标厂商 adapter_ready，也不得替代 Prod hosted rollout receipt。
 
@@ -93,7 +93,7 @@
 
 - GIVEN 某 Capability 被产品声明为 Prod required。
 - WHEN 执行 prod-hosted gray_initial deploy gate。
-- THEN Alpha/Beta/Gamma 当前版本 sandbox/nonprod Adapter 的九格证据必须齐备，且 Prod 当前版本正式厂商 Adapter 的 hosted rollout 证据必须独立齐备才允许继续；任一层证据不得替代另一层。
+- THEN Alpha/Beta/Gamma 当前版本 protocol substitute/local infrastructure Adapter 的九格证据必须齐备，且 Prod 当前版本正式厂商 Adapter 的 hosted rollout 证据必须独立齐备才允许继续；任一层证据不得替代另一层。
 
 ## 6. 依赖
 
@@ -136,5 +136,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺 Alpha/Beta/Gamma sandbox/nonprod 九格、Prod 凭据/设备/远端租户或审批时保持 blocked；Prod smoke 不反写非生产九格，nonprod receipt 不冒充 Prod hosted rollout 证据。
+- 影响或价值：缺 Alpha/Beta/Gamma protocol substitute/local infrastructure 九格、Prod 凭据/设备/远端租户或审批时保持 blocked；Prod smoke 不反写非生产九格，nonprod receipt 不冒充 Prod hosted rollout 证据。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效

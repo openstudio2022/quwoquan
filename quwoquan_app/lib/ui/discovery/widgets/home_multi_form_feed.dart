@@ -16,10 +16,6 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
@@ -62,6 +58,7 @@ import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability_provider.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/app_terminal_viewport.dart';
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -133,12 +130,12 @@ class HomeMultiFormFeed extends ConsumerWidget {
   onUserTap;
 
   final void Function(
-    PostBaseDto post,
+    ContentPostViewData post,
     int index, {
-    List<PostBaseDto>? feedPosts,
+    List<ContentPostViewData>? feedPosts,
   })?
   onPostTap;
-  final void Function(PostBaseDto post)? onMoreTap;
+  final void Function(ContentPostViewData post)? onMoreTap;
   final VoidCallback? onInitialContentPainted;
 
   @override
@@ -161,17 +158,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
       });
     }
 
-    final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
+    final dtos = feedAsync.value?.items ?? const <ContentPostViewData>[];
     final moments = dtos
         .where((post) => post.identity == 'moment')
         .toList(growable: false);
-    final articlesById = <String, PostBaseDto>{
+    final articlesById = <String, ContentPostViewData>{
       for (final article in dtos.where((post) => post.isArticleLike))
         article.id: article,
     };
     final articles = articlesById.values.toList(growable: false);
     final feedPosts = shouldShowFollowingArticles
-        ? <PostBaseDto>[...moments, ...articles]
+        ? <ContentPostViewData>[...moments, ...articles]
         : dtos;
     if (ref.watch(authSessionControllerProvider).isAuthenticated) {
       _scheduleHomeReportContinuationResume(context, ref, feedPosts);
@@ -245,7 +242,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               .any((action) => handledActionTypes.contains(action.type));
       return AppPageErrorState(
         semantic: semantic,
-        onAction: !hasHandledAction
+        onRecovery: !hasHandledAction
             ? null
             : (action) async {
                 if (action.type == UiErrorActionType.login) {
@@ -255,23 +252,27 @@ class HomeMultiFormFeed extends ConsumerWidget {
                     redirect: AppRoutePaths.home,
                     dismissFallback: AppRoutePaths.home,
                   );
-                  return;
+                  return UiRecoveryOutcome.handedOff;
                 }
                 if (action.type == UiErrorActionType.retry ||
                     action.type == UiErrorActionType.resubmit) {
-                  await ref
+                  final result = await ref
                       .read(discoveryFeedMapProvider.notifier)
                       .load(channelId, force: true);
-                  final refreshed = ref.read(discoveryFeedProvider(channelId));
-                  final refreshedValue = refreshed.value;
-                  if (refreshedValue?.blockingError != null ||
-                      ((refreshedValue?.items.isEmpty ?? true) &&
-                          refreshedValue?.emptyReason == null)) {
-                    throw StateError(
-                      'feed recovery did not leave blocking error',
-                    );
-                  }
+                  return switch (result.terminal) {
+                    DiscoveryFeedLoadTerminal.content ||
+                    DiscoveryFeedLoadTerminal.canonicalEmpty ||
+                    DiscoveryFeedLoadTerminal.retainedContent =>
+                      UiRecoveryOutcome.recovered,
+                    DiscoveryFeedLoadTerminal.stillBlocked =>
+                      UiRecoveryOutcome.stillBlocked,
+                    DiscoveryFeedLoadTerminal.superseded =>
+                      UiRecoveryOutcome.superseded,
+                    DiscoveryFeedLoadTerminal.cancelled =>
+                      UiRecoveryOutcome.cancelled,
+                  };
                 }
+                return UiRecoveryOutcome.cancelled;
               },
       );
     }
@@ -319,7 +320,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final impressionPolicyDigest = feedAsync.value?.policyDigest;
 
     Widget buildCard(
-      PostBaseDto dto,
+      ContentPostViewData dto,
       int index,
       ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
     ) {
@@ -527,7 +528,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     // position 与 card key 仍用数据索引（postIndex），不受对象卡插入影响。
     final feedEntries = _weaveObjectCards(
       feedPosts,
-      feedAsync.value?.objectCards ?? const <FeedObjectCardDto>[],
+      feedAsync.value?.objectCards ?? const <FeedObjectCard>[],
     );
     final feedEntryIdentities = feedEntries
         .map((entry) => entry.stableIdentity)
@@ -647,7 +648,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   void _showShare(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableIdentityTemplate,
   }) {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
@@ -676,7 +677,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   void _showMoreActions(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post, {
+    ContentPostViewData post, {
     double? panelMaxWidth,
   }) {
     final journeyTracker = ref.read(journeyEventTrackerProvider);
@@ -776,7 +777,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   Future<void> _requestHomeBlockAuthor(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
+    ContentPostViewData post,
   ) async {
     final confirmed = await showAppActionSheet<bool>(
       context,
@@ -826,7 +827,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   Future<void> _applyHomeBlockAuthor(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
+    ContentPostViewData post,
   ) async {
     try {
       await ref
@@ -877,7 +878,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   Future<void> _requestHomeBlockKeyword(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
+    ContentPostViewData post,
   ) async {
     final suggested = suggestContentBlockedKeyword(<String>[
       post.title,
@@ -918,7 +919,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   Future<void> _applyHomeBlockKeyword(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post,
+    ContentPostViewData post,
     String keyword,
   ) async {
     try {
@@ -968,7 +969,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
   Future<void> _copyLink(
     BuildContext context,
     WidgetRef ref,
-    PostBaseDto post, {
+    ContentPostViewData post, {
     required bool enableIdentityTemplate,
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
@@ -1023,7 +1024,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
   }
 
-  DiscoveryPresentationWire _rawDiscoveryItem(PostBaseDto post) {
-    return DiscoveryPresentationWire(post.toMap());
+  DiscoveryPresentationWire _rawDiscoveryItem(ContentPostViewData post) {
+    return DiscoveryPresentationWire(post.toPresentationMap());
   }
 }

@@ -3,6 +3,9 @@
 /// production composition 与 Patrol/UAT 不可导入本文件。
 library;
 
+export 'package:quwoquan_app/application/entity/homepage_operation_ports.dart';
+export 'package:quwoquan_app/application/entity/homepage_review_operation_ports.dart';
+
 export 'behavior_repository_double.dart';
 export 'object_doubles/chat/alpha_chat_state_engine.dart';
 export 'object_doubles/chat/alpha_message_writer.dart';

@@ -88,7 +88,7 @@
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/errors.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/object.yaml`
 - canonical：`quwoquan_app/lib/ui/content/entry/providers/post_publication_intent_queue_provider.dart`
-- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/work_browser_item.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/post_read_presentation.yaml#PostReadPresentation`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml`
 - canonical：`quwoquan_service/services/tag-service/contracts/tag/tag_node_view/operations.yaml`
 - canonical：`quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/event_catalog.yaml`

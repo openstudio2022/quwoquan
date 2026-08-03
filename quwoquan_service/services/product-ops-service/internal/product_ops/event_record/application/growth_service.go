@@ -36,7 +36,7 @@ type GrowthStore interface {
 }
 
 // ActiveSessionLister 由事件仓库实现：返回窗口内 distinct sessionId 与事件总数。
-// SLS 用 SQL 聚合，memory/postgres 遍历；上限保护防止无界拉取。
+// Elasticsearch 用聚合查询，memory local_contract 遍历；上限保护防止无界拉取。
 type ActiveSessionLister interface {
 	ListDistinctSessions(ctx context.Context, from, to time.Time, limit int) (sessions []string, totalEvents int64, err error)
 }

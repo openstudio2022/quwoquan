@@ -8,22 +8,11 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageIntroductionTimelineItem
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_introduction_timeline_item.g.dart
-  fields:
-  - name: dateLabel
-    dart_type: String
-    nullable: false
-    source: dateLabel
-    default: ''''''
-  - name: text
-    dart_type: String
-    nullable: false
-    source: text
-    default: ''''''
-  - name: assetUrl
-    dart_type: String
-    nullable: true
-    source: assetUrl
+fields:
+- name: dateLabel
+  type: string
+- name: text
+  type: string
+- name: assetUrl
+  type: string
+  nullable: true

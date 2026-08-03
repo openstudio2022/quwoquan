@@ -636,7 +636,19 @@ private final class RecoveryFailureEncryptedStore {
           output[entry.key] = value
         }
       }
-      result(values)
+      var packageValues = values
+      for key in [
+        "contentReleaseId",
+        "contentManifestDigest",
+        "contentReadinessReceiptDigest",
+        "launchTarget",
+        "effectiveLaunchManifestDigest",
+      ] {
+        if let value = self?.nativeRuntimeManifest[key] as? String, !value.isEmpty {
+          packageValues[key] = value
+        }
+      }
+      result(packageValues)
     }
 
     let videoEditingChannel = FlutterMethodChannel(
@@ -920,17 +932,36 @@ private final class RecoveryFailureEncryptedStore {
         result(nil)
         return
       }
-      guard call.method == "readProcessSegments" else {
+      guard call.method == "beginStartupAttempt" else {
         result(FlutterMethodNotImplemented)
         return
       }
-      let elapsedMs = Int(
-        (ProcessInfo.processInfo.systemUptime - self.processStartUptime) * 1000
-      )
+      let arguments = call.arguments as? [String: Any]
+      let attemptId = self.safeStartupIdentifier(arguments?["attemptId"] as? String)
+      guard attemptId != "unknown" else {
+        result(
+          FlutterError(
+            code: "invalid_startup_attempt",
+            message: "attemptId is required",
+            details: nil
+          )
+        )
+        return
+      }
+      let now = ProcessInfo.processInfo.systemUptime
+      let hotRestart = self.dartStartupAttemptStarted
+      self.dartStartupAttemptStarted = true
+      self.currentDartAttemptId = attemptId
+      self.currentDartAttemptIsHotRestart = hotRestart
+      self.currentDartAttemptStartedUptime = hotRestart ? now : self.processStartUptime
+      let processElapsedMs = Int((now - self.processStartUptime) * 1000)
+      let attemptElapsedMs = Int((now - self.currentDartAttemptStartedUptime) * 1000)
       result([
-        "elapsedSinceProcessStartMs": elapsedMs,
-        "deadlineOrigin": "ios_process",
-        "startupAttemptId": self.startupTelemetryJournal.currentAttemptId,
+        "elapsedSinceProcessStartMs": processElapsedMs,
+        "elapsedSinceAttemptStartMs": attemptElapsedMs,
+        "attemptKind": hotRestart ? "hotRestart" : "cold",
+        "deadlineOrigin": hotRestart ? "dartHotRestart" : "nativeProcess",
+        "startupAttemptId": attemptId,
       ])
     }
   }
@@ -944,14 +975,12 @@ private final class RecoveryFailureEncryptedStore {
       return
     }
     if eventName == "startup_attempt_started" {
-      currentDartAttemptId = safeStartupIdentifier(event["attemptId"] as? String)
+      let reportedAttemptId = safeStartupIdentifier(event["attemptId"] as? String)
+      guard reportedAttemptId == currentDartAttemptId else {
+        NSLog("QWQStartup ios_dart_startup_attempt_invalid reason=attempt_mismatch")
+        return
+      }
       currentLaunchMode = safeStartupEnum(event["launchMode"] as? String)
-      let hotRestart = dartStartupAttemptStarted
-      dartStartupAttemptStarted = true
-      currentDartAttemptIsHotRestart = hotRestart
-      currentDartAttemptStartedUptime = hotRestart
-        ? ProcessInfo.processInfo.systemUptime
-        : processStartUptime
       let configurationState = safeStartupEnum(
         event["configurationState"] as? String
       )
@@ -960,7 +989,7 @@ private final class RecoveryFailureEncryptedStore {
         "QWQStartup ios_dart_startup_attempt attemptId=%@ launchMode=%@ hotRestart=%@ configurationState=%@ effectiveLaunchManifestDigest=%@%@",
         currentDartAttemptId,
         currentLaunchMode,
-        hotRestart ? "true" : "false",
+        currentDartAttemptIsHotRestart ? "true" : "false",
         configurationState,
         NativeCrashMarkerStore.effectiveLaunchManifestDigest,
         missingDefineKeys.isEmpty ? "" : " missingDefineKeys=\(missingDefineKeys)"
@@ -1930,12 +1959,7 @@ final class AssistantDeviceActionPlugin {
       return
     }
     let preferenceKey = Self.idempotencyPrefix + request.idempotencyKey
-    if let existing = UserDefaults.standard.string(forKey: preferenceKey),
-       eventStore.event(withIdentifier: existing) != nil
-    {
-      result(response(status: "created", objectId: existing))
-      return
-    }
+    let marker = eventMarker(for: request.idempotencyKey)
     requestCalendarAccess { [weak self] granted in
       guard let self else {
         result(["status": "failed", "deviceObjectId": ""])
@@ -1943,6 +1967,20 @@ final class AssistantDeviceActionPlugin {
       }
       guard granted else {
         result(self.response(status: "denied"))
+        return
+      }
+      if let existing = UserDefaults.standard.string(forKey: preferenceKey),
+         self.eventStore.event(withIdentifier: existing) != nil
+      {
+        result(self.response(status: "created", objectId: existing))
+        return
+      }
+      if let recovered = self.event(matching: request, marker: marker),
+         let identifier = recovered.eventIdentifier,
+         !identifier.isEmpty
+      {
+        UserDefaults.standard.set(identifier, forKey: preferenceKey)
+        result(self.response(status: "created", objectId: identifier))
         return
       }
       guard let calendar = self.eventStore.defaultCalendarForNewEvents else {
@@ -1957,6 +1995,7 @@ final class AssistantDeviceActionPlugin {
       event.endDate = request.startsAt.addingTimeInterval(
         TimeInterval(request.durationMinutes * 60)
       )
+      event.url = marker
       event.addAlarm(
         EKAlarm(relativeOffset: TimeInterval(-request.reminderMinutes * 60))
       )
@@ -1972,6 +2011,30 @@ final class AssistantDeviceActionPlugin {
       } catch {
         result(self.response(status: "failed"))
       }
+    }
+  }
+
+  private func eventMarker(for idempotencyKey: String) -> URL {
+    let digest = SHA256.hash(data: Data(idempotencyKey.utf8))
+      .map { String(format: "%02x", $0) }
+      .joined()
+    return URL(string: "quwoquan://assistant/calendar/\(digest)")!
+  }
+
+  private func event(
+    matching request: CalendarReminderRequest,
+    marker: URL
+  ) -> EKEvent? {
+    let endDate = request.startsAt.addingTimeInterval(
+      TimeInterval(request.durationMinutes * 60)
+    )
+    let predicate = eventStore.predicateForEvents(
+      withStart: request.startsAt.addingTimeInterval(-60),
+      end: endDate.addingTimeInterval(60),
+      calendars: nil
+    )
+    return eventStore.events(matching: predicate).first { event in
+      event.url == marker
     }
   }
 

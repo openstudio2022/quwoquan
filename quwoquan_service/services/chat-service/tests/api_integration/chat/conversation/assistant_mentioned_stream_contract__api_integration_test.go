@@ -46,8 +46,12 @@ func TestAssistantMentionedWritesReliableStream(t *testing.T) {
 		if values["assistantMemberId"] != "assistant" {
 			t.Fatalf("assistantMemberId=%s, want assistant", values["assistantMemberId"])
 		}
-		if values["assistantSkillId"] != "general" {
-			t.Fatalf("assistantSkillId=%s, want general", values["assistantSkillId"])
+		if values["senderAccountId"] != "user_test_001" ||
+			values["senderId"] != "user_test_001" {
+			t.Fatalf("account/persona identity drifted: %#v", values)
+		}
+		if _, exists := values["assistantSkillId"]; exists {
+			t.Fatalf("AssistantMentioned must not bind a Skill identity: %#v", values)
 		}
 		if values["content"] != "@小趣 帮忙总结" {
 			t.Fatalf("content=%s", values["content"])

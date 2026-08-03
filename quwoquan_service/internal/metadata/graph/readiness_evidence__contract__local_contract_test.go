@@ -114,11 +114,20 @@ func TestImplementationEvidenceRequiresExactOperationsAndContentDigests(t *testi
 func TestDuplicateEvidenceCannotPromoteObject(t *testing.T) {
 	t.Parallel()
 
-	evidence := completeImplementationEvidence()
+	evidence := completeImplementationEvidence("test.sample.ProjectSample")
 	contractGraph := Build(&ast.Catalog{
 		Objects: []ast.Object{{
 			ID: "test.sample", Domain: "test", Name: "Sample",
 			Kind: ast.ObjectKindProjection, KindExplicit: true,
+		}},
+		RuntimeEntrypoints: []ast.RuntimeEntrypoint{{
+			ID: "test.sample.ProjectSample", LocalID: "ProjectSample",
+			Domain: "test", ObjectID: "test.sample", RuntimeKind: "projector",
+			Phase: "event_projection", ApplicationKind: ast.OperationKindCommand,
+			Facet: "SampleProjector", FacadeMethod: "apply", ObjectOwner: "Sample",
+			SourceEvents: []string{"test.SampleObserved"}, Checkpoint: "sample_sequence",
+			Rebuild: "replay_sample_events", Tombstone: "delete_sample_keep_checkpoint",
+			Idempotency: "aggregate_version",
 		}},
 		BusinessObjectMaps: []ast.BusinessObjectMap{{
 			Domain:  "test",

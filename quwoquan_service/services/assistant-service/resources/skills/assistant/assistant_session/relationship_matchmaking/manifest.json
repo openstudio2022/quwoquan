@@ -20,5 +20,10 @@
   "capabilityProfileRef": "capability.web2",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.relationship_matchmaking.v1"
+  "replayAssetRef": "assistant.replay.relationship_matchmaking",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

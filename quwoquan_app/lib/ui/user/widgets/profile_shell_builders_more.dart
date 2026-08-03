@@ -70,7 +70,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
             .createReport(
               CreateContentReportCommand(
                 targetId: widget.userId,
-                targetType: ContentReportTargetType.user,
+                targetType: ReportTargetType.user,
                 reason: reason,
               ),
             );

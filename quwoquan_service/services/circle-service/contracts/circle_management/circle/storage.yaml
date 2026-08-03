@@ -79,6 +79,26 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
+  circle_closed_account_subjects:
+    entity: Circle
+    role: projection
+    description: UserAccountClosed 的不可逆本地主体阻断投影；Circle 与 CirclePostPlacement 只能经本域 port 查询。
+  circle_user_account_restrictions:
+    entity: Circle
+    role: projection
+    description: UserSuspended/UserRestored 的 Circle 本地可逆阻断状态。
+  circle_user_account_restriction_inbox:
+    entity: Circle
+    role: projection
+    description: 账号限制事件的幂等 inbox；与 Circle 自有状态 mutation 同事务。
+  circle_user_account_restriction_watermarks:
+    entity: Circle
+    role: projection
+    description: 账号限制单调水位；账号关闭后 terminal，不允许迟到恢复事件复活状态。
+  circle_projection_checkpoints:
+    entity: Circle
+    role: projection
+    description: Circle 对象本地 projector 的可重建 checkpoint。
 redis_cache:
 - key: cache:circle-discovery:{generation}:{scope}:{personaHash}:{category}:{subCategory}:{sort}:{cursor}:{limit}
   ttl_seconds: 60

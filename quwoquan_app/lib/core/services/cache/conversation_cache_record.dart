@@ -1,5 +1,6 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -66,7 +67,9 @@ class ConversationCacheRecord {
   final bool pinned;
   final int? membersRosterRevision;
 
-  factory ConversationCacheRecord.fromConversationDto(ConversationDto dto) {
+  factory ConversationCacheRecord.fromConversationViewData(
+    ConversationViewData dto,
+  ) {
     return ConversationCacheRecord(
       id: dto.id.trim(),
       type: dto.type.trim(),
@@ -98,7 +101,7 @@ class ConversationCacheRecord {
     );
   }
 
-  factory ConversationCacheRecord.fromInboxDto(ChatInboxDto dto) {
+  factory ConversationCacheRecord.fromInboxDto(ChatInboxViewData dto) {
     return ConversationCacheRecord(
       id: dto.id.trim(),
       type: dto.type.trim(),
@@ -138,7 +141,10 @@ class ConversationCacheRecord {
       lastMessagePreview: _string(map['lastMessagePreview']),
       lastMessageType: map['lastMessageType'] == null
           ? MessageType.text
-          : MessageType.fromWire(map['lastMessageType']),
+          : MessageType.fromWire(
+              map['lastMessageType'],
+              'ConversationCacheRecord.lastMessageType',
+            ),
       lastMessageAt: _normalizeIsoString(map['lastMessageAt']) ?? '',
       messageCount: _int(map['messageCount']),
       status: _string(map['status']),
@@ -158,8 +164,8 @@ class ConversationCacheRecord {
 
   String get messageTimestamp => lastMessageAt;
 
-  ChatInboxDto toChatInboxDto() {
-    return ChatInboxDto(
+  ChatInboxViewData toChatInboxViewData() {
+    return ChatInboxViewData(
       id: id,
       type: type,
       title: title,
@@ -198,8 +204,8 @@ class ConversationCacheRecord {
     );
   }
 
-  ConversationDto toConversationDto() {
-    return ConversationDto(
+  ConversationViewData toConversationViewData() {
+    return ConversationViewData(
       id: id,
       type: type,
       title: title.isEmpty ? null : title,
@@ -249,7 +255,7 @@ class ConversationCacheRecord {
       if (lastMessageId != null) 'lastMessageId': lastMessageId,
       if (lastMessagePreview.isNotEmpty)
         'lastMessagePreview': lastMessagePreview,
-      'lastMessageType': lastMessageType.wireValue,
+      'lastMessageType': lastMessageType.wireName,
       if (lastMessageAt.isNotEmpty) 'lastMessageAt': lastMessageAt,
       'messageCount': messageCount,
       if (status.isNotEmpty) 'status': status,

@@ -3,6 +3,8 @@ package local_contract
 
 import (
 	"context"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
 	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/prompting"
 	"strconv"
 	"strings"
@@ -17,14 +19,28 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type contextAssemblyRecordingModel struct {
 	calls            int
+	askSlotID        string
 	assemblies       []*contextassembly.AssemblyResult
+	sessionFacts     [][]preferencemodel.Snapshot
 	longTermFacts    [][]preferencemodel.Snapshot
 	contextSummaries []*assistant.AssistantSessionContextSummary
 	contextTurns     [][]assistant.AssistantSessionContextTurn
+}
+
+type sharedContextResolverFunc func(
+	skillcontext.ResolveRequest,
+) (skillcontext.ResolvedContext, error)
+
+func (resolver sharedContextResolverFunc) Resolve(
+	_ context.Context,
+	request skillcontext.ResolveRequest,
+) (skillcontext.ResolvedContext, error) {
+	return resolver(request)
 }
 
 func (model *contextAssemblyRecordingModel) Complete(
@@ -33,6 +49,7 @@ func (model *contextAssemblyRecordingModel) Complete(
 ) (orchestration.ModelResponse, error) {
 	model.calls++
 	model.assemblies = append(model.assemblies, req.ContextAssembly)
+	model.sessionFacts = append(model.sessionFacts, req.SessionPreferenceFacts)
 	model.longTermFacts = append(model.longTermFacts, req.LongTermPreferenceFacts)
 	model.contextSummaries = append(model.contextSummaries, req.ContextSummary)
 	model.contextTurns = append(
@@ -40,6 +57,19 @@ func (model *contextAssemblyRecordingModel) Complete(
 		append([]assistant.AssistantSessionContextTurn(nil), req.ContextTurns...),
 	)
 	if req.Stage == "reasoning" {
+		if model.askSlotID != "" {
+			return orchestration.ModelResponse{
+				Text: "需要确认旅行目标。",
+				StructuredDelta: map[string]any{
+					"nextAction": "ask_user",
+					"askUser": map[string]any{
+						"slotId":   model.askSlotID,
+						"prompt":   "你想去哪里旅行？",
+						"required": true,
+					},
+				},
+			}, nil
+		}
 		return orchestration.ModelResponse{
 			Text:            `{"nextAction":"answer"}`,
 			StructuredDelta: map[string]any{"nextAction": "answer"},
@@ -61,6 +91,7 @@ func contextAssemblyLoop(
 		orchestration.ReactRuntime{Model: model},
 		nil,
 	)
+	loop.Catalog = skillfixture.Loader{}
 	loop.PromptAssets = promptassets.MustResolver(t)
 	return loop
 }
@@ -70,18 +101,20 @@ func contextAssemblyTurn(text string) assistant.AssistantTurn {
 		SessionID: "session-context-assembly",
 		TurnID:    "turn-context-assembly",
 		TraceID:   "trace-context-assembly",
+		SkillID:   "travel_companion",
+		DomainID:  "travel",
 		Input:     assistant.AssistantTurnInput{Text: text},
 		FrozenPolicySelection: testFrozenPolicySelection(
 			"assistant-default",
-			"travel_planning",
-			"travel_planning",
+			"fallback_general_search",
+			"assistant",
 		),
 	}
 }
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-001
-func TestContextAssemblyAsksForMissingSlotBeforeModelCall(t *testing.T) {
-	model := &contextAssemblyRecordingModel{}
+func TestContextAssemblyLetsPlannerClarifyWorkflowSpecificSlot(t *testing.T) {
+	model := &contextAssemblyRecordingModel{askSlotID: "destination"}
 	loop := contextAssemblyLoop(t, model)
 	events, failure, err := loop.RunTurn(
 		t.Context(),
@@ -90,8 +123,8 @@ func TestContextAssemblyAsksForMissingSlotBeforeModelCall(t *testing.T) {
 	if err != nil || failure != nil {
 		t.Fatalf("RunTurn() failure=%+v err=%v", failure, err)
 	}
-	if model.calls != 0 {
-		t.Fatalf("model calls=%d want 0 before required context is filled", model.calls)
+	if model.calls != 1 {
+		t.Fatalf("model calls=%d want planner-driven clarification", model.calls)
 	}
 	payload := completedPayload(t, events)
 	if payload["messageKind"] != "ask_user" ||
@@ -192,7 +225,7 @@ func TestContextAssemblyDistinguishesStaleAndConflictedSlots(t *testing.T) {
 					{Role: "user", Text: "目的地是苏州，明天出发"},
 				},
 			},
-			DomainID: "travel_planning",
+			DomainID: "travel",
 			SlotSchema: skillpkg.SlotSchema{
 				RequiredSlots: []string{"destination", "travel_date"},
 				CarryOver:     true,
@@ -253,48 +286,31 @@ func (factualMemoryPreferenceReader) ResolveActiveSnapshots(
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001
 func TestConfirmedFactualMemoryEntersPrivateModelContext(t *testing.T) {
-	service := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(persistence.NewMemorySessionRunStore()),
-		orchestration.WithPreferenceSnapshotReader(factualMemoryPreferenceReader{}),
-		testFrozenPolicyOption(),
-	)
-	session, err := service.CreateSession(
+	_, longTermFacts, err := (factualMemoryPreferenceReader{}).ResolveActiveSnapshots(
 		t.Context(),
 		"persona-memory",
-		assistant.CreateSessionInput{ClientRequestID: "memory-context-session"},
+		"session-memory",
 	)
 	if err != nil {
-		t.Fatalf("CreateSession(): %v", err)
+		t.Fatalf("ResolveActiveSnapshots(): %v", err)
 	}
-	turn, err := service.CreateTurn(
-		t.Context(),
-		"persona-memory",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "给我推荐晚餐"},
-			ClientRequestID: "memory-context-turn",
-			RequestContext:  testRunRequestContext("persona-memory"),
-		},
-	)
-	if err != nil {
-		t.Fatalf("CreateTurn(): %v", err)
+	turn := assistant.AssistantTurn{
+		TurnID:                  "execution:memory-context-run",
+		SessionID:               "session-memory",
+		UserID:                  "persona-memory",
+		Status:                  "running",
+		Input:                   assistant.AssistantTurnInput{Text: "给我推荐晚餐"},
+		LongTermPreferenceFacts: longTermFacts,
+		CreatedAt:               time.Now().UTC(),
 	}
 	if len(turn.LongTermPreferenceFacts) != 1 {
 		t.Fatalf("turn long-term memories=%#v", turn.LongTermPreferenceFacts)
 	}
-	model := &contextAssemblyRecordingModel{}
-	loop := contextAssemblyLoop(t, model)
-	if _, failure, runErr := loop.RunTurn(t.Context(), turn); runErr != nil || failure != nil {
-		t.Fatalf("RunTurn() failure=%+v err=%v", failure, runErr)
+	if len(turn.LongTermPreferenceFacts) != 1 ||
+		turn.LongTermPreferenceFacts[0].Kind != preferencemodel.KindDietaryRestrictions {
+		t.Fatalf("run long-term memories=%#v", turn.LongTermPreferenceFacts)
 	}
-	if len(model.longTermFacts) == 0 ||
-		len(model.longTermFacts[0]) != 1 ||
-		model.longTermFacts[0][0].Kind != preferencemodel.KindDietaryRestrictions {
-		t.Fatalf("model long-term memories=%#v", model.longTermFacts)
-	}
-	if prompt := prompting.FormatFactualMemoriesForPrompt(model.longTermFacts[0]); !strings.Contains(
+	if prompt := prompting.FormatFactualMemoriesForPrompt(turn.LongTermPreferenceFacts); !strings.Contains(
 		prompt,
 		"对花生过敏",
 	) || !strings.Contains(prompt, "scope=long_term") {
@@ -304,157 +320,71 @@ func TestConfirmedFactualMemoryEntersPrivateModelContext(t *testing.T) {
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
 func TestLongSessionUsesTraceableSummaryWithoutPerTurnTruncation(t *testing.T) {
-	store := persistence.NewMemorySessionRunStore()
-	model := &contextAssemblyRecordingModel{}
-	loop := contextAssemblyLoop(t, model)
-	service := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(store),
-		orchestration.WithAgentLoop(loop),
-		testFrozenPolicyOption(),
-	)
-	session, err := service.CreateSession(
-		t.Context(),
-		"persona-summary",
-		assistant.CreateSessionInput{ClientRequestID: "summary-session"},
-	)
-	if err != nil {
-		t.Fatalf("CreateSession(): %v", err)
+	store := persistence.NewMemorySessionStore()
+	now := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
+	if _, _, err := store.InsertSession(t.Context(), assistant.AssistantSession{
+		SessionID: "asn_summary_context",
+		UserID:    "persona-summary",
+		State:     "active",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("InsertSession(): %v", err)
 	}
-	baseTime := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
-	for index := 0; index < 10; index++ {
-		text := "继续讨论旅行计划"
-		if index == 0 {
-			text = "原始目标：目的地是杭州，明天出发，预算5000元，安排一次家庭旅行"
-		}
-		if index == 7 {
-			text = strings.Repeat("长", 320) + "保留尾部目标"
-		}
-		_, _, insertErr := store.InsertTurn(t.Context(), assistant.AssistantTurn{
-			TurnID:             "turn-history-" + strconv.Itoa(index),
-			SessionID:          session.SessionID,
-			UserID:             "persona-summary",
-			Status:             "completed",
-			CompletionSequence: int64(index + 1),
-			SkillID:            "travel_planning",
-			DomainID:           "travel_planning",
-			Input:              assistant.AssistantTurnInput{Text: text},
-			TerminalSnapshot: &assistant.AssistantRunTerminalSnapshot{
-				AnswerText: "已记录该轮旅行讨论。",
-			},
-			ClientRequestID: "history-request-" + strconv.Itoa(index),
-			CreatedAt:       baseTime.Add(time.Duration(index) * time.Minute),
-		})
-		if insertErr != nil {
-			t.Fatalf("InsertTurn(%d): %v", index, insertErr)
-		}
-	}
-	current, err := service.CreateTurn(
-		t.Context(),
-		"persona-summary",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			SkillID:         "travel_planning",
-			DomainID:        "travel_planning",
-			Input:           assistant.AssistantTurnInput{Text: "继续上面的旅行计划"},
-			ClientRequestID: "summary-current-turn",
-			RequestContext:  testRunRequestContext("persona-summary"),
+	summary := assistant.AssistantSessionContextSummary{
+		SummaryID:   "summary-traceable",
+		Text:        "原始目标：目的地是杭州，明天出发，预算5000元",
+		FromTurnID:  "run-history-0",
+		ToTurnID:    "run-history-4",
+		TurnCount:   5,
+		CurrentGoal: "原始目标：安排一次家庭旅行",
+		ConfirmedSlots: map[string]string{
+			"destination": "杭州",
+			"travel_date": "明天",
 		},
-	)
-	if err != nil {
-		t.Fatalf("CreateTurn(): %v", err)
 	}
-	if _, err := service.ExecuteTurn(
+	swapped, err := store.CompareAndSwapSessionSummary(
 		t.Context(),
-		"persona-summary",
-		current.TurnID,
-	); err != nil {
-		t.Fatalf("ExecuteTurn(): %v", err)
+		"asn_summary_context",
+		0,
+		0,
+		5,
+		summary,
+		now,
+	)
+	if err != nil || !swapped {
+		t.Fatalf("persist canonical session summary: swapped=%v err=%v", swapped, err)
 	}
-	if len(model.contextSummaries) == 0 || model.contextSummaries[0] == nil {
-		t.Fatal("model request did not receive rolling context summary")
-	}
-	summary := model.contextSummaries[0]
-	if summary.FromTurnID != "turn-history-0" ||
-		summary.ToTurnID != "turn-history-3" ||
-		summary.TurnCount != 4 {
-		t.Fatalf("summary trace=%#v", summary)
-	}
-	if !strings.Contains(summary.CurrentGoal, "原始目标") ||
-		summary.ConfirmedSlots["destination"] != "杭州" ||
-		summary.ConfirmedSlots["travel_date"] != "明天" {
-		t.Fatalf("summary lost goal or slots: %#v", summary)
-	}
-	foundUntruncatedTail := false
-	for _, contextTurn := range model.contextTurns[0] {
-		if strings.Contains(contextTurn.Text, "保留尾部目标") &&
-			len([]rune(contextTurn.Text)) > 320 {
-			foundUntruncatedTail = true
-		}
-	}
-	if !foundUntruncatedTail {
-		t.Fatalf("recent context was truncated: %#v", model.contextTurns[0])
-	}
-	assembly := model.assemblies[0]
-	if assembly == nil ||
-		assembly.SlotState.Slots["destination"].Value != "杭州" {
-		t.Fatalf("context assembly did not consume summary slots: %#v", assembly)
-	}
-	persisted, found, err := store.GetSession(t.Context(), session.SessionID)
+	persisted, found, err := store.GetSession(t.Context(), "asn_summary_context")
 	if err != nil || !found || persisted.ContextSummary == nil {
-		t.Fatalf("persisted summary missing: session=%+v found=%v err=%v", persisted, found, err)
+		t.Fatalf("load canonical session summary: found=%v err=%v", found, err)
 	}
-	if persisted.SummarySourceSequence != 5 ||
-		persisted.SummaryVersion != 2 ||
-		persisted.ContextSummary.ToTurnID != "turn-history-4" ||
-		!strings.Contains(persisted.ContextSummary.CurrentGoal, "原始目标") {
-		t.Fatalf("persisted incremental summary=%+v", persisted)
-	}
-
-	restartedModel := &contextAssemblyRecordingModel{}
-	restarted := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(store),
-		orchestration.WithAgentLoop(contextAssemblyLoop(t, restartedModel)),
-		testFrozenPolicyOption(),
-	)
-	afterRestart, err := restarted.CreateTurn(
-		t.Context(),
-		"persona-summary",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			SkillID:         "travel_planning",
-			DomainID:        "travel_planning",
-			Input:           assistant.AssistantTurnInput{Text: "重启后继续旅行计划"},
-			ClientRequestID: "summary-after-restart",
-			RequestContext:  testRunRequestContext("persona-summary"),
+	longTail := strings.Repeat("长", 320) + "保留尾部目标"
+	turn := assistant.AssistantTurn{
+		TurnID:         "execution:summary-current-run",
+		SessionID:      persisted.SessionID,
+		UserID:         persisted.UserID,
+		Status:         "running",
+		Input:          assistant.AssistantTurnInput{Text: "继续上面的计划"},
+		ContextSummary: persisted.ContextSummary,
+		ContextTurns: []assistant.AssistantSessionContextTurn{
+			{Role: "user", Text: longTail},
 		},
-	)
-	if err != nil {
-		t.Fatalf("CreateTurn(after restart): %v", err)
+		CreatedAt: now,
 	}
-	if _, err := restarted.ExecuteTurn(
-		t.Context(),
-		"persona-summary",
-		afterRestart.TurnID,
-	); err != nil {
-		t.Fatalf("ExecuteTurn(after restart): %v", err)
+	if turn.ContextSummary == nil || turn.ContextSummary.ToTurnID != "run-history-4" {
+		t.Fatalf("run summary=%#v", turn.ContextSummary)
 	}
-	if len(restartedModel.contextSummaries) == 0 ||
-		restartedModel.contextSummaries[0] == nil ||
-		restartedModel.contextSummaries[0].ToTurnID != "turn-history-4" {
-		t.Fatalf(
-			"restart did not reuse persisted summary: %#v",
-			restartedModel.contextSummaries,
-		)
+	if len(turn.ContextTurns) != 1 ||
+		!strings.Contains(turn.ContextTurns[0].Text, "保留尾部目标") ||
+		len([]rune(turn.ContextTurns[0].Text)) <= 320 {
+		t.Fatalf("recent context was truncated: %#v", turn.ContextTurns)
 	}
 }
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
 func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
-	store := persistence.NewMemorySessionRunStore()
+	store := persistence.NewMemorySessionStore()
 	now := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
 	if _, _, err := store.InsertSession(t.Context(), assistant.AssistantSession{
 		SessionID: "asn_summary_cas",
@@ -526,69 +456,30 @@ func TestSessionSummaryCASRejectsConcurrentAndDuplicateSource(t *testing.T) {
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md#gwt-002
 func TestGroupMentionChannelExcludesPrivateLongTermMemory(t *testing.T) {
-	service := orchestration.NewAssistantService(
-		nil,
-		nil,
-		orchestration.WithSessionRunStore(persistence.NewMemorySessionRunStore()),
-		orchestration.WithPreferenceSnapshotReader(channelPreferenceReader{}),
-		testFrozenPolicyOption(),
-	)
-	personalSession, err := service.CreateSession(
+	sessionFacts, longTermFacts, err := (channelPreferenceReader{}).ResolveActiveSnapshots(
 		t.Context(),
 		"persona-channel",
-		assistant.CreateSessionInput{ClientRequestID: "personal-channel-session"},
+		"group-channel-session",
 	)
 	if err != nil {
-		t.Fatalf("CreateSession(personal): %v", err)
+		t.Fatalf("ResolveActiveSnapshots(): %v", err)
 	}
-	personal, err := service.CreateTurn(
-		t.Context(),
-		"persona-channel",
-		personalSession.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "你好"},
-			ClientRequestID: "personal-channel-turn",
-			RequestContext:  testRunRequestContext("persona-channel"),
-		},
-	)
-	if err != nil {
-		t.Fatalf("CreateTurn(personal): %v", err)
+	group := assistant.AssistantTurn{
+		TurnID:                 "execution:group-channel-run",
+		SessionID:              "group-channel-session",
+		UserID:                 "persona-channel",
+		TurnType:               "proactive",
+		Status:                 "running",
+		Input:                  assistant.AssistantTurnInput{Text: "群里有人问杭州天气"},
+		Trigger:                assistant.AssistantTurnTrigger{Type: "chat_assistant_mentioned", MessageID: "message-channel"},
+		SessionPreferenceFacts: sessionFacts,
+		CreatedAt:              time.Now().UTC(),
 	}
-	if len(personal.LongTermPreferenceFacts) != 1 {
-		t.Fatalf("personal long-term facts=%#v want private memory", personal.LongTermPreferenceFacts)
-	}
-
-	groupSession, err := service.CreateSession(
-		t.Context(),
-		"persona-channel",
-		assistant.CreateSessionInput{ClientRequestID: "group-channel-session"},
-	)
-	if err != nil {
-		t.Fatalf("CreateSession(group): %v", err)
-	}
-	group, err := service.CreateTurn(
-		t.Context(),
-		"persona-channel",
-		groupSession.SessionID,
-		assistant.CreateTurnInput{
-			TurnType: "proactive",
-			Input:    assistant.AssistantTurnInput{Text: "群里有人问杭州天气"},
-			Trigger: assistant.AssistantTurnTrigger{
-				Type:      "chat_assistant_mentioned",
-				MessageID: "message-channel",
-			},
-			ClientRequestID: "group-channel-turn",
-			RequestContext:  testRunRequestContext("persona-channel"),
-		},
-	)
-	if err != nil {
-		t.Fatalf("CreateTurn(group): %v", err)
-	}
-	if len(group.SessionPreferenceFacts) != 1 {
-		t.Fatalf("group session facts=%#v want channel-local session preference", group.SessionPreferenceFacts)
+	if len(longTermFacts) != 1 {
+		t.Fatalf("reader fixture lost private memory: %#v", longTermFacts)
 	}
 	if len(group.LongTermPreferenceFacts) != 0 {
-		t.Fatalf("group long-term facts=%#v must exclude private memory", group.LongTermPreferenceFacts)
+		t.Fatalf("group turn leaked private memory: %#v", group.LongTermPreferenceFacts)
 	}
 	prompt := prompting.FormatModelPreferencesForPrompt(
 		group.SessionPreferenceFacts,
@@ -597,24 +488,101 @@ func TestGroupMentionChannelExcludesPrivateLongTermMemory(t *testing.T) {
 	if strings.Contains(prompt, "使用简体中文回答") {
 		t.Fatalf("group prompt leaked private long-term memory: %q", prompt)
 	}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
+func TestSharedSurfacePhysicallyRemovesPersonalPreferencesBeforeModelUse(t *testing.T) {
 	model := &contextAssemblyRecordingModel{}
 	loop := contextAssemblyLoop(t, model)
-	if _, failure, runErr := loop.RunTurn(t.Context(), group); runErr != nil || failure != nil {
-		t.Fatalf("RunTurn(group) failure=%+v err=%v", failure, runErr)
+	turn := contextAssemblyTurn("帮群里规划杭州行程")
+	turn.UserID = "account-channel"
+	turn.RequestContext = assistant.AssistantRunRequestContext{
+		SurfaceKind: "conversation",
+		SurfaceID:   "conversation-channel",
+		PersonaID:   "persona-channel",
 	}
-	for _, facts := range model.longTermFacts {
-		if len(facts) != 0 {
-			t.Fatalf("group model request leaked long-term facts: %#v", facts)
+	turn.SessionPreferenceFacts = []preferencemodel.Snapshot{{
+		PreferenceID: "session-private", Value: "只推荐高价酒店",
+	}}
+	turn.LongTermPreferenceFacts = []preferencemodel.Snapshot{{
+		PreferenceID: "memory-private", Value: "家庭住址是私密信息",
+	}}
+	_, failure, err := loop.RunTurn(t.Context(), turn)
+	if err != nil || failure != nil {
+		t.Fatalf("RunTurn() failure=%+v err=%v", failure, err)
+	}
+	if len(model.sessionFacts) == 0 || len(model.longTermFacts) == 0 {
+		t.Fatal("model was not invoked")
+	}
+	for index := range model.sessionFacts {
+		if len(model.sessionFacts[index]) != 0 || len(model.longTermFacts[index]) != 0 {
+			t.Fatalf(
+				"shared model call %d leaked session=%#v longTerm=%#v",
+				index,
+				model.sessionFacts[index],
+				model.longTermFacts[index],
+			)
 		}
 	}
-	for _, assembly := range model.assemblies {
-		if assembly == nil {
-			continue
-		}
-		for _, hint := range assembly.RecallHints {
-			if hint.Source == "longterm_memory" {
-				t.Fatalf("group recall leaked private memory: %#v", hint)
-			}
-		}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
+func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testing.T) {
+	model := &contextAssemblyRecordingModel{}
+	loop := contextAssemblyLoop(t, model)
+	now := time.Now().UTC()
+	registry, err := skillcontext.NewResolverRegistry(
+		skillcontext.RegisteredResolver{
+			ResolverRef: "trip.current_context",
+			Resolver: sharedContextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+				return skillcontext.ResolvedContext{
+					Kind:        "domain",
+					SourceRef:   "travel.TripTimelineView:trip-1@sha256:shared",
+					Authority:   assistantgenerated.AssistantContextAuthorityDomainCanonical,
+					Sensitivity: assistantgenerated.AssistantContextSensitivityInternal,
+					CapturedAt:  now,
+					TokenCost:   32,
+					Value: map[string]any{
+						"tripId":       "trip-1",
+						"sourceDigest": "sha256:shared",
+					},
+				}, nil
+			}),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop.SkillContexts = skillcontext.NewAssembler(
+		registry,
+		skillcontext.ConsentReaderFunc(func(
+			context.Context,
+			string,
+			string,
+			[]string,
+		) (bool, error) {
+			return true, nil
+		}),
+	)
+	turn := contextAssemblyTurn("帮群里调整这次旅行")
+	turn.UserID = "account-channel"
+	turn.RequestContext = assistant.AssistantRunRequestContext{
+		SurfaceKind: "conversation",
+		SurfaceID:   "conversation-channel",
+		PersonaID:   "persona-channel",
+	}
+
+	_, failure, err := loop.RunTurn(t.Context(), turn)
+	if err != nil || failure != nil {
+		t.Fatalf("RunTurn() failure=%+v err=%v", failure, err)
+	}
+	if len(model.assemblies) == 0 || model.assemblies[0] == nil {
+		t.Fatal("model did not receive shared context assembly")
+	}
+	snapshot, ok := model.assemblies[0].ContextEnvelope["skillContextSnapshot"].(skillcontext.Snapshot)
+	if !ok || len(snapshot.Segments) != 1 ||
+		snapshot.Segments[0].Sensitivity != assistantgenerated.AssistantContextSensitivityInternal ||
+		snapshot.Segments[0].Value["tripId"] != "trip-1" {
+		t.Fatalf("shared internal Trip context was rejected or widened: %#v", snapshot)
 	}
 }

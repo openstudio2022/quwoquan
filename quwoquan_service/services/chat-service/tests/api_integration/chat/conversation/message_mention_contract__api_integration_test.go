@@ -239,6 +239,7 @@ func TestMessageMention_UnreadProjectionAndMarkRead(t *testing.T) {
 	); err != nil {
 		t.Fatalf("mark mention read: %v", err)
 	}
+	drainInboxProjector(t, projector)
 	_, targetMentions = inboxCounters(t, inboxService, "user_target", conversationID)
 	if targetMentions != 1 {
 		t.Fatalf(
@@ -265,6 +266,7 @@ func TestMessageMention_UnreadProjectionAndMarkRead(t *testing.T) {
 	); err != nil {
 		t.Fatalf("mark latest mention read: %v", err)
 	}
+	drainInboxProjector(t, projector)
 	_, targetMentions = inboxCounters(t, inboxService, "user_target", conversationID)
 	if targetMentions != 0 {
 		t.Fatalf("mentionUnreadCount must reach zero at latest watermark, got %d", targetMentions)

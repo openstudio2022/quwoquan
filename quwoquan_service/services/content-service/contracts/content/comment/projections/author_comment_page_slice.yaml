@@ -1,25 +1,10 @@
 read_model: AuthorCommentPageSlice
-description: 当前 persona 已发表评论的商用组合投影分页；actor 由 transport 绑定，禁止按任意 authorId 查询。
-source_entities:
-- Comment
-- ContentReaction
-- MediaAsset
-- Post
-consumers:
-- app
-client_projection:
-  dart_class: ContentAuthorCommentPageSlice
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/comment_contracts.dart
+description: >-
+  当前 persona 已发表评论的 owner-scoped keyset page；actor 由受信 transport 绑定，
+  禁止按任意 authorId 查询。
+source_entities: [Comment, ContentReaction, MediaAsset, Post]
+consumers: [app]
 fields:
-- attachments
-- replyCount
-- replyPreview
-- replyNextCursor
-- likeCount
-- dislikeCount
-- viewerReaction
-- isAuthor
-- canDelete
-- canReply
-- canReport
-- canPin
+  - {name: items, type: '[]CommentListItem', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: total, type: int, nullable: false}

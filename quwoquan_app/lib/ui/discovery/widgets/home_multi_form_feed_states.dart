@@ -163,34 +163,35 @@ class _HomeFollowingFeedEmptyState extends StatelessWidget {
     );
     return ColoredBox(
       color: pageBackground,
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            key: const ValueKey('home-following-feed-empty'),
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                DiscoveryFeedText.followingFeedEmptyTitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.semiBold,
-                  color: primaryText,
-                ),
+      child: AppTerminalViewport(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.containerMd,
+        ),
+        child: Column(
+          key: const ValueKey('home-following-feed-empty'),
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              DiscoveryFeedText.followingFeedEmptyTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosSubheadline,
+                fontWeight: AppTypography.semiBold,
+                color: primaryText,
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                DiscoveryFeedText.followingFeedEmptyDescription,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  color: secondaryText,
-                  height: AppSpacing.textLineHeightBody,
-                ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              DiscoveryFeedText.followingFeedEmptyDescription,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosBody,
+                color: secondaryText,
+                height: AppSpacing.textLineHeightBody,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -213,7 +214,8 @@ class _HomeFeedCompletedEmptyState extends StatelessWidget {
     );
     return ColoredBox(
       color: pageBackground,
-      child: Center(
+      child: AppTerminalViewport(
+        padding: EdgeInsets.all(AppSpacing.containerMd),
         child: Text(
           DiscoveryFeedText.contentLoadingCompleted,
           key: const ValueKey<String>('home-feed-completed-empty'),

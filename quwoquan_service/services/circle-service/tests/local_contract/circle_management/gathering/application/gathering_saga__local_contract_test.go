@@ -112,15 +112,85 @@ func TestConcurrentJoinReservationsCannotExceedCapacity(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-001
+func TestDurableReconcilerCompletesBindingAndPendingOpenJoinExactlyOnce(t *testing.T) {
+	store := newMemoryStore()
+	chat := &conversationDouble{failEnsure: true}
+	facade := app.NewCommandFacade(store, navigableTargetDouble{}, chat)
+	createdAt := time.Now().UTC()
+	command := createCommand(createdAt.Add(time.Hour))
+	if _, err := facade.Create(commandContext("persona-owner", "create-reconcile"), command); err == nil {
+		t.Fatal("Create must expose the initial Chat failure")
+	}
+
+	reconciler := app.NewReconciler(store, store, chat)
+	chat.failEnsure = false
+	if count, err := reconciler.ReconcileOnce(context.Background(), 10); err != nil || count != 1 {
+		t.Fatalf("reconcile binding count=%d err=%v", count, err)
+	}
+	bound := store.mustLoad(t)
+	if bound.Status != model.StatusOpen || bound.ConversationID != "conversation-gathering" || store.checkpoint != bound.Version {
+		t.Fatalf("binding reconciliation drift: value=%+v checkpoint=%d", bound, store.checkpoint)
+	}
+
+	chat.failAdd = true
+	joinContext := commandContext("persona-2", "join-reconcile")
+	if _, err := facade.Join(joinContext, app.GatheringCommand{GatheringID: bound.ID}); err == nil {
+		t.Fatal("Join must expose the initial membership failure")
+	}
+	if stateFor(store.mustLoad(t), "persona-2") != model.ParticipantStatePending {
+		t.Fatal("failed Chat write must remain pending")
+	}
+
+	chat.failAdd = false
+	if count, err := reconciler.ReconcileOnce(context.Background(), 10); err != nil || count != 1 {
+		t.Fatalf("reconcile membership count=%d err=%v", count, err)
+	}
+	joined := store.mustLoad(t)
+	if stateFor(joined, "persona-2") != model.ParticipantStateJoined || store.checkpoint != joined.Version {
+		t.Fatalf("membership reconciliation drift: value=%+v checkpoint=%d", joined, store.checkpoint)
+	}
+	projectedCalls := chat.projectCalls
+	if count, err := reconciler.ReconcileOnce(context.Background(), 10); err != nil || count != 0 {
+		t.Fatalf("settled reconciliation count=%d err=%v", count, err)
+	}
+	if chat.projectCalls != projectedCalls {
+		t.Fatal("settled checkpoint must suppress duplicate Chat writes")
+	}
+}
+
 type receiptRecord struct {
 	digest    string
 	gathering model.Gathering
 }
 
 type memoryStore struct {
-	mu       sync.Mutex
-	value    *model.Gathering
-	receipts map[string]receiptRecord
+	mu         sync.Mutex
+	value      *model.Gathering
+	receipts   map[string]receiptRecord
+	checkpoint int64
+}
+
+func (store *memoryStore) ListReconciliationCandidates(_ context.Context, limit int) ([]model.Gathering, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if limit <= 0 || store.value == nil || store.checkpoint >= store.value.Version {
+		return nil, nil
+	}
+	return []model.Gathering{clone(*store.value)}, nil
+}
+
+func (store *memoryStore) SaveReconciliationCheckpoint(_ context.Context, gatheringID string, version int64, _ time.Time) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.value == nil || store.value.ID != gatheringID {
+		return errors.New("Gathering not found")
+	}
+	if version > store.checkpoint {
+		store.checkpoint = version
+	}
+	return nil
 }
 
 func newMemoryStore() *memoryStore {
@@ -180,13 +250,14 @@ func (navigableTargetDouble) RequireNavigable(_ context.Context, target model.Ta
 }
 
 type conversationDouble struct {
-	mu         sync.Mutex
-	failEnsure bool
-	failAdd    bool
-	createdIDs int
+	mu           sync.Mutex
+	failEnsure   bool
+	failAdd      bool
+	createdIDs   int
+	projectCalls int
 }
 
-func (double *conversationDouble) EnsureGroupConversation(_ context.Context, _, _, _, _ string) (string, error) {
+func (double *conversationDouble) EnsureGroupConversation(_ context.Context, _, _, _ string, _ int64, _ string) (string, error) {
 	double.mu.Lock()
 	defer double.mu.Unlock()
 	if double.failEnsure {
@@ -198,16 +269,15 @@ func (double *conversationDouble) EnsureGroupConversation(_ context.Context, _, 
 	return "conversation-gathering", nil
 }
 
-func (double *conversationDouble) AddMember(_ context.Context, _, _, _ string) error {
+func (double *conversationDouble) ProjectParticipant(_ context.Context, _, _, _ string, state string, _ int64, _ string) error {
 	double.mu.Lock()
 	defer double.mu.Unlock()
-	if double.failAdd {
+	if double.failAdd && state == "joined" {
 		return errors.New("chat unavailable")
 	}
+	double.projectCalls++
 	return nil
 }
-
-func (*conversationDouble) RemoveMember(context.Context, string, string, string) error { return nil }
 
 func commandContext(personaID, key string) context.Context {
 	return operation.WithContext(context.Background(), operation.Context{
@@ -220,7 +290,7 @@ func commandContext(personaID, key string) context.Context {
 func createCommand(startAt time.Time) app.CreateCommand {
 	return app.CreateCommand{
 		Title:     "贡嘎日落同行",
-		TargetRef: model.TargetRef{ObjectTypeRef: "photo_spot", ObjectID: "spot-1", RouteID: "gatheringDetail"},
+		TargetRef: model.TargetRef{ObjectTypeRef: "photo_spot", ObjectID: "spot-1", RouteID: "homepageDetail"},
 		StartAt:   startAt, Capacity: 3, JoinPolicy: model.JoinPolicyOpen,
 	}
 }

@@ -71,8 +71,8 @@ paths:
     /internal/realtime/personas/{personaId}/presence:
         get:
             operationId: GetPersonaPresence
-            x-contract-operation-id: realtime.connection.GetPersonaPresence
-            x-object-id: realtime.connection
+            x-contract-operation-id: realtime.presence_view.GetPersonaPresence
+            x-object-id: realtime.presence_view
             x-actor: none
             x-application:
                 kind: query

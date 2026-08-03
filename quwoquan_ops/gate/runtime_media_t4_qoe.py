@@ -1,4 +1,4 @@
-"""runtime-media T4 SLS QoE readback 阈值与重算合同。"""
+"""runtime-media T4 Elasticsearch QoE readback 阈值与重算合同。"""
 
 from __future__ import annotations
 
@@ -255,8 +255,8 @@ def validate_qoe_payload(
     issues: list[str],
     prefix: str,
 ) -> None:
-    if payload.get("source") != "aliyun_sls":
-        issues.append(f"{prefix}.QoE readback.source 必须为 aliyun_sls")
+    if payload.get("source") != "elasticsearch":
+        issues.append(f"{prefix}.QoE readback.source 必须为 elasticsearch")
     if payload.get("eventType") != "video_playback_qoe":
         issues.append(f"{prefix}.QoE readback.eventType 必须为 video_playback_qoe")
     if payload.get("status") != "passed":

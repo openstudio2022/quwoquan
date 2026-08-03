@@ -23,15 +23,7 @@ void main() {
       expect(IntersectionActionKeys.openRoute, 'open_route');
       expect(IntersectionActionKeys.createFollowup, 'create_followup');
       expect(IntersectionActionKeys.askAssistant, 'ask_assistant');
-      // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯常量。
-      expect(IntersectionActionKeys.joinTopicRoom, 'join_topic_room');
       expect(IntersectionActionKeys.startGathering, 'start_gathering');
-      expect(IntersectionActionKeys.joinGathering, 'join_gathering');
-      expect(IntersectionActionKeys.meetNearby, 'meet_nearby');
-      expect(IntersectionActionKeys.expressInterest, 'express_interest');
-      expect(IntersectionActionKeys.viewOfficialDeals, 'view_official_deals');
-      expect(IntersectionActionKeys.bookTicket, 'book_ticket');
-      expect(IntersectionActionKeys.bookHotel, 'book_hotel');
     });
 
     test('端侧常量集合与 codegen actionKey 闭集完全一致（无孤儿、无缺失）', () {
@@ -48,14 +40,7 @@ void main() {
         IntersectionActionKeys.openRoute,
         IntersectionActionKeys.createFollowup,
         IntersectionActionKeys.askAssistant,
-        IntersectionActionKeys.joinTopicRoom,
         IntersectionActionKeys.startGathering,
-        IntersectionActionKeys.joinGathering,
-        IntersectionActionKeys.meetNearby,
-        IntersectionActionKeys.expressInterest,
-        IntersectionActionKeys.viewOfficialDeals,
-        IntersectionActionKeys.bookTicket,
-        IntersectionActionKeys.bookHotel,
       };
       expect(endpointConstants, intersectionActionKeys.toSet());
     });
@@ -66,24 +51,10 @@ void main() {
         IntersectionActionKeys.isGatheringAction('start_gathering'),
         isTrue,
       );
-      expect(
-        IntersectionActionKeys.isGatheringAction('join_gathering'),
-        isTrue,
-      );
-      expect(IntersectionActionKeys.isGatheringAction('meet_nearby'), isTrue);
       // trim 容错。
       expect(
         IntersectionActionKeys.isGatheringAction(' start_gathering '),
         isTrue,
-      );
-      // M0.7 语义修正：话题房 / 心动（dispatch==connect）不再误标为同行。
-      expect(
-        IntersectionActionKeys.isGatheringAction('join_topic_room'),
-        isFalse,
-      );
-      expect(
-        IntersectionActionKeys.isGatheringAction('express_interest'),
-        isFalse,
       );
       // 私信（dispatch==message）与轻连接 / 助手类均非同行。
       expect(
@@ -125,15 +96,6 @@ void main() {
       expect(IntersectionActionKeys.isAssistant('ask_xiaoqu'), isFalse);
     });
 
-    test('isCommerce：仅 commerce dispatch 动作进入商用转化闸', () {
-      expect(IntersectionActionKeys.isCommerce('view_official_deals'), isTrue);
-      expect(IntersectionActionKeys.isCommerce('book_ticket'), isTrue);
-      expect(IntersectionActionKeys.isCommerce('book_hotel'), isTrue);
-      expect(IntersectionActionKeys.isCommerce('start_gathering'), isFalse);
-      expect(IntersectionActionKeys.isCommerce('open_route'), isFalse);
-      expect(IntersectionActionKeys.isCommerce(''), isFalse);
-    });
-
     test('分类判定委托 codegen dispatch，端无第二真相源（M0.7）', () {
       // 端 isAssistant / isGatheringAction 必须与 codegen actionKeyMeta.dispatch 完全一致，
       // 证明端不再手写重社交/助手枚举（守 R06 / R24 单一真相源）。
@@ -148,11 +110,6 @@ void main() {
         expect(
           IntersectionActionKeys.isGatheringAction(key),
           meta.dispatch == 'gathering',
-          reason: '$key dispatch=${meta.dispatch}',
-        );
-        expect(
-          IntersectionActionKeys.isCommerce(key),
-          meta.dispatch == 'commerce',
           reason: '$key dispatch=${meta.dispatch}',
         );
       }

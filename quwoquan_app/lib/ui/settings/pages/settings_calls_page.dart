@@ -7,8 +7,6 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/settings/providers/user_settings_provider.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show OfficialRingtoneId;
 
 class SettingsCallsPage extends ConsumerStatefulWidget {
   const SettingsCallsPage({super.key});
@@ -18,15 +16,9 @@ class SettingsCallsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
-  static final OfficialRingtoneId _defaultRingtone = OfficialRingtoneId(
-    'official.default',
-  );
-  static final OfficialRingtoneId _classicRingtone = OfficialRingtoneId(
-    'official.classic',
-  );
-  static final OfficialRingtoneId _softRingtone = OfficialRingtoneId(
-    'official.soft',
-  );
+  static const String _defaultRingtone = 'official.default';
+  static const String _classicRingtone = 'official.classic';
+  static const String _softRingtone = 'official.soft';
 
   @override
   void initState() {
@@ -152,8 +144,8 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
   Widget _ringtoneRow({
     required bool isDark,
     required String label,
-    required OfficialRingtoneId ringtoneId,
-    required OfficialRingtoneId? selected,
+    required String ringtoneId,
+    required String? selected,
   }) => SettingsInsetChoiceRow(
     isDark: isDark,
     label: label,

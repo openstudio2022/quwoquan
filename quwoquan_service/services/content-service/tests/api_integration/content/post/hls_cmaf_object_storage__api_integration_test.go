@@ -17,7 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	runtimemedia "quwoquan_service/runtime/media"
-	mediaprocinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	mediaprocinfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
 )
 
 func TestHLSCMAFArtifactsPreserveMIMEAndFallbackContractInObjectStorage(t *testing.T) {

@@ -7,13 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_node.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show AssistantDeviceActionExecutionReceipt;
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
     show actorQueueStorageProvider;
@@ -961,7 +959,7 @@ void main() {
     });
 
     test(
-      'skill center uses assistant repository for alpha data source',
+      'skill center separates default enablement from proactive subscription',
       () async {
         final repository = _FakeAssistantRepository(
           events: <AssistantStreamEventWire>[],
@@ -976,7 +974,14 @@ void main() {
               .where((item) => item.skillId == 'stock_sentinel')
               .single
               .enabled,
-          isFalse,
+          isTrue,
+        );
+        expect(
+          items
+              .where((item) => item.skillId == 'stock_sentinel')
+              .single
+              .subscription,
+          isNull,
         );
 
         await repository.createSkillSubscription(
@@ -1565,6 +1570,86 @@ void main() {
         container.read(personalAssistantStreamControllerProvider).errorMessage,
         AssistantText.assistantDeviceActionUnavailable,
       );
+      expect(
+        container
+            .read(personalAssistantStreamControllerProvider)
+            .retryAvailable,
+        isFalse,
+      );
+    });
+
+    test('日历权限拒绝保留用户请求并以新 Run 恢复而非重放 continuation', () async {
+      final repository = _FakeAssistantRepository(
+        events: <AssistantStreamEventWire>[
+          _event(
+            seq: 1,
+            eventType: 'completed',
+            payload: const <String, dynamic>{'text': '请确认是否创建日历提醒'},
+          ),
+        ],
+      );
+      final deviceActions = _RecordingAssistantDeviceActionBridge(
+        result: const AssistantDeviceActionResult(
+          status: AssistantDeviceActionStatus.denied,
+        ),
+      );
+      final container = _containerWith(
+        assistantRepository: repository,
+        deviceActionBridge: deviceActions,
+        platformCapabilities: CapabilityProfile.mobile,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+
+      await notifier.send('提醒我明早九点在断桥集合');
+      const action = AssistantActionIntentWire(
+        intentId: 'continue_calendar_denied',
+        operation: 'ContinueAssistantToolUse',
+        objectTypeRef: 'assistant_tool_use',
+        objectId: 'tool_calendar_denied',
+        payload: <String, dynamic>{
+          'decision': 'approved',
+          'continuationToken': 'continuation_calendar_denied',
+          'deviceAction': <String, dynamic>{
+            'kind': 'calendar_create_reminder',
+            'idempotencyKey': 'tool_calendar_denied',
+            'input': <String, dynamic>{
+              'title': '断桥集合',
+              'startsAt': '2026-08-03T09:00:00+08:00',
+            },
+          },
+        },
+        requiresConfirmation: true,
+      );
+
+      await notifier.handlePresentationAction(
+        runId: 'arn_action_denied',
+        action: action,
+      );
+
+      final failedState = container.read(
+        personalAssistantStreamControllerProvider,
+      );
+      expect(repository.continuedToolUses.single.decision, 'rejected');
+      expect(
+        repository.continuedToolUses.single.executionReceipt?.outcome,
+        'denied',
+      );
+      expect(
+        failedState.errorMessage,
+        AssistantText.assistantDeviceActionPermissionDenied,
+      );
+      expect(failedState.retryAvailable, isTrue);
+
+      await notifier.retryLastFailedAction();
+
+      expect(repository.startedRunTexts, <String>[
+        '提醒我明早九点在断桥集合',
+        '提醒我明早九点在断桥集合',
+      ]);
+      expect(repository.continuedToolUses, hasLength(1));
     });
 
     test('事实候选仅在 typed confirmation 批准后写入长期记忆', () async {
@@ -1655,6 +1740,14 @@ class _SwitchRecordingHistoryLoader implements AssistantHistoryLoader {
 
 class _RecordingAssistantDeviceActionBridge
     implements AssistantDeviceActionBridge {
+  _RecordingAssistantDeviceActionBridge({
+    this.result = const AssistantDeviceActionResult(
+      status: AssistantDeviceActionStatus.created,
+      deviceObjectId: 'calendar_event_1',
+    ),
+  });
+
+  final AssistantDeviceActionResult result;
   final List<AssistantCalendarReminderRequest> requests =
       <AssistantCalendarReminderRequest>[];
 
@@ -1663,10 +1756,7 @@ class _RecordingAssistantDeviceActionBridge
     AssistantCalendarReminderRequest request,
   ) async {
     requests.add(request);
-    return const AssistantDeviceActionResult(
-      status: AssistantDeviceActionStatus.created,
-      deviceObjectId: 'calendar_event_1',
-    );
+    return result;
   }
 }
 
@@ -1829,7 +1919,7 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
     return const PageContextReceipt(
       accepted: true,
       contextKey: 'ctx_test',
-      expiresAt: null,
+      expiresAt: '2026-08-02T12:05:00Z',
     );
   }
 
@@ -1840,7 +1930,7 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
   final Set<String> rejectedLearningFactIds = <String>{};
 
   @override
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   }) async {
     learningFacts.add(request);
@@ -1848,14 +1938,14 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
         rejectedLearningFactIds.contains(request.eventId)) {
       throw StateError('learning append unavailable (test)');
     }
-    return AssistantLearningFactAppendReceipt(
+    return AssistantLearningFactReceipt(
       eventId: request.eventId,
       accepted: true,
       deduplicated: false,
       appendSequence: learningFacts.length,
       payloadDigest:
           '0000000000000000000000000000000000000000000000000000000000000000',
-      recordedAt: DateTime.now().toUtc(),
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
@@ -1999,7 +2089,7 @@ class _FakeAppMessageQuery implements AppMessageQuery {
     return AppMessage(
       messageId: query.messageId,
       userId: 'user_test',
-      messageType: 'assistant',
+      messageType: NotificationType.assistant,
       source: 'assistant_turn',
       sourceId: 'arn_test_personal',
       destination: const AppMessageDestination(type: 'user', id: 'user_test'),
@@ -2008,6 +2098,7 @@ class _FakeAppMessageQuery implements AppMessageQuery {
       target: const AppMessageTarget(
         targetType: 'assistant_turn',
         targetId: 'arn_test_personal',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 4, 29),

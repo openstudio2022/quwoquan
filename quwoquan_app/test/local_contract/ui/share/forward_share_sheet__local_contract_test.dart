@@ -63,22 +63,22 @@ void main() {
     for (final kind in AppForwardSubjectKind.values) {
       final objectRef = switch (kind) {
         AppForwardSubjectKind.profileQr => null,
-        AppForwardSubjectKind.contentPost => ChatMessageCardObjectRef(
+        AppForwardSubjectKind.contentPost => MessageCardObjectRef(
           objectTypeRef: 'post',
           objectId: 'post_1',
           routeId: 'contentDetail',
         ),
-        AppForwardSubjectKind.userProfile => ChatMessageCardObjectRef(
+        AppForwardSubjectKind.userProfile => MessageCardObjectRef(
           objectTypeRef: 'user',
           objectId: 'user_1',
           routeId: 'userProfile',
         ),
-        AppForwardSubjectKind.entityProfile => ChatMessageCardObjectRef(
+        AppForwardSubjectKind.entityProfile => MessageCardObjectRef(
           objectTypeRef: 'homepage',
           objectId: 'homepage_1',
           routeId: 'homepageDetail',
         ),
-        AppForwardSubjectKind.circle => ChatMessageCardObjectRef(
+        AppForwardSubjectKind.circle => MessageCardObjectRef(
           objectTypeRef: 'circle',
           objectId: 'circle_1',
           routeId: 'circleDetail',
@@ -400,7 +400,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
   String? get lastConversationId => writer.lastCommand?.conversationId;
   String? get lastType => writer.lastCommand?.type;
   String? get lastContent => writer.lastCommand?.content;
-  ChatMessageCardCommand? get lastCard => writer.lastCommand?.card;
+  MessageCard? get lastCard => writer.lastCommand?.card;
 
   @override
   Future<List<ChatInboxDto>> listConversations({

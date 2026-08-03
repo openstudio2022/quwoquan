@@ -731,8 +731,8 @@ void main() {
         'outcome': 'empty',
         'emptyReason': 'no_active_release',
       });
-      expect(page.outcome, ContentDiscoveryFeedOutcome.empty);
-      expect(page.emptyReason, ContentDiscoveryFeedEmptyReason.noActiveRelease);
+      expect(page.outcome, ContentFeedOutcome.empty);
+      expect(page.emptyReason, ContentFeedEmptyReason.noActiveRelease);
     });
 
     test('non-empty feed rejects empty outcome or emptyReason', () {

@@ -10,13 +10,17 @@ access:
 relationships:
 - {name: content, target_object: content.Post, reference_fields: [contentId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: tombstone}
 - {name: author, target_object: user.Persona, reference_fields: [authorId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: detach}
+- {name: primary_homepage, target_object: entity.Homepage, reference_fields: [primaryHomepageId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: detach}
 - {name: tags, target_object: tag.TagNodeView, reference_fields: [entityTagIds], kind: projection_source, cardinality: 'N:N', consistency: eventual, access: event, on_delete: detach}
 business_rules:
 - 候选只由上游 typed 事件构建，不跨库读取 Content、Entity、Circle 或 Tag 私有集合。
 - scenario 与 contentId 唯一定位候选；Post 生命周期以 aggregateVersion 单调推进，premium admission 以自身 updatedAt 水位推进，任一旧事件都不得覆盖较新状态或复活已删除内容。
+- UserSuspended/UserRestored 以 accountVersion 单调维护本地作者限制投影；限制状态必须在候选查询 limit 前过滤，账号关闭后候选与可逆限制原值均不可保留。
+- following 场景只能消费 PersonaFollowStateChanged/PersonaBlocked/PersonaUnblocked 维护的本地关系投影筛选 authorId；不得跨库读取 User 私有关系表，拉黑后不得恢复历史关注。
 - premium pool 和实体标签是同一候选身份的具名索引，不得形成第二候选真相源。
+- 对象卡只能从 Post lifecycle 携带的 canonical Homepage 公开快照和 FeatureProfile 选择；不得回查 Entity 私有集合或在 Content 重新计算。
 lifecycle:
-  source_events: [PostPublished, PostUpdated, PostSettingsUpdated, PostPromotedToWork, PostDeleted, PostPrivacyRedacted, PostPurged, PremiumPoolEntryUpserted, PremiumPoolEntryRolledBack, PremiumPoolEntryTakedownEjected]
+  source_events: [PostPublished, PostUpdated, PostSettingsUpdated, PostPromotedToWork, PostDeleted, PostPrivacyRedacted, PostPurged, PremiumPoolEntryUpserted, PremiumPoolEntryRolledBack, PremiumPoolEntryTakedownEjected, PersonaFollowStateChanged, PersonaBlocked, PersonaUnblocked, UserSuspended, UserRestored, UserAccountClosed]
   checkpoint: per_source_partition_sequence
   rebuild: recreate_candidate_indexes_then_replay_all_source_events
   tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint

@@ -17,9 +17,32 @@ fields:
   - { name: environmentScopes, type: list<string>, default: [] }
   - { name: serverInjectedInputs, type: list<string>, default: [] }
   - { name: readOnly, type: bool, default: true }
+  - { name: capability, type: object, ref: capability_policy, default: {} }
+  - { name: confirmation, type: object, ref: confirmation_policy, default: {} }
   - { name: resilience, type: object, ref: resilience_policy, default: {} }
   - { name: recovery, type: object, ref: recovery_policy, default: {} }
 subcontracts:
+  capability_policy:
+    class_name: AssistantToolCapabilityPolicyWire
+    fields:
+      - { name: capabilityKey, type: string, default: '' }
+      - { name: connectorRequirement, type: string, default: none }
+      - { name: consentScopes, type: list<string>, default: [] }
+      - { name: allowedSurfaceKinds, type: list<string>, default: [] }
+      - { name: recheckAtExecution, type: bool, default: false }
+  confirmation_policy:
+    class_name: AssistantToolConfirmationPolicyWire
+    fields:
+      - { name: templateRef, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: description, type: string, default: '' }
+      - { name: completionSummary, type: string, default: '' }
+      - { name: displayFields, type: list<object>, ref: confirmation_display_field, default: [] }
+  confirmation_display_field:
+    class_name: AssistantToolConfirmationDisplayFieldWire
+    fields:
+      - { name: inputKey, type: string, required: true }
+      - { name: label, type: string, required: true }
   resilience_policy:
     class_name: AssistantToolResiliencePolicyWire
     fields:

@@ -228,6 +228,39 @@ class AppRoutePaths {
   static const String assistantSkills = '/assistant/skills';
   static const String assistantSkillsSegment = 'skills';
 
+  static const String travelTrips = '/travel/trips';
+  static const String travelTripsSegment = 'trips';
+
+  static const String travelTemplates = '/travel/templates';
+  static const String travelTemplatesSegment = 'templates';
+
+  static const String travelTimelinePathTemplate = '/travel/trips/{id}/timeline';
+  static String travelTimeline({required String id}) {
+    return _buildPath(travelTimelinePathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String travelTimelineSegment = 'timeline';
+
+  static const String travelMapPathTemplate = '/travel/trips/{id}/map';
+  static String travelMap({required String id}) {
+    return _buildPath(travelMapPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String travelMapSegment = 'map';
+
+  static const String travelSharePathTemplate = '/travel/share-snapshots/{id}';
+  static String travelShare({required String id}) {
+    return _buildPath(travelSharePathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+    });
+  }
+  static const String travelShareSegment = '{id}';
+
   static const String settings = '/settings';
   static const String settingsSegment = 'settings';
 

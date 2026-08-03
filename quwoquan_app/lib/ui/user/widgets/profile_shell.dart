@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide InteractionDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -53,7 +54,7 @@ part 'profile_shell_builders.dart';
 part 'profile_shell_builders_parts.dart';
 part 'profile_shell_builders_more.dart';
 
-/// 用户主页壳层（V3 统一对象页骨架 ObjectPageShell + full 吸顶模式）。
+/// 用户主页壳层（统一对象页骨架 ObjectPageShell + full 吸顶模式）。
 /// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳提供用户主页业务插槽与二级页签。
 /// 先前「共鸣/我的交集」假数据卡片与独立页链路已彻底移除（V5/S3）；
 /// 统一交集卡 ObjectIntersectionCard 在 profile detail intersectionReasons 真实下发后接入（V5/S5）。

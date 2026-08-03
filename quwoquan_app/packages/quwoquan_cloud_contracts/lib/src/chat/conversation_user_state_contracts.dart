@@ -1,16 +1,14 @@
-import '../operation_request_payload.dart';
-import 'conversation_contracts.dart' show ChatCommandAck;
+import 'chat_operation_contracts.g.dart';
 
-export 'conversation_contracts.dart' show ChatCommandAck;
-part '../generated/requests/chat/conversation_user_state_contracts.requests.g.dart';
+export 'chat_operation_contracts.g.dart';
 
 abstract interface class ChatConversationUserStateCommandWriter {
-  Future<ChatCommandAck> markMessageRead(
+  Future<ConversationUserStateCommandAck> markMessageRead(
     ChatMarkConversationMessageReadCommand command, {
     required String idempotencyKey,
   });
 
-  Future<ChatCommandAck> updateConversationSettings(
+  Future<ConversationUserStateCommandAck> updateConversationSettings(
     ChatUpdateConversationSettingsCommand command, {
     required String idempotencyKey,
   });

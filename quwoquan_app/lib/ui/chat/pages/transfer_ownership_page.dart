@@ -1,3 +1,4 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -10,7 +11,6 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/chat_interaction_telemetry_tracker.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
@@ -34,7 +34,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
     super.dispose();
   }
 
-  void _onMemberSelected(ChatConversationMemberDto member) {
+  void _onMemberSelected(ConversationMemberListRow member) {
     final name = member.displayName;
 
     showAppCupertinoDialog<void>(

@@ -24,7 +24,7 @@ const _uuid = Uuid();
 
 /// 消息列表状态：含加载态、错误信息和已排序消息列表。
 class ChatMessageState {
-  final List<MessageDto> messages;
+  final List<ChatMessageViewData> messages;
   final bool isLoading;
   final bool isRefreshing;
   final bool isLoadingOlder;
@@ -43,7 +43,7 @@ class ChatMessageState {
   });
 
   ChatMessageState copyWith({
-    List<MessageDto>? messages,
+    List<ChatMessageViewData>? messages,
     bool? isLoading,
     bool? isRefreshing,
     bool? isLoadingOlder,
@@ -251,9 +251,12 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   /// 进入详情后用当前已加载的最后一条消息触发已读回执。
   Future<bool> markConversationRead() async {
+    if (!ref.mounted) {
+      return false;
+    }
     final latest = state.messages.reversed.firstWhere(
       (message) => message.id.isNotEmpty,
-      orElse: () => MessageDto(
+      orElse: () => ChatMessageViewData(
         id: '',
         conversationId: '',
         seq: 0,
@@ -271,8 +274,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         conversationId: conversationId,
         messageId: latest.id,
       );
+      if (!ref.mounted) {
+        return false;
+      }
       return true;
     } catch (e) {
+      if (!ref.mounted) {
+        return false;
+      }
       state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       return false;
     }
@@ -292,7 +301,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     final resolvedSenderPersonaId = activeContext.personaId.isNotEmpty
         ? activeContext.personaId
         : activeContext.ownerUserId;
-    final optimistic = MessageDto(
+    final optimistic = ChatMessageViewData(
       id: clientMsgId,
       conversationId: conversationId,
       seq: _unconfirmedSeq,
@@ -461,7 +470,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }
 
   /// 外部实时事件推送消息到列表（WebSocket/Long-poll 收到的新消息）。
-  void addMessage(MessageDto msg) {
+  void addMessage(ChatMessageViewData msg) {
     final existing = state.messages.any(
       (m) =>
           m.id == msg.id ||
@@ -471,7 +480,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     state = state.copyWith(
       messages: _sorted([...state.messages, _normalizeSenderAvatar(msg)]),
     );
-    unawaited(_persistMessages(<MessageDto>[msg]));
+    unawaited(_persistMessages(<ChatMessageViewData>[msg]));
   }
 
   /// 实时事件：标记某消息已撤回。
@@ -485,8 +494,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     unawaited(_removePersistedMessage(messageId));
   }
 
-  Future<List<MessageDto>> _hydrateSenderSnapshots(
-    List<MessageDto> messages,
+  Future<List<ChatMessageViewData>> _hydrateSenderSnapshots(
+    List<ChatMessageViewData> messages,
   ) async {
     final needsHydration = messages.any(
       (message) =>
@@ -539,7 +548,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     }
   }
 
-  MessageDto _normalizeSenderAvatar(MessageDto message) {
+  ChatMessageViewData _normalizeSenderAvatar(ChatMessageViewData message) {
     final avatar = _resolveAvatar(message.senderAvatar);
     if ((message.senderAvatar ?? '') == avatar) {
       return message;
@@ -556,9 +565,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────
 
-  List<MessageDto> _sorted(List<MessageDto> list) {
-    final confirmed = <MessageDto>[];
-    final pending = <MessageDto>[];
+  List<ChatMessageViewData> _sorted(List<ChatMessageViewData> list) {
+    final confirmed = <ChatMessageViewData>[];
+    final pending = <ChatMessageViewData>[];
     for (final m in list) {
       if (m.seq > _unconfirmedSeq) {
         confirmed.add(m);
@@ -597,7 +606,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     }
   }
 
-  int _oldestConfirmedSeq(List<MessageDto> messages) {
+  int _oldestConfirmedSeq(List<ChatMessageViewData> messages) {
     var oldest = 0;
     for (final message in messages) {
       if (message.seq <= _unconfirmedSeq) continue;
@@ -621,7 +630,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }
 
   Future<void> _persistMessages(
-    List<MessageDto> messages, {
+    List<ChatMessageViewData> messages, {
     LocalSearchNamespace? namespace,
   }) async {
     if (messages.isEmpty) return;
@@ -678,11 +687,11 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   // ── 合并去重（按 id / clientMsgId）──────────────────────────────
 
-  List<MessageDto> _mergeMessages(
-    List<MessageDto> existing,
-    List<MessageDto> incoming,
+  List<ChatMessageViewData> _mergeMessages(
+    List<ChatMessageViewData> existing,
+    List<ChatMessageViewData> incoming,
   ) {
-    final byId = <String, MessageDto>{};
+    final byId = <String, ChatMessageViewData>{};
     for (final m in existing) {
       byId[m.id] = m;
     }

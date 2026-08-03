@@ -56,7 +56,7 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/contact_home_row.yaml`
-- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/projections/intersection_action_hint.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_action_hint.yaml`
 - 父能力公开契约：[`L2 spec`](../spec.md)
 
 ## 5. 验收场景

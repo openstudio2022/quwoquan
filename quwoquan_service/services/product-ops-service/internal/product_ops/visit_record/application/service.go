@@ -8,46 +8,22 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	visitdomain "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/domain"
 )
 
 const receiptRetention = 180 * 24 * time.Hour
 
 var (
-	ErrInvalidInput        = errors.New("invalid visit input")
+	ErrInvalidInput        = visitdomain.ErrInvalid
 	ErrIdempotencyRequired = errors.New("visit idempotency key is required")
 	ErrIdempotencyConflict = errors.New("visit idempotency key conflicts with the first command")
 )
 
-var supportedTargetTypes = map[string]struct{}{
-	"page":   {},
-	"post":   {},
-	"circle": {},
-	"user":   {},
-}
-
-type VisitInput struct {
-	UserID     string `json:"userId"`
-	TargetType string `json:"targetType"`
-	TargetKey  string `json:"targetKey"`
-}
-
-type VisitRecord struct {
-	TargetType string    `json:"targetType" bson:"targetType"`
-	TargetKey  string    `json:"targetKey" bson:"targetKey"`
-	UserID     string    `json:"-" bson:"userId"`
-	VisitCount int       `json:"visitCount" bson:"visitCount"`
-	OccurredAt time.Time `json:"occurredAt" bson:"occurredAt"`
-}
-
-type VisitStatsQuery struct {
-	TargetType string
-	TargetKey  string
-}
-
-type VisitStats struct {
-	TotalVisits int           `json:"totalVisits"`
-	Items       []VisitRecord `json:"items"`
-}
+type VisitInput = visitdomain.VisitInput
+type VisitRecord = visitdomain.VisitRecord
+type VisitStatsQuery = visitdomain.VisitStatsQuery
+type VisitStats = visitdomain.VisitStats
 
 type CommandResult struct {
 	VisitRecord
@@ -94,14 +70,9 @@ func (s *Service) RecordVisit(
 	input VisitInput,
 	idempotencyKey string,
 ) (CommandResult, error) {
-	input.UserID = strings.TrimSpace(input.UserID)
-	input.TargetType = strings.TrimSpace(input.TargetType)
-	input.TargetKey = strings.TrimSpace(input.TargetKey)
+	input = input.Normalize()
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if input.UserID == "" || input.TargetKey == "" || len(input.TargetKey) > 256 {
-		return CommandResult{}, ErrInvalidInput
-	}
-	if _, supported := supportedTargetTypes[input.TargetType]; !supported {
+	if err := input.Validate(); err != nil {
 		return CommandResult{}, ErrInvalidInput
 	}
 	if idempotencyKey == "" {
@@ -131,12 +102,9 @@ func (s *Service) GetVisitStats(
 	ctx context.Context,
 	query VisitStatsQuery,
 ) (VisitStats, error) {
-	query.TargetType = strings.TrimSpace(query.TargetType)
-	query.TargetKey = strings.TrimSpace(query.TargetKey)
-	if query.TargetType != "" {
-		if _, supported := supportedTargetTypes[query.TargetType]; !supported {
-			return VisitStats{}, ErrInvalidInput
-		}
+	query, err := query.NormalizeAndValidate()
+	if err != nil {
+		return VisitStats{}, ErrInvalidInput
 	}
 	return s.store.GetVisitStats(ctx, query)
 }

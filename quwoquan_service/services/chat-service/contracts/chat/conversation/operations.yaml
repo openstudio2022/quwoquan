@@ -54,13 +54,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
-    response_entity: Conversation
+    response_entity: ConversationPageSlice
     response_body: ChatConversation
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversationPageSlice
-      response_decoder: decodeChatConversationPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.invalid_argument
@@ -108,13 +104,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 会话时间戳索引（用于本地缓存增量同步）
-    response_entity: Conversation
+    response_entity: ConversationTimestampIndexSlice
     response_body: ChatConversationTimestamp
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversationTimestampPageSlice
-      response_decoder: decodeChatConversationTimestampPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -174,15 +166,12 @@ api_routes:
 '
     request_entity: ChatCreateConversationCommand
     response_body: ChatConversation
+    response_entity: ChatConversation
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversation
-      response_decoder: decodeChatConversation
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.invalid_argument
-      - CHAT.USER.circle_group_binding_write_forbidden
+      - CHAT.USER.source_managed_binding_write_forbidden
       - CHAT.USER.not_mutual
       - CHAT.USER.greeting_required
       - CHAT.USER.blocked
@@ -237,13 +226,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 批量拉取指定会话的完整信息（仅返回请求者为成员的会话）
-    response_entity: Conversation
+    response_entity: ConversationBatchSlice
     response_body: ChatConversation
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversationBatchSlice
-      response_decoder: decodeChatConversationBatchSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -294,13 +279,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt；群设置页与聊天信息页共用本事实源，App 不得另建群设置读取旁路）
-    response_entity: Conversation
+    response_entity: ChatConversation
     response_body: ChatConversation
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversation
-      response_decoder: decodeChatConversation
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
@@ -364,18 +345,14 @@ api_routes:
       circleGroupId 非空时标题由 CircleGroup 管理并拒绝本 operation。
 
 '
-    response_entity: Conversation
+    response_entity: ChatConversation
     response_body: ChatConversation
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversation
-      response_decoder: decodeChatConversation
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.USER.conversation_dissolved
       - CHAT.SYSTEM.internal_error
     security:
@@ -435,18 +412,14 @@ api_routes:
       公告内容一致为 no-op 并重放原回执。circleGroupId 非空时公告由 CircleGroup 管理并拒绝本 operation。
 
 '
-    response_entity: Conversation
+    response_entity: ChatConversation
     response_body: ChatConversation
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversation
-      response_decoder: decodeChatConversation
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.USER.conversation_dissolved
       - CHAT.USER.message_too_long
       - CHAT.SYSTEM.internal_error
@@ -507,18 +480,14 @@ api_routes:
       ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。circleGroupId 非空时治理策略由 CircleGroup 管理并拒绝本 operation。
 
 '
-    response_entity: Conversation
+    response_entity: ChatConversation
     response_body: ChatConversation
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatConversation
-      response_decoder: decodeChatConversation
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.USER.conversation_dissolved
       - CHAT.SYSTEM.internal_error
     security:
@@ -529,67 +498,6 @@ api_routes:
       visibility: private
     request_entity: ChatUpdateGroupGovernanceSettingsCommand
     request_body_kind: object
-  - method: GET
-    path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
-    operation: GetReceipts
-    request_bindings:
-      path:
-        - name: conversationId
-          field: conversationId
-        - name: messageId
-          field: messageId
-    actor: persona
-    commercial:
-      status: ready
-    application:
-      kind: query
-      facet: MessageReceiptQueryFacet
-      method: getReceipts
-      reader: MessageReceiptReader
-      slice: MessageReceiptPageSlice
-    authorization:
-      principal: persona
-      ownership_policy: conversation_member
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: none
-    privacy:
-      request_classification: INTERNAL
-      response_classification: SENSITIVE
-      log_policy: metadata_only
-    telemetry:
-      metric: chat_conversation_query
-      trace: true
-      attributes:
-        - operation
-        - outcome
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    description: 获取消息回执列表（仅 receiptEnabled 会话可用；读取 MessageReceiptFact append-only 事实）
-    response_entity: ChatMessageReceipt
-    response_body: ChatMessageReceipt
-    response_body_kind: page
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatMessageReceiptPageSlice
-      response_decoder: decodeChatMessageReceiptPageSlice
-    error_codes:
-      - CHAT.USER.unauthorized
-      - CHAT.USER.blocked
-      - CHAT.USER.message_not_found
-      - CHAT.SYSTEM.internal_error
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    request_entity: ChatGetMessageReceiptsQuery
-    request_body_kind: none
   - method: DELETE
     path: /chat/conversations/{conversationId}
     operation: DissolveConversation
@@ -637,16 +545,13 @@ api_routes:
       ConversationDissolved 事件实时收敛成员端；已解散重复请求为 no-op 并重放原回执。
 
 '
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -655,65 +560,6 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     request_entity: ChatDissolveConversationCommand
-    request_body_kind: none
-  - method: GET
-    path: /chat/inbox
-    operation: ListInbox
-    request_bindings:
-      query:
-        - name: limit
-          field: limit
-        - name: cursor
-          field: cursor
-          required: false
-    actor: persona
-    commercial:
-      status: ready
-    authorization:
-      principal: persona
-      ownership_policy: active_persona_inbox
-    reliability:
-      timeout_ms: 1500
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: none
-    error_codes:
-      - CHAT.USER.unauthorized
-      - CHAT.SYSTEM.internal_error
-    privacy:
-      request_classification: INTERNAL
-      response_classification: SENSITIVE
-      log_policy: metadata_only
-    telemetry:
-      metric: chat_inbox_list
-      trace: true
-      attributes:
-        - outcome
-    slo:
-      latency_p95_ms: 500
-      availability_percent: 99.9
-    application:
-      kind: query
-      facet: ConversationInboxQueryFacet
-      method: listInbox
-      reader: ChatInboxReader
-      slice: ChatInboxPageSlice
-    description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 服务端预合成头像）
-    response_entity: ChatInbox
-    response_body: ChatInbox
-    response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatInboxPageSlice
-      response_decoder: decodeChatInboxPageSlice
-    security:
-      auth_mode: required
-      principal: persona
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    request_entity: ChatListInboxQuery
     request_body_kind: none
   - method: GET
     path: /chat/message-home
@@ -759,13 +605,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
-    response_entity: MessageHomeRow
+    response_entity: MessageHomePageSlice
     response_body: MessageHomeRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/message_home_contracts.dart
-      response_type: ChatMessageHomePageSlice
-      response_decoder: decodeChatMessageHomePageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -819,13 +661,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 联系人列表
-    response_entity: ChatContactListRow
+    response_entity: ContactPageSlice
     response_body: ChatContactListRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatContactPageSlice
-      response_decoder: decodeChatContactPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -878,13 +716,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
-    response_entity: ContactHomeRow
+    response_entity: ContactHomePageSlice
     response_body: ContactHomeRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatContactHomePageSlice
-      response_decoder: decodeChatContactHomePageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -938,10 +772,6 @@ api_routes:
     response_entity: GroupHome
     response_body: GroupHome
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/conversation_contracts.dart
-      response_type: ChatGroupHome
-      response_decoder: decodeChatGroupHome
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
@@ -996,13 +826,9 @@ api_routes:
       latency_p95_ms: 500
       availability_percent: 99.9
     description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
-    response_entity: ChatContactListRow
+    response_entity: GroupCandidatePageSlice
     response_body: ChatContactListRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatContactPageSlice
-      response_decoder: decodeChatGroupCandidatePageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.SYSTEM.internal_error
@@ -1070,13 +896,9 @@ api_routes:
       响应使用 `items + nextCursor` keyset Slice；cursor、source 和 query 必须在服务端同一读取链路中处理，端侧仅可顺序追加后续页。
 
 '
-    response_entity: SelectableGroupConversationRow
+    response_entity: SelectableGroupConversationPageSlice
     response_body: SelectableGroupConversationRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatSelectableGroupConversationPageSlice
-      response_decoder: decodeChatSelectableGroupConversationPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.invalid_argument
@@ -1143,13 +965,9 @@ api_routes:
       调用者必须是目标会话成员；响应使用 `items + nextCursor` keyset Slice，query 在分页前由服务端过滤。
 
 '
-    response_entity: ChatContactListRow
+    response_entity: SelectableGroupContactPageSlice
     response_body: ChatContactListRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/contact_contracts.dart
-      response_type: ChatContactPageSlice
-      response_decoder: decodeChatSelectableGroupContactMemberPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
@@ -1214,6 +1032,39 @@ api_routes:
       anonymous_policy: deny
       visibility: internal
     description: operator 只释放 Chat 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
+  - method: PUT
+    path: /internal/chat/gathering-conversations/{gatheringId}
+    operation: ProjectGatheringConversation
+    actor: none
+    application:
+      kind: command
+      facet: GatheringConversationProjectionFacet
+      method: projectGatheringConversation
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    request_bindings:
+      path: [{name: gatheringId, field: gatheringId}]
+    request_entity: GatheringConversationProjectionCommand
+    response_entity: GatheringConversationProjectionResult
+    authorization:
+      principal: service
+      scopes: [chat.gathering.write]
+      ownership_policy: gathering_source_projection
+    commercial: {status: ready}
+    reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 3, idempotency: required}
+    error_codes: [CHAT.USER.invalid_argument, CHAT.USER.gathering_binding_conflict, CHAT.SYSTEM.internal_error]
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: chat_gathering_conversation_project, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 800, availability_percent: 99.9}
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    request_body_kind: object
+    description: 以 Gathering source event 幂等创建唯一群会话；普通建群命令不得写 gatheringId。
 consumers:
   - name: app
     capabilities:
@@ -1265,13 +1116,6 @@ contract_test:
             - items_match_schema
             - sorted_by_last_message_time
             - maxSeq_present
-        - name: inbox_list
-          route: GET /chat/inbox
-          assertions:
-            - status_200
-            - items_match_schema
-            - sorted_by_pinned_then_last_message_time
-            - unread_and_mention_counts_present
         - name: group_chat_lifecycle
           routes:
             - POST /chat/conversations

@@ -114,3 +114,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+types:
+  HomepageSearchSlice:
+    fields:
+    - {name: items, type: '[]HomepageSearchItemView', constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE]}
+  HomepageSearchQuery:
+    fields:
+    - {name: query, type: string, constraints: [NOT_NULL]}
+    - {name: homepageType, type: string, constraints: [NULLABLE]}
+    - {name: city, type: string, constraints: [NULLABLE]}
+    - {name: status, type: string, constraints: [NULLABLE]}
+    - {name: cursor, type: string, constraints: [NULLABLE]}
+    - {name: limit, type: int, constraints: [NOT_NULL], client_default: "20"}

@@ -11,10 +11,6 @@ api_routes:
     actor: persona
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantLearningFactAppendReceipt
-      response_decoder: decodeAssistantLearningFactAppendReceipt
     application:
       kind: command
       facet: AssistantLearningFactAppendSink

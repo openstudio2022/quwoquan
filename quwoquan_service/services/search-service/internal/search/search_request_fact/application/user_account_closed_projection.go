@@ -79,6 +79,31 @@ type UserAccountClosedProjectionResult struct {
 	Replayed bool
 }
 
+// RecentSearchClosureCleaner is the object-owned account-closure port for
+// RecentSearchState. SearchRequestFact must not access its collections.
+type RecentSearchClosureCleaner interface {
+	DeleteClosedSubjects(
+		ctx context.Context,
+		subjects []string,
+	) (deletedStates int64, deletedReceipts int64, err error)
+}
+
+// SearchFeedbackClosureCleaner is the object-owned account-closure port for
+// SearchFeedbackFact. Request IDs are discovered from SearchRequestFact before
+// its facts are deleted, then passed through this typed boundary.
+type SearchFeedbackClosureCleaner interface {
+	DeleteClosedSubjects(
+		ctx context.Context,
+		subjects []string,
+		requestIDs []string,
+	) (
+		deletedFacts int64,
+		deletedReceipts int64,
+		deletedDeliveries int64,
+		err error,
+	)
+}
+
 // UserAccountClosedProjection 必须把 inbox 与 Search 私有数据清理放在同一事务中。
 type UserAccountClosedProjection interface {
 	ApplyUserAccountClosed(

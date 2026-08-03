@@ -11,6 +11,10 @@ from core.io import read_json
 from content.release.canonical.aggregate_release import build_aggregate_release
 from content.release.canonical.acceptance_lease import handle_acceptance_lease
 from content.release.canonical.baseline_release import build_empty_baseline_release
+from content.release.canonical.commercial_transition import (
+    CommercialTransitionError,
+    write_commercial_transition,
+)
 from content.release.canonical.discard import handle_discard
 from content.release.canonical.lifecycle_exit import handle_lifecycle_exit
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
@@ -20,6 +24,10 @@ from content.release.canonical.release_operation_lock import (
     release_operation_lock_root,
 )
 from content.release.canonical.reset import handle_reset_canonical
+from content.release.canonical.research_scale_promotion import (
+    ResearchScalePromotionError,
+    write_research_scale_promotion,
+)
 from verify.verify_release_lifecycle import release_lifecycle_issues
 
 
@@ -88,6 +96,61 @@ def handle_attest_release(args: argparse.Namespace) -> None:
         raise SystemExit(1)
     aggregate = read_json(attestation_root(release_root / release_id) / "release.json")
     print(json.dumps({"releaseId": release_id, "attested": True, "attestation": aggregate}, ensure_ascii=False, indent=2))
+
+
+def handle_research_scale_promotion(args: argparse.Namespace) -> None:
+    output_root = Path(args.output_root or OUTPUT_ROOT)
+    try:
+        document, path = write_research_scale_promotion(
+            release_id=str(args.release_id),
+            promotion_id=str(args.promotion_id),
+            campaign_evidence_path=Path(args.campaign_evidence),
+            release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
+            output_root=output_root,
+        )
+    except (
+        FileNotFoundError,
+        ObjectTransactionError,
+        ResearchScalePromotionError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release research-promote-scale] GATE_BLOCK {exc}") from exc
+    print(
+        json.dumps(
+            {**document, "receiptRef": path.relative_to(output_root).as_posix()},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def handle_commercial_transition(args: argparse.Namespace) -> None:
+    output_root = Path(args.output_root or OUTPUT_ROOT)
+    try:
+        document, path = write_commercial_transition(
+            research_release_id=str(args.research_release_id),
+            commercial_release_id=str(args.commercial_release_id),
+            transition_run_id=str(args.run_id),
+            cleanup_evidence_path=Path(args.cleanup_evidence),
+            release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
+            output_root=output_root,
+        )
+    except (
+        CommercialTransitionError,
+        FileNotFoundError,
+        ObjectTransactionError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release commercial-transition] GATE_BLOCK {exc}") from exc
+    print(
+        json.dumps(
+            {**document, "receiptRef": path.relative_to(output_root).as_posix()},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -169,3 +232,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     attest.add_argument("--release-id", required=True)
     attest.add_argument("--release-root")
     attest.set_defaults(handler=handle_attest_release)
+
+    research_promote = commands.add_parser(
+        "research-promote-scale",
+        help="由四载体 M100 与资源隔离/恢复证据写入 create-once promotion receipt",
+    )
+    research_promote.add_argument("--release-id", required=True)
+    research_promote.add_argument("--promotion-id", required=True)
+    research_promote.add_argument("--campaign-evidence", required=True)
+    research_promote.add_argument("--release-root")
+    research_promote.add_argument("--output-root")
+    research_promote.set_defaults(handler=handle_research_scale_promotion)
+
+    commercial_transition = commands.add_parser(
+        "commercial-transition",
+        help="从 research/commercial release 与四环境清理回读写逐资产迁移 receipt",
+    )
+    commercial_transition.add_argument("--research-release-id", required=True)
+    commercial_transition.add_argument("--commercial-release-id", required=True)
+    commercial_transition.add_argument("--run-id", required=True)
+    commercial_transition.add_argument("--cleanup-evidence", required=True)
+    commercial_transition.add_argument("--release-root")
+    commercial_transition.add_argument("--output-root")
+    commercial_transition.set_defaults(handler=handle_commercial_transition)

@@ -17,7 +17,7 @@ class ParticipantTile extends StatelessWidget {
     this.videoTrack,
   });
 
-  final CallParticipant participant;
+  final CallParticipantViewData participant;
   final bool isActiveSpeaker;
   final bool showName;
   final BorderRadius? borderRadius;

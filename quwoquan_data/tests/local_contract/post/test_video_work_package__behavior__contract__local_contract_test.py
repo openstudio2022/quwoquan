@@ -149,7 +149,13 @@ def test_video_frame_contract_has_no_rights_or_source_mode_fallback() -> None:
 
 def test_commercial_video_work_package_rejects_unverified_source_frame(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        video_package_module,
+        "rights_proof_required",
+        lambda _vertical: True,
+    )
     request = _request(tmp_path)
     unverified = replace(
         request.source_frames[0],
@@ -261,7 +267,7 @@ def _content_plan_frame_source(
     )
 
 
-def test_video_content_plan_rejects_unverified_commercial_frame(
+def test_video_content_plan_accepts_audited_unverified_research_frame(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx, source_dir = _content_plan_frame_source(
@@ -278,8 +284,12 @@ def test_video_content_plan_rejects_unverified_commercial_frame(
 
     candidates, rejects = content_plan_video._source_frames(ctx, source_dir.parent)
 
-    assert candidates == []
-    assert rejects == {"rights_not_verified": 1}
+    assert len(candidates) == 1
+    assert candidates[0].rights_audit_status == "unverified"
+    assert candidates[0].rights_audit_issues == (
+        "imageRights: source terms not yet verified",
+    )
+    assert rejects == {}
 
 
 def test_video_content_plan_preserves_source_unit_mode(
@@ -368,7 +378,7 @@ def test_prepare_video_brief_shortfall_uses_post_compose_stage() -> None:
     ), issues
 
 
-def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
+def test_research_video_execution_stops_before_generated_materialization() -> None:
     execution_id = "20260716--travel-video-supply--test-region-a--pilot-902"
     ref = "测试实体甲_video"
     build_execution_fixture(
@@ -476,16 +486,4 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
         }
     ]
     materialized = materialize_posts(execution_id, "video", refs=[ref])
-    assert len(materialized) == 1
-    post_dir = materialized[0]
-    assert (post_dir / "assets/video.mp4").is_file()
-    assert (post_dir / "assets/poster.webp").is_file()
-    assert (post_dir / "subtitles.vtt").is_file()
-    assert not (post_dir / "article.md").exists()
-    manifest = read_json(post_dir / "manifest.json")
-    assert manifest["contentType"] == "video"
-    assert manifest["contentIdentity"] == "work"
-    assert manifest["publishAngle"] == "体验"
-    assert manifest["reviewDecision"] == "approved"
-    gate_issues = gate_post(execution_id, "video", refs=[ref])
-    assert gate_issues == [], "\n".join(gate_issues)
+    assert materialized == []

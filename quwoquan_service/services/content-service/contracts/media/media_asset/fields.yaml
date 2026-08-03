@@ -543,6 +543,39 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  MediaAssetSlice:
+    description: Owner or public policy-filtered delivery projection for one ready MediaAsset.
+    fields:
+      - {name: assetId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mediaType, type: enum, enum_ref: MediaType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mimeType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: fileSize, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: MediaAssetStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: accessPolicy, type: enum, enum_ref: MediaAssetAccessPolicy, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageWidth, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageHeight, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageDeliveryMimeType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageDominantColor, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageLqip, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: imageContentProfile, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: imageDerivativePolicyVersion, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: cdnUrl, type: url, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  MediaAssetDiscardResult:
+    description: Idempotent logical deletion result for one unreferenced MediaAsset.
+    fields:
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: MediaAssetStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  MediaCoverSelectionResult:
+    description: Current canonical cover projection after an idempotent MediaAsset mutation.
+    fields:
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: coverStrategy, type: enum, enum_ref: MediaCoverStrategy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: manualCoverAssetId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: coverFrameTimeMs, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: thumbnailUrl, type: url, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: coverUrl, type: url, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   RecordMediaProcessingResultRequest:
     description: 受信处理器提交的原子处理结果；图片、视频 descriptor 字段按 mediaType 与 processingStatus 的领域规则成组校验。
     fields:

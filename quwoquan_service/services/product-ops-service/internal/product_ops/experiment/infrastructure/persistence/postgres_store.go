@@ -66,20 +66,6 @@ SELECT id, version, key, status, variants, audience_rule, starts_at, ends_at, up
 FROM experiments
 ON CONFLICT (experiment_id, revision) DO NOTHING;
 
-CREATE TABLE IF NOT EXISTS experiment_assignment_facts (
-  id VARCHAR(36) PRIMARY KEY,
-  experiment_id VARCHAR(64) NOT NULL REFERENCES experiments(id),
-  subject_key VARCHAR(128) NOT NULL,
-  variant VARCHAR(32) NOT NULL,
-  experiment_revision BIGINT NOT NULL,
-  assigned_at TIMESTAMPTZ NOT NULL,
-  CONSTRAINT uq_assignment_subject UNIQUE(experiment_id, experiment_revision, subject_key)
-);
-CREATE INDEX IF NOT EXISTS idx_assignment_experiment
-  ON experiment_assignment_facts(experiment_id, variant);
-CREATE INDEX IF NOT EXISTS idx_assignment_subject
-  ON experiment_assignment_facts(subject_key);
-
 CREATE TABLE IF NOT EXISTS product_ops_outbox (
   event_id VARCHAR(128) PRIMARY KEY,
   event_type VARCHAR(128) NOT NULL,
@@ -234,7 +220,44 @@ WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempoten
 	if err != nil {
 		return ports.CommitReceipt{}, err
 	}
-	if _, err := tx.Exec(ctx, `
+	if expectedVersion < 0 {
+		return ports.CommitReceipt{}, errors.New("experiment expected version cannot be negative")
+	}
+	if expectedVersion == 0 {
+		if changes.Experiment.Version != 1 {
+			return ports.CommitReceipt{}, errors.New("new experiment version must be 1")
+		}
+		commandTag, err := tx.Exec(ctx, `
+INSERT INTO experiments(
+  id, key, version, status, variants, audience_rule,
+  starts_at, ends_at, created_at, updated_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+ON CONFLICT DO NOTHING`,
+			changes.Experiment.ID, changes.Experiment.Key, changes.Experiment.Version,
+			changes.Experiment.Status, variants, audience, startsAt, endsAt,
+			createdAt, updatedAt)
+		if err != nil {
+			return ports.CommitReceipt{}, err
+		}
+		if commandTag.RowsAffected() != 1 {
+			err = tx.QueryRow(ctx, `
+SELECT experiment_id, version, command_digest FROM experiment_idempotency_receipts
+WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempotencyKey).
+				Scan(&receipt.ExperimentID, &receipt.Version, &storedDigest)
+			if err == nil {
+				if storedDigest != commandDigest {
+					return ports.CommitReceipt{}, model.ErrIdempotencyConflict
+				}
+				receipt.Replayed = true
+				return receipt, tx.Commit(ctx)
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return ports.CommitReceipt{}, err
+			}
+			return ports.CommitReceipt{}, model.ErrVersionConflict
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `
 INSERT INTO experiment_policy_revisions(
   experiment_id, revision, key, status, variants, audience_rule,
   starts_at, ends_at, activated_at
@@ -242,35 +265,36 @@ INSERT INTO experiment_policy_revisions(
 SELECT id, version, key, status, variants, audience_rule, starts_at, ends_at, updated_at
 FROM experiments WHERE id=$1 AND version=$2
 ON CONFLICT (experiment_id, revision) DO NOTHING`, changes.Experiment.ID, expectedVersion); err != nil {
-		return ports.CommitReceipt{}, err
-	}
-	commandTag, err := tx.Exec(ctx, `
+			return ports.CommitReceipt{}, err
+		}
+		commandTag, err := tx.Exec(ctx, `
 UPDATE experiments SET
   key=$3, version=$4, status=$5, variants=$6, audience_rule=$7,
   starts_at=$8, ends_at=$9, created_at=$10, updated_at=$11
 WHERE id=$1 AND version=$2`,
-		changes.Experiment.ID, expectedVersion, changes.Experiment.Key, changes.Experiment.Version,
-		changes.Experiment.Status, variants, audience,
-		startsAt, endsAt, createdAt, updatedAt)
-	if err != nil {
-		return ports.CommitReceipt{}, err
-	}
-	if commandTag.RowsAffected() != 1 {
-		err = tx.QueryRow(ctx, `
-SELECT experiment_id, version, command_digest FROM experiment_idempotency_receipts
-WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempotencyKey).
-			Scan(&receipt.ExperimentID, &receipt.Version, &storedDigest)
-		if err == nil {
-			if storedDigest != commandDigest {
-				return ports.CommitReceipt{}, model.ErrIdempotencyConflict
-			}
-			receipt.Replayed = true
-			return receipt, tx.Commit(ctx)
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+			changes.Experiment.ID, expectedVersion, changes.Experiment.Key, changes.Experiment.Version,
+			changes.Experiment.Status, variants, audience,
+			startsAt, endsAt, createdAt, updatedAt)
+		if err != nil {
 			return ports.CommitReceipt{}, err
 		}
-		return ports.CommitReceipt{}, model.ErrVersionConflict
+		if commandTag.RowsAffected() != 1 {
+			err = tx.QueryRow(ctx, `
+SELECT experiment_id, version, command_digest FROM experiment_idempotency_receipts
+WHERE experiment_id=$1 AND idempotency_key=$2`, changes.Experiment.ID, idempotencyKey).
+				Scan(&receipt.ExperimentID, &receipt.Version, &storedDigest)
+			if err == nil {
+				if storedDigest != commandDigest {
+					return ports.CommitReceipt{}, model.ErrIdempotencyConflict
+				}
+				receipt.Replayed = true
+				return receipt, tx.Commit(ctx)
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return ports.CommitReceipt{}, err
+			}
+			return ports.CommitReceipt{}, model.ErrVersionConflict
+		}
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO experiment_policy_revisions(
@@ -296,94 +320,6 @@ VALUES ($1,$2,$3,$4)`, changes.Experiment.ID, idempotencyKey, commandDigest, cha
 		return ports.CommitReceipt{}, err
 	}
 	return ports.CommitReceipt{ExperimentID: changes.Experiment.ID, Version: changes.Experiment.Version}, nil
-}
-
-func (s *PostgresStore) Append(
-	ctx context.Context,
-	fact model.AssignmentFact,
-) (model.AssignmentFact, bool, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return model.AssignmentFact{}, false, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	assignedAt, err := parseOptionalTime(fact.AssignedAt)
-	if err != nil || assignedAt == nil {
-		return model.AssignmentFact{}, false, errors.New("assignment assignedAt is required RFC3339")
-	}
-	var canonical model.AssignmentFact
-	var canonicalAt time.Time
-	err = tx.QueryRow(ctx, `
-INSERT INTO experiment_assignment_facts(
-  id, experiment_id, subject_key, variant, experiment_revision, assigned_at
-) VALUES ($1,$2,$3,$4,$5,$6)
-ON CONFLICT (experiment_id, experiment_revision, subject_key) DO NOTHING
-RETURNING id, experiment_id, subject_key, variant, experiment_revision, assigned_at`,
-		fact.ID, fact.ExperimentID, fact.SubjectKey, fact.Variant, fact.ExperimentRevision, assignedAt,
-	).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.ExperimentRevision, &canonicalAt)
-	inserted := true
-	if errors.Is(err, pgx.ErrNoRows) {
-		inserted = false
-		err = tx.QueryRow(ctx, `
-SELECT id, experiment_id, subject_key, variant, experiment_revision, assigned_at
-FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND experiment_revision=$2 AND subject_key=$3`,
-			fact.ExperimentID, fact.ExperimentRevision, fact.SubjectKey,
-		).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.ExperimentRevision, &canonicalAt)
-	}
-	if err != nil {
-		return model.AssignmentFact{}, false, err
-	}
-	canonical.AssignedAt = canonicalAt.UTC().Format(time.RFC3339)
-	if err := tx.Commit(ctx); err != nil {
-		return model.AssignmentFact{}, false, err
-	}
-	return canonical, inserted, nil
-}
-
-func (s *PostgresStore) Get(
-	ctx context.Context,
-	experimentID string,
-	experimentRevision int64,
-	subjectKey string,
-) (model.AssignmentFact, error) {
-	var out model.AssignmentFact
-	var assignedAt time.Time
-	err := s.pool.QueryRow(ctx, `
-SELECT id, experiment_id, subject_key, variant, experiment_revision, assigned_at
-FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND experiment_revision=$2 AND subject_key=$3`,
-		experimentID, experimentRevision, subjectKey,
-	).Scan(&out.ID, &out.ExperimentID, &out.SubjectKey, &out.Variant, &out.ExperimentRevision, &assignedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return model.AssignmentFact{}, model.ErrAssignmentNotFound
-	}
-	if err != nil {
-		return model.AssignmentFact{}, err
-	}
-	out.AssignedAt = assignedAt.UTC().Format(time.RFC3339)
-	return out, nil
-}
-
-func (s *PostgresStore) Stats(ctx context.Context, experimentID string, experimentRevision int64) (ports.AssignmentStats, error) {
-	rows, err := s.pool.Query(ctx, `
-SELECT variant, COUNT(*) FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND experiment_revision=$2 GROUP BY variant ORDER BY variant`, experimentID, experimentRevision)
-	if err != nil {
-		return ports.AssignmentStats{}, err
-	}
-	defer rows.Close()
-	out := ports.AssignmentStats{VariantCounts: map[string]int{}}
-	for rows.Next() {
-		var variant string
-		var count int
-		if err := rows.Scan(&variant, &count); err != nil {
-			return ports.AssignmentStats{}, err
-		}
-		out.VariantCounts[variant] = count
-		out.AssignedSubjects += count
-	}
-	return out, rows.Err()
 }
 
 const experimentSelect = `SELECT
@@ -483,8 +419,6 @@ func formatOptionalTime(value *time.Time) string {
 }
 
 var (
-	_ ports.AggregateStore   = (*PostgresStore)(nil)
-	_ ports.CatalogReader    = (*PostgresStore)(nil)
-	_ ports.AssignmentSink   = (*PostgresStore)(nil)
-	_ ports.AssignmentReader = (*PostgresStore)(nil)
+	_ ports.AggregateStore = (*PostgresStore)(nil)
+	_ ports.CatalogReader  = (*PostgresStore)(nil)
 )

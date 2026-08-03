@@ -17,38 +17,23 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtfailures "quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/streaming"
-	preferenceerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_preference"
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	sessionerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
-	subscriptionerrors "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
-	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/application"
 	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 )
 
 type Handler struct {
-	service            *orchestration.AssistantService
-	preferenceCommands *preferencefact.CommandFacade
-	preferenceQueries  *preferencefact.QueryFacade
-	runCommands        *runruntime.CommandService
-	runs               *runapplication.UseCases
-	subscriptions      *subscriptionapplication.UseCases
+	service     *orchestration.AssistantService
+	runCommands *runruntime.CommandService
+	runs        *runapplication.UseCases
+	preferences runapplication.PreferenceSnapshotReader
+	context     *runapplication.ContextResolver
 }
 
 type HandlerOption func(*Handler)
-
-func WithPreferenceFacades(
-	commands *preferencefact.CommandFacade,
-	queries *preferencefact.QueryFacade,
-) HandlerOption {
-	return func(handler *Handler) {
-		handler.preferenceCommands = commands
-		handler.preferenceQueries = queries
-	}
-}
 
 func WithRunCommandService(commands *runruntime.CommandService) HandlerOption {
 	return func(handler *Handler) {
@@ -56,16 +41,19 @@ func WithRunCommandService(commands *runruntime.CommandService) HandlerOption {
 	}
 }
 
+func WithRunPreferenceSnapshots(reader runapplication.PreferenceSnapshotReader) HandlerOption {
+	return func(handler *Handler) { handler.preferences = reader }
+}
+
+func WithRunContextResolver(resolver *runapplication.ContextResolver) HandlerOption {
+	return func(handler *Handler) { handler.context = resolver }
+}
+
 func NewHandler(
 	service *orchestration.AssistantService,
 	options ...HandlerOption,
 ) *Handler {
-	handler := &Handler{
-		service:            service,
-		preferenceCommands: preferencefact.NewCommandFacade(nil, nil),
-		preferenceQueries:  preferencefact.NewQueryFacade(nil),
-		subscriptions:      subscriptionapplication.NewUseCases(service),
-	}
+	handler := &Handler{service: service}
 	if service != nil && service.RunCommandService() != nil {
 		handler.runCommands = service.RunCommandService()
 	}
@@ -75,7 +63,8 @@ func NewHandler(
 	if handler.runCommands != nil {
 		handler.runs = runapplication.NewUseCases(
 			handler.runCommands,
-			handler.preferenceQueries,
+			runapplication.WithPreferenceSnapshots(handler.preferences),
+			runapplication.WithContextResolver(handler.context),
 		)
 	}
 	return handler
@@ -86,7 +75,6 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", h.handleHealthz)
 	mux.HandleFunc("GET /livez", h.handleHealthz)
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
-	mux.HandleFunc("POST /assistant/search/xiaoqu", h.handleSearchXiaoqu)
 	mux.HandleFunc("POST /assistant/sessions/{sessionId}/runs", h.handleStartRun)
 	mux.HandleFunc("GET /assistant/runs/{runId}", h.handleGetRun)
 	mux.HandleFunc("POST /assistant/runs/{runId}/cancel", h.handleCancelRun)
@@ -98,20 +86,6 @@ func (h *Handler) Routes() http.Handler {
 		h.handleContinueToolUse,
 	)
 	mux.HandleFunc("GET /assistant/runs/{runId}/events", h.handleStreamRunEvents)
-	mux.HandleFunc("POST /assistant/page-context", h.handleReportPageContext)
-	mux.HandleFunc("GET /assistant/personalization", h.handleGetEntryPersonalization)
-	mux.HandleFunc("GET /assistant/suggested-actions", h.handleGetSuggestedActions)
-	mux.HandleFunc("POST /assistant/skills/creation-suggest", h.handleSuggestCreationAssistance)
-	mux.HandleFunc("GET /assistant/tasks", h.handleListTasks)
-	mux.HandleFunc("POST /assistant/preferences", h.handleSetPreference)
-	mux.HandleFunc("GET /assistant/preferences", h.handleListPreferences)
-	mux.HandleFunc("POST /assistant/preferences/{preferenceId}/revoke", h.handleRevokePreference)
-	mux.HandleFunc("POST /assistant/preferences/{preferenceId}/restore", h.handleRestorePreference)
-	mux.HandleFunc("GET /assistant/skill-subscriptions", h.handleListSkillSubscriptions)
-	mux.HandleFunc("POST /assistant/skill-subscriptions", h.handleCreateSkillSubscription)
-	mux.HandleFunc("GET /assistant/skill-subscriptions/{subscriptionId}", h.handleGetSkillSubscription)
-	mux.HandleFunc("PATCH /assistant/skill-subscriptions/{subscriptionId}/status", h.handleUpdateSkillSubscriptionStatus)
-	mux.HandleFunc("POST /internal/assistant/skill-subscriptions:tick", h.handleTickSkillSubscriptionCron)
 	mux.HandleFunc("POST /assistant/intersections/reminders/tick", h.handleTickIntersectionReminders)
 	mux.HandleFunc("POST /assistant/sessions", h.handleCreateSession)
 	mux.HandleFunc("GET /assistant/sessions", h.handleListSessions)
@@ -121,295 +95,6 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *Handler) handleReportPageContext(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireRunUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var input assistant.PageContextInput
-	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	ack, err := h.service.ReportPageContext(r.Context(), userID, input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, ack)
-}
-
-func (h *Handler) handleGetEntryPersonalization(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireRunUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	view, err := h.service.GetEntryPersonalization(r.Context(), userID, strings.TrimSpace(r.URL.Query().Get("pageType")))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleGetSuggestedActions(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireRunUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	view, err := h.service.GetSuggestedActions(r.Context(), userID, strings.TrimSpace(r.URL.Query().Get("pageType")), strings.TrimSpace(r.URL.Query().Get("objectId")))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleSearchXiaoqu(w http.ResponseWriter, r *http.Request) {
-	if _, err := requireRunUser(r); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var req assistant.SearchRequest
-	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	view, err := h.service.SearchXiaoquResults(r.Context(), req)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleListTasks(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireRunUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	limit := parseLimit(r, 32)
-	view, err := h.service.ListAssistantTasks(r.Context(), userID, limit, strings.TrimSpace(r.URL.Query().Get("status")))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-type setAssistantPreferenceRequest struct {
-	Scope           string `json:"scope"`
-	SessionID       string `json:"sessionId"`
-	Kind            string `json:"kind"`
-	Value           string `json:"value"`
-	SourceType      string `json:"sourceType"`
-	SourceSessionID string `json:"sourceSessionId"`
-	Confirmed       bool   `json:"confirmed"`
-}
-
-func (h *Handler) handleSetPreference(w http.ResponseWriter, r *http.Request) {
-	userID, err := requirePreferenceUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var input setAssistantPreferenceRequest
-	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(
-			w,
-			r,
-			preferencefact.InvalidArgumentError(err.Error()),
-		)
-		return
-	}
-	fact, err := h.preferenceCommands.SetPreference(
-		r.Context(),
-		preferencefact.SetPreferenceCommand{
-			UserID:          userID,
-			Scope:           input.Scope,
-			SessionID:       input.SessionID,
-			Kind:            input.Kind,
-			Value:           input.Value,
-			SourceType:      input.SourceType,
-			SourceSessionID: input.SourceSessionID,
-			Confirmed:       input.Confirmed,
-		},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, fact)
-}
-
-func (h *Handler) handleListPreferences(w http.ResponseWriter, r *http.Request) {
-	userID, err := requirePreferenceUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	view, err := h.preferenceQueries.ListPreferences(
-		r.Context(),
-		preferencefact.ListPreferencesQuery{
-			UserID:    userID,
-			Scope:     strings.TrimSpace(r.URL.Query().Get("scope")),
-			SessionID: strings.TrimSpace(r.URL.Query().Get("sessionId")),
-			Status:    strings.TrimSpace(r.URL.Query().Get("status")),
-			Limit:     100,
-		},
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleRevokePreference(w http.ResponseWriter, r *http.Request) {
-	userID, err := requirePreferenceUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	fact, err := h.preferenceCommands.RevokePreference(
-		r.Context(),
-		userID,
-		r.PathValue("preferenceId"),
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, fact)
-}
-
-func (h *Handler) handleRestorePreference(w http.ResponseWriter, r *http.Request) {
-	userID, err := requirePreferenceUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	fact, err := h.preferenceCommands.RestorePreference(
-		r.Context(),
-		userID,
-		r.PathValue("preferenceId"),
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, fact)
-}
-
-func (h *Handler) handleSuggestCreationAssistance(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireRunUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var input assistant.AssistantCreationSuggestRequest
-	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	view, err := h.service.SuggestCreationAssistance(r.Context(), userID, input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleListSkillSubscriptions(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireSubscriptionUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	view, err := h.subscriptions.List(
-		r.Context(),
-		userID,
-		strings.TrimSpace(r.URL.Query().Get("status")),
-		parseLimit(r, 20),
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
-}
-
-func (h *Handler) handleCreateSkillSubscription(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireSubscriptionUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var input assistant.CreateSkillSubscriptionInput
-	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	input.CreatedByPersonaID = resolvePersonaID(r)
-	subscription, err := h.subscriptions.Create(r.Context(), userID, input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, subscription)
-}
-
-func (h *Handler) handleGetSkillSubscription(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireSubscriptionUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	subscription, err := h.subscriptions.Get(r.Context(), userID, r.PathValue("subscriptionId"))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, subscription)
-}
-
-func (h *Handler) handleUpdateSkillSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
-	userID, err := requireSubscriptionUser(r)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	var input assistant.UpdateSkillSubscriptionStatusInput
-	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	subscription, err := h.subscriptions.UpdateStatus(r.Context(), userID, r.PathValue("subscriptionId"), input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, subscription)
-}
-
-func (h *Handler) handleTickSkillSubscriptionCron(w http.ResponseWriter, r *http.Request) {
-	var input assistant.SkillSubscriptionCronTickInput
-	if err := readJSON(r, &input); err != nil && err != io.EOF {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	result, err := h.subscriptions.Tick(r.Context(), input)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleTickIntersectionReminders(w http.ResponseWriter, r *http.Request) {
@@ -451,14 +136,6 @@ func requireSessionUser(r *http.Request) (string, error) {
 
 func requireRunUser(r *http.Request) (string, error) {
 	return requireIdentifiedUser(r, runerrors.AppErrorFromRunUnauthorized)
-}
-
-func requirePreferenceUser(r *http.Request) (string, error) {
-	return requireIdentifiedUser(r, preferenceerrors.AppErrorFromPreferenceUnauthorized)
-}
-
-func requireSubscriptionUser(r *http.Request) (string, error) {
-	return requireIdentifiedUser(r, subscriptionerrors.AppErrorFromSubscriptionUnauthorized)
 }
 
 // requireCanonicalCommandIdentity enforces the one stable mutation identity
@@ -577,6 +254,27 @@ func (h *Handler) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(r, &input); err != nil {
 		writeHTTPError(w, r, orchestration.AssistantRunInvalidArgument(err.Error()))
 		return
+	}
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok || strings.TrimSpace(principal.Actor.PersonaID) == "" {
+		writeHTTPError(
+			w,
+			r,
+			runerrors.AppErrorFromRunUnauthorized(
+				"StartAssistantRun requires a trusted persona principal",
+			),
+		)
+		return
+	}
+	input.TrustedPersonaID = strings.TrimSpace(principal.Actor.PersonaID)
+	input.TrustedRequestContext = runruntime.RequestContext{
+		ClientSessionID: r.Header.Get("X-Client-Session-Id"),
+		PageID:          r.Header.Get("X-Client-Page-Id"),
+		SurfaceID:       r.Header.Get("X-Client-Surface-Id"),
+		RouteID:         r.Header.Get("X-Client-Route-Id"),
+		OperationID:     r.Header.Get("X-Client-Operation-Id"),
+		TraceID:         resolveTraceID(r),
+		PersonaID:       input.TrustedPersonaID,
 	}
 	input.ClientRequestID, err = requireRunCommandIdentity(
 		r,
@@ -973,7 +671,7 @@ func projectAssistantRunEnvelope(run runruntime.Run) map[string]any {
 	}
 	terminalSnapshot := any(nil)
 	if len(run.TerminalSnapshot) > 0 {
-		terminalSnapshot = run.TerminalSnapshot
+		terminalSnapshot = projectAssistantRunTerminalSnapshot(run.TerminalSnapshot)
 	}
 	return map[string]any{
 		"runId":            run.RunID,
@@ -995,6 +693,23 @@ func projectAssistantRunEnvelope(run runruntime.Run) map[string]any {
 		"createdAt":   run.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"completedAt": completedAt,
 	}
+}
+
+func projectAssistantRunTerminalSnapshot(snapshot map[string]any) map[string]any {
+	processes := any([]map[string]any{})
+	if value, found := snapshot["processes"]; found && value != nil {
+		processes = value
+	}
+	projected := map[string]any{
+		"answerText": snapshot["answerText"],
+		"processes":  processes,
+	}
+	for _, field := range []string{"failure", "selectedPolicyRef"} {
+		if value, found := snapshot[field]; found && value != nil {
+			projected[field] = value
+		}
+	}
+	return projected
 }
 
 func projectRunJournalEventType(event runruntime.JournalEvent) string {

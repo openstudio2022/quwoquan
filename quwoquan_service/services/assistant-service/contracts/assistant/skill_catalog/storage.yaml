@@ -1,6 +1,6 @@
 backend: service_resource
 role: projection
 description: >-
-  SkillCatalog 由服务内 canonical CatalogSource 在请求时读取资源清单，并经
-  SkillConsentReader 组合账号自己的授权 Slice；本对象不物化数据库、缓存副本或
-  codegen Store，SkillConsent 的持久化仍只归其独立对象契约所有。
+  SkillCatalog 由服务内 active-release CatalogSource 在请求时读取 digest 已验证的
+  immutable package 资产；本对象不物化数据库、缓存副本或 codegen Store，账号
+  Consent、Setting 与 Subscription 的持久化仍只归各自独立对象契约所有。

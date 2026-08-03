@@ -8,43 +8,18 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageSource
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_source.g.dart
-  fields:
-  - name: sourceKind
-    dart_type: String
-    nullable: false
-    source: sourceKind
-    default: ''''''
-  - name: sourceUrl
-    dart_type: String
-    nullable: false
-    source: sourceUrl
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: fetchedAt
-    dart_type: String
-    nullable: false
-    source: fetchedAt
-    default: ''''''
-  - name: snapshotHash
-    dart_type: String
-    nullable: false
-    source: snapshotHash
-    default: ''''''
-  - name: policyRevision
-    dart_type: String
-    nullable: false
-    source: policyRevision
-    default: ''''''
-  - name: sourceUseMode
-    dart_type: String
-    nullable: false
-    source: sourceUseMode
-    default: ''''''
+fields:
+- name: sourceKind
+  type: string
+- name: sourceUrl
+  type: string
+- name: title
+  type: string
+- name: fetchedAt
+  type: string
+- name: snapshotHash
+  type: string
+- name: policyRevision
+  type: string
+- name: sourceUseMode
+  type: string

@@ -15,6 +15,10 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 
 	repository := newMemoryRunRepository()
 	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	skillPackages := &rotatingSkillPackageResolver{
+		packageID:     "assistant.session.skills",
+		releaseDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
 	service := runruntime.NewCommandService(
 		repository,
 		runruntime.SessionAuthorizerFunc(func(
@@ -27,8 +31,11 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 			}
 			return nil
 		}),
+		skillPackages,
+		runruntime.AllowAllStartAccessPolicy{},
 		func() time.Time { return now },
 		nil,
+		testPolicyResolver(),
 	)
 	command := runruntime.StartCommand{
 		UserID:          "user-1",
@@ -41,12 +48,25 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start first run: %v", err)
 	}
+	skillPackages.releaseDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	replayed, err := service.Start(context.Background(), command)
 	if err != nil {
 		t.Fatalf("replay start run: %v", err)
 	}
 	if replayed.RunID != first.RunID {
 		t.Fatalf("idempotency replay created another run: %s != %s", replayed.RunID, first.RunID)
+	}
+	if first.SkillPackageID != "assistant.session.skills" ||
+		first.SkillPackageReleaseDigest !=
+			"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+		replayed.SkillPackageReleaseDigest != first.SkillPackageReleaseDigest ||
+		skillPackages.calls != 1 {
+		t.Fatalf(
+			"Skill package was not frozen: first=%+v replay=%+v activeReads=%d",
+			first,
+			replayed,
+			skillPackages.calls,
+		)
 	}
 	conflicting := command
 	conflicting.InputText = "不同用户意图"
@@ -93,11 +113,14 @@ func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		func() time.Time {
 			now = now.Add(time.Second)
 			return now
 		},
 		nil,
+		testPolicyResolver(),
 	)
 	run, err := service.Start(context.Background(), runruntime.StartCommand{
 		UserID:          "user-1",

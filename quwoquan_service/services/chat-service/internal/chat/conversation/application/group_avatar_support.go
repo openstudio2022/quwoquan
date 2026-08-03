@@ -237,6 +237,31 @@ func RecomputeGroupAvatar(
 		if err := storage.Conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
 			return err
 		}
+		if storage.ConversationCommands == nil {
+			return fmt.Errorf("conversation outbox is required for group avatar projection")
+		}
+		if err := storage.ConversationCommands.AppendAggregateOutboxEvents(
+			txCtx,
+			[]AggregateOutboxEvent{{
+				EventID: chatAggregateEventID(
+					fmt.Sprintf("group-avatar:%s:%d", conv.ID, conv.GroupAvatarVersion),
+					string(event.ConversationRosterUpdated),
+				),
+				EventType:      string(event.ConversationRosterUpdated),
+				AggregateID:    conv.ID,
+				ConversationID: conv.ID,
+				ActorID:        actorID,
+				Payload: map[string]any{
+					"membersRosterRevision": conv.MembersRosterRevision,
+					"updatedAt":             conv.UpdatedAt,
+					"aspects":               []string{"avatar"},
+					"avatarUrl":             conv.AvatarUrl,
+					"groupAvatarVersion":    conv.GroupAvatarVersion,
+				},
+			}},
+		); err != nil {
+			return err
+		}
 		if !avatarPatchEnabled || scheduler == nil || len(recipientUserIDs) == 0 {
 			return nil
 		}

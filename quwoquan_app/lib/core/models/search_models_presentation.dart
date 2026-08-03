@@ -237,16 +237,37 @@ class SearchSuggestionEntry {
     : this._(kind: SearchSuggestionEntryKind.contact, payload: value);
   const SearchSuggestionEntry.chatRecord(ChatRecordSearchSuggestion value)
     : this._(kind: SearchSuggestionEntryKind.chatRecord, payload: value);
-  const SearchSuggestionEntry.circle(CircleSearchItemView value)
+  const SearchSuggestionEntry.circle(CircleSearchHitViewData value)
     : this._(kind: SearchSuggestionEntryKind.circle, payload: value);
-  const SearchSuggestionEntry.location(LocationPoiDto value)
+  const SearchSuggestionEntry.location(SearchLocationSuggestionViewData value)
     : this._(kind: SearchSuggestionEntryKind.location, payload: value);
-  const SearchSuggestionEntry.followedPerson(SocialRelationSearchItemView value)
+  const SearchSuggestionEntry.followedPerson(SocialRelationSearchItemViewData value)
     : this._(kind: SearchSuggestionEntryKind.followedPerson, payload: value);
   const SearchSuggestionEntry.network(NetworkSearchSuggestion value)
     : this._(kind: SearchSuggestionEntryKind.network, payload: value);
 
   T cast<T>() => payload as T;
+}
+
+/// 搜索页自有的位置建议模型；Integration POI 与 Search place 投影在此汇合，
+/// 不用伪造经纬度把后者冒充 Cloud `LocationPoi`。
+final class SearchLocationSuggestionViewData {
+  const SearchLocationSuggestionViewData({
+    required this.id,
+    required this.name,
+    this.address,
+  });
+
+  factory SearchLocationSuggestionViewData.fromWire(LocationPoi wire) =>
+      SearchLocationSuggestionViewData(
+        id: wire.id,
+        name: wire.name,
+        address: wire.address,
+      );
+
+  final String id;
+  final String name;
+  final String? address;
 }
 
 class SearchSuggestionSection {

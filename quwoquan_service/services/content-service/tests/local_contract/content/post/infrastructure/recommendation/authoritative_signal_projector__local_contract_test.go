@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	runtimelearning "quwoquan_service/runtime/learning"
 	rtrec "quwoquan_service/runtime/recommendation"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
@@ -36,19 +35,6 @@ func (c *capturedSignals) ProcessSignalBatch(_ context.Context, signals []rtrec.
 
 type capturedEvents struct {
 	events []ports.RawBehaviorEvent
-}
-
-type capturedLearningEvents struct {
-	events []runtimelearning.Event
-}
-
-func (c *capturedLearningEvents) RecordEvent(_ context.Context, event runtimelearning.Event) error {
-	c.events = append(c.events, event)
-	return nil
-}
-
-func (*capturedLearningEvents) RecordScorecard(context.Context, runtimelearning.Scorecard) error {
-	return nil
 }
 
 func (c *capturedEvents) InsertBatch(_ context.Context, events []ports.RawBehaviorEvent) error {
@@ -139,10 +125,8 @@ func TestReactionSignalProjector_ClearedAndNonLikeIgnored(t *testing.T) {
 	}
 }
 
-func TestAuthoritativeSignalSkipsLearningWithoutFeedRequestID(t *testing.T) {
+func TestAuthoritativeSignalPersistsCanonicalBehaviorWithoutFeedRequestID(t *testing.T) {
 	sink, signals, events := testSink()
-	learning := &capturedLearningEvents{}
-	sink.AttachFeedback(rtrec.NewFeedbackRecorder(learning))
 
 	if err := sink.Emit(context.Background(), rtrec.BehaviorSignal{
 		UserID: "user_1", SessionID: "outbox-session", ContentID: "post_1",
@@ -155,12 +139,6 @@ func TestAuthoritativeSignalSkipsLearningWithoutFeedRequestID(t *testing.T) {
 			"unattributed authoritative signal must preserve HotPath and behavior projection: signals=%+v events=%+v",
 			signals.batches,
 			events.events,
-		)
-	}
-	if len(learning.events) != 0 {
-		t.Fatalf(
-			"unattributed authoritative signal must not emit an unjoinable learning fact: %+v",
-			learning.events,
 		)
 	}
 }

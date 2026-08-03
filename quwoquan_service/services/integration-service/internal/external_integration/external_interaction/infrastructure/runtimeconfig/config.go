@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
 type Config struct {
@@ -55,6 +55,7 @@ type ExternalProviderConfig struct {
 	Provider  string `yaml:"provider"`
 	Endpoint  string `yaml:"endpoint"`
 	Token     string `yaml:"token"`
+	CAFile    string `yaml:"ca_file"`
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
@@ -240,6 +241,15 @@ func Validate(cfg Config) error {
 		if strings.Contains(strings.ToLower(providerCfg.Provider), "mock") {
 			return fmt.Errorf("enabled operation %s cannot use mock provider", operation)
 		}
+		if providerCfg.Provider == "ext.sms.local_capture" {
+			if cfg.Environment == "prod" {
+				return fmt.Errorf("SMS local_capture is forbidden in prod")
+			}
+		}
+		if providerCfg.Provider == "ext.sms.local_capture" &&
+			invalidRequiredConfigValue(providerCfg.CAFile) {
+			return fmt.Errorf("SMS local_capture CA file is required")
+		}
 		if invalidRequiredConfigValue(providerCfg.Endpoint) {
 			return fmt.Errorf("external provider endpoint is required for enabled operation %s", operation)
 		}
@@ -294,9 +304,9 @@ func validatePushDeliveryConfig(
 	}
 	mode := strings.TrimSpace(push.Mode)
 	if mode == "local_recorder" {
-		if appEnv != "alpha" && appEnv != "beta" {
+		if appEnv != "alpha" && appEnv != "beta" && appEnv != "gamma" {
 			return fmt.Errorf(
-				"integration push local_recorder is only permitted in alpha/beta, got APP_ENV=%s",
+				"integration push local_recorder is only permitted in alpha/beta/gamma, got APP_ENV=%s",
 				appEnv,
 			)
 		}
@@ -307,7 +317,7 @@ func validatePushDeliveryConfig(
 	}
 	if mode != "real" && mode != "remote" {
 		return fmt.Errorf(
-			"integration push mode must be real/remote, or local_recorder in alpha/beta, when APP_ENV=%s",
+			"integration push mode must be real/remote, or local_recorder in alpha/beta/gamma, when APP_ENV=%s",
 			appEnv,
 		)
 	}
@@ -331,11 +341,11 @@ func validatePushDeliveryConfig(
 		}
 	}
 	apnsEnvironment := strings.TrimSpace(push.APNs.Environment)
-	if apnsEnvironment != provider.APNsEnvironmentSandbox &&
-		apnsEnvironment != provider.APNsEnvironmentProduction {
+	if apnsEnvironment != pushapp.APNsEnvironmentSandbox &&
+		apnsEnvironment != pushapp.APNsEnvironmentProduction {
 		return fmt.Errorf("integration push apns.environment must be sandbox or production")
 	}
-	if appEnv == "prod" && apnsEnvironment != provider.APNsEnvironmentProduction {
+	if appEnv == "prod" && apnsEnvironment != pushapp.APNsEnvironmentProduction {
 		return fmt.Errorf("integration push APNs environment must be production in prod")
 	}
 	if push.TimeoutMs <= 0 {

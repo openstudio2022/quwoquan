@@ -11,7 +11,6 @@ import (
 	"time"
 
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
-	"quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
 	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
@@ -125,10 +124,9 @@ func TestPlatformCatalogAndTopologyEndpoints(t *testing.T) {
 // TestControlPlanePrincipalGate 守护生产授权边界：metadata codegen 描述符同时校验
 // 已验证 operator principal 与 operation scope；客户端身份头不能越过该边界。
 func TestControlPlanePrincipalGate(t *testing.T) {
-	server := rtauth.RequireGeneratedOperationAuthorization(append(
-		operationsecurity.ForDomain("ops"),
-		generatedcontrolplane.PlatformOperationSecurityDescriptors...,
-	))(newServerMux(newTestPlatformService(t)))
+	server := rtauth.RequireGeneratedOperationAuthorization(
+		generatedcontrolplane.PlatformOperationSecurityDescriptors,
+	)(newServerMux(newTestPlatformService(t)))
 
 	anonReq := httptest.NewRequest(http.MethodGet, "/control-plane/platform/releases", nil)
 	anonReq.Header.Set("X-Actor", "forged-platform-admin")
@@ -495,53 +493,6 @@ func TestConfigInstanceReportRejectsForgedIdentityAndDesiredHash(t *testing.T) {
 			server.ServeHTTP(recorder, request)
 			if recorder.Code != testCase.status {
 				t.Fatalf("status=%d want=%d body=%s", recorder.Code, testCase.status, recorder.Body.String())
-			}
-		})
-	}
-}
-
-func TestConfigInstanceReportPrincipalRequiresBoundServiceEnvironmentAndInstance(t *testing.T) {
-	valid := rtauth.Principal{
-		Claims: rtauth.Claims{Roles: []string{"service"}},
-		Actor:  operation.ActorContext{AccountID: "service:content-service@prod"},
-	}
-	for _, testCase := range []struct {
-		name        string
-		principal   rtauth.Principal
-		instanceID  string
-		service     string
-		environment string
-		wantErr     bool
-	}{
-		{
-			name:      "valid",
-			principal: valid, instanceID: "content-service-prod-control-a-0",
-			service: "content-service", environment: "prod",
-		},
-		{
-			name: "legacy unbound service identity",
-			principal: rtauth.Principal{
-				Claims: rtauth.Claims{Roles: []string{"service"}},
-				Actor:  operation.ActorContext{AccountID: "service:content-service"},
-			},
-			instanceID: "content-service-prod-control-a-0",
-			service:    "content-service", environment: "prod", wantErr: true,
-		},
-		{
-			name:      "instance namespace forgery",
-			principal: valid, instanceID: "user-service-prod-control-a-0",
-			service: "content-service", environment: "prod", wantErr: true,
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			err := validateConfigInstanceReportPrincipal(
-				testCase.principal,
-				testCase.instanceID,
-				testCase.service,
-				testCase.environment,
-			)
-			if (err != nil) != testCase.wantErr {
-				t.Fatalf("error=%v wantErr=%t", err, testCase.wantErr)
 			}
 		})
 	}

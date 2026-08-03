@@ -90,7 +90,7 @@ class SearchHit {
   final String? matchedField;
   final SearchHitPayload payload;
   final String connectionState;
-  final IntersectionReason? intersectionReason;
+  final CanonicalSearchIntersectionReason? intersectionReason;
 
   /// 云侧排序透明化（`_shared/search_contract.yaml` hit_fields.rankReasons）：
   /// 命中已展开为人类可读的排序理由标签。本地扇出（mock/local）为空列表。

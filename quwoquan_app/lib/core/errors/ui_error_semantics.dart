@@ -79,6 +79,7 @@ class UiErrorSemanticResolver {
         category: category,
         allowOpenSettings: allowOpenSettings,
         verifiedUpdateAvailable: verifiedUpdateAvailable,
+        sourceOperationId: effectiveSourceOperationId,
       );
       return AppUserRecoveryContract.semanticFor(
         group: group,

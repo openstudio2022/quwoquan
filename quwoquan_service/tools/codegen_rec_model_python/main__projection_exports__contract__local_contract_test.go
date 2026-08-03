@@ -63,3 +63,89 @@ func TestGenerateRankedWindowGoTransportExcludesInjectedRequestFields(t *testing
 		}
 	}
 }
+
+func TestGenerateRankedWindowTransportIncludesObjectOwnedCardSnapshot(t *testing.T) {
+	fields := &fieldsFile{Entities: map[string]entityDef{
+		"RecommendationObjectCard": {
+			Fields: []fieldDef{
+				{Name: "objectKind", Type: "string", Constraints: []string{"NOT_NULL"}},
+				{Name: "objectId", Type: "string", Constraints: []string{"NOT_NULL"}},
+			},
+		},
+		"RankedRecommendationPage": {
+			Fields: []fieldDef{
+				{Name: "objectCards", Type: "[]RecommendationObjectCard", Constraints: []string{"NOT_NULL"}},
+			},
+		},
+		"GetRankedRecommendationPageQuery": {
+			Fields: []fieldDef{
+				{Name: "subjectId", Type: "string", Constraints: []string{"NOT_NULL"}},
+				{Name: "windowId", Type: "string", Constraints: []string{"NOT_NULL"}},
+				{Name: "fromOrdinal", Type: "int", Constraints: []string{"NULLABLE"}},
+				{Name: "limit", Type: "int", Constraints: []string{"NULLABLE"}},
+			},
+		},
+	}}
+
+	python := generateRequestResponsePyForNames(fields, rankedWindowTransportOrder)
+	for _, expected := range []string{
+		"class RecommendationObjectCard(BaseModel):",
+		"class GetRankedRecommendationPageQuery(BaseModel):",
+		"subjectId: str",
+		"objectCards: list[RecommendationObjectCard]",
+	} {
+		if !strings.Contains(python, expected) {
+			t.Fatalf("generated Python transport missing %q:\n%s", expected, python)
+		}
+	}
+
+	goTransport := generateRankedWindowGoTransport(fields, &operationsFile{})
+	for _, expected := range []string{
+		"type RecommendationObjectCard struct",
+		"type GetRankedRecommendationPageQuery struct",
+		"SubjectId string",
+		"ObjectCards []RecommendationObjectCard",
+	} {
+		if !strings.Contains(goTransport, expected) {
+			t.Fatalf("generated Go transport missing %q:\n%s", expected, goTransport)
+		}
+	}
+}
+
+func TestFeatureProfileTransportUsesObjectLocalIntersectionProjectionTypes(t *testing.T) {
+	fields := &fieldsFile{Entities: map[string]entityDef{
+		"IntersectionTarget": {Fields: []fieldDef{
+			{Name: "objectId", Type: "string", Constraints: []string{"NOT_NULL"}},
+		}},
+		"IntersectionReason": {Fields: []fieldDef{
+			{Name: "intersectionId", Type: "string", Constraints: []string{"NOT_NULL"}},
+			{Name: "typeVisual", Type: "IntersectionTarget", Constraints: []string{"NULLABLE"}},
+		}},
+		"RecommendationIntersectionReasonSlice": {Fields: []fieldDef{
+			{Name: "subjectId", Type: "string", Constraints: []string{"NOT_NULL"}},
+			{Name: "reasons", Type: "[]IntersectionReason", Constraints: []string{"NOT_NULL"}},
+		}},
+	}}
+
+	python := generateRequestResponsePyForNames(fields, featureProfileTransportOrder)
+	for _, expected := range []string{
+		"class IntersectionReason(BaseModel):",
+		"typeVisual: IntersectionTarget | None = None",
+		"reasons: list[IntersectionReason]",
+	} {
+		if !strings.Contains(python, expected) {
+			t.Fatalf("generated feature-profile Python missing %q:\n%s", expected, python)
+		}
+	}
+
+	goTransport := generateFeatureProfileGoTransport(fields, &operationsFile{})
+	for _, expected := range []string{
+		"type IntersectionReason struct",
+		"TypeVisual *IntersectionTarget",
+		"Reasons []IntersectionReason",
+	} {
+		if !strings.Contains(goTransport, expected) {
+			t.Fatalf("generated feature-profile Go missing %q:\n%s", expected, goTransport)
+		}
+	}
+}

@@ -14,14 +14,13 @@ func TestRelationshipCapabilityContractHasSinglePersonaRelationshipOwner(t *test
 	serviceRoot := userServiceRoot(t)
 	canonicalPath := filepath.Join(
 		serviceRoot,
-		"contracts", "relationship", "persona_relationship", "projections",
-		"relationship_capability_wire.yaml",
+		"contracts", "relationship", "persona_relationship", "fields.yaml",
 	)
 	canonical := readContract(t, canonicalPath)
 	for _, want := range []string{
-		"source_entities:\n- PersonaRelationship",
-		"dart_class: RelationshipCapabilityWireDto",
-		"output_path: cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart",
+		"RelationshipCapabilityView:",
+		"description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图",
+		"name: canCreateDirectConversation",
 	} {
 		if !strings.Contains(canonical, want) {
 			t.Fatalf("canonical RelationshipCapability contract missing %q", want)
@@ -48,17 +47,24 @@ func TestRelationshipCapabilityContractHasSinglePersonaRelationshipOwner(t *test
 	if strings.Contains(userAccountFields, "SocialRelationshipCapabilityView") {
 		t.Fatal("user_account retains the six-field relationship capability subset")
 	}
-	if !strings.Contains(userAccountFields, "type: RelationshipCapabilityWire") {
+	if !strings.Contains(userAccountFields, "object_ref: RelationshipCapabilityView") {
 		t.Fatal("social relation search item does not reference the canonical relationship capability view")
 	}
 
-	searchProjection := readContract(t, filepath.Join(
-		serviceRoot,
-		"contracts", "account", "user_account", "projections",
-		"social_relation_search_item_wire.yaml",
-	))
-	if !strings.Contains(searchProjection, "dart_type: RelationshipCapabilityWireDto\n    nullable: false") {
-		t.Fatal("social relation search projection does not require the canonical capability wire")
+	if err := filepath.Walk(filepath.Join(serviceRoot, "contracts"), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+			return err
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(raw), "RelationshipCapabilityWire") {
+			t.Fatalf("legacy relationship capability wire remains in %s", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scan relationship capability owners: %v", err)
 	}
 }
 

@@ -87,8 +87,8 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<ConversationDto> getConversation(String conversationId) async =>
-      ConversationDto.fromMap(_appMap(_engine.getConversation(conversationId)));
+  Future<ConversationViewData> getConversation(String conversationId) async =>
+      ConversationViewData.fromMap(_appMap(_engine.getConversation(conversationId)));
 
   @override
   Future<void> updateConversationTitle(
@@ -220,11 +220,8 @@ class MockChatRepository implements ChatRepository {
       _engine.listMemberUserIds(conversationId);
 
   @override
-  Future<void> inviteAssistant({
-    required String conversationId,
-    String? skillId,
-  }) async =>
-      _engine.inviteAssistant(conversationId: conversationId, skillId: skillId);
+  Future<void> inviteAssistant({required String conversationId}) async =>
+      _engine.inviteAssistant(conversationId: conversationId);
 
   @override
   Future<void> removeAssistant({required String conversationId}) async =>
@@ -314,10 +311,10 @@ class MockChatRepository implements ChatRepository {
       .toList(growable: false);
 
   @override
-  Future<List<ConversationDto>> batchGetConversations(List<String> ids) async =>
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) async =>
       _engine
           .batchGetConversations(ids)
-          .map((row) => ConversationDto.fromMap(_appMap(row)))
+          .map((row) => ConversationViewData.fromMap(_appMap(row)))
           .toList(growable: false);
 
   @override

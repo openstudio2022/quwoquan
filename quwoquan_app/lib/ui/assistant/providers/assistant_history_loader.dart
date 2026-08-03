@@ -74,7 +74,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: question,
             senderId: 'current_user',
             senderName: AssistantText.assistantCurrentUserSenderName,
-            timestamp: turn.createdAt ?? '',
+            timestamp: turn.createdAt,
             status: '',
             isRead: true,
           ),
@@ -90,7 +90,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: answer,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt ?? '',
+            timestamp: turn.completedAt ?? turn.createdAt,
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,
@@ -107,7 +107,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: AssistantText.assistantUnavailable,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt ?? '',
+            timestamp: turn.completedAt ?? turn.createdAt,
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,
@@ -124,7 +124,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: AssistantText.assistantTaskStatusCancelled,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt ?? '',
+            timestamp: turn.completedAt ?? turn.createdAt,
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,

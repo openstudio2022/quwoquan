@@ -12,7 +12,7 @@ final class RemoteCallQuery implements CallQuery {
   final RtcCallInvocationContextFactory invocationContext;
 
   @override
-  Future<CallSessionDto> getCall(RtcGetCallQuery query) =>
+  Future<CallSession> getCall(RtcGetCallQuery query) =>
       client.rtcCallSessionGetCall(
         query,
         context: invocationContext(RtcRequestPageIds.getCall, command: false),

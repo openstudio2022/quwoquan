@@ -9,13 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_actor_evidence.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -32,11 +25,20 @@ import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.d
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_terminal_viewport.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentDiscoveryFeedEmptyReason;
+    show
+        ContentFeedEmptyReason,
+        IntersectionActionHint,
+        IntersectionActorEvidence,
+        IntersectionReason,
+        IntersectionRepresentativeActor,
+        IntersectionTarget,
+        IntersectionTextSpan,
+        IntersectionVisual;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/cloud_services/behavior_repository_double.dart';
@@ -58,6 +60,85 @@ TextSpan _spanByText(RichText richText, String text) {
 int _fontWeightValue(TextSpan span) =>
     span.style?.fontWeight?.value ?? FontWeight.normal.value;
 
+IntersectionReason _canonicalReason({
+  required String dimension,
+  required String intersectionId,
+  required String intersectionClass,
+  required String objectKind,
+  required String source,
+  required String actionTargetId,
+  required String pointSummarySnapshotId,
+  required String displayBinding,
+  required int actorEvidenceTotalCount,
+  required String actorEvidenceCompleteness,
+  required String primaryText,
+  required List<IntersectionTextSpan> primarySpans,
+  IntersectionRepresentativeActor? representativeActor,
+  List<IntersectionActorEvidence> actorEvidence =
+      const <IntersectionActorEvidence>[],
+  List<IntersectionVisual> sampleVisuals = const <IntersectionVisual>[],
+  List<IntersectionActionHint> actionHints =
+      const <IntersectionActionHint>[],
+}) {
+  return IntersectionReason(
+    kind: 'content',
+    vertical: 'travel',
+    dimension: dimension,
+    tagRefs: const <String>[],
+    relationKind: source,
+    objectKind: objectKind,
+    relationObjectId: actionTargetId,
+    strength: 1,
+    primaryText: primaryText,
+    primaryTextL10nKey: '',
+    displayBinding: displayBinding,
+    secondaryText: '',
+    weightTier: 'high',
+    actionType: 'open',
+    actionTargetId: actionTargetId,
+    source: source,
+    intersectionId: intersectionId,
+    intersectionClass: intersectionClass,
+    avatarUrl: representativeActor?.avatarUrl ?? '',
+    displayName: representativeActor?.displayName ?? '',
+    confidenceLabel: 'high',
+    modelReasonBucket: 'local_contract',
+    freshAt: '2026-01-01T00:00:00Z',
+    expiresAt: '2027-01-01T00:00:00Z',
+    intersectionPoints: const [],
+    pointSummarySnapshotId: pointSummarySnapshotId,
+    actorEvidenceTotalCount: actorEvidenceTotalCount,
+    actorEvidenceCompleteness: actorEvidenceCompleteness,
+    actorEvidence: actorEvidence,
+    factPointCount: intersectionClass == 'fact' ? 1 : 0,
+    recommendedPointCount: intersectionClass == 'recommended' ? 1 : 0,
+    totalPointCount: 1,
+    dimensionPointSummary: const [],
+    pointClassLabel: intersectionClass,
+    connectionSummary: primaryText,
+    lastRecommendedAt: '',
+    seenAt: '',
+    rankState: 'active',
+    primarySpans: primarySpans,
+    sampleVisuals: sampleVisuals,
+    representativeActor: representativeActor,
+    actionHints: actionHints,
+    lifecycleState: 'active',
+    previousStrength: 0,
+    strengthDelta: 1,
+    edgeWeight: 1,
+    iconKey: '',
+    tone: 'neutral',
+    timeBucket: 'current',
+    dedupeKey: intersectionId,
+    anchorUserWeight: 1,
+    mutualCount: actorEvidenceTotalCount,
+    moment: '',
+    subjectId: actionTargetId,
+    subjectContext: dimension,
+  );
+}
+
 IntersectionReason _reason({
   String intersectionClass = 'fact',
   String? postId,
@@ -70,7 +151,7 @@ IntersectionReason _reason({
     objectKind: 'person',
     routeId: 'userProfile',
   );
-  return IntersectionReason(
+  return _canonicalReason(
     dimension: 'content',
     intersectionId: 'ix_post_lin',
     intersectionClass: intersectionClass,
@@ -84,6 +165,7 @@ IntersectionReason _reason({
     representativeActor: IntersectionRepresentativeActor(
       actorId: 'fixture_user_lin',
       displayName: '林清越',
+      avatarUrl: 'https://example.invalid/media/avatar/fixture_user_lin.webp',
       relationLabel: '联系人',
       privacyState: 'visible',
       target: target,
@@ -94,12 +176,18 @@ IntersectionReason _reason({
       IntersectionActorEvidence(
         actorId: 'fixture_user_lin',
         displayName: '林清越',
+        avatarUrl: 'https://example.invalid/media/avatar/fixture_user_lin.webp',
         relationLabel: '联系人',
         relationSourceRef: 'contact',
+        relationObjectId: '',
+        relationObjectName: '',
         sourcePointId: 'ix_post_lin_actor_1',
         sourceRef: 'commonContact',
         actionSummaryText: '赞过川西雪山和校园摄影路线',
         likeCount: 1,
+        commentCount: 0,
+        shareCount: 0,
+        privacyState: 'visible',
         target: target,
         evidenceRank: 5,
         snapshotVersion: 'snap_lin',
@@ -108,12 +196,19 @@ IntersectionReason _reason({
       IntersectionActorEvidence(
         actorId: 'fixture_user_zhou',
         displayName: '周屿',
+        avatarUrl:
+            'https://example.invalid/media/avatar/fixture_user_zhou.webp',
         relationLabel: '你关注的人',
         relationSourceRef: 'followee',
+        relationObjectId: '',
+        relationObjectName: '',
         sourcePointId: 'ix_post_lin_actor_2',
         sourceRef: 'sharedFollowees',
         actionSummaryText: '赞过川西雪山和校园摄影路线',
         likeCount: 1,
+        commentCount: 0,
+        shareCount: 0,
+        privacyState: 'visible',
         evidenceRank: 10,
         snapshotVersion: 'snap_lin',
         sortKey: 2,
@@ -121,6 +216,8 @@ IntersectionReason _reason({
       IntersectionActorEvidence(
         actorId: 'fixture_user_gunan',
         displayName: '顾南',
+        avatarUrl:
+            'https://example.invalid/media/avatar/fixture_user_gunan.webp',
         relationLabel: '城市漫游圈圈友',
         relationSourceRef: 'sharedCircle',
         relationObjectId: 'fixture_circle_city_walk',
@@ -128,7 +225,10 @@ IntersectionReason _reason({
         sourcePointId: 'ix_post_lin_actor_3',
         sourceRef: 'sharedCircle',
         actionSummaryText: '评论过川西雪山和校园摄影路线',
+        likeCount: 0,
         commentCount: 1,
+        shareCount: 0,
+        privacyState: 'visible',
         evidenceRank: 20,
         snapshotVersion: 'snap_lin',
         sortKey: 3,
@@ -175,7 +275,7 @@ IntersectionReason _photoSpotReason() {
     objectKind: 'photo_spot',
     routeId: 'homepageDetail',
   );
-  return IntersectionReason(
+  return _canonicalReason(
     dimension: 'photo_work',
     intersectionId: 'ix_post_photo_spot',
     intersectionClass: 'fact',
@@ -183,11 +283,14 @@ IntersectionReason _photoSpotReason() {
     source: 'alpha_showcase',
     actionTargetId: 'fixture_homepage_photo_spot_hengshu_studio',
     pointSummarySnapshotId: 'snap_photo_spot',
+    displayBinding: 'explicit_link',
     actorEvidenceTotalCount: 7,
     actorEvidenceCompleteness: 'complete',
     representativeActor: IntersectionRepresentativeActor(
       actorId: 'sys_travel_9018_sub_01',
       displayName: '山川手账',
+      avatarUrl:
+          'https://example.invalid/media/avatar/sys_travel_9018_sub_01.webp',
       relationLabel: '你关注的人',
       privacyState: 'visible',
       target: actorTarget,
@@ -220,7 +323,7 @@ IntersectionReason _photoSpotReason() {
   );
 }
 
-MicroPostDto _microPost({
+ContentPostViewData _microPost({
   String? id,
   List<String> imageUrls = const <String>[
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
@@ -234,10 +337,15 @@ MicroPostDto _microPost({
       id ?? 'post_intersection_demo_${reasonClass}_${imageUrls.length}';
   final effectiveReason =
       reason ?? _reason(intersectionClass: reasonClass, postId: postId);
-  return MicroPostDto(
+  return ContentPostViewData(
     id: postId,
-    type: 'moment',
+    type: 'micro',
     identity: 'moment',
+    displayFormat: videoUrl != null
+        ? 'video'
+        : imageUrls.isNotEmpty
+        ? 'image'
+        : 'note',
     authorId: 'user_demo',
     displayName: '小趣用户',
     avatarUrl: avatarUrl,
@@ -260,7 +368,7 @@ MicroPostDto _microPost({
   );
 }
 
-PhotoPostDto _photoPost({
+ContentPostViewData _photoPost({
   required int width,
   required int height,
   List<String> imageUrls = const <String>[
@@ -270,10 +378,11 @@ PhotoPostDto _photoPost({
 }) {
   final postId = 'photo_${width}_${height}_${imageUrls.length}';
   final effectiveReason = reason ?? _reason(postId: postId);
-  return PhotoPostDto(
+  return ContentPostViewData(
     id: postId,
-    type: 'photo',
+    type: 'image',
     identity: 'work',
+    displayFormat: 'image',
     assistantUsePolicy: 'allow',
     authorId: 'user_photo',
     displayName: '影像作者',
@@ -297,12 +406,13 @@ PhotoPostDto _photoPost({
   );
 }
 
-VideoPostDto _videoPost({required int width, required int height}) {
+ContentPostViewData _videoPost({required int width, required int height}) {
   final postId = 'video_${width}_$height';
-  return VideoPostDto(
+  return ContentPostViewData(
     id: postId,
     type: 'video',
     identity: 'work',
+    displayFormat: 'video',
     assistantUsePolicy: 'allow',
     authorId: 'user_video',
     displayName: '视频作者',
@@ -331,64 +441,36 @@ VideoPostDto _videoPost({required int width, required int height}) {
   );
 }
 
-PostBaseDto _alphaShowcaseHomePost() {
+ContentPostViewData _alphaShowcaseHomePost() {
   return _microPost();
 }
 
-class _ArticleLayoutPost extends PostBaseDto {
-  const _ArticleLayoutPost({
-    required this.id,
-    this.bodyValue = '正文第一行，正文第二行，正文第三行，正文第四行会被折叠进全文入口。',
-    this.coverUrlValue = '',
-  });
-
-  @override
-  final String id;
-  final String bodyValue;
-  final String coverUrlValue;
-
-  @override
-  String get type => 'article';
-  @override
-  String get identity => 'work';
-  @override
-  String get displayFormat => 'note';
-  @override
-  String get assistantUsePolicy => 'allow';
-  @override
-  String get authorId => 'user_article';
-  @override
-  String get displayName => '文章作者';
-  @override
-  String get avatarUrl => '';
-  @override
-  String? get authorBackgroundUrl => null;
-  @override
-  String get authorRoleLabel => '旅行作者';
-  @override
-  List<String> get authorIdentityTags => const <String>['长文'];
-  @override
-  bool get authorVerified => false;
-  @override
-  String get title => '川西路线长文标题';
-  @override
-  String? get body => bodyValue;
-  @override
-  String? get coverUrl => coverUrlValue;
-  @override
-  int get likeCount => 1;
-  @override
-  int get commentCount => 2;
-  @override
-  int get shareCount => 3;
-  @override
-  DateTime get createdAt => DateTime(2026);
-  @override
-  List<IntersectionReason>? get intersectionReasons => <IntersectionReason>[
-    _reason(postId: id),
-  ];
-  @override
-  Map<String, dynamic> toMap() => <String, dynamic>{'id': id};
+ContentPostViewData _articleLayoutPost({
+  required String id,
+  String bodyValue = '正文第一行，正文第二行，正文第三行，正文第四行会被折叠进全文入口。',
+  String coverUrlValue = '',
+}) {
+  return ContentPostViewData(
+    id: id,
+    type: 'article',
+    identity: 'work',
+    displayFormat: 'note',
+    assistantUsePolicy: 'allow',
+    authorId: 'user_article',
+    displayName: '文章作者',
+    avatarUrl: '',
+    authorRoleLabel: '旅行作者',
+    authorIdentityTags: const <String>['长文'],
+    authorVerified: false,
+    title: '川西路线长文标题',
+    body: bodyValue,
+    coverUrl: coverUrlValue,
+    likeCount: 1,
+    commentCount: 2,
+    shareCount: 3,
+    createdAt: DateTime(2026),
+    intersectionReasons: <IntersectionReason>[_reason(postId: id)],
+  );
 }
 
 class _NoopMediaDownloadCache extends MediaDownloadCache {
@@ -404,10 +486,10 @@ final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
 );
 
 Widget _buildFeed(
-  PostBaseDto post, {
+  ContentPostViewData post, {
   ContentBehaviorTracker? tracker,
   bool authenticated = false,
-  void Function(PostBaseDto post, int index, {List<PostBaseDto>? feedPosts})?
+  void Function(ContentPostViewData post, int index, {List<ContentPostViewData>? feedPosts})?
   onPostTap,
 }) {
   return ProviderScope(
@@ -758,7 +840,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final notifier = _PreviousPageRecoveryFeedMapNotifier(
-      List<PostBaseDto>.generate(
+      List<ContentPostViewData>.generate(
         48,
         (index) => _microPost(
           id: 'post_previous_page_${index.toString().padLeft(2, '0')}',
@@ -856,6 +938,13 @@ void main() {
     expect(find.textContaining('关注更多内容后'), findsNothing);
     expect(find.text(SearchText.reload), findsNothing);
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsNothing);
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('home-following-feed-empty')),
+        matching: find.byType(AppTerminalViewport),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('缺少 canonical empty reason 的推荐空响应按协议错误阻断', (tester) async {
@@ -871,8 +960,8 @@ void main() {
       find.byKey(const ValueKey('home-following-feed-empty')),
       findsNothing,
     );
-    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
-    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.recoveryInvalidContentTitle), findsOneWidget);
+    expect(find.text(SearchText.recoveryInvalidContentMessage), findsOneWidget);
     expect(find.text(SearchText.reload), findsOneWidget);
     expect(find.byType(Icon), findsNothing);
     expect(find.text('暂时没有推荐内容'), findsNothing);
@@ -899,6 +988,13 @@ void main() {
     expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
     expect(find.text(SearchText.reload), findsNothing);
     expect(find.byType(Icon), findsNothing);
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('home-feed-completed-empty')),
+        matching: find.byType(AppTerminalViewport),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('feed 离线、超时和依赖不可用使用准确恢复组且不展示技术字段', (tester) async {
@@ -920,8 +1016,8 @@ void main() {
           kind: RuntimeFailureKind.timeout,
           reason: 'feed_timeout',
         ),
-        title: SearchText.recoveryReloadLaterTitle,
-        message: SearchText.recoveryReloadLaterMessage,
+        title: SearchText.recoveryRequestTimedOutTitle,
+        message: SearchText.recoveryRequestTimedOutMessage,
       ),
       (
         failure: _feedFailure(
@@ -929,8 +1025,8 @@ void main() {
           kind: RuntimeFailureKind.unavailable,
           reason: 'feed_dependency_unavailable',
         ),
-        title: SearchText.recoveryReloadLaterTitle,
-        message: SearchText.recoveryReloadLaterMessage,
+        title: SearchText.recoveryServiceUnavailableTitle,
+        message: SearchText.recoveryServiceUnavailableMessage,
       ),
     ];
 
@@ -1057,16 +1153,28 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final reason = IntersectionReason(
+    final reason = _canonicalReason(
       dimension: 'interest',
       intersectionId: 'ix_companion_demo',
+      intersectionClass: 'recommended',
       objectKind: 'person',
       source: 'coWishlistedEntity',
+      actionTargetId: 'fixture_user_companion',
+      pointSummarySnapshotId: 'snap_companion_demo',
+      displayBinding: 'host_implicit',
+      actorEvidenceTotalCount: 0,
+      actorEvidenceCompleteness: 'complete',
+      primaryText: '',
+      primarySpans: const <IntersectionTextSpan>[],
       actionHints: <IntersectionActionHint>[
         IntersectionActionHint(
           actionKey: 'start_gathering',
           label: '发起结伴',
+          isPrimary: true,
+          priority: 0,
           actionTier: 'heavy',
+          requiredGates: const <String>[],
+          dispatch: 'gathering',
         ),
       ],
     );
@@ -1082,11 +1190,19 @@ void main() {
 
     // _microPost 的 body 含「川西」：旧实现按 travelHints 地名字符串误判展示约伴徽标，
     // 修复后端只读云侧 actionHint（守元数据驱动 + §24.10 诚实红线），不再按内容猜测行动。
-    final reason = IntersectionReason(
+    final reason = _canonicalReason(
       dimension: 'content',
       intersectionId: 'ix_plain_demo',
+      intersectionClass: 'fact',
       objectKind: 'content',
       source: 'coCommented',
+      actionTargetId: 'post_plain_demo',
+      pointSummarySnapshotId: 'snap_plain_demo',
+      displayBinding: 'host_implicit',
+      actorEvidenceTotalCount: 0,
+      actorEvidenceCompleteness: 'complete',
+      primaryText: '',
+      primarySpans: const <IntersectionTextSpan>[],
     );
     await tester.pumpWidget(_buildFeed(_microPost(reason: reason)));
     await tester.pump();
@@ -1466,7 +1582,7 @@ void main() {
 
     await tester.pumpWidget(
       _buildFeed(
-        const _ArticleLayoutPost(
+        _articleLayoutPost(
           id: 'article_text_short',
           bodyValue: '这是一段三行内能读完的短文摘要。',
         ),
@@ -1502,7 +1618,7 @@ void main() {
 
     await tester.pumpWidget(
       _buildFeed(
-        const _ArticleLayoutPost(
+        _articleLayoutPost(
           id: 'article_text_long',
           bodyValue:
               '这是一段无图长文摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
@@ -1521,7 +1637,7 @@ void main() {
 
     await tester.pumpWidget(
       _buildFeed(
-        const _ArticleLayoutPost(
+        _articleLayoutPost(
           id: 'article_side',
           bodyValue: '短图文保持左文右图，快速扫读也能看到封面。',
           coverUrlValue:
@@ -1563,7 +1679,7 @@ void main() {
 
     await tester.pumpWidget(
       _buildFeed(
-        const _ArticleLayoutPost(
+        _articleLayoutPost(
           id: 'article_top',
           bodyValue:
               '有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。这里继续补充一段描述，让布局明确进入上文下图状态。',
@@ -1583,10 +1699,10 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final opened = <PostBaseDto>[];
+    final opened = <ContentPostViewData>[];
     await tester.pumpWidget(
       _buildFeed(
-        const _ArticleLayoutPost(
+        _articleLayoutPost(
           id: 'article_open',
           bodyValue:
               '这是一段用于点击测试的长文摘要，用来确保全文入口出现。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。',
@@ -1702,7 +1818,7 @@ void main() {
 /// 从而验证 onTrack → trackTagClick 的归因字段透传（`/user/:userHandle` 复用
 /// resolvePath(userProfile) 的 codegen 路由）。
 Widget _routedFeed(
-  PostBaseDto post, {
+  ContentPostViewData post, {
   required ContentBehaviorTracker tracker,
 }) {
   final router = GoRouter(
@@ -1765,14 +1881,14 @@ class _AuthenticatedSession extends AuthSessionController {
 class _SinglePostFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _SinglePostFeedMapNotifier(this.post);
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': AsyncData(
         DiscoveryFeedState(
-          items: <PostBaseDto>[post],
+          items: <ContentPostViewData>[post],
           feedRequestId: 'frq_local_contract_single_post',
           policyDigest:
               'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -1782,7 +1898,13 @@ class _SinglePostFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 }
 
 class _FollowingEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
@@ -1791,27 +1913,39 @@ class _FollowingEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'following': AsyncData(
         const DiscoveryFeedState(
-          items: <PostBaseDto>[],
-          emptyReason: ContentDiscoveryFeedEmptyReason.followingEmpty,
+          items: <ContentPostViewData>[],
+          emptyReason: ContentFeedEmptyReason.followingEmpty,
         ),
       ),
     };
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
+    generation: 0,
+  );
 }
 
 class _RecommendEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'recommend': AsyncData(const DiscoveryFeedState(items: <PostBaseDto>[])),
+      'recommend': AsyncData(const DiscoveryFeedState(items: <ContentPostViewData>[])),
     };
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
+    generation: 0,
+  );
 }
 
 class _RecommendCanonicalEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
@@ -1820,15 +1954,21 @@ class _RecommendCanonicalEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': AsyncData(
         const DiscoveryFeedState(
-          items: <PostBaseDto>[],
-          emptyReason: ContentDiscoveryFeedEmptyReason.noEligibleContent,
+          items: <ContentPostViewData>[],
+          emptyReason: ContentFeedEmptyReason.noEligibleContent,
         ),
       ),
     };
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
+    generation: 0,
+  );
 }
 
 class _BlockingErrorFeedMapNotifier extends DiscoveryFeedMapNotifier {
@@ -1844,7 +1984,13 @@ class _BlockingErrorFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.stillBlocked,
+    generation: 0,
+  );
 }
 
 RuntimeFailure _feedFailure({
@@ -1875,7 +2021,13 @@ class _LoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.cancelled,
+    generation: 0,
+  );
 }
 
 class _SlowLoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
@@ -1889,13 +2041,19 @@ class _SlowLoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.cancelled,
+    generation: 0,
+  );
 }
 
 class _PreviousPageRecoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _PreviousPageRecoveryFeedMapNotifier(this.posts);
 
-  final List<PostBaseDto> posts;
+  final List<ContentPostViewData> posts;
   int prependCalls = 0;
 
   @override
@@ -1913,7 +2071,13 @@ class _PreviousPageRecoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 
   @override
   Future<bool> prependPreviousPage(String channelId) async {
@@ -1929,7 +2093,7 @@ class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   DiscoveryFeedState get currentFeed => state['recommend']!.value!;
 
-  List<PostBaseDto> _page(int pageIndex) => List<PostBaseDto>.generate(
+  List<ContentPostViewData> _page(int pageIndex) => List<ContentPostViewData>.generate(
     20,
     (index) => _microPost(
       id: 'widget_page_${pageIndex}_post_$index',
@@ -1956,7 +2120,13 @@ class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 
   @override
   Future<void> appendNextPage(String channelId) async {
@@ -1973,7 +2143,7 @@ class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
     final nextPage = _page(loadedPageCount);
     _seenItemIds.addAll(nextPage.map((post) => post.id));
     loadedPageCount += 1;
-    final combined = <PostBaseDto>[...current.items, ...nextPage];
+    final combined = <ContentPostViewData>[...current.items, ...nextPage];
     final visible = combined.length <= 80
         ? combined
         : combined.sublist(combined.length - 80);
@@ -1981,7 +2151,7 @@ class _EightPageScrollFeedMapNotifier extends DiscoveryFeedMapNotifier {
       ...state,
       channelId: AsyncData(
         current.copyWith(
-          items: List<PostBaseDto>.unmodifiable(visible),
+          items: List<ContentPostViewData>.unmodifiable(visible),
           seenItemIds: List<String>.unmodifiable(_seenItemIds),
           nextCursor: loadedPageCount < 8
               ? 'widget_cursor_$loadedPageCount'

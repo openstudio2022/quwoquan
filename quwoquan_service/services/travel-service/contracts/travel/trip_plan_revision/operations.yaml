@@ -1,0 +1,13 @@
+description: TripPlanRevision 只由 TripPlan 聚合事务追加，不提供独立写 API。
+api_routes: []
+runtime_entrypoints:
+- name: AppendTripPlanRevision
+  kind: internal_port
+  phase: transactional_append
+  source_objects: [travel.TripPlan]
+  idempotency: transaction_identity
+  application:
+    kind: command
+    facet: TripPlanRevisionAppender
+    method: append
+    object_owner: TripPlanRevision

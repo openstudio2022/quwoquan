@@ -80,15 +80,22 @@ type Config struct {
 	SearchService            ServiceEgressConfig `yaml:"search_service"`
 	EntityService            ServiceEgressConfig `yaml:"entity_service"`
 	ContentService           ServiceEgressConfig `yaml:"content_service"`
+	TravelService            ServiceEgressConfig `yaml:"travel_service"`
+	IntegrationService       ServiceEgressConfig `yaml:"integration_service"`
 	UserProfile              UserProfileConfig   `yaml:"user_profile"`
 	UserService              ServiceEgressConfig `yaml:"user_service"`
 	ChatService              ServiceEgressConfig `yaml:"chat_service"`
+	CircleService            ServiceEgressConfig `yaml:"circle_service"`
 	NotificationService      ServiceEgressConfig `yaml:"notification_service"`
 	AccountSecurityAuthority ServiceEgressConfig `yaml:"account_security_authority"`
 	PolicyPublication        struct {
 		ReleaseArtifactRef string `yaml:"release_artifact_ref"`
 		RolloutArtifactRef string `yaml:"rollout_artifact_ref"`
 	} `yaml:"policy_publication"`
+	SkillPackage struct {
+		AssetRoot             string `yaml:"asset_root"`
+		TrustedPublicKeysJSON string `yaml:"trusted_public_keys_json"`
+	} `yaml:"skill_package"`
 }
 
 func ResolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -145,6 +152,9 @@ func ApplyEnvOverrides(cfg *Config) error {
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CHAT_BASE_URL")); v != "" {
 		cfg.ChatService.BaseURL = v
 	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CIRCLE_BASE_URL")); v != "" {
+		cfg.CircleService.BaseURL = v
+	}
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_USER_SERVICE_BASE_URL")); v != "" {
 		cfg.UserService.BaseURL = v
 	}
@@ -159,6 +169,18 @@ func ApplyEnvOverrides(cfg *Config) error {
 	}
 	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CONTENT_SERVICE_BASE_URL")); v != "" {
 		cfg.ContentService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_TRAVEL_SERVICE_BASE_URL")); v != "" {
+		cfg.TravelService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_INTEGRATION_BASE_URL")); v != "" {
+		cfg.IntegrationService.BaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SKILL_PACKAGE_ROOT")); v != "" {
+		cfg.SkillPackage.AssetRoot = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON")); v != "" {
+		cfg.SkillPackage.TrustedPublicKeysJSON = v
 	}
 	return nil
 }

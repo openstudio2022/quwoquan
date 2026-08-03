@@ -1,13 +1,13 @@
 part of 'call_session_provider.dart';
 
 extension _CallSessionNotifierRuntime on CallSessionNotifier {
-  void _syncParticipantRoster(CallSessionDto session) {
+  void _syncParticipantRoster(CallSession session) {
     final incoming = _runtimeState.incomingPresentation;
     unawaited(
       _runtimeRef
           .read(callParticipantsProvider.notifier)
           .syncRoster(
-            session.participants,
+            session.participants ?? const <CallParticipant>[],
             conversationId: session.conversationId,
             callerFallback: incoming == null
                 ? null
@@ -28,7 +28,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
     bool enableVideo = false,
   }) async {
     if (_mediaConnectInFlight) return;
-    final callId = _runtimeState.session?.callId ?? '';
+    final callId = _runtimeState.session?.id ?? '';
     _mediaCredentialsCallId = callId;
     _mediaAccessToken = accessToken.trim();
     _mediaAccessEnableVideo = enableVideo;
@@ -84,7 +84,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
   }
 
   void _beginMediaQoeAttempt() {
-    final callId = _runtimeState.session?.callId ?? '';
+    final callId = _runtimeState.session?.id ?? '';
     if (callId.isNotEmpty) {
       _mediaQoe.beginAttempt(callId);
     }
@@ -95,7 +95,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
   }
 
   void _reportMediaConnectedOnce() {
-    final callId = _runtimeState.session?.callId ?? '';
+    final callId = _runtimeState.session?.id ?? '';
     if (callId.isEmpty) return;
     if (_mediaConnectedReportedCallId == callId) return;
     _mediaConnectedReportedCallId = callId;
@@ -107,8 +107,8 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
       final session = await _runtimeRef
           .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
           .reportMediaConnected(RtcCallIdCommand(callId: expectedCallId));
-      if (_runtimeState.session?.callId == expectedCallId &&
-          session.callId == expectedCallId &&
+      if (_runtimeState.session?.id == expectedCallId &&
+          session.id == expectedCallId &&
           _runtimeState.status != CallStatus.ended) {
         if (session.status == CallStatus.inCall) {
           _markMediaConnected();
@@ -127,7 +127,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
         _mediaConnectedReportedCallId = null;
       }
       final failure = _failureFrom(error);
-      if (_runtimeState.session?.callId == expectedCallId &&
+      if (_runtimeState.session?.id == expectedCallId &&
           _runtimeState.status != CallStatus.ended) {
         _runtimeState = _runtimeState.copyWith(failure: failure);
       }
@@ -180,7 +180,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
 
   void _onParticipantsChanged() {
     final dtos =
-        _runtimeState.session?.participants ?? const <CallParticipantDto>[];
+        _runtimeState.session?.participants ?? const <CallParticipant>[];
     _runtimeRef
         .read(callParticipantsProvider.notifier)
         .syncFromRtcRoom(_lkRoom, dtos);
@@ -224,8 +224,8 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
     final session = _runtimeState.session;
     if (session == null) return;
     final terminal = _mediaQoe.finish(
-      callId: session.callId,
-      callType: session.callType.toApiString(),
+      callId: session.id,
+      callType: session.callType.wireName,
       participantCount: session.participantCount,
       abandonedBeforeAcceptance:
           _runtimeState.status == CallStatus.initiated ||
@@ -292,7 +292,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
             .read(appTelemetryReporterProvider)
             .record(
               AppTelemetryPayload.rtcCallOutcome(
-                callType: session.callType.toApiString(),
+                callType: session.callType.wireName,
                 result: result,
                 durationMs: endedInCall && startedAt != null
                     ? DateTime.now().difference(startedAt).inMilliseconds

@@ -38,7 +38,7 @@ api_routes:
     scopes: [ops.platform.config.ack]
     ownership_policy: service_instance_bound
   reliability: {timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-  error_codes: [OPS.USER.config_instance_report_invalid, OPS.USER.config_instance_report_conflict, OPS.SYSTEM.config_instance_report_candidate_unavailable, OPS.SYSTEM.config_instance_report_storage_failed]
+  error_codes: [OPS.USER.config_instance_report_unauthorized, OPS.USER.config_instance_report_invalid, OPS.USER.config_instance_report_conflict, OPS.SYSTEM.config_instance_report_candidate_unavailable, OPS.SYSTEM.config_instance_report_storage_failed]
   privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
   telemetry: {metric: ops_platform_config_instance_ack, trace: true, attributes: [operation, environment, service, outcome]}
   slo: {latency_p95_ms: 700, availability_percent: 99.9}
@@ -50,13 +50,155 @@ api_routes:
     aggregate_owner: ConfigInstanceReport
     mutation_target: ConfigInstanceReport
     invariant_target: ConfigInstanceReport
+- method: GET
+  path: /control-plane/platform/releases
+  operation: ListReleaseCandidateAcks
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.rollout.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_release_candidate_acks, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportRuntimeQueryFacade, method: listReleaseCandidateAcks, reader: ReleaseCandidateAckReader, slice: ReleaseCandidateAckSlice}
+- method: GET
+  path: /control-plane/platform/topology/services
+  operation: ListRuntimeServices
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.dependency.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_runtime_services, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportRuntimeQueryFacade, method: listRuntimeServices, reader: RuntimeServiceReader, slice: RuntimeServiceSlice}
+- method: GET
+  path: /control-plane/platform/topology/instances
+  operation: ListRuntimeInstances
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.dependency.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_runtime_instances, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportRuntimeQueryFacade, method: listRuntimeInstances, reader: RuntimeInstanceReader, slice: RuntimeInstanceSlice}
+- method: POST
+  path: /control-plane/platform/alerts/ingest
+  operation: IngestAlertmanagerWebhook
+  actor: none
+  security: {auth_mode: required, principal: alertmanager, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  authorization: {principal: service, scopes: [ops.platform.observability.write], ownership_policy: machine_principal_bound}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.config_instance_report_invalid, OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_alert_ingest, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [accepted]
+  application: {kind: command, facet: ConfigInstanceReportAlertCommandFacade, method: ingestAlertmanagerWebhook, aggregate_owner: ConfigInstanceReport, mutation_target: ConfigInstanceReport, invariant_target: ConfigInstanceReport}
+- method: GET
+  path: /control-plane/platform/alerts/active
+  operation: ListActiveAlerts
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.observability.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_active_alerts, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportAlertQueryFacade, method: listActiveAlerts, reader: ActiveAlertReader, slice: ActiveAlertSlice}
+- method: POST
+  path: /control-plane/platform/alerts/{fingerprint}:ack
+  operation: AcknowledgeAlert
+  actor: account
+  security: {auth_mode: required}
+  request_bindings:
+    path: [{name: fingerprint, field: fingerprint}]
+  authorization: {principal: operator, scopes: [ops.platform.observability.write], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.config_instance_report_invalid, OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_alert_ack, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [acknowledged]
+  application: {kind: command, facet: ConfigInstanceReportAlertCommandFacade, method: acknowledgeAlert, aggregate_owner: ConfigInstanceReport, mutation_target: ConfigInstanceReport, invariant_target: ConfigInstanceReport}
+- method: GET
+  path: /control-plane/platform/audits
+  operation: ListPlatformAudits
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.rollout.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_audits, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportJournalQueryFacade, method: listPlatformAudits, reader: PlatformAuditReader, slice: PlatformAuditSlice}
+- method: GET
+  path: /control-plane/platform/approvals
+  operation: ListPlatformApprovals
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.rollout.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_approvals, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigInstanceReportJournalQueryFacade, method: listPlatformApprovals, reader: PlatformApprovalReader, slice: PlatformApprovalSlice}
+- method: GET
+  path: /control-plane/platform/projections/summary
+  operation: GetPlatformProjectionSummary
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.observability.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_projection_summary, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [workflowCount, approvalCount, auditCount, activeObjectTypes]
+  application: {kind: query, facet: ConfigInstanceReportJournalQueryFacade, method: getPlatformProjectionSummary, reader: PlatformProjectionSummaryReader, slice: PlatformProjectionSummary}
+- method: GET
+  path: /control-plane/platform/triage/summary
+  operation: GetPlatformTriageSummary
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.observability.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_triage_summary, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [projectionSummary, backlogCandidates, runtimeReady, source]
+  application: {kind: query, facet: ConfigInstanceReportJournalQueryFacade, method: getPlatformTriageSummary, reader: PlatformTriageSummaryReader, slice: PlatformTriageSummary}
 consumers:
 - name: platform-ops
-  capabilities: [list_config_instance_reports, report_config_instance]
+  capabilities: [list_config_instance_reports, report_config_instance, list_release_candidate_acks, list_runtime_services, list_runtime_instances, ingest_alertmanager_webhook, list_active_alerts, acknowledge_alert, list_platform_audits, list_platform_approvals, get_platform_projection_summary, get_platform_triage_summary]
 contract_test:
   coverage_requirements:
   - ACK 只接受绑定 service/environment/instance namespace 的已验证 service principal。
-  - ACK 必须绑定 canonical ReleaseManifest digest，desiredHash 只能来自 ConfigSnapshot。
+  - ACK 必须绑定 canonical ReleaseManifest digest，desiredHash 只能来自 ConfigSnapshot；状态、workflow、audit、幂等 receipt 与 ConfigInstanceReported outbox 必须原子提交。
   current_evidence:
     local_contract: [control-plane/platform-ops/cmd/api/main__local_contract_test.go]
     api_integration: [control-plane/platform-ops/tests/api_integration/ops/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go]

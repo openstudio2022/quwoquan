@@ -51,10 +51,6 @@ api_routes:
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.5
-    client_contract:
-      dart_import: ../integration/location_queries.dart
-      response_type: LocationPoiListSlice
-      response_decoder: decodeLocationPoiListSlice
     description: 获取当前位置附近 POI 列表（统一输出，不暴露供应商差异）
     request_bindings:
       query:
@@ -69,7 +65,7 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: LocationPoi
+    response_entity: LocationPoiListSlice
     security:
       auth_mode: optional
       principal: owner
@@ -118,10 +114,6 @@ api_routes:
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.5
-    client_contract:
-      dart_import: ../integration/location_queries.dart
-      response_type: LocationPoiListSlice
-      response_decoder: decodeLocationPoiListSlice
     description: 按关键词实时搜索 POI（支持城市与当前位置增强）
     request_bindings:
       query:
@@ -138,7 +130,7 @@ api_routes:
           required: false
         - name: limit
           field: limit
-    response_entity: LocationPoi
+    response_entity: LocationPoiListSlice
     security:
       auth_mode: optional
       principal: owner

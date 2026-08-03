@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -53,10 +54,33 @@ func (r *Resolver) Resolve(
 		document.FallbackReason = err.Error()
 		return document, nil
 	}
-	nodes, err := resolveNodes(template.Nodes, selection.Data)
+	nodes, err := resolveNodes(template, selection.Data)
 	if err != nil {
 		document.FallbackReason = err.Error()
 		return document, nil
+	}
+	allowedActions := make(map[string]bool, len(template.AllowedActionIntents))
+	for _, operation := range template.AllowedActionIntents {
+		allowedActions[operation] = true
+	}
+	for index := range nodes {
+		node := &nodes[index]
+		if node.Kind == generated.AssistantPresentationNodeKindRouteMap {
+			if err := validateRouteMapData(node.Data); err != nil {
+				normalized, valid := RouteMapFromTravelProjection(node.Data)
+				if !valid {
+					document.FallbackReason = err.Error()
+					return document, nil
+				}
+				node.Data = normalized
+			}
+		}
+		if node.Action != nil {
+			if err := validateActionIntent(*node.Action, allowedActions); err != nil {
+				document.FallbackReason = ErrActionRejected.Error()
+				return document, nil
+			}
+		}
 	}
 	if !supportsNodes(nodes, capabilities.SupportedNodeKinds) {
 		document.FallbackReason = "surface does not support required semantic nodes"
@@ -105,8 +129,8 @@ func validateInputData(template Template, data map[string]any) error {
 	return nil
 }
 
-func resolveNodes(nodes []Node, data map[string]any) ([]Node, error) {
-	resolved := cloneNodes(nodes)
+func resolveNodes(template Template, data map[string]any) ([]Node, error) {
+	resolved := cloneNodes(template.Nodes)
 	visible := make(map[string]bool, len(resolved))
 	for index := range resolved {
 		visible[resolved[index].NodeID] = true
@@ -140,6 +164,12 @@ func resolveNodes(nodes []Node, data map[string]any) ([]Node, error) {
 					return nil, ErrInvalidData
 				}
 				visible[resolved[index].NodeID] = show
+			case "action":
+				action, ok := actionIntentFrom(value)
+				if !ok {
+					return nil, ErrInvalidData
+				}
+				resolved[index].Action = &action
 			}
 		}
 		resolved[index].Binding = nil
@@ -166,6 +196,28 @@ func resolveNodes(nodes []Node, data map[string]any) ([]Node, error) {
 		return nil, ErrInvalidData
 	}
 	return result, nil
+}
+
+func actionIntentFrom(value any) (ActionIntent, bool) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return ActionIntent{}, false
+	}
+	raw, err := json.Marshal(object)
+	if err != nil || len(raw) > maxPayloadBytes {
+		return ActionIntent{}, false
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	decoder.UseNumber()
+	var action ActionIntent
+	if err := decoder.Decode(&action); err != nil {
+		return ActionIntent{}, false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return ActionIntent{}, false
+	}
+	return action, true
 }
 
 func lookupPath(data map[string]any, path string) (any, bool) {

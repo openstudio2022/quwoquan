@@ -2,19 +2,16 @@ package media_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	rterr "quwoquan_service/runtime/errors"
 	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	contentgenerated "quwoquan_service/services/content-service/generated/media/media_original_access_fact"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
-	mediaports "quwoquan_service/services/content-service/internal/content/post/domain/media/ports"
+	"quwoquan_service/runtime/commandmeta"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"
 )
 
@@ -339,100 +336,6 @@ func TestReadyVideoRejectsOverOneHourAndUnsafeSeekDescriptors(t *testing.T) {
 	}
 }
 
-func TestOriginalMediaAccessAppendsOneFactAndKeepsAbsoluteExpiryOnReplay(t *testing.T) {
-	now := time.Date(2030, time.March, 4, 5, 6, 7, 0, time.UTC)
-	service, store, _ := newMediaService(now)
-	assetID := seedMediaAsset(
-		t, store, now, "asset-original-access", "persona-owner",
-		"image", "image/jpeg", digestAtomic, mediamodel.AccessPolicyOwnerOnly,
-	)
-	if _, err := service.RecordMediaProcessingResult(
-		mediaContext("ready-original-access-image"),
-		mediaapp.RecordMediaProcessingResultCommand{
-			AssetID:    assetID,
-			Processing: mediamodel.ProcessingStatusReady,
-			Descriptor: imageProcessingDescriptor(assetID, 2),
-		},
-	); err != nil {
-		t.Fatalf("ready image before original access: %v", err)
-	}
-	command := mediaapp.RequestOriginalMediaAccessCommand{
-		AssetID: assetID, ViewerID: "persona-owner", Purpose: "save",
-	}
-	ctx := mediaContext("grant-original-access")
-	first, err := service.RequestOriginalMediaAccess(ctx, command)
-	if err != nil {
-		t.Fatalf("request original access: %v", err)
-	}
-	replayed, err := service.RequestOriginalMediaAccess(ctx, command)
-	if err != nil {
-		t.Fatalf("replay original access: %v", err)
-	}
-	if first.AuditID != replayed.AuditID || first.OriginalURL != replayed.OriginalURL || !first.ExpiresAt.Equal(replayed.ExpiresAt) {
-		t.Fatalf("idempotent replay extended or changed grant: first=%+v replay=%+v", first, replayed)
-	}
-	if !first.ExpiresAt.Equal(now.Add(5*time.Minute)) || !strings.Contains(first.OriginalURL, fmt.Sprintf("expires=%d", first.ExpiresAt.Unix())) {
-		t.Fatalf("signed URL and response must share the absolute expiry: %+v", first)
-	}
-	facts := store.OriginalAccessFacts()
-	if len(facts) != 1 ||
-		facts[0].AuditID != first.AuditID ||
-		facts[0].Purpose != "save" ||
-		facts[0].Outcome != "granted" ||
-		facts[0].Reason != "authorized" {
-		t.Fatalf("expected exactly one durable original access fact, got %+v", facts)
-	}
-}
-
-func TestOriginalMediaAccessRateLimitsByViewerAssetAndPurpose(t *testing.T) {
-	now := time.Date(2030, time.March, 4, 5, 6, 7, 0, time.UTC)
-	service, store, _ := newMediaService(now)
-	assetID := seedMediaAsset(
-		t, store, now, "asset-original-access-limit", "persona-owner",
-		"image", "image/jpeg", digestAtomic, mediamodel.AccessPolicyOwnerOnly,
-	)
-	if _, err := service.RecordMediaProcessingResult(
-		mediaContext("ready-original-access-limit"),
-		mediaapp.RecordMediaProcessingResultCommand{
-			AssetID: assetID, Processing: mediamodel.ProcessingStatusReady,
-			Descriptor: imageProcessingDescriptor(assetID, 2),
-		},
-	); err != nil {
-		t.Fatalf("ready image: %v", err)
-	}
-	for attempt := 0; attempt < 6; attempt++ {
-		if _, err := service.RequestOriginalMediaAccess(
-			mediaContext(fmt.Sprintf("original-access-limit-%d", attempt)),
-			mediaapp.RequestOriginalMediaAccessCommand{
-				AssetID: assetID, ViewerID: "persona-owner", Purpose: "view",
-			},
-		); err != nil {
-			t.Fatalf("grant %d: %v", attempt, err)
-		}
-	}
-	_, err := service.RequestOriginalMediaAccess(
-		mediaContext("original-access-limit-rejected"),
-		mediaapp.RequestOriginalMediaAccessCommand{
-			AssetID: assetID, ViewerID: "persona-owner", Purpose: "view",
-		},
-	)
-	var appError *rterr.AppError
-	if !errors.As(err, &appError) ||
-		appError.Code.String() != contentgenerated.AppErrorFromOriginalAccessRateLimited("").Code.String() {
-		t.Fatalf("expected viewer/media/purpose rate limit, got %v", err)
-	}
-	facts := store.OriginalAccessFacts()
-	rateLimitedAudits := 0
-	for _, fact := range facts {
-		if fact.Outcome == "rate_limited" && fact.Reason == "rate_limit_exhausted" {
-			rateLimitedAudits++
-		}
-	}
-	if rateLimitedAudits != 1 {
-		t.Fatalf("rate-limited request must append one audit fact, got %+v", facts)
-	}
-}
-
 func newMediaService(
 	now time.Time,
 ) (*mediaapp.MediaService, *mediacontract.MediaStore, *time.Time) {
@@ -443,9 +346,6 @@ func newMediaService(
 	service := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(store),
 		mediaObjectGateway{},
-		mediaapp.WithOriginalAccessPostVisibilityReader(
-			alwaysVisibleMediaReader{},
-		),
 		mediaapp.WithClock(func() time.Time { return *current }),
 		mediaapp.WithIdentifierGenerator(func(prefix string) (string, error) {
 			identifier++
@@ -453,16 +353,6 @@ func newMediaService(
 		}),
 	)
 	return service, store, current
-}
-
-type alwaysVisibleMediaReader struct{}
-
-func (alwaysVisibleMediaReader) CanViewerAccessPublishedMedia(
-	context.Context,
-	string,
-	string,
-) (bool, error) {
-	return true, nil
 }
 
 type mediaObjectGateway struct{}

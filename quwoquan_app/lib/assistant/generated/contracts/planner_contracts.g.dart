@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class SlotFillEntry {
   const SlotFillEntry({
@@ -28,6 +28,31 @@ class SlotFillEntry {
       };
 
   factory SlotFillEntry.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'value',
+      'source',
+      'action',
+      'confidence',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SlotFillEntry response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('slotId') || json['slotId'] == null || (json['slotId'] is! String)) {
+      throw const FormatException('SlotFillEntry field slotId has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('SlotFillEntry field source has an invalid wire value');
+    }
+    if (json.containsKey('action') && json['action'] != null && (json['action'] is! String)) {
+      throw const FormatException('SlotFillEntry field action has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('SlotFillEntry field confidence has an invalid wire value');
+    }
     return SlotFillEntry(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       value: json['value'],
@@ -60,6 +85,18 @@ class SlotFillPlanDto {
       };
 
   factory SlotFillPlanDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'entries',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SlotFillPlanDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('entries') && json['entries'] != null && (json['entries'] is! Map)) {
+      throw const FormatException('SlotFillPlanDto field entries has an invalid wire value');
+    }
     return SlotFillPlanDto(
       entries: _assistantObjectMap(json['entries'], (key, value) => SlotFillEntry.fromJson(value)),
     );

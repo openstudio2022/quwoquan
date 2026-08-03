@@ -1,0 +1,27 @@
+backend: mongodb
+role: authoritative
+collections:
+  connector_authorizations:
+    entity: ConnectorAuthorization
+    role: authoritative
+    indexes:
+    - {name: uq_connector_authorizations_id, keys: {authorizationId: 1}, unique: true}
+    - {name: idx_connector_authorizations_account_created, keys: {accountId: 1, createdAt: -1}}
+    - {name: idx_connector_authorizations_status_expiry, keys: {status: 1, expiresAt: 1}}
+  connector_authorization_command_receipts:
+    entity: ConnectorAuthorization
+    role: authoritative
+    description: 与授权状态、grant receipt 和 outbox 同一 Mongo transaction 提交的账号级幂等回执。
+    indexes:
+    - {name: uq_connector_authorization_receipt_owner_key, keys: {accountId: 1, idempotencyKey: 1}, unique: true}
+  connector_authorization_outbox:
+    entity: ConnectorAuthorization
+    role: append_only
+    description: 仅保存脱敏授权状态；proof、credentialRef、continuation 与 bearer grant receipt 永不进入 event payload。
+  connector_authorization_grant_receipts:
+    entity: ConnectorAuthorization
+    role: operational
+    description: native/OAuth proof 验证后原子写入的短期受保护 grant receipt；只保存 opaque credentialRef 与 hash/digest，TTL 到期自动清理。
+    indexes:
+    - {name: uq_connector_authorization_grant_receipt_digest, keys: {grantReceiptDigest: 1}, unique: true}
+    - {name: ttl_connector_authorization_grant_receipts, keys: {expiresAt: 1}, ttl_seconds: 0}

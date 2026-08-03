@@ -175,9 +175,7 @@ func renderPostReadPresentationDtoDart(yamlBytes []byte) (string, error) {
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
 	b.WriteString("// Source: services/content-service/contracts/content/post/projections/post_read_presentation.yaml\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
-	b.WriteString("import 'package:quwoquan_app/cloud/runtime/generated/content/article_detail_wire_keys.g.dart';\n")
-	b.WriteString("import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';\n\n")
-	b.WriteString("/// 帖子只读投影（字段来自 metadata + PostBaseDto；扩展项可走 wire）。\n")
+	b.WriteString("/// 帖子只读投影；字段与类型只来自 canonical metadata。\n")
 	fmt.Fprintf(&b, "class %s {\n", class)
 	fmt.Fprintf(&b, "  const %s({\n", class)
 	for _, fld := range f.Fields {
@@ -198,27 +196,6 @@ func renderPostReadPresentationDtoDart(yamlBytes []byte) (string, error) {
 		fmt.Fprintf(&b, "  final %s %s;\n", dt, fld.Name)
 	}
 
-	fmt.Fprintf(&b, "\n  factory %s.fromPostBase(\n    PostBaseDto post, {\n    Map<String, dynamic>? wire,\n  }) {\n", class)
-	fmt.Fprintf(&b, "    return %s(\n", class)
-	for _, fld := range f.Fields {
-		if fld.Name == "" {
-			continue
-		}
-		if fld.WireKey != "" {
-			fmt.Fprintf(
-				&b,
-				"      %s: (wire?[%s.%s] ?? '').toString(),\n",
-				fld.Name,
-				"ArticleDetailWireKeys",
-				fld.WireKey,
-			)
-			continue
-		}
-		if fld.PostBase == "" {
-			return "", fmt.Errorf("field %q needs post_base or wire_key", fld.Name)
-		}
-		fmt.Fprintf(&b, "      %s: post.%s,\n", fld.Name, fld.PostBase)
-	}
-	fmt.Fprintf(&b, "    );\n  }\n}\n")
+	fmt.Fprintf(&b, "}\n")
 	return b.String(), nil
 }

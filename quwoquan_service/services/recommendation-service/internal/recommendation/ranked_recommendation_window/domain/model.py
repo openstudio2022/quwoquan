@@ -6,8 +6,9 @@ import math
 from typing import Any, Mapping
 
 
-WINDOW_TTL = timedelta(minutes=15)
-MAX_WINDOW_ITEMS = 500
+WINDOW_TTL = timedelta(minutes=10)
+MAX_WINDOW_ITEMS = 300
+MAX_WINDOW_OBJECT_CARDS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,18 @@ class RankedCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class RecommendationObjectCard:
+    object_kind: str
+    object_id: str
+    title: str
+    subtitle: str | None
+    cover_url: str | None
+    tag_refs: tuple[str, ...]
+    reason_key: str
+    recall_path: str
+
+
+@dataclass(frozen=True, slots=True)
 class RankingResult:
     model_bucket: str
     model_channel: str | None
@@ -37,6 +50,7 @@ class RankingResult:
     ranking_snapshot_digest: str
     user_feature_snapshot: Mapping[str, Any]
     candidates: tuple[RankedCandidate, ...]
+    object_cards: tuple[RecommendationObjectCard, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +69,7 @@ class RankedRecommendationWindow:
     items: tuple[RankedRecommendationItem, ...]
     created_at: datetime
     expires_at: datetime
+    object_cards: tuple[RecommendationObjectCard, ...] = ()
 
     @classmethod
     def create(
@@ -101,7 +116,9 @@ class RankedRecommendationWindow:
         ):
             raise ValueError("rule ranking cannot claim a model channel or release")
         if len(ranking.candidates) > MAX_WINDOW_ITEMS:
-            raise ValueError("ranked window must contain at most 500 items")
+            raise ValueError("ranked window must contain at most 300 items")
+        if len(ranking.object_cards) > MAX_WINDOW_OBJECT_CARDS:
+            raise ValueError("ranked window must contain at most 20 object cards")
         seen: set[str] = set()
         items: list[RankedRecommendationItem] = []
         for ordinal, candidate in enumerate(ranking.candidates):
@@ -140,7 +157,46 @@ class RankedRecommendationWindow:
             items=tuple(items),
             created_at=created_at,
             expires_at=created_at + WINDOW_TTL,
+            object_cards=cls._validate_object_cards(ranking.object_cards),
         )
+
+    @staticmethod
+    def _validate_object_cards(
+        cards: tuple[RecommendationObjectCard, ...],
+    ) -> tuple[RecommendationObjectCard, ...]:
+        normalized: list[RecommendationObjectCard] = []
+        seen: set[str] = set()
+        for card in cards:
+            object_kind = card.object_kind.strip()
+            object_id = card.object_id.strip()
+            title = card.title.strip()
+            reason_key = card.reason_key.strip()
+            recall_path = card.recall_path.strip()
+            if (
+                object_kind != "entity_homepage"
+                or not object_id
+                or object_id in seen
+                or not title
+                or not reason_key
+                or not recall_path
+                or any(not tag.strip() for tag in card.tag_refs)
+                or len(set(card.tag_refs)) != len(card.tag_refs)
+            ):
+                raise ValueError("ranked window object card snapshot is invalid")
+            seen.add(object_id)
+            normalized.append(
+                RecommendationObjectCard(
+                    object_kind=object_kind,
+                    object_id=object_id,
+                    title=title,
+                    subtitle=(card.subtitle.strip() if card.subtitle else None),
+                    cover_url=(card.cover_url.strip() if card.cover_url else None),
+                    tag_refs=tuple(tag.strip() for tag in card.tag_refs),
+                    reason_key=reason_key,
+                    recall_path=recall_path,
+                )
+            )
+        return tuple(normalized)
 
     def page(self, *, from_ordinal: int, limit: int) -> tuple[tuple[RankedRecommendationItem, ...], int | None]:
         if from_ordinal < 0 or limit <= 0 or limit > 100:

@@ -2,6 +2,12 @@
 package generated
 
 const (
+	RouteGetMyIntersectionSummaryMethod = "GET"
+	RouteGetMyIntersectionSummaryPath   = "/content/intersections/summary"
+	RouteGetObjectIntersectionsMethod   = "GET"
+	RouteGetObjectIntersectionsPath     = "/content/intersections/object"
+	RouteListMyIntersectionsMethod      = "GET"
+	RouteListMyIntersectionsPath        = "/content/intersections"
 	RouteMarkIntersectionsVisitedMethod = "POST"
 	RouteMarkIntersectionsVisitedPath   = "/content/intersections/visit"
 )

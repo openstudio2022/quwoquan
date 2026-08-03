@@ -2,8 +2,6 @@ package modeldouble
 
 import (
 	"fmt"
-
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 )
 
 // domainSkillFinalAnswer 是测试树内的领域技能话术表，只用于让断言可以稳定匹配某个
@@ -14,10 +12,8 @@ func domainSkillFinalAnswer(skillID, question, summary string) string {
 		return fmt.Sprintf("理财与投资助手已生成重大消息摘要：%s。针对“%s”，请优先核对公告原文、行业政策与盘中波动，本内容仅作信息摘要，非投资建议。", summary, question)
 	case "weather":
 		return fmt.Sprintf("天气助手已生成天气建议：%s。针对“%s”，请关注地点、日期、降雨或温度变化，建议携带雨具并预留出行缓冲时间。", summary, question)
-	case "travel_transport":
-		return fmt.Sprintf("交通出行助手已生成路线与缓冲建议：%s。针对“%s”，建议先确认公共交通衔接，再为路况和换乘预留缓冲时间。", summary, question)
-	case "travel_planning":
-		return fmt.Sprintf("出行管家已生成行程提醒：%s。针对“%s”，建议同时关注景点、酒店区域、天气和拥堵，必要时调整游览顺序。", summary, question)
+	case "travel_companion":
+		return fmt.Sprintf("贴身旅行管家已生成共同旅行时间线方案：%s。针对“%s”，建议同时核对吃玩住行、同行约束、现场变化和下一步行动。", summary, question)
 	case "local_life":
 		return fmt.Sprintf("本地生活助手已生成附近餐厅与本地好去处建议：%s。针对“%s”，建议按距离、排队、口味和营业时间筛选。", summary, question)
 	case "calendar_task":
@@ -59,15 +55,15 @@ func domainSkillFinalAnswer(skillID, question, summary string) string {
 
 func proactiveFinalAnswer(skillID, question, summary string) string {
 	switch skillID {
-	case orchestration.SkillDailyAssistant:
+	case "daily_assistant":
 		return fmt.Sprintf("每日助手已生成计划：%s。为什么提醒你：你订阅了每日助手。建议先处理会议准备、学习计划和作息提醒。", summary)
-	case orchestration.SkillNewsBriefing:
+	case "news_briefing":
 		return fmt.Sprintf("新闻简报已生成：%s。为什么提醒你：你订阅了相关话题。可以继续追问任一来源的影响。", summary)
-	case orchestration.SkillStockSentinel:
+	case "stock_sentinel":
 		return fmt.Sprintf("股票哨兵已生成信息摘要：%s。为什么提醒你：你订阅了关注标的消息面。本内容仅作信息摘要，非投资建议。", summary)
-	case orchestration.SkillTravelJourneyManager:
+	case "travel_companion":
 		return fmt.Sprintf("出行管家已生成行程提醒：%s。为什么提醒你：你订阅了行程天气、路况和拥堵变化。建议预留缓冲时间。", summary)
 	default:
-		return fmt.Sprintf("已完成主动 Skill 摘要：%s。针对“%s”，你可以继续追问细节。", summary, question)
+		return ""
 	}
 }

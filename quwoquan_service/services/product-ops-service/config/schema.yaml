@@ -200,6 +200,12 @@ configs:
   rollout: progressive
   sensitive: false
   default: app-product-telemetry-hourly
+- key: sys.product-ops-service.elasticsearch.api_key
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
 - key: sys.product-ops-service.elasticsearch.endpoint
   type: string
   scope: workload
@@ -413,59 +419,3 @@ configs:
   rollout: progressive
   sensitive: false
   default: :18086
-- key: sys.product-ops-service.sls.aggregate_logstore
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: app-product-telemetry-hourly
-- key: sys.product-ops-service.sls.endpoint
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: ${PRODUCT_OPS_SLS_ENDPOINT}
-- key: sys.product-ops-service.sls.project
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: ${PRODUCT_OPS_SLS_PROJECT}
-- key: sys.product-ops-service.sls.raw_logstore
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: app-product-telemetry-raw
-- key: sys.product-ops-service.sls.region
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: ${PRODUCT_OPS_SLS_REGION}
-- key: sys.product-ops-service.sls.runtime_logstore
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: runtime-diagnostics-raw
-- key: sys.product-ops-service.sls.startup_diagnostic_logstore
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: app-startup-diagnostic-raw
-- key: sys.product-ops-service.sls.timeout_ms
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 1200

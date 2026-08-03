@@ -8,21 +8,11 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageReviewSummaryData
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_review_summary_data.g.dart
-  fields:
-  - name: averageRating
-    dart_type: double
-    nullable: true
-    source: averageRating
-  - name: ratingCount
-    dart_type: int
-    nullable: false
-    source: ratingCount
-    default: '0'
-  - name: highlightTags
-    dart_type: List<String>
-    nullable: false
-    source: highlightTags
+fields:
+- name: averageRating
+  type: float64
+  nullable: true
+- name: ratingCount
+  type: int
+- name: highlightTags
+  type: '[]string'

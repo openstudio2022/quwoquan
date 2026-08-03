@@ -59,3 +59,13 @@ func TestHydrateOperationReferencesRejectsUnknownOrDuplicateTruth(t *testing.T) 
 		t.Fatal("parallel operation truth sources must fail")
 	}
 }
+
+func TestHydrateOperationReferencesRejectsInlineOperationAsOnlyTruth(t *testing.T) {
+	document := map[string]any{"object_types": []any{map[string]any{
+		"object_type": "experiment",
+		"operations":  []any{map[string]any{"operation": "InlineParallelTruth"}},
+	}}}
+	if err := HydrateOperationReferences(document, &graph.ContractGraph{}); err == nil {
+		t.Fatal("inline control-plane operations must fail even without operation_refs")
+	}
+}

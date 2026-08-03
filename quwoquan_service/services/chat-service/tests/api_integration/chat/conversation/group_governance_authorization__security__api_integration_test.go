@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
 )
 
 // 本文件覆盖群成员治理的授权矩阵与生命周期负例（metadata 声明的
@@ -339,7 +339,7 @@ func TestTerminalMembershipStateCleanup(t *testing.T) {
 
 	// A MessageSent event committed before leave may reach the inbox projector
 	// afterwards. Its deleted state is terminal, so this must remain a no-op.
-	store := persistence.NewMongoChatStore(mongoDB)
+	store := userstatepersistence.NewMongoStore(mongoDB)
 	if err := store.AdvanceInboxUnread(
 		context.Background(),
 		"user_left",

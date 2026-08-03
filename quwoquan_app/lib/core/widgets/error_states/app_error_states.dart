@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -7,6 +8,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_terminal_viewport.dart';
 
 import 'app_error_action_feedback.dart';
 export 'app_error_action_feedback.dart';
@@ -18,12 +20,19 @@ class AppPageErrorState extends StatefulWidget {
     super.key,
     required this.semantic,
     this.onAction,
+    this.onRecovery,
     this.padding,
     this.experienceTracker,
-  });
+  }) : assert(
+         onAction == null || onRecovery == null,
+         'Use the typed onRecovery callback for page recovery, not both.',
+       );
 
   final UiErrorSemantic semantic;
+
+  /// 存量非阻塞页面的动作回调；新增页面恢复必须使用 [onRecovery]。
   final UiErrorActionCallback? onAction;
+  final UiRecoveryActionCallback? onRecovery;
   final EdgeInsetsGeometry? padding;
   final AppPageExperienceTracker? experienceTracker;
 
@@ -74,8 +83,9 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
   }
 
   Future<void> _handleAction(UiErrorAction action) async {
-    final callback = widget.onAction;
-    if (callback == null) {
+    final callback = widget.onRecovery;
+    final legacyCallback = widget.onAction;
+    if (callback == null && legacyCallback == null) {
       return;
     }
     final semantic = widget.semantic;
@@ -85,20 +95,43 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
       action: action,
     );
     try {
-      await callback(action);
+      final outcome = callback != null
+          ? await callback(action)
+          : await _runLegacyAction(legacyCallback!, action);
       _enqueueErrorOutcome(
         semantic: semantic,
-        result: 'recovered',
+        result: switch (outcome) {
+          UiRecoveryOutcome.recovered => 'recovered',
+          UiRecoveryOutcome.stillBlocked => 'still_blocked',
+          UiRecoveryOutcome.handedOff => 'handed_off',
+          UiRecoveryOutcome.superseded => 'superseded',
+          UiRecoveryOutcome.cancelled => 'cancelled',
+        },
         action: action,
       );
     } catch (error, stackTrace) {
       _enqueueErrorOutcome(
         semantic: semantic,
-        result: 'recovery_failed',
+        result: 'recovery_unexpected_failure',
         action: action,
       );
-      Error.throwWithStackTrace(error, stackTrace);
+      developer.log(
+        'Unexpected page recovery callback failure.',
+        name: 'AppPageErrorState',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
+  }
+
+  Future<UiRecoveryOutcome> _runLegacyAction(
+    UiErrorActionCallback callback,
+    UiErrorAction action,
+  ) async {
+    await callback(action);
+    // Future<void> 无法证明页面是否真的离开错误态；只有 typed callback
+    // 明确返回 recovered 才允许记录恢复成功。
+    return UiRecoveryOutcome.handedOff;
   }
 
   void _enqueueErrorOutcome({
@@ -163,45 +196,24 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
           );
           return ColoredBox(
             color: background,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final height = constraints.hasBoundedHeight
-                    ? constraints.maxHeight
-                    : MediaQuery.sizeOf(themedContext).height;
-                final resolvedPadding =
-                    (widget.padding ?? EdgeInsets.all(AppSpacing.containerMd))
-                        .resolve(Directionality.of(themedContext));
-                final availableHeight = height - resolvedPadding.vertical;
-                return SizedBox(
-                  width: double.infinity,
-                  height: height,
-                  child: DefaultTextStyle(
-                    style: fallbackStyle,
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: resolvedPadding,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: availableHeight > 0 ? availableHeight : 0,
-                        ),
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth: AppSpacing.feedMaxContentWidth,
-                            ),
-                            child: _ErrorEmptyPageBody(
-                              semantic: widget.semantic,
-                              onAction: widget.onAction == null
-                                  ? null
-                                  : _handleAction,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+            child: DefaultTextStyle(
+              style: fallbackStyle,
+              child: AppTerminalViewport(
+                padding:
+                    widget.padding ?? EdgeInsets.all(AppSpacing.containerMd),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSpacing.feedMaxContentWidth,
                   ),
-                );
-              },
+                  child: _ErrorEmptyPageBody(
+                    semantic: widget.semantic,
+                    onAction:
+                        widget.onAction == null && widget.onRecovery == null
+                        ? null
+                        : _handleAction,
+                  ),
+                ),
+              ),
             ),
           );
         },

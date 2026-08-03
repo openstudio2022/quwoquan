@@ -3,25 +3,23 @@ package local_contract
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 // 技能 manifest 声明的工具必须都能装配出实现，否则模型选中后必然工具失败。
 func TestSkillManifestToolPolicyIsRegistrySubset(t *testing.T) {
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("load assistant domain skill catalog: %v", err)
 	}
@@ -55,13 +53,15 @@ func TestSkillManifestToolPolicyIsRegistrySubset(t *testing.T) {
 
 // 目录加载必须对不存在的工具名 fail-fast，而不是留到运行时才失败。
 func TestSkillCatalogRejectsUnregisteredTool(t *testing.T) {
-	root := t.TempDir()
-	writeProbeSkillProfiles(t, root)
-	writeProbeSkillManifest(t, root, "fallback_general_search", "capability.valid")
-	writeProbeSkillManifest(t, root, "probe_skill", "capability.invalid")
-	t.Setenv("ASSISTANT_RESOURCE_ROOT", root)
-
-	_, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog[0].ToolPolicy.AllowedTools = append(
+		catalog[0].ToolPolicy.AllowedTools,
+		"web_fetch",
+	)
+	_, err = orchestration.ValidateAssistantDomainSkillCatalog(catalog)
 	if err == nil {
 		t.Fatal("expected unregistered tool to be rejected")
 	}
@@ -93,6 +93,7 @@ func TestFrozenPolicyRejectsUnregisteredTool(t *testing.T) {
 		nil,
 	)
 	loop.PromptAssets = promptassets.MustResolver(t)
+	loop.Catalog = skillfixture.Loader{}
 	turn := unregisteredToolPolicyTurn([]string{"app_search", "scheduler"})
 	_, failure, err := loop.RunTurn(t.Context(), turn)
 	if err == nil && failure == nil {
@@ -117,7 +118,8 @@ func unregisteredToolPolicyTurn(allowedTools []string) assistant.AssistantTurn {
 	}
 }
 
-// 策略发布物同样只能引用装配目录内的工具，并且模板技能必须存在于技能目录。
+// Policy 历史发布物只继续约束通用执行工具。Skill 身份和能力来自 active
+// SkillPackageRelease，不能再用当前目录反向改写不可变的历史 Policy 归因。
 func TestPolicyReleaseArtifactsStayWithinToolAndSkillCatalog(t *testing.T) {
 	artifacts, err := filepath.Glob(filepath.Join(
 		policyArtifactRoot(t), "assistant", "*", "releases", "*.json",
@@ -127,14 +129,6 @@ func TestPolicyReleaseArtifactsStayWithinToolAndSkillCatalog(t *testing.T) {
 	}
 	if len(artifacts) == 0 {
 		t.Fatal("no policy release artifact found")
-	}
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
-	if err != nil {
-		t.Fatalf("load assistant domain skill catalog: %v", err)
-	}
-	knownSkills := map[string]bool{}
-	for _, manifest := range catalog {
-		knownSkills[manifest.SkillID] = true
 	}
 	registered := map[string]bool{}
 	for _, name := range toolpkg.CanonicalToolNames() {
@@ -163,14 +157,6 @@ func TestPolicyReleaseArtifactsStayWithinToolAndSkillCatalog(t *testing.T) {
 		}
 		referenced[path] = true
 		for _, template := range artifact.Release.Templates {
-			if !knownSkills[template.SkillID] {
-				t.Fatalf(
-					"%s template %s references unknown skill %q",
-					filepath.Base(path),
-					template.TemplateID,
-					template.SkillID,
-				)
-			}
 			for _, name := range template.AllowedTools {
 				if !registered[name] {
 					t.Fatalf(
@@ -226,94 +212,6 @@ func policyArtifactRoot(t *testing.T) string {
 	}
 	t.Fatal("policy artifact root not found")
 	return ""
-}
-
-func writeProbeSkillManifest(t *testing.T, root string, skillID string, capabilityRef string) {
-	t.Helper()
-	dir := filepath.Join(root, skillID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("create probe skill dir: %v", err)
-	}
-	manifest := map[string]any{
-		"skillId":                skillID,
-		"displayName":            skillID,
-		"description":            "契约测试用探针技能",
-		"domainId":               "general",
-		"executionTarget":        "cloud",
-		"problemClass":           "general",
-		"activationProfileRef":   "activation.reactive",
-		"contextProfileRef":      "context.none",
-		"capabilityProfileRef":   capabilityRef,
-		"presentationProfileRef": "presentation.default",
-		"evaluationProfileRef":   "evaluation.general",
-	}
-	raw, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatalf("encode probe skill manifest: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), raw, 0o644); err != nil {
-		t.Fatalf("write probe skill manifest: %v", err)
-	}
-}
-
-func writeProbeSkillProfiles(t *testing.T, root string) {
-	t.Helper()
-	activation := skillpkg.ActivationProfile{ProfileID: "activation.reactive", Mode: "reactive"}
-	activation.AssetDigest = probeAssetDigest(struct {
-		ProfileID string `json:"profileId"`
-		Mode      string `json:"mode"`
-	}{activation.ProfileID, activation.Mode})
-	contextProfile := skillpkg.ContextProfile{ProfileID: "context.none", Requirements: []skillpkg.ContextRequirement{}}
-	contextProfile.AssetDigest = probeAssetDigest(struct {
-		ProfileID    string                        `json:"profileId"`
-		SlotSchema   skillpkg.SlotSchema           `json:"slotSchema,omitempty"`
-		Requirements []skillpkg.ContextRequirement `json:"requirements"`
-	}{contextProfile.ProfileID, contextProfile.SlotSchema, contextProfile.Requirements})
-	capability := func(profileID string, tools []string) skillpkg.CapabilityProfile {
-		value := skillpkg.CapabilityProfile{
-			ProfileID: profileID,
-			ToolPolicy: skillpkg.ToolPolicy{
-				AllowedTools: tools, PreferredTools: tools[:1], MaxToolCalls: 2,
-			},
-		}
-		value.AssetDigest = probeAssetDigest(struct {
-			ProfileID  string              `json:"profileId"`
-			ToolPolicy skillpkg.ToolPolicy `json:"toolPolicy"`
-		}{value.ProfileID, value.ToolPolicy})
-		return value
-	}
-	presentation := skillpkg.PresentationProfile{
-		ProfileID: "presentation.default", IconToken: "sparkles", TemplateRefs: []string{"assistant.answer.default"},
-	}
-	presentation.AssetDigest = probeAssetDigest(struct {
-		ProfileID    string   `json:"profileId"`
-		IconToken    string   `json:"iconToken"`
-		TemplateRefs []string `json:"templateRefs"`
-	}{presentation.ProfileID, presentation.IconToken, presentation.TemplateRefs})
-	evaluation := skillpkg.EvaluationProfile{ProfileID: "evaluation.general", FixtureRefs: []string{"probe"}}
-	evaluation.AssetDigest = probeAssetDigest(struct {
-		ProfileID   string   `json:"profileId"`
-		FixtureRefs []string `json:"fixtureRefs"`
-	}{evaluation.ProfileID, evaluation.FixtureRefs})
-	catalog := skillpkg.ProfileAssetCatalog{
-		ActivationProfiles:   []skillpkg.ActivationProfile{activation},
-		ContextProfiles:      []skillpkg.ContextProfile{contextProfile},
-		CapabilityProfiles:   []skillpkg.CapabilityProfile{capability("capability.valid", []string{"web_search"}), capability("capability.invalid", []string{"web_search", "web_fetch"})},
-		PresentationProfiles: []skillpkg.PresentationProfile{presentation},
-		EvaluationProfiles:   []skillpkg.EvaluationProfile{evaluation},
-	}
-	raw, err := json.Marshal(catalog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "profile_assets.json"), raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func probeAssetDigest(value any) string {
-	raw, _ := json.Marshal(value)
-	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
 }
 
 func toolPolicyContains(names []string, target string) bool {

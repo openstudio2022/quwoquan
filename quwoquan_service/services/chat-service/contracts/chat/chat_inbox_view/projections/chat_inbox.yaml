@@ -1,0 +1,95 @@
+read_model: ChatInbox
+description: >-
+  Persona 与 Conversation 复合身份的唯一物化聊天收件箱。Conversation、Message、
+  ConversationMembership 与 ConversationUserState 的 typed outbox 事件推进该视图；
+  查询只读 chat_inbox_views，不回扫源集合。迟到或重放事件按各 source checkpoint
+  幂等处理；成员退出、会话解散和重建中消失的身份写 tombstone，不允许迟到消息复活。
+storage_backend: mongodb
+collection: chat_inbox_views
+checkpoint_collection: chat_inbox_view_checkpoints
+source_entities:
+- Conversation
+- Message
+- ConversationMembership
+- ConversationUserState
+source_events:
+- ConversationCreated
+- ConversationUpdated
+- ConversationDissolved
+- ConversationMemberAdded
+- ConversationMemberRemoved
+- ConversationMemberLeft
+- MessageSent
+- ConversationUserSettingsChanged
+- ConversationReadWatermarkAdvanced
+consumers:
+- app (chat list)
+rebuild:
+  source: authoritative_chat_snapshots
+  checkpoint: per_typed_source_outbox_sequence
+  missing_identity: tombstone
+tombstone:
+  triggers:
+  - ConversationDissolved
+  - ConversationMemberRemoved
+  - ConversationMemberLeft
+  retain:
+  - userId
+  - conversationId
+  - sourceCheckpoints
+fields:
+- name: userId
+  type: string
+- name: conversationId
+  type: ObjectId
+- name: type
+  type: enum
+- name: title
+  type: string
+- name: avatarUrl
+  type: string
+  description: 单聊为对方头像，群聊为服务端预合成头像。
+- name: groupAvatarVersion
+  type: int64
+- name: lastMessageId
+  type: ObjectId
+- name: lastMessagePreview
+  type: string
+- name: lastMessageType
+  type: enum
+  enum_ref: MessageType
+- name: lastMessageTime
+  type: timestamp
+- name: lastSeq
+  type: int64
+- name: readSeq
+  type: int64
+- name: inboxProjectedSeq
+  type: int64
+- name: unreadCount
+  type: int
+- name: mentionUnreadCount
+  type: int
+- name: muted
+  type: bool
+- name: pinned
+  type: bool
+- name: circleId
+  type: string
+- name: sourceCheckpoints
+  type: object
+- name: tombstoned
+  type: bool
+indexes:
+- name: idx_chat_inbox_views_page
+  keys:
+    userId: 1
+    tombstoned: 1
+    pinned: -1
+    lastMessageTime: -1
+    conversationId: 1
+- name: uq_chat_inbox_views_identity
+  keys:
+    userId: 1
+    conversationId: 1
+  unique: true

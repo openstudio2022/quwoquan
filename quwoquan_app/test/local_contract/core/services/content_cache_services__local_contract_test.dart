@@ -125,7 +125,7 @@ void main() {
       expect(delegate.feedRequestCount, 2);
 
       refresh.complete(
-        DiscoveryFeedPage(items: <PostBaseDto>[_postDto('post_2')]),
+        DiscoveryFeedPage(items: <ContentPostViewData>[_postDto('post_2')]),
       );
       final revalidated = await stale.revalidation!;
       expect(revalidated.items.single.id, 'post_2');
@@ -350,7 +350,7 @@ void main() {
 
       store.put(
         key: queryKey,
-        items: <PostBaseDto>[_postDto('post_1')],
+        items: <ContentPostViewData>[_postDto('post_1')],
         nextCursor: 'cursor_2',
         previousCursor: 'cursor_previous',
         paginationExpiresAt: DateTime.utc(2026, 7, 29, 12),
@@ -465,7 +465,7 @@ void main() {
       expect(
         () => restored.put(
           key: queryKey,
-          items: const <PostBaseDto>[],
+          items: const <ContentPostViewData>[],
           policyDigest: '',
         ),
         throwsFormatException,
@@ -480,7 +480,7 @@ void main() {
         now: () => now,
       );
 
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
       now = now.add(const Duration(minutes: 6));
 
       final cached = store.get(queryKey);
@@ -496,7 +496,7 @@ void main() {
         final expiresAt = DateTime.utc(2026, 7, 29, 12);
         final snapshot = ContentQuerySnapshot(
           key: 'surface=discoveryFeed&cursor=',
-          items: <PostBaseDto>[_postDto('post_1')],
+          items: <ContentPostViewData>[_postDto('post_1')],
           fetchedAt: DateTime.utc(2026, 7, 29, 11),
           nextCursor: 'fc.next',
           previousCursor: 'fc.previous',
@@ -539,7 +539,7 @@ void main() {
         now: () => now,
       );
       await store.ensureHydrated();
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
       await store.flushPersistence();
 
       now = now.add(const Duration(hours: 24, microseconds: 1));
@@ -575,7 +575,7 @@ void main() {
 
       store.put(
         key: queryKey,
-        items: <PostBaseDto>[
+        items: <ContentPostViewData>[
           _postDto(
             'post_escaped',
             body: body,
@@ -638,7 +638,7 @@ void main() {
         sort: kFeedSortRecommend,
         limit: 20,
       );
-      final manyPosts = List<PostBaseDto>.generate(
+      final manyPosts = List<ContentPostViewData>.generate(
         30,
         (index) => _postDto('feed_$index'),
       );
@@ -646,19 +646,19 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: middleFeedKey,
-        items: <PostBaseDto>[_postDto('middle_feed')],
+        items: <ContentPostViewData>[_postDto('middle_feed')],
         nextCursor: 'cursor_2',
       );
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: latestFeedKey,
-        items: <PostBaseDto>[_postDto('latest_feed')],
+        items: <ContentPostViewData>[_postDto('latest_feed')],
         nextCursor: 'cursor_3',
       );
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: overflowFeedKey,
-        items: <PostBaseDto>[_postDto('overflow_feed')],
+        items: <ContentPostViewData>[_postDto('overflow_feed')],
       );
 
       final oldUserKey = contentUserPostsQueryKey(
@@ -671,11 +671,11 @@ void main() {
         cursor: null,
         limit: 20,
       );
-      store.put(key: oldUserKey, items: <PostBaseDto>[_postDto('old_user')]);
+      store.put(key: oldUserKey, items: <ContentPostViewData>[_postDto('old_user')]);
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: latestUserKey,
-        items: <PostBaseDto>[_postDto('latest_user')],
+        items: <ContentPostViewData>[_postDto('latest_user')],
       );
       await store.flushPersistence();
 
@@ -713,10 +713,10 @@ void main() {
         sort: kFeedSortRecommend,
         limit: 20,
       );
-      final firstPage = <PostBaseDto>[
+      final firstPage = <ContentPostViewData>[
         _postDto('feed_1', body: List<String>.filled(24, '川西雪山🙂').join()),
       ];
-      final secondPage = <PostBaseDto>[
+      final secondPage = <ContentPostViewData>[
         _postDto('feed_2', body: List<String>.filled(48, '高原湖泊🏔️').join()),
       ];
 
@@ -761,7 +761,7 @@ void main() {
       await bounded.ensureHydrated();
       bounded.put(
         key: userPostsKey,
-        items: <PostBaseDto>[
+        items: <ContentPostViewData>[
           _postDto(
             'large_user_post',
             body: List<String>.filled(1000, '独立个人作品页🙂').join(),
@@ -818,7 +818,7 @@ void main() {
 
       store.put(
         key: queryKey,
-        items: <PostBaseDto>[
+        items: <ContentPostViewData>[
           _SnapshotEncodingProbePost(
             id: 'oversized',
             body: List<String>.filled(4096, 'x').join(),
@@ -861,7 +861,7 @@ void main() {
       await store.ensureHydrated();
       store.put(
         key: queryKey,
-        items: <PostBaseDto>[
+        items: <ContentPostViewData>[
           _postDto(
             'oversized_author',
             authorId: List<String>.filled(43, '人').join(),
@@ -911,11 +911,11 @@ void main() {
       await store.ensureHydrated();
       store.put(
         key: firstFeedKey,
-        items: <PostBaseDto>[_postDto('feed_1'), _postDto('feed_2')],
+        items: <ContentPostViewData>[_postDto('feed_1'), _postDto('feed_2')],
         nextCursor: 'cursor_1',
       );
       await store.flushPersistence();
-      store.put(key: secondFeedKey, items: <PostBaseDto>[_postDto('feed_3')]);
+      store.put(key: secondFeedKey, items: <ContentPostViewData>[_postDto('feed_3')]);
       await store.flushPersistence();
 
       final raw = (await SharedPreferences.getInstance()).getString(
@@ -952,10 +952,10 @@ void main() {
       );
       await store.ensureHydrated();
 
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
       await backend.firstWriteStarted.future;
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_2')]);
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_3')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_2')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_3')]);
       await Future<void>.delayed(Duration.zero);
 
       expect(backend.writeCallCount, 1);
@@ -990,7 +990,7 @@ void main() {
         telemetrySink: const NoopCacheTelemetrySink(),
       );
       await store.ensureHydrated();
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_1')]);
       await store.flushPersistence();
       store.invalidatePost('post_1');
       await store.flushPersistence();
@@ -1003,7 +1003,7 @@ void main() {
       await afterInvalidate.ensureHydrated();
       expect(afterInvalidate.get(queryKey), isNull);
 
-      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_2')]);
+      store.put(key: queryKey, items: <ContentPostViewData>[_postDto('post_2')]);
       await store.flushPersistence();
       store.clearAll();
       await store.flushPersistence();
@@ -1034,7 +1034,7 @@ void main() {
       postCache.putDetail(_detailPayload('post_1'));
       queryStore.put(
         key: 'surface=discoveryFeed&cursor=',
-        items: <PostBaseDto>[_postDto('post_1')],
+        items: <ContentPostViewData>[_postDto('post_1')],
       );
 
       final result = await service.clear(CacheClearLevel.offlineContent);
@@ -1072,7 +1072,7 @@ void main() {
       postCache.putDetail(_detailPayload('post-terminal'));
       queryStore.put(
         key: 'surface=terminal&cursor=',
-        items: <PostBaseDto>[_postDto('post-terminal')],
+        items: <ContentPostViewData>[_postDto('post-terminal')],
       );
       userCache.put('user-terminal', <String, dynamic>{
         'userId': 'user-terminal',
@@ -1132,7 +1132,7 @@ class _SnapshotEncodingProbePost extends MicroPostDto {
   @override
   Map<String, dynamic> toMap() {
     onEncode();
-    return super.toMap();
+    return super.toPresentationMap();
   }
 }
 
@@ -1173,10 +1173,10 @@ class _ControlledQuerySnapshotPersistenceBackend
 }
 
 class _CountingContentRepository extends Fake implements ContentReadRepository {
-  _CountingContentRepository({PostBaseDto? post})
+  _CountingContentRepository({ContentPostViewData? post})
     : post = post ?? _postDto('post_1');
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   int feedRequestCount = 0;
   int detailRequestCount = 0;
   int userPostsRequestCount = 0;
@@ -1208,7 +1208,7 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
       return pending.future;
     }
     return DiscoveryFeedPage(
-      items: <PostBaseDto>[post],
+      items: <ContentPostViewData>[post],
       nextCursor: null,
       feedRequestId: feedRequestId?.trim().isNotEmpty == true
           ? feedRequestId!.trim()
@@ -1227,7 +1227,7 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -1239,21 +1239,21 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
     if (failUserPostsRequests) {
       throw StateError('user posts offline');
     }
-    return CursorPage<PostBaseDto>(
-      items: <PostBaseDto>[post],
+    return CursorPage<ContentPostViewData>(
+      items: <ContentPostViewData>[post],
       nextCursor: null,
     );
   }
 }
 
-PostBaseDto _postDto(
+ContentPostViewData _postDto(
   String id, {
   String authorId = 'user_1',
   String avatarUrl = '',
   String body = '缓存内容',
   List<Map<String, dynamic>>? intersectionReasons,
 }) {
-  return postBaseDtoFromMap(<String, dynamic>{
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     'type': 'micro',
     'identity': 'moment',
@@ -1271,12 +1271,12 @@ PostBaseDto _postDto(
   });
 }
 
-PostBaseDto _videoPostDto(
+ContentPostViewData _videoPostDto(
   String id, {
   required String videoUrl,
   required String thumbnailUrl,
 }) {
-  return postBaseDtoFromMap(<String, dynamic>{
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     'type': 'video',
     'identity': 'work',
@@ -1298,7 +1298,7 @@ PostBaseDto _videoPostDto(
   });
 }
 
-ContentPostDetailPayload _detailPayload(String id, {PostBaseDto? post}) {
+ContentPostDetailPayload _detailPayload(String id, {ContentPostViewData? post}) {
   final resolvedPost = post ?? _postDto(id);
   return ContentPostDetailPayload.fromWire(<String, dynamic>{
     'id': id,

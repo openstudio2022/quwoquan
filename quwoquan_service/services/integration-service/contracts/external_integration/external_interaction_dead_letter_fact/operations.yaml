@@ -1,0 +1,14 @@
+description: ExternalInteractionDeadLetterFact 只由 ExternalInteraction 终态边界追加。
+api_routes: []
+runtime_entrypoints:
+- name: AppendExternalInteractionDeadLetter
+  kind: internal_port
+  phase: transactional_append
+  source_objects:
+  - integration.ExternalInteraction
+  idempotency: identity_payload_digest
+  application:
+    kind: command
+    facet: ExternalInteractionDeadLetterFactAppender
+    method: append
+    object_owner: ExternalInteractionDeadLetterFact

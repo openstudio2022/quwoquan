@@ -11,7 +11,6 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
@@ -19,29 +18,45 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../repository_mock_reexports.dart';
+import '../object_doubles/object_scenario_seed_reader.dart';
 import 'content_mock_data.dart';
 // ── 发现区 wire 聚合与查找（原 lib discovery_wire_lookup.dart，仅测试消费）──
 
-/// 将四类发现区 [FeedItemDto] 列表合并为单行扫描序列（与 [ContentMockData] 对齐）。
+/// 将四类发现区 [ContentPostViewData] 列表合并为单行扫描序列（与 [ContentMockData] 对齐）。
 List<Map<String, dynamic>> aggregateDiscoveryWireSlices({
-  required List<FeedItemDto> photo,
-  required List<FeedItemDto> video,
-  required List<FeedItemDto> article,
-  required List<FeedItemDto> moment,
-  List<FeedItemDto> showcase = const <FeedItemDto>[],
+  required List<ContentPostViewData> photo,
+  required List<ContentPostViewData> video,
+  required List<ContentPostViewData> article,
+  required List<ContentPostViewData> moment,
+  List<ContentPostViewData> showcase = const <ContentPostViewData>[],
 }) {
   return <Map<String, dynamic>>[
-    ...showcase.map((e) => e.toDiscoveryWireMap()),
-    ...photo.map((e) => e.toDiscoveryWireMap()),
-    ...video.map((e) => e.toDiscoveryWireMap()),
-    ...article.map((e) => e.toDiscoveryWireMap()),
-    ...moment.map((e) => e.toDiscoveryWireMap()),
+    ...showcase.map(_mockReadModelMapFromViewData),
+    ...photo.map(_mockReadModelMapFromViewData),
+    ...video.map(_mockReadModelMapFromViewData),
+    ...article.map(_mockReadModelMapFromViewData),
+    ...moment.map(_mockReadModelMapFromViewData),
   ];
+}
+
+Map<String, dynamic> _mockReadModelMapFromViewData(ContentPostViewData post) {
+  final map = post.toPresentationMap();
+  map['postId'] = post.id;
+  map['contentType'] = post.type;
+  map['contentIdentity'] = post.identity;
+  map['authorDisplayName'] = post.displayName;
+  map['authorAvatarUrl'] = post.avatarUrl;
+  map['mediaUrls'] = post.imageUrls;
+  map.remove('id');
+  map.remove('type');
+  map.remove('identity');
+  map.remove('displayName');
+  map.remove('avatarUrl');
+  map.remove('imageUrls');
+  return map;
 }
 
 /// 在已聚合的公共 wire 行中按帖子 id 查找。
@@ -82,10 +97,10 @@ Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
 const String _mockContentDefaultAuthorAvatarUrl =
     'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png';
 
-List<PostBaseDto>? _contractSeedPosts() {
+List<ContentPostViewData>? _contractSeedPosts() {
   final seed = objectScenarioSeedReader.contentSeedSet();
   final posts = seed?['posts'];
-  final contractPosts = <PostBaseDto>[];
+  final contractPosts = <ContentPostViewData>[];
   if (posts is! List) {
     return null;
   }
@@ -94,7 +109,7 @@ List<PostBaseDto>? _contractSeedPosts() {
         .whereType<Map>()
         .map(
           (item) =>
-              contentPostDtoFromReadModelMap(item.cast<String, dynamic>()),
+              contentPostViewDataFromReadModelMap(item.cast<String, dynamic>()),
         )
         .toList(growable: false),
   );
@@ -104,21 +119,21 @@ List<PostBaseDto>? _contractSeedPosts() {
   return _mergePostSeeds(contractPosts, _discoverySeedPosts());
 }
 
-List<PostBaseDto> _discoverySeedPosts() {
+List<ContentPostViewData> _discoverySeedPosts() {
   return aggregateDiscoveryWireSlices(
     showcase: ContentMockData.seededShowcaseFeedItems,
     photo: ContentMockData.discoveryPhotoData,
     video: ContentMockData.discoveryVideoData,
     moment: ContentMockData.discoveryMomentData,
     article: ContentMockData.discoveryArticleData,
-  ).map(postBaseDtoFromMap).toList(growable: false);
+  ).map(contentPostViewDataFromReadModelMap).toList(growable: false);
 }
 
-List<PostBaseDto> _mergePostSeeds(
-  List<PostBaseDto> primary,
-  List<PostBaseDto> fallback,
+List<ContentPostViewData> _mergePostSeeds(
+  List<ContentPostViewData> primary,
+  List<ContentPostViewData> fallback,
 ) {
-  final byId = <String, PostBaseDto>{};
+  final byId = <String, ContentPostViewData>{};
   for (final post in primary) {
     byId[post.id] = post;
   }
@@ -138,10 +153,10 @@ class MockContentRepository
         ContentWriteRepository,
         ContentEngagementRepository,
         ContentConfigRepository {
-  MockContentRepository({List<PostBaseDto>? seedPosts})
+  MockContentRepository({List<ContentPostViewData>? seedPosts})
     : _seedPosts = seedPosts ?? _contractSeedPosts();
 
-  final List<PostBaseDto>? _seedPosts;
+  final List<ContentPostViewData>? _seedPosts;
 
   Never _throwMockPostNotFound(String postId) {
     throw CloudErrorMapper.fromStatusCode(
@@ -191,7 +206,7 @@ class MockContentRepository
     // 池成员唯一 seed 真相源是 home_feed_core.featuredFeedPostIds（与云侧
     // rm_premium_pool 物化集合同构、与 alpha runner adapter 同判定），
     // supplySource==data_engineering 供给兜底（策展池外的数据工程直供）。
-    List<PostBaseDto> items;
+    List<ContentPostViewData> items;
     if (channelRouted &&
         (resolvedChannelId == 'premium' ||
             resolvedChannelId == 'premium_stream')) {
@@ -246,7 +261,7 @@ class MockContentRepository
   }
 
   /// 与云侧 policy（everyN=8、maxCards≤3、entity_homepage only）同构的对象卡。
-  List<FeedObjectCardDto> _mockObjectCards({
+  List<FeedObjectCard> _mockObjectCards({
     required bool channelRouted,
     required String channelId,
     required String? cursor,
@@ -254,16 +269,16 @@ class MockContentRepository
   }) {
     const everyN = 8;
     if (!channelRouted || channelId != 'recommend') {
-      return const <FeedObjectCardDto>[];
+      return const <FeedObjectCard>[];
     }
     if ((cursor ?? '').trim().isNotEmpty) {
-      return const <FeedObjectCardDto>[];
+      return const <FeedObjectCard>[];
     }
     if (itemCount < everyN) {
-      return const <FeedObjectCardDto>[];
+      return const <FeedObjectCard>[];
     }
-    return <FeedObjectCardDto>[
-      FeedObjectCardDto(
+    return <FeedObjectCard>[
+      FeedObjectCard(
         objectKind: 'entity_homepage',
         objectId: 'homepage_sight_west_lake',
         title: '西湖',
@@ -291,7 +306,7 @@ class MockContentRepository
   }
 
   /// 镜像云侧 postMatchesVertical 的 travel 判定（contentVertical 优先，关键词兜底）。
-  bool _matchesTravelVerticalPost(PostBaseDto item) {
+  bool _matchesTravelVerticalPost(ContentPostViewData item) {
     final vertical = (item.contentVertical ?? '').trim();
     if (vertical.isNotEmpty) {
       return vertical == 'travel_photography';
@@ -302,7 +317,7 @@ class MockContentRepository
   }
 
   @override
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -344,7 +359,12 @@ class MockContentRepository
     if (raw == null) {
       _throwMockPostNotFound(postId);
     }
-    return ContentPostDetailPayload.fromWire(raw);
+    return ContentPostDetailPayload.fromWire(
+      ContentPostDetailSlice.fromWire(
+        Map<String, Object?>.from(raw),
+        'MockContentRepository.GetPost',
+      ),
+    );
   }
 
   @override
@@ -412,7 +432,7 @@ class MockContentRepository
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -433,7 +453,7 @@ class MockContentRepository
           (p) => _matchesIdentityAndTypePost(p, identity: identity, type: type),
         )
         .toList();
-    return CursorPage<PostBaseDto>(items: filtered, nextCursor: null);
+    return CursorPage<ContentPostViewData>(items: filtered, nextCursor: null);
   }
 
   @override
@@ -443,11 +463,11 @@ class MockContentRepository
 // ── 帖子/发现流域逻辑（原 content_repository_mock_posts.dart）───────────
 
 extension _MockContentPosts on MockContentRepository {
-  PostBaseDto _mockPostDto(
+  ContentPostViewData _mockPostDto(
     String postId, {
     required Map<String, dynamic> payloadMerge,
   }) {
-    return postBaseDtoFromMap(
+    return contentPostViewDataFromReadModelMap(
       _mockPostWire(postId, payloadMerge: payloadMerge),
     );
   }
@@ -459,12 +479,12 @@ extension _MockContentPosts on MockContentRepository {
     Map<String, dynamic>? existingProjection;
     for (final post in _allDiscoveryPosts()) {
       if (post.id == postId) {
-        existingProjection = post.toMap();
+        existingProjection = _mockReadModelMapFromViewData(post);
         break;
       }
     }
     final merged = <String, dynamic>{
-      'id': postId,
+      'postId': postId,
       'authorId': 'mock_user',
       'displayName': 'Mock User',
       'avatarUrl': _mockContentDefaultAuthorAvatarUrl,
@@ -479,28 +499,23 @@ extension _MockContentPosts on MockContentRepository {
       ...?existingProjection,
       ...payloadMerge,
     };
-    final contentType = merged.remove('contentType')?.toString().trim();
-    if (contentType?.isNotEmpty == true) {
-      merged['type'] = contentType;
-    }
-    final contentIdentity = merged.remove('contentIdentity')?.toString().trim();
-    if (contentIdentity?.isNotEmpty == true) {
-      merged['identity'] = contentIdentity;
-    }
-    final mediaUrls = merged.remove('mediaUrls');
-    if (mediaUrls is List) {
-      merged['imageUrls'] = mediaUrls;
-    }
-    merged.remove('postId');
+    merged['contentType'] = merged['contentType'] ?? merged.remove('type');
+    merged['contentIdentity'] =
+        merged['contentIdentity'] ?? merged.remove('identity');
+    merged['authorDisplayName'] =
+        merged['authorDisplayName'] ?? merged.remove('displayName');
+    merged['authorAvatarUrl'] =
+        merged['authorAvatarUrl'] ?? merged.remove('avatarUrl');
+    merged['mediaUrls'] = merged['mediaUrls'] ?? merged.remove('imageUrls');
     merged.remove('_id');
-    final type = merged['type']?.toString().trim() ?? '';
+    final type = merged['contentType']?.toString().trim() ?? '';
     if (type.isEmpty) {
       throw StateError('mock post type is required');
     }
     if (type == 'micro') {
-      merged['identity'] = merged['identity'] ?? 'moment';
+      merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
     } else {
-      merged['identity'] = merged['identity'] ?? 'work';
+      merged['contentIdentity'] = merged['contentIdentity'] ?? 'work';
     }
     return merged;
   }
@@ -601,9 +616,9 @@ extension _MockContentPosts on MockContentRepository {
     );
   }
 
-  List<PostBaseDto> _profilePreviewPostsFor(String authorId) {
+  List<ContentPostViewData> _profilePreviewPostsFor(String authorId) {
     if (authorId.isEmpty) {
-      return const <PostBaseDto>[];
+      return const <ContentPostViewData>[];
     }
     final displayName = authorId == 'nature_photographer' ? '自然摄影师' : authorId;
     final base = <String, dynamic>{
@@ -613,7 +628,7 @@ extension _MockContentPosts on MockContentRepository {
       'authorBackgroundUrl':
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
     };
-    return <PostBaseDto>[
+    return <ContentPostViewData>[
       _mockPostDto(
         '${authorId}_p1',
         payloadMerge: <String, dynamic>{
@@ -670,10 +685,10 @@ extension _MockContentPosts on MockContentRepository {
     ];
   }
 
-  List<PostBaseDto> _allDiscoveryPosts() {
+  List<ContentPostViewData> _allDiscoveryPosts() {
     final seeded = _seedPosts;
     if (seeded != null) {
-      return List<PostBaseDto>.from(seeded, growable: false);
+      return List<ContentPostViewData>.from(seeded, growable: false);
     }
     return _discoverySeedPosts();
   }
@@ -697,7 +712,7 @@ extension _MockContentPosts on MockContentRepository {
     return null;
   }
 
-  Future<List<PostBaseDto>> _resolveDiscoveryPosts({
+  Future<List<ContentPostViewData>> _resolveDiscoveryPosts({
     required String category,
     String? identity,
     String? type,
@@ -726,11 +741,8 @@ extension _MockContentPosts on MockContentRepository {
         .toList(growable: false);
   }
 
-  Future<List<PostBaseDto>> _alphaShowcasePosts() async {
-    final showcase = await ContentMockData.seededShowcaseFeedItemsAsync();
-    return showcase
-        .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
-        .toList(growable: false);
+  Future<List<ContentPostViewData>> _alphaShowcasePosts() async {
+    return ContentMockData.seededShowcaseFeedItemsAsync();
   }
 
   Future<Map<String, dynamic>?> _alphaShowcasePostWireById(
@@ -743,7 +755,7 @@ extension _MockContentPosts on MockContentRepository {
     final showcase = await ContentMockData.seededShowcaseFeedItemsAsync();
     for (final item in showcase) {
       if (item.id == trimmed) {
-        final row = item.toDiscoveryWireMap();
+        final row = _mockReadModelMapFromViewData(item);
         if ((row['type']?.toString() ?? '') == 'article') {
           return ContentMockData.articleWireByPostId(trimmed) ?? row;
         }
@@ -772,7 +784,7 @@ extension _MockContentPosts on MockContentRepository {
   }
 
   bool _matchesIdentityAndTypePost(
-    PostBaseDto post, {
+    ContentPostViewData post, {
     String? identity,
     String? type,
   }) {
@@ -856,7 +868,7 @@ class MockFootprintRepository implements FootprintRepository {
           action: (item['action'] ?? '').toString(),
           occurredAt: _isoMinusHours(item['occurredAgoHours']),
           post: postMap != null
-              ? contentPostDtoFromReadModelMap(postMap)
+              ? contentPostViewDataFromReadModelMap(postMap)
               : null,
         ),
       );

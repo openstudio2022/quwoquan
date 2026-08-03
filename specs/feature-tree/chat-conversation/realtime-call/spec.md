@@ -108,7 +108,7 @@
 ### REQ-009 RTC 媒体 QoE 黄金指标与发布 readback
 
 - rtc_media_qoe 有生产 emitter、去重终态与有界维度，且不会把 callId/userId 放进 Prometheus label。
-- SLS/local rollup 同源产出有效媒体接通率、接听到媒体可用 P95、非预期媒体中断率。
+- Elasticsearch rollup 同源产出有效媒体接通率、接听到媒体可用 P95、非预期媒体中断率。
 - dashboard/alert 只消费已查询到的真实 series，并完成 Gamma 与 prod gray 触发/恢复演练。
 
 <a id="req-010"></a>
@@ -217,7 +217,7 @@
 - GIVEN 执行“RTC 媒体 QoE 黄金指标与发布 readback”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“RTC 媒体 QoE 黄金指标与发布 readback”对应动作。
 - THEN rtc_media_qoe 有生产 emitter、去重终态与有界维度，且不会把 callId/userId 放进 Prometheus label。
-- THEN SLS/local rollup 同源产出有效媒体接通率、接听到媒体可用 P95、非预期媒体中断率。
+- THEN Elasticsearch rollup 同源产出有效媒体接通率、接听到媒体可用 P95、非预期媒体中断率。
 - THEN dashboard/alert 只消费已查询到的真实 series，并完成 Gamma 与 prod gray 触发/恢复演练。
 
 ## 8. 开放事项

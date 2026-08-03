@@ -4,7 +4,7 @@ import (
 	"time"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	mediaports "quwoquan_service/services/content-service/internal/content/post/domain/media/ports"
+	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 )
 
 func (s *MediaStore) assetReceipt(

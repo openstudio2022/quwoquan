@@ -27,7 +27,7 @@ import 'package:quwoquan_app/ui/chat/providers/greeting_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/notification_inbox_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AppMessage;
+    show AppMessage, NotificationType;
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
 import 'package:quwoquan_app/ui/chat/utils/chat_contact_initials.dart';
@@ -578,7 +578,7 @@ class _GreetingInboxTile extends StatelessWidget {
   });
 
   final int pendingCount;
-  final GreetingRequestDto latest;
+  final GreetingRequestViewData latest;
   final Color fgPrimary;
   final Color fgSecondary;
   final Color backgroundColor;
@@ -689,11 +689,11 @@ class _NotificationInboxTile extends StatelessWidget {
 
   IconData get _typeIcon {
     return switch (message.messageType) {
-      'content' => CupertinoIcons.doc_text,
-      'social' => CupertinoIcons.person_2,
-      'circle' => CupertinoIcons.circle_grid_hex,
-      'assistant' => CupertinoIcons.sparkles,
-      _ => CupertinoIcons.bell,
+      NotificationType.content => CupertinoIcons.doc_text,
+      NotificationType.social => CupertinoIcons.person_2,
+      NotificationType.circle => CupertinoIcons.circle_grid_hex,
+      NotificationType.assistant => CupertinoIcons.sparkles,
+      NotificationType.system => CupertinoIcons.bell,
     };
   }
 

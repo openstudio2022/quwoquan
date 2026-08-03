@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	rtfailures "quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/streaming"
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
@@ -24,7 +26,20 @@ import (
 
 type AgentLoop struct {
 	Skills SkillRuntime
-	React  ReactRuntime
+	// SkillCandidates 在路由前把候选集收窄到用户 Setting 或共享 Placement
+	// 当前允许的 active-package Skills。nil 表示未配置策略；非 nil 空集合
+	// 表示没有可执行 Skill，路由必须 fail closed。
+	SkillCandidates SkillCandidateAccessPolicy
+	// SkillAccess 在路由完成后、任何 Context/Tool/Model 执行前重新求交
+	// 个人设置或共享 Placement，保证隐式路由不能绕过权限门。
+	SkillAccess SkillExecutionAccessPolicy
+	// ToolAccess 在每次实际工具调用前，用 canonical tool metadata 重新求交
+	// Capability、Consent、Setting、Connector grant 与 surface policy。
+	ToolAccess ToolExecutionAccessPolicy
+	// Catalog resolves only the currently active immutable Skill package. The
+	// production composition never falls back to source-tree discovery.
+	Catalog skillpkg.Loader
+	React   ReactRuntime
 	// Subagents 判定多技能并行计划。未配置时所有问题都按单技能执行。
 	Subagents SubagentPlanner
 	// PromptAssets 按需解析被选中技能的领域话术。未配置时技能不得声明提示词资产。
@@ -37,10 +52,69 @@ type AgentLoop struct {
 	Now           func() time.Time
 }
 
+type SkillExecutionAccessPolicy interface {
+	AuthorizeSkill(context.Context, assistant.AssistantTurn, string) error
+}
+
+type SkillCandidateAccessPolicy interface {
+	AllowedSkillIDs(context.Context, assistant.AssistantTurn) ([]string, error)
+}
+
+type ToolExecutionAccessPolicy interface {
+	AuthorizeTool(
+		context.Context,
+		assistant.AssistantTurn,
+		SkillSelection,
+		string,
+		toolpkg.Metadata,
+	) error
+}
+
+type ToolExecutionAccessPolicyFunc func(
+	context.Context,
+	assistant.AssistantTurn,
+	SkillSelection,
+	string,
+	toolpkg.Metadata,
+) error
+
+func (authorize ToolExecutionAccessPolicyFunc) AuthorizeTool(
+	ctx context.Context,
+	turn assistant.AssistantTurn,
+	skill SkillSelection,
+	toolName string,
+	metadata toolpkg.Metadata,
+) error {
+	return authorize(ctx, turn, skill, toolName, metadata)
+}
+
+type SkillCandidateAccessPolicyFunc func(
+	context.Context,
+	assistant.AssistantTurn,
+) ([]string, error)
+
+func (resolve SkillCandidateAccessPolicyFunc) AllowedSkillIDs(
+	ctx context.Context,
+	turn assistant.AssistantTurn,
+) ([]string, error) {
+	return resolve(ctx, turn)
+}
+
+type SkillExecutionAccessPolicyFunc func(
+	context.Context,
+	assistant.AssistantTurn,
+	string,
+) error
+
+func (authorize SkillExecutionAccessPolicyFunc) AuthorizeSkill(
+	ctx context.Context,
+	turn assistant.AssistantTurn,
+	skillID string,
+) error {
+	return authorize(ctx, turn, skillID)
+}
+
 func NewAgentLoop(skills SkillRuntime, react ReactRuntime, now func() time.Time) *AgentLoop {
-	if skills == nil {
-		skills = DefaultSkillRuntime{}
-	}
 	if react.Tools == nil {
 		react.Tools = DefaultToolCoordinator{Now: now}
 	}
@@ -69,6 +143,7 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 	if l == nil {
 		l = NewAgentLoop(nil, ReactRuntime{}, nil)
 	}
+	turn = sanitizeTurnForSurface(turn)
 	turnStartedAt := time.Now()
 	log.Printf("assistant agent run_started sessionId=%s turnId=%s traceId=%s", turn.SessionID, turn.TurnID, turn.TraceID)
 	projector := assistantstreaming.NewStreamProjectorAt(turn, l.Now, afterSeq)
@@ -196,7 +271,9 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 	var answerStreamStartedAt time.Time
 	answerProcessStarted := false
 	reactStartedAt := time.Now()
-	result, err := l.React.RunWithFinalTextSink(ctx, turn, skill, func(step ReactStepResult) error {
+	reactRuntime := l.React
+	reactRuntime.PreToolUse = l.preToolUse()
+	result, err := reactRuntime.RunWithFinalTextSink(ctx, turn, skill, func(step ReactStepResult) error {
 		return emitReactReasoning(projector, appendEvent, turn, skill, step)
 	}, func(step ReactStepResult) error {
 		failure, err := emitReactObservation(projector, appendEvent, turn, skill, step)
@@ -346,6 +423,15 @@ func (l *AgentLoop) RunTurnWithSinkAfterSeq(
 	return events, nil, nil
 }
 
+func sanitizeTurnForSurface(turn assistant.AssistantTurn) assistant.AssistantTurn {
+	switch strings.TrimSpace(turn.RequestContext.SurfaceKind) {
+	case "conversation", "circle":
+		turn.SessionPreferenceFacts = nil
+		turn.LongTermPreferenceFacts = nil
+	}
+	return turn
+}
+
 func assistantContinuationToken(runID string, toolUseID string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(runID) + "\x00" + strings.TrimSpace(toolUseID)))
 	return "ct_" + hex.EncodeToString(digest[:16])
@@ -372,7 +458,11 @@ func (l *AgentLoop) assembleContext(
 	if surfaceID == "" && turn.PageContext != nil {
 		surfaceID = strings.TrimSpace(turn.PageContext.PageType)
 	}
-	channel := channelpkg.Resolve(turn.TurnType, turn.Trigger)
+	channel := channelpkg.ResolveForSurface(
+		turn.TurnType,
+		turn.Trigger,
+		turn.RequestContext.SurfaceKind,
+	)
 	assembly, err := assembler.Assemble(ctx, contextassembly.AssemblyInput{
 		Turn: turn,
 		Client: contextassembly.ClientContext{
@@ -396,12 +486,22 @@ func (l *AgentLoop) assembleContext(
 	}
 	visibility := skillcontext.DeliveryPersonal
 	maximumSensitivity := assistantgenerated.AssistantContextSensitivityPrivate
-	if channel.AnswerBoundary().Public {
+	if sharedAssistantSurface(turn.RequestContext.SurfaceKind) {
+		// Conversation/Circle 是成员可见的共享面，不是公开互联网。
+		// 允许 owner-backed internal 事实进入，但 delivery policy 仍会拒绝
+		// private/restricted memory 与个人 Connector。
+		visibility = skillcontext.DeliveryShared
+		maximumSensitivity = assistantgenerated.AssistantContextSensitivityInternal
+	} else if channel.AnswerBoundary().Public {
 		visibility = skillcontext.DeliveryPublic
 		maximumSensitivity = assistantgenerated.AssistantContextSensitivityPublic
 	}
+	contextRunID := strings.TrimSpace(turn.ExecutionRunID)
+	if contextRunID == "" {
+		contextRunID = strings.TrimSpace(turn.TurnID)
+	}
 	snapshot, err := l.SkillContexts.Assemble(ctx, profile, skillcontext.AssembleRequest{
-		RunID:              turn.TurnID,
+		RunID:              contextRunID,
 		OwnerID:            turn.UserID,
 		SkillID:            skill.SkillID,
 		Visibility:         visibility,
@@ -458,36 +558,81 @@ func canonicalSkillContextProfile(
 	return result, nil
 }
 
-// skillSelectionForTurn 以冻结策略为准，再按需补上该技能清单里的领域话术与问题类型。
-// 清单缺失时不阻断运行：策略模板本身已经是一份可用提示词。
+// skillSelectionForTurn 以 Run 冻结的 active Skill package 为唯一 Skill 真相源。
+// AssistantPolicyRelease 只保留模型 cohort、学习策略与通用执行边界，不能覆盖 Skill
+// 身份、领域、工具或完成条件。
 func (l *AgentLoop) skillSelectionForTurn(
 	ctx context.Context,
 	turn assistant.AssistantTurn,
 ) (SkillSelection, error) {
-	selection, err := skillSelectionFromFrozenPolicy(turn)
+	policySelection, err := skillSelectionFromFrozenPolicy(turn)
 	if err != nil {
 		return SkillSelection{}, err
 	}
-	manifest, found, err := assistantDomainSkillManifest(selection.SkillID)
+	skillID := strings.TrimSpace(turn.SkillID)
+	if skillID == "" {
+		var allowedSkillIDs []string
+		if l.SkillCandidates != nil {
+			allowedSkillIDs, err = l.SkillCandidates.AllowedSkillIDs(ctx, turn)
+			if err != nil {
+				return SkillSelection{}, err
+			}
+		}
+		if l.Skills != nil {
+			var selection SkillSelection
+			var selectErr error
+			if l.SkillCandidates != nil {
+				scoped, ok := l.Skills.(ScopedSkillRuntime)
+				if !ok {
+					return SkillSelection{}, fmt.Errorf("Skill runtime does not support access-scoped routing")
+				}
+				selection, selectErr = scoped.SelectSkillWithin(ctx, turn, allowedSkillIDs)
+			} else {
+				selection, selectErr = l.Skills.SelectSkill(ctx, turn)
+			}
+			if selectErr != nil {
+				return SkillSelection{}, selectErr
+			}
+			skillID = strings.TrimSpace(selection.SkillID)
+		} else {
+			loader := l.Catalog
+			if loader == nil {
+				return SkillSelection{}, fmt.Errorf("active Skill package is not configured")
+			}
+			catalog, loadErr := loader.Load(ctx)
+			if loadErr != nil {
+				return SkillSelection{}, loadErr
+			}
+			catalog = restrictSkillCatalog(reactiveSkillCatalog(catalog), allowedSkillIDs)
+			if l.SkillCandidates != nil && len(catalog) == 0 {
+				return SkillSelection{}, ErrNoEligibleSkill
+			}
+			skillID = skillpkg.NewRouter(catalog).Route(turn).SkillID
+		}
+	}
+	manifest, found, err := l.resolveSkillManifest(ctx, skillID)
 	if err != nil {
 		return SkillSelection{}, err
 	}
 	if !found {
-		return selection, nil
+		return SkillSelection{}, fmt.Errorf(
+			"turn %s frozen Skill %q is absent from active package",
+			turn.TurnID,
+			skillID,
+		)
 	}
-	selection.ProblemClass = manifest.ProblemClass
-	selection.SlotSchema = manifest.SlotSchema
-	selection.ContextProfile = manifest.ContextProfile
-	// 工具预算只在清单里声明；策略负责允许集合，清单负责该技能跑多深。
-	selection.MaxToolCalls = manifest.ToolPolicy.MaxToolCalls
-	if strings.TrimSpace(manifest.DisplayName) != "" {
-		selection.DisplayName = manifest.DisplayName
+	if l.SkillAccess != nil {
+		if err := l.SkillAccess.AuthorizeSkill(ctx, turn, skillID); err != nil {
+			return SkillSelection{}, err
+		}
 	}
+	selection := selectionFromManifest(manifest)
+	selection.SearchIntensity = policySelection.SearchIntensity
 	guidance, err := resolveSkillPromptGuidance(ctx, l.PromptAssets, manifest)
 	if err != nil {
 		return SkillSelection{}, err
 	}
-	selection.PromptPolicy = composePromptPolicy(selection.PromptPolicy, guidance)
+	selection.PromptPolicy = composePromptPolicy(policySelection.PromptPolicy, guidance)
 	return selection, nil
 }
 
@@ -521,7 +666,7 @@ func skillSelectionFromFrozenPolicy(
 	return SkillSelection{
 		SkillID:         strings.TrimSpace(template.SkillID),
 		DomainID:        strings.TrimSpace(template.DomainID),
-		DisplayName:     displaySkillName(template.SkillID),
+		DisplayName:     strings.TrimSpace(template.SkillID),
 		ToolPolicy:      toolPolicy,
 		PromptPolicy:    strings.TrimSpace(template.PromptPolicy),
 		SearchIntensity: strings.TrimSpace(template.SearchIntensity),
@@ -741,6 +886,10 @@ func (l *AgentLoop) skills() SkillRuntime {
 }
 
 func modelFailure(stage string, err error) rtfailures.Failure {
+	var appError *rterr.AppError
+	if errors.As(err, &appError) {
+		return rtfailures.FromCurrentAppError(appError)
+	}
 	return rtfailures.Failure{
 		Code:   "ASSISTANT.MIDDLEWARE.model_runtime_failed",
 		Origin: rtfailures.OriginRemoteDependency,
@@ -755,318 +904,6 @@ func modelFailure(stage string, err error) rtfailures.Failure {
 			{Key: "reason", Value: err.Error()},
 		}},
 	}.Normalized()
-}
-
-func buildSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) []map[string]any {
-	query := turn.Input.Text
-	if step.Tool.Requested.Input != nil {
-		if value, ok := step.Tool.Requested.Input["query"].(string); ok && value != "" {
-			query = value
-		}
-		if plans := searchPlansFromToolInput(step.Tool.Requested.Input, step.Tool.Requested.ToolName); len(plans) > 0 {
-			return plans
-		}
-	}
-	return []map[string]any{{
-		"query":          query,
-		"label":          "综合检索",
-		"purpose":        "",
-		"sourceType":     step.Tool.Requested.ToolName,
-		"freshnessHours": 24,
-	}}
-}
-
-func searchPlansFromToolInput(input map[string]any, toolName string) []map[string]any {
-	for _, key := range []string{"searchQueries", "queries"} {
-		if plans := searchPlansFromRaw(input[key], toolName); len(plans) > 0 {
-			return plans
-		}
-	}
-	return nil
-}
-
-func searchPlansFromRaw(raw any, toolName string) []map[string]any {
-	switch items := raw.(type) {
-	case []any:
-		plans := []map[string]any{}
-		for _, item := range items {
-			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
-				plans = append(plans, plan)
-			}
-		}
-		return plans
-	case []map[string]any:
-		plans := []map[string]any{}
-		for _, item := range items {
-			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
-				plans = append(plans, plan)
-			}
-		}
-		return plans
-	case []string:
-		plans := []map[string]any{}
-		for _, item := range items {
-			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
-				plans = append(plans, plan)
-			}
-		}
-		return plans
-	default:
-		return nil
-	}
-}
-
-func searchPlanFromAny(raw any, toolName string) map[string]any {
-	switch item := raw.(type) {
-	case string:
-		query := strings.TrimSpace(item)
-		if query == "" {
-			return nil
-		}
-		return map[string]any{
-			"query":          query,
-			"label":          "检索",
-			"purpose":        "",
-			"sourceType":     toolName,
-			"freshnessHours": 24,
-		}
-	case map[string]any:
-		query := strings.TrimSpace(stringValue(item["query"]))
-		if query == "" {
-			return nil
-		}
-		label := strings.TrimSpace(stringValue(item["dimension"]))
-		if label == "" {
-			label = strings.TrimSpace(stringValue(item["label"]))
-		}
-		if label == "" {
-			label = "检索"
-		}
-		return map[string]any{
-			"query":          query,
-			"label":          label,
-			"purpose":        strings.TrimSpace(stringValue(item["purpose"])),
-			"sourceType":     toolName,
-			"freshnessHours": 24,
-		}
-	default:
-		return nil
-	}
-}
-
-func buildAcceptedSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) []map[string]any {
-	plans := buildSearchPlansForStep(turn, skill, step)
-	for i := range plans {
-		plans[i]["acceptReason"] = ""
-	}
-	return plans
-}
-
-func deltaNestedString(delta map[string]any, parentKey, childKey string) string {
-	if delta == nil {
-		return ""
-	}
-	raw, ok := delta[parentKey]
-	if !ok {
-		return ""
-	}
-	nested, ok := raw.(map[string]any)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(nested[childKey]))
-}
-
-func stringSliceFromAny(raw any) []string {
-	switch items := raw.(type) {
-	case []any:
-		out := []string{}
-		for _, item := range items {
-			text := strings.TrimSpace(fmt.Sprint(item))
-			if text != "" {
-				out = append(out, text)
-			}
-		}
-		return out
-	case []string:
-		out := []string{}
-		for _, item := range items {
-			text := strings.TrimSpace(item)
-			if text != "" {
-				out = append(out, text)
-			}
-		}
-		return out
-	default:
-		return []string{}
-	}
-}
-
-func referencesFromEvidence(raw any) []map[string]any {
-	switch items := raw.(type) {
-	case []any:
-		out := []map[string]any{}
-		for _, item := range items {
-			entry, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			out = append(out, entry)
-		}
-		return out
-	case []map[string]any:
-		return items
-	default:
-		return nil
-	}
-}
-
-func buildUnderstandingSnapshotForStep(turn assistant.AssistantTurn, step ReactStepResult) map[string]any {
-	delta := step.StructuredDelta
-	stageNarrative := strings.TrimSpace(fmt.Sprint(delta["stageNarrative"]))
-	if stageNarrative == "<nil>" {
-		stageNarrative = ""
-	}
-	summary := stageNarrative
-	if summary == "" {
-		summary = deltaNestedString(delta, "understandingSnapshot", "userFacingSummary")
-	}
-	retrieval := ""
-	if stageNarrative == "" {
-		retrieval = deltaNestedString(delta, "understandingSnapshot", "retrievalDesignNarrative")
-	}
-	return map[string]any{
-		"intentSummary":            turn.Input.Text,
-		"userFacingSummary":        summary,
-		"retrievalDesignNarrative": retrieval,
-		"concernPoints":            []string{},
-		"emotionSignal":            "",
-		"resolutionItems":          []map[string]any{},
-		"assumptions":              []string{},
-		"mismatchSignal":           "",
-		"carryForwardFacts":        []string{},
-		"discardedAssumptions":     []string{},
-	}
-}
-
-func buildRetrievalProcessingForStep(step ReactStepResult) map[string]any {
-	delta := step.EvidenceStructuredDelta
-	summary := ""
-	keyPoints := []string{}
-	modelRefs := []map[string]any(nil)
-	if delta != nil {
-		if rp, ok := delta["retrievalProcessing"].(map[string]any); ok {
-			summary = strings.TrimSpace(fmt.Sprint(rp["processingSummary"]))
-			keyPoints = stringSliceFromAny(rp["selectedKeyPoints"])
-			modelRefs = referencesFromEvidence(rp["acceptedReferences"])
-		}
-	}
-	reliable := toolResultReliable(step)
-	toolRefs := []map[string]any{}
-	if reliable {
-		toolRefs = acceptedReferencesForStep(step)
-	}
-	searchedCount := len(toolRefs)
-	if reliable {
-		referencesCountFallback := searchedCount == 0 && !step.Observation.Empty
-		if referencesCountFallback {
-			searchedCount = 1
-		}
-	}
-	acceptedRefs := []map[string]any{}
-	if reliable {
-		acceptedRefs = MergeReferences(modelRefs, toolRefs)
-	}
-	return map[string]any{
-		"searchedDocumentCount":  searchedCount,
-		"processedDocumentCount": searchedCount,
-		"acceptedDocumentCount":  len(acceptedRefs),
-		"processingSummary":      summary,
-		"selectedKeyPoints":      keyPoints,
-		"expansionReason":        "",
-		"acceptedReferences":     acceptedRefs,
-	}
-}
-
-func MergeReferences(primary []map[string]any, fallback []map[string]any) []map[string]any {
-	merged := []map[string]any{}
-	seen := map[string]bool{}
-	authoritative := map[string]map[string]any{}
-	for _, reference := range fallback {
-		key, ok := referenceDestinationKey(reference)
-		if !ok {
-			continue
-		}
-		authoritative[key] = reference
-	}
-	appendOne := func(reference map[string]any) {
-		if len(merged) >= 5 {
-			return
-		}
-		key, ok := referenceDestinationKey(reference)
-		if !ok || seen[key] {
-			return
-		}
-		authoritativeReference, exists := authoritative[key]
-		if !exists {
-			return
-		}
-		seen[key] = true
-		merged = append(merged, authoritativeReference)
-	}
-	for _, reference := range primary {
-		canonical, ok := canonicalModelReference(reference)
-		if ok {
-			appendOne(canonical)
-		}
-	}
-	for _, reference := range fallback {
-		appendOne(reference)
-	}
-	return merged
-}
-
-// collectEmergedTags 汇总本轮 ReAct 各步 app_search 命中内容的类目（categoryId / subCategory），
-// 去重后归到 Topic 维度生成路径制 tagRef，作为对话浮现的兴趣标签随 turn.completed 下发，
-// 供端侧合成 assistant_interest 行为回流推荐特征（rm_recommend_feature）。
-func collectEmergedTags(result ReactResult) []string {
-	seen := map[string]struct{}{}
-	tags := []string{}
-	add := func(value string) {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return
-		}
-		tagRef := "Topic/" + value
-		if _, ok := seen[tagRef]; ok {
-			return
-		}
-		seen[tagRef] = struct{}{}
-		tags = append(tags, tagRef)
-	}
-	consume := func(m map[string]any) {
-		add(stringValue(m["categoryId"]))
-		add(stringValue(m["subCategory"]))
-	}
-	for _, step := range result.Steps {
-		raw, ok := step.Tool.Completed.Result["results"]
-		if !ok {
-			continue
-		}
-		switch items := raw.(type) {
-		case []any:
-			for _, item := range items {
-				if m, ok := item.(map[string]any); ok {
-					consume(m)
-				}
-			}
-		case []map[string]any:
-			for _, m := range items {
-				consume(m)
-			}
-		}
-	}
-	return tags
 }
 
 func toolResultReliable(step ReactStepResult) bool {

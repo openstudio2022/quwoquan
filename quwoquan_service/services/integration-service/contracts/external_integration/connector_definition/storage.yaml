@@ -1,0 +1,20 @@
+backend: mongodb
+role: authoritative
+collections:
+  connector_definitions:
+    entity: ConnectorDefinition
+    role: authoritative
+    description: 仅由签名 immutable release publisher 写入的官方 Connector 目录。
+    indexes:
+    - {name: uq_connector_definitions_connector, keys: {connectorId: 1}, unique: true}
+    - {name: idx_connector_definitions_status, keys: {status: 1, publishedAt: -1}}
+  connector_definition_command_receipts:
+    entity: ConnectorDefinition
+    role: authoritative
+    description: 与 ConnectorDefinition 同一 Mongo transaction 提交的 release publisher 幂等回执。
+    indexes:
+    - {name: uq_connector_definition_receipt_key, keys: {idempotencyKey: 1}, unique: true}
+  connector_definition_outbox:
+    entity: ConnectorDefinition
+    role: append_only
+    description: 与 definition 和命令回执原子提交的 ConnectorDefinitionPublished 事件。

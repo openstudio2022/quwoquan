@@ -8,10 +8,10 @@ final class AlphaContentReportQueryAdapter
   final List<ContentMyReportItem> _items;
 
   @override
-  Future<ContentMyReportPage> listMyReports(ContentMyReportsQuery query) async {
+  Future<MyReportPageSlice> listMyReports(ContentMyReportsQuery query) async {
     final offset = _decodeOffset(query.cursor);
     final end = (offset + query.limit).clamp(0, _items.length);
-    return ContentMyReportPage(
+    return MyReportPageSlice(
       items: _items.sublist(offset.clamp(0, _items.length), end),
       nextCursor: end < _items.length ? 'offset:$end' : null,
     );

@@ -8,58 +8,25 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/httpcodec"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
-	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
-	behaviorfactmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/domain/model"
-	fileapp "quwoquan_service/services/circle-service/internal/circle_management/circle_file/application"
-	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
-	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
-	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
-	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
 )
 
 // CircleHandler adapts circle application services to HTTP.
 type CircleHandler struct {
-	circleService           *application.CircleService
-	circleCommands          *application.CircleCommandFacade
-	fileCommands            *fileapp.CommandFacade
-	fileQueries             *fileapp.QueryFacade
-	behaviorFacts           *behaviorfactapp.Writer
-	groupCommands           *groupapp.CommandFacade
-	groupQueries            *groupapp.QueryFacade
-	groupMembershipCommands *groupmembershipapp.CommandFacade
-	groupMembershipQueries  *groupmembershipapp.QueryFacade
-	membershipCommands      *membershipapp.CommandFacade
-	membershipQueries       *membershipapp.QueryFacade
-	placementCommands       *placementapp.CommandFacade
+	circleService  *application.CircleService
+	circleCommands *application.CircleCommandFacade
 }
 
 func NewCircleHandler(
 	cs *application.CircleService,
 	circleCommands *application.CircleCommandFacade,
-	fileCommands *fileapp.CommandFacade,
-	fileQueries *fileapp.QueryFacade,
-	behaviorFacts *behaviorfactapp.Writer,
-	groupCommands *groupapp.CommandFacade,
-	groupQueries *groupapp.QueryFacade,
-	groupMembershipCommands *groupmembershipapp.CommandFacade,
-	groupMembershipQueries *groupmembershipapp.QueryFacade,
-	membershipCommands *membershipapp.CommandFacade,
-	membershipQueries *membershipapp.QueryFacade,
-	placements *placementapp.CommandFacade,
 ) *CircleHandler {
-	if cs == nil || circleCommands == nil || fileCommands == nil || fileQueries == nil || behaviorFacts == nil || groupCommands == nil || groupQueries == nil || groupMembershipCommands == nil || groupMembershipQueries == nil || membershipCommands == nil || membershipQueries == nil || placements == nil {
-		panic("CircleHandler requires all object facades")
+	if cs == nil || circleCommands == nil {
+		panic("CircleHandler requires Circle object facades")
 	}
-	return &CircleHandler{
-		circleService: cs, circleCommands: circleCommands,
-		fileCommands: fileCommands, fileQueries: fileQueries, behaviorFacts: behaviorFacts,
-		groupCommands: groupCommands, groupQueries: groupQueries,
-		groupMembershipCommands: groupMembershipCommands, groupMembershipQueries: groupMembershipQueries,
-		membershipCommands: membershipCommands, membershipQueries: membershipQueries,
-		placementCommands: placements,
-	}
+	return &CircleHandler{circleService: cs, circleCommands: circleCommands}
 }
 
 func (h *CircleHandler) Routes() http.Handler {
@@ -70,11 +37,7 @@ func (h *CircleHandler) Routes() http.Handler {
 	mux.HandleFunc("/circles", h.handleCircles)
 	mux.HandleFunc("GET /circles/discovery-feed", h.handleCircleDiscoveryFeed)
 	mux.HandleFunc("GET /circles/search", h.handleSearchCircles)
-	mux.HandleFunc("/circles/behaviors", h.handleBehaviors)
 	mux.HandleFunc("/circles/", h.handleCircleSubRoutes)
-
-	// Persona membership projection
-	mux.HandleFunc("/personas/", h.handlePersonaCircles)
 
 	return mux
 }
@@ -152,7 +115,7 @@ func (h *CircleHandler) handleCircleDiscoveryFeed(w http.ResponseWriter, r *http
 
 func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {
 	var command application.CreateCircleCommand
-	if err := readStrictJSON(r, &command); err != nil {
+	if err := httpcodec.DecodeStrictJSON(r, &command); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
@@ -191,10 +154,6 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 
 	subResource := parts[1]
 	switch subResource {
-	case "memberships":
-		h.handleMemberships(w, r, circleID, parts[2:])
-	case "groups":
-		h.handleGroups(w, r, circleID, parts[2:])
 	case "feed":
 		h.handleFeed(w, r, circleID, parts[2:])
 	case "stats":
@@ -203,10 +162,6 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 		h.handleGetImpact(w, r, circleID)
 	case "sections":
 		h.handleUpdateSections(w, r, circleID)
-	case "files":
-		h.handleFiles(w, r, circleID, parts[2:])
-	case "post-placements":
-		h.handlePostPlacements(w, r, circleID, parts[2:])
 	default:
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown sub-resource: "+subResource))
 	}
@@ -225,7 +180,7 @@ func (h *CircleHandler) handleGetCircle(w http.ResponseWriter, r *http.Request, 
 
 func (h *CircleHandler) handleUpdateCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	var command application.UpdateCircleCommand
-	if err := readStrictJSON(r, &command); err != nil {
+	if err := httpcodec.DecodeStrictJSON(r, &command); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
@@ -312,7 +267,7 @@ func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Requ
 	var body struct {
 		Sections []model.CircleSectionConfig `json:"sections"`
 	}
-	if err := readStrictJSON(r, &body); err != nil {
+	if err := httpcodec.DecodeStrictJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
@@ -324,30 +279,6 @@ func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
-}
-
-// --- Behaviors ---
-
-func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
-		return
-	}
-	var request struct {
-		CircleID  string `json:"circleId"`
-		EventType string `json:"eventType"`
-	}
-	if err := readStrictJSON(r, &request); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
-		return
-	}
-	if _, err := h.behaviorFacts.Append(r.Context(), behaviorfactapp.AppendCommand{
-		CircleID: request.CircleID, EventType: behaviorfactmodel.BehaviorEventType(request.EventType),
-	}); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Helpers ---

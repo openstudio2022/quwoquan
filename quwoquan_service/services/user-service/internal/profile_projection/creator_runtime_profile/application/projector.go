@@ -35,3 +35,13 @@ func (p *Projector) Project(ctx context.Context, profile Profile) (bool, error) 
 	}
 	return p.store.UpsertIfNewer(ctx, profile)
 }
+
+func (p *Projector) Delete(ctx context.Context, creatorID string, sourceVersion int64) (bool, error) {
+	if p == nil || p.store == nil {
+		return false, errors.New("creator runtime profile store is unavailable")
+	}
+	if strings.TrimSpace(creatorID) == "" || sourceVersion <= 0 {
+		return false, errors.New("creator runtime profile tombstone identity and sourceVersion are required")
+	}
+	return p.store.DeleteIfNotOlder(ctx, strings.TrimSpace(creatorID), sourceVersion)
+}

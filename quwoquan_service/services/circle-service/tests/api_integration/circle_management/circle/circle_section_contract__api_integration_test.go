@@ -112,7 +112,7 @@ func TestSectionConfigUpdate(t *testing.T) {
 
 // --- feed_pin_and_feature ---
 // 展示位唯一写入口是 CirclePostPlacement 命令；feed 直接联合 placement
-// 聚合读模型，禁止把圈子级 pin/feature 污染到跨圈共享的 Post 文档。
+// 聚合读模型，禁止把圈子级 pin/feature 污染到本地 Post 展示快照。
 
 func TestFeedPinAndFeature(t *testing.T) {
 	cleanCollections(t)
@@ -120,7 +120,7 @@ func TestFeedPinAndFeature(t *testing.T) {
 
 	circleID := createTestCircleAs(t, "Feed管理圈子", "persona-circle-owner")
 	secondCircleID := createTestCircleAs(t, "第二个Feed管理圈子", "persona-circle-owner")
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":   "post_001",
 		"title": "待管理帖子",
 	})
@@ -165,7 +165,7 @@ func TestFeedPinAndFeature(t *testing.T) {
 	}
 
 	var doc bson.M
-	if err := mongoDB.Collection("posts").FindOne(context.Background(), bson.M{"_id": "post_001"}).Decode(&doc); err != nil {
+	if err := mongoDB.Collection("circle_feed_items").FindOne(context.Background(), bson.M{"_id": "post_001"}).Decode(&doc); err != nil {
 		t.Fatalf("find post_001 failed: %v", err)
 	}
 	if _, polluted := doc["pinned"]; polluted {

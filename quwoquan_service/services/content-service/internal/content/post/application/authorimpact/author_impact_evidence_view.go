@@ -6,7 +6,7 @@ import (
 
 	rtimpact "quwoquan_service/runtime/impact"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 )
 

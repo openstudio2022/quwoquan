@@ -14,6 +14,7 @@ import (
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
+	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
 // TestExternalInteractionControlPlaneReadsCanonicalMongoFacts proves that the
@@ -27,14 +28,15 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	taskType := reliabletask.TaskTypeForExternalInteraction(
 		reliabletask.ExternalInteractionOperationPush,
 	)
+	runtimeStore := canonicalMongoExternalStore(t)
 	service, err := application.NewExternalInteractionService(
-		integrationReliableStore,
+		runtimeStore,
 		map[string]reliabletask.ExternalProvider{
-			application.PushProviderLocalRecorder: application.LocalRecorderPushProvider{},
+			pushapp.PushProviderLocalRecorder: pushapp.LocalRecorderPushProvider{},
 		},
 		map[string]reliabletask.ProviderPolicy{
 			reliabletask.ExternalInteractionOperationPush: {
-				Providers:   []string{application.PushProviderLocalRecorder},
+				Providers:   []string{pushapp.PushProviderLocalRecorder},
 				Timeout:     time.Second,
 				RetryPolicy: reliabletask.RetryPolicy{MaxAttempts: 1},
 			},
@@ -43,10 +45,10 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct external interaction service: %v", err)
 	}
-	handler := httpadapter.NewHandler(nil, 0, 0, 0, 0, 0, service).Routes()
+	handler := httpadapter.NewHandler(service).Routes()
 
 	requestID := "request-control-plane-001"
-	_, err = integrationReliableStore.DeclareTask(ctx, reliabletask.DeclareTaskRequest{
+	_, err = runtimeStore.DeclareTask(ctx, reliabletask.DeclareTaskRequest{
 		TaskType:       taskType,
 		OwnerDomain:    "integration",
 		AggregateType:  "external_interaction",
@@ -76,10 +78,10 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 		t.Fatalf("non-canonical external request state: status=%d body=%#v", status, requestState)
 	}
 
-	if _, err := integrationReliableStore.DispatchDueTasks(ctx, now, 1); err != nil {
+	if _, err := runtimeStore.DispatchDueTasks(ctx, now, 1); err != nil {
 		t.Fatalf("dispatch canonical external interaction task: %v", err)
 	}
-	task, err := integrationReliableStore.ClaimReadyTask(
+	task, err := runtimeStore.ClaimReadyTask(
 		ctx,
 		[]string{taskType},
 		"external-control-plane-test",
@@ -89,12 +91,12 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	if err != nil || task == nil {
 		t.Fatalf("claim external interaction task: task=%#v err=%v", task, err)
 	}
-	if _, err := integrationReliableStore.RecordProviderAttempt(ctx, reliabletask.ProviderAttemptRecord{
+	if _, err := runtimeStore.RecordProviderAttempt(ctx, reliabletask.ProviderAttemptRecord{
 		AttemptID:             "attempt-control-plane-001",
 		RequestID:             requestID,
 		TaskID:                task.TaskID,
 		Operation:             reliabletask.ExternalInteractionOperationPush,
-		Provider:              application.PushProviderLocalRecorder,
+		Provider:              pushapp.PushProviderLocalRecorder,
 		ProviderRequestDigest: reliabletask.ProviderRequestDigest("provider-request-control-plane-001"),
 		Status:                reliabletask.ExternalInteractionStatusFailed,
 		NormalizedError:       "provider rejected control-plane fixture",
@@ -104,7 +106,7 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("record canonical provider attempt: %v", err)
 	}
-	if err := integrationReliableStore.FailTask(
+	if err := runtimeStore.FailTask(
 		ctx,
 		task.TaskID,
 		task.LeaseToken,
@@ -204,8 +206,8 @@ func TestExternalInteractionControlPlaneReadsCanonicalMongoFacts(t *testing.T) {
 		nil,
 	)
 	items, ok := deadLetters["items"].([]any)
-	if status != http.StatusOK || !ok || len(items) != 0 {
-		t.Fatalf("recovered task remains in dead-letter slice: status=%d body=%#v", status, deadLetters)
+	if status != http.StatusOK || !ok || len(items) != 1 {
+		t.Fatalf("immutable dead-letter fact changed after recovery: status=%d body=%#v", status, deadLetters)
 	}
 }
 

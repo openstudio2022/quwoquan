@@ -1,0 +1,38 @@
+kind: ElasticsearchProductTelemetryAlertPolicy
+metadata:
+  name: app-product-telemetry
+  owner: product-ops-growth
+  environments: [alpha, beta, gamma, prod]
+spec:
+  adapter: ext.obs.elasticsearch
+  sourceIndexRole: aggregate
+  fallback: forbidden
+  alerts:
+  - {name: product-startup-content-p95-high, rowKind: performance, filter: {eventType: app_startup}, condition: "sampleCount >= 100 AND p95Ms > 3000", severity: warning}
+  - {name: product-startup-error-rate-high, rowKind: performance, filter: {eventType: app_startup}, condition: "sampleCount >= 100 AND errorRate > 0.001", severity: critical}
+  - {name: product-video-ready-p95-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND p95Ms > 3000", severity: warning}
+  - {name: product-video-rebuffer-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND rebufferRate > 0.01", severity: warning}
+  - {name: product-video-duration-mismatch-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND mismatchRate > 0.01", severity: warning}
+  - {name: product-video-seek-command-failure-rate-high, rowKind: video_qoe, condition: "seekCount >= 100 AND failureRate >= 0.005", severity: warning}
+  - {name: product-video-source-switch-seek-unsettled-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND unsettledRate >= 0.005", severity: warning}
+  - {name: product-video-dropped-frame-ratio-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND processedFrames >= 1000 AND droppedFrameRatio >= 0.01", severity: warning}
+  - {name: product-video-audio-underrun-detected, rowKind: video_qoe, condition: "sampleCount >= 100 AND audioUnderrunCount > 0", severity: warning}
+  - {name: product-rtc-media-connect-rate-low, rowKind: rtc_qoe, filter: {excludeResult: abandoned, connected: true}, condition: "sampleCount >= 50 AND connectRate < 0.98", severity: critical}
+  - {name: product-rtc-media-connect-p95-high, rowKind: rtc_qoe, filter: {mediaConnected: true}, condition: "sampleCount >= 50 AND p95Ms > 3000", severity: warning}
+  - {name: product-rtc-unexpected-disconnect-rate-high, rowKind: rtc_qoe, filter: {mediaConnected: true, result: connection_lost}, condition: "sampleCount >= 50 AND disconnectRate > 0.02", severity: critical}
+  - {name: product-content-share-action-failure-rate-high, rowKind: product_action_funnel, filter: {journey: content_share}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
+  - {name: product-content-report-action-failure-rate-high, rowKind: product_action_funnel, filter: {journey: content_report}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
+  - {name: product-article-reader-enter-p95-high, rowKind: article_reader_lifecycle, filter: {eventType: article_reader_enter, result: success}, condition: "sampleCount >= 100 AND p95Ms > 1200", severity: warning}
+  - {name: product-article-reader-error-rate-high, rowKind: article_reader_lifecycle, condition: "enterCount >= 100 AND errorRate > 0.01", severity: warning}
+  - {name: product-article-reader-recovery-failure, rowKind: article_reader_lifecycle, filter: {eventType: article_reader_recovery, result: failure}, condition: "recoveryFailureCount > 0", severity: warning}
+  - {name: product-profile-interaction-state-failure-rate-high, rowKind: product_action_funnel, filter: {journey: profile_interaction}, condition: "sampleCount >= 20 AND failureRate > 0.02", severity: warning}
+  - {name: product-chat-group-create-failure-rate-high, rowKind: chat_funnel, filter: {chatAction: group_create}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
+  - {name: product-chat-governance-failure-rate-high, rowKind: chat_funnel, filter: {chatAction: group_governance}, condition: "sampleCount >= 20 AND failureRate > 0.02", severity: warning}
+  - {name: product-search-effective-success-rate-low, rowKind: search_funnel, condition: "submitCount >= 100 AND effectiveSuccessRate < 0.35", severity: warning}
+  - {name: product-search-first-actionable-p95-high, rowKind: search_funnel, condition: "sampleCount >= 100 AND p95Ms > 1500", severity: warning}
+  - {name: product-search-effective-action-rate-low, rowKind: search_funnel, condition: "resultCount >= 100 AND effectiveActionRate < 0.20", severity: warning}
+  - {name: product-telemetry-transform-failed, rowKind: control_plane, condition: "failedTransformCount > 0", severity: critical}
+  - {name: product-telemetry-aggregate-stale, rowKind: control_plane, condition: "freshnessMinutes > 70", severity: warning}
+  - {name: product-telemetry-raw-retention-drift, rowKind: control_plane, condition: "rawRetentionDays != 3", severity: critical}
+  - {name: runtime-diagnostics-error-fingerprint-spike, rowKind: runtime_diagnostics, condition: "count >= 10", severity: warning}
+  - {name: runtime-diagnostics-raw-retention-drift, rowKind: control_plane, condition: "runtimeRawRetentionDays != 3", severity: critical}

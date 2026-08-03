@@ -1,53 +1,44 @@
 read_model: ContentPostProjection
-description: 'ListUserPosts 分页结果的单项内容读模型。它是 Post 的只读投影，
-
-  不允许作为命令输入或权威写模型。
-
-  '
-consumers:
-- app
-source_entities:
-- Post
-- MediaAsset
-client_projection:
-  dart_class: ContentPostProjection
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/content_post_projection.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/content_post_projection.dart
+description: >-
+  Feed、作者列表、足迹和 Post mutation 共用的公开内容投影；它不是 Post 聚合，
+  不包含 CAS version、审核内部状态、幂等 receipt 或存储键。
+source_entities: [Post, MediaAsset]
+consumers: [app]
 fields:
-- {name: postId}
-- {name: contentType}
-- {name: contentIdentity}
-- {name: assistantUsePolicy}
-- {name: authorId}
-- {name: authorDisplayName}
-- {name: authorAvatarUrl}
-- {name: authorBackgroundUrl}
-- {name: authorRoleLabel}
-- {name: authorIdentityTags}
-- {name: authorVerified}
-- {name: title}
-- {name: body}
-- {name: summary}
-- {name: coverUrl}
-- {name: articleTemplate}
-- {name: articleFontPreset}
-- {name: mediaUrls}
-- {name: videoUrl}
-- {name: mediaAssetId}
-- {name: mediaAssetVersion}
-- {name: hlsCmafMasterManifestUrl}
-- {name: hlsCmafDescriptorVersion}
-- {name: thumbnailUrl}
-- {name: width}
-- {name: height}
-- {name: durationMs}
-- {name: likeCount}
-- {name: commentCount}
-- {name: shareCount}
-- {name: createdAt}
-- {name: updatedAt}
-- {name: publishedAt}
-- {name: contentVertical}
-- {name: recallPath}
-- {name: supplySource}
-- {name: intersectionReasons}
+  - {name: postId, type: string, nullable: false}
+  - {name: contentType, type: string, nullable: false}
+  - {name: contentIdentity, type: string, nullable: true}
+  - {name: assistantUsePolicy, type: string, nullable: true}
+  - {name: authorId, type: string, nullable: true}
+  - {name: authorDisplayName, type: string, nullable: true}
+  - {name: authorAvatarUrl, type: string, nullable: true}
+  - {name: authorBackgroundUrl, type: string, nullable: true}
+  - {name: authorRoleLabel, type: string, nullable: true}
+  - {name: authorIdentityTags, type: '[]string', nullable: true}
+  - {name: authorVerified, type: bool, nullable: true}
+  - {name: title, type: string, nullable: true}
+  - {name: body, type: string, nullable: true}
+  - {name: summary, type: string, nullable: true}
+  - {name: coverUrl, type: string, nullable: true}
+  - {name: articleTemplate, type: string, nullable: true}
+  - {name: articleFontPreset, type: string, nullable: true}
+  - {name: mediaUrls, type: '[]string', nullable: true}
+  - {name: videoUrl, type: string, nullable: true}
+  - {name: mediaAssetId, type: string, nullable: true}
+  - {name: mediaAssetVersion, type: int, nullable: true}
+  - {name: hlsCmafMasterManifestUrl, type: string, nullable: true}
+  - {name: hlsCmafDescriptorVersion, type: int, nullable: true}
+  - {name: thumbnailUrl, type: string, nullable: true}
+  - {name: width, type: int, nullable: true}
+  - {name: height, type: int, nullable: true}
+  - {name: durationMs, type: int, nullable: true}
+  - {name: likeCount, type: int, nullable: false}
+  - {name: commentCount, type: int, nullable: false}
+  - {name: shareCount, type: int, nullable: false}
+  - {name: createdAt, type: timestamp, nullable: true}
+  - {name: updatedAt, type: timestamp, nullable: true}
+  - {name: publishedAt, type: timestamp, nullable: true}
+  - {name: contentVertical, type: string, nullable: true}
+  - {name: recallPath, type: string, nullable: true}
+  - {name: supplySource, type: string, nullable: true}
+  - {name: intersectionReasons, type: '[]IntersectionReason', nullable: true}

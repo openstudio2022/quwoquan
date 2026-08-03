@@ -53,3 +53,24 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+types:
+  ChatGetMessageReceiptsQuery:
+    fields:
+    - name: conversationId
+      type: string
+      constraints:
+      - NOT_BLANK
+      client_dart_type: String
+      client_normalization: trim
+    - name: messageId
+      type: string
+      constraints:
+      - NOT_BLANK
+      client_dart_type: String
+      client_normalization: trim
+  MessageReceiptPageSlice:
+    description: MessageReceiptFact Reader 的稳定只读集合响应。
+    fields:
+    - name: items
+      type: '[]ChatMessageReceipt'
+      constraints: [NOT_NULL]

@@ -14,10 +14,6 @@ source_entities:
 consumers:
 - notification-service
 - app
-client_projection:
-  dart_class: AppMessage
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/notification/app_message.dart
 fields:
 - name: messageId
   type: string

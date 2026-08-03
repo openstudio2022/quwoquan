@@ -17,6 +17,7 @@ import (
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
+	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
 type Handler struct {
@@ -27,6 +28,16 @@ type Handler struct {
 type UpdateExperimentRolloutRequest struct {
 	Status   string                    `json:"status"`
 	Variants []experimentmodel.Variant `json:"variants"`
+}
+
+type CreateExperimentRequest struct {
+	ID           string                       `json:"id"`
+	Key          string                       `json:"key"`
+	Status       string                       `json:"status"`
+	Variants     []experimentmodel.Variant    `json:"variants"`
+	AudienceRule experimentmodel.AudienceRule `json:"audienceRule"`
+	StartsAt     string                       `json:"startsAt,omitempty"`
+	EndsAt       string                       `json:"endsAt,omitempty"`
 }
 
 type ExperimentCatalogItem struct {
@@ -58,6 +69,14 @@ type UpdateExperimentRolloutResult struct {
 	Variants           []experimentmodel.Variant `json:"variants"`
 }
 
+type CreateExperimentResult struct {
+	ID                 string                    `json:"id"`
+	Key                string                    `json:"key"`
+	Status             string                    `json:"status"`
+	ExperimentRevision int64                     `json:"experimentRevision"`
+	Variants           []experimentmodel.Variant `json:"variants"`
+}
+
 func NewHandler(experiments *experimentapp.Facade) (*Handler, error) {
 	if experiments == nil {
 		return nil, errors.New("experiment HTTP adapter requires facade")
@@ -67,6 +86,8 @@ func NewHandler(experiments *experimentapp.Facade) (*Handler, error) {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/control-plane/product/experiments":
+		h.createExperiment(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/control-plane/product/experiments":
 		h.listExperiments(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/control-plane/product/experiments/") && strings.HasSuffix(r.URL.Path, ":rollout"):
@@ -78,6 +99,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument("experiment route or method is not registered"))
 	}
+}
+
+func (h *Handler) createExperiment(w http.ResponseWriter, r *http.Request) {
+	var command CreateExperimentRequest
+	if err := decodeStrictJSON(r, &command); err != nil {
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument(err.Error()))
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument("Idempotency-Key is required"))
+		return
+	}
+	if _, err := h.experiments.Create(
+		r.Context(), command.ID, command.Key, command.Status, command.Variants,
+		command.AudienceRule, command.StartsAt, command.EndsAt, idempotencyKey,
+	); err != nil {
+		writeExperimentError(w, r, err, true)
+		return
+	}
+	created, err := h.experiments.Get(r.Context(), command.ID)
+	if err != nil {
+		writeExperimentError(w, r, err, false)
+		return
+	}
+	writeJSON(w, http.StatusCreated, CreateExperimentResult{
+		ID: created.ID, Key: created.Key, Status: created.Status,
+		ExperimentRevision: created.Version, Variants: created.Variants,
+	})
 }
 
 func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +143,7 @@ func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.assignments.Get(r.Context(), experimentID, subjectKey)
 	if err != nil {
-		writeAssignmentError(w, r, err, false)
+		writeAssignmentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -107,7 +157,7 @@ func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
 	}
 	experiment, stats, err := h.assignments.Stats(r.Context(), experimentID)
 	if err != nil {
-		writeAssignmentError(w, r, err, false)
+		writeAssignmentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, ExperimentStatsSlice{
@@ -208,6 +258,8 @@ func trustedSubjectKey(r *http.Request) (string, error) {
 
 func writeExperimentError(w http.ResponseWriter, r *http.Request, err error, write bool) {
 	switch {
+	case errors.Is(err, experimentmodel.ErrInvalidArgument):
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument(err.Error()))
 	case errors.Is(err, experimentmodel.ErrNotFound):
 		writeError(w, r, experimentgenerated.AppErrorFromExperimentNotFound(err.Error()))
 	case errors.Is(err, experimentmodel.ErrVersionConflict):
@@ -223,19 +275,13 @@ func writeExperimentError(w http.ResponseWriter, r *http.Request, err error, wri
 	}
 }
 
-func writeAssignmentError(w http.ResponseWriter, r *http.Request, err error, write bool) {
+func writeAssignmentError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, experimentmodel.ErrNotFound):
 		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentExperimentNotFound(err.Error()))
-	case errors.Is(err, experimentmodel.ErrAssignmentNotFound):
+	case errors.Is(err, assignmentdomain.ErrNotFound):
 		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentNotFound(err.Error()))
-	case errors.Is(err, experimentmodel.ErrDisabled):
-		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentNotRunning(err.Error()))
 	default:
-		if write {
-			writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentStorageWriteFailed(err.Error()))
-			return
-		}
 		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentStorageReadFailed(err.Error()))
 	}
 }

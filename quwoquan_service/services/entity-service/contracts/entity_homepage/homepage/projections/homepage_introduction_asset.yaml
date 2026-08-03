@@ -12,27 +12,13 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageIntroductionAsset
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_introduction_asset.g.dart
-  fields:
-  - name: assetId
-    dart_type: String
-    nullable: false
-    source: assetId
-    default: ''''''
-  - name: url
-    dart_type: String
-    nullable: false
-    source: url
-    default: ''''''
-  - name: caption
-    dart_type: String
-    nullable: true
-    source: caption
-  - name: role
-    dart_type: String
-    nullable: false
-    source: role
-    default: '''related'''
+fields:
+- name: assetId
+  type: string
+- name: url
+  type: string
+- name: caption
+  type: string
+  nullable: true
+- name: role
+  type: string

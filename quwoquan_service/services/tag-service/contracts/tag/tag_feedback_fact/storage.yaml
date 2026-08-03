@@ -18,3 +18,10 @@ collections:
         eventPublishedAt: 1
         recordedAt: 1
 role: append_only
+streams:
+  events.tag.feedback:
+    entity: TagFeedbackFact
+    role: append_only
+    idempotency_key: id
+    retention_seconds: 604800
+    description: TagFeedbackRecorded 的唯一权威事实流，由 TagFeedbackFact transactional relay 发布。

@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/models/post_read_ui_bundle.dart';
@@ -33,9 +34,9 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     ArticleDetailWireKeys.articleMarkdown: markdown,
     ArticleDetailWireKeys.markdownDialect: 'qwq-rich-md',
     ArticleDetailWireKeys.articleAssetManifest:
-        buildArticleAssetManifestForPayload(state).toJson(),
+        buildArticleAssetManifestForPayload(state).toWire(),
     ArticleDetailWireKeys.articleRenderProfile:
-        buildArticleRenderProfileForPayload(state).toJson(),
+        buildArticleRenderProfileForPayload(state).toWire(),
     ArticleDetailWireKeys.articleTemplate: state.articleTemplate.name,
     ArticleDetailWireKeys.articleFontPreset: state.articleFontPreset.name,
   };
@@ -51,7 +52,7 @@ PostReadUiBundle postReadPreviewBundleFromCreateEditorState(
     previewPostId: previewPostId,
   );
   return PostReadUiBundle.fromPost(
-    postBaseDtoFromMap(raw),
+    contentPostViewDataFromReadModelMap(raw),
     PostReadSurfaceId.draftPreview,
     wire: raw,
   );
@@ -159,7 +160,7 @@ PostReadUiBundle postReadPreviewBundleFromPublishConfirmSummary({
     previewPostId: previewPostId,
   );
   return PostReadUiBundle.fromPost(
-    postBaseDtoFromMap(wire),
+    contentPostViewDataFromReadModelMap(wire),
     PostReadSurfaceId.draftPreview,
     wire: wire,
   );

@@ -573,13 +573,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         });
   }
 
-  RecentSearchEntryView _recentEntryFromContract(RecentSearchEntry entry) {
-    return RecentSearchEntryView(
-      entryId: entry.entryId,
-      query: entry.query,
-      scope: SearchScope.fromWire(entry.scope),
-      facet: entry.facet,
-      updatedAt: entry.updatedAt ?? DateTime.now(),
-    );
+  RecentSearchEntryView _recentEntryFromContract(RecentSearchEntryWire entry) {
+    return RecentSearchEntryView.fromWire(entry);
   }
 }

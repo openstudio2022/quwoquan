@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
 type assistantSessionPreferenceInjectionPreferenceSnapshotReader struct {
@@ -28,7 +30,6 @@ func (r *assistantSessionPreferenceInjectionPreferenceSnapshotReader) ResolveAct
 }
 
 func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
-	store := persistence.NewMemorySessionRunStore()
 	preferences := &assistantSessionPreferenceInjectionPreferenceSnapshotReader{
 		sessionBySession: map[string][]preferencemodel.Snapshot{},
 		longTerm: []preferencemodel.Snapshot{
@@ -41,30 +42,23 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 			},
 		},
 	}
-	service := orchestration.NewAssistantService(
+	runtime := assistantruntest.NewMemoryRuntime()
+	commands := runruntime.NewCommandService(
+		runtime,
+		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		nil,
 		nil,
-		orchestration.WithSessionRunStore(store),
-		orchestration.WithPreferenceSnapshotReader(preferences),
-		testFrozenPolicyOption(),
+		testRunPolicyResolver(),
 	)
-	sessionA, err := service.CreateSession(
-		t.Context(),
-		"persona-owner",
-		assistant.CreateSessionInput{ClientRequestID: "create-preference-session-a"},
+	useCases := runapplication.NewUseCases(
+		commands,
+		runapplication.WithPreferenceSnapshots(preferences),
 	)
-	if err != nil {
-		t.Fatalf("CreateSession(A) error = %v", err)
-	}
-	sessionB, err := service.CreateSession(
-		t.Context(),
-		"persona-owner",
-		assistant.CreateSessionInput{ClientRequestID: "create-preference-session-b"},
-	)
-	if err != nil {
-		t.Fatalf("CreateSession(B) error = %v", err)
-	}
-	preferences.sessionBySession[sessionA.SessionID] = []preferencemodel.Snapshot{
+	const sessionA = "session-preference-a"
+	const sessionB = "session-preference-b"
+	preferences.sessionBySession[sessionA] = []preferencemodel.Snapshot{
 		{
 			PreferenceID: "apf_session_a",
 			Scope:        preferencemodel.ScopeSession,
@@ -74,55 +68,63 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 		},
 	}
 	const question = "请解释今天的安排"
-	turnA, err := service.CreateTurn(
+	runA, err := useCases.Start(
 		t.Context(),
 		"persona-owner",
-		sessionA.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: question},
-			ClientRequestID: "create-preference-turn-a",
-			RequestContext:  testRunRequestContext("persona-owner"),
+		sessionA,
+		"trace-preference-a",
+		runapplication.StartInput{
+			ClientRequestID: "create-preference-run-a",
+			Intent: rundomain.Intent{
+				Kind:   "answer",
+				Answer: &rundomain.AnswerIntent{Text: question},
+			},
+			TrustedPersonaID: "persona-owner",
 		},
 	)
 	if err != nil {
-		t.Fatalf("CreateTurn(A) error = %v", err)
+		t.Fatalf("Start(A) error = %v", err)
 	}
-	if turnA.Input.Text != question {
-		t.Fatalf("turn A question mutated: %q", turnA.Input.Text)
+	if runA.InputText != question {
+		t.Fatalf("run A question mutated: %q", runA.InputText)
 	}
-	if len(turnA.SessionPreferenceFacts) != 1 ||
-		turnA.SessionPreferenceFacts[0].Value != "concise" {
-		t.Fatalf("turn A session preferences = %#v", turnA.SessionPreferenceFacts)
+	if len(runA.SessionPreferenceFacts) != 1 ||
+		runA.SessionPreferenceFacts[0].Value != "concise" {
+		t.Fatalf("run A session preferences = %#v", runA.SessionPreferenceFacts)
 	}
-	if len(turnA.LongTermPreferenceFacts) != 1 ||
-		turnA.LongTermPreferenceFacts[0].Value != "warm" {
-		t.Fatalf("turn A long-term preferences = %#v", turnA.LongTermPreferenceFacts)
+	if len(runA.LongTermPreferenceFacts) != 1 ||
+		runA.LongTermPreferenceFacts[0].Value != "warm" {
+		t.Fatalf("run A long-term preferences = %#v", runA.LongTermPreferenceFacts)
 	}
-	turnB, err := service.CreateTurn(
+	runB, err := useCases.Start(
 		t.Context(),
 		"persona-owner",
-		sessionB.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: question},
-			ClientRequestID: "create-preference-turn-b",
-			RequestContext:  testRunRequestContext("persona-owner"),
+		sessionB,
+		"trace-preference-b",
+		runapplication.StartInput{
+			ClientRequestID: "create-preference-run-b",
+			Intent: rundomain.Intent{
+				Kind:   "answer",
+				Answer: &rundomain.AnswerIntent{Text: question},
+			},
+			TrustedPersonaID: "persona-owner",
 		},
 	)
 	if err != nil {
-		t.Fatalf("CreateTurn(B) error = %v", err)
+		t.Fatalf("Start(B) error = %v", err)
 	}
-	if turnB.Input.Text != question {
-		t.Fatalf("turn B question mutated: %q", turnB.Input.Text)
+	if runB.InputText != question {
+		t.Fatalf("run B question mutated: %q", runB.InputText)
 	}
-	if len(turnB.SessionPreferenceFacts) != 0 {
+	if len(runB.SessionPreferenceFacts) != 0 {
 		t.Fatalf(
 			"session B inherited session A session preference: %#v",
-			turnB.SessionPreferenceFacts,
+			runB.SessionPreferenceFacts,
 		)
 	}
-	if len(turnB.LongTermPreferenceFacts) != 1 ||
-		turnB.LongTermPreferenceFacts[0].Value != "warm" {
-		t.Fatalf("turn B long-term preferences = %#v", turnB.LongTermPreferenceFacts)
+	if len(runB.LongTermPreferenceFacts) != 1 ||
+		runB.LongTermPreferenceFacts[0].Value != "warm" {
+		t.Fatalf("run B long-term preferences = %#v", runB.LongTermPreferenceFacts)
 	}
 }
 

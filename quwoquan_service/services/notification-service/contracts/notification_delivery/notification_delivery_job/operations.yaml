@@ -63,10 +63,6 @@ api_routes:
     response_entity: AckIncomingCallPresentationResult
     response_body: AckIncomingCallPresentationResult
     response_body_kind: object
-    client_contract:
-      dart_import: ../notification/incoming_call_delivery_contracts.dart
-      response_type: AckIncomingCallPresentationResultDto
-      response_decoder: decodeAckIncomingCallPresentationResult
     description: 当前 trusted persona/device 确认已展示 deliveryKey 对应来电；只允许 realtime_dispatched CAS 到 realtime_presented
     security:
       auth_mode: required

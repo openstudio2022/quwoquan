@@ -183,6 +183,17 @@ types:
         type: timestamp
         constraints:
           - NOT_NULL
+  CircleGroupPageSlice:
+    description: CircleGroupReader 的稳定游标分页结果；items 与 cursor 共同构成唯一 wire 响应。
+    fields:
+      - name: items
+        type: '[]CircleGroupSlice'
+        constraints:
+          - NOT_NULL
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
   CreateCircleGroupRequest:
     description: 创建 CircleGroup 的强类型命令体；actor 与 circleId 由 runtime/path 注入。
     fields:
@@ -395,12 +406,10 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: nodeType
-        type: string
+        type: enum
         enum_ref: OrganizationNodeType
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupNodeType?
-        client_wire: canonicalEnum
       - name: name
         type: string
         constraints:
@@ -412,19 +421,15 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: visibility
-        type: CircleGroupVisibility
+        type: enum
         enum_ref: CircleGroupVisibility
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupVisibility?
-        client_wire: canonicalEnum
       - name: joinPolicy
-        type: CircleGroupJoinPolicy
+        type: enum
         enum_ref: CircleGroupJoinPolicy
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupJoinPolicy?
-        client_wire: canonicalEnum
       - name: storageEnabled
         type: bool
         constraints:
@@ -450,19 +455,15 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: visibility
-        type: CircleGroupVisibility
+        type: enum
         enum_ref: CircleGroupVisibility
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupVisibility?
-        client_wire: canonicalEnum
       - name: groupType
-        type: CircleGroupType
+        type: enum
         enum_ref: CircleGroupType
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupType?
-        client_wire: canonicalEnum
       - name: cursor
         type: string
         constraints:
@@ -486,17 +487,13 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: groupType
-        type: CircleGroupType
+        type: enum
         enum_ref: CircleGroupType
-        client_dart_type: CircleGroupType
-        client_wire: canonicalEnum
       - name: nodeType
-        type: string
+        type: enum
         enum_ref: OrganizationNodeType
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupNodeType?
-        client_wire: canonicalEnum
       - name: name
         type: string
         constraints:
@@ -508,15 +505,11 @@ types:
         client_dart_type: String
         client_default: ''''''
       - name: visibility
-        type: CircleGroupVisibility
+        type: enum
         enum_ref: CircleGroupVisibility
-        client_dart_type: CircleGroupVisibility
-        client_wire: canonicalEnum
       - name: joinPolicy
-        type: CircleGroupJoinPolicy
+        type: enum
         enum_ref: CircleGroupJoinPolicy
-        client_dart_type: CircleGroupJoinPolicy
-        client_wire: canonicalEnum
       - name: storageEnabled
         type: bool
         client_dart_type: bool
@@ -532,31 +525,25 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: groupType
-        type: CircleGroupType
+        type: enum
         enum_ref: CircleGroupType
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupType?
-        client_wire: canonicalEnum
       - name: visibility
-        type: CircleGroupVisibility
+        type: enum
         enum_ref: CircleGroupVisibility
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupVisibility?
-        client_wire: canonicalEnum
       - name: parentGroupId
         type: string
         constraints:
           - NULLABLE
         client_dart_type: String?
       - name: nodeType
-        type: string
+        type: enum
         enum_ref: OrganizationNodeType
         constraints:
           - NULLABLE
-        client_dart_type: CircleGroupNodeType?
-        client_wire: canonicalEnum
       - name: cursor
         type: string
         constraints:

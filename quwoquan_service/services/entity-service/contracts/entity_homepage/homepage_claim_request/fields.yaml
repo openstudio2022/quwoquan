@@ -156,6 +156,16 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  HomepageClaimRequestView:
+    fields:
+      - {name: claimRequestId, type: string, constraints: [NOT_BLANK]}
+      - {name: homepageId, type: string, constraints: [NOT_BLANK]}
+      - {name: requesterPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: claimTier, type: enum, enum_ref: HomepageClaimTier, constraints: [NOT_NULL]}
+      - {name: status, type: enum, enum_ref: HomepageClaimReviewStatus, constraints: [NOT_NULL]}
+      - {name: reviewNote, type: string, constraints: [NULLABLE]}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: reviewedAt, type: timestamp, constraints: [NULLABLE]}
   ReviewHomepageClaimRequestCommand:
     fields:
       - name: homepageId

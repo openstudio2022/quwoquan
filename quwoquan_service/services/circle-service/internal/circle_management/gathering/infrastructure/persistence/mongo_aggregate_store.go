@@ -18,17 +18,19 @@ import (
 )
 
 const (
-	gatheringCollection = "gatherings"
-	receiptCollection   = "gathering_command_receipts"
-	outboxCollection    = "gathering_outbox"
-	sequenceCollection  = "gathering_outbox_sequences"
+	gatheringCollection                = "gatherings"
+	receiptCollection                  = "gathering_command_receipts"
+	outboxCollection                   = "gathering_outbox"
+	sequenceCollection                 = "gathering_outbox_sequences"
+	reconciliationCheckpointCollection = "gathering_reconciliation_checkpoints"
 )
 
 type MongoAggregateStore struct {
-	gatherings *mongo.Collection
-	receipts   *mongo.Collection
-	outbox     *mongo.Collection
-	sequences  *mongo.Collection
+	gatherings  *mongo.Collection
+	receipts    *mongo.Collection
+	outbox      *mongo.Collection
+	sequences   *mongo.Collection
+	checkpoints *mongo.Collection
 }
 
 func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
@@ -36,10 +38,11 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 		panic("Gathering MongoAggregateStore requires database")
 	}
 	return &MongoAggregateStore{
-		gatherings: database.Collection(gatheringCollection),
-		receipts:   database.Collection(receiptCollection),
-		outbox:     database.Collection(outboxCollection),
-		sequences:  database.Collection(sequenceCollection),
+		gatherings:  database.Collection(gatheringCollection),
+		receipts:    database.Collection(receiptCollection),
+		outbox:      database.Collection(outboxCollection),
+		sequences:   database.Collection(sequenceCollection),
+		checkpoints: database.Collection(reconciliationCheckpointCollection),
 	}
 }
 
@@ -72,6 +75,66 @@ func (store *MongoAggregateStore) Load(ctx context.Context, gatheringID string) 
 		return model.Gathering{}, false, err
 	}
 	return value, true, nil
+}
+
+func (store *MongoAggregateStore) ListReconciliationCandidates(
+	ctx context.Context,
+	limit int,
+) ([]model.Gathering, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	cursor, err := store.gatherings.Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: reconciliationCheckpointCollection},
+			{Key: "localField", Value: "_id"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "reconciliationCheckpoint"},
+		}}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "reconciliationCheckpointVersion", Value: bson.D{
+			{Key: "$ifNull", Value: bson.A{
+				bson.D{{Key: "$arrayElemAt", Value: bson.A{"$reconciliationCheckpoint.version", 0}}},
+				int64(0),
+			}},
+		}}}}},
+		bson.D{{Key: "$match", Value: bson.D{{Key: "$expr", Value: bson.D{
+			{Key: "$lt", Value: bson.A{"$reconciliationCheckpointVersion", "$version"}},
+		}}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "updatedAt", Value: 1}, {Key: "_id", Value: 1}}}},
+		bson.D{{Key: "$limit", Value: int64(limit)}},
+		bson.D{{Key: "$unset", Value: bson.A{"reconciliationCheckpoint", "reconciliationCheckpointVersion"}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var values []model.Gathering
+	if err := cursor.All(ctx, &values); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func (store *MongoAggregateStore) SaveReconciliationCheckpoint(
+	ctx context.Context,
+	gatheringID string,
+	version int64,
+	updatedAt time.Time,
+) error {
+	gatheringID = strings.TrimSpace(gatheringID)
+	if gatheringID == "" || version <= 0 || updatedAt.IsZero() {
+		return model.ErrInvalidArgument
+	}
+	_, err := store.checkpoints.UpdateOne(
+		ctx,
+		bson.M{"_id": gatheringID},
+		bson.M{
+			"$max": bson.M{"version": version},
+			"$set": bson.M{"updatedAt": updatedAt.UTC()},
+		},
+		options.UpdateOne().SetUpsert(true),
+	)
+	return err
 }
 
 func (store *MongoAggregateStore) Commit(ctx context.Context, request ports.CommitRequest) (ports.CommitReceipt, error) {
@@ -196,5 +259,6 @@ func (store *MongoAggregateStore) appendOutbox(ctx context.Context, eventType st
 }
 
 var _ ports.AggregateStore = (*MongoAggregateStore)(nil)
+var _ ports.ReconciliationStore = (*MongoAggregateStore)(nil)
 
 var _ = time.Now

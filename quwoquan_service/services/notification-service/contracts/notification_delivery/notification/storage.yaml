@@ -44,4 +44,47 @@ collections:
       keys:
         expireAt: 1
       expireAfterSeconds: 0
+  notification_user_account_restrictions:
+    entity: Notification
+    role: projection
+    description: UserSuspended/UserRestored 的可逆本地阻断状态；只持有 subject 集合与账号版本，不读取 User 数据库。
+    indexes:
+    - name: idx_notification_account_restriction_subject_state
+      keys:
+        subjects: 1
+        restricted: 1
+    - name: idx_notification_account_restriction_version
+      keys:
+        accountVersion: -1
+  notification_user_account_restriction_inbox:
+    entity: Notification
+    role: projection
+    description: 可逆账号限制事件的 eventId/digest 幂等 inbox；与 Notification 状态和 DeliveryJob typed port mutation 同事务。
+    indexes:
+    - name: uq_notification_account_restriction_account_version
+      keys:
+        accountDigest: 1
+        accountVersion: 1
+      unique: true
+    - name: idx_notification_account_restriction_applied
+      keys:
+        appliedAt: -1
+  notification_user_account_restriction_watermarks:
+    entity: Notification
+    role: projection
+    description: 账号限制的单调版本水位；UserAccountClosed 后写入不可逆 terminal marker，迟到恢复事件不得复活通知投递。
+    indexes:
+    - name: idx_notification_account_restriction_terminal_version
+      keys:
+        terminal: 1
+        accountVersion: -1
+  interaction_notification_failures:
+    entity: Notification
+    role: projection
+    description: typed interaction notification 投影的有限重试状态；不读取 Integration provider ledger。
+    indexes:
+    - name: ttl_interaction_notification_failures
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
 role: authoritative

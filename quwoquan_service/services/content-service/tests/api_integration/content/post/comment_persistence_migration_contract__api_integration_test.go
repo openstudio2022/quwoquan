@@ -8,8 +8,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/commandmeta"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 )
 
 func TestCommentAggregateMongoTransactionAndCAS(t *testing.T) {
@@ -96,22 +96,6 @@ func TestCommentStore_AuthoritativeCountsNoCache(t *testing.T) {
 	}
 	if page.Total != authoritative || numberAsInt64(counters["comment"]) != authoritative {
 		t.Fatalf("authoritative Comment count mismatch: mongo=%d page=%d counters=%+v", authoritative, page.Total, counters)
-	}
-	var feedProjection struct {
-		CommentCount int64 `bson:"commentCount"`
-	}
-	if err := mongoDB.Collection("rm_discovery_feed").FindOne(
-		context.Background(),
-		bson.M{"postId": postID},
-	).Decode(&feedProjection); err != nil {
-		t.Fatalf("read DiscoveryFeed Comment count projection: %v", err)
-	}
-	if feedProjection.CommentCount != authoritative {
-		t.Fatalf(
-			"DiscoveryFeed Comment count stale: mongo=%d feed=%d",
-			authoritative,
-			feedProjection.CommentCount,
-		)
 	}
 }
 

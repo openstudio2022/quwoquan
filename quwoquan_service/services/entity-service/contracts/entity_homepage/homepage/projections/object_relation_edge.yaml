@@ -11,64 +11,28 @@ consumers:
 - app
 - recommendation
 - assistant
-client_projection:
-  dart_class: ObjectRelationEdge
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/object_relation_edge.g.dart
-  fields:
-  - name: edgeId
-    dart_type: String
-    nullable: false
-    source: edgeId
-    default: ''''''
-  - name: edgeType
-    dart_type: String
-    enum_ref: ObjectRelationEdgeType
-    nullable: false
-    source: edgeType
-    default: ''''''
-    description: 关系类型，取值闭集为 _shared/types.yaml 的 ObjectRelationEdgeType。wire 仍是字符串，但生产方（runtime/recommendation
-      ObjectRelationEdgeType）与消费方（core/models/object_relation_edge_type.dart）必须只使用闭集成员，parity 由
-      verify_object_relation_edge_type_contract.py 守；未登记取值不会被读端放行，也不会被端侧渲染
-  - name: sourceObjectType
-    dart_type: String
-    nullable: false
-    source: sourceObjectType
-    default: ''''''
-  - name: sourceObjectId
-    dart_type: String
-    nullable: false
-    source: sourceObjectId
-    default: ''''''
-  - name: targetObjectType
-    dart_type: String
-    nullable: false
-    source: targetObjectType
-    default: ''''''
-  - name: targetObjectId
-    dart_type: String
-    nullable: false
-    source: targetObjectId
-    default: ''''''
-  - name: canonicalEntityId
-    dart_type: String
-    nullable: false
-    source: canonicalEntityId
-    default: ''''''
-  - name: tagRefs
-    dart_type: List<String>
-    nullable: false
-    source: tagRefs
-  - name: evidenceRefs
-    dart_type: List<String>
-    nullable: false
-    source: evidenceRefs
-  - name: confidence
-    dart_type: double
-    nullable: false
-    source: confidence
-    default: '0.0'
-  - name: createdAt
-    dart_type: DateTime?
-    nullable: true
-    source: createdAt
+fields:
+- name: edgeId
+  type: string
+- name: edgeType
+  type: enum
+  enum_ref: ObjectRelationEdgeType
+- name: sourceObjectType
+  type: string
+- name: sourceObjectId
+  type: string
+- name: targetObjectType
+  type: string
+- name: targetObjectId
+  type: string
+- name: canonicalEntityId
+  type: string
+- name: tagRefs
+  type: '[]string'
+- name: evidenceRefs
+  type: '[]string'
+- name: confidence
+  type: float64
+- name: createdAt
+  type: timestamp
+  nullable: true

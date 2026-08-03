@@ -394,12 +394,19 @@ func signedRelease(
 	t.Helper()
 	kinds := []string{
 		model.AssetManifest,
-		model.AssetPrompt,
+		model.AssetCatalog,
 		model.AssetActivation,
+		model.AssetInput,
+		model.AssetInputSchema,
 		model.AssetContext,
 		model.AssetCapability,
+		model.AssetOrchestration,
+		model.AssetTrigger,
+		model.AssetMemory,
 		model.AssetPresentation,
+		model.AssetPresentationTemplate,
 		model.AssetEvaluation,
+		model.AssetPrompt,
 		model.AssetReplay,
 	}
 	assets := make([]model.Asset, 0, len(kinds))

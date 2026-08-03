@@ -20,17 +20,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"identity.sms.otp": {
 			State:       "enabled",
-			AdapterID:   "ext.sms.aliyun",
-			EndpointRef: "environment_binding:integration.sms",
+			AdapterID:   "ext.sms.local_capture",
+			EndpointRef: "local_topology:integration.local_capture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
 				"INTEGRATION_SMS_TOKEN",
-				"OTP_CODE_REF_KEYS_JSON",
-				"INTEGRATION_SERVICE_MTLS_CA_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{
@@ -41,17 +37,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"beta": {
 		"identity.sms.otp": {
 			State:       "enabled",
-			AdapterID:   "ext.sms.aliyun",
-			EndpointRef: "environment_binding:integration.sms",
+			AdapterID:   "ext.sms.local_capture",
+			EndpointRef: "local_topology:integration.local_capture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
 				"INTEGRATION_SMS_TOKEN",
-				"OTP_CODE_REF_KEYS_JSON",
-				"INTEGRATION_SERVICE_MTLS_CA_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{
@@ -62,17 +54,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"gamma": {
 		"identity.sms.otp": {
 			State:       "enabled",
-			AdapterID:   "ext.sms.aliyun",
-			EndpointRef: "environment_binding:integration.sms",
+			AdapterID:   "ext.sms.local_capture",
+			EndpointRef: "local_topology:integration.local_capture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
 			},
 			SecretEnvironmentKeys: []string{
 				"INTEGRATION_SMS_TOKEN",
-				"OTP_CODE_REF_KEYS_JSON",
-				"INTEGRATION_SERVICE_MTLS_CA_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
-				"INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
 			},
 			TimeoutMilliseconds: 10000,
 			RequiredRedisScenes: []string{

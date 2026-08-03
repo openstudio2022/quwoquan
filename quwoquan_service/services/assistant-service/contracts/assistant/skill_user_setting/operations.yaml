@@ -1,0 +1,65 @@
+commercial_defaults:
+  status: blocked
+  block_reason: SkillUserSetting 新操作必须证明 active package schema、原子 CAS、权限求交和双端真实 Skill Center UAT
+  gap_id: ASSISTANT_SKILL_USER_SETTING_COMMERCIAL_EVIDENCE
+  target_story: skill-user-lifecycle
+api_routes:
+- method: GET
+  path: /assistant/skill-settings
+  operation: ListSkillUserSettings
+  actor: account
+  request_entity: ListSkillUserSettingsQuery
+  request_body_kind: none
+  request_bindings: {query: [{name: limit, field: limit}]}
+  response_entity: SkillUserSettingListSlice
+  authorization: {principal: account, ownership_policy: skill_setting_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.skill_setting_unauthorized, ASSISTANT.USER.skill_setting_invalid_argument, ASSISTANT.SYSTEM.skill_setting_storage_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_user_setting_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: SkillUserSettingQueryFacade, method: listSettings, reader: SkillUserSettingReader, slice: SkillUserSettingListSlice}
+  description: 有界读取账号已显式保存的 Skill 设置；未返回的 Skill 继续使用 active package 默认，不生成伪设置。
+- method: GET
+  path: /assistant/skills/{skillId}/setting
+  operation: GetSkillUserSetting
+  actor: account
+  request_entity: GetSkillUserSettingQuery
+  request_body_kind: none
+  request_bindings: {path: [{name: skillId, field: skillId}]}
+  response_entity: SkillUserSetting
+  authorization: {principal: account, ownership_policy: skill_setting_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [ASSISTANT.USER.skill_setting_unauthorized, ASSISTANT.USER.skill_setting_not_found, ASSISTANT.SYSTEM.skill_setting_storage_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_user_setting_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: SkillUserSettingQueryFacade, method: getSetting, reader: SkillUserSettingReader, slice: SkillUserSetting}
+  description: 读取账号对指定 Skill 的显式设置；不存在时返回 not_found，由 active package 决定缺省可用性。
+- method: PUT
+  path: /assistant/skills/{skillId}/setting
+  operation: PutSkillUserSetting
+  actor: account
+  request_entity: PutSkillUserSettingRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: skillId, field: skillId}]}
+  response_entity: PutSkillUserSettingReceipt
+  authorization: {principal: account, ownership_policy: skill_setting_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [ASSISTANT.USER.skill_setting_unauthorized, ASSISTANT.USER.skill_setting_invalid_argument, ASSISTANT.USER.skill_setting_schema_digest_mismatch, ASSISTANT.USER.skill_setting_revision_conflict, ASSISTANT.USER.skill_setting_idempotency_conflict, ASSISTANT.SYSTEM.skill_setting_package_unavailable, ASSISTANT.SYSTEM.skill_setting_storage_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: assistant_skill_user_setting_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 600, availability_percent: 99.9}
+  application: {kind: command, facet: SkillUserSettingCommandFacade, method: putSetting, aggregate_owner: SkillUserSetting, mutation_target: SkillUserSetting, invariant_target: SkillUserSetting}
+  description: 以 expectedRevision CAS 原子创建或更新个人 Skill 显式设置，返回权威设置、变更与重放回执，不修改授权或主动订阅。
+consumers:
+- name: app
+  capabilities: [list_skill_settings, get_skill_setting, put_skill_setting]
+- name: assistant-run
+  capabilities: [read_effective_skill_setting]

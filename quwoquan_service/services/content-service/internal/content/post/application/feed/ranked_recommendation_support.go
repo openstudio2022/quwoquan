@@ -49,13 +49,48 @@ func (delivery *rankedRecommendationDelivery) bindPage(
 		delivery.page.PolicyDigest != page.PolicyDigest ||
 		delivery.page.RankingSnapshotDigest != page.RankingSnapshotDigest ||
 		!delivery.page.FeatureSnapshotAt.Equal(page.FeatureSnapshotAt) ||
-		!delivery.page.ExpiresAt.Equal(page.ExpiresAt) {
+		!delivery.page.ExpiresAt.Equal(page.ExpiresAt) ||
+		!sameRecommendationObjectCards(delivery.page.ObjectCards, page.ObjectCards) {
 		return fmt.Errorf(
 			"%w: recommendation page attribution changed within one response",
 			deliveryapp.ErrRecommendationUnavailable,
 		)
 	}
 	return nil
+}
+
+func sameRecommendationObjectCards(
+	left []transport.RecommendationObjectCard,
+	right []transport.RecommendationObjectCard,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index].ObjectKind != right[index].ObjectKind ||
+			left[index].ObjectId != right[index].ObjectId ||
+			left[index].Title != right[index].Title ||
+			optionalRecommendationText(left[index].Subtitle) != optionalRecommendationText(right[index].Subtitle) ||
+			optionalRecommendationText(left[index].CoverUrl) != optionalRecommendationText(right[index].CoverUrl) ||
+			left[index].ReasonKey != right[index].ReasonKey ||
+			left[index].RecallPath != right[index].RecallPath ||
+			!sameRecommendationStrings(left[index].TagRefs, right[index].TagRefs) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameRecommendationStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func (delivery *rankedRecommendationDelivery) event(
@@ -85,6 +120,8 @@ func (delivery *rankedRecommendationDelivery) event(
 
 func recommendationScenario(route feedRoute) string {
 	switch {
+	case route.FeedType == rtrec.FeedFollow:
+		return "following"
 	case route.Surface == "premium_stream":
 		return "premium_stream"
 	case route.Vertical == "travel_photography":
@@ -94,7 +131,10 @@ func recommendationScenario(route feedRoute) string {
 	}
 }
 
-func rankedRecommendationSubject(req ListFeedRequest) string {
+func rankedRecommendationSubject(req ListFeedRequest, route feedRoute) string {
+	if route.FeedType == rtrec.FeedFollow {
+		return strings.TrimSpace(req.ViewerPersonaID)
+	}
 	if !identity.IsAnonymousFallbackPersonaID(req.UserID) {
 		return strings.TrimSpace(req.UserID)
 	}
@@ -122,17 +162,22 @@ func (s *FeedService) rankedRecommendationPage(
 			ctx,
 			transport.CreateRankedRecommendationWindowCommand{
 				IdempotencyKey: strings.TrimSpace(feedRequestID),
-				SubjectId:      rankedRecommendationSubject(req),
+				SubjectId:      rankedRecommendationSubject(req, route),
 				Scenario:       scenario,
 				Limit:          limit,
 			},
 		)
 	} else {
+		fromOrdinal := continuation.AfterOrdinal
+		pageLimit := limit
 		page, err = s.rankedWindows.GetPage(
 			ctx,
-			strings.TrimSpace(continuation.WindowID),
-			continuation.AfterOrdinal,
-			limit,
+			transport.GetRankedRecommendationPageQuery{
+				SubjectId:   rankedRecommendationSubject(req, route),
+				WindowId:    strings.TrimSpace(continuation.WindowID),
+				FromOrdinal: &fromOrdinal,
+				Limit:       &pageLimit,
+			},
 		)
 	}
 	if err != nil {

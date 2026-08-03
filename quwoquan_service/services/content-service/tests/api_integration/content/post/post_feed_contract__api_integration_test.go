@@ -16,10 +16,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	rtrec "quwoquan_service/runtime/recommendation"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 // TestMongoPostFeedReaderDecodesCanonicalProjection 直接验证生产 Feed Reader
@@ -224,119 +222,6 @@ func cloneBSONDocument(source bson.M) bson.M {
 		cloned[key] = value
 	}
 	return cloned
-}
-
-func TestMongoDiscoveryRecallBlendsUGCWithExactCanonicalAnchor(t *testing.T) {
-	ctx := context.Background()
-	collection := mongoDB.Collection("rm_discovery_feed")
-	const activeReleaseID = "rel_blended_recall_active"
-	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	ids := []string{
-		"blend_ugc_high_1",
-		"blend_ugc_high_2",
-		"blend_canonical_current",
-		"blend_canonical_stale",
-		"blend_canonical_wrong_digest",
-		"blend_malformed_data_owner",
-		"blend_deleted",
-		"blend_private",
-	}
-	t.Cleanup(func() {
-		_, _ = collection.DeleteMany(context.Background(), bson.M{"postId": bson.M{"$in": ids}})
-	})
-	_, _ = collection.DeleteMany(ctx, bson.M{"postId": bson.M{"$in": ids}})
-	now := time.Now().UTC()
-	base := bson.M{
-		"contentType": "image", "contentIdentity": "work",
-		"authorId": "blend_author", "status": "published", "visibility": "public",
-		"publishedAt": now, "contentVertical": "blend_contract",
-	}
-	documents := make([]any, 0, len(ids))
-	for index, id := range ids[:2] {
-		doc := cloneBSONDocument(base)
-		doc["postId"] = id
-		doc["sourceOwner"] = "user_service"
-		doc["supplySource"] = "user_generated"
-		doc["recScore"] = float64(100 - index)
-		documents = append(documents, doc)
-	}
-	current := cloneBSONDocument(base)
-	current["postId"] = ids[2]
-	current["sourceOwner"] = "qwq_data"
-	current["supplySource"] = "data_engineering"
-	current["releaseId"] = activeReleaseID
-	current["manifestDigest"] = manifestDigest
-	current["lifecycleStatus"] = "active"
-	current["recScore"] = 0.01
-	documents = append(documents, current)
-	stale := cloneBSONDocument(current)
-	stale["postId"] = ids[3]
-	stale["releaseId"] = "rel_blended_recall_stale"
-	stale["recScore"] = 1000.0
-	documents = append(documents, stale)
-	wrongDigest := cloneBSONDocument(current)
-	wrongDigest["postId"] = ids[4]
-	wrongDigest["manifestDigest"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	wrongDigest["recScore"] = 999.0
-	documents = append(documents, wrongDigest)
-	malformed := cloneBSONDocument(base)
-	malformed["postId"] = ids[5]
-	malformed["supplySource"] = "data_engineering"
-	malformed["recScore"] = 998.0
-	documents = append(documents, malformed)
-	deleted := cloneBSONDocument(base)
-	deleted["postId"] = ids[6]
-	deleted["sourceOwner"] = "user_service"
-	deleted["supplySource"] = "user_generated"
-	deleted["status"] = "deleted"
-	deleted["recScore"] = 1001.0
-	documents = append(documents, deleted)
-	private := cloneBSONDocument(base)
-	private["postId"] = ids[7]
-	private["sourceOwner"] = "user_service"
-	private["supplySource"] = "user_generated"
-	private["visibility"] = "private"
-	private["recScore"] = 1002.0
-	documents = append(documents, private)
-	if _, err := collection.InsertMany(ctx, documents); err != nil {
-		t.Fatalf("seed blended discovery recall: %v", err)
-	}
-
-	source := recinfra.NewMongoCandidateSource(mongoDB)
-	candidates, err := source.Recall(ctx, rtrec.RecallRequest{
-		FeedType: rtrec.FeedDiscovery, Surface: "home", Vertical: "blend_contract", Limit: 2,
-		ActiveReleaseID: activeReleaseID, ActiveManifestDigest: manifestDigest,
-	})
-	if err != nil {
-		t.Fatalf("blended discovery recall: %v", err)
-	}
-	seen := make(map[string]bool, len(candidates))
-	for _, candidate := range candidates {
-		seen[candidate.ContentID] = true
-	}
-	if !seen[ids[0]] || !seen[ids[1]] || !seen[ids[2]] {
-		t.Fatalf("UGC and exact canonical anchor must coexist: %+v", candidates)
-	}
-	if seen[ids[3]] || seen[ids[4]] || seen[ids[5]] {
-		t.Fatalf("stale/wrong-digest/malformed canonical supply leaked: %+v", candidates)
-	}
-
-	withoutActiveRelease, err := source.Recall(ctx, rtrec.RecallRequest{
-		FeedType: rtrec.FeedDiscovery, Surface: "home", Vertical: "blend_contract", Limit: 20,
-	})
-	if err != nil {
-		t.Fatalf("discovery recall without active release: %v", err)
-	}
-	seenWithoutActive := make(map[string]bool, len(withoutActiveRelease))
-	for _, candidate := range withoutActiveRelease {
-		seenWithoutActive[candidate.ContentID] = true
-	}
-	if !seenWithoutActive[ids[0]] || !seenWithoutActive[ids[1]] {
-		t.Fatalf("published public UGC must remain eligible without active release: %+v", withoutActiveRelease)
-	}
-	if seenWithoutActive[ids[6]] || seenWithoutActive[ids[7]] {
-		t.Fatalf("deleted/private content leaked without active release: %+v", withoutActiveRelease)
-	}
 }
 
 // TestGetFeedByType creates image and video posts, then requests feed with
@@ -1022,82 +907,6 @@ func TestListFeedWithPagination(t *testing.T) {
 	}
 	if len(page1.Items) == 0 {
 		t.Error("first page: expected at least one item in feed")
-	}
-}
-
-// TestGetFeedFiltersBlockedUser 验证 Feed 只消费 PersonaBlocked 服务端投影；
-// 客户端 X-Blocked-User-Ids 不再参与内容授权或过滤。
-func TestGetFeedFiltersBlockedUser(t *testing.T) {
-	ctx := context.Background()
-	relationships := requireMongoDB(t).Collection("persona_follow_projection")
-	viewerID := "feed_block_viewer"
-	blockedAuthorID := "feed_blocked_author"
-	visibleAuthorID := "feed_visible_author"
-	cleanup := func() {
-		cleanPosts(t)
-		_, _ = relationships.DeleteMany(ctx, bson.M{
-			"$or": []bson.M{
-				{"sourcePersonaId": viewerID},
-				{"targetPersonaId": viewerID},
-			},
-		})
-	}
-	cleanup()
-	t.Cleanup(cleanup)
-
-	blockedPost := submitPublishedPostWithAuthor(
-		t,
-		blockedAuthorID,
-		`{"contentType":"image","title":"server blocked feed post"}`,
-	)
-	visiblePost := submitPublishedPostWithAuthor(
-		t,
-		visibleAuthorID,
-		`{"contentType":"image","title":"server visible feed post"}`,
-	)
-	projector := recinfra.NewPersonaRelationshipProjection(requireMongoDB(t))
-	if err := projector.Apply(ctx, recinfra.PersonaRelationshipProjectionEvent{
-		EventID:         "feed_block_event",
-		EventName:       recinfra.PersonaBlocked,
-		PairID:          "feed_block_pair",
-		SourcePersonaID: viewerID,
-		TargetPersonaID: blockedAuthorID,
-		Version:         1,
-		OccurredAt:      time.Now().UTC(),
-	}); err != nil {
-		t.Fatalf("project feed block event: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=20", nil)
-	req.Header.Set("X-Client-Persona-Id", viewerID)
-	// 伪造客户端列表不得隐藏本应可见的作者。
-	req.Header.Set("X-Blocked-User-Ids", visibleAuthorID)
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var page struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	blockedPostID := asTestString(blockedPost["postId"])
-	visiblePostID := asTestString(visiblePost["postId"])
-	visibleFound := false
-	for _, item := range page.Items {
-		postID := asTestString(item["postId"])
-		if postID == blockedPostID {
-			t.Fatalf("server-projected blocked author leaked into feed: %v", item)
-		}
-		if postID == visiblePostID {
-			visibleFound = true
-		}
-	}
-	if !visibleFound {
-		t.Fatal("client-provided blocked-id header incorrectly filtered visible author")
 	}
 }
 

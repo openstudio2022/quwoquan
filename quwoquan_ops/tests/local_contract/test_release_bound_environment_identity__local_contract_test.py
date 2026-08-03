@@ -548,7 +548,7 @@ class Fixture:
                 "environment": self.environment,
                 "target": self.target,
                 "effectiveLaunchManifestDigest": self.launch_digest,
-                "telemetryBackend": "aliyun-sls",
+                "telemetryBackend": "elasticsearch",
                 "backendReceiptRef": f"receipt:hosted:{DIGEST_A}",
                 "attemptIds": attempts,
                 "deviceIds": devices,

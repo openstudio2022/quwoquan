@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	indexmodel "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/model"
 	application "quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
@@ -86,7 +87,7 @@ func (r migratedActiveReleaseReader) ActiveReleaseID(context.Context) (string, b
 
 type migratedObjectTagIndexReader struct{}
 
-func (migratedObjectTagIndexReader) FindByObject(context.Context, string, string) (*model.ObjectTagIndex, error) {
+func (migratedObjectTagIndexReader) FindByObject(context.Context, string, string) (*indexmodel.ObjectTagIndex, error) {
 	return nil, nil
 }
 
@@ -95,7 +96,7 @@ func (migratedObjectTagIndexReader) FindObjectsByTagRef(
 	string,
 	string,
 	int64,
-) ([]model.ObjectTagIndex, error) {
+) ([]indexmodel.ObjectTagIndex, error) {
 	return nil, nil
 }
 
@@ -104,7 +105,7 @@ func (migratedObjectTagIndexReader) FindObjectsByTagRefSubtree(
 	string,
 	string,
 	int64,
-) ([]model.ObjectTagIndex, error) {
+) ([]indexmodel.ObjectTagIndex, error) {
 	return nil, nil
 }
 

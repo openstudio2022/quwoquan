@@ -137,10 +137,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: subjectType
-        type: FollowSubjectKind
+        type: enum
         enum_ref: FollowSubjectKind
-        client_dart_type: FollowSubjectKind
-        client_wire: canonicalEnum
       - name: visitedAt
         type: timestamp
         client_dart_type: DateTime

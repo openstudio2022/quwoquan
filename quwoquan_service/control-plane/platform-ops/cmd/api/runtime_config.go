@@ -22,6 +22,11 @@ type platformRuntimeConfig struct {
 	Postgres struct {
 		DSN string `yaml:"dsn"`
 	} `yaml:"postgres"`
+	Redis struct {
+		General struct {
+			Addr string `yaml:"addr"`
+		} `yaml:"general"`
+	} `yaml:"redis"`
 }
 
 func applyPlatformEnvOverrides(cfg *platformRuntimeConfig) {
@@ -31,11 +36,17 @@ func applyPlatformEnvOverrides(cfg *platformRuntimeConfig) {
 	if strings.HasPrefix(strings.TrimSpace(cfg.Postgres.DSN), "${") {
 		cfg.Postgres.DSN = ""
 	}
+	if address := strings.TrimSpace(os.Getenv("PLATFORM_OPS_REDIS_GENERAL_ADDR")); address != "" {
+		cfg.Redis.General.Addr = address
+	}
 }
 
 func validatePlatformRuntimeConfig(cfg platformRuntimeConfig) error {
 	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
 		return fmt.Errorf("postgres.dsn is required")
+	}
+	if strings.TrimSpace(cfg.Redis.General.Addr) == "" {
+		return fmt.Errorf("redis.general.addr is required")
 	}
 	return nil
 }

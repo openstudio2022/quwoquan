@@ -77,8 +77,11 @@ func Activate(
 		BucketDefinitions:   normalizedBuckets,
 		Assignments:         normalizedAssignments,
 		PreviousAssignments: previous,
-		ActivatedAt:         now.UTC(),
-		ActivatedBy:         activatedBy,
+		// MongoDB persists BSON datetimes at millisecond precision. Keeping the
+		// aggregate at that precision makes first responses and receipt replays
+		// byte-identical instead of creating a second temporal representation.
+		ActivatedAt: now.UTC().Truncate(time.Millisecond),
+		ActivatedBy: activatedBy,
 	}, nil
 }
 
@@ -108,7 +111,7 @@ func Rollback(
 		BucketDefinitions:   append([]BucketDefinition(nil), current.BucketDefinitions...),
 		Assignments:         append([]CohortAssignment(nil), current.PreviousAssignments...),
 		PreviousAssignments: append([]CohortAssignment(nil), current.Assignments...),
-		ActivatedAt:         now.UTC(),
+		ActivatedAt:         now.UTC().Truncate(time.Millisecond),
 		ActivatedBy:         activatedBy,
 	}, nil
 }

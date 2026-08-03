@@ -9,7 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 )
 
 func TestMongoMediaProjectionCheckpointIsMonotonicAcrossReplicas(t *testing.T) {
@@ -19,8 +19,8 @@ func TestMongoMediaProjectionCheckpointIsMonotonicAcrossReplicas(t *testing.T) {
 		_, _ = collection.DeleteOne(context.Background(), bson.M{"_id": consumer})
 	})
 
-	replicaA := persistence.NewMongoMediaStore(mongoDB)
-	replicaB := persistence.NewMongoMediaStore(mongoDB)
+	replicaA := mediaassetpersistence.NewMongoMediaStore(mongoDB)
+	replicaB := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	base := time.Date(2032, time.April, 5, 6, 7, 8, 123456789, time.UTC)
 	checkpoints := make([]string, 32)
 	for index := range checkpoints {
@@ -82,8 +82,8 @@ func TestMongoMediaProcessingLeaseHasSingleOwnerAndRejectsStaleCheckpointWrite(t
 		_, _ = collection.DeleteOne(context.Background(), bson.M{"_id": consumer})
 	})
 
-	replicaA := persistence.NewMongoMediaStore(mongoDB)
-	replicaB := persistence.NewMongoMediaStore(mongoDB)
+	replicaA := mediaassetpersistence.NewMongoMediaStore(mongoDB)
+	replicaB := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	now := time.Date(2032, time.April, 5, 6, 7, 8, 0, time.UTC)
 	ttl := 30 * time.Second
 

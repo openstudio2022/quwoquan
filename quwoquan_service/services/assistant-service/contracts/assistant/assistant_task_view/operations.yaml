@@ -5,13 +5,15 @@ api_routes:
   path: /assistant/tasks
   operation: ListAssistantTasks
   actor: persona
+  request_entity: ListAssistantTasksQuery
+  request_body_kind: none
   commercial: {status: blocked, block_reason: AssistantTaskView 对象源与投影测试尚待闭环, gap_id: ASSISTANT_TASK_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
   application: {kind: query, facet: AssistantTaskViewQueryFacade, method: listTasks, reader: AssistantTaskViewReader, slice: AssistantTaskSlice}
   request_bindings:
     query: [{name: limit, field: limit, required: false}, {name: status, field: status, required: false}]
   response_entity: AssistantTaskSlice
   reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
-  error_codes: [ASSISTANT.USER.run_unauthorized]
+  error_codes: [ASSISTANT.USER.task_unauthorized, ASSISTANT.SYSTEM.task_projection_unavailable]
   privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: assistant_task_view_query, trace: true, attributes: [operation, outcome, error_code]}
   slo: {latency_p95_ms: 500, availability_percent: 99.5}

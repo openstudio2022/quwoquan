@@ -1,7 +1,7 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/conversation_avatar_members_provider.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
@@ -12,17 +12,17 @@ import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 
 class ChatInboxListState {
   const ChatInboxListState({
-    this.items = const <ChatInboxDto>[],
+    this.items = const <ChatInboxViewData>[],
     this.isLoading = false,
     this.error,
   });
 
-  final List<ChatInboxDto> items;
+  final List<ChatInboxViewData> items;
   final bool isLoading;
   final String? error;
 
   ChatInboxListState copyWith({
-    List<ChatInboxDto>? items,
+    List<ChatInboxViewData>? items,
     bool? isLoading,
     String? error,
   }) {
@@ -139,7 +139,7 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
     state = state.copyWith(items: cached);
   }
 
-  void _preloadConversationAvatarUrls(List<ChatInboxDto> items) {
+  void _preloadConversationAvatarUrls(List<ChatInboxViewData> items) {
     for (final item in items) {
       final avatarUrl = item.avatarUrl.trim();
       if (avatarUrl.isEmpty) {
@@ -187,10 +187,10 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
     state = state.copyWith(items: next);
   }
 
-  List<ChatInboxDto> _readCache() {
-    final cached = <ChatInboxDto>[];
+  List<ChatInboxViewData> _readCache() {
+    final cached = <ChatInboxViewData>[];
     for (final record in _cache.getAll()) {
-      final dto = record.toChatInboxDto();
+      final dto = record.toChatInboxViewData();
       if (dto.id.isEmpty) {
         continue;
       }
@@ -199,11 +199,11 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
     return _sortItems(cached);
   }
 
-  List<ChatInboxDto> _fallbackItems() {
-    return const <ChatInboxDto>[];
+  List<ChatInboxViewData> _fallbackItems() {
+    return const <ChatInboxViewData>[];
   }
 
-  List<ChatInboxDto> _sortItems(List<ChatInboxDto> items) {
+  List<ChatInboxViewData> _sortItems(List<ChatInboxViewData> items) {
     final sorted = [...items];
     sorted.sort((a, b) {
       if (a.pinned != b.pinned) {
@@ -226,7 +226,7 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
       }
       return a.title.compareTo(b.title);
     });
-    return List<ChatInboxDto>.unmodifiable(sorted);
+    return List<ChatInboxViewData>.unmodifiable(sorted);
   }
 }
 

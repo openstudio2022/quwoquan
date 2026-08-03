@@ -20,7 +20,7 @@ final class RemoteContentOutboundShareAppendWriter
   final ContentOutboundShareInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentOutboundShareFactResult> appendOutboundShare(
+  Future<OutboundShareFactResult> appendOutboundShare(
     CreateContentOutboundShareCommand command,
   ) => client.contentOutboundShareFactCreateOutboundShare(
     command,

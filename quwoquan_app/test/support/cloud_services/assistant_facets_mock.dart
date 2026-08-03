@@ -4,12 +4,9 @@
 /// 仅对象级测试可注入，Patrol/UAT 与 production composition 不可达。
 library;
 
-import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show AssistantDeviceActionExecutionReceipt;
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class AssistantPrototypeTaskRow {
   const AssistantPrototypeTaskRow({
@@ -103,7 +100,9 @@ class AlphaAssistantFacets
     implements
         AssistantSessionRunFacet,
         AssistantRunControlFacet,
+        AssistantSkillCatalogFacet,
         AssistantSkillSubscriptionFacet,
+        AssistantSkillUserSettingFacet,
         AssistantSkillConsentFacet,
         AssistantLearningFactAppendFacet,
         AssistantPersonalizationFacet,
@@ -111,47 +110,54 @@ class AlphaAssistantFacets
         AssistantPreferenceFacet,
         AssistantSearchRunFacet,
         AssistantCreationRunFacet {
-  AlphaAssistantFacets({AssistantConsentStore? store})
-    : _store =
-          store ?? AssistantConsentStore(accountId: 'alpha_mock_assistant');
+  AlphaAssistantFacets();
 
-  final AssistantConsentStore _store;
+  final List<SkillConsent> _consents = <SkillConsent>[];
   final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
+  final Map<String, SkillUserSetting> _settings = <String, SkillUserSetting>{};
   final List<AssistantPreference> _preferences = <AssistantPreference>[];
 
   @override
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   }) async {
-    return AssistantLearningFactAppendReceipt(
+    return AssistantLearningFactReceipt(
       eventId: request.eventId,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
       payloadDigest:
           '0000000000000000000000000000000000000000000000000000000000000000',
-      recordedAt: DateTime.now().toUtc(),
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 
   @override
-  Future<List<AssistantSkillConsent>> listConsents() {
-    return _store.load();
+  Future<List<SkillConsent>> listConsents() {
+    return Future<List<SkillConsent>>.value(
+      List<SkillConsent>.unmodifiable(_consents),
+    );
   }
 
   @override
-  Future<AssistantSkillConsent> grantSkillConsent({
+  Future<SkillConsent> grantSkillConsent({
     required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
+    required List<String> grantedScopes,
     required String clientRequestId,
   }) async {
-    final consent = AssistantSkillConsent(
+    final now = DateTime.now().toUtc().toIso8601String();
+    final consent = SkillConsent(
+      id: 'consent:$skillId',
+      accountId: 'alpha_mock_assistant',
       skillId: skillId,
-      grantedScope: grantedScope,
+      grantedScopes: List<String>.unmodifiable(grantedScopes),
+      grantedAt: now,
+      revokedAt: null,
       granted: true,
-      updatedAt: DateTime.now(),
     );
-    await _store.upsert(consent);
+    _consents
+      ..removeWhere((item) => item.skillId == skillId)
+      ..add(consent);
     return consent;
   }
 
@@ -160,7 +166,8 @@ class AlphaAssistantFacets
     required String skillId,
     required String clientRequestId,
   }) {
-    return _store.revoke(skillId);
+    _consents.removeWhere((item) => item.skillId == skillId);
+    return Future<void>.value();
   }
 
   @override
@@ -399,63 +406,196 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = kAssistantSkillCatalogDefaultLimit,
   }) async {
-    final p0Skills = <AssistantSkillCatalogItemProjection>[
-      const AssistantSkillCatalogItemProjection(
+    AssistantSkillCatalogItemView item({
+      required String skillId,
+      required String displayName,
+      required String description,
+      String? category,
+      String? iconHint,
+      List<String> requiredConsentScopes = const <String>[],
+      String activationMode = 'hybrid',
+    }) {
+      return AssistantSkillCatalogItemView(
+        packageId: 'quwoquan.official.$skillId',
+        releaseDigest: 'sha256:${skillId.padRight(64, '0').substring(0, 64)}',
+        skillId: skillId,
+        displayName: displayName,
+        description: description,
+        category: category,
+        requiresConsent: requiredConsentScopes.isNotEmpty,
+        requiredConsentScopes: requiredConsentScopes,
+        iconHint: iconHint,
+        targetUsers: const <String>['旅行组织者'],
+        dataUseSummary: requiredConsentScopes.isEmpty
+            ? '仅使用当前对话与公开信息'
+            : '仅在明确授权后读取所列数据',
+        exampleRefs: const <String>[],
+        activationMode: activationMode,
+        allowedSurfaceKinds: const <String>['personal'],
+        configurationSchemaDigest:
+            'sha256:${'schema-$skillId'.padRight(64, '0').substring(0, 64)}',
+        setupTemplateRef: 'assistant.setup.$skillId',
+        configurationRequiredFields: const <String>[],
+      );
+    }
+
+    final p0Skills = <AssistantSkillCatalogItemView>[
+      item(
         skillId: 'daily_assistant',
         displayName: '每日助手',
         description: '管理待办、日历、会议、作息和学习计划。',
         category: 'life',
-        requiresConsent: false,
         iconHint: 'checkmark',
       ),
-      const AssistantSkillCatalogItemProjection(
+      item(
         skillId: 'news_briefing',
         displayName: '新闻简报',
         description: '按关注话题定时生成新闻摘要。',
         category: 'content',
-        requiresConsent: false,
         iconHint: 'news',
       ),
-      const AssistantSkillCatalogItemProjection(
+      item(
         skillId: 'stock_sentinel',
         displayName: '股票哨兵',
         description: '跟踪关注股票的重大消息面和行情变化。',
         category: 'finance',
-        requiresConsent: false,
         iconHint: 'chart',
       ),
-      const AssistantSkillCatalogItemProjection(
+      item(
         skillId: 'travel_journey_manager',
         displayName: '出行旅程管家',
         description: '结合天气、路况和景点拥堵提醒行程风险。',
         category: 'travel',
-        requiresConsent: false,
         iconHint: 'airplane',
+        requiredConsentScopes: const <String>[
+          'assistant.memory.preferences.read',
+          'travel.trip.read',
+        ],
       ),
-      const AssistantSkillCatalogItemProjection(
+      item(
         skillId: 'creation_assistant',
         displayName: '创作助手',
         description: '帮助整理草稿摘要、推荐标签和关联主页。',
         category: 'content_creation',
-        requiresConsent: false,
         iconHint: 'sparkles',
       ),
     ];
     final prototypeSkills = AssistantPrototypeFixture.instance.skills.map(
-      (row) => AssistantSkillCatalogItemProjection(
+      (row) => item(
         skillId: row.skillId,
         displayName: row.name,
-        description: row.description,
-        requiresConsent: false,
+        description: row.description ?? '',
       ),
     );
-    return <AssistantSkillCatalogItemProjection>[
+    return <AssistantSkillCatalogItemView>[
       ...p0Skills,
       ...prototypeSkills,
     ].take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<AssistantSkillCatalogItemDetailView> getSkillCatalogItem({
+    required String skillId,
+  }) async {
+    final item = (await listSkillCatalog()).singleWhere(
+      (candidate) => candidate.skillId == skillId,
+      orElse: () => throw StateError('skill catalog item not found'),
+    );
+    final configurationSchema = skillId == 'travel_journey_manager'
+        ? <String, Object?>{
+            'title': '旅行偏好',
+            'description': '用于组合吃玩住行与提醒节奏。',
+            'type': 'object',
+            'additionalProperties': false,
+            'properties': <String, Object?>{
+              'travelPace': <String, Object?>{
+                'type': 'string',
+                'title': '旅行节奏',
+                'enum': <String>['relaxed', 'balanced', 'intensive'],
+                'x-enum-labels': <String, String>{
+                  'relaxed': '轻松',
+                  'balanced': '均衡',
+                  'intensive': '紧凑',
+                },
+              },
+              'reminderLeadMinutes': <String, Object?>{
+                'type': 'integer',
+                'title': '默认提前提醒',
+                'minimum': 5,
+                'maximum': 1440,
+              },
+            },
+          }
+        : <String, Object?>{
+            'type': 'object',
+            'additionalProperties': false,
+            'properties': <String, Object?>{},
+          };
+    return AssistantSkillCatalogItemDetailView(
+      item: item,
+      configurationSchema: configurationSchema,
+    );
+  }
+
+  @override
+  Future<List<SkillUserSetting>> listSkillUserSettings({
+    int limit = kAssistantSkillCatalogDefaultLimit,
+  }) async {
+    return _settings.values.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<SkillUserSetting> getSkillUserSetting({
+    required String skillId,
+  }) async {
+    final setting = _settings[skillId];
+    if (setting == null) {
+      throw StateError('skill user setting not found');
+    }
+    return setting;
+  }
+
+  @override
+  Future<PutSkillUserSettingReceipt> putSkillUserSetting({
+    required String skillId,
+    required SkillUserSettingStatus status,
+    required Map<String, Object?> configurationData,
+    required String configurationSchemaDigest,
+    required SkillMemoryPolicy memoryPolicy,
+    required List<String> connectorConnectionRefs,
+    required int expectedRevision,
+    required String clientRequestId,
+  }) async {
+    final current = _settings[skillId];
+    if ((current?.revision ?? 0) != expectedRevision) {
+      throw StateError('skill user setting revision conflict');
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final next = SkillUserSetting(
+      id: 'setting:$skillId',
+      accountId: 'alpha_mock_assistant',
+      skillId: skillId,
+      status: status,
+      configurationData: Map<String, Object?>.unmodifiable(configurationData),
+      configurationSchemaDigest: configurationSchemaDigest,
+      memoryPolicy: memoryPolicy,
+      connectorConnectionRefs: List<String>.unmodifiable(
+        connectorConnectionRefs,
+      ),
+      revision: expectedRevision + 1,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+    );
+    final changed = current?.status != next.status;
+    _settings[skillId] = next;
+    return PutSkillUserSettingReceipt(
+      setting: next,
+      changed: changed,
+      replayed: false,
+    );
   }
 
   @override
@@ -512,6 +652,7 @@ class AlphaAssistantFacets
     required String rawText,
     List<String> queries = const <String>[],
     String cron = '0 8 * * *',
+    String timezone = 'Asia/Shanghai',
     required String clientRequestId,
   }) async {
     if (clientRequestId.trim().isEmpty) {
@@ -520,6 +661,7 @@ class AlphaAssistantFacets
     final now = DateTime.now().toUtc().toIso8601String();
     final subscription = SkillSubscriptionWire(
       subscriptionId: 'sub_mock_${_subscriptions.length + 1}',
+      version: 1,
       createdByUserId: 'mock-user',
       skillId: skillId,
       domainId: domainId,
@@ -528,7 +670,7 @@ class AlphaAssistantFacets
         rawText: rawText,
         queries: queries.isEmpty ? <String>[rawText] : queries,
       ),
-      trigger: SkillSubscriptionTriggerWire(cron: cron),
+      trigger: SkillSubscriptionTriggerWire(cron: cron, timezone: timezone),
       destination: const SkillSubscriptionDestinationWire(
         destinationType: SkillSubscriptionDestinationType.user,
         destinationId: 'mock-user',
@@ -558,6 +700,7 @@ class AlphaAssistantFacets
     final current = _subscriptions[idx];
     final updated = SkillSubscriptionWire(
       subscriptionId: current.subscriptionId,
+      version: current.version + 1,
       owner: current.owner,
       createdByUserId: current.createdByUserId,
       skillId: current.skillId,

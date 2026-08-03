@@ -26,7 +26,7 @@ class _TrackingAssistantRepository extends AlphaAssistantFacets {
     return const PageContextReceipt(
       accepted: true,
       contextKey: 'ctx_test',
-      expiresAt: null,
+      expiresAt: '2026-08-02T12:05:00Z',
     );
   }
 

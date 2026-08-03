@@ -13,7 +13,7 @@ class VideoGridLayout extends StatelessWidget {
     this.activeSpeakerId,
   });
 
-  final List<CallParticipant> participants;
+  final List<CallParticipantViewData> participants;
   final String? activeSpeakerId;
 
   @override
@@ -36,7 +36,7 @@ class VideoGridLayout extends StatelessWidget {
     );
   }
 
-  Widget _buildGrid(List<CallParticipant> items) {
+  Widget _buildGrid(List<CallParticipantViewData> items) {
     final config = _gridConfig(items.length);
 
     return Padding(

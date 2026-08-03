@@ -79,30 +79,44 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "ActivateFilterCatalogRelease":
 		h.handleActivateFilterCatalogRelease(w, r)
 	case "BindMediaAssetsToComment":
-		h.handleBindMediaAssetsToComment(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.BindMediaAssetsToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
+		})
 	case "CompleteMediaUpload":
 		h.dispatchMediaUploadSession(w, r, func(handler mediaUploadSessionHTTPHandler) {
 			handler.Complete(w, r)
 		})
 	case "CreateComment":
-		h.handleCreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.CreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
+		})
 	case "CreateOutboundShare":
-		h.handleCreateOutboundShare(w, r)
+		if h.outboundShareHandler == nil {
+			writeHTTPError(
+				w,
+				r,
+				rterr.NewUnavailable(
+					rterr.ModuleContent,
+					"站外分享服务未配置",
+					"OutboundShareFact HTTP adapter is not configured",
+				),
+			)
+			return
+		}
+		h.outboundShareHandler.CreateOutboundShare(w, r)
 	case "CreateReport":
 		h.handleCreateReport(w, r)
 	case "DecidePostModeration":
-		h.handleDecidePostModeration(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.Decide(w, r) })
 	case "DeleteComment":
-		h.handleDeleteComment(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.DeleteComment(
+				w,
+				r,
+				strings.TrimSpace(r.PathValue("postId")),
+				strings.TrimSpace(r.PathValue("commentId")),
+			)
+		})
 	case "DeletePost":
 		h.handleDeletePost(w, r)
 	case "DismissReport":
@@ -114,11 +128,13 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetAuthorImpact":
 		h.handleGetAuthorImpact(w, r)
 	case "GetContentReactionState":
-		h.handleGetReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.GetContentReactionState(w, r, strings.TrimSpace(r.PathValue("postId")))
+		})
 	case "GetCounters":
 		h.handleGetCounters(w, r, strings.TrimSpace(r.PathValue("postId")))
 	case "GetCurrentPostModerationCase":
-		h.handleGetCurrentPostModerationCase(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.GetCurrent(w, r) })
 	case "GetEntityWishlistState":
 		h.handleGetEntityWishlistState(w, r)
 	case "GetActiveFilterCatalog":
@@ -128,13 +144,13 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetHelperRead":
 		h.handleGetHelperRead(w, r)
 	case "GetMediaAsset":
-		h.handleGetMediaAsset(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.GetPublic(w, r) })
 	case "GetMediaAssetDeliveryReference":
-		h.handleGetMediaAssetDeliveryReference(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.GetDeliveryReference(w, r) })
 	case "GetMediaAssetReference":
-		h.handleGetMediaAssetReference(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.GetReference(w, r) })
 	case "GetMediaImageReprocessRun":
-		h.handleGetMediaImageReprocessRun(w, r)
+		h.dispatchMediaImageReprocess(w, r, func(handler mediaImageReprocessHTTPHandler) { handler.Get(w, r) })
 	case "GetMediaUploadSession":
 		h.dispatchMediaUploadSession(w, r, func(handler mediaUploadSessionHTTPHandler) {
 			handler.Get(w, r)
@@ -142,129 +158,268 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetMyFootprint":
 		h.handleGetMyFootprint(w, r)
 	case "GetMyIntersectionSummary":
-		h.handleGetMyIntersectionSummary(w, r)
+		h.dispatchIntersectionVisitState(w, r, func(handler intersectionVisitStateHTTPHandler) {
+			handler.GetMyIntersectionSummary(w, r)
+		})
 	case "GetObjectIntersections":
-		h.handleGetObjectIntersections(w, r)
+		h.dispatchIntersectionVisitState(w, r, func(handler intersectionVisitStateHTTPHandler) {
+			handler.GetObjectIntersections(w, r)
+		})
 	case "GetOwnedMediaAsset":
-		h.handleGetOwnedMediaAsset(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.GetOwned(w, r) })
 	case "DiscardMediaAsset":
-		h.handleDiscardMediaAsset(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.Discard(w, r) })
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetPostPublicationEligibility":
-		h.handleGetPostPublicationEligibility(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.GetPublicationEligibility(w, r) })
 	case "GetReport":
 		h.handleGetReport(w, r)
 	case "HideComment":
-		h.handleHideComment(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.HideComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
+		})
 	case "InitMediaUpload":
 		h.dispatchMediaUploadSession(w, r, func(handler mediaUploadSessionHTTPHandler) {
 			handler.Init(w, r)
 		})
 	case "LikePost":
-		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.LikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		})
 	case "ListAuthorImpactEvidence":
 		h.handleListAuthorImpactEvidence(w, r)
 	case "ListCommentReplies":
-		h.handleListCommentReplies(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.ListCommentReplies(
+				w,
+				r,
+				strings.TrimSpace(r.PathValue("postId")),
+				strings.TrimSpace(r.PathValue("commentId")),
+			)
+		})
 	case "ListComments":
-		h.handleListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.ListComments(w, r, strings.TrimSpace(r.PathValue("postId")))
+		})
 	case "ListCommentsByAuthor":
-		h.handleListCommentsByAuthor(w, r)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.ListCommentsByAuthor(w, r)
+		})
 	case "ListCommentsForPostAuthor":
-		h.handleListCommentsForPostAuthor(w, r)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.ListCommentsForPostAuthor(w, r)
+		})
 	case "ListMyIntersections":
-		h.handleListMyIntersections(w, r)
+		h.dispatchIntersectionVisitState(w, r, func(handler intersectionVisitStateHTTPHandler) {
+			handler.ListMyIntersections(w, r)
+		})
 	case "ListMyReports":
 		h.handleListMyReports(w, r)
 	case "ListProfileInteractionActivitiesReceived":
-		h.handleListProfileInteractionActivitiesReceived(w, r)
+		h.dispatchProfileInteractionActivity(w, r, func(handler profileInteractionActivityHTTPHandler) {
+			handler.ListReceived(w, r)
+		})
 	case "ListProfileInteractionActivitiesSent":
-		h.handleListProfileInteractionActivitiesSent(w, r)
+		h.dispatchProfileInteractionActivity(w, r, func(handler profileInteractionActivityHTTPHandler) {
+			handler.ListSent(w, r)
+		})
 	case "ListReports":
 		h.handleListReports(w, r)
 	case "ListUserPosts":
 		h.handleListUserPosts(w, r)
 	case "MarkIntersectionsVisited":
-		h.handleMarkIntersectionsVisited(w, r)
+		h.dispatchIntersectionVisitState(w, r, func(handler intersectionVisitStateHTTPHandler) {
+			handler.MarkVisited(w, r)
+		})
 	case "OpenPostModerationCase":
-		h.handleOpenPostModerationCase(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.Open(w, r) })
 	case "PauseMediaImageReprocessRun":
-		h.handlePauseMediaImageReprocessRun(w, r)
+		h.dispatchMediaImageReprocess(w, r, func(handler mediaImageReprocessHTTPHandler) { handler.Pause(w, r) })
 	case "PinComment":
-		h.handleSetCommentPinned(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-			true,
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.SetCommentPinned(
+				w,
+				r,
+				strings.TrimSpace(r.PathValue("postId")),
+				strings.TrimSpace(r.PathValue("commentId")),
+				true,
+			)
+		})
 	case "PromotePostToWork":
 		h.handlePromotePostToWork(w, r)
 	case "ReactToComment":
-		h.handleReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.ReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
+		})
 	case "RecordMediaProcessingResult":
-		h.handleRecordMediaProcessingResult(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.RecordProcessingResult(w, r) })
 	case "ReportBehaviors":
-		h.handleReportBehaviors(w, r)
+		h.dispatchContentBehavior(w, r)
 	case "RequestOriginalImageAccess":
-		h.handleRequestOriginalImageAccess(w, r)
+		if h.mediaOriginalAccessHandler == nil {
+			writeHTTPError(w, r, rterr.NewUnavailable(
+				rterr.ModuleContent,
+				"原图授权事实服务未配置",
+				"MediaOriginalAccessFact HTTP adapter is not configured",
+			))
+			return
+		}
+		h.mediaOriginalAccessHandler.Request(w, r)
 	case "ResolveReport":
 		h.handleResolveReport(w, r)
 	case "RestoreComment":
-		h.handleRestoreComment(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("commentId")),
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.RestoreComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
+		})
 	case "ResumeMediaImageReprocessRun":
-		h.handleResumeMediaImageReprocessRun(w, r)
+		h.dispatchMediaImageReprocess(w, r, func(handler mediaImageReprocessHTTPHandler) { handler.Resume(w, r) })
 	case "ReviewPostModerationCase":
-		h.handleReviewPostModerationCase(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.Review(w, r) })
 	case "RollbackMediaImageReprocessRun":
-		h.handleRollbackMediaImageReprocessRun(w, r)
+		h.dispatchMediaImageReprocess(w, r, func(handler mediaImageReprocessHTTPHandler) { handler.Rollback(w, r) })
 	case "RollbackFilterCatalogRelease":
 		h.handleRollbackFilterCatalogRelease(w, r)
 	case "SelectAutoVideoCover":
-		h.handleSelectAutoVideoCover(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.SelectAutoCover(w, r) })
 	case "SelectManualVideoCover":
-		h.handleSelectManualVideoCover(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.SelectManualCover(w, r) })
 	case "StartMediaImageReprocessRun":
-		h.handleStartMediaImageReprocessRun(w, r)
+		h.dispatchMediaImageReprocess(w, r, func(handler mediaImageReprocessHTTPHandler) { handler.Start(w, r) })
 	case "StageFilterCatalogRelease":
 		h.handleStageFilterCatalogRelease(w, r)
 	case "SubmitPostPublication":
 		h.handleSubmitPostPublication(w, r)
 	case "SupersedePostModerationCase":
-		h.handleSupersedePostModerationCase(w, r)
+		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.Supersede(w, r) })
 	case "UnlikePost":
-		h.handleUnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
+			handler.UnlikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
+		})
 	case "UnpinComment":
-		h.handleSetCommentPinned(
-			w,
-			r,
-			strings.TrimSpace(r.PathValue("postId")),
-			strings.TrimSpace(r.PathValue("commentId")),
-			false,
-		)
+		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
+			handler.SetCommentPinned(
+				w,
+				r,
+				strings.TrimSpace(r.PathValue("postId")),
+				strings.TrimSpace(r.PathValue("commentId")),
+				false,
+			)
+		})
 	case "UpdateMediaAssetAccessPolicy":
-		h.handleUpdateMediaAssetAccessPolicy(w, r)
+		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.UpdateAccessPolicy(w, r) })
 	case "UpdatePostSettings":
 		h.handleUpdatePostSettings(w, r)
 	case "UpdateProfileInteractionState":
-		h.handleUpdateProfileInteractionState(w, r)
+		h.dispatchProfileInteractionReadFact(w, r, func(handler profileInteractionReadFactHTTPHandler) {
+			handler.Append(w, r)
+		})
 	default:
 		h.handleNotImplemented(w, r, operation)
 	}
+}
+
+func (h *ContentHandler) dispatchComment(
+	writer http.ResponseWriter,
+	request *http.Request,
+	dispatch func(commentHTTPHandler),
+) {
+	if h.commentHandler == nil {
+		writeHTTPError(
+			writer,
+			request,
+			rterr.NewUnavailable(
+				rterr.ModuleContent,
+				"评论服务未配置",
+				"Comment HTTP adapter is not configured",
+			),
+		)
+		return
+	}
+	dispatch(h.commentHandler)
+}
+
+func (h *ContentHandler) dispatchContentReaction(
+	writer http.ResponseWriter,
+	request *http.Request,
+	dispatch func(contentReactionHTTPHandler),
+) {
+	if h.reactionHandler == nil {
+		writeHTTPError(
+			writer,
+			request,
+			rterr.NewUnavailable(
+				rterr.ModuleContent,
+				"互动服务未配置",
+				"ContentReaction HTTP adapter is not configured",
+			),
+		)
+		return
+	}
+	dispatch(h.reactionHandler)
+}
+
+func (h *ContentHandler) dispatchContentBehavior(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	if h.behaviorHandler == nil {
+		writeHTTPError(writer, request, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"内容行为事实服务未配置",
+			"ContentBehaviorFact HTTP adapter is not configured",
+		))
+		return
+	}
+	h.behaviorHandler.Report(writer, request)
+}
+
+func (h *ContentHandler) dispatchIntersectionVisitState(
+	writer http.ResponseWriter,
+	request *http.Request,
+	dispatch func(intersectionVisitStateHTTPHandler),
+) {
+	if h.intersectionVisitHandler == nil {
+		writeHTTPError(writer, request, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"交集已读状态服务未配置",
+			"IntersectionVisitState HTTP adapter is not configured",
+		))
+		return
+	}
+	dispatch(h.intersectionVisitHandler)
+}
+
+func (h *ContentHandler) dispatchProfileInteractionActivity(
+	writer http.ResponseWriter,
+	request *http.Request,
+	dispatch func(profileInteractionActivityHTTPHandler),
+) {
+	if h.profileInteractionHandler == nil {
+		writeHTTPError(writer, request, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"互动活动读模型未配置",
+			"ProfileInteractionActivityView HTTP adapter is not configured",
+		))
+		return
+	}
+	dispatch(h.profileInteractionHandler)
+}
+
+func (h *ContentHandler) dispatchProfileInteractionReadFact(
+	writer http.ResponseWriter,
+	request *http.Request,
+	dispatch func(profileInteractionReadFactHTTPHandler),
+) {
+	if h.profileReadFactHandler == nil {
+		writeHTTPError(writer, request, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"互动已读事实服务未配置",
+			"ProfileInteractionReadFact HTTP adapter is not configured",
+		))
+		return
+	}
+	dispatch(h.profileReadFactHandler)
 }
 
 func (h *ContentHandler) dispatchMediaUploadSession(
@@ -285,6 +440,54 @@ func (h *ContentHandler) dispatchMediaUploadSession(
 		return
 	}
 	dispatch(h.mediaUploadSessionHandler)
+}
+
+func (h *ContentHandler) dispatchMediaAsset(
+	w http.ResponseWriter,
+	r *http.Request,
+	dispatch func(mediaAssetHTTPHandler),
+) {
+	if h.mediaAssetHandler == nil {
+		writeHTTPError(w, r, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"媒体资产服务未配置",
+			"MediaAsset HTTP adapter is required",
+		))
+		return
+	}
+	dispatch(h.mediaAssetHandler)
+}
+
+func (h *ContentHandler) dispatchPostModerationCase(
+	w http.ResponseWriter,
+	r *http.Request,
+	dispatch func(postModerationCaseHTTPHandler),
+) {
+	if h.moderationHandler == nil {
+		writeHTTPError(w, r, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"内容审核服务未配置",
+			"PostModerationCase HTTP adapter is required",
+		))
+		return
+	}
+	dispatch(h.moderationHandler)
+}
+
+func (h *ContentHandler) dispatchMediaImageReprocess(
+	w http.ResponseWriter,
+	r *http.Request,
+	dispatch func(mediaImageReprocessHTTPHandler),
+) {
+	if h.mediaImageReprocessHandler == nil {
+		writeHTTPError(w, r, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"图片重处理任务服务未配置",
+			"MediaImageReprocessRun HTTP adapter is required",
+		))
+		return
+	}
+	dispatch(h.mediaImageReprocessHandler)
 }
 
 func (h *ContentHandler) dispatchFilterCatalogRelease(

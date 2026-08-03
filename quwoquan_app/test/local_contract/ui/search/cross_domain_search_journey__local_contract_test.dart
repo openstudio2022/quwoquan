@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
@@ -70,7 +69,7 @@ GoRouter _buildRouter({
 
 Widget _buildApp({
   required SearchRepository searchRepository,
-  AssistantXiaoquSearchFacet? assistantXiaoquSearch,
+  AssistantSearchRunFacet? assistantXiaoquSearch,
   BehaviorRepository? behaviorRepository,
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
@@ -86,7 +85,7 @@ Widget _buildApp({
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
       ),
-      assistantXiaoquSearchFacetProvider.overrideWithValue(
+      assistantSearchRunFacetProvider.overrideWithValue(
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
@@ -104,7 +103,7 @@ Widget _buildApp({
 /// 直接以深链方式打开 result 页（绕过 suggest），用于降级/错误态闭环验证。
 Widget _buildResultsPage({
   required SearchRepository searchRepository,
-  AssistantXiaoquSearchFacet? assistantXiaoquSearch,
+  AssistantSearchRunFacet? assistantXiaoquSearch,
   required SearchLaunchContext launchContext,
 }) {
   return ProviderScope(
@@ -113,7 +112,7 @@ Widget _buildResultsPage({
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
       ),
-      assistantXiaoquSearchFacetProvider.overrideWithValue(
+      assistantSearchRunFacetProvider.overrideWithValue(
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
@@ -575,46 +574,63 @@ class _FlakyXiaoquAssistantRepository extends _FakeAssistantRepository {
   bool failNext = true;
 
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     if (failNext) {
       throw StateError('xiaoqu backend unavailable');
     }
-    return super.searchXiaoquResults(
+    return super.executeAssistantSearch(
       query: query,
+      sessionClientRequestId: sessionClientRequestId,
+      runClientRequestId: runClientRequestId,
       searchIntensity: searchIntensity,
       contextSnapshot: contextSnapshot,
     );
   }
 }
 
-class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
+class _FakeAssistantRepository implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    return AssistantSearchResultView(
-      queryEcho: query,
-      summary: '$query 的推荐结果',
-      searchIntensity: searchIntensity,
-      citations: <AssistantSearchCitationView>[
-        AssistantSearchCitationView(
-          citationId: 'citation_1',
-          objectType: 'content.post',
-          objectId: 'post_1',
-          title: '西湖夜景推荐',
-          snippet: '小趣整理的推荐结果',
-          sourceDomain: '小趣搜',
-          destination: CitationDestination(
-            kind: CitationDestinationKind.internal,
-            objectTypeRef: 'content.post',
-            objectId: 'post_1',
-          ),
+    return AssistantRunTerminalSnapshotView(
+      answerText: '$query 的推荐结果',
+      processes: <AssistantRunVisibleProcessView>[
+        AssistantRunVisibleProcessView(
+          processId: 'search-process-1',
+          scope: 'public_web',
+          stage: 'retrieval',
+          actionCode: 'search',
+          status: 'completed',
+          order: 1,
+          summary: '已整理公开线索',
+          skillId: 'web_search',
+          domainId: 'search',
+          searchedDocumentCount: 1,
+          processedDocumentCount: 1,
+          acceptedDocumentCount: 1,
+          acceptedReferences: <AssistantRunVisibleReferenceView>[
+            AssistantRunVisibleReferenceView(
+              title: '西湖夜景推荐',
+              snippet: '小趣整理的推荐结果',
+              source: '小趣搜',
+              destination: CitationDestination(
+                kind: CitationDestinationKind.internal,
+                objectTypeRef: 'content.post',
+                objectId: 'post_1',
+              ),
+            ),
+          ],
         ),
       ],
     );

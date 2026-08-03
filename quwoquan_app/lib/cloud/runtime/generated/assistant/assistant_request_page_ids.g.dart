@@ -17,7 +17,10 @@ class AssistantRequestPageIds {
     'GetAssistantRun': 'assistant.get.assistant.run',
     'GetAssistantSession': 'assistant.get.assistant.session',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
+    'GetSkillCatalogItem': 'assistant.get.skill.catalog.item',
     'GetSkillSubscription': 'assistant.get.skill.subscription',
+    'GetSkillSurfacePlacement': 'assistant.get.skill.surface.placement',
+    'GetSkillUserSetting': 'assistant.get.skill.user.setting',
     'GrantSkillConsent': 'assistant.skills.consent.grant',
     'ListAssistantPreferences': 'assistant.list.assistant.preferences',
     'ListAssistantSessions': 'assistant.list.assistant.sessions',
@@ -25,8 +28,11 @@ class AssistantRequestPageIds {
     'ListConsents': 'assistant.list.consents',
     'ListSessionTurns': 'assistant.list.session.turns',
     'ListSkillSubscriptions': 'assistant.list.skill.subscriptions',
+    'ListSkillUserSettings': 'assistant.list.skill.user.settings',
     'ListSkills': 'assistant.skills.list',
     'PauseAssistantRun': 'assistant.pause.assistant.run',
+    'PutSkillSurfacePlacement': 'assistant.put.skill.surface.placement',
+    'PutSkillUserSetting': 'assistant.put.skill.user.setting',
     'ReportPageContext': 'assistant.page_context.report',
     'RestoreAssistantPreference': 'assistant.restore.assistant.preference',
     'ResumeAssistantRun': 'assistant.resume.assistant.run',
@@ -56,7 +62,10 @@ class AssistantRequestPageIds {
   static const String getAssistantRun = 'assistant.get.assistant.run';
   static const String getAssistantSession = 'assistant.get.assistant.session';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
+  static const String getSkillCatalogItem = 'assistant.get.skill.catalog.item';
   static const String getSkillSubscription = 'assistant.get.skill.subscription';
+  static const String getSkillSurfacePlacement = 'assistant.get.skill.surface.placement';
+  static const String getSkillUserSetting = 'assistant.get.skill.user.setting';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';
   static const String listAssistantPreferences = 'assistant.list.assistant.preferences';
   static const String listAssistantSessions = 'assistant.list.assistant.sessions';
@@ -64,8 +73,11 @@ class AssistantRequestPageIds {
   static const String listConsents = 'assistant.list.consents';
   static const String listSessionTurns = 'assistant.list.session.turns';
   static const String listSkillSubscriptions = 'assistant.list.skill.subscriptions';
+  static const String listSkillUserSettings = 'assistant.list.skill.user.settings';
   static const String listSkills = 'assistant.skills.list';
   static const String pauseAssistantRun = 'assistant.pause.assistant.run';
+  static const String putSkillSurfacePlacement = 'assistant.put.skill.surface.placement';
+  static const String putSkillUserSetting = 'assistant.put.skill.user.setting';
   static const String reportPageContext = 'assistant.page_context.report';
   static const String restoreAssistantPreference = 'assistant.restore.assistant.preference';
   static const String resumeAssistantRun = 'assistant.resume.assistant.run';

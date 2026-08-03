@@ -598,7 +598,7 @@ types:
       - name: valid
         type: '[]string'
         constraints:
-          - NULLABLE
+          - NOT_NULL
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -606,7 +606,7 @@ types:
       - name: invalid
         type: '[]string'
         constraints:
-          - NULLABLE
+          - NOT_NULL
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -806,7 +806,6 @@ types:
       - name: limit
         type: int
         client_dart_type: int
-        client_default: TagApiDefaults.childrenLimit
   ValidateTagRefsQuery:
     fields:
       - name: expectedTaxonomyReleaseId

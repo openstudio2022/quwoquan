@@ -8,19 +8,20 @@ import (
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
 type RunReader interface {
-	GetTurn(context.Context, string) (assistant.AssistantTurn, bool, error)
+	Load(context.Context, string) (runruntime.Run, error)
 }
 
 type RuntimeResolver struct {
 	ResolverRef   string
 	Runs          RunReader
-	Subscriptions ports.SkillSubscriptionStore
+	Subscriptions subscriptionports.Store
 	Interests     ports.ProactiveInterestReader
 	Now           func() time.Time
 }
@@ -32,70 +33,71 @@ func (r RuntimeResolver) Resolve(
 	if r.Runs == nil {
 		return application.ResolvedContext{}, fmt.Errorf("assistant run reader is unavailable")
 	}
-	turn, found, err := r.Runs.GetTurn(ctx, strings.TrimSpace(request.RunID))
+	run, err := r.Runs.Load(ctx, strings.TrimSpace(request.RunID))
 	if err != nil {
 		return application.ResolvedContext{}, err
 	}
-	if !found {
-		return application.ResolvedContext{}, fmt.Errorf("assistant run is unavailable")
-	}
 	switch strings.TrimSpace(r.ResolverRef) {
 	case "trigger.envelope":
-		return r.resolveTrigger(turn)
+		return r.resolveTrigger(run)
 	case "turn.slot":
-		return resolveTurnInput(turn), nil
+		return resolveRunInput(run), nil
 	case "turn.preferences":
-		return resolveTurnPreferences(turn), nil
+		return resolveRunPreferences(run), nil
 	case "subscription.plan":
-		return r.resolveSubscription(ctx, turn)
+		return r.resolveSubscription(ctx, run)
 	case "user.interest_profile":
-		return r.resolveInterests(ctx, turn)
+		return r.resolveInterests(ctx, run)
 	default:
 		return application.ResolvedContext{}, fmt.Errorf("unknown assistant context resolver")
 	}
 }
 
 func (r RuntimeResolver) resolveTrigger(
-	turn assistant.AssistantTurn,
+	run runruntime.Run,
 ) (application.ResolvedContext, error) {
-	envelope := turn.Trigger.Envelope
-	if envelope == nil || strings.TrimSpace(envelope.TriggerID) == "" {
+	triggerID := stringValue(run.Trigger, "triggerId")
+	if triggerID == "" {
 		return application.ResolvedContext{}, fmt.Errorf("assistant trigger envelope is unavailable")
+	}
+	occurredAt, err := time.Parse(time.RFC3339Nano, stringValue(run.Trigger, "occurredAt"))
+	if err != nil {
+		return application.ResolvedContext{}, fmt.Errorf("assistant trigger occurredAt is invalid")
 	}
 	return application.ResolvedContext{
 		Kind:        "trigger",
-		SourceRef:   "trigger:" + envelope.TriggerID,
+		SourceRef:   "trigger:" + triggerID,
 		Authority:   generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity: generated.AssistantContextSensitivityInternal,
-		CapturedAt:  envelope.OccurredAt.UTC(),
+		CapturedAt:  occurredAt.UTC(),
 		TokenCost:   64,
 		Value: map[string]any{
-			"kind":              envelope.Kind,
-			"triggerId":         envelope.TriggerID,
-			"occurredAt":        envelope.OccurredAt.UTC().Format(time.RFC3339Nano),
-			"subscriptionRef":   envelope.SubscriptionRef,
-			"signalRefs":        append([]string(nil), envelope.SignalRefs...),
-			"reason":            envelope.Reason,
-			"dedupeKey":         envelope.DedupeKey,
-			"deliveryPolicyRef": envelope.DeliveryPolicyRef,
+			"kind":              stringValue(run.Trigger, "kind"),
+			"triggerId":         triggerID,
+			"occurredAt":        occurredAt.UTC().Format(time.RFC3339Nano),
+			"subscriptionRef":   stringValue(run.Trigger, "subscriptionRef"),
+			"signalRefs":        stringSliceValue(run.Trigger, "signalRefs"),
+			"reason":            stringValue(run.Trigger, "reason"),
+			"dedupeKey":         stringValue(run.Trigger, "dedupeKey"),
+			"deliveryPolicyRef": stringValue(run.Trigger, "deliveryPolicyRef"),
 		},
 	}, nil
 }
 
-func resolveTurnInput(turn assistant.AssistantTurn) application.ResolvedContext {
+func resolveRunInput(run runruntime.Run) application.ResolvedContext {
 	return application.ResolvedContext{
 		Kind:        "conversation",
-		SourceRef:   "run:" + turn.TurnID + ":input",
+		SourceRef:   "run:" + run.RunID + ":input",
 		Authority:   generated.AssistantContextAuthorityUserDeclared,
 		Sensitivity: generated.AssistantContextSensitivityPrivate,
-		CapturedAt:  turn.CreatedAt.UTC(),
-		TokenCost:   approximateTokens(turn.Input.Text),
-		Value:       map[string]any{"text": strings.TrimSpace(turn.Input.Text)},
+		CapturedAt:  run.CreatedAt.UTC(),
+		TokenCost:   approximateTokens(run.InputText),
+		Value:       map[string]any{"text": strings.TrimSpace(run.InputText)},
 	}
 }
 
-func resolveTurnPreferences(turn assistant.AssistantTurn) application.ResolvedContext {
-	values := make([]map[string]any, 0, len(turn.SessionPreferenceFacts)+len(turn.LongTermPreferenceFacts))
+func resolveRunPreferences(run runruntime.Run) application.ResolvedContext {
+	values := make([]map[string]any, 0, len(run.SessionPreferenceFacts)+len(run.LongTermPreferenceFacts))
 	appendFacts := func(facts []preferencemodel.Snapshot) {
 		for _, fact := range facts {
 			values = append(values, map[string]any{
@@ -104,14 +106,14 @@ func resolveTurnPreferences(turn assistant.AssistantTurn) application.ResolvedCo
 			})
 		}
 	}
-	appendFacts(turn.SessionPreferenceFacts)
-	appendFacts(turn.LongTermPreferenceFacts)
+	appendFacts(run.SessionPreferenceFacts)
+	appendFacts(run.LongTermPreferenceFacts)
 	return application.ResolvedContext{
 		Kind:        "memory",
-		SourceRef:   "run:" + turn.TurnID + ":preferences",
+		SourceRef:   "run:" + run.RunID + ":preferences",
 		Authority:   generated.AssistantContextAuthorityUserDeclared,
 		Sensitivity: generated.AssistantContextSensitivityPrivate,
-		CapturedAt:  turn.CreatedAt.UTC(),
+		CapturedAt:  run.CreatedAt.UTC(),
 		TokenCost:   len(values) * 24,
 		Value:       map[string]any{"preferences": values},
 	}
@@ -119,15 +121,16 @@ func resolveTurnPreferences(turn assistant.AssistantTurn) application.ResolvedCo
 
 func (r RuntimeResolver) resolveSubscription(
 	ctx context.Context,
-	turn assistant.AssistantTurn,
+	run runruntime.Run,
 ) (application.ResolvedContext, error) {
-	if r.Subscriptions == nil || turn.Trigger.Envelope == nil {
+	subscriptionRef := stringValue(run.Trigger, "subscriptionRef")
+	if r.Subscriptions == nil || subscriptionRef == "" {
 		return application.ResolvedContext{}, fmt.Errorf("assistant subscription context is unavailable")
 	}
 	subscription, err := r.Subscriptions.GetSkillSubscription(
 		ctx,
-		turn.UserID,
-		turn.Trigger.Envelope.SubscriptionRef,
+		run.UserID,
+		subscriptionRef,
 	)
 	if err != nil {
 		return application.ResolvedContext{}, err
@@ -152,12 +155,12 @@ func (r RuntimeResolver) resolveSubscription(
 
 func (r RuntimeResolver) resolveInterests(
 	ctx context.Context,
-	turn assistant.AssistantTurn,
+	run runruntime.Run,
 ) (application.ResolvedContext, error) {
 	if r.Interests == nil {
 		return application.ResolvedContext{}, fmt.Errorf("assistant interest context is unavailable")
 	}
-	profile, err := r.Interests.GetInterestProfile(ctx, turn.UserID)
+	profile, err := r.Interests.GetInterestProfile(ctx, run.UserID)
 	if err != nil {
 		return application.ResolvedContext{}, err
 	}
@@ -176,7 +179,7 @@ func (r RuntimeResolver) resolveInterests(
 	}
 	return application.ResolvedContext{
 		Kind:        "memory",
-		SourceRef:   "interest-profile:" + turn.UserID,
+		SourceRef:   "interest-profile:" + run.UserID,
 		Authority:   generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity: generated.AssistantContextSensitivityPrivate,
 		CapturedAt:  now().UTC(),
@@ -189,6 +192,29 @@ func (r RuntimeResolver) resolveInterests(
 	}, nil
 }
 
+func stringValue(values map[string]any, key string) string {
+	value, _ := values[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func stringSliceValue(values map[string]any, key string) []string {
+	raw, ok := values[key].([]string)
+	if ok {
+		return append([]string(nil), raw...)
+	}
+	items, ok := values[key].([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if value, ok := item.(string); ok && strings.TrimSpace(value) != "" {
+			result = append(result, strings.TrimSpace(value))
+		}
+	}
+	return result
+}
+
 func approximateTokens(value string) int {
 	runes := len([]rune(strings.TrimSpace(value)))
 	if runes == 0 {
@@ -199,8 +225,9 @@ func approximateTokens(value string) int {
 
 func NewRuntimeRegistry(
 	runs RunReader,
-	subscriptions ports.SkillSubscriptionStore,
+	subscriptions subscriptionports.Store,
 	interests ports.ProactiveInterestReader,
+	extra ...application.RegisteredResolver,
 ) (*application.ResolverRegistry, error) {
 	refs := []string{
 		"trigger.envelope",
@@ -221,5 +248,12 @@ func NewRuntimeRegistry(
 			},
 		})
 	}
+	registered = append(registered, application.RegisteredResolver{
+		ResolverRef: "conversation.current_context",
+		Resolver: ConversationContextResolver{
+			Runs: runs,
+		},
+	})
+	registered = append(registered, extra...)
 	return application.NewResolverRegistry(registered...)
 }

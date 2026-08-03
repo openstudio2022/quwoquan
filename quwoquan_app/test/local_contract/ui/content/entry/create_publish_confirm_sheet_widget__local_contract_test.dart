@@ -277,13 +277,13 @@ void main() {
     await tester.pumpWidget(
       _buildApp(
         initialSettings: const PublishSettings(
-          captureMetadata: MediaCaptureMetadata(
+          captureMetadata: ExtractedMediaCaptureMetadata(
             cameraModel: 'ILCE-7M4',
             isoSensitivity: 800,
           ),
-          captureDisclosure: <MediaCaptureDisclosureGroup>{
-            MediaCaptureDisclosureGroup.gear,
-            MediaCaptureDisclosureGroup.parameters,
+          captureDisclosure: <CaptureMetadataDisclosureGroup>{
+            CaptureMetadataDisclosureGroup.gear,
+            CaptureMetadataDisclosureGroup.parameters,
           },
         ),
         onConfirm: (settings) => confirmed = settings,
@@ -307,8 +307,8 @@ void main() {
 
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
     await tester.pumpAndSettle();
-    expect(confirmed?.captureDisclosure, <MediaCaptureDisclosureGroup>{
-      MediaCaptureDisclosureGroup.parameters,
+    expect(confirmed?.captureDisclosure, <CaptureMetadataDisclosureGroup>{
+      CaptureMetadataDisclosureGroup.parameters,
     });
   });
 }

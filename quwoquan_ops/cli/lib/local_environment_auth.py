@@ -30,6 +30,11 @@ _SECRET_KEYS = (
     "otp_code_ref_key_b64",
     "push_token_encryption_key_b64",
     "account_closure_subject_hmac_secret",
+    "rtc_media_api_key",
+    "rtc_media_api_secret",
+    "sms_substitute_provider_token",
+    "sms_substitute_operator_token",
+    "sms_substitute_capture_key_b64",
 )
 _LOCAL_TARGETS = {
     "alpha": "alpha-local",
@@ -40,7 +45,6 @@ _LOCAL_TARGETS = {
 }
 _NONPROD_IDENTITY_POOL_SCHEMA = "qwq.nonprod_acceptance_identity_pool"
 _NONPROD_IDENTITY_POOL_PATH_ENV = "QWQ_NONPROD_ACCEPTANCE_IDENTITY_POOL"
-_NONPROD_OTP_CODE_ENV = "QWQ_NONPROD_ACCEPTANCE_OTP_CODE"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -93,7 +97,48 @@ def prepare_local_environment_auth(
 ) -> LocalEnvironmentAuth:
     """Create target-isolated auth material in the external deploy workspace."""
     _require_local_environment(environment, target_name)
-    secret_path = (
+    secret_path = _local_environment_secret_path(
+        target_name,
+        deployment_work_root=deployment_work_root,
+    )
+    values = _load_or_create_secrets(secret_path)
+    return _local_environment_auth(environment, secret_path, values)
+
+
+def load_local_environment_auth(
+    environment: str,
+    target_name: str,
+    *,
+    deployment_work_root: str | Path | None = None,
+) -> LocalEnvironmentAuth:
+    """Load existing target auth material without creating or migrating it."""
+
+    _require_local_environment(environment, target_name)
+    secret_path = _local_environment_secret_path(
+        target_name,
+        deployment_work_root=deployment_work_root,
+    )
+    if not secret_path.is_file():
+        raise RuntimeError(
+            f"GATE_BLOCK: local environment auth material is unavailable: {secret_path}"
+        )
+    _require_mode(secret_path, 0o600)
+    values = _read_secret_file(secret_path)
+    missing = [key for key in _SECRET_KEYS if not values.get(key)]
+    if missing:
+        raise RuntimeError(
+            "GATE_BLOCK: local environment auth secret file is incomplete: "
+            + ", ".join(missing)
+        )
+    return _local_environment_auth(environment, secret_path, values)
+
+
+def _local_environment_secret_path(
+    target_name: str,
+    *,
+    deployment_work_root: str | Path | None,
+) -> Path:
+    return (
         deployment_target_path(target_name, "secrets", "auth.env")
         if deployment_work_root is None
         else deployment_target_path_in_work_root(
@@ -103,7 +148,13 @@ def prepare_local_environment_auth(
             "auth.env",
         )
     )
-    values = _load_or_create_secrets(secret_path)
+
+
+def _local_environment_auth(
+    environment: str,
+    secret_path: Path,
+    values: dict[str, str],
+) -> LocalEnvironmentAuth:
     key_version = f"local-{environment}-k1"
     return LocalEnvironmentAuth(
         environment={
@@ -125,6 +176,18 @@ def prepare_local_environment_auth(
             ],
             "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": values[
                 "account_closure_subject_hmac_secret"
+            ],
+            "RTC_MEDIA_API_KEY": values["rtc_media_api_key"],
+            "RTC_MEDIA_API_SECRET": values["rtc_media_api_secret"],
+            "INTEGRATION_SMS_TOKEN": values["sms_substitute_provider_token"],
+            "SMS_SUBSTITUTE_PROVIDER_TOKEN": values[
+                "sms_substitute_provider_token"
+            ],
+            "SMS_SUBSTITUTE_OPERATOR_TOKEN": values[
+                "sms_substitute_operator_token"
+            ],
+            "SMS_SUBSTITUTE_CAPTURE_KEY_B64": values[
+                "sms_substitute_capture_key_b64"
             ],
         },
         secret_path=secret_path,
@@ -173,21 +236,12 @@ def mint_local_filter_catalog_service_token(
             "local FilterCatalog service credential mint failed"
             + (f" (exit={result.returncode})" if result.returncode else "")
         )
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise RuntimeError("local FilterCatalog service credential is not a JWT")
-    try:
-        encoded = parts[1] + "=" * (-len(parts[1]) % 4)
-        claims = json.loads(
-            base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
-        )
-    except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError(
-            "local FilterCatalog service credential claims are invalid"
-        ) from exc
+    claims = _decode_local_jwt_claims(
+        token,
+        label="local FilterCatalog service credential",
+    )
     if (
-        not isinstance(claims, dict)
-        or claims.get("sub") != "service:qwq-data"
+        claims.get("sub") != "service:qwq-data"
         or claims.get("roles") != ["service"]
         or "content.filter_catalog.manage"
         not in str(claims.get("scope") or "").split()
@@ -201,6 +255,102 @@ def mint_local_filter_catalog_service_token(
             "local FilterCatalog service credential claims mismatch"
         )
     return token
+
+
+def mint_local_product_ops_operator_token(
+    environment: str,
+    target_name: str,
+    *,
+    deployment_work_root: str | Path | None = None,
+) -> str:
+    """Mint one 15-minute Alpha/Beta/Gamma Product Ops operator credential.
+
+    Prod and every non-local target must use the real RS256 OIDC path and are
+    rejected before the canonical signer is invoked.
+    """
+
+    _require_local_environment(environment, target_name)
+    if environment not in {"alpha", "beta", "gamma"}:
+        raise ValueError(
+            "local Product Ops operator credential is limited to Alpha/Beta/Gamma"
+        )
+    auth = prepare_local_environment_auth(
+        environment,
+        target_name,
+        deployment_work_root=deployment_work_root,
+    )
+    process_environment = {
+        **os.environ,
+        **auth.environment,
+        "APP_ENV": environment,
+        "GOCACHE": str(
+            _REPO_ROOT
+            / ".qwq_output/env/repo/local/go-build/local-operator-credential"
+        ),
+        "GOTMPDIR": str(
+            _REPO_ROOT
+            / ".qwq_output/env/repo/local/go-tmp/local-operator-credential"
+        ),
+    }
+    Path(process_environment["GOCACHE"]).mkdir(parents=True, exist_ok=True)
+    Path(process_environment["GOTMPDIR"]).mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["go", "run", "./cmd/local-product-ops-operator-credential"],
+        cwd=_REPO_ROOT / "quwoquan_service",
+        env=process_environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    token = result.stdout.strip()
+    if result.returncode != 0 or not token or "\n" in token:
+        raise RuntimeError(
+            "local Product Ops operator credential mint failed"
+            + (f" (exit={result.returncode})" if result.returncode else "")
+        )
+    claims = _decode_local_jwt_claims(
+        token,
+        label="local Product Ops operator credential",
+    )
+    expected_subject = f"operator:content-commercial:{environment}"
+    if (
+        claims.get("sub") != expected_subject
+        or claims.get("roles") != ["operator"]
+        or str(claims.get("scope") or "").split()
+        != [
+            "ops.experiment.read",
+            "ops.experiment.write",
+            "ops.reco.read",
+            "ops.reco.write",
+            "ops.telemetry.read",
+        ]
+        or claims.get("iss") != auth.environment["AUTH_JWT_ISSUER"]
+        or claims.get("aud") != auth.environment["AUTH_JWT_AUDIENCE"]
+        or not isinstance(claims.get("iat"), int)
+        or not isinstance(claims.get("exp"), int)
+        or claims["exp"] - claims["iat"] != 15 * 60
+    ):
+        raise RuntimeError(
+            "local Product Ops operator credential claims mismatch"
+        )
+    return token
+
+
+def _decode_local_jwt_claims(token: str, *, label: str) -> dict[str, Any]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise RuntimeError(f"{label} is not a JWT")
+    try:
+        encoded = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(
+            base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
+        )
+    except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{label} claims are invalid") from exc
+    if not isinstance(claims, dict):
+        raise RuntimeError(f"{label} claims are invalid")
+    return claims
 
 
 def request_local_environment_json(
@@ -256,7 +406,8 @@ def open_local_phone_acceptance_session(
     """Create or restore a real nonprod account via OTP and phone login.
 
     Phone numbers come from a target-scoped protected identity pool and the OTP
-    comes from protected runtime injection. Neither value is returned in receipts.
+    is consumed once from the target-isolated capture control plane. Neither
+    value is returned in receipts.
     Prod is rejected by ``_require_nonprod_target``.
     """
 
@@ -277,7 +428,6 @@ def open_local_phone_acceptance_session(
         dataset_id=canonical_dataset_id,
         actor_index=actor_index,
     )
-    otp_code = _protected_nonprod_otp_code()
     device_id = f"acceptance-{environment}-{actor_digest[:16]}"
     common = {
         "deviceId": device_id,
@@ -296,6 +446,17 @@ def open_local_phone_acceptance_session(
         timeout_seconds=timeout_seconds,
     )
     challenge_id = _required_string(otp, "challengeId", "OTP response")
+    # Lazy import avoids a module cycle: the capture client loads the target's
+    # protected auth material only after this module is fully initialized.
+    from .local_sms_provider_debug import read_latest_debug_otp
+
+    protected_otp = read_latest_debug_otp(
+        environment=environment,
+        target_name=target_name,
+        recipient=phone,
+        timeout_seconds=timeout_seconds,
+    )
+    otp_code = protected_otp.code
     login = request_local_environment_public_json(
         base_url,
         path="/auth/login/phone",
@@ -309,6 +470,7 @@ def open_local_phone_acceptance_session(
         },
         timeout_seconds=timeout_seconds,
     )
+    protected_otp = None
     active_persona = login.get("activePersona")
     if not isinstance(active_persona, dict):
         raise RuntimeError("phone login response missing activePersona")
@@ -488,15 +650,6 @@ def _nonprod_acceptance_phone(
     return phone
 
 
-def _protected_nonprod_otp_code() -> str:
-    value = os.environ.get(_NONPROD_OTP_CODE_ENV, "").strip()
-    if not value:
-        raise RuntimeError(f"GATE_BLOCK: {_NONPROD_OTP_CODE_ENV} is required")
-    if len(value) < 4 or len(value) > 8 or not value.isdigit():
-        raise RuntimeError("protected nonprod OTP code must contain 4 to 8 digits")
-    return value
-
-
 def request_local_environment_public_json(
     base_url: str,
     *,
@@ -616,12 +769,24 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
             "otp_code_ref_key_b64",
             "push_token_encryption_key_b64",
             "account_closure_subject_hmac_secret",
+            "rtc_media_api_key",
+            "rtc_media_api_secret",
+            "sms_substitute_provider_token",
+            "sms_substitute_operator_token",
+            "sms_substitute_capture_key_b64",
         }
         if missing and set(missing).issubset(generated_keys):
             with path.open("a", encoding="utf-8") as handle:
                 for key in missing:
                     if key == "account_closure_subject_hmac_secret":
                         values[key] = secrets.token_urlsafe(48)
+                    elif key in {
+                        "rtc_media_api_key",
+                        "rtc_media_api_secret",
+                        "sms_substitute_provider_token",
+                        "sms_substitute_operator_token",
+                    }:
+                        values[key] = secrets.token_urlsafe(32)
                     else:
                         values[key] = base64.b64encode(
                             secrets.token_bytes(32)
@@ -643,6 +808,13 @@ def _load_or_create_secrets(path: Path) -> dict[str, str]:
             secrets.token_bytes(32)
         ).decode("ascii"),
         "account_closure_subject_hmac_secret": secrets.token_urlsafe(48),
+        "rtc_media_api_key": secrets.token_urlsafe(32),
+        "rtc_media_api_secret": secrets.token_urlsafe(32),
+        "sms_substitute_provider_token": secrets.token_urlsafe(32),
+        "sms_substitute_operator_token": secrets.token_urlsafe(32),
+        "sms_substitute_capture_key_b64": base64.b64encode(
+            secrets.token_bytes(32)
+        ).decode("ascii"),
     }
     fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:

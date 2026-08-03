@@ -61,7 +61,7 @@
 
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#UpdateGroupGovernanceSettings`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml#UpdateAnnouncement`
-- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_group_settings_client.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_conversation.yaml#ChatConversation`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/group_home.yaml`
 
 ## 5. 验收场景

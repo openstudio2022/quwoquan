@@ -1,3 +1,4 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 // settings-canonical-shell: search_embedded — 见 scripts/settings_canonical_manifest.yaml 与 page-layout-semantics L3 spec。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +8,6 @@ import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天信息顶栏进入的群成员嵌入式搜索（端侧过滤）。
@@ -31,7 +31,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     super.dispose();
   }
 
-  void _openProfile(ChatConversationMemberDto m) {
+  void _openProfile(ConversationMemberListRow m) {
     final userHandle = m.userHandle.trim();
     if (userHandle.isEmpty) return;
     context.push(

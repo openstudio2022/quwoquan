@@ -4,6 +4,189 @@ info:
     title: quwoquan ops API
     version: canonical
 paths:
+    /control-plane/platform/alerts/{fingerprint}:ack:
+        post:
+            operationId: AcknowledgeAlert
+            x-contract-operation-id: ops.config_instance_report.AcknowledgeAlert
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConfigInstanceReportAlertCommandFacade
+                method: acknowledgeAlert
+                aggregateOwner: ConfigInstanceReport
+            parameters:
+                - name: fingerprint
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AcknowledgeAlertRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/alerts/active:
+        get:
+            operationId: ListActiveAlerts
+            x-contract-operation-id: ops.config_instance_report.ListActiveAlerts
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportAlertQueryFacade
+                method: listActiveAlerts
+                reader: ActiveAlertReader
+                slice: ActiveAlertSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListActiveAlertsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/alerts/ingest:
+        post:
+            operationId: IngestAlertmanagerWebhook
+            x-contract-operation-id: ops.config_instance_report.IngestAlertmanagerWebhook
+            x-object-id: ops.config_instance_report
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ConfigInstanceReportAlertCommandFacade
+                method: ingestAlertmanagerWebhook
+                aggregateOwner: ConfigInstanceReport
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/IngestAlertmanagerWebhookRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/approvals:
+        get:
+            operationId: ListPlatformApprovals
+            x-contract-operation-id: ops.config_instance_report.ListPlatformApprovals
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportJournalQueryFacade
+                method: listPlatformApprovals
+                reader: PlatformApprovalReader
+                slice: PlatformApprovalSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPlatformApprovalsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/audits:
+        get:
+            operationId: ListPlatformAudits
+            x-contract-operation-id: ops.config_instance_report.ListPlatformAudits
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportJournalQueryFacade
+                method: listPlatformAudits
+                reader: PlatformAuditReader
+                slice: PlatformAuditSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPlatformAuditsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/catalog/services:
+        get:
+            operationId: ListServiceCatalogEntries
+            x-contract-operation-id: ops.config_snapshot.ListServiceCatalogEntries
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: listServiceCatalogEntries
+                reader: ServiceCatalogEntryReader
+                slice: ServiceCatalogEntrySlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListServiceCatalogEntriesResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/platform/configs:
         get:
             operationId: ListServiceConfigs
@@ -202,6 +385,276 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ConfigSnapshotView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/projections/summary:
+        get:
+            operationId: GetPlatformProjectionSummary
+            x-contract-operation-id: ops.config_instance_report.GetPlatformProjectionSummary
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportJournalQueryFacade
+                method: getPlatformProjectionSummary
+                reader: PlatformProjectionSummaryReader
+                slice: PlatformProjectionSummary
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPlatformProjectionSummaryResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/releases:
+        get:
+            operationId: ListReleaseCandidateAcks
+            x-contract-operation-id: ops.config_instance_report.ListReleaseCandidateAcks
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportRuntimeQueryFacade
+                method: listReleaseCandidateAcks
+                reader: ReleaseCandidateAckReader
+                slice: ReleaseCandidateAckSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListReleaseCandidateAcksResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/rollout/routing-policy:
+        get:
+            operationId: GetGrayRoutingPolicy
+            x-contract-operation-id: ops.config_snapshot.GetGrayRoutingPolicy
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: getGrayRoutingPolicy
+                reader: GrayRoutingPolicyReader
+                slice: GrayRoutingPolicySnapshot
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetGrayRoutingPolicyResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/clusters:
+        get:
+            operationId: ListRuntimeClusters
+            x-contract-operation-id: ops.config_snapshot.ListRuntimeClusters
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: listRuntimeClusters
+                reader: RuntimeClusterReader
+                slice: RuntimeClusterSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListRuntimeClustersResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/environments:
+        get:
+            operationId: ListEnvironmentTopologies
+            x-contract-operation-id: ops.config_snapshot.ListEnvironmentTopologies
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: listEnvironmentTopologies
+                reader: EnvironmentTopologyReader
+                slice: EnvironmentTopologySlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListEnvironmentTopologiesResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/instances:
+        get:
+            operationId: ListRuntimeInstances
+            x-contract-operation-id: ops.config_instance_report.ListRuntimeInstances
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportRuntimeQueryFacade
+                method: listRuntimeInstances
+                reader: RuntimeInstanceReader
+                slice: RuntimeInstanceSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListRuntimeInstancesResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/planes:
+        get:
+            operationId: ListPlaneBindings
+            x-contract-operation-id: ops.config_snapshot.ListPlaneBindings
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: listPlaneBindings
+                reader: PlaneBindingReader
+                slice: PlaneBindingSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPlaneBindingsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/prod-plane-access-isolation:
+        get:
+            operationId: GetProdPlaneAccessIsolation
+            x-contract-operation-id: ops.config_snapshot.GetProdPlaneAccessIsolation
+            x-object-id: ops.config_snapshot
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigSnapshotTopologyQueryFacade
+                method: getProdPlaneAccessIsolation
+                reader: ProdPlaneAccessIsolationReader
+                slice: ProdPlaneAccessIsolationSnapshot
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetProdPlaneAccessIsolationResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/topology/services:
+        get:
+            operationId: ListRuntimeServices
+            x-contract-operation-id: ops.config_instance_report.ListRuntimeServices
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportRuntimeQueryFacade
+                method: listRuntimeServices
+                reader: RuntimeServiceReader
+                slice: RuntimeServiceSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListRuntimeServicesResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/triage/summary:
+        get:
+            operationId: GetPlatformTriageSummary
+            x-contract-operation-id: ops.config_instance_report.GetPlatformTriageSummary
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportJournalQueryFacade
+                method: getPlatformTriageSummary
+                reader: PlatformTriageSummaryReader
+                slice: PlatformTriageSummary
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPlatformTriageSummaryResponse'
                 default:
                     description: Runtime failure
                     content:
@@ -409,6 +862,98 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /control-plane/product/approvals:
+        get:
+            operationId: ListProductApprovals
+            x-contract-operation-id: ops.event_record.ListProductApprovals
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordControlPlaneQueryFacade
+                method: listProductApprovals
+                reader: ProductApprovalReader
+                slice: ProductApprovalSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProductApprovalsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/audits:
+        get:
+            operationId: ListProductAudits
+            x-contract-operation-id: ops.event_record.ListProductAudits
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordControlPlaneQueryFacade
+                method: listProductAudits
+                reader: ProductAuditReader
+                slice: ProductAuditSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProductAuditsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/experience/pages:
+        get:
+            operationId: GetPageExperience
+            x-contract-operation-id: ops.event_record.GetPageExperience
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordMetricQueryFacade
+                method: getPageExperience
+                reader: PageExperienceReader
+                slice: PageExperienceSlice
+            parameters:
+                - name: from
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: to
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetPageExperienceResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/product/experiments:
         get:
             operationId: ListExperiments
@@ -428,6 +973,44 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ExperimentCatalogSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        post:
+            operationId: CreateExperiment
+            x-contract-operation-id: ops.experiment.CreateExperiment
+            x-object-id: ops.experiment
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ExperimentCommandFacade
+                method: createExperiment
+                aggregateOwner: Experiment
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateExperimentRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateExperimentResult'
                 default:
                     description: Runtime failure
                     content:
@@ -477,6 +1060,349 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/UpdateExperimentRolloutResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/growth/overview:
+        get:
+            operationId: GetGrowthOverview
+            x-contract-operation-id: ops.event_record.GetGrowthOverview
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordMetricQueryFacade
+                method: getGrowthOverview
+                reader: GrowthOverviewReader
+                slice: GrowthOverview
+            parameters:
+                - name: days
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetGrowthOverviewResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/metrics/l1l4:
+        get:
+            operationId: ListL1L4MetricSnapshots
+            x-contract-operation-id: ops.event_record.ListL1L4MetricSnapshots
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordMetricQueryFacade
+                method: listL1L4MetricSnapshots
+                reader: L1L4MetricSnapshotReader
+                slice: L1L4MetricSnapshot
+            parameters:
+                - name: environment
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: service
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: pageName
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListL1L4MetricSnapshotsResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/metrics/red-routes:
+        get:
+            operationId: GetServiceRouteRED
+            x-contract-operation-id: ops.event_record.GetServiceRouteRED
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordMetricQueryFacade
+                method: getServiceRouteRED
+                reader: ServiceRouteREDReader
+                slice: ServiceRouteREDSlice
+            parameters:
+                - name: service
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetServiceRouteREDResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/projections/summary:
+        get:
+            operationId: GetProductProjectionSummary
+            x-contract-operation-id: ops.event_record.GetProductProjectionSummary
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordControlPlaneQueryFacade
+                method: getProductProjectionSummary
+                reader: ProductProjectionSummaryReader
+                slice: ProductProjectionSummary
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetProductProjectionSummaryResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/recommendation/premium-pool:
+        get:
+            operationId: ListPremiumPoolEntries
+            x-contract-operation-id: ops.premium_pool_entry.ListPremiumPoolEntries
+            x-object-id: ops.premium_pool_entry
+            x-actor: account
+            x-application:
+                kind: query
+                facet: PremiumPoolEntryQueryFacade
+                method: listEntries
+                reader: PremiumPoolEntryReader
+                slice: PremiumPoolEntrySlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PremiumPoolEntrySlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        post:
+            operationId: UpsertPremiumPoolEntry
+            x-contract-operation-id: ops.premium_pool_entry.UpsertPremiumPoolEntry
+            x-object-id: ops.premium_pool_entry
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PremiumPoolEntryCommandFacade
+                method: upsertEntry
+                aggregateOwner: PremiumPoolEntry
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertPremiumPoolEntryRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PremiumPoolEntry'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/recommendation/premium-pool/{contentId}:rollback:
+        post:
+            operationId: RollbackPremiumPoolEntry
+            x-contract-operation-id: ops.premium_pool_entry.RollbackPremiumPoolEntry
+            x-object-id: ops.premium_pool_entry
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PremiumPoolEntryCommandFacade
+                method: rollbackEntry
+                aggregateOwner: PremiumPoolEntry
+            parameters:
+                - name: contentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RollbackPremiumPoolEntryRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PremiumPoolEntry'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/recommendation/premium-pool/{contentId}:takedown:
+        post:
+            operationId: TakedownPremiumPoolEntry
+            x-contract-operation-id: ops.premium_pool_entry.TakedownPremiumPoolEntry
+            x-object-id: ops.premium_pool_entry
+            x-actor: account
+            x-application:
+                kind: command
+                facet: PremiumPoolEntryCommandFacade
+                method: takedownEntry
+                aggregateOwner: PremiumPoolEntry
+            parameters:
+                - name: contentId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TakedownPremiumPoolEntryRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PremiumPoolEntryTakedownResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/triage/summary:
+        get:
+            operationId: GetProductTriageSummary
+            x-contract-operation-id: ops.event_record.GetProductTriageSummary
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordControlPlaneQueryFacade
+                method: getProductTriageSummary
+                reader: ProductTriageSummaryReader
+                slice: ProductTriageSummary
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetProductTriageSummaryResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/workflows:
+        get:
+            operationId: ListProductWorkflows
+            x-contract-operation-id: ops.event_record.ListProductWorkflows
+            x-object-id: ops.event_record
+            x-actor: account
+            x-application:
+                kind: query
+                facet: EventRecordControlPlaneQueryFacade
+                method: listProductWorkflows
+                reader: ProductWorkflowReader
+                slice: ProductWorkflowSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProductWorkflowsResponse'
                 default:
                     description: Runtime failure
                     content:
@@ -1173,6 +2099,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AccountEnforcementCaseResult
             x-contract-placeholder: true
+        AcknowledgeAlertRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AcknowledgeAlertRequest
+            x-contract-placeholder: true
         ConfigDomainSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1197,6 +2128,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ConfigSnapshotView
+            x-contract-placeholder: true
+        CreateExperimentRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateExperimentRequest
+            x-contract-placeholder: true
+        CreateExperimentResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateExperimentResult
             x-contract-placeholder: true
         EffectiveConfigSlice:
             type: object
@@ -1238,6 +2179,46 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetEventSummaryResponse
             x-contract-placeholder: true
+        GetGrayRoutingPolicyResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetGrayRoutingPolicyResponse
+            x-contract-placeholder: true
+        GetGrowthOverviewResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetGrowthOverviewResponse
+            x-contract-placeholder: true
+        GetPageExperienceResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetPageExperienceResponse
+            x-contract-placeholder: true
+        GetPlatformProjectionSummaryResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetPlatformProjectionSummaryResponse
+            x-contract-placeholder: true
+        GetPlatformTriageSummaryResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetPlatformTriageSummaryResponse
+            x-contract-placeholder: true
+        GetProdPlaneAccessIsolationResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetProdPlaneAccessIsolationResponse
+            x-contract-placeholder: true
+        GetProductProjectionSummaryResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetProductProjectionSummaryResponse
+            x-contract-placeholder: true
+        GetProductTriageSummaryResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetProductTriageSummaryResponse
+            x-contract-placeholder: true
         GetRuntimeLogDrilldownResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1248,10 +2229,90 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetRuntimeLogSummaryResponse
             x-contract-placeholder: true
+        GetServiceRouteREDResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GetServiceRouteREDResponse
+            x-contract-placeholder: true
         GetVisitStatsResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetVisitStatsResponse
+            x-contract-placeholder: true
+        IngestAlertmanagerWebhookRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IngestAlertmanagerWebhookRequest
+            x-contract-placeholder: true
+        ListActiveAlertsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListActiveAlertsResponse
+            x-contract-placeholder: true
+        ListEnvironmentTopologiesResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListEnvironmentTopologiesResponse
+            x-contract-placeholder: true
+        ListL1L4MetricSnapshotsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListL1L4MetricSnapshotsResponse
+            x-contract-placeholder: true
+        ListPlaneBindingsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListPlaneBindingsResponse
+            x-contract-placeholder: true
+        ListPlatformApprovalsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListPlatformApprovalsResponse
+            x-contract-placeholder: true
+        ListPlatformAuditsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListPlatformAuditsResponse
+            x-contract-placeholder: true
+        ListProductApprovalsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListProductApprovalsResponse
+            x-contract-placeholder: true
+        ListProductAuditsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListProductAuditsResponse
+            x-contract-placeholder: true
+        ListProductWorkflowsResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListProductWorkflowsResponse
+            x-contract-placeholder: true
+        ListReleaseCandidateAcksResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListReleaseCandidateAcksResponse
+            x-contract-placeholder: true
+        ListRuntimeClustersResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListRuntimeClustersResponse
+            x-contract-placeholder: true
+        ListRuntimeInstancesResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListRuntimeInstancesResponse
+            x-contract-placeholder: true
+        ListRuntimeServicesResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListRuntimeServicesResponse
+            x-contract-placeholder: true
+        ListServiceCatalogEntriesResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ListServiceCatalogEntriesResponse
             x-contract-placeholder: true
         OpenAccountAppealCaseRequest:
             type: object
@@ -1262,6 +2323,21 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OpenAccountModerationCaseRequest
+            x-contract-placeholder: true
+        PremiumPoolEntry:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PremiumPoolEntry
+            x-contract-placeholder: true
+        PremiumPoolEntrySlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PremiumPoolEntrySlice
+            x-contract-placeholder: true
+        PremiumPoolEntryTakedownResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PremiumPoolEntryTakedownResult
             x-contract-placeholder: true
         RecordVisitRequest:
             type: object
@@ -1293,6 +2369,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReviewAccountEnforcementCaseRequest
             x-contract-placeholder: true
+        RollbackPremiumPoolEntryRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RollbackPremiumPoolEntryRequest
+            x-contract-placeholder: true
         RtcMediaQoeSummarySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1303,6 +2384,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RuntimeLogBatchRequest
             x-contract-placeholder: true
+        TakedownPremiumPoolEntryRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: TakedownPremiumPoolEntryRequest
+            x-contract-placeholder: true
         UpdateExperimentRolloutRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1312,4 +2398,9 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UpdateExperimentRolloutResult
+            x-contract-placeholder: true
+        UpsertPremiumPoolEntryRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpsertPremiumPoolEntryRequest
             x-contract-placeholder: true

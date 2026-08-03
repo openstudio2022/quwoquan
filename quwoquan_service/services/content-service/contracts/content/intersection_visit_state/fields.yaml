@@ -64,6 +64,24 @@ fields:
   ops_exposure: read
   role: authoritative_state
 types:
+  GetMyIntersectionSummaryQuery:
+    description: 当前可信 persona 的交集收件箱摘要查询；身份只从 principal 注入，不接受客户端身份字段。
+    fields: []
+  ListMyIntersectionsQuery:
+    description: 当前可信 persona 的交集收件箱分页查询。
+    fields:
+    - {name: dimension, type: string, constraints: [NULLABLE]}
+    - {name: filter, type: string, constraints: [NULLABLE]}
+    - {name: sourceRef, type: string, constraints: [NULLABLE]}
+    - {name: timeBucket, type: string, constraints: [NULLABLE]}
+    - {name: cursor, type: string, constraints: [NULLABLE]}
+    - {name: limit, type: int, client_default: "50"}
+  GetObjectIntersectionsQuery:
+    description: 当前可信 persona 与指定公开对象的交集查询。
+    fields:
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+    - {name: objectType, type: string, constraints: [NULLABLE]}
+    - {name: limit, type: int, client_default: "8"}
   MarkIntersectionsVisitedRequest:
     description: 推进交集已读水位的命令输入；dimension 为空表示推进全部维度。
     fields:

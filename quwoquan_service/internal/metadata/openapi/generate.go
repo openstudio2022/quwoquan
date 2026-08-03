@@ -231,7 +231,9 @@ func buildSuccessResponse(
 	registry *schemaRegistry,
 ) (string, openAPIResponse, error) {
 	responseKind := strings.TrimSpace(operation.ResponseBodyKind)
-	entity := firstNonEmpty(operation.ResponseBody, operation.ResponseEntity)
+	responseEntity := strings.TrimSpace(operation.ResponseEntity)
+	legacyResponseBody := strings.TrimSpace(operation.ResponseBody)
+	entity := firstNonEmpty(responseEntity, legacyResponseBody)
 
 	switch responseKind {
 	case "upgrade":
@@ -239,6 +241,17 @@ func buildSuccessResponse(
 	case "ack":
 		return "204", openAPIResponse{Description: "No Content"}, nil
 	case "page":
+		// response_entity is the exact canonical response wire (normally a
+		// bounded *Slice). response_body was the retired item-type track; only
+		// use its page-wrapper fallback for operations not yet declaring the
+		// canonical response entity.
+		if responseEntity != "" {
+			component, err := registry.addPlaceholder(responseEntity)
+			if err != nil {
+				return "", openAPIResponse{}, err
+			}
+			return jsonResponse("200", "OK", componentRef(component))
+		}
 		if entity == "" {
 			entity = operation.LocalID + "Item"
 		}

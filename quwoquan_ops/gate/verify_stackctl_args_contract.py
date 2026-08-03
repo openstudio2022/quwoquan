@@ -71,6 +71,14 @@ def main() -> int:
         except json.JSONDecodeError:
             issues.append("stackctl data-execution-fleet must return JSON with --output-format json")
 
+    fleet_help = run(["python3", str(STACKCTL), "data-execution-fleet", "--help"])
+    if (
+        fleet_help.returncode != 0
+        or "--action" not in fleet_help.stdout
+        or any(action not in fleet_help.stdout for action in ("resolve", "up", "status", "down"))
+    ):
+        issues.append("stackctl data-execution-fleet must expose resolve/up/status/down actions")
+
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
     if (
         verify_help.returncode != 0

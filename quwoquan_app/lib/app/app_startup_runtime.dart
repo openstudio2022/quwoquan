@@ -54,10 +54,12 @@ final class AppStartupRuntime {
   int? _androidActivityOnCreateMs;
   int? _androidFlutterEngineConfiguredMs;
   int? _nativeElapsedSinceProcessStartMs;
+  int? _nativeElapsedSinceAttemptStartMs;
   int? _dartElapsedAtNativeHydrationMs;
   int? _deadlineElapsedAtBootstrapMs;
   int _dartElapsedAtDeadlineArmMs = 0;
   String _deadlineOrigin = 'fallbackDart';
+  String _attemptKind = 'unknown';
 
   static StartupTimingsNativeBridge _nativeTimingsBridge =
       MethodChannelStartupTimingsNativeBridge();
@@ -102,10 +104,12 @@ final class AppStartupRuntime {
     _androidActivityOnCreateMs = null;
     _androidFlutterEngineConfiguredMs = null;
     _nativeElapsedSinceProcessStartMs = null;
+    _nativeElapsedSinceAttemptStartMs = null;
     _dartElapsedAtNativeHydrationMs = null;
     _deadlineElapsedAtBootstrapMs = null;
     _dartElapsedAtDeadlineArmMs = 0;
     _deadlineOrigin = 'fallbackDart';
+    _attemptKind = 'unknown';
   }
 
   void markBootstrapStarted() {
@@ -115,10 +119,6 @@ final class AppStartupRuntime {
     _bootstrapStarted = true;
     _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
-    _recordPlatformStartupEvent(
-      eventName: 'startup_attempt_started',
-      properties: _snapshotProperties(phase: 'startup_attempt_started'),
-    );
     final platformElapsed = readPlatformStartupElapsedMs();
     _dartElapsedAtDeadlineArmMs = _elapsedMs;
     if (platformElapsed != null) {
@@ -143,6 +143,10 @@ final class AppStartupRuntime {
   }
 
   void markConfigurationValidated() {
+    _recordPlatformStartupEvent(
+      eventName: 'startup_attempt_started',
+      properties: _snapshotProperties(phase: 'startup_attempt_started'),
+    );
     _recordCanonicalPhase(
       StartupTelemetryPhase.configurationValidation,
       outcome: 'validated',
@@ -231,7 +235,7 @@ final class AppStartupRuntime {
   ///
   /// 同时到来的调用共享一条有上限任务；超时、PlatformException 或任意未知错误都会
   /// 清除 in-flight 标记，下一次安全时机可以重试，绝不把永久 pending 固化为已水合。
-  Future<void> hydrateNativeProcessSegments({
+  Future<void> beginNativeStartupAttempt({
     Duration budget = const Duration(seconds: 2),
     Future<void>? cancellationSignal,
   }) {
@@ -273,17 +277,22 @@ final class AppStartupRuntime {
         _androidFlutterEngineConfiguredMs =
             segments.androidFlutterEngineConfiguredMs;
         _nativeElapsedSinceProcessStartMs = segments.elapsedSinceProcessStartMs;
+        _nativeElapsedSinceAttemptStartMs = segments.elapsedSinceAttemptStartMs;
         _dartElapsedAtNativeHydrationMs = dartElapsedAtHydration;
+        final nativeAttemptKind = segments.attemptKind?.trim() ?? '';
+        if (nativeAttemptKind == 'cold' || nativeAttemptKind == 'hotRestart') {
+          _attemptKind = nativeAttemptKind;
+        }
         final nativeAttemptId = segments.startupAttemptId?.trim() ?? '';
         if (StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)) {
           _startupAttemptId = nativeAttemptId;
         }
-        final nativeDeadline = segments.elapsedSinceProcessStartMs;
+        final nativeDeadline = segments.elapsedSinceAttemptStartMs;
         if (nativeDeadline != null &&
-            nativeDeadline > deadlineBeforeHydration) {
-          // Native process time can only consume more of the existing budget.
-          // A delayed/stale bridge response must never move the absolute
-          // deadline backwards and grant a second startup window.
+            (_attemptKind == 'hotRestart' ||
+                nativeDeadline > deadlineBeforeHydration)) {
+          // Cold start 只能向前收紧；Hot Restart 则必须丢弃旧进程时钟，
+          // 改用本次 Dart attempt 的单调时钟。
           _deadlineElapsedAtBootstrapMs = nativeDeadline;
           _dartElapsedAtDeadlineArmMs = dartElapsedAtHydration;
           final nativeOrigin = segments.deadlineOrigin ?? '';
@@ -332,14 +341,16 @@ final class AppStartupRuntime {
         );
       }
     });
-    _nativeTimingsBridge.readProcessSegments().then(
-      (segments) {
-        completeValue(segments);
-      },
-      onError: (Object error, StackTrace stack) {
-        completeFailure(error, stack);
-      },
-    );
+    _nativeTimingsBridge
+        .beginStartupAttempt(_startupAttemptId)
+        .then(
+          (segments) {
+            completeValue(segments);
+          },
+          onError: (Object error, StackTrace stack) {
+            completeFailure(error, stack);
+          },
+        );
     cancellationSignal?.then((_) {
       completeFailure(const _NativeTimingHydrationCancelled());
     });
@@ -347,6 +358,20 @@ final class AppStartupRuntime {
   }
 
   Duration get elapsedSinceProcessStart {
+    final nativeElapsed = _nativeElapsedSinceAttemptStartMs;
+    final dartHydrationElapsed = _dartElapsedAtNativeHydrationMs;
+    if (nativeElapsed != null && dartHydrationElapsed != null) {
+      final sinceHydration = (_elapsedMs - dartHydrationElapsed).clamp(
+        0,
+        1 << 30,
+      );
+      return Duration(milliseconds: nativeElapsed + sinceHydration);
+    }
+    return Duration(milliseconds: _elapsedMs);
+  }
+
+  /// 进程总存活时间只用于诊断，不参与 Hot Restart 的 Welcome deadline。
+  Duration get processElapsed {
     final nativeElapsed = _nativeElapsedSinceProcessStartMs;
     final dartHydrationElapsed = _dartElapsedAtNativeHydrationMs;
     if (nativeElapsed != null && dartHydrationElapsed != null) {
@@ -375,6 +400,8 @@ final class AppStartupRuntime {
   }
 
   String get deadlineOrigin => _deadlineOrigin;
+
+  String get attemptKind => _attemptKind;
 
   String get startupAttemptId => _startupAttemptId;
 
@@ -689,6 +716,14 @@ final class AppStartupRuntime {
       'runtimeEnv': runtimeSummary['runtimeEnv'],
       'launchMode': runtimeSummary['launchMode'],
       'configurationState': runtimeSummary['configurationState'],
+      'contentBindingState': runtimeSummary['contentBindingState'],
+      if ((runtimeSummary['contentReleaseId'] ?? '').isNotEmpty)
+        'contentReleaseId': runtimeSummary['contentReleaseId'],
+      if ((runtimeSummary['contentManifestDigest'] ?? '').isNotEmpty)
+        'contentManifestDigest': runtimeSummary['contentManifestDigest'],
+      if ((runtimeSummary['contentReadinessReceiptDigest'] ?? '').isNotEmpty)
+        'contentReadinessReceiptDigest':
+            runtimeSummary['contentReadinessReceiptDigest'],
       if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
       if (_runAppMs != null) 'runAppMs': _runAppMs,
       if (_firstFrameMs != null) 'firstFrameMs': _firstFrameMs,
@@ -703,7 +738,9 @@ final class AppStartupRuntime {
       if (_androidFlutterEngineConfiguredMs != null)
         'androidFlutterEngineConfiguredMs': _androidFlutterEngineConfiguredMs,
       'deadlineOrigin': _deadlineOrigin,
+      'attemptKind': _attemptKind,
       'elapsedSinceProcessStartMs': elapsedSinceProcessStart.inMilliseconds,
+      'processElapsedMs': processElapsed.inMilliseconds,
       if (_homeFeedWarmMs != null) 'homeFeedWarmMs': _homeFeedWarmMs,
       if (_homeReadyMs != null) 'homeReadyMs': _homeReadyMs,
       'elapsedMs': _elapsedMs,

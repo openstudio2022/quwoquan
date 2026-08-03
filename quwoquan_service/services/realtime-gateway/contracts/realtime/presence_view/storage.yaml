@@ -1,2 +1,8 @@
 backend: redis
 role: projection
+redis_cache:
+- key: presence:persona:{personaId}
+  ttl_seconds: 120
+  type: hash
+  scene: realtime
+  description: Persona 设备级在线状态 Hash；field=deviceId，value 含 connection fence sequence。写入与删除必须使用单 key 原子 CAS；Hash TTL 只作崩溃兜底，reader 仍逐 field 清理陈旧设备。

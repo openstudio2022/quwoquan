@@ -1,0 +1,222 @@
+"""Governed research/commercial asset admission.
+
+Acquisition and distribution are deliberately separate: a locally acquired
+file never proves that commercial redistribution is authorized.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+from typing import Any, Mapping
+
+import yaml
+
+from core.schema import assert_valid
+
+
+POLICY_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "control_plane/_shared/content_distribution.policy.yaml"
+)
+
+
+class ProductLifecycleState(StrEnum):
+    RESEARCH = "research"
+    COMMERCIAL = "commercial"
+
+
+class ReleaseClass(StrEnum):
+    RESEARCH = "research"
+    COMMERCIAL = "commercial"
+
+
+class AcquisitionStatus(StrEnum):
+    ACQUIRED = "acquired"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+
+class RightsStatus(StrEnum):
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+    RESTRICTED = "restricted"
+    UNKNOWN = "unknown"
+
+
+class DistributionDecision(StrEnum):
+    RESEARCH_ALLOWED = "research_allowed"
+    COMMERCIAL_ALLOWED = "commercial_allowed"
+    BLOCKED = "blocked"
+
+
+@dataclass(frozen=True, slots=True)
+class ContentDistributionPolicy:
+    policy_id: str
+    product_lifecycle_state: ProductLifecycleState
+    release_class: ReleaseClass
+    image_generation_allowed: bool
+    video_generation_allowed: bool
+    minimum_illustrated_rate: float
+    maximum_text_only_rate: float
+    m100_per_carrier: int
+    m1000_per_carrier: int
+    minimum_automatic_recovery_rate: float
+    image_provider_priority: tuple[str, ...]
+    video_popularity_signals: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.release_class.value != self.product_lifecycle_state.value:
+            raise ValueError("releaseClass must equal productLifecycleState")
+        if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
+            raise ValueError("research image provider priority must start with pinterest")
+
+
+def load_content_distribution_policy(
+    *, policy_path: Path = POLICY_PATH
+) -> ContentDistributionPolicy:
+    try:
+        raw = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(f"content distribution policy is unreadable: {policy_path}") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("content distribution policy must be an object")
+    assert_valid(
+        raw,
+        "governance",
+        "content_distribution_policy",
+        label="content_distribution_policy",
+    )
+    acquisition = raw["acquisition"]
+    if any(bool(value) for value in acquisition.values()):
+        raise ValueError("content acquisition bypass controls must remain disabled")
+    lifecycle = ProductLifecycleState(str(raw["productLifecycleState"]))
+    release_class = ReleaseClass(str(raw["releaseClass"]))
+    media_generation = raw["mediaGeneration"]
+    research_discovery = raw["researchDiscovery"]
+    article_media = raw["articleMedia"]
+    scale_gates = raw["scaleGates"]
+    return ContentDistributionPolicy(
+        policy_id=str(raw["policyId"]),
+        product_lifecycle_state=lifecycle,
+        release_class=release_class,
+        image_generation_allowed=bool(media_generation["imageAllowed"]),
+        video_generation_allowed=bool(media_generation["videoAllowed"]),
+        minimum_illustrated_rate=float(article_media["minimumIllustratedRate"]),
+        maximum_text_only_rate=float(article_media["maximumTextOnlyRate"]),
+        m100_per_carrier=int(scale_gates["m100PerCarrier"]),
+        m1000_per_carrier=int(scale_gates["m1000PerCarrier"]),
+        minimum_automatic_recovery_rate=float(
+            scale_gates["minimumAutomaticRecoveryRate"]
+        ),
+        image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
+        video_popularity_signals=tuple(research_discovery["videoPopularitySignals"]),
+    )
+
+
+def distribution_decision(
+    *,
+    acquisition_status: AcquisitionStatus,
+    rights_status: RightsStatus,
+    authorization_proof: str,
+) -> DistributionDecision:
+    if acquisition_status is not AcquisitionStatus.ACQUIRED:
+        return DistributionDecision.BLOCKED
+    if rights_status is RightsStatus.RESTRICTED:
+        return DistributionDecision.BLOCKED
+    if rights_status is RightsStatus.VERIFIED and authorization_proof.strip():
+        return DistributionDecision.COMMERCIAL_ALLOWED
+    return DistributionDecision.RESEARCH_ALLOWED
+
+
+def project_asset_admission(
+    asset: Mapping[str, Any],
+    *,
+    object_ref: str,
+) -> dict[str, Any]:
+    raw_rights_status = str(
+        asset.get("rightsStatus") or asset.get("rightsAuditStatus") or "unknown"
+    ).strip()
+    try:
+        rights_status = RightsStatus(raw_rights_status)
+    except ValueError as exc:
+        raise ValueError(
+            f"{object_ref}: asset rightsStatus is invalid: {raw_rights_status!r}"
+        ) from exc
+    physical = asset.get("asset")
+    acquired = (
+        isinstance(physical, Mapping)
+        and str(physical.get("sha256") or "").startswith("sha256:")
+        and int(physical.get("bytes") or 0) > 0
+    )
+    acquisition_status = (
+        AcquisitionStatus.ACQUIRED if acquired else AcquisitionStatus.FAILED
+    )
+    authorization_proof = str(asset.get("authorizationProof") or "").strip()
+    decision = distribution_decision(
+        acquisition_status=acquisition_status,
+        rights_status=rights_status,
+        authorization_proof=authorization_proof,
+    )
+    source_url = str(
+        asset.get("sourceUrl")
+        or asset.get("originalAssetUrl")
+        or asset.get("source")
+        or asset.get("canonicalFilePage")
+        or ""
+    ).strip()
+    captured_at = str(asset.get("capturedAt") or asset.get("fetchedAt") or "").strip()
+    content_sha256 = str(
+        asset.get("contentSha256")
+        or (physical.get("sha256") if isinstance(physical, Mapping) else "")
+        or ""
+    ).strip()
+    if not source_url.startswith("https://") or not captured_at or not content_sha256.startswith("sha256:"):
+        raise ValueError(
+            f"{object_ref}: acquired asset lacks sourceUrl/capturedAt/contentSha256"
+        )
+    rights_issues = [
+        str(item).strip()
+        for item in (asset.get("rightsIssues") or asset.get("rightsAuditIssues") or [])
+        if str(item).strip()
+    ]
+    if rights_status is not RightsStatus.VERIFIED and not rights_issues:
+        raise ValueError(f"{object_ref}: non-verified asset lacks rightsIssues")
+    generated = bool(
+        str(asset.get("generationModel") or "").strip()
+        or str(asset.get("sourceUseMode") or "") == "self_generated_original"
+    )
+    return {
+        "assetId": str(asset.get("assetId") or "").strip(),
+        "objectRef": object_ref,
+        "acquisitionStatus": acquisition_status.value,
+        "rightsStatus": rights_status.value,
+        "authorizationRequired": (
+            rights_status is not RightsStatus.VERIFIED or not authorization_proof
+        ),
+        "distributionDecision": decision.value,
+        "sourceUrl": source_url,
+        "platform": str(asset.get("platform") or asset.get("sourceKind") or "unknown").strip(),
+        "creator": str(asset.get("creator") or asset.get("author") or "unknown").strip(),
+        "capturedAt": captured_at,
+        "contentSha256": content_sha256,
+        "license": str(asset.get("license") or asset.get("licenseName") or "unknown").strip(),
+        "termsUrl": str(asset.get("termsUrl") or asset.get("licenseUrl") or "").strip(),
+        "authorizationProof": authorization_proof,
+        "rightsIssues": rights_issues,
+        "generated": generated,
+    }
+
+
+__all__ = [
+    "AcquisitionStatus",
+    "ContentDistributionPolicy",
+    "DistributionDecision",
+    "POLICY_PATH",
+    "ProductLifecycleState",
+    "ReleaseClass",
+    "RightsStatus",
+    "distribution_decision",
+    "load_content_distribution_policy",
+    "project_asset_admission",
+]

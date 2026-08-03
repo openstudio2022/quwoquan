@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -127,6 +128,17 @@ func (service *Service) ResolveActive(
 		return ResolvedRelease{}, model.ErrActivationAbsent
 	}
 	return service.resolver.ResolveActive(ctx, packageID)
+}
+
+func (service *Service) ResolveRelease(
+	ctx context.Context,
+	packageID string,
+	releaseDigest string,
+) (ResolvedRelease, error) {
+	if service == nil || service.resolver == nil {
+		return ResolvedRelease{}, model.ErrReleaseNotFound
+	}
+	return service.resolver.ResolveRelease(ctx, packageID, releaseDigest)
 }
 
 func (service *Service) Activate(
@@ -265,7 +277,7 @@ func verifyAssets(
 	for _, asset := range release.Assets {
 		content, err := reader.ReadAsset(ctx, asset.Locator)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %v", model.ErrAssetUnavailable, err)
 		}
 		sum := sha256.Sum256(content)
 		if "sha256:"+hex.EncodeToString(sum[:]) != asset.AssetDigest {

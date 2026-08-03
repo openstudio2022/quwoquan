@@ -1,7 +1,7 @@
-import 'content_reaction_contracts.dart';
+import 'content_operation_contracts.g.dart';
 
 abstract interface class ContentPostReactionQuery {
-  Future<ContentPostReactionStateSlice> getReactionState(
+  Future<ContentReactionStateSlice> getReactionState(
     GetContentPostReactionStateQuery query,
   );
 }

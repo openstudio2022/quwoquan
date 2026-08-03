@@ -16,6 +16,7 @@ import (
 	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	"strings"
 	"time"
 )
@@ -328,7 +329,7 @@ func buildPublicPersonaProfileView(owner *model.UserProfile, persona *model.Pers
 
 // BuildCreatorRuntimeProfileView projects an imported creator into its
 // public-safe account query representation.
-func BuildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[string]any {
+func BuildCreatorRuntimeProfileView(creator *userrepo.CreatorRuntimeProfileView) map[string]any {
 	if creator == nil {
 		return map[string]any{}
 	}
@@ -338,14 +339,11 @@ func BuildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[st
 	return map[string]any{
 		"subjectType":        "creator",
 		"personaId":          creator.PersonaID,
-		"userId":             creator.CreatorID,
 		"userHandle":         creator.Handle,
 		"displayName":        creator.DisplayName,
-		"nickname":           creator.DisplayName,
 		"headline":           creator.Headline,
 		"nicknameCustomized": false,
 		"avatarUrl":          creator.AvatarURL,
-		"avatarVersion":      creator.AvatarVersion,
 		"backgroundUrl":      creator.CoverURL,
 		"bio":                creator.Bio,
 		"identityTags":       identityTags,
@@ -422,16 +420,12 @@ func buildPersonaProfileView(owner *model.UserProfile, persona *model.Persona) m
 	}
 
 	return map[string]any{
-		"ownerUserId":        owner.UserID,
 		"subjectType":        subjectType,
 		"personaId":          personaID,
-		"userId":             defaultString(personaID, owner.UserID),
 		"userHandle":         userHandle,
 		"displayName":        displayName,
-		"nickname":           displayName,
 		"nicknameCustomized": nicknameCustomized,
 		"avatarUrl":          avatarURLWithVersion(avatarURL, avatarVersion),
-		"avatarVersion":      avatarVersion,
 		"backgroundUrl":      backgroundURL,
 		"bio":                bio,
 		"identityTags":       identityTags,

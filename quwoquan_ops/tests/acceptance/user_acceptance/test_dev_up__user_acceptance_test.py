@@ -373,6 +373,8 @@ class DevUpTest(unittest.TestCase):
         combined = build_gradle + alpha_run + beta_manual
         self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", combined)
         self.assertNotIn("local_env_debug_root", combined)
+        self.assertIn("--allow-unprovisioned-system-trust", build_gradle)
+        self.assertIn("--allow-unprovisioned-system-trust", alpha_run)
 
     def test_plain_android_flutter_run_is_env_package_backed(self) -> None:
         build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
@@ -541,7 +543,8 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("--launch-mode direct_flutter_run", prepare_defines)
         self.assertIn("device-trust --target alpha-local", prepare_defines)
         self.assertIn("--platform ios-simulator", prepare_defines)
-        self.assertIn('${CONFIGURATION:-}" == "Debug"', prepare_defines)
+        self.assertIn("--defer-endpoint-probe", prepare_defines)
+        self.assertIn('${CONFIGURATION:-}" == Debug*', prepare_defines)
         self.assertIn("export FLUTTER_TARGET=", prepare_defines)
         self.assertIn("lib/main_prod.dart", prepare_defines)
 

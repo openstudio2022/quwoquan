@@ -16,9 +16,11 @@ import (
 
 type StartCommand struct {
 	UserID                  string
+	PersonaID               string
 	SessionID               string
 	ClientRequestID         string
 	TraceID                 string
+	RequestContext          RequestContext
 	IntentKind              string
 	InputText               string
 	RequestedSkillID        string
@@ -56,35 +58,146 @@ func (f SessionAuthorizerFunc) AuthorizeSession(
 	return f(ctx, userID, sessionID)
 }
 
+type SkillPackageIdentity struct {
+	PackageID     string
+	ReleaseDigest string
+}
+
+type SkillPackageIdentityResolver interface {
+	ResolveActiveSkillPackage(context.Context) (string, string, error)
+}
+
+type StartAccessPolicy interface {
+	AuthorizeStart(context.Context, StartAccessRequest) error
+}
+
+type StartAccessRequest struct {
+	AccountID   string
+	PersonaID   string
+	SkillID     string
+	SurfaceKind string
+	SurfaceID   string
+}
+
+type PolicyResolver interface {
+	ResolveFrozenPolicy(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+	) (FrozenPolicySelection, error)
+}
+
+type PolicyResolverFunc func(
+	context.Context,
+	string,
+	string,
+	string,
+	string,
+) (FrozenPolicySelection, error)
+
+func (resolve PolicyResolverFunc) ResolveFrozenPolicy(
+	ctx context.Context,
+	policyID string,
+	personaID string,
+	skillID string,
+	domainID string,
+) (FrozenPolicySelection, error) {
+	return resolve(ctx, policyID, personaID, skillID, domainID)
+}
+
+type StartAccessPolicyFunc func(context.Context, StartAccessRequest) error
+
+func (policy StartAccessPolicyFunc) AuthorizeStart(
+	ctx context.Context,
+	request StartAccessRequest,
+) error {
+	return policy(ctx, request)
+}
+
+type AllowAllStartAccessPolicy struct{}
+
+func (AllowAllStartAccessPolicy) AuthorizeStart(
+	context.Context,
+	StartAccessRequest,
+) error {
+	return nil
+}
+
+type StaticSkillPackageIdentityResolver struct {
+	PackageID     string
+	ReleaseDigest string
+}
+
+func (resolver StaticSkillPackageIdentityResolver) ResolveActiveSkillPackage(
+	ctx context.Context,
+) (string, string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", "", err
+	}
+	packageID := strings.TrimSpace(resolver.PackageID)
+	digest := strings.TrimSpace(resolver.ReleaseDigest)
+	if packageID == "" || !validSkillPackageDigest(digest) {
+		return "", "", ErrSkillPackageUnavailable
+	}
+	return packageID, digest, nil
+}
+
+func validSkillPackageDigest(value string) bool {
+	if len(value) != len("sha256:")+sha256.Size*2 ||
+		!strings.HasPrefix(value, "sha256:") {
+		return false
+	}
+	raw := strings.TrimPrefix(value, "sha256:")
+	if raw != strings.ToLower(raw) {
+		return false
+	}
+	_, err := hex.DecodeString(raw)
+	return err == nil
+}
+
 // CommandService is the only writable AssistantRun command surface. Every
 // mutation loads one aggregate revision and commits its journal event with CAS.
 type CommandService struct {
-	repository Repository
-	sessions   SessionAuthorizer
-	now        func() time.Time
-	newRunID   func() (string, error)
-	cancel     *CancellationCoordinator
+	repository    Repository
+	sessions      SessionAuthorizer
+	skillPackages SkillPackageIdentityResolver
+	startAccess   StartAccessPolicy
+	policies      PolicyResolver
+	now           func() time.Time
+	newRunID      func() (string, error)
+	cancel        *CancellationCoordinator
 }
 
 func NewCommandService(
 	repository Repository,
 	sessions SessionAuthorizer,
+	skillPackages SkillPackageIdentityResolver,
+	startAccess StartAccessPolicy,
 	now func() time.Time,
 	cancel *CancellationCoordinator,
+	policies ...PolicyResolver,
 ) *CommandService {
-	if repository == nil || sessions == nil {
+	if repository == nil || sessions == nil || skillPackages == nil || startAccess == nil {
 		panic("assistant run command dependencies are required")
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &CommandService{
-		repository: repository,
-		sessions:   sessions,
-		now:        now,
-		newRunID:   newRunID,
-		cancel:     cancel,
+	service := &CommandService{
+		repository:    repository,
+		sessions:      sessions,
+		skillPackages: skillPackages,
+		startAccess:   startAccess,
+		now:           now,
+		newRunID:      newRunID,
+		cancel:        cancel,
 	}
+	if len(policies) > 0 {
+		service.policies = policies[0]
+	}
+	return service
 }
 
 func (s *CommandService) Start(
@@ -99,6 +212,8 @@ func (s *CommandService) Start(
 		return Run{}, ErrInvalidRun
 	}
 	inputDigest, err := commandDigest("run_start", struct {
+		PersonaID           string         `json:"personaId"`
+		RequestContext      RequestContext `json:"requestContext"`
 		IntentKind          string         `json:"intentKind"`
 		InputText           string         `json:"inputText"`
 		RequestedSkillID    string         `json:"requestedSkillId,omitempty"`
@@ -107,6 +222,8 @@ func (s *CommandService) Start(
 		ContextSnapshot     map[string]any `json:"contextSnapshot,omitempty"`
 		SurfaceCapabilities map[string]any `json:"surfaceCapabilities,omitempty"`
 	}{
+		PersonaID:           command.PersonaID,
+		RequestContext:      command.RequestContext,
 		IntentKind:          command.IntentKind,
 		InputText:           command.InputText,
 		RequestedSkillID:    command.RequestedSkillID,
@@ -140,6 +257,39 @@ func (s *CommandService) Start(
 	); err != nil {
 		return Run{}, err
 	}
+	if command.RequestedSkillID != "" {
+		if err := s.startAccess.AuthorizeStart(
+			ctx,
+			StartAccessRequest{
+				AccountID:   command.UserID,
+				PersonaID:   command.PersonaID,
+				SkillID:     command.RequestedSkillID,
+				SurfaceKind: command.RequestContext.SurfaceKind,
+				SurfaceID:   command.RequestContext.SurfaceID,
+			},
+		); err != nil {
+			return Run{}, err
+		}
+	}
+	skillPackageID, skillPackageReleaseDigest, err :=
+		s.skillPackages.ResolveActiveSkillPackage(ctx)
+	if err != nil || strings.TrimSpace(skillPackageID) == "" ||
+		!validSkillPackageDigest(strings.TrimSpace(skillPackageReleaseDigest)) {
+		return Run{}, ErrSkillPackageUnavailable
+	}
+	if s.policies == nil {
+		return Run{}, ErrPolicyUnavailable
+	}
+	policySelection, err := s.policies.ResolveFrozenPolicy(
+		ctx,
+		"assistant-default",
+		command.PersonaID,
+		command.RequestedSkillID,
+		command.RequestedDomainID,
+	)
+	if err != nil || !validPolicySelection(policySelection) {
+		return Run{}, ErrPolicyUnavailable
+	}
 	runID, err := s.newRunID()
 	if err != nil {
 		return Run{}, err
@@ -151,7 +301,7 @@ func (s *CommandService) Start(
 	if err != nil {
 		return Run{}, err
 	}
-	now := s.now().UTC()
+	now := s.now().UTC().Truncate(time.Millisecond)
 	run, err := NewRun(
 		runID,
 		command.ReasoningProfile,
@@ -164,6 +314,7 @@ func (s *CommandService) Start(
 	}
 	if err := run.BindIdentity(
 		command.UserID,
+		command.PersonaID,
 		command.SessionID,
 		command.ClientRequestID,
 		command.TraceID,
@@ -171,6 +322,7 @@ func (s *CommandService) Start(
 	); err != nil {
 		return Run{}, err
 	}
+	run.RequestContext = normalizeRequestContext(command.RequestContext)
 	if err := run.BindExecutionInput(
 		command.IntentKind,
 		inputDigest,
@@ -182,6 +334,13 @@ func (s *CommandService) Start(
 	); err != nil {
 		return Run{}, err
 	}
+	if err := run.BindSkillPackage(
+		skillPackageID,
+		skillPackageReleaseDigest,
+	); err != nil {
+		return Run{}, err
+	}
+	run.FrozenPolicySelection = clonePolicySelection(policySelection)
 	run.SessionPreferenceFacts = append(
 		[]preferencemodel.Snapshot(nil),
 		command.SessionPreferenceFacts...,
@@ -221,6 +380,52 @@ func (s *CommandService) Start(
 		return Run{}, err
 	}
 	return run, nil
+}
+
+func validPolicySelection(selection FrozenPolicySelection) bool {
+	digest := strings.TrimPrefix(strings.TrimSpace(selection.ReleaseDigest), "sha256:")
+	if strings.TrimSpace(selection.PolicyID) == "" || len(digest) != sha256.Size*2 ||
+		digest != strings.ToLower(digest) {
+		return false
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return false
+	}
+	return strings.TrimSpace(selection.Template.TemplateID) != "" &&
+		selection.RolloutRevision > 0
+}
+
+func clonePolicySelection(selection FrozenPolicySelection) FrozenPolicySelection {
+	selection.Template.AllowedTools = append(
+		[]string(nil),
+		selection.Template.AllowedTools...,
+	)
+	selection.LearningContextPolicy.AllowedSignals = append(
+		[]string(nil),
+		selection.LearningContextPolicy.AllowedSignals...,
+	)
+	selection.LearningContextPolicy.AllowedMetricIDs = append(
+		[]string(nil),
+		selection.LearningContextPolicy.AllowedMetricIDs...,
+	)
+	selection.LearningContextPolicy.AllowedReasonCodes = append(
+		[]string(nil),
+		selection.LearningContextPolicy.AllowedReasonCodes...,
+	)
+	return selection
+}
+
+func normalizeRequestContext(value RequestContext) RequestContext {
+	return RequestContext{
+		ClientSessionID: strings.TrimSpace(value.ClientSessionID),
+		PageID:          strings.TrimSpace(value.PageID),
+		SurfaceKind:     strings.TrimSpace(value.SurfaceKind),
+		SurfaceID:       strings.TrimSpace(value.SurfaceID),
+		RouteID:         strings.TrimSpace(value.RouteID),
+		OperationID:     strings.TrimSpace(value.OperationID),
+		TraceID:         strings.TrimSpace(value.TraceID),
+		PersonaID:       strings.TrimSpace(value.PersonaID),
+	}
 }
 
 func (s *CommandService) Get(
@@ -288,9 +493,28 @@ func (s *CommandService) Cancel(
 			return nil
 		}
 		if s.cancel != nil {
-			return s.cancel.Cancel(ctx, run, "user_cancelled", now)
+			if err := s.cancel.Cancel(ctx, run, "user_cancelled", now); err != nil {
+				return err
+			}
+		} else if err := run.Transition(
+			generated.AssistantRunStateCancelled,
+			"user_cancelled",
+			now,
+		); err != nil {
+			return err
 		}
-		return run.Transition(generated.AssistantRunStateCancelled, "user_cancelled", now)
+		snapshot := map[string]any{
+			"answerText": "",
+			"processes":  []map[string]any{},
+		}
+		if run.FrozenPolicySelection.PolicyID != "" {
+			snapshot["selectedPolicyRef"] = map[string]any{
+				"policyId":      run.FrozenPolicySelection.PolicyID,
+				"releaseDigest": run.FrozenPolicySelection.ReleaseDigest,
+				"cohort":        run.FrozenPolicySelection.Cohort,
+			}
+		}
+		return run.SetTerminalSnapshot(snapshot, now)
 	})
 	observeCancelDuration(startedAt, err)
 	return run, err
@@ -303,9 +527,6 @@ func (s *CommandService) ContinueToolUse(
 	decision := strings.TrimSpace(command.Decision)
 	if decision != "approved" && decision != "rejected" {
 		return Run{}, ErrInvalidRun
-	}
-	if err := validateDeviceActionExecutionReceipt(command, decision); err != nil {
-		return Run{}, err
 	}
 	executionOutcome := ""
 	if command.ExecutionReceipt != nil {
@@ -329,6 +550,21 @@ func (s *CommandService) ContinueToolUse(
 				strings.TrimSpace(command.ContinuationToken) !=
 					assistantRunContinuationToken(run.RunID, command.ToolUseID) {
 				return ErrInvalidTransition
+			}
+			expectedActionKind, valid := pendingDeviceActionKind(
+				run.PresentationDocument,
+				strings.TrimSpace(command.ToolUseID),
+				strings.TrimSpace(command.ContinuationToken),
+			)
+			if !valid {
+				return ErrInvalidRun
+			}
+			if err := validateDeviceActionExecutionReceipt(
+				command,
+				decision,
+				expectedActionKind,
+			); err != nil {
+				return err
 			}
 			run.Checkpoint.PendingApprovalRef = ""
 			if command.ExecutionReceipt != nil {
@@ -383,14 +619,19 @@ func (s *CommandService) ContinueToolUse(
 func validateDeviceActionExecutionReceipt(
 	command ContinueToolUseCommand,
 	decision string,
+	expectedActionKind string,
 ) error {
 	receipt := command.ExecutionReceipt
+	expectedActionKind = strings.TrimSpace(expectedActionKind)
+	if expectedActionKind == "" {
+		return ErrInvalidRun
+	}
 	if decision == "rejected" {
 		if receipt == nil {
 			return nil
 		}
 		outcome := strings.TrimSpace(receipt.Outcome)
-		if strings.TrimSpace(receipt.ActionKind) != "calendar_create_reminder" ||
+		if strings.TrimSpace(receipt.ActionKind) != expectedActionKind ||
 			strings.TrimSpace(receipt.IdempotencyKey) != strings.TrimSpace(command.ToolUseID) ||
 			(outcome != "unavailable" && outcome != "denied" && outcome != "failed") ||
 			receipt.ExecutedAt.IsZero() ||
@@ -400,7 +641,7 @@ func validateDeviceActionExecutionReceipt(
 		return nil
 	}
 	if receipt == nil ||
-		strings.TrimSpace(receipt.ActionKind) != "calendar_create_reminder" ||
+		strings.TrimSpace(receipt.ActionKind) != expectedActionKind ||
 		strings.TrimSpace(receipt.IdempotencyKey) != strings.TrimSpace(command.ToolUseID) ||
 		strings.TrimSpace(receipt.Outcome) != "completed" ||
 		receipt.ExecutedAt.IsZero() ||
@@ -408,6 +649,61 @@ func validateDeviceActionExecutionReceipt(
 		return ErrInvalidRun
 	}
 	return nil
+}
+
+func pendingDeviceActionKind(
+	presentation map[string]any,
+	toolUseID string,
+	continuationToken string,
+) (string, bool) {
+	for _, rawNode := range objectSlice(presentation["nodes"]) {
+		action := objectValue(rawNode["action"])
+		if strings.TrimSpace(stringValue(action["operation"])) != "ContinueAssistantToolUse" ||
+			strings.TrimSpace(stringValue(action["objectTypeRef"])) != "assistant_tool_use" ||
+			strings.TrimSpace(stringValue(action["objectId"])) != toolUseID {
+			continue
+		}
+		payload := objectValue(action["payload"])
+		if strings.TrimSpace(stringValue(payload["decision"])) != "approved" ||
+			strings.TrimSpace(stringValue(payload["continuationToken"])) != continuationToken {
+			continue
+		}
+		deviceAction := objectValue(payload["deviceAction"])
+		kind := strings.TrimSpace(stringValue(deviceAction["kind"]))
+		if kind == "" ||
+			strings.TrimSpace(stringValue(deviceAction["idempotencyKey"])) != toolUseID {
+			continue
+		}
+		return kind, true
+	}
+	return "", false
+}
+
+func objectSlice(value any) []map[string]any {
+	switch values := value.(type) {
+	case []map[string]any:
+		return values
+	case []any:
+		result := make([]map[string]any, 0, len(values))
+		for _, value := range values {
+			if object := objectValue(value); object != nil {
+				result = append(result, object)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func objectValue(value any) map[string]any {
+	object, _ := value.(map[string]any)
+	return object
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func assistantRunContinuationToken(runID string, toolUseID string) string {
@@ -462,7 +758,7 @@ func (s *CommandService) mutate(
 	}
 	lastSequence := run.JournalSequence
 	expectedRevision := run.Revision
-	now := s.now().UTC()
+	now := s.now().UTC().Truncate(time.Millisecond)
 	if err := change(&run, now); err != nil {
 		return Run{}, err
 	}
@@ -515,6 +811,7 @@ func commandDigest(kind string, payload any) (string, error) {
 
 func normalizeStartCommand(command StartCommand, now time.Time) StartCommand {
 	command.UserID = strings.TrimSpace(command.UserID)
+	command.PersonaID = strings.TrimSpace(command.PersonaID)
 	command.SessionID = strings.TrimSpace(command.SessionID)
 	command.ClientRequestID = strings.TrimSpace(command.ClientRequestID)
 	command.TraceID = strings.TrimSpace(command.TraceID)

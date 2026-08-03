@@ -7,20 +7,22 @@ import (
 	"net"
 	"net/http"
 	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"gopkg.in/yaml.v3"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	configrelease "quwoquan_service/runtime/configrelease"
 	"quwoquan_service/runtime/controlplane"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	entitycomposition "quwoquan_service/services/entity-service/cmd/internal/composition"
 	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
 	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
@@ -30,11 +32,15 @@ import (
 	entitymessaging "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/messaging"
 	entityguard "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/operationguard"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/searchindex"
+	claimhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/adapters/inbound/http"
 	claimapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/application"
 	claimpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/infrastructure/persistence"
+	reviewhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/adapters/inbound/http"
 	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
 	reviewpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/infrastructure/persistence"
+	searchitempersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/persistence"
+	searchitemindex "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/searchindex"
+	statushttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/adapters/inbound/http"
 	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 	statuspersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/infrastructure/persistence"
 )
@@ -58,7 +64,7 @@ type config struct {
 		DB       int    `yaml:"db"`
 	} `yaml:"redis"`
 
-	ES searchindex.ESConfig `yaml:"es"`
+	ES searchitemindex.ESConfig `yaml:"es"`
 
 	ContentService struct {
 		BaseURL                 string `yaml:"base_url"`
@@ -113,6 +119,7 @@ func main() {
 	var reviewStore *reviewpersistence.MongoReviewStore
 	var claimStore *claimpersistence.MongoStore
 	var statusReportStore *statuspersistence.MongoStore
+	var mongoDatabase *mongo.Database
 	mongoURI := getenvOrDefault("ENTITY_MONGO_URI", cfg.Mongo.URI)
 	if mongoURI == "" {
 		// production composition 在所有环境都只装配权威存储；alpha fixture
@@ -125,7 +132,7 @@ func main() {
 			mongoDBName = "quwoquan_entity"
 		}
 		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "entity-service")
-		mongoDatabase := mongoClient.Database(mongoDBName)
+		mongoDatabase = mongoClient.Database(mongoDBName)
 		mongoHomepageStore := homepagepersistence.NewMongoHomepageStore(
 			mongoDatabase,
 			appEnv != "alpha",
@@ -180,8 +187,8 @@ func main() {
 	// shared SEARCH_ES_* env (same cluster/index as search-service); when ES is
 	// disabled Build returns a no-op Built and the homepage service runs without a
 	// projector, so the primary write path is unaffected.
-	searchindex.ApplyESEnvOverrides(&cfg.ES)
-	searchBuilt, err := searchindex.Build(cfg.ES)
+	searchitemindex.ApplyESEnvOverrides(&cfg.ES)
+	searchBuilt, err := searchitemindex.Build(cfg.ES)
 	if err != nil {
 		log.Fatalf("entity-service search index build failed: %v", err)
 	}
@@ -214,8 +221,14 @@ func main() {
 	}
 
 	var serviceOpts []application.HomepageServiceOption
-	if searchBuilt.Projector != nil {
-		serviceOpts = append(serviceOpts, application.WithProjector(searchBuilt.Projector))
+	var searchItemProjection application.Projector
+	if searchBuilt.Indexer != nil {
+		searchItemIndex := searchitempersistence.NewESIndex(searchBuilt.Indexer, mongoDatabase)
+		if err := searchItemIndex.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("entity-service homepage search item indexes failed: %v", err)
+		}
+		searchItemProjection = entitycomposition.NewHomepageSearchItemProjection(searchItemIndex)
+		serviceOpts = append(serviceOpts, application.WithProjector(searchItemProjection))
 	}
 	contentBaseURL := getenvOrDefault("CONTENT_SERVICE_BASE_URL", cfg.ContentService.BaseURL)
 	contentIntersectionsPath := getenvOrDefault(
@@ -246,10 +259,12 @@ func main() {
 	}
 	homepageService := application.NewHomepageServiceWithStore(ctx, homepageStore, serviceOpts...)
 	projectionRunners := []namedProjectionRunner{}
-	if searchBuilt.Projector != nil {
+	var claimFacade *claimapp.Facade
+	var statusFacade *statusapp.Facade
+	if searchItemProjection != nil {
 		searchRelay, relayErr := application.NewHomepageSearchRelay(
 			homepageStore,
-			searchBuilt.Projector,
+			searchItemProjection,
 		)
 		if relayErr != nil {
 			log.Fatalf("entity-service homepage search relay failed: %v", relayErr)
@@ -259,16 +274,16 @@ func main() {
 		})
 	}
 	if claimStore != nil {
-		claimFacade, facadeErr := claimapp.NewFacade(claimapp.DataPorts{
+		var facadeErr error
+		claimFacade, facadeErr = claimapp.NewFacade(claimapp.DataPorts{
 			Aggregates: claimStore,
 			Receipts:   claimStore,
-			Homepages:  homepageService,
+			Homepages:  entitycomposition.NewHomepageClaimGate(homepageService),
 			Queue:      claimStore,
 		})
 		if facadeErr != nil {
 			log.Fatalf("entity-service homepage claim facade failed: %v", facadeErr)
 		}
-		homepageService.SetClaimFacade(claimFacade)
 		claimProjector, projectorErr := application.NewClaimHomepageProjector(
 			claimStore,
 			homepageService,
@@ -281,7 +296,8 @@ func main() {
 		})
 	}
 	if statusReportStore != nil {
-		statusFacade, facadeErr := statusapp.NewFacade(statusapp.DataPorts{
+		var facadeErr error
+		statusFacade, facadeErr = statusapp.NewFacade(statusapp.DataPorts{
 			Aggregates: statusReportStore,
 			Receipts:   statusReportStore,
 			Homepages:  homepageService,
@@ -290,7 +306,6 @@ func main() {
 		if facadeErr != nil {
 			log.Fatalf("entity-service homepage status report facade failed: %v", facadeErr)
 		}
-		homepageService.SetStatusReportFacade(statusFacade)
 		statusProjector, projectorErr := application.NewStatusHomepageProjector(
 			statusReportStore,
 			homepageService,
@@ -348,6 +363,12 @@ func main() {
 	}
 	log.Printf("entity-service subject follow consumer enabled")
 	httpHandler := httpadapter.NewHandler(homepageService)
+	if claimFacade != nil {
+		httpHandler = httpHandler.WithClaimRequestHandler(claimhttp.NewHandler(claimFacade))
+	}
+	if statusFacade != nil {
+		httpHandler = httpHandler.WithStatusReportHandler(statushttp.NewHandler(statusFacade))
+	}
 	if reviewStore != nil {
 		reviewFacade, err := reviewapp.NewFacade(reviewapp.DataPorts{
 			Aggregate: reviewStore,
@@ -357,7 +378,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("entity-service homepage review facade failed: %v", err)
 		}
-		httpHandler = httpHandler.WithReviewFacade(reviewFacade)
+		httpHandler = httpHandler.WithReviewHandler(reviewhttp.NewHandler(reviewFacade))
 		reviewRelay, relayErr := reviewapp.NewSummaryRelay(
 			reviewStore,
 			reviewStore,

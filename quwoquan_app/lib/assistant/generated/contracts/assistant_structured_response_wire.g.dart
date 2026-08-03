@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantUiReferenceWireDto {
   const AssistantUiReferenceWireDto({
@@ -28,6 +28,34 @@ class AssistantUiReferenceWireDto {
       };
 
   factory AssistantUiReferenceWireDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'destination',
+      'title',
+      'source',
+      'snippet',
+      'label',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantUiReferenceWireDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
+      throw const FormatException('AssistantUiReferenceWireDto field destination has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantUiReferenceWireDto field title has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('AssistantUiReferenceWireDto field source has an invalid wire value');
+    }
+    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
+      throw const FormatException('AssistantUiReferenceWireDto field snippet has an invalid wire value');
+    }
+    if (json.containsKey('label') && json['label'] != null && (json['label'] is! String)) {
+      throw const FormatException('AssistantUiReferenceWireDto field label has an invalid wire value');
+    }
     return AssistantUiReferenceWireDto(
       destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       title: (json['title'] as String?)?.trim() ?? "",
@@ -80,6 +108,46 @@ class AssistantStructuredResponseWire {
       };
 
   factory AssistantStructuredResponseWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'qualityMetrics',
+      'decisionParseSuccess',
+      'hardCutSource',
+      'answerGateReady',
+      'answerGateReasonCode',
+      'dialogueDomainId',
+      'dialogueRuntime',
+      'uiReferences',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantStructuredResponseWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('qualityMetrics') && json['qualityMetrics'] != null && (json['qualityMetrics'] is! Map)) {
+      throw const FormatException('AssistantStructuredResponseWire field qualityMetrics has an invalid wire value');
+    }
+    if (json.containsKey('decisionParseSuccess') && json['decisionParseSuccess'] != null && (json['decisionParseSuccess'] is! bool)) {
+      throw const FormatException('AssistantStructuredResponseWire field decisionParseSuccess has an invalid wire value');
+    }
+    if (json.containsKey('hardCutSource') && json['hardCutSource'] != null && (json['hardCutSource'] is! String)) {
+      throw const FormatException('AssistantStructuredResponseWire field hardCutSource has an invalid wire value');
+    }
+    if (json.containsKey('answerGateReady') && json['answerGateReady'] != null && (json['answerGateReady'] is! bool)) {
+      throw const FormatException('AssistantStructuredResponseWire field answerGateReady has an invalid wire value');
+    }
+    if (json.containsKey('answerGateReasonCode') && json['answerGateReasonCode'] != null && (json['answerGateReasonCode'] is! String)) {
+      throw const FormatException('AssistantStructuredResponseWire field answerGateReasonCode has an invalid wire value');
+    }
+    if (json.containsKey('dialogueDomainId') && json['dialogueDomainId'] != null && (json['dialogueDomainId'] is! String)) {
+      throw const FormatException('AssistantStructuredResponseWire field dialogueDomainId has an invalid wire value');
+    }
+    if (json.containsKey('dialogueRuntime') && json['dialogueRuntime'] != null && (json['dialogueRuntime'] is! Map)) {
+      throw const FormatException('AssistantStructuredResponseWire field dialogueRuntime has an invalid wire value');
+    }
+    if (json.containsKey('uiReferences') && json['uiReferences'] != null && (json['uiReferences'] is! List || (json['uiReferences'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantStructuredResponseWire field uiReferences has an invalid wire value');
+    }
     return AssistantStructuredResponseWire(
       qualityMetrics: (json['qualityMetrics'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       decisionParseSuccess: json['decisionParseSuccess'] != false,

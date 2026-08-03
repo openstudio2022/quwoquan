@@ -3,32 +3,33 @@ package application
 import (
 	"context"
 	"errors"
-	"strings"
-	"time"
+
+	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/domain"
 )
 
-type DeadLetter struct {
-	DeadLetterID string
-	AttemptID    string
-	FailureCode  string
-	PayloadHash  string
-	FailedAt     time.Time
+type Repository interface {
+	AppendIfAbsent(context.Context, domain.Fact) (bool, error)
+	ListByRequest(context.Context, string) ([]domain.Fact, error)
 }
 
-type Store interface {
-	AppendIfAbsent(context.Context, DeadLetter) (bool, error)
-}
+type Appender struct{ store Repository }
 
-type Appender struct{ store Store }
+func NewAppender(store Repository) *Appender { return &Appender{store: store} }
 
-func NewAppender(store Store) *Appender { return &Appender{store: store} }
-
-func (a *Appender) Append(ctx context.Context, deadLetter DeadLetter) (bool, error) {
+func (a *Appender) Append(ctx context.Context, deadLetter domain.Fact) (bool, error) {
 	if a == nil || a.store == nil {
 		return false, errors.New("external interaction dead-letter store is unavailable")
 	}
-	if strings.TrimSpace(deadLetter.DeadLetterID) == "" || strings.TrimSpace(deadLetter.AttemptID) == "" || strings.TrimSpace(deadLetter.FailureCode) == "" || strings.TrimSpace(deadLetter.PayloadHash) == "" || deadLetter.FailedAt.IsZero() {
-		return false, errors.New("external interaction dead-letter fact is incomplete")
+	canonical, err := domain.NewFact(deadLetter)
+	if err != nil {
+		return false, err
 	}
-	return a.store.AppendIfAbsent(ctx, deadLetter)
+	return a.store.AppendIfAbsent(ctx, canonical)
+}
+
+func (a *Appender) ListByRequest(ctx context.Context, requestID string) ([]domain.Fact, error) {
+	if a == nil || a.store == nil {
+		return nil, errors.New("external interaction dead-letter store is unavailable")
+	}
+	return a.store.ListByRequest(ctx, requestID)
 }

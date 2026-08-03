@@ -395,7 +395,7 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                         else (
                             []
                             if str(asset.get("rightsAuditStatus") or "").strip()
-                            in {"verified", "unverified"}
+                            in {"verified", "unverified", "restricted", "unknown"}
                             else ["rightsAuditStatus"]
                         )
                     )

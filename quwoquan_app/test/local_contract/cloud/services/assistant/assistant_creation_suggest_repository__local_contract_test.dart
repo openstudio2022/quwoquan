@@ -15,40 +15,27 @@ void main() {
     );
   });
 
-  test('creation suggest is unavailable before subscription', () async {
+  test('creation assistance uses the canonical AssistantRun path', () async {
     final repository = AlphaAssistantFacets();
+    await repository.createSkillSubscription(
+      skillId: 'creation_assistant',
+      domainId: 'content_creation',
+      rawText: '发布前帮我整理标签和关联主页',
+      clientRequestId: 'create-creation-assistant',
+    );
 
-    final response = await repository.suggestCreationAssistance(
-      request: const AssistantCreationSuggestRequest(
+    final response = await repository.startCreationRun(
+      sessionId: 'session-creation-1',
+      clientRequestId: 'run-creation-1',
+      intent: AssistantCreationRunIntent(
         bodyDigest: '峨眉山旅行路线和摄影点整理',
+        primaryHomepageId: 'homepage_sight_emeishan',
       ),
     );
 
-    expect(response.available, isFalse);
-    expect(response.unavailableReason, 'skill_not_enabled');
+    expect(response.runId, 'arn_mock_creation_run-creation-1');
+    expect(response.sessionId, 'session-creation-1');
+    expect(response.goal, contains('峨眉山旅行路线和摄影点整理'));
+    expect(response.traceId, 'trace_mock_creation_run-creation-1');
   });
-
-  test(
-    'creation suggest returns traceable suggestions after subscription',
-    () async {
-      final repository = AlphaAssistantFacets();
-      await repository.createSkillSubscription(
-        skillId: 'creation_assistant',
-        domainId: 'content_creation',
-        rawText: '发布前帮我整理标签和关联主页',
-        clientRequestId: 'create-creation-assistant',
-      );
-
-      final response = await repository.suggestCreationAssistance(
-        request: const AssistantCreationSuggestRequest(
-          bodyDigest: '峨眉山旅行路线和摄影点整理',
-          primaryHomepageId: 'homepage_sight_emeishan',
-        ),
-      );
-
-      expect(response.available, isTrue);
-      expect(response.suggestedTagRefs, contains('Topic/旅行'));
-      expect(response.suggestedHomepages.single.id, 'homepage_sight_emeishan');
-    },
-  );
 }

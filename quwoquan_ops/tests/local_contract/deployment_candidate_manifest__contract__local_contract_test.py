@@ -112,6 +112,20 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
                 return_value=self.legal,
             )
         )
+        self.patches.enter_context(
+            mock.patch.object(
+                subject,
+                "_observability_log_sink_identity",
+                return_value={
+                    "adapterId": "ext.obs.elasticsearch",
+                    "deploymentMode": "package-bound-local",
+                    "imageDigest": "sha256:" + "1" * 64,
+                    "bindingDigest": "sha256:" + "2" * 64,
+                    "deploymentDigest": "sha256:" + "3" * 64,
+                    "clusterRef": "target:alpha-local/product-ops/elasticsearch",
+                },
+            )
+        )
 
     def test_full_candidate_binds_package_oci_runtime_and_both_releases(self) -> None:
         path = subject.write_candidate_manifest(
@@ -135,6 +149,10 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             "west-lake-canonical-20260729",
         )
         self.assertEqual(payload["release"]["rollback"]["releaseId"], "pilot-002")
+        self.assertEqual(
+            payload["observabilityLogSink"]["adapterId"],
+            "ext.obs.elasticsearch",
+        )
         subject.validate_candidate_manifest(
             payload,
             expected_environment="alpha",

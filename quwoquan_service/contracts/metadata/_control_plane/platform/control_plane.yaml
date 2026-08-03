@@ -15,11 +15,8 @@ object_types:
     view_model: ServiceCatalogEntry
     risk_level: low
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListServiceCatalogEntries
-        method: GET
-        path: /control-plane/platform/catalog/services
-        scopes: [ops.platform.catalog.read]
+    operation_refs:
+      - operation_id: ops.config_snapshot.ListServiceCatalogEntries
 
   - object_type: plane_binding
     view_kind: snapshot
@@ -28,11 +25,8 @@ object_types:
     view_model: PlaneBinding
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListPlaneBindings
-        method: GET
-        path: /control-plane/platform/topology/planes
-        scopes: [ops.platform.catalog.read]
+    operation_refs:
+      - operation_id: ops.config_snapshot.ListPlaneBindings
 
   - object_type: prod_plane_access_isolation
     view_kind: snapshot
@@ -41,11 +35,8 @@ object_types:
     view_model: ProdPlaneAccessIsolationSnapshot
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: GetProdPlaneAccessIsolation
-        method: GET
-        path: /control-plane/platform/topology/prod-plane-access-isolation
-        scopes: [ops.platform.dependency.read]
+    operation_refs:
+      - operation_id: ops.config_snapshot.GetProdPlaneAccessIsolation
 
   - object_type: service_config
     view_kind: snapshot
@@ -82,15 +73,9 @@ object_types:
     view_model: ReleaseManifestCandidate
     risk_level: critical
     deployment_profile: batch_heavy
-    operations:
-      - operation: ListReleaseCandidateAcks
-        method: GET
-        path: /control-plane/platform/releases
-        scopes: [ops.platform.rollout.read]
-      - operation: GetGrayRoutingPolicy
-        method: GET
-        path: /control-plane/platform/rollout/routing-policy
-        scopes: [ops.platform.rollout.read]
+    operation_refs:
+      - operation_id: ops.config_instance_report.ListReleaseCandidateAcks
+      - operation_id: ops.config_snapshot.GetGrayRoutingPolicy
     analytics_views:
       - view_id: release-health
         widget_types: [success_rate, latency_p95, rollback_readiness]
@@ -103,11 +88,8 @@ object_types:
     view_model: EnvironmentTopology
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListEnvironmentTopologies
-        method: GET
-        path: /control-plane/platform/topology/environments
-        scopes: [ops.platform.dependency.read]
+    operation_refs:
+      - operation_id: ops.config_snapshot.ListEnvironmentTopologies
 
   - object_type: runtime_cluster
     view_kind: snapshot
@@ -116,11 +98,8 @@ object_types:
     view_model: RuntimeCluster
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListRuntimeClusters
-        method: GET
-        path: /control-plane/platform/topology/clusters
-        scopes: [ops.platform.dependency.read]
+    operation_refs:
+      - operation_id: ops.config_snapshot.ListRuntimeClusters
 
   - object_type: runtime_service
     view_kind: snapshot
@@ -129,11 +108,8 @@ object_types:
     view_model: RuntimeService
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListRuntimeServices
-        method: GET
-        path: /control-plane/platform/topology/services
-        scopes: [ops.platform.dependency.read]
+    operation_refs:
+      - operation_id: ops.config_instance_report.ListRuntimeServices
 
   - object_type: runtime_instance
     view_kind: snapshot
@@ -142,11 +118,8 @@ object_types:
     view_model: RuntimeInstance
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListRuntimeInstances
-        method: GET
-        path: /control-plane/platform/topology/instances
-        scopes: [ops.platform.dependency.read]
+    operation_refs:
+      - operation_id: ops.config_instance_report.ListRuntimeInstances
 
   # Alertmanager 告警回流：ingest 由 Alertmanager receiver 推送（webhook），
   # active 供值班列表消费，ack 由值班人显式认领并落审计。
@@ -157,21 +130,10 @@ object_types:
     view_model: ActiveAlert
     risk_level: high
     deployment_profile: latency_sensitive
-    operations:
-      - operation: IngestAlertmanagerWebhook
-        method: POST
-        path: /control-plane/platform/alerts/ingest
-        scopes: [ops.platform.observability.write]
-        auth_mode: machine_token
-        principal: alertmanager
-      - operation: ListActiveAlerts
-        method: GET
-        path: /control-plane/platform/alerts/active
-        scopes: [ops.platform.observability.read]
-      - operation: AcknowledgeAlert
-        method: POST
-        path: /control-plane/platform/alerts/{fingerprint}:ack
-        scopes: [ops.platform.observability.write]
+    operation_refs:
+      - operation_id: ops.config_instance_report.IngestAlertmanagerWebhook
+      - operation_id: ops.config_instance_report.ListActiveAlerts
+      - operation_id: ops.config_instance_report.AcknowledgeAlert
         danger_level: medium
         approval_mode: single
 
@@ -182,20 +144,8 @@ object_types:
     view_model: PlatformControlPlaneJournal
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListPlatformAudits
-        method: GET
-        path: /control-plane/platform/audits
-        scopes: [ops.platform.rollout.read]
-      - operation: ListPlatformApprovals
-        method: GET
-        path: /control-plane/platform/approvals
-        scopes: [ops.platform.rollout.read]
-      - operation: GetPlatformProjectionSummary
-        method: GET
-        path: /control-plane/platform/projections/summary
-        scopes: [ops.platform.observability.read]
-      - operation: GetPlatformTriageSummary
-        method: GET
-        path: /control-plane/platform/triage/summary
-        scopes: [ops.platform.observability.read]
+    operation_refs:
+      - operation_id: ops.config_instance_report.ListPlatformAudits
+      - operation_id: ops.config_instance_report.ListPlatformApprovals
+      - operation_id: ops.config_instance_report.GetPlatformProjectionSummary
+      - operation_id: ops.config_instance_report.GetPlatformTriageSummary

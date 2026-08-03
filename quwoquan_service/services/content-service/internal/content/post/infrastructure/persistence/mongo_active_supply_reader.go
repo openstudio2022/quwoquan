@@ -22,7 +22,6 @@ var canonicalManifestDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 type MongoActiveSupplyReader struct {
 	stateCollection *mongo.Collection
 	postsCollection *mongo.Collection
-	feedCollection  *mongo.Collection
 	playableVideos  postports.PlayableVideoSupplyReader
 	environment     string
 	cache           *activeSupplySnapshotCache
@@ -66,7 +65,6 @@ func NewMongoActiveSupplyReader(
 	reader := &MongoActiveSupplyReader{
 		stateCollection: db.Collection("data_release_state"),
 		postsCollection: db.Collection("posts"),
-		feedCollection:  db.Collection("rm_discovery_feed"),
 		playableVideos:  mongoPlayableVideoSupplyReader{posts: db.Collection("posts")},
 		environment:     strings.TrimSpace(environment),
 		cache: newActiveSupplySnapshotCache(
@@ -87,7 +85,7 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 ) (postports.ActiveSupplySnapshot, error) {
 	empty := postports.ActiveSupplySnapshot{}
 	if r == nil || r.stateCollection == nil || r.postsCollection == nil ||
-		r.feedCollection == nil || r.environment == "" {
+		r.environment == "" {
 		return empty, fmt.Errorf("active supply reader is not fully configured")
 	}
 	if r.playableVideos == nil {
@@ -189,10 +187,6 @@ func (r *MongoActiveSupplyReader) readActiveSupplyProjectionCounts(
 	if err != nil {
 		return empty, fmt.Errorf("count active release posts: %w", err)
 	}
-	discoveryPosts, err := r.feedCollection.CountDocuments(ctx, canonicalFilter)
-	if err != nil {
-		return empty, fmt.Errorf("count active release discovery posts: %w", err)
-	}
 	playableVideos, err := r.playableVideos.CountActiveReleasePlayableVideos(
 		ctx,
 		releaseID,
@@ -209,7 +203,6 @@ func (r *MongoActiveSupplyReader) readActiveSupplyProjectionCounts(
 		ManifestDigest:  manifestDigest,
 		ReadbackStatus:  "passed",
 		Posts:           posts,
-		DiscoveryPosts:  discoveryPosts,
 		PlayableVideos:  playableVideos,
 	}, nil
 }

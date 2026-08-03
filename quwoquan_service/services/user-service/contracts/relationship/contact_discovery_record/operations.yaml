@@ -16,10 +16,9 @@ api_routes:
       - id
       - status
       - expireAt
-    client_contract:
-      dart_import: ../user/contact_discovery_contracts.dart
-      response_type: ContactDiscoveryResult
-      response_decoder: decodeContactDiscoveryResult
+    response_entity: ContactDiscoveryResult
+    response_body: ContactDiscoveryResult
+    response_body_kind: object
     rate_limit: 5次/24h/ownerAccountId
     authorization:
       principal: account
@@ -70,12 +69,12 @@ api_routes:
       method: getLatestContactDiscovery
       reader: GetLatestContactDiscoveryReader
       slice: GetLatestContactDiscoverySlice
-    description: '获取最近一次发现结果。matchedPersonaIds 保留为隐私基线（仅 ID）； matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、 精简 profile 与关系能力位，驱动「添加 / 已添加」。
+    description: '获取最近一次发现结果。matchedPersonaIds 保留为隐私基线（仅 ID）； matches[] 为富化投影 ContactDiscoveryMatchResult，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、 精简 profile 与关系能力位，驱动「添加 / 已添加」。
 
 '
-    response_entity: ContactDiscoveryRecord
+    response_entity: ContactDiscoveryResult
     response_read_models:
-      - ContactDiscoveryMatchWire
+      - ContactDiscoveryMatchResult
     response_fields:
       - id
       - status
@@ -83,10 +82,8 @@ api_routes:
       - matchCount
       - expireAt
       - completedAt
-    client_contract:
-      dart_import: ../user/contact_discovery_contracts.dart
-      response_type: ContactDiscoveryResult
-      response_decoder: decodeContactDiscoveryResult
+    response_body: ContactDiscoveryResult
+    response_body_kind: object
     authorization:
       principal: account
       ownership_policy: current_account_owner
@@ -142,10 +139,9 @@ api_routes:
     description: 主动删除/忽略发现记录
     response_fields:
       - status
-    client_contract:
-      dart_import: ../user/contact_discovery_contracts.dart
-      response_type: ContactDiscoveryDismissResult
-      response_decoder: decodeContactDiscoveryDismissResult
+    response_entity: ContactDiscoveryDismissResult
+    response_body: ContactDiscoveryDismissResult
+    response_body_kind: object
     authorization:
       principal: account
       ownership_policy: current_account_owner

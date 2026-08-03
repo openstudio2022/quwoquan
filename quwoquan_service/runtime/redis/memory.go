@@ -18,6 +18,7 @@ type memoryClient struct {
 	mu                     sync.RWMutex
 	strings                map[string]memEntry
 	hashes                 map[string]map[string]string
+	hashExpirations        map[string]time.Time
 	sets                   map[string]map[string]struct{}
 	zsets                  map[string]map[string]float64
 	immutableRecordIndexes map[string]map[string]memoryImmutableRecordMetadata
@@ -58,10 +59,11 @@ func (e memEntry) expired() bool {
 // NewMemoryClient returns an in-memory Client (no external Redis required).
 func NewMemoryClient() Client {
 	return &memoryClient{
-		strings: make(map[string]memEntry),
-		hashes:  make(map[string]map[string]string),
-		sets:    make(map[string]map[string]struct{}),
-		zsets:   make(map[string]map[string]float64),
+		strings:         make(map[string]memEntry),
+		hashes:          make(map[string]map[string]string),
+		hashExpirations: make(map[string]time.Time),
+		sets:            make(map[string]map[string]struct{}),
+		zsets:           make(map[string]map[string]float64),
 		immutableRecordIndexes: make(
 			map[string]map[string]memoryImmutableRecordMetadata,
 		),
@@ -350,6 +352,9 @@ func (m *memoryClient) Expire(_ context.Context, key string, ttl time.Duration) 
 		e.expires = time.Now().Add(ttl)
 		m.strings[key] = e
 	}
+	if _, ok := m.hashes[key]; ok {
+		m.hashExpirations[key] = time.Now().Add(ttl)
+	}
 	return nil
 }
 
@@ -358,6 +363,7 @@ func (m *memoryClient) Expire(_ context.Context, key string, ttl time.Duration) 
 func (m *memoryClient) HSet(_ context.Context, key, field, value string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.expireHashLocked(key)
 	h, ok := m.hashes[key]
 	if !ok {
 		h = make(map[string]string)
@@ -368,8 +374,9 @@ func (m *memoryClient) HSet(_ context.Context, key, field, value string) error {
 }
 
 func (m *memoryClient) HGet(_ context.Context, key, field string) (string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.expireHashLocked(key)
 	h, ok := m.hashes[key]
 	if !ok {
 		return "", ErrKeyNotFound
@@ -384,6 +391,7 @@ func (m *memoryClient) HGet(_ context.Context, key, field string) (string, error
 func (m *memoryClient) HDel(_ context.Context, key string, fields ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.expireHashLocked(key)
 	h, ok := m.hashes[key]
 	if !ok {
 		return nil
@@ -395,8 +403,9 @@ func (m *memoryClient) HDel(_ context.Context, key string, fields ...string) err
 }
 
 func (m *memoryClient) HGetAll(_ context.Context, key string) (map[string]string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.expireHashLocked(key)
 	h, ok := m.hashes[key]
 	if !ok {
 		return map[string]string{}, nil
@@ -406,6 +415,59 @@ func (m *memoryClient) HGetAll(_ context.Context, key string) (map[string]string
 		cp[k] = v
 	}
 	return cp, nil
+}
+
+func (m *memoryClient) CompareAndSwapHashField(
+	_ context.Context,
+	key string,
+	field string,
+	expected *string,
+	replacement *string,
+	ttl time.Duration,
+) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.expireHashLocked(key)
+	hash, exists := m.hashes[key]
+	current, fieldExists := "", false
+	if exists {
+		current, fieldExists = hash[field]
+	}
+	if expected == nil {
+		if fieldExists {
+			return false, nil
+		}
+	} else if !fieldExists || current != *expected {
+		return false, nil
+	}
+	if replacement == nil {
+		if exists {
+			delete(hash, field)
+			if len(hash) == 0 {
+				delete(m.hashes, key)
+				delete(m.hashExpirations, key)
+			}
+		}
+		return true, nil
+	}
+	if !exists {
+		hash = make(map[string]string)
+		m.hashes[key] = hash
+	}
+	hash[field] = *replacement
+	if ttl > 0 {
+		m.hashExpirations[key] = time.Now().Add(ttl)
+	}
+	return true, nil
+}
+
+func (m *memoryClient) expireHashLocked(key string) {
+	expiresAt, ok := m.hashExpirations[key]
+	if !ok || expiresAt.IsZero() || time.Now().Before(expiresAt) {
+		return
+	}
+	delete(m.hashes, key)
+	delete(m.hashExpirations, key)
 }
 
 func (m *memoryClient) HIncrByFloat(_ context.Context, key, field string, incr float64) error {

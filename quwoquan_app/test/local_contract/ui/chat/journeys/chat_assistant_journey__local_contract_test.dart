@@ -327,10 +327,7 @@ class _TrackingAssistantRepo extends MockChatRepository {
   int get sendCallCount => writer.sendCallCount;
 
   @override
-  Future<void> inviteAssistant({
-    required String conversationId,
-    String? skillId,
-  }) async {
+  Future<void> inviteAssistant({required String conversationId}) async {
     inviteCallCount++;
   }
 
@@ -367,10 +364,7 @@ class _NoopWriter implements ChatMessageCommandWriter {
 
 class _ErrorAssistantRepo extends MockChatRepository {
   @override
-  Future<void> inviteAssistant({
-    required String conversationId,
-    String? skillId,
-  }) async {
+  Future<void> inviteAssistant({required String conversationId}) async {
     throw Exception('邀请助手失败');
   }
 }

@@ -18,10 +18,6 @@ api_routes:
     description: owner 自己的订阅列表。
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSkillSubscriptionListProjection
-      response_decoder: decodeAssistantSkillSubscriptionList
     request_bindings:
       query:
         - name: limit
@@ -78,10 +74,6 @@ api_routes:
     description: 一次创建订阅；clientRequestId 为稳定 intent，重放返回首个结果。
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSkillSubscriptionProjection
-      response_decoder: decodeAssistantSkillSubscription
     request_entity: CreateAssistantSkillSubscriptionCommand
     request_body_kind: object
     response_entity: SkillSubscription
@@ -139,10 +131,6 @@ api_routes:
           field: subscriptionId
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSkillSubscriptionProjection
-      response_decoder: decodeAssistantSkillSubscription
     response_entity: SkillSubscription
     reliability:
       timeout_ms: 1500
@@ -193,10 +181,6 @@ api_routes:
     description: 命名状态迁移（active/paused/archived）；服务端内部 CAS，目标状态已满足时持久化 no-op receipt。
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSkillSubscriptionProjection
-      response_decoder: decodeAssistantSkillSubscription
     request_entity: UpdateAssistantSkillSubscriptionStatusCommand
     request_body_kind: object
     request_bindings:

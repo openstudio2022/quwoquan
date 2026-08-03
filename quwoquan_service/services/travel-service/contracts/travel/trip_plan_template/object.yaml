@@ -1,0 +1,26 @@
+kind: aggregate_root
+description: 领队与导游可复用的旅行计划结构；只保存公开地点、通用建议和可追溯署名，不复制历史 Trip 私密事实。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: owner_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [ownerPersonaId], target_object: user.Persona}
+- {name: attribution_personas, kind: reference, cardinality: 'N:N', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [attributionPersonaIds], target_object: user.Persona}
+capabilities: [commandable, queryable, idempotent_commands]
+local_identity_reasons:
+  attributionIds: 模板内署名条目的局部稳定键，不是业务聚合身份
+  templateItemIds: 模板内计划项的局部稳定键，不是业务聚合身份
+business_rules:
+- Template 不得保存历史 Trip 的成员、Moment、Conversation、Connector、联系方式、房间号或连续位置
+- stay 项只允许通用时间结构，不允许 placeRef、私人标题或备注；创建新 Trip 后由当前组织者重新选择住宿
+- 公开地点引用只保存 canonical PlaceRef；专业讲解必须引用 attributionId 与 author Persona
+- 修订使用 expectedVersion CAS；成功命令、回执与 outbox 原子提交
+lifecycle:
+  state_field: status
+  states: [active, archived]
+  optimistic_concurrency: version
+  idempotency: command_receipt

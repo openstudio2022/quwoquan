@@ -1,9 +1,7 @@
 backend: redis
-description: 'realtime-gateway 连接状态全部存储在 Redis（realtime scene）。
+description: 'realtime-gateway Connection 会话状态全部存储在 Redis（realtime scene）。
 
   Connection 实体存在于进程内存中（Hub map），不持久化。
-
-  PresenceEntry 通过 Redis Hash 实现多节点共享在线查询。
 
   '
 redis_cache:
@@ -76,29 +74,6 @@ redis_cache:
   type: string
   scene: realtime
   description: 每 persona/device fencing token 单调计数器（INCR，任何新连接取号，保证旧连接不可回写）。
-- key: presence:persona:{personaId}
-  ttl_seconds: 120
-  type: hash
-  scene: realtime
-  description: 'Persona 设备级在线状态 Hash。field = deviceId，
-
-    value = JSON{accountId,personaId,deviceId,connId,nodeId,transport,lastHeartbeatAt}。
-
-    整体 TTL 只作进程崩溃兜底；PresenceView reader 必须按 lastHeartbeatAt
-
-    对每个 hash field 独立剔除陈旧设备，不能由活跃设备续命 stale field。
-
-    '
-- key: presence:node:{nodeId}:count
-  ttl_seconds: 60
-  type: string
-  scene: realtime
-  description: 节点当前连接数（INCR/DECR，用于负载均衡和容量限流）
-- key: transport:state:{personaId}:{deviceId}
-  ttl_seconds: 300
-  type: string
-  scene: realtime
-  description: 用户传输状态缓存（IDLE/ACTIVE/BACKGROUND，用于跨请求状态一致性）
 - key: rt:account:security-relay
   type: pubsub_channel
   scene: realtime

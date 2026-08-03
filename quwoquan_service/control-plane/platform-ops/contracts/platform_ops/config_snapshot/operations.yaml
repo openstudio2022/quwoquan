@@ -222,6 +222,90 @@ api_routes:
     method: listDomains
     reader: ConfigSnapshotReader
     slice: ConfigDomainSlice
+- method: GET
+  path: /control-plane/platform/catalog/services
+  operation: ListServiceCatalogEntries
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.catalog.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_service_catalog, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: listServiceCatalogEntries, reader: ServiceCatalogEntryReader, slice: ServiceCatalogEntrySlice}
+- method: GET
+  path: /control-plane/platform/topology/planes
+  operation: ListPlaneBindings
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.catalog.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_plane_bindings, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: listPlaneBindings, reader: PlaneBindingReader, slice: PlaneBindingSlice}
+- method: GET
+  path: /control-plane/platform/topology/prod-plane-access-isolation
+  operation: GetProdPlaneAccessIsolation
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.dependency.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_prod_plane_isolation, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [environment, plane, directAccessAllowed, evidence]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: getProdPlaneAccessIsolation, reader: ProdPlaneAccessIsolationReader, slice: ProdPlaneAccessIsolationSnapshot}
+- method: GET
+  path: /control-plane/platform/rollout/routing-policy
+  operation: GetGrayRoutingPolicy
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.rollout.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_rollout_routing_policy, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [policy, source]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: getGrayRoutingPolicy, reader: GrayRoutingPolicyReader, slice: GrayRoutingPolicySnapshot}
+- method: GET
+  path: /control-plane/platform/topology/environments
+  operation: ListEnvironmentTopologies
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.dependency.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_environment_topology, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: listEnvironmentTopologies, reader: EnvironmentTopologyReader, slice: EnvironmentTopologySlice}
+- method: GET
+  path: /control-plane/platform/topology/clusters
+  operation: ListRuntimeClusters
+  actor: account
+  security: {auth_mode: required}
+  authorization: {principal: operator, scopes: [ops.platform.dependency.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.config_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_runtime_clusters, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: ConfigSnapshotTopologyQueryFacade, method: listRuntimeClusters, reader: RuntimeClusterReader, slice: RuntimeClusterSlice}
 consumers:
 - name: platform-ops
   capabilities:
@@ -229,6 +313,12 @@ consumers:
   - resolve_effective_config
   - get_config_snapshot
   - list_config_domains
+  - list_service_catalog_entries
+  - list_plane_bindings
+  - get_prod_plane_access_isolation
+  - get_gray_routing_policy
+  - list_environment_topologies
+  - list_runtime_clusters
 contract_test:
   coverage_requirements:
   - resolve 的有效值来自服务 schema 默认值与单一环境覆盖，无任何在线写路径

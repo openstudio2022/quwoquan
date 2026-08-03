@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 import 'package:quwoquan_app/ui/content/models/post_read_ui_bundle.dart';
 
 void main() {
   // S2 内容投影单轨：PostReadProjectionFacade 已删除，投影统一经
-  // PostReadPresentation.fromPostBase（DTO + wire 单一真相源）。
+  // PostReadPresentationMapper.fromViewData（DTO + wire 单一真相源）。
   group('PostReadPresentation single-rail projection', () {
     test('personaId 与 authorId 保持同一真相源', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
@@ -36,7 +37,7 @@ void main() {
         'shareCount': 3,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
-      final pres = PostReadPresentation.fromPostBase(dto);
+      final pres = PostReadPresentationMapper.fromViewData(dto);
       expect(pres.postId, 'p1');
       expect(pres.body, 'hello');
     });
@@ -55,7 +56,7 @@ void main() {
         'shareCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
-      final pres = PostReadPresentation.fromPostBase(
+      final pres = PostReadPresentationMapper.fromViewData(
         dto,
         wire: <String, dynamic>{'articleTemplate': 'modern'},
       );

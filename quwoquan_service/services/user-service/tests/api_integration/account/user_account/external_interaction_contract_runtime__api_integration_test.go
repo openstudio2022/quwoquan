@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -54,8 +55,19 @@ func (client *capturingExternalInteractionClient) OTPCode(phone string) string {
 func startExternalInteractionContractRuntime() (*externalInteractionContractRuntime, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/integrations/external-requests", handleExternalInteractionRequest)
-	server := httptest.NewTLSServer(mux)
-	client, err := integration.NewExternalInteractionClient(server.URL, "beta", server.Client(), testAccessSigner)
+	server := httptest.NewServer(mux)
+	serverAddress := server.Listener.Addr().String()
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp", serverAddress)
+		},
+	}
+	client, err := integration.NewExternalInteractionClient(
+		"http://integration-service:18086",
+		"beta",
+		&http.Client{Transport: transport},
+		testAccessSigner,
+	)
 	if err != nil {
 		server.Close()
 		return nil, err

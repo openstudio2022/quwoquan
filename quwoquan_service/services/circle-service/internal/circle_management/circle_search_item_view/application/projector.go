@@ -8,12 +8,24 @@ import (
 )
 
 type SearchItem struct {
-	CircleID      string
-	DisplayName   string
-	Description   string
-	Visibility    string
-	SourceVersion int64
-	UpdatedAt     time.Time
+	CircleID            string
+	DisplayName         string
+	Description         string
+	CoverURL            string
+	CategoryID          string
+	SubCategory         string
+	DomainID            string
+	Kind                string
+	DisplaySubjectType  string
+	MemberCount         int64
+	PostCount           int64
+	LinkedHomepageID    string
+	LinkedHomepageType  string
+	LinkedHomepageTitle string
+	Visibility          string
+	Tags                []string
+	SourceVersion       int64
+	UpdatedAt           time.Time
 }
 
 type Index interface {
@@ -33,4 +45,18 @@ func (p *Projector) Upsert(ctx context.Context, item SearchItem) (bool, error) {
 		return false, errors.New("circle search item identity, displayName and sourceVersion are required")
 	}
 	return p.index.UpsertIfNewer(ctx, item)
+}
+
+func (p *Projector) Delete(ctx context.Context, circleID string, sourceVersion int64) (bool, error) {
+	if p == nil || p.index == nil {
+		return false, errors.New("circle search index is unavailable")
+	}
+	if strings.TrimSpace(circleID) == "" || sourceVersion <= 0 {
+		return false, errors.New("circle search item identity and sourceVersion are required")
+	}
+	return p.index.DeleteIfNotOlder(ctx, circleID, sourceVersion)
+}
+
+type SnapshotReader interface {
+	LoadSearchItem(context.Context, string) (SearchItem, bool, error)
 }

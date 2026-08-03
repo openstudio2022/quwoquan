@@ -122,7 +122,7 @@ class ConversationSyncService {
           );
           final conversations = await repo.batchGetConversations(batch);
           cache.putAll(
-            conversations.map(ConversationCacheRecord.fromConversationDto),
+            conversations.map(ConversationCacheRecord.fromConversationViewData),
           );
         }
       }

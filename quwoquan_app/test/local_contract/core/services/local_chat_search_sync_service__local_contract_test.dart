@@ -400,9 +400,9 @@ class _StableChatRepository extends MockChatRepository {
   int getConversationCalls = 0;
 
   @override
-  Future<ConversationDto> getConversation(String id) async {
+  Future<ConversationViewData> getConversation(String id) async {
     getConversationCalls += 1;
-    return ConversationDto.fromMap(<String, dynamic>{
+    return ConversationViewData.fromMap(<String, dynamic>{
       'id': id,
       'title': '摄影讨论组',
       'type': 'group',

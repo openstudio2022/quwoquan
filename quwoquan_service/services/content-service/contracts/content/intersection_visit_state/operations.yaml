@@ -55,7 +55,167 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   description: 推进交集已读水位并清零未读红点；dimension 为空推进全部维度。水位 $max 单调合并使任意重放自然收敛，Idempotency-Key 可选（携带时作观测关联，不改变语义）。
+- method: GET
+  path: /content/intersections/summary
+  operation: GetMyIntersectionSummary
+  actor: persona
+  authorization:
+    principal: persona
+    ownership_policy: own_intersections
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.SYSTEM.storage_read_failed
+  - CONTENT.SYSTEM.internal_error
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_intersection_summary_get
+    trace: true
+    attributes: [outcome, dimension_count]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  application:
+    kind: query
+    facet: IntersectionQueryFacet
+    method: getMyIntersectionSummary
+    reader: IntersectionSummaryReader
+    slice: IntersectionInboxSummary
+  description: 我的主页「我的交集」聚合摘要（总数 + 各维度计数与自上次查看未读数）。
+  request_entity: GetMyIntersectionSummaryQuery
+  request_body_kind: none
+  response_entity: IntersectionInboxSummary
+  response_body: IntersectionInboxSummary
+  response_body_kind: object
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /content/intersections
+  operation: ListMyIntersections
+  actor: persona
+  authorization:
+    principal: persona
+    ownership_policy: own_intersections
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.SYSTEM.storage_read_failed
+  - CONTENT.SYSTEM.internal_error
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_intersection_list
+    trace: true
+    attributes: [dimension, filter, outcome, result_count]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  application:
+    kind: query
+    facet: IntersectionQueryFacet
+    method: listMyIntersections
+    reader: IntersectionListReader
+    slice: IntersectionReasonPageSlice
+  description: 我的主页按筛选、维度、证据组和时间桶分页交集列表；服务端先全局去重，再按强度、时间桶、锚点权重、共同人数和对象类型稳定排序；独立列表 Slice 返回 displayBinding=explicit_link，primarySpans 必须包含可点击 typed object，禁止泛对象。
+  request_bindings:
+    query:
+    - {name: dimension, field: dimension, required: false}
+    - {name: filter, field: filter, required: false}
+    - {name: sourceRef, field: sourceRef, required: false}
+    - {name: timeBucket, field: timeBucket, required: false}
+    - {name: cursor, field: cursor, required: false}
+    - {name: limit, field: limit, required: false}
+  request_entity: ListMyIntersectionsQuery
+  request_body_kind: none
+  response_entity: IntersectionReasonPageSlice
+  response_body: IntersectionReason
+  response_body_kind: page
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+- method: GET
+  path: /content/intersections/object
+  operation: GetObjectIntersections
+  actor: persona
+  authorization:
+    principal: persona
+    ownership_policy: own_intersections
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.SYSTEM.storage_read_failed
+  - CONTENT.SYSTEM.internal_error
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_object_intersection_get
+    trace: true
+    attributes: [object_type, outcome, result_count]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  application:
+    kind: query
+    facet: IntersectionQueryFacet
+    method: getObjectIntersections
+    reader: ObjectIntersectionReader
+    slice: ObjectIntersectionReasonSlice
+  description: 对象页「我与该对象」的关系类交集；host Slice 返回 displayBinding=host_plain 或 host_implicit，当前 objectId/objectType 作为上下文宾语，禁止可点击 self-target。
+  request_bindings:
+    query:
+    - {name: objectId, field: objectId, required: true}
+    - {name: objectType, field: objectType, required: false}
+    - {name: limit, field: limit, required: false}
+  request_entity: GetObjectIntersectionsQuery
+  request_body_kind: none
+  response_entity: ObjectIntersectionReasonSlice
+  response_body: IntersectionReason
+  response_body_kind: page
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
 consumers:
 - name: app
   capabilities:
   - mark_intersections_visited
+  - read_intersections

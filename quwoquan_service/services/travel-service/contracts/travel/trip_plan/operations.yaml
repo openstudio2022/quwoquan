@@ -1,0 +1,116 @@
+description: TripPlan 对象专属 Command Facade 与当前 Revision named Reader。
+externalDependencies:
+- role: use
+  capability: runtime.message.transport
+  port: MessageTransportPort
+  operations: [appendDurable, consumeDurable]
+  scenes: [general]
+commercial_defaults:
+  status: blocked
+  block_reason: 缺 Travel 实现、三层测试、三环境与双端真机证据
+  gap_id: TRAVEL_TRIP_PLAN_COMMERCIAL_CLOSURE
+  target_story: trip-plan-revision
+api_routes:
+- method: POST
+  path: /travel/trips
+  operation: CreateTripPlan
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanCommandFacet, method: createTripPlan, aggregate_owner: TripPlan, mutation_target: TripPlan, invariant_target: TripPlan}
+  request_entity: CreateTripPlanCommand
+  response_entity: TripPlanCommandResult
+  authorization: {principal: persona, ownership_policy: organizer_becomes_owner}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_idempotency_conflict, TRAVEL.DEPENDENCY.trip_reference_unavailable, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_create, trace: true, attributes: [outcome, item_count]}
+  slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+  request_body_kind: object
+- method: POST
+  path: /travel/templates/{templateId}/trips
+  operation: CreateTripPlanFromTemplate
+  request_bindings:
+    path: [{name: templateId, field: templateId}]
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanCommandFacet, method: createTripPlanFromTemplate, aggregate_owner: TripPlan, mutation_target: TripPlan, invariant_target: TripPlan}
+  request_entity: CreateTripPlanFromTemplateCommand
+  response_entity: TripPlanCommandResult
+  authorization: {principal: persona, scopes: [travel.trip.template.read, travel.trip.write], ownership_policy: template_owner_becomes_trip_organizer}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_template_not_found, TRAVEL.USER.trip_template_permission_denied, TRAVEL.USER.trip_idempotency_conflict, TRAVEL.DEPENDENCY.trip_template_unavailable, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_create_from_template, trace: true, attributes: [outcome, source_template_version, item_count, attribution_count]}
+  slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+  request_body_kind: object
+- method: GET
+  path: /travel/trips/{tripId}
+  operation: GetTripPlan
+  request_bindings:
+    path: [{name: tripId, field: tripId}]
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: query, facet: TripPlanQueryFacet, method: getTripPlan, reader: TripPlanReader, slice: TripPlanSlice}
+  request_entity: TripPlanIDQuery
+  response_entity: TripPlanSlice
+  authorization: {principal: persona, ownership_policy: trip_organizer_only}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_get, trace: true, attributes: [outcome, status]}
+  slo: {latency_p95_ms: 400, availability_percent: 99.9}
+  request_body_kind: none
+- method: GET
+  path: /travel/trips
+  operation: ListTripPlans
+  request_bindings:
+    query:
+    - {name: status, field: status, required: false}
+    - {name: cursor, field: cursor, required: false}
+    - {name: limit, field: limit, required: false}
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: query, facet: TripPlanQueryFacet, method: listTripPlans, reader: TripPlanReader, slice: TripPlanListSlice}
+  request_entity: ListTripPlansQuery
+  response_entity: TripPlanListSlice
+  authorization: {principal: persona, ownership_policy: organizer_owned_trips_only}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_permission_denied, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_list, trace: true, attributes: [outcome, status, count, has_next]}
+  slo: {latency_p95_ms: 450, availability_percent: 99.9}
+  request_body_kind: none
+- method: POST
+  path: /travel/trips/{tripId}/revisions
+  operation: ReviseTripPlan
+  request_bindings:
+    path: [{name: tripId, field: tripId}]
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanCommandFacet, method: reviseTripPlan, aggregate_owner: TripPlan, mutation_target: TripPlan, invariant_target: TripPlan}
+  request_entity: ReviseTripPlanCommand
+  response_entity: TripPlanCommandResult
+  authorization: {principal: persona, ownership_policy: trip_organizer_only}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.USER.trip_revision_conflict, TRAVEL.USER.trip_idempotency_conflict, TRAVEL.DEPENDENCY.trip_reference_unavailable, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_revise, trace: true, attributes: [outcome, severity, item_count]}
+  slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+  request_body_kind: object
+- method: POST
+  path: /travel/trips/{tripId}/lifecycle-transitions
+  operation: TransitionTripPlan
+  request_bindings:
+    path: [{name: tripId, field: tripId}]
+  actor: persona
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanCommandFacet, method: transitionTripPlan, aggregate_owner: TripPlan, mutation_target: TripPlan, invariant_target: TripPlan}
+  request_entity: TransitionTripPlanCommand
+  response_entity: TripPlanCommandResult
+  authorization: {principal: persona, ownership_policy: trip_organizer_only}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.invalid_argument, TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.USER.trip_revision_conflict, TRAVEL.USER.trip_state_invalid, TRAVEL.USER.trip_idempotency_conflict, TRAVEL.SYSTEM.trip_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_transition, trace: true, attributes: [outcome, previous_status, target_status]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  request_body_kind: object

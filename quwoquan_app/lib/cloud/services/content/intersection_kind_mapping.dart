@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 交集共同实例数解析（point.count 真相源）。
 ///

@@ -2,7 +2,7 @@
 ///
 /// 本文件是 assistant 域端侧接口的唯一真相源：
 /// - 8 个对象级窄接口（每个 ≤10 方法），替代旧聚合 `AssistantRepository`；
-/// - 顶层共享类型（[AssistantSkillConsent]、context snapshot、常量）。
+/// - 顶层共享类型（generated Skill/Consent/Setting、context snapshot、常量）。
 ///
 /// B8 阶段 3b：Remote 失败一律抛结构化 `CloudException`，本文件不再提供
 /// 任何"服务不可用时本地合成结果"的 fallback 构造器。
@@ -11,100 +11,86 @@
 /// `lib/core/providers/app_providers_client_sync.dart`（Remote-only）。
 library;
 
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_session.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_envelope.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    hide AssistantLearningFactAppendCommand;
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show
-        AssistantLearningFactAppendCommand,
-        AssistantLearningFactAppendReceipt,
-        AssistantSkillCatalogItemProjection;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantAnswerRunIntent,
         AssistantCreationRunIntent,
+        AssistantContextSnapshot,
+        AssistantCreateSessionRequest,
+        AssistantConsentMatrix,
+        AssistantDeviceActionExecutionReceipt,
         AssistantEntryAction,
         AssistantEntryChip,
         AssistantEntryResponse,
         AssistantIntersectionEvidenceRef,
-        AssistantPreference,
-        AssistantPreferenceListView,
-        AssistantContextSnapshot,
-        AssistantCreateSessionRequest,
-        AssistantConsentMatrix,
+        AssistantLearningFactType,
+        AssistantLearningFactTypeX,
+        AssistantLearningFactAppendCommand,
+        AssistantLearningFactReceipt,
         AssistantObjectGroundingView,
+        AssistantPageContextType,
+        AssistantPreference,
+        AssistantPreferenceKind,
+        AssistantPreferenceScope,
+        AssistantPreferenceSourceType,
+        AssistantPreferenceStatus,
+        AssistantRunEnvelopeWire,
         AssistantRunIntent,
+        AssistantRunStreamStateWire,
+        AssistantReferralSource,
+        AssistantReferralSourceX,
         AssistantRunTerminalFailureView,
         AssistantRunTerminalSnapshotView,
         AssistantRunVisibleProcessView,
         AssistantRunVisibleReferenceView,
         AssistantSearchRunIntent,
         AssistantSelectedPolicyRefView,
+        AssistantSessionWire,
+        AssistantSkillCatalogItemDetailView,
+        AssistantSkillCatalogItemView,
         AssistantStartRunRequest,
+        AssistantStreamEventType,
+        AssistantStreamEventTypeX,
+        AssistantStreamEventWire,
         AssistantTaskItemView,
         AssistantTaskSlice,
         AssistantTurnListView,
         AssistantTurnSummaryView,
         AssistantUserActionGroundingView,
         CitationDestination,
-        PageContextAction,
-        PageContextObjectRef,
-        PageContextReceipt,
-        PageContextSnapshot,
-        ReportPageContextCommand;
-export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show
-        AssistantLearningFactAppendCommand,
-        AssistantLearningFactAppendReceipt,
-        AssistantSkillCatalogItemProjection;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_session.g.dart'
-    show AssistantSessionWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
-    show AssistantStreamEventWire;
-export 'package:quwoquan_app/assistant/generated/contracts/assistant_run_envelope.g.dart'
-    show AssistantRunEnvelopeWire, AssistantRunStreamStateWire;
-export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
-    show
-        SkillSubscriptionDeliveryStateWire,
-        SkillSubscriptionDestinationWire,
-        SkillSubscriptionOwnerWire,
-        SkillSubscriptionSearchQueryPlanWire,
-        SkillSubscriptionTriggerWire,
-        SkillSubscriptionWire;
-export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
-    show AssistantPageContextType, SearchIntensity;
-export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
-    show ToolUseWire;
-export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
-    show
-        AssistantPreferenceKind,
-        AssistantPreferenceKindX,
-        AssistantLearningFactType,
-        AssistantLearningFactTypeX,
-        AssistantPreferenceScope,
-        AssistantPreferenceScopeX,
-        AssistantPreferenceSourceType,
-        AssistantPreferenceSourceTypeX,
-        AssistantPreferenceStatus,
-        AssistantPreferenceStatusX,
-        AssistantStreamEventType,
-        AssistantStreamEventTypeX,
-        AssistantReferralSource,
-        AssistantReferralSourceX,
         FeedbackType,
         FeedbackTypeX,
         InteractionEventType,
         InteractionEventTypeX,
+        PageContextAction,
+        PageContextObjectRef,
+        PageContextReceipt,
+        PageContextSnapshot,
+        PutSkillUserSettingReceipt,
+        ReportPageContextCommand,
+        SearchIntensity,
+        SearchIntensityX,
+        SkillSubscriptionDeliveryStateWire,
+        SkillSubscriptionDestinationWire,
         SkillSubscriptionDestinationType,
         SkillSubscriptionDestinationTypeX,
+        SkillSubscriptionOwnerWire,
+        SkillSubscriptionSearchQueryPlanWire,
         SkillSubscriptionStatus,
         SkillSubscriptionStatusX,
+        SkillSubscriptionTriggerWire,
+        SkillSubscriptionWire,
+        SkillConsent,
+        SkillConsentListSlice,
+        SkillUserSetting,
+        SkillUserSettingListSlice,
+        SkillUserSettingStatus,
+        SkillUserSettingStatusX,
+        SkillMemoryPolicy,
+        SkillMemoryPolicyX,
         parseAssistantLearningFactTypeStrict,
         parseAssistantReferralSourceStrict,
         parseAssistantStreamEventTypeStrict,
@@ -112,8 +98,11 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
         parseInteractionEventTypeStrict,
         parseSkillSubscriptionDestinationTypeStrict,
         parseSkillSubscriptionStatusStrict;
+export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
+    show ToolUseWire;
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
+const String kPersonalContentAccessScope = 'personal_content_access';
 
 /// Assistant 任务/记忆等列表接口单次拉取条数（与网关约定一致，非 [CloudApiDefaults.pageLimit]）。
 const int kAssistantListPageDefaultLimit = 32;
@@ -123,59 +112,6 @@ const int kAssistantSkillCatalogDefaultLimit = 64;
 
 /// Assistant 技能订阅列表单次拉取条数。
 const int kAssistantSkillSubscriptionsDefaultLimit = 20;
-
-class AssistantSkillConsent {
-  const AssistantSkillConsent({
-    required this.skillId,
-    required this.grantedScope,
-    required this.granted,
-    required this.updatedAt,
-  });
-
-  final String skillId;
-  final String grantedScope;
-  final bool granted;
-  final DateTime updatedAt;
-
-  factory AssistantSkillConsent.fromJson(Map<String, dynamic> json) {
-    final skillId = json['skillId'];
-    final grantedScope = json['grantedScope'];
-    final granted = json['granted'];
-    final grantedAt = json['grantedAt'];
-    final revokedAt = json['revokedAt'];
-    if (skillId is! String || skillId.trim().isEmpty) {
-      throw const FormatException('skill consent requires skillId');
-    }
-    if (grantedScope is! String || grantedScope.trim().isEmpty) {
-      throw const FormatException('skill consent requires grantedScope');
-    }
-    if (granted is! bool) {
-      throw const FormatException('skill consent requires granted');
-    }
-    if (grantedAt is! String || DateTime.tryParse(grantedAt) == null) {
-      throw const FormatException('skill consent requires grantedAt');
-    }
-    if (revokedAt != null &&
-        (revokedAt is! String ||
-            revokedAt.trim().isEmpty ||
-            DateTime.tryParse(revokedAt) == null)) {
-      throw const FormatException('skill consent revokedAt is invalid');
-    }
-    return AssistantSkillConsent(
-      skillId: skillId.trim(),
-      grantedScope: grantedScope.trim(),
-      granted: granted && revokedAt == null,
-      updatedAt: DateTime.parse(grantedAt).toUtc(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'skillId': skillId,
-    'grantedScope': grantedScope,
-    'granted': granted,
-    'grantedAt': updatedAt.toIso8601String(),
-  };
-}
 
 AssistantContextSnapshot assistantContextSnapshotFromOpenContext(
   AssistantOpenContext context, {
@@ -219,7 +155,7 @@ PageContextSnapshot pageContextSnapshotFromOpenContext(
   final objectId = context.entityId?.trim() ?? '';
   final normalizedAction = userAction?.trim() ?? '';
   return PageContextSnapshot(
-    capturedAt: now.toIso8601String(),
+    capturedAt: now,
     pageType: assistantPageTypeForSource(context.source),
     pageObjects: <PageContextObjectRef>[
       if (objectType.isNotEmpty && objectId.isNotEmpty)
@@ -359,6 +295,7 @@ abstract class AssistantSkillSubscriptionFacet {
     required String rawText,
     List<String> queries = const <String>[],
     String cron = '0 8 * * *',
+    String timezone = 'Asia/Shanghai',
     required String clientRequestId,
   });
 
@@ -369,13 +306,44 @@ abstract class AssistantSkillSubscriptionFacet {
   });
 }
 
+/// 当前 active SkillPackageRelease 的用户目录投影。
+abstract class AssistantSkillCatalogFacet {
+  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+    int limit = kAssistantSkillCatalogDefaultLimit,
+  });
+
+  Future<AssistantSkillCatalogItemDetailView> getSkillCatalogItem({
+    required String skillId,
+  });
+}
+
+/// 用户对 Skill 的显式启用状态与配置；缺少记录表示 package default。
+abstract class AssistantSkillUserSettingFacet {
+  Future<List<SkillUserSetting>> listSkillUserSettings({
+    int limit = kAssistantSkillCatalogDefaultLimit,
+  });
+
+  Future<SkillUserSetting> getSkillUserSetting({required String skillId});
+
+  Future<PutSkillUserSettingReceipt> putSkillUserSetting({
+    required String skillId,
+    required SkillUserSettingStatus status,
+    required Map<String, Object?> configurationData,
+    required String configurationSchemaDigest,
+    required SkillMemoryPolicy memoryPolicy,
+    required List<String> connectorConnectionRefs,
+    required int expectedRevision,
+    required String clientRequestId,
+  });
+}
+
 /// 技能授权（consent 查询/授予/撤回）。
 abstract class AssistantSkillConsentFacet {
-  Future<List<AssistantSkillConsent>> listConsents();
+  Future<List<SkillConsent>> listConsents();
 
-  Future<AssistantSkillConsent> grantSkillConsent({
+  Future<SkillConsent> grantSkillConsent({
     required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
+    required List<String> grantedScopes,
     required String clientRequestId,
   });
 
@@ -387,7 +355,7 @@ abstract class AssistantSkillConsentFacet {
 
 /// 用户学习事实的单轨 append command。
 abstract class AssistantLearningFactAppendFacet {
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   });
 }
@@ -404,17 +372,12 @@ abstract class AssistantPersonalizationFacet {
   });
 }
 
-/// 私助个人数据只读列表（任务/记忆/技能目录）。
+/// 私助个人任务只读列表。
 abstract class AssistantPersonalDataFacet {
   /// GET /assistant/tasks
   Future<List<AssistantTaskItemView>> listAssistantTasks({
     int limit = kAssistantListPageDefaultLimit,
     String? status,
-  });
-
-  /// GET /assistant/skills
-  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
-    int limit = kAssistantSkillCatalogDefaultLimit,
   });
 }
 

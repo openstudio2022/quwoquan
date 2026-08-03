@@ -3,6 +3,9 @@ package model
 import (
 	"errors"
 	"time"
+
+	membershipmodel "quwoquan_service/services/chat-service/internal/chat/conversation_membership/domain/model"
+	userstatemodel "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/domain/model"
 )
 
 var _ = time.Now
@@ -12,8 +15,8 @@ var _ = time.Now
 var (
 	ErrConversationNotFound                = errors.New("conversation not found")
 	ErrCircleGroupConversationAlreadyBound = errors.New("circle group conversation already bound")
-	ErrMemberNotFound                      = errors.New("conversation member not found")
-	ErrUserStateNotFound                   = errors.New("conversation user state not found")
+	ErrGatheringConversationAlreadyBound   = errors.New("Gathering conversation already bound")
+	ErrUserStateNotFound                   = userstatemodel.ErrNotFound
 )
 
 // Conversation is the aggregate root for the chat domain.
@@ -28,6 +31,7 @@ type Conversation struct {
 	CreatorId             string `json:"creatorId" bson:"creatorId"`
 	CircleId              string `json:"circleId" bson:"circleId"`
 	CircleGroupId         string `json:"circleGroupId" bson:"circleGroupId,omitempty"`
+	GatheringId           string `json:"gatheringId" bson:"gatheringId,omitempty"`
 	EntityId              string `json:"entityId" bson:"entityId"`
 	OriginType            string `json:"originType" bson:"originType"`
 	// OriginGreetingRequestID 是升级来源的 GreetingRequest.id，只在
@@ -76,34 +80,9 @@ const (
 	ConversationStatusDissolved ConversationStatus = "dissolved"
 )
 
-// ConversationMember tracks membership in a conversation (independent collection for scale).
-type ConversationMember struct {
-	ID               string    `json:"id" bson:"_id"`
-	ConversationId   string    `json:"conversationId" bson:"conversationId"`
-	UserId           string    `json:"userId" bson:"userId"`
-	UserHandle       string    `json:"userHandle" bson:"userHandle"`
-	DisplayName      string    `json:"displayName" bson:"displayName"`
-	AvatarUrl        string    `json:"avatarUrl" bson:"avatarUrl"`
-	AvatarAssetId    string    `json:"avatarAssetId" bson:"avatarAssetId"`
-	AvatarVersion    int64     `json:"avatarVersion" bson:"avatarVersion"`
-	MemberType       string    `json:"memberType" bson:"memberType"`
-	Role             string    `json:"role" bson:"role"`
-	AssistantSkillId string    `json:"assistantSkillId" bson:"assistantSkillId"`
-	InvitedBy        string    `json:"invitedBy" bson:"invitedBy"`
-	JoinedAt         time.Time `json:"joinedAt" bson:"joinedAt"`
-}
+type ConversationMember = membershipmodel.Member
+
+var ErrMemberNotFound = membershipmodel.ErrNotFound
 
 // ConversationUserState holds per-user conversation state (readSeq, unread, mute, pin).
-type ConversationUserState struct {
-	ID                 string    `json:"id" bson:"_id"`
-	UserId             string    `json:"userId" bson:"userId"`
-	ConversationId     string    `json:"conversationId" bson:"conversationId"`
-	ReadSeq            int64     `json:"readSeq" bson:"readSeq"`
-	InboxProjectedSeq  int64     `json:"-" bson:"inboxProjectedSeq"`
-	UnreadCount        int       `json:"unreadCount" bson:"unreadCount"`
-	MentionUnreadCount int       `json:"mentionUnreadCount" bson:"mentionUnreadCount"`
-	Muted              bool      `json:"muted" bson:"muted"`
-	Pinned             bool      `json:"pinned" bson:"pinned"`
-	LastReadAt         time.Time `json:"lastReadAt" bson:"lastReadAt"`
-	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
-}
+type ConversationUserState = userstatemodel.State

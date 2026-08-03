@@ -1,23 +1,40 @@
 backend: observability_log_sink
 environment_backends:
   alpha:
-    adapter: ext.obs.postgres_telemetry_local
-    backend: postgres
+    adapter: ext.obs.elasticsearch
+    backend: elasticsearch
   beta:
-    adapter: ext.obs.postgres_telemetry_local
-    backend: postgres
+    adapter: ext.obs.elasticsearch
+    backend: elasticsearch
   gamma:
-    adapter: ext.obs.elasticsearch_local
+    adapter: ext.obs.elasticsearch
     backend: elasticsearch
   prod:
-    adapter: ext.obs.aliyun_sls
-    backend: aliyun_sls
+    adapter: ext.obs.elasticsearch
+    backend: elasticsearch
 fallback: forbidden
+collections:
+  ops_user_activity_daily:
+    entity: EventRecord
+    projection: UserActivityDailyView
+    description: EventRecord 产品事件按 UTC 日期形成的可重建增长聚合；原始事件是唯一权威来源。
+    indexes:
+    - name: pk_user_activity_date
+      keys:
+        _id: 1
+      unique: true
+  ops_actor_first_seen:
+    entity: EventRecord
+    projection: ActorFirstSeenView
+    description: 不可逆 actor hash 的首见日期投影，用于新增与留存口径；可由 EventRecord 重放重建。
+    indexes:
+    - name: idx_actor_first_seen_date
+      keys:
+        firstSeenDate: 1
 logstores:
   raw:
     provider_config_keys:
-      elasticsearch_local: elasticsearch.raw_index
-      aliyun_sls: sls.raw_logstore
+      elasticsearch: elasticsearch.raw_index
     default_name: app-product-telemetry-raw
     ttl_days: 3
     time_field: ingestedAt
@@ -39,12 +56,62 @@ logstores:
     - httpStatus
     - occurredAt
     - sessionId
+    - _batchKey
+    - _batchIndex
+    - journey
+    - action
+    - flowId
+    - entryMode
+    - step
+    - fromStep
+    - toStep
+    - provider
+    - otpPurpose
+    - consentState
+    - result
+    - durationMs
+    - failReasonCode
+    - failureKind
+    - recoveryAction
+    - copyKey
+    - feedbackSurface
+    - requestId
+    - traceId
+    - resultCount
+    - rankPosition
+    - objectType
+    - devicePlatform
+    - playbackMode
+    - readyMs
+    - ttffMs
+    - rebufferCount
+    - rebufferMs
+    - effectivePlaybackMs
+    - seekCount
+    - seekFailureCount
+    - seekCommandMaxMs
+    - seekSettleMaxMs
+    - droppedFrames
+    - processedVideoFrames
+    - audioUnderrunCount
+    - rendererMode
+    - decoderQueueMode
+    - decoderFallbackEnabled
+    - seekEvidenceSource
+    - durationMismatch
+    - chatAction
+    - chatOutcome
+    - chatSource
+    - mentionScope
+    - governanceAction
+    - watermarkResult
+    - memberCountBucket
+    - unreadCountBucket
     non_indexed_fields:
     - callStack
   startup_diagnostic:
     provider_config_keys:
-      elasticsearch_local: elasticsearch.startup_diagnostic_index
-      aliyun_sls: sls.startup_diagnostic_logstore
+      elasticsearch: elasticsearch.startup_diagnostic_index
     default_name: app-startup-diagnostic-raw
     ttl_days: 3
     forbidden_fields:
@@ -54,18 +121,23 @@ logstores:
     - callStack
   runtime_diagnostic:
     provider_config_keys:
-      elasticsearch_local: elasticsearch.runtime_log_index
-      aliyun_sls: sls.runtime_logstore
+      elasticsearch: elasticsearch.runtime_log_index
     default_name: runtime-diagnostics-raw
     ttl_days: 3
     forbidden_fields:
+    - schemaVersion
+    - eventVersion
+    - contractVersion
+    - protocolVersion
+    - releaseVersion
+    - releaseId
+    - dataReleaseId
     - rawCredential
     - rawToken
     - rawEndpoint
   aggregate:
     provider_config_keys:
-      elasticsearch_local: elasticsearch.aggregate_index
-      aliyun_sls: sls.aggregate_logstore
+      elasticsearch: elasticsearch.aggregate_index
     default_name: app-product-telemetry-hourly
     ttl_days: 90
     internal_fields:
@@ -97,33 +169,30 @@ wire_projection:
   backend_identity:
     response_exposure: forbidden
     internal_metric_only: true
-local_adapters:
+environment_adapters:
   canonical_port: ObservabilityLogSinkPort
   alpha:
-    backend: postgres_telemetry_local
-    schema: telemetry_local_integration
+    backend: elasticsearch
+    endpoint_source: local_env_port_manifest
     fallback: forbidden
   beta:
-    backend: postgres_telemetry_local
-    database: quwoquan_telemetry_local
-    schema: telemetry_local_beta
-    roles:
-    - telemetry_writer
-    - telemetry_reader
-    - telemetry_rollup
-    - telemetry_migrator
-    random_schema_per_test: true
-    destructive_cleanup: drop_schema_cascade
+    backend: elasticsearch
+    endpoint_source: local_env_port_manifest
     fallback: forbidden
   gamma:
-    backend: elasticsearch_local
+    backend: elasticsearch
     endpoint_source: local_env_port_manifest
-    indices:
-    - app-product-telemetry-raw
-    - app-startup-diagnostic-raw
-    - runtime-diagnostics-raw
-    - app-product-telemetry-hourly
     fallback: forbidden
+  prod:
+    backend: elasticsearch
+    endpoint_source: prod_runtime_topology
+    authentication: api_key
+    fallback: forbidden
+  indices:
+  - app-product-telemetry-raw
+  - app-startup-diagnostic-raw
+  - runtime-diagnostics-raw
+  - app-product-telemetry-hourly
 query_facade:
   portal_direct_cloud_access: false
   summary_source: hourly_rollup
@@ -131,3 +200,9 @@ query_facade:
   raw_window_days: 3
   drilldown_max_items: 100
 role: append_only
+redis_cache:
+- key: ops:telemetry:batch:{batchKey}
+  type: hash
+  ttl_seconds: 259200
+  entity: EventRecord
+  description: EventRecord ingest batch 的幂等完成 ledger；key 只使用 canonical batch digest。

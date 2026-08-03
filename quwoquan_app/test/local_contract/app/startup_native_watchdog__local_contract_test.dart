@@ -87,6 +87,7 @@ void main() {
       final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
 
       expect(runtime, contains('deadlineElapsedSinceProcessStart'));
+      expect(runtime, contains("_attemptKind == 'hotRestart'"));
       expect(runtime, contains('nativeDeadline > deadlineBeforeHydration'));
       expect(shell, contains('_hydrateNativeTimingForTelemetry'));
       expect(shell, contains('_armStartupDeadline();'));

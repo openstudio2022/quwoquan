@@ -3,7 +3,7 @@ description: 举报状态迁移后的版本化命令结果。
 consumers:
 - platform-ops
 fields:
-- id
-- version
-- status
-- replayed
+- {name: id, type: string, nullable: false}
+- {name: version, type: int, nullable: false}
+- {name: status, type: enum, enum_ref: ReportStatus, nullable: false}
+- {name: replayed, type: boolean, nullable: false}

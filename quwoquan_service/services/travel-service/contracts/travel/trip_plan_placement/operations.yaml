@@ -1,0 +1,73 @@
+description: TripPlanPlacement 共享放置命令和双向 named Reader。
+commercial_defaults:
+  status: blocked
+  block_reason: 缺 Chat/Circle authority、来源事件收敛、群圈与双端 UAT
+  gap_id: TRAVEL_TRIP_PLACEMENT_COMMERCIAL_CLOSURE
+  target_story: trip-placement-collaboration
+api_routes:
+- method: PUT
+  path: /travel/trips/{tripId}/placements/{surfaceKind}/{surfaceId}
+  operation: PutTripPlanPlacement
+  actor: persona
+  request_bindings:
+    path: [{name: tripId, field: tripId}, {name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanPlacementCommandFacet, method: putTripPlanPlacement, aggregate_owner: TripPlanPlacement, mutation_target: TripPlanPlacement, invariant_target: TripPlanPlacement}
+  request_entity: PutTripPlanPlacementRequest
+  response_entity: TripPlanPlacementSlice
+  authorization: {principal: persona, ownership_policy: trip_organizer_and_surface_admin}
+  reliability: {timeout_ms: 2500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.trip_placement_invalid_argument, TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.USER.trip_placement_revision_conflict, TRAVEL.USER.trip_placement_idempotency_conflict, TRAVEL.DEPENDENCY.trip_placement_surface_unavailable, TRAVEL.SYSTEM.trip_placement_storage_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_placement_put, trace: true, attributes: [outcome, surface_kind]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  request_body_kind: object
+- method: POST
+  path: /travel/trips/{tripId}/placement-removals/{surfaceKind}/{surfaceId}
+  operation: RemoveTripPlanPlacement
+  actor: persona
+  request_bindings:
+    path: [{name: tripId, field: tripId}, {name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripPlanPlacementCommandFacet, method: removeTripPlanPlacement, aggregate_owner: TripPlanPlacement, mutation_target: TripPlanPlacement, invariant_target: TripPlanPlacement}
+  request_entity: RemoveTripPlanPlacementRequest
+  response_entity: TripPlanPlacementSlice
+  authorization: {principal: persona, ownership_policy: trip_organizer_and_surface_admin}
+  reliability: {timeout_ms: 2500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.trip_placement_invalid_argument, TRAVEL.USER.trip_placement_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.USER.trip_placement_revision_conflict, TRAVEL.USER.trip_placement_idempotency_conflict, TRAVEL.DEPENDENCY.trip_placement_surface_unavailable, TRAVEL.SYSTEM.trip_placement_storage_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_placement_remove, trace: true, attributes: [outcome, surface_kind]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  request_body_kind: object
+- method: GET
+  path: /travel/trips/{tripId}/placements
+  operation: ListTripPlanPlacements
+  actor: persona
+  request_bindings: {path: [{name: tripId, field: tripId}]}
+  request_entity: ListTripPlanPlacementsQuery
+  security: {auth_mode: required}
+  application: {kind: query, facet: TripPlanPlacementQueryFacet, method: listTripPlanPlacements, reader: TripPlanPlacementReader, slice: TripPlanPlacementListSlice}
+  response_entity: TripPlanPlacementListSlice
+  authorization: {principal: persona, ownership_policy: active_trip_member}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.SYSTEM.trip_placement_storage_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_placement_list, trace: true, attributes: [outcome, placement_count]}
+  slo: {latency_p95_ms: 400, availability_percent: 99.9}
+  request_body_kind: none
+- method: GET
+  path: /travel/placements/{surfaceKind}/{surfaceId}/trips
+  operation: ListSurfaceTripPlacements
+  actor: persona
+  request_bindings: {path: [{name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]}
+  request_entity: ListSurfaceTripPlacementsQuery
+  security: {auth_mode: required}
+  application: {kind: query, facet: TripPlanPlacementQueryFacet, method: listSurfaceTripPlacements, reader: TripPlanPlacementReader, slice: TripPlanPlacementListSlice}
+  response_entity: TripPlanPlacementListSlice
+  authorization: {principal: persona, ownership_policy: surface_member}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.trip_permission_denied, TRAVEL.DEPENDENCY.trip_placement_surface_unavailable, TRAVEL.SYSTEM.trip_placement_storage_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_surface_trip_placement_list, trace: true, attributes: [outcome, surface_kind, placement_count]}
+  slo: {latency_p95_ms: 400, availability_percent: 99.9}
+  request_body_kind: none

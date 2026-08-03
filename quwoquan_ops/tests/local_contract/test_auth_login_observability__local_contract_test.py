@@ -41,7 +41,7 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden_label, source)
 
-    def test_dashboard_uses_http_metrics_and_sls_owns_login_funnel(self) -> None:
+    def test_dashboard_uses_http_metrics_and_elasticsearch_owns_login_funnel(self) -> None:
         path = (
             ROOT
             / "quwoquan_ops/observability/monitoring/dashboards/l2_auth_login_commercial.json"
@@ -61,36 +61,25 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertIn("ops_login_operation_events_total", expressions)
         self.assertIn("ops_login_state_dwell_seconds_bucket", expressions)
 
-        sls_path = (
+        rollup_path = (
             ROOT
-            / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+            / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
         )
-        sls = yaml.safe_load(sls_path.read_text(encoding="utf-8"))["spec"]
+        rollups = yaml.safe_load(rollup_path.read_text(encoding="utf-8"))
         storage_path = (
             ROOT
             / "quwoquan_service/services/product-ops-service/contracts/product_ops/"
             "event_record/storage.yaml"
         )
         storage = yaml.safe_load(storage_path.read_text(encoding="utf-8"))
-        jobs = {item["name"]: item for item in sls["scheduledSql"]["jobs"]}
-        dimensions_sql = jobs[
-            "app-product-telemetry-event-dimensions-hourly"
-        ]["sql"]
+        jobs = {item["row_kind"]: item for item in rollups["jobs"]}
+        dimensions = jobs["event_dimensions"]["dimensions"]
         for dimension in ("journey", "action", "result"):
-            self.assertIn(dimension, dimensions_sql)
+            self.assertIn(dimension, dimensions)
 
-        logstores = {item["name"]: item for item in sls["logstores"]}
-        self.assertEqual(
-            logstores["app-product-telemetry-raw"]["retentionDays"],
-            storage["logstores"]["raw"]["ttl_days"],
-        )
-        self.assertEqual(
-            logstores["app-product-telemetry-hourly"]["retentionDays"],
-            storage["logstores"]["aggregate"]["ttl_days"],
-        )
-        indexed_fields = set(
-            logstores["app-product-telemetry-raw"]["indexes"]["fields"]
-        )
+        self.assertEqual(storage["logstores"]["raw"]["ttl_days"], 3)
+        self.assertEqual(storage["logstores"]["aggregate"]["ttl_days"], 90)
+        indexed_fields = set(storage["logstores"]["raw"]["indexed_fields"])
         for field in (
             "flowId",
             "step",
@@ -102,7 +91,8 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         ):
             self.assertIn(field, indexed_fields)
 
-        login_sql = jobs["app-product-telemetry-login-lifecycle-hourly"]["sql"]
+        login = jobs["login_lifecycle"]
+        login_dimensions = set(login["dimensions"])
         for dimension in (
             "eventType",
             "action",
@@ -114,7 +104,7 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             "copyKey",
             "feedbackSurface",
         ):
-            self.assertIn(dimension, login_sql)
+            self.assertIn(dimension, login_dimensions)
         for sensitive in (
             "phone",
             "otpCode",
@@ -124,7 +114,7 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             "requestId",
             "traceId",
         ):
-            self.assertNotIn(sensitive, login_sql)
+            self.assertNotIn(sensitive, login_dimensions)
 
     def test_alerts_enforce_two_windows_and_contract_thresholds(self) -> None:
         path = (

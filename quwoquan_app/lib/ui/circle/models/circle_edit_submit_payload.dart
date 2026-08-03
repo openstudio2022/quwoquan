@@ -40,8 +40,8 @@ class CircleEditSubmitPayload {
     iconUrl: avatarUrl,
     category: categoryId,
     tags: tags,
-    visibility: visibility.wireValue,
-    joinPolicy: joinPolicy.wireValue,
+    visibility: visibility.wireName,
+    joinPolicy: joinPolicy.wireName,
     autoSyncChat: autoSyncChat,
   );
 
@@ -55,8 +55,8 @@ class CircleEditSubmitPayload {
     iconUrl: avatarUrl,
     category: categoryId,
     tags: tags,
-    visibility: visibility.wireValue,
-    joinPolicy: joinPolicy.wireValue,
+    visibility: visibility.wireName,
+    joinPolicy: joinPolicy.wireName,
     autoSyncChat: autoSyncChat,
   );
 
@@ -65,8 +65,11 @@ class CircleEditSubmitPayload {
         circleId: circleId,
         sections: sectionConfig
             .map(
-              (section) => CircleSectionConfigInput(
-                sectionType: section.sectionType,
+              (section) => CircleSectionConfig(
+                sectionType: CircleSectionType.fromWire(
+                  section.sectionType,
+                  'sectionConfig.sectionType',
+                ),
                 visible: section.visible,
                 order: section.order,
                 customTitle: section.customTitle,

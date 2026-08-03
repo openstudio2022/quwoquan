@@ -6,6 +6,8 @@ class NativeStartupProcessSegments {
     this.androidActivityOnCreateMs,
     this.androidFlutterEngineConfiguredMs,
     this.elapsedSinceProcessStartMs,
+    this.elapsedSinceAttemptStartMs,
+    this.attemptKind,
     this.deadlineOrigin,
     this.startupAttemptId,
   });
@@ -13,12 +15,14 @@ class NativeStartupProcessSegments {
   final int? androidActivityOnCreateMs;
   final int? androidFlutterEngineConfiguredMs;
   final int? elapsedSinceProcessStartMs;
+  final int? elapsedSinceAttemptStartMs;
+  final String? attemptKind;
   final String? deadlineOrigin;
   final String? startupAttemptId;
 }
 
 abstract interface class StartupTimingsNativeBridge {
-  Future<NativeStartupProcessSegments?> readProcessSegments();
+  Future<NativeStartupProcessSegments?> beginStartupAttempt(String attemptId);
 }
 
 class NativeStartupJournalEntries {
@@ -56,9 +60,13 @@ class MethodChannelStartupTimingsNativeBridge
   final MethodChannel channel;
 
   @override
-  Future<NativeStartupProcessSegments?> readProcessSegments() async {
+  Future<NativeStartupProcessSegments?> beginStartupAttempt(
+    String attemptId,
+  ) async {
     try {
-      final raw = await channel.invokeMethod<Object?>('readProcessSegments');
+      final raw = await channel.invokeMethod<Object?>('beginStartupAttempt', {
+        'attemptId': attemptId,
+      });
       if (raw is! Map) {
         return null;
       }
@@ -68,6 +76,8 @@ class MethodChannelStartupTimingsNativeBridge
           raw['androidFlutterEngineConfiguredMs'],
         ),
         elapsedSinceProcessStartMs: _asInt(raw['elapsedSinceProcessStartMs']),
+        elapsedSinceAttemptStartMs: _asInt(raw['elapsedSinceAttemptStartMs']),
+        attemptKind: raw['attemptKind']?.toString(),
         deadlineOrigin: raw['deadlineOrigin']?.toString(),
         startupAttemptId: raw['startupAttemptId']?.toString(),
       );

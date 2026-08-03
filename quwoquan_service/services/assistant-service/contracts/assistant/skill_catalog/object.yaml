@@ -1,8 +1,9 @@
 kind: projection
 description: >-
-  SkillCatalog 是技能清单资源与账号当前授权事实组合出的私有只读目录投影。
-  技能展示元数据只来自 canonical manifest catalog，授权标记只经 SkillConsentReader
-  按可信 accountId 查询；它不属于 AssistantRun 或 AssistantSession 的一致性边界。
+  SkillCatalog 是 active immutable SkillPackageRelease 的私有只读目录投影。
+  技能展示、输入 schema 与激活元数据只来自 digest 已验证的 package assets；
+  账号 Consent、Setting 与 Subscription 由各自对象读取，它不属于 AssistantRun
+  或 AssistantSession 的一致性边界。
 identity:
   fields:
   - skillId
@@ -12,26 +13,28 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships:
-- access: named_reader
+- access: event
   cardinality: N:1
-  consistency: eventual
+  consistency: strong
   kind: projection_source
-  name: accountOwner
-  on_delete: cascade
+  name: activePackageRelease
+  on_delete: tombstone
   reference_fields:
-  - accountId
-  target_object: user.UserAccount
+  - packageId
+  - releaseDigest
+  target_object: assistant.SkillPackageRelease
 capabilities:
 - queryable
 taggable: false
 vector_enabled: false
 business_rules:
 - ListSkills 只能使用 transport 验证后的 accountId，禁止信任客户端身份 header
-- catalog source 缺失、清单无效、SkillConsentReader 缺失或读取失败均 fail-closed
+- active release、manifest、profile 或输入 schema 资产缺失及 digest 不一致均 fail-closed
+- 详情 configurationSchema 必须与 item.configurationSchemaDigest 来自同一 digest 已验证的 active package asset；ListSkills 不携带 schema document，客户端只在用户进入详情后按需读取
 - 同一 skillId 只能存在一个目录项，清单项按 skillId 稳定排序后返回
-- 授权 scope 只对请求账号自己的匹配 skillId 可见
+- 目录不得拼接、复制或推断账号 Consent、Setting 与 Subscription 状态
 lifecycle:
-  source_events: [SkillConsentGranted, SkillConsentRevoked, SkillCatalogReleaseActivated]
-  checkpoint: catalog_release_digest_and_consent_sequence
-  rebuild: reload_manifest_catalog_then_replay_skill_consent_outbox
-  tombstone: remove_account_consent_projection_keep_catalog_entry
+  source_events: [SkillCatalogReleaseActivated]
+  checkpoint: active_skill_package_release_digest
+  rebuild: resolve_active_release_and_decode_digest_verified_assets
+  tombstone: active_release_rollback_or_replacement_removes_old_catalog_projection

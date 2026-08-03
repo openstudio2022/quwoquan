@@ -17,17 +17,17 @@ final class RemoteProfileInteractionAdapter
   final ProfileInteractionInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentProfileInteractionPage> listActivities(
+  Future<ProfileInteractionActivityPageSlice> listActivities(
     ContentProfileInteractionPageQuery query, {
-    required ContentProfileInteractionDirection direction,
+    required InteractionDirection direction,
   }) {
     return switch (direction) {
-      ContentProfileInteractionDirection.received => _listReceived(query),
-      ContentProfileInteractionDirection.sent => _listSent(query),
+      InteractionDirection.received => _listReceived(query),
+      InteractionDirection.sent => _listSent(query),
     };
   }
 
-  Future<ContentProfileInteractionPage> _listReceived(
+  Future<ProfileInteractionActivityPageSlice> _listReceived(
     ContentProfileInteractionPageQuery query,
   ) {
     final client = this.client;
@@ -41,7 +41,7 @@ final class RemoteProfileInteractionAdapter
     // dart format on
   }
 
-  Future<ContentProfileInteractionPage> _listSent(
+  Future<ProfileInteractionActivityPageSlice> _listSent(
     ContentProfileInteractionPageQuery query,
   ) {
     final client = this.client;
@@ -56,7 +56,7 @@ final class RemoteProfileInteractionAdapter
   }
 
   @override
-  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+  Future<ProfileInteractionReadFactAck> appendReadFact(
     AppendContentProfileInteractionReadFactCommand command,
   ) {
     final client = this.client;
@@ -79,7 +79,7 @@ final class RemoteProfileInteractionAdapter
         deadlineAt: base.deadlineAt,
         cancellation: base.cancellation,
         idempotencyKey:
-            'profile-read:${command.personaId}:${command.activityId}:${command.state.wireValue}',
+            'profile-read:${command.personaId}:${command.activityId}:${command.state.wireName}',
       ),
     );
     // dart format on

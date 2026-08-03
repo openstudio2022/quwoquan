@@ -15,7 +15,7 @@
 - Capability/Adapter/环境 Binding 单轨注册、显式 composition 与启动 fail-closed
 - Alpha/Beta/Gamma × local_contract/api_integration/user_acceptance 的受管非生产 Provider 九格证据
 - 统一错误、超时/取消、幂等、隐私、观测、成本、降级、切换与回滚
-- SLS、MQ、DNS、RTC、LLM 首波及其余现存外部依赖的分波迁移
+- Observability、MQ、DNS、RTC、LLM 首波及其余现存外部依赖的分波迁移
 
 ### Out of Scope
 
@@ -29,6 +29,10 @@
   - 本能力处理：组合本目录 Story 的可观察行为。
   - 本能力输出：以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
+- [`JNY-013 / SCN-030`](../../spec.md#scn-030)
+  - 本能力处理：为日历、提醒、地图导航和受控旅行外链提供用户级 Connector 目录、连接、能力授权与调用回执，凭证只在 Integration Service 受保护存储中使用。
+  - 本能力输出：Assistant 只获得 `connectionRef`、capability readiness 与脱敏 invocation receipt；App 只执行 typed native intent。
+  - 失败时终态：未连接、已撤权、Provider 不可用或外链不安全均结构化失败，不继承凭证、不执行预订支付、不合成成功。
 
 ## 4. Story
 
@@ -37,6 +41,7 @@
 - [`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)：替代 Adapter 通过、旧 digest、不同 commit/image/config 或缺目标厂商证据均不能 提升目标 adapter_ready。
 - [`integration-service-foundation`](./integration-service-foundation/spec.md)：对外只暴露标准化接口，禁止端侧直接调用供应商 API。
 - [`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)：success、validation、auth、network/DNS、timeout、throttle、retry、idempotency、 callback ordering、redaction、observability 均被同一 Adapter 执行。
+- [`user-connector-capability-gateway`](./user-connector-capability-gateway/spec.md)：拥有官方 Connector 目录、账号连接、能力授权、凭证引用、外部调用与脱敏回执，向 Skill 暴露厂商无关 capability。
 
 ## 5. 能力要求
 
@@ -54,10 +59,10 @@
    receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
    file 或 conformance manifest。
 - BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
-- content embedding、user one-tap/social、integration location/SMS/Push、assistant model、 RTC room 与 runtime SLS 各自产出 root-scoped checked-in Go descriptor，并由对应 composition entrypoint fail-closed 消费。
+- content embedding、user one-tap/social、integration location/SMS/Push、assistant model、RTC room 与四环境 Elasticsearch Log sink 各自产出 root-scoped checked-in descriptor，并由对应 composition entrypoint fail-closed 消费。
 - runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
 - runtime NATS 与 DNS 显式声明生产消费为 none，仅为资产登记；不得列为 release-required、不得生成 release Binding 或冒充 readiness 证据。
-- Alpha/Beta/Gamma 缺受管非生产 Provider 材料、初始化、conformance 或健康探针时启动失败；stackctl 不自动生成 Provider endpoint/secret。
+- Alpha/Beta/Gamma 缺受管替代 topology、target-scoped LiveKit 材料、初始化、conformance 或健康探针时启动失败；stackctl 只投影 canonical internal endpoint 并生成 target-scoped 本地基础设施 secret，不生成或接收生产厂商凭据。
 - Prod 缺 **真实厂商** Provider、外部注入凭据、初始化或健康探针时启动失败，并拒绝 local substitute Adapter。
 - optional 能力仅结构化 unavailable/degraded，绝不假成功。
 - readiness 只暴露 capability/adapter ID、状态、版本、digest 和 evidence URI，不暴露 endpoint、Secret 或 token。
@@ -67,7 +72,7 @@
 
 - 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
 - Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
-- local_contract 对对应环境 Binding 选中的 Adapter 类运行离线协议/故障 harness，永不访问外网；api_integration 连接该环境声明的协议端点：Alpha/Beta/Gamma 连接隔离 sandbox/nonprod tenant，Prod Remote receipt 连接生产厂商租户。
+- local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接 integration-service 独立内部协议端点或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
 - runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
 - 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
 - NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。
@@ -92,13 +97,13 @@
 ### REQ-006 Alpha/Beta/Gamma 受管非生产 Provider 与 Prod hosted 分层对接
 
 - `runtime_shared_adapter` 由多个静态组合根共同消费；每个 composition root 必须引用同一公开 Port 与 Adapter 契约，禁止复制实现。
-- **Alpha / Beta / Gamma** required 验收必须绑定受管非生产租户的非内存 Provider Adapter，`state: enabled`；endpoint 与 secret 只由受保护环境注入，缺失时在 stackctl preflight 返回 `GATE_BLOCK`，不得生成或回退到 fixture/mock/local recorder/local capture。
-- **Gamma（gamma-local 拓扑）** 同时运行 production Remote composition、完整第一方拓扑、黑盒 API 与真机 Journey；禁止 UI Mock、Provider override、进程内 Provider fake 或生产租户凭据。Provider 使用隔离的 sandbox/nonprod tenant，但不得改变 canonical Port。
+- **Alpha / Beta / Gamma** required 验收必须绑定环境声明的 `protocol_fixture/local_*` Port 对等 Adapter，`state: enabled`；禁止运行时 fallback、App/UI Mock、生产租户凭据或未经 Binding 的 override。
+- **Gamma（gamma-local 拓扑）** 同时运行 production Remote composition、完整第一方拓扑、integration-service 内部协议替代端点、真实本地 LiveKit、黑盒 API 与真机 Journey；不得改变 canonical typed Port。
 - **Prod（含 gray）** 只允许真实厂商 Adapter 与生产租户，禁止 fixture/mock/fake/local_* 替代 Adapter；Prod hosted rollout receipt 独立绑定 Prod config/topology，不能由 Gamma receipt 替代。
 - Alpha/Beta/Gamma 的 canonical Port、assertionIds 与 ContractGraph 必须一致，Provider receipt 必须绑定同一候选且禁止 UI 假绿。
 - Prod 缺正式凭据时 fail-closed 并 GATE_BLOCK；不得用 Alpha/Beta/Gamma sandbox/nonprod receipt 冒充 Prod hosted readiness。
 - deadline、cancel、幂等、retry/throttle 必须由能力合同约束，调用方不得猜测 Vendor 行为。
-- credential、token、原始 endpoint 与 PII/SECRET 不得进入日志、trace、metric label 或运行证据正文；stackctl 不得自动生成 Provider secrets，所有材料不得写入仓库或 `.qwq_output`。
+- credential、token、原始 endpoint 与 PII/SECRET 不得进入日志、trace、metric label 或运行证据正文；stackctl 仅可在 `QWQ_DEPLOY_WORK_ROOT/<target>/secrets` 生成本地 LiveKit/第一方认证材料，禁止生成生产厂商凭据。
 - 每项 required 能力必须暴露可查询的成功率、错误率、P95/P99、throttle、retry 与 provider 可用性。
 - optional 能力只能以结构化 unavailable/degraded 关闭并提供用户指引；禁止假成功或静默回退。
 - 切换只允许在两个 ready Adapter 之间进行；必须验证数据与合同兼容、用户旅程连续和回滚可执行。
@@ -129,10 +134,10 @@
    receipt/descriptor、SBOM 与 acceptance 双向一致；不得维护全局 registry、binding
    file 或 conformance manifest。
 - THEN BindingCompiler 只在构建/门禁阶段运行；运行时不扫描 metadata 或按字符串动态选厂。
-- THEN content embedding、user one-tap/social、integration location/SMS/Push、assistant model、 RTC room 与 runtime SLS 各自产出 root-scoped checked-in Go descriptor，并由对应 composition entrypoint fail-closed 消费。
+- THEN content embedding、user one-tap/social、integration location/SMS/Push、assistant model、RTC room 与四环境 Elasticsearch Log sink 各自产出 root-scoped checked-in descriptor，并由对应 composition entrypoint fail-closed 消费。
 - THEN runtime.message.transport 使用唯一 Redis Adapter Binding；其所有实际 producer/ consumer root 共享同一环境选择、各自产出 descriptor 并在 publisher/consumer 构造前 preflight Redis scene。任何 root 直接构造未校验 transport、静默跳过 consumer 或把 Pub/Sub 当作 durable delivery 均为阻断。
 - THEN runtime NATS 与 DNS 显式声明生产消费为 none，仅为资产登记；不得列为 release-required、不得生成 release Binding 或冒充 readiness 证据。
-- THEN Alpha/Beta/Gamma 缺受管非生产 Provider 材料、初始化、conformance 或健康探针时启动失败，且不得自动生成 Provider endpoint/secret。
+- THEN Alpha/Beta/Gamma 缺受管替代 topology、target-scoped LiveKit 材料、初始化、conformance 或健康探针时启动失败，且不得读取或生成生产厂商凭据。
 - THEN Prod 缺真实厂商 Provider、外部注入凭据、初始化或健康探针时启动失败，并拒绝本地替代 endpoint。
 - THEN optional 能力仅结构化 unavailable/degraded，绝不假成功。
 - THEN readiness 只暴露 capability/adapter ID、状态、版本、digest 和 evidence URI，不暴露 endpoint、Secret 或 token。
@@ -144,7 +149,7 @@
 - WHEN 参与者发起“Provider 公共/专项 Conformance 与 Alpha/Beta/Gamma 九格证据”对应动作。
 - THEN 公共 suite 覆盖 success、validation、auth、network/DNS、timeout、throttle、retry、 idempotency、redaction 与 observability；能力专项 profile 覆盖本能力协议语义。
 - THEN Alpha/Beta/Gamma 各自执行 local_contract、api_integration、user_acceptance；环境不是 第四测试目录层。
-- THEN local_contract 对对应环境 Binding 选中的 Adapter 类运行离线协议/故障 harness，永不访问外网；api_integration 连接该环境声明的协议端点：Alpha/Beta/Gamma 连接隔离 sandbox/nonprod tenant，Prod Remote receipt 连接生产厂商租户。
+- THEN local_contract 对 Binding 选中的 Adapter 运行离线协议/故障 harness；Alpha/Beta/Gamma api_integration 连接受管内部协议端点或真实本地 LiveKit，Prod hosted receipt 连接生产厂商租户。
 - THEN runtime.message.transport 的 user_acceptance 只能以 production Remote composition 的 原生设备 chat @ assistant journey 取证，并受 stackctl 解析的 endpoint、CI 注入的 auth 和环境 seed 约束；未登记该 harness 时必须输出 PROVIDER.CONFORMANCE.REMOTE_CHAT_ASSISTANT_UAT_HARNESS_REQUIRED 并 GATE_BLOCK， 不得用 memory Redis、fixture consumer、UI mock 或 Provider override 生成 passed。
 - THEN 每格报告含当前 commit/image/config/ContractGraph/Adapter digest、断言/skip、网络边界、 数据 digest、acceptance refs 与 logs/traces/metrics 引用。
 - THEN NOT_RUN、required skip、零断言、dry-run、旧 digest、缺观测或缺清理回执均阻断。

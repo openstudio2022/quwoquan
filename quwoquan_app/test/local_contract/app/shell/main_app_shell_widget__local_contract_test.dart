@@ -27,10 +27,12 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/platform/web_install_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_terminal_viewport.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -614,6 +616,41 @@ void main() {
         ),
         findsNothing,
       );
+      final navContext = tester.element(find.byType(BottomNavigationWidget));
+      final obstructionScope = tester.widget<AppViewportObstructionScope>(
+        find.byType(AppViewportObstructionScope),
+      );
+      expect(
+        obstructionScope.obstruction.bottom,
+        AppSpacing.bottomNavBarHeight(navContext) +
+            MediaQuery.viewPaddingOf(navContext).bottom,
+      );
+    });
+
+    testWidgets('从首页切到视频书不在 IndexedStack build 期间写 Feed Provider', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pump(const Duration(milliseconds: 300));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MainAppShell)),
+      );
+      expect(
+        container.read(discoveryFeedMapProvider)['recommend']?.value?.items,
+        isNotEmpty,
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text('视频书'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
     });
 
     testWidgets('圈子路由归并到首页频道', (tester) async {

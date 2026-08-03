@@ -5,7 +5,7 @@ description: 'realtime-gateway 连接运行时会话。
 
   可信连接身份由 accountId + personaId + deviceId 三元组构成；RTC 业务路由只使用
 
-  personaId，设备级在线状态通过 Redis Hash（presence:persona:{personaId}）维护。
+  personaId。设备在线状态由独立 PresenceView 对象消费 Connection 生命周期维护。
 
   realtime-gateway 作为平台级基础设施，不属于任何业务域，独立部署。
 

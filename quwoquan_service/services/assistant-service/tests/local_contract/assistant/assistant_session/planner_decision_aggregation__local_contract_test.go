@@ -15,6 +15,7 @@ import (
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 // plannerStubModel 按 stage 返回可控决策，用来驱动 planner 的动作分支。
@@ -86,6 +87,7 @@ func plannerLoop(t *testing.T, model orchestration.ModelProvider, toolCalls *int
 		nil,
 	)
 	loop.PromptAssets = promptassets.MustResolver(t)
+	loop.Catalog = skillfixture.Loader{}
 	return loop
 }
 
@@ -96,6 +98,8 @@ func plannerTurn(skillID string) assistant.AssistantTurn {
 		SessionID:             "session-planner",
 		TurnID:                "turn-planner",
 		TraceID:               "trace-planner",
+		SkillID:               skillID,
+		DomainID:              "travel",
 		Input:                 assistant.AssistantTurnInput{Text: "我周末去杭州玩"},
 		FrozenPolicySelection: selection,
 	}
@@ -137,7 +141,7 @@ func TestPlannerAskUserEndsTurnWithClarification(t *testing.T) {
 		},
 	}}
 	loop := plannerLoop(t, model, &toolCalls)
-	events, failure, err := loop.RunTurn(t.Context(), plannerTurn("travel_planning"))
+	events, failure, err := loop.RunTurn(t.Context(), plannerTurn("travel_companion"))
 	if err != nil || failure != nil {
 		t.Fatalf("clarification turn must succeed: failure=%+v err=%v", failure, err)
 	}
@@ -185,7 +189,7 @@ func TestAggregationMarksSingleReadySkillRunAsFull(t *testing.T) {
 		"toolInput":  map[string]any{"query": "杭州 周末 天气"},
 	}}
 	loop := plannerLoop(t, model, &toolCalls)
-	events, failure, err := loop.RunTurn(t.Context(), plannerTurn("travel_planning"))
+	events, failure, err := loop.RunTurn(t.Context(), plannerTurn("travel_companion"))
 	if err != nil || failure != nil {
 		t.Fatalf("answer turn must succeed: failure=%+v err=%v", failure, err)
 	}
@@ -200,8 +204,8 @@ func TestAggregationMarksSingleReadySkillRunAsFull(t *testing.T) {
 	if !ok || len(runs) != 1 {
 		t.Fatalf("skillRuns=%#v want exactly one run", payload["skillRuns"])
 	}
-	if runs[0]["answerReady"] != true || runs[0]["skillId"] != "travel_planning" {
-		t.Fatalf("skillRun=%#v want a ready travel_planning run", runs[0])
+	if runs[0]["answerReady"] != true || runs[0]["skillId"] != "travel_companion" {
+		t.Fatalf("skillRun=%#v want a ready travel_companion run", runs[0])
 	}
 	toolNames, ok := runs[0]["toolNames"].([]string)
 	if !ok || len(toolNames) != 1 || toolNames[0] != "web_search" {
@@ -211,7 +215,7 @@ func TestAggregationMarksSingleReadySkillRunAsFull(t *testing.T) {
 
 // 工具预算来自技能清单：模型持续要求检索时，工具调用次数不得超过清单声明。
 func TestToolBudgetComesFromSkillManifest(t *testing.T) {
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("load assistant domain skill catalog: %v", err)
 	}

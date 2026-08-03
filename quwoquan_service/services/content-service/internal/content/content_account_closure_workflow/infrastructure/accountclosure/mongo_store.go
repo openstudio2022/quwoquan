@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	accountclosureapp "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/application"
+	closuremodel "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/domain/model"
 )
 
 const (
@@ -33,12 +34,12 @@ type inboxDocument struct {
 	CompletedAt    *time.Time    `bson:"completedAt,omitempty"`
 }
 
-type WorkflowState string
+type WorkflowState = closuremodel.WorkflowState
 
 const (
-	WorkflowStateReceived               WorkflowState = "received"
-	WorkflowStateExternalCleanupPending WorkflowState = "external_cleanup_pending"
-	WorkflowStateCompleted              WorkflowState = "completed"
+	WorkflowStateReceived               = closuremodel.WorkflowStateReceived
+	WorkflowStateExternalCleanupPending = closuremodel.WorkflowStateExternalCleanupPending
+	WorkflowStateCompleted              = closuremodel.WorkflowStateCompleted
 )
 
 type failureDocument struct {

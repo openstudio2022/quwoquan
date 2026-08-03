@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_distribution_policy.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "policyId",
+    "productLifecycleState",
+    "releaseClass",
+    "mediaGeneration",
+    "acquisition",
+    "researchDiscovery",
+    "researchDistribution",
+    "commercialDistribution",
+    "articleMedia",
+    "scaleGates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan.content_distribution_policy"},
+    "policyId": {"type": "string", "minLength": 1},
+    "productLifecycleState": {"enum": ["research", "commercial"]},
+    "releaseClass": {"enum": ["research", "commercial"]},
+    "mediaGeneration": {
+      "type": "object",
+      "required": ["imageAllowed", "videoAllowed"],
+      "additionalProperties": false,
+      "properties": {
+        "imageAllowed": {"type": "boolean"},
+        "videoAllowed": {"type": "boolean"}
+      }
+    },
+    "acquisition": {
+      "type": "object",
+      "required": ["bypassLogin", "bypassPaywall", "bypassCaptcha", "bypassAccessControl"],
+      "additionalProperties": false,
+      "properties": {
+        "bypassLogin": {"const": false},
+        "bypassPaywall": {"const": false},
+        "bypassCaptcha": {"const": false},
+        "bypassAccessControl": {"const": false}
+      }
+    },
+    "researchDiscovery": {
+      "type": "object",
+      "required": [
+        "catalogRevision", "imageProviderPriority", "imageSearchAxes",
+        "videoPopularitySignals", "popularityNormalization"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "catalogRevision": {"type": "string", "minLength": 1},
+        "imageProviderPriority": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "imageSearchAxes": {
+          "type": "array",
+          "const": ["category", "entity", "season", "style", "viewpoint", "popularity"]
+        },
+        "videoPopularitySignals": {
+          "type": "array",
+          "const": ["play", "like", "comment", "share", "favorite"]
+        },
+        "popularityNormalization": {
+          "const": "same_platform_topic_time_bucket_percentile"
+        }
+      }
+    },
+    "researchDistribution": {
+      "type": "object",
+      "required": ["allowedRightsStatuses", "requireInternalAccessIsolation"],
+      "additionalProperties": false,
+      "properties": {
+        "allowedRightsStatuses": {
+          "type": "array",
+          "const": ["verified", "unverified", "unknown"]
+        },
+        "requireInternalAccessIsolation": {"const": true}
+      }
+    },
+    "commercialDistribution": {
+      "type": "object",
+      "required": ["allowedRightsStatuses", "requireAuthorizationProof"],
+      "additionalProperties": false,
+      "properties": {
+        "allowedRightsStatuses": {"type": "array", "const": ["verified"]},
+        "requireAuthorizationProof": {"const": true}
+      }
+    },
+    "articleMedia": {
+      "type": "object",
+      "required": ["minimumIllustratedRate", "maximumTextOnlyRate", "requireCoverAndBodyImage"],
+      "additionalProperties": false,
+      "properties": {
+        "minimumIllustratedRate": {"type": "number", "minimum": 0.9, "maximum": 1},
+        "maximumTextOnlyRate": {"type": "number", "minimum": 0, "maximum": 0.1},
+        "requireCoverAndBodyImage": {"const": true}
+      }
+    },
+    "scaleGates": {
+      "type": "object",
+      "required": ["m100PerCarrier", "m1000PerCarrier", "requireM100PromotionBeforeM1000", "minimumAutomaticRecoveryRate"],
+      "additionalProperties": false,
+      "properties": {
+        "m100PerCarrier": {"type": "integer", "minimum": 100},
+        "m1000PerCarrier": {"type": "integer", "minimum": 1000},
+        "requireM100PromotionBeforeM1000": {"const": true},
+        "minimumAutomaticRecoveryRate": {"type": "number", "minimum": 0.9, "maximum": 1}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"productLifecycleState": {"const": "research"}}},
+      "then": {"properties": {"releaseClass": {"const": "research"}}},
+      "else": {"properties": {"releaseClass": {"const": "commercial"}}}
+    }
+  ]
+}

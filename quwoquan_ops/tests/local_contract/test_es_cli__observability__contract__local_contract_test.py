@@ -28,12 +28,11 @@ _SPEC.loader.exec_module(es_cli)
 
 
 class EsCliTriageTests(unittest.TestCase):
-    def test_compose_file_uses_ops_owned_observability_topology(self) -> None:
-        self.assertEqual(
-            es_cli.COMPOSE_FILE,
-            _ROOT / "quwoquan_ops/observability/es/docker-compose.yml",
-        )
-        self.assertTrue(es_cli.COMPOSE_FILE.is_file())
+    def test_cli_has_no_direct_elasticsearch_or_compose_entrypoint(self) -> None:
+        source = Path(es_cli.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("COMPOSE_FILE", source)
+        self.assertNotIn("QUWOQUAN_ES_URL", source)
+        self.assertNotIn("docker compose", source)
 
     def test_triage_prefers_control_plane_api(self) -> None:
         buffer = io.StringIO()
@@ -69,39 +68,17 @@ class EsCliTriageTests(unittest.TestCase):
         self.assertIn("repair=/product/l1-l4/environment", out)
         self.assertIn("alert=HighP95Latency", out)
 
-    def test_triage_falls_back_to_es_manual_report(self) -> None:
-        buffer = io.StringIO()
+    def test_triage_fails_closed_without_control_plane(self) -> None:
         with (
-            patch.dict(os.environ, {"PLATFORM_OPS_BASE_URL": ""}, clear=False),
             patch.object(es_cli, "query_control_plane_triage", return_value=None),
-            patch.object(
-                es_cli,
-                "query_report_docs",
-                return_value=[
-                    {
-                        "occurredAt": "2026-06-07T08:00:00Z",
-                        "errorCode": "OPS.NETWORK.fetch_failed",
-                        "requestId": "req-1",
-                        "traceId": "trace-1",
-                        "failurePoint": "service.http",
-                        "stackHash": "stack-1",
-                        "businessObject": "event_record",
-                        "functionModule": "observability",
-                        "nature": "bug",
-                    }
-                ],
-            ),
             patch.object(
                 sys,
                 "argv",
-                ["es_cli.py", "triage", "--domain", "platform", "--env", "beta", "--output", "markdown"],
+                ["es_cli.py", "triage", "--domain", "platform", "--env", "beta"],
             ),
-            redirect_stdout(buffer),
+            self.assertRaisesRegex(SystemExit, "canonical Product/Platform Ops"),
         ):
-            self.assertEqual(es_cli.main(), 0)
-        out = buffer.getvalue()
-        self.assertIn("# 异常日报", out)
-        self.assertIn("OPS.NETWORK.fetch_failed", out)
+            es_cli.main()
 
     def test_triage_json_emits_stable_repair_contract(self) -> None:
         buffer = io.StringIO()

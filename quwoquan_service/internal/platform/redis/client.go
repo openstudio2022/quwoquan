@@ -46,6 +46,29 @@ type client struct {
 	raw goredis.UniversalClient
 }
 
+var compareAndSwapHashFieldScript = goredis.NewScript(`
+local current = redis.call('HGET', KEYS[1], ARGV[1])
+local expects_value = ARGV[2] == '1'
+if expects_value then
+  if not current or current ~= ARGV[3] then
+    return 0
+  end
+elseif current then
+  return 0
+end
+
+if ARGV[4] == '1' then
+  redis.call('HSET', KEYS[1], ARGV[1], ARGV[5])
+  local ttl_ms = tonumber(ARGV[6])
+  if ttl_ms and ttl_ms > 0 then
+    redis.call('PEXPIRE', KEYS[1], ttl_ms)
+  end
+else
+  redis.call('HDEL', KEYS[1], ARGV[1])
+end
+return 1
+`)
+
 var boundedImmutableRecordAtomicCreateScript = goredis.NewScript(`
 local ttl_ms = tonumber(ARGV[2])
 local owner_digest = ARGV[3]
@@ -456,6 +479,43 @@ func (c *client) Expire(ctx context.Context, key string, ttl time.Duration) erro
 
 func (c *client) HSet(ctx context.Context, key, field, value string) error {
 	return c.raw.HSet(ctx, key, field, value).Err()
+}
+
+func (c *client) CompareAndSwapHashField(
+	ctx context.Context,
+	key string,
+	field string,
+	expected *string,
+	replacement *string,
+	ttl time.Duration,
+) (bool, error) {
+	expectsValue := "0"
+	expectedValue := ""
+	if expected != nil {
+		expectsValue = "1"
+		expectedValue = *expected
+	}
+	hasReplacement := "0"
+	replacementValue := ""
+	if replacement != nil {
+		hasReplacement = "1"
+		replacementValue = *replacement
+	}
+	result, err := compareAndSwapHashFieldScript.Run(
+		ctx,
+		c.raw,
+		[]string{key},
+		field,
+		expectsValue,
+		expectedValue,
+		hasReplacement,
+		replacementValue,
+		ttl.Milliseconds(),
+	).Int64()
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
 }
 
 func (c *client) HGet(ctx context.Context, key, field string) (string, error) {

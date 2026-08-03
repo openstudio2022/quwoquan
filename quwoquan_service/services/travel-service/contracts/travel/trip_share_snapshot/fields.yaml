@@ -1,0 +1,75 @@
+description: TripShareSnapshot 冻结来源、范围与已裁剪展示数据。
+fields:
+- {name: _id, type: string, constraints: [PK, NOT_NULL], role: authoritative_state}
+- {name: version, type: int64, constraints: [NOT_NULL], role: authoritative_state}
+- {name: tripId, type: string, constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: sourceRevisionId, type: string, constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: sourceRevisionNumber, type: int64, constraints: [NOT_NULL], role: authoritative_state}
+- {name: sourceDigest, type: string, constraints: [NOT_NULL], role: authoritative_state}
+- {name: scope, type: enum, enum_ref: TripShareSnapshotScope, constraints: [NOT_NULL], role: authoritative_state}
+- {name: dayIndex, type: int, constraints: [NULLABLE], role: authoritative_state}
+- {name: itemId, type: string, constraints: [NULLABLE], role: authoritative_state}
+- {name: momentIds, type: '[]string', constraints: [NOT_NULL], role: authoritative_state}
+- {name: visibility, type: enum, enum_ref: TripShareSnapshotVisibility, constraints: [NOT_NULL], role: authoritative_state}
+- {name: privacyPolicyDigest, type: string, constraints: [NOT_NULL], role: authoritative_state}
+- {name: items, type: '[]TripShareItemSlice', constraints: [NOT_NULL], role: authoritative_state}
+- {name: moments, type: '[]TripShareMomentSlice', constraints: [NOT_NULL], role: authoritative_state}
+- {name: contentLinks, type: '[]TripShareContentLinkSlice', constraints: [NOT_NULL], role: authoritative_state}
+- {name: routeStops, type: '[]TripShareRouteStopSlice', constraints: [NOT_NULL], role: authoritative_state}
+- {name: createdByPersonaId, type: string, constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: status, type: enum, enum_ref: TripShareSnapshotStatus, constraints: [NOT_NULL], role: authoritative_state}
+- {name: createdAt, type: timestamp, constraints: [NOT_NULL], role: authoritative_state}
+types:
+  GetTripShareSnapshotQuery:
+    fields:
+    - {name: snapshotId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+  CreateTripShareSnapshotRequest:
+    fields:
+    - {name: tripId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: sourceRevisionId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: sourceDigest, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: scope, type: enum, enum_ref: TripShareSnapshotScope, constraints: [NOT_NULL], client_dart_type: TripShareSnapshotScope}
+    - {name: dayIndex, type: int, constraints: [NULLABLE], client_dart_type: 'int?'}
+    - {name: itemId, type: string, constraints: [NULLABLE], client_dart_type: 'String?'}
+    - {name: momentIds, type: '[]string', constraints: [NOT_NULL], client_dart_type: 'List<String>'}
+    - {name: visibility, type: enum, enum_ref: TripShareSnapshotVisibility, constraints: [NOT_NULL], client_dart_type: TripShareSnapshotVisibility}
+  TripSharePlaceRef:
+    fields:
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  TripShareItemSlice:
+    fields:
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NOT_NULL]}
+    - {name: orderInDay, type: int, constraints: [NOT_NULL]}
+    - {name: kind, type: string, constraints: [NOT_BLANK]}
+    - {name: title, type: string, constraints: [NULLABLE]}
+    - {name: placeRef, type: object, object_ref: TripSharePlaceRef, constraints: [NULLABLE]}
+  TripShareMomentSlice:
+    fields:
+    - {name: momentId, type: string, constraints: [NOT_NULL]}
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NULLABLE]}
+    - {name: kind, type: string, constraints: [NOT_BLANK]}
+    - {name: contentObjectTypeRef, type: string, constraints: [NULLABLE]}
+    - {name: contentObjectId, type: string, constraints: [NULLABLE]}
+  TripShareContentLinkSlice:
+    fields:
+    - {name: linkId, type: string, constraints: [NOT_NULL]}
+    - {name: postId, type: string, constraints: [NOT_NULL]}
+    - {name: dayIndex, type: int, constraints: [NULLABLE]}
+    - {name: itemId, type: string, constraints: [NULLABLE]}
+  TripShareRouteStopSlice:
+    fields:
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NOT_NULL]}
+    - {name: sequence, type: int, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NULLABLE]}
+    - {name: placeRef, type: object, object_ref: TripSharePlaceRef, constraints: [NOT_NULL]}
+enums:
+  TripShareSnapshotScope:
+    values: [full, day, item, route, moment_collection]
+  TripShareSnapshotVisibility:
+    values: [trip_members, public]
+  TripShareSnapshotStatus:
+    values: [active]

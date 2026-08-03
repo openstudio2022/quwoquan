@@ -50,6 +50,7 @@ SPEC_REFS = (
 EnvRunner = Callable[..., dict[str, Any]]
 DataRunner = Callable[..., dict[str, Any]]
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
+_ATTEMPT_ID = re.compile(r"(?!unknown\b)[A-Za-z0-9][A-Za-z0-9._:-]{5,}")
 
 
 def _new_matrix_run_id() -> str:
@@ -196,6 +197,85 @@ def _docker_daemon_ready() -> tuple[bool, str]:
     return False, detail[:300]
 
 
+def _device_binding_errors(
+    *,
+    ios_simulator_device: str,
+    android_emulator_device: str,
+    android_physical_device: str,
+) -> list[str]:
+    """Reject absent or misclassified device bindings before mutating runtimes."""
+
+    errors: list[str] = []
+    bindings = {
+        "iOS Simulator": ios_simulator_device.strip(),
+        "Android Emulator": android_emulator_device.strip(),
+        "Android physical device": android_physical_device.strip(),
+    }
+    for label, device_id in bindings.items():
+        if not device_id:
+            errors.append(f"{label} device id is required")
+    android_ids = {
+        android_emulator_device.strip(),
+        android_physical_device.strip(),
+    }
+    android_ids.discard("")
+    if len(android_ids) != 2 and len(android_ids) > 0:
+        errors.append("Android Emulator and physical device must be distinct")
+    if errors:
+        return errors
+
+    try:
+        simulator = subprocess.run(
+            ["xcrun", "simctl", "list", "devices", "available", "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        errors.append("xcrun simctl is unavailable")
+        return errors
+    try:
+        simulator_payload = json.loads(simulator.stdout)
+    except json.JSONDecodeError:
+        simulator_payload = {}
+    available_ids = {
+        str(item.get("udid") or "")
+        for items in (simulator_payload.get("devices") or {}).values()
+        if isinstance(items, list)
+        for item in items
+        if isinstance(item, dict) and item.get("isAvailable") is not False
+    }
+    if simulator.returncode != 0 or ios_simulator_device not in available_ids:
+        errors.append("configured iOS Simulator is not available")
+
+    for label, device_id, expected_qemu in (
+        ("Android Emulator", android_emulator_device, "1"),
+        ("Android physical device", android_physical_device, "0"),
+    ):
+        try:
+            state = subprocess.run(
+                ["adb", "-s", device_id, "get-state"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            qemu = subprocess.run(
+                ["adb", "-s", device_id, "shell", "getprop", "ro.kernel.qemu"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except OSError:
+            errors.append("adb is unavailable")
+            break
+        actual_qemu = (qemu.stdout or "0").strip() or "0"
+        if state.returncode != 0 or state.stdout.strip() != "device":
+            errors.append(f"configured {label} is not connected")
+        elif actual_qemu != expected_qemu:
+            errors.append(f"configured {label} has the wrong device class")
+    return errors
+
+
 def _release_binding(attestation: str, *, label: str) -> dict[str, str]:
     path = Path(str(attestation or "").strip()).expanduser()
     if not str(attestation or "").strip():
@@ -316,11 +396,7 @@ def _homepage_release_evidence(
         payload.get("schema") == "quwoquan_data.environment_release_readiness"
         and payload.get("environment") == environment
         and payload.get("releaseId") == release_id
-        and payload.get("readinessPhase") == "consumer"
-        and not any(
-            isinstance(item, dict) and item.get("name") == "premium_stream"
-            for item in feed_queries or []
-        )
+        and payload.get("readinessPhase") in {"consumer", "commercial"}
         and isinstance(homepage, dict)
         and homepage.get("status") == 200
         and homepage.get("releaseBound") is True
@@ -468,12 +544,23 @@ def _live_matrix_evidence_errors(
         "package",
         "up",
         "health",
+        "telemetryBefore",
+        "providerMatrix",
+        "candidateApply",
         "candidateVerify",
+        "rollbackApply",
+        "rollbackVerify",
+        "replayApply",
         "verify",
         "replayVerify",
         "homepageReleaseEvidence",
         "lifecycleExit",
-        "replayReferenceVerify",
+        "iosSimulatorUAT",
+        "androidEmulatorUAT",
+        "androidPhysicalUAT",
+        "telemetryAfter",
+        "acceptanceLeaseAcquire",
+        "acceptanceLeaseRevoke",
         "down",
     )
     for target in CANONICAL_TARGETS:
@@ -486,6 +573,18 @@ def _live_matrix_evidence_errors(
         package = block.get("package")
         if not isinstance(package, dict) or package.get("baselineId") != baseline_id:
             errors.append(f"{target}: package baselineId is missing or drifted")
+        elif (
+            _SHA256.fullmatch(str(package.get("packageDigest") or "")) is None
+            or _SHA256.fullmatch(str(package.get("imageDigest") or "")) is None
+            or not isinstance(package.get("observabilityLogSink"), dict)
+            or package["observabilityLogSink"].get("adapterId")
+            != "ext.obs.elasticsearch"
+            or package["observabilityLogSink"].get("deploymentMode")
+            != "package-bound-local"
+        ):
+            errors.append(f"{target}: package/OCI/Elasticsearch identity is incomplete")
+        if block.get("workload") != "full" or block.get("profile") != "integration":
+            errors.append(f"{target}: Green closure did not use full/integration")
         for step in required_steps:
             evidence = block.get(step)
             if (
@@ -510,7 +609,81 @@ def _live_matrix_evidence_errors(
             or int(homepage.get("itemCount") or 0) <= 0
         ):
             errors.append(f"{target}: homepage content outcome is not canonical")
+        provider = block.get("providerMatrix")
+        if (
+            not isinstance(provider, dict)
+            or provider.get("status") != "passed"
+            or int(provider.get("capabilityCount") or 0) <= 0
+            or int(provider.get("executed") or 0)
+            != int(provider.get("capabilityCount") or 0) * 3
+            or int(provider.get("skipped") or 0) != 0
+        ):
+            errors.append(f"{target}: Provider three-layer matrix is incomplete")
+        for step in ("telemetryBefore", "telemetryAfter"):
+            telemetry = block.get(step)
+            if (
+                not isinstance(telemetry, dict)
+                or ((telemetry.get("logSink") or {}).get("adapterId"))
+                != "ext.obs.elasticsearch"
+                or int(telemetry.get("executed") or 0) <= 0
+                or int(telemetry.get("skipped") or 0) != 0
+            ):
+                errors.append(f"{target}: {step} has no Elasticsearch execution evidence")
+        for step in ("iosSimulatorUAT", "androidEmulatorUAT", "androidPhysicalUAT"):
+            uat = block.get(step)
+            if (
+                not isinstance(uat, dict)
+                or uat.get("status") != "passed"
+                or int(uat.get("executed") or 0) <= 0
+                or int(uat.get("skipped") or 0) != 0
+                or uat.get("packageBaseline") != baseline_id
+                or not _contains_non_unknown_attempt(uat)
+            ):
+                errors.append(f"{target}: {step} has no release-bound device attempt")
+        verify = block.get("verify")
+        if not _integration_verify_has_required_nonprod_case(verify):
+            errors.append(f"{target}: integration verify has no executed nonprod CaseResult")
     return errors
+
+
+def _contains_non_unknown_attempt(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key == "attemptId" and _ATTEMPT_ID.fullmatch(str(nested or "")):
+                return True
+            if _contains_non_unknown_attempt(nested):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_non_unknown_attempt(item) for item in value)
+    return False
+
+
+def _integration_verify_has_required_nonprod_case(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    report_ref = str(value.get("reportDir") or "").strip()
+    if not report_ref:
+        return False
+    report_path = Path(report_ref)
+    if not report_path.is_absolute():
+        report_path = ROOT / report_path
+    try:
+        report = json.loads((report_path / "report.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if report.get("profile") != "integration" or report.get("status") != "ok":
+        return False
+    for step in report.get("steps") or []:
+        if not isinstance(step, dict) or step.get("kind") != "nonprod-business-data":
+            continue
+        case = step.get("caseResult")
+        return (
+            isinstance(case, dict)
+            and case.get("status") == "passed"
+            and int(case.get("executed") or 0) > 0
+            and int(case.get("skipped") or 0) == 0
+        )
+    return False
 
 
 def _write_matrix_result(
@@ -623,17 +796,23 @@ def _run_local_env_gate_matrix(
     health_fn: EnvRunner,
     verify_fn: EnvRunner,
     down_fn: EnvRunner,
+    telemetry_fn: EnvRunner | None = None,
+    provider_fn: EnvRunner | None = None,
+    app_uat_fn: EnvRunner | None = None,
     filter_catalog_fn: EnvRunner | None = None,
     targets: tuple[str, ...] = CANONICAL_TARGETS,
     include_l0: bool = True,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
     nonprod_data_evidence: dict[str, str] | None = None,
+    ios_simulator_device: str = "",
+    android_emulator_device: str = "",
+    android_physical_device: str = "",
     data_fn: DataRunner = _data_cli_runner,
     execution_class: str = "live",
     matrix_run_id: str,
 ) -> dict[str, Any]:
-    """Run one package-bound content-consumer state machine per local environment."""
+    """Run one package-bound full integration state machine per local environment."""
     if execution_class not in {"live", "contract-simulation"}:
         raise ValueError("execution_class must be live or contract-simulation")
     if tuple(targets) != CANONICAL_TARGETS:
@@ -656,10 +835,29 @@ def _run_local_env_gate_matrix(
         )
         if candidate_release["releaseId"] == rollback_release["releaseId"]:
             raise ValueError("candidate and rollback release must be different")
-        # The local matrix proves the content consumer slice. Provider/share/
-        # reliability evidence belongs to the full commercial integration gate,
-        # whose services and protected material are intentionally absent here.
-        _ = nonprod_data_evidence
+        evidence_by_target = dict(nonprod_data_evidence or {})
+        if execution_class == "live":
+            if set(evidence_by_target) != set(CANONICAL_TARGETS):
+                raise ValueError(
+                    "live matrix requires one --nonprod-data-evidence for every target"
+                )
+            for target, raw_path in sorted(evidence_by_target.items()):
+                evidence_path = Path(str(raw_path or "").strip()).expanduser()
+                if not evidence_path.is_absolute():
+                    evidence_path = ROOT / evidence_path
+                if not evidence_path.is_file():
+                    raise ValueError(f"{target} nonprod data evidence is unavailable")
+            if telemetry_fn is None or provider_fn is None or app_uat_fn is None:
+                raise ValueError(
+                    "live matrix requires telemetry, Provider, and App UAT runners"
+                )
+            device_errors = _device_binding_errors(
+                ios_simulator_device=ios_simulator_device,
+                android_emulator_device=android_emulator_device,
+                android_physical_device=android_physical_device,
+            )
+            if device_errors:
+                raise ValueError("; ".join(device_errors))
     except ValueError as exc:
         return {
             "exitCode": 2,
@@ -722,8 +920,8 @@ def _run_local_env_gate_matrix(
         block: dict[str, Any] = {
             "target": target,
             "environment": env_name,
-            "workload": "content-release",
-            "profile": "content-consumer",
+            "workload": "full",
+            "profile": "integration",
             "matrixRunId": matrix_run_id,
             "release": candidate_release,
             "rollbackRelease": rollback_release,
@@ -828,7 +1026,7 @@ def _run_local_env_gate_matrix(
                 command="up",
                 env=env_name,
                 target="",
-                workload="content-release",
+                workload="full",
                 skip_app=True,
                 skip_build=True,
                 build_only=False,
@@ -874,7 +1072,7 @@ def _run_local_env_gate_matrix(
                 and startup_attempt.get("status") == "running"
                 and startup_attempt.get("target") == target
                 and startup_attempt.get("env") == env_name
-                and startup_attempt.get("workload") == "content-release"
+                and startup_attempt.get("workload") == "full"
                 and str(startup_attempt.get("composeProject") or "").strip()
                 and _SHA256.fullmatch(
                     str(startup_attempt.get("configurationDigest") or "")
@@ -919,7 +1117,7 @@ def _run_local_env_gate_matrix(
             _namespace(
                 command="health",
                 target=target,
-                scope="content-import",
+                scope="full",
                 output_format="json",
                 report_dir="",
                 request_timeout_seconds=0,
@@ -937,6 +1135,57 @@ def _run_local_env_gate_matrix(
         if health_exit != 0:
             overall_exit = health_exit
             failure_category = "health"
+
+        if overall_exit == 0 and execution_class == "live":
+            telemetry_payload = _invoke_env(
+                telemetry_fn,
+                _namespace(
+                    command="product-telemetry-log-sink",
+                    target=target,
+                    action="all",
+                    output_format="json",
+                    report_dir=str(matrix_dir / target / "telemetry-before"),
+                ),
+                action=f"{target} Elasticsearch telemetry preflight",
+            )
+            block["telemetryBefore"] = telemetry_payload
+            telemetry_exit = _record_phase(
+                phases,
+                name=f"{target}_elasticsearch_telemetry_before",
+                payload=telemetry_payload,
+            )
+            if telemetry_exit != 0:
+                overall_exit = telemetry_exit
+                failure_category = "elasticsearch"
+
+        if overall_exit == 0 and execution_class == "live":
+            provider_payload = _invoke_env(
+                provider_fn,
+                _namespace(
+                    command="provider-conformance",
+                    adapter_id="",
+                    capability_id="",
+                    env=env_name,
+                    layer="",
+                    matrix=False,
+                    environment_matrix=True,
+                    execute=True,
+                    image_digest="",
+                    data_digest="",
+                    output_format="json",
+                    report_dir=str(matrix_dir / target / "provider-matrix"),
+                ),
+                action=f"{target} Provider environment matrix",
+            )
+            block["providerMatrix"] = provider_payload
+            provider_exit = _record_phase(
+                phases,
+                name=f"{target}_provider_matrix",
+                payload=provider_payload,
+            )
+            if provider_exit != 0:
+                overall_exit = provider_exit
+                failure_category = "provider"
 
         if overall_exit == 0:
             data_root = ["python3", "quwoquan_data/scripts/cli.py"]
@@ -1000,39 +1249,6 @@ def _run_local_env_gate_matrix(
             if data_exit != 0:
                 overall_exit = data_exit
                 failure_category = "data_candidate_verify"
-
-        if overall_exit == 0:
-            verify_payload = _invoke_env(
-                verify_fn,
-                _namespace(
-                    command="verify",
-                    kind="all",
-                    env=env_name,
-                    target=target,
-                    profile="smoke",
-                    service="",
-                    output_format="json",
-                    report_dir="",
-                    backup_recovery_receipt="",
-                    data_release_id=candidate_release["releaseId"],
-                    data_verify_run_id=data_ids["originalVerify"],
-                    data_manifest_digest=candidate_release["releaseDigest"],
-                    nonprod_data_evidence="",
-                    data_lifecycle_exit_ref="",
-                    distribution_root="",
-                    verify_hosted=False,
-                ),
-                action=f"{target} content consumer smoke verify",
-            )
-            block["verify"] = verify_payload
-            verify_exit = _record_phase(
-                phases,
-                name=f"{target}_verify_consumer_smoke",
-                payload=verify_payload,
-            )
-            if verify_exit != 0:
-                overall_exit = verify_exit
-                failure_category = "verify"
 
         if overall_exit == 0:
             rollback_readiness = _data_readiness_path(
@@ -1151,7 +1367,7 @@ def _run_local_env_gate_matrix(
                     "--run-id",
                     data_ids["replayVerify"],
                     "--readiness-phase",
-                    "consumer",
+                    "commercial",
                 ],
                 report_path=replay_readiness,
                 data_fn=data_fn,
@@ -1223,37 +1439,37 @@ def _run_local_env_gate_matrix(
                 failure_category = "data_lifecycle_exit"
 
         if overall_exit == 0:
-            replay_reference_payload = _invoke_env(
+            integration_payload = _invoke_env(
                 verify_fn,
                 _namespace(
                     command="verify",
                     kind="all",
                     env=env_name,
                     target=target,
-                    profile="smoke",
+                    profile="integration",
                     service="",
                     output_format="json",
                     report_dir="",
                     backup_recovery_receipt="",
                     data_release_id=candidate_release["releaseId"],
-                    data_verify_run_id=data_ids["originalVerify"],
+                    data_verify_run_id=data_ids["replayVerify"],
                     data_manifest_digest=candidate_release["releaseDigest"],
-                    nonprod_data_evidence="",
-                    data_lifecycle_exit_ref="",
+                    nonprod_data_evidence=str(evidence_by_target.get(target) or ""),
+                    data_lifecycle_exit_ref=_evidence_path(lifecycle_path),
                     distribution_root="",
                     verify_hosted=False,
                 ),
-                action=f"{target} replay runtime smoke verify",
+                action=f"{target} full integration verify",
             )
-            block["replayReferenceVerify"] = replay_reference_payload
-            replay_reference_exit = _record_phase(
+            block["verify"] = integration_payload
+            integration_exit = _record_phase(
                 phases,
-                name=f"{target}_runtime_smoke_revalidate",
-                payload=replay_reference_payload,
+                name=f"{target}_full_integration_verify",
+                payload=integration_payload,
             )
-            if replay_reference_exit != 0:
-                overall_exit = replay_reference_exit
-                failure_category = "runtime_smoke_revalidate"
+            if integration_exit != 0:
+                overall_exit = integration_exit
+                failure_category = "integration_verify"
 
         lease_id = f"{matrix_run_id}-{env_name}-device-uat"
         lease_acquire_event: dict[str, Any] | None = None
@@ -1305,6 +1521,60 @@ def _run_local_env_gate_matrix(
                             details=[str(exc)],
                         )
                     )
+
+        if lease_acquire_event is not None and execution_class == "live":
+            for key, platform, device_id in (
+                ("iosSimulatorUAT", "ios-simulator", ios_simulator_device),
+                ("androidEmulatorUAT", "android", android_emulator_device),
+                ("androidPhysicalUAT", "android", android_physical_device),
+            ):
+                uat_payload = _invoke_env(
+                    app_uat_fn,
+                    _namespace(
+                        command="app-content-uat",
+                        targets=target,
+                        platform=platform,
+                        device_id=device_id,
+                        dry_run=False,
+                        output_format="json",
+                        report_dir=str(
+                            matrix_dir / target / "device-uat" / key
+                        ),
+                    ),
+                    action=f"{target} {key}",
+                )
+                block[key] = uat_payload
+                uat_exit = _record_phase(
+                    phases,
+                    name=f"{target}_{key}",
+                    payload=uat_payload,
+                )
+                if uat_exit != 0:
+                    if overall_exit == 0:
+                        overall_exit = uat_exit
+                        failure_category = "device_uat"
+                    break
+
+            telemetry_after = _invoke_env(
+                telemetry_fn,
+                _namespace(
+                    command="product-telemetry-log-sink",
+                    target=target,
+                    action="all",
+                    output_format="json",
+                    report_dir=str(matrix_dir / target / "telemetry-after"),
+                ),
+                action=f"{target} Elasticsearch telemetry readback",
+            )
+            block["telemetryAfter"] = telemetry_after
+            telemetry_after_exit = _record_phase(
+                phases,
+                name=f"{target}_elasticsearch_telemetry_after",
+                payload=telemetry_after,
+            )
+            if telemetry_after_exit != 0 and overall_exit == 0:
+                overall_exit = telemetry_after_exit
+                failure_category = "elasticsearch_readback"
 
         if lease_acquire_event is not None:
             revoke_exit, revoke_payload = _run_data_phase(
@@ -1408,12 +1678,18 @@ def run_local_env_gate_matrix(
     health_fn: EnvRunner,
     verify_fn: EnvRunner,
     down_fn: EnvRunner,
+    telemetry_fn: EnvRunner | None = None,
+    provider_fn: EnvRunner | None = None,
+    app_uat_fn: EnvRunner | None = None,
     filter_catalog_fn: EnvRunner | None = None,
     targets: tuple[str, ...] = CANONICAL_TARGETS,
     include_l0: bool = True,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
     nonprod_data_evidence: dict[str, str] | None = None,
+    ios_simulator_device: str = "",
+    android_emulator_device: str = "",
+    android_physical_device: str = "",
     data_fn: DataRunner = _data_cli_runner,
     execution_class: str = "live",
 ) -> dict[str, Any]:
@@ -1427,12 +1703,18 @@ def run_local_env_gate_matrix(
         "health_fn": health_fn,
         "verify_fn": verify_fn,
         "down_fn": down_fn,
+        "telemetry_fn": telemetry_fn,
+        "provider_fn": provider_fn,
+        "app_uat_fn": app_uat_fn,
         "filter_catalog_fn": filter_catalog_fn,
         "targets": targets,
         "include_l0": include_l0,
         "release_attestation": release_attestation,
         "rollback_release_attestation": rollback_release_attestation,
         "nonprod_data_evidence": nonprod_data_evidence,
+        "ios_simulator_device": ios_simulator_device,
+        "android_emulator_device": android_emulator_device,
+        "android_physical_device": android_physical_device,
         "data_fn": data_fn,
         "execution_class": execution_class,
         "matrix_run_id": matrix_run_id,

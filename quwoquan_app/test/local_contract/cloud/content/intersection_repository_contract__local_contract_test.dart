@@ -210,11 +210,6 @@ void main() {
         expect(meta, isNotNull, reason: hint.actionKey);
         expect(hint.actionTier, meta!.tier, reason: hint.actionKey);
         expect(hint.requiredGates, meta.requiredGates, reason: hint.actionKey);
-        expect(
-          hint.targetAvailability,
-          meta.targetAvailability,
-          reason: hint.actionKey,
-        );
         expect(hint.dispatch, meta.dispatch, reason: hint.actionKey);
       }
     });

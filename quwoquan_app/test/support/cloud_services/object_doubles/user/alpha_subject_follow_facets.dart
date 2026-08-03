@@ -9,7 +9,7 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
   final Set<String> _following = <String>{};
 
   static String _key(FollowSubjectKind type, String id) =>
-      '${type.wireValue}\u0000$id';
+      '${type.wireName}\u0000$id';
 
   bool isFollowing(FollowSubjectKind type, String subjectId) =>
       _following.contains(_key(type, subjectId));

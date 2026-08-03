@@ -11,6 +11,7 @@ from content.release.environment.consistency import report_to_text, scan_release
 from content.release.environment.homepage_verification_cases import (
     HomepageVerificationCaseError,
 )
+from content.release.environment.readiness import ShipReadinessPhase
 from content.release.model import (
     DeletePolicy,
     DeploymentEnvironment,
@@ -20,6 +21,8 @@ from content.release.model import (
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import write_json
 from core.paths import release_ref
+from core.release_layout import payload_digest, payload_file
+from core.io import read_json
 
 
 def apply_release(
@@ -29,6 +32,17 @@ def apply_release(
 ) -> None:
     release_id = str(args.release_id)
     release, contract = dependencies.load_release(release_id)
+    header = read_json(payload_file(release, "release.json"))
+    lifecycle_evidence = {
+        "releaseClass": str(header.get("releaseClass") or ""),
+        "productLifecycleState": str(
+            header.get("productLifecycleState") or ""
+        ),
+        "containsUnverifiedAssets": bool(
+            header.get("containsUnverifiedAssets")
+        ),
+        "manifestDigest": payload_digest(release),
+    }
     envs = [item.strip() for item in str(args.env).split(",") if item.strip()]
     if not envs:
         raise SystemExit("[ship] apply 需要 --env")
@@ -66,10 +80,17 @@ def apply_release(
             kind=ReleaseRunKind.APPLY,
         )
         if args.import_to_db and not args.dry_run:
+            readiness_phase = (
+                ShipReadinessPhase.RESEARCH
+                if lifecycle_evidence["releaseClass"] == "research"
+                else ShipReadinessPhase.IMPORT
+            )
             dependencies.require_environment_readiness(
                 environment=target.environment,
-                consumer=False,
+                phase=readiness_phase,
                 run=run,
+                release_id=release_id,
+                manifest_digest=lifecycle_evidence["manifestDigest"],
             )
         write_json(run / "consistency-preflight.json", preflight)
         if (
@@ -174,6 +195,7 @@ def apply_release(
                 "schema": "quwoquan_data.environment_release_result",
                 "environment": env,
                 "releaseId": release_id,
+                **lifecycle_evidence,
                 "runId": run_id,
                 "status": (
                     ReleaseRunStatus.DRY_RUN
@@ -205,6 +227,17 @@ def rollback_release(
     if not source_id or source_id == target_id:
         raise SystemExit("[ship] rollback requires a distinct --from-release-id")
     release, contract = dependencies.load_release(target_id)
+    header = read_json(payload_file(release, "release.json"))
+    lifecycle_evidence = {
+        "releaseClass": str(header.get("releaseClass") or ""),
+        "productLifecycleState": str(
+            header.get("productLifecycleState") or ""
+        ),
+        "containsUnverifiedAssets": bool(
+            header.get("containsUnverifiedAssets")
+        ),
+        "manifestDigest": payload_digest(release),
+    }
     env = str(args.env)
     target = dependencies.resolve_environment_release_target(env)
     if (
@@ -235,10 +268,17 @@ def rollback_release(
         kind=ReleaseRunKind.ROLLBACK,
     )
     if args.import_to_db and not args.dry_run:
+        readiness_phase = (
+            ShipReadinessPhase.RESEARCH
+            if lifecycle_evidence["releaseClass"] == "research"
+            else ShipReadinessPhase.IMPORT
+        )
         dependencies.require_environment_readiness(
             environment=target.environment,
-            consumer=False,
+            phase=readiness_phase,
             run=run,
+            release_id=target_id,
+            manifest_digest=lifecycle_evidence["manifestDigest"],
         )
     dependencies.write_release_evidence(
         run / "rollback_ref.json",
@@ -351,6 +391,7 @@ def rollback_release(
             "schema": "quwoquan_data.environment_release_result",
             "environment": env,
             "releaseId": target_id,
+            **lifecycle_evidence,
             "runId": run_id,
             "status": (
                 ReleaseRunStatus.DRY_RUN

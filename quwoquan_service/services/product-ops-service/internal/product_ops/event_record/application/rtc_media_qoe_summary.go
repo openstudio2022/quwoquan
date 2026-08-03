@@ -118,7 +118,7 @@ func (s *TelemetryService) GetRtcMediaQoeSummary(
 	).Get24HourSummary(ctx)
 }
 
-// BuildRtcMediaQoeSummary 统一 SLS 与 Postgres 的分母、空值和缺桶语义。
+// BuildRtcMediaQoeSummary 统一 Elasticsearch 与 local_contract memory reader 的分母、空值和缺桶语义。
 // 空桶保留 count=0，但所有 rate/P95 都为 null，不会合成 0% 成功率。
 func BuildRtcMediaQoeSummary(
 	query RtcMediaQoeSummaryQuery,

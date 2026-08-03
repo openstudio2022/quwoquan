@@ -44,7 +44,7 @@ api_routes:
   description: 创建显式 moderation case；受信 operator 与证据只保留在 Product Ops。
   commercial:
     status: blocked
-    block_reason: Gamma 真实 OIDC、服务身份、UserAccount 与设备 Journey 尚未证明
+    block_reason: Gamma target-scoped operator conformance、服务身份、UserAccount 与设备 Journey 尚未证明
     gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
     target_story: account-moderation-and-appeal-enforcement
 - method: POST
@@ -92,7 +92,7 @@ api_routes:
   description: 从既有受信 intake 与已投递 suspend decision 创建 appeal case；不提供用户申诉入口。
   commercial:
     status: blocked
-    block_reason: Gamma 真实 OIDC、服务身份、UserAccount 与设备 Journey 尚未证明
+    block_reason: Gamma target-scoped operator conformance、服务身份、UserAccount 与设备 Journey 尚未证明
     gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
     target_story: account-moderation-and-appeal-enforcement
 - method: POST

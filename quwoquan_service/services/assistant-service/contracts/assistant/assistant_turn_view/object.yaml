@@ -13,7 +13,16 @@ relationships:
   cardinality: N:1
   consistency: eventual
   kind: projection_source
-  name: runEvents
+  name: sourceRun
+  on_delete: retain
+  reference_fields:
+  - turnId
+  target_object: assistant.AssistantRun
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: session
   on_delete: retain
   reference_fields:
   - sessionId

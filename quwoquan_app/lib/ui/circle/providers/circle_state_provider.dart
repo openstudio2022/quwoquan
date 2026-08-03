@@ -157,7 +157,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
             : membership.state.name,
         membershipVersion: membership?.version,
         clearMembershipVersion: membership == null,
-        circleStats: CircleStatsViewData.fromSlice(stats),
+        circleStats: CircleStatsViewData.fromWire(stats),
         isLoading: false,
         clearLoadError: true,
       );
@@ -218,7 +218,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
       );
       if (result.state == CircleMembershipState.active &&
           !result.idempotentReplay) {
-        _appendBehaviorFact(CircleBehaviorEventType.joinCircle);
+        _appendBehaviorFact(BehaviorEventType.joinCircle);
       }
     } catch (error) {
       state = state.copyWith(
@@ -251,7 +251,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
         clearLoadError: true,
       );
       if (!result.idempotentReplay) {
-        _appendBehaviorFact(CircleBehaviorEventType.leaveCircle);
+        _appendBehaviorFact(BehaviorEventType.leaveCircle);
       }
     } catch (error) {
       state = state.copyWith(
@@ -266,7 +266,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
 
   /// 行为事实是推荐 HotPath 的 fire-and-forget 信号：
   /// 失败不回滚交互，经全局异常遥测观测通道兜底。
-  void _appendBehaviorFact(CircleBehaviorEventType eventType) {
+  void _appendBehaviorFact(BehaviorEventType eventType) {
     if (ref.read(resolvedOwnerUserIdProvider).trim().isEmpty) {
       return;
     }
@@ -282,7 +282,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
               AppExceptionTelemetryService.instance.recordGlobalException(
-                source: 'circle.behavior.${eventType.wireValue}',
+                source: 'circle.behavior.${eventType.wireName}',
                 exceptionText: error.toString(),
                 stackText: stackTrace.toString(),
               ),

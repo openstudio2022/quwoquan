@@ -1,0 +1,43 @@
+description: 不可变 TripPlanRevision 的 snapshot、diff 与来源字段。
+fields:
+- {name: _id, type: string, constraints: [PK, NOT_NULL], role: append_only_fact}
+- {name: tripId, type: string, constraints: [NOT_NULL], role: append_only_fact, reference: true}
+- {name: revisionNumber, type: int64, constraints: [NOT_NULL], role: append_only_fact}
+- {name: previousRevisionId, type: string, constraints: [NULLABLE], role: append_only_fact, reference: true}
+- {name: changeReason, type: string, constraints: [NOT_NULL], role: append_only_fact}
+- {name: severity, type: enum, enum_ref: TripRevisionSeverity, constraints: [NOT_NULL], role: append_only_fact}
+- {name: items, type: '[]TripRevisionItemSnapshot', constraints: [NOT_NULL], role: append_only_fact}
+- {name: changes, type: '[]TripRevisionChange', constraints: [NOT_NULL], role: append_only_fact}
+- {name: affectedPersonaIds, type: '[]string', constraints: [NOT_NULL], role: append_only_fact, reference: true}
+- {name: createdByPersonaId, type: string, constraints: [NOT_NULL], role: append_only_fact, reference: true}
+- {name: createdAt, type: timestamp, constraints: [NOT_NULL], role: append_only_fact}
+types:
+  TripRevisionPlaceRef:
+    fields:
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  TripRevisionItemSnapshot:
+    fields:
+    - {name: itemId, type: string, constraints: [NOT_NULL]}
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: orderInDay, type: int, constraints: [NOT_NULL]}
+    - {name: kind, type: enum, enum_ref: TripPlanItemKind, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NOT_NULL]}
+    - {name: startAt, type: timestamp, constraints: [NULLABLE]}
+    - {name: endAt, type: timestamp, constraints: [NULLABLE]}
+    - {name: placeRef, type: object, object_ref: TripRevisionPlaceRef, constraints: [NULLABLE]}
+    - {name: note, type: string, constraints: [NULLABLE]}
+  TripRevisionChange:
+    fields:
+    - {name: changeKind, type: enum, enum_ref: TripRevisionChangeKind, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NULLABLE]}
+    - {name: field, type: string, constraints: [NULLABLE]}
+    - {name: previousValueDigest, type: string, constraints: [NULLABLE]}
+    - {name: currentValueDigest, type: string, constraints: [NULLABLE]}
+  TripRevisionIDQuery:
+    fields:
+    - {name: tripId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+    - {name: revisionNumber, type: int64, constraints: [NOT_NULL], client_dart_type: int}
+enums:
+  TripRevisionChangeKind:
+    values: [item_added, item_removed, item_updated, schedule_changed, lifecycle_changed]

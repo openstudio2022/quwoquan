@@ -1,0 +1,78 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Connector 调用需完成权限交集、撤权安全边界、真实 adapter 与 continuation 收据后准出
+  gap_id: INTEGRATION_CONNECTOR_INVOCATION_COMMERCIAL_EVIDENCE
+  target_story: user-connector-capability-gateway
+api_routes:
+- method: GET
+  path: /integrations/invocations
+  operation: ListConnectorInvocations
+  actor: account
+  request_entity: ListConnectorInvocationsQuery
+  request_body_kind: none
+  request_bindings: {query: [{name: connectionId, field: connectionId}, {name: limit, field: limit}]}
+  response_entity: ConnectorInvocationListSlice
+  authorization: {principal: account, ownership_policy: connector_invocation_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_invocation_unauthorized, INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_invocation_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorInvocationQueryFacade, method: listInvocations, reader: ConnectorInvocationReader, slice: ConnectorInvocationListSlice}
+  description: 有界读取当前账号的脱敏 Connector 调用活动；不返回 payload、凭证或 Provider 正文。
+- method: GET
+  path: /integrations/invocations/{invocationId}
+  operation: GetConnectorInvocation
+  actor: account
+  request_entity: GetConnectorInvocationQuery
+  request_body_kind: none
+  request_bindings: {path: [{name: invocationId, field: invocationId}]}
+  response_entity: ConnectorInvocationView
+  authorization: {principal: account, ownership_policy: connector_invocation_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_invocation_unauthorized, INTEGRATION.USER.connector_invocation_not_found, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_invocation_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorInvocationQueryFacade, method: getInvocation, reader: ConnectorInvocationReader, slice: ConnectorInvocation}
+  description: 读取当前账号拥有的单个脱敏 Connector 调用状态。
+- method: POST
+  path: /internal/integrations/invocations
+  operation: InvokeConnectorCapability
+  actor: none
+  request_entity: InvokeConnectorCapabilityRequest
+  request_body_kind: object
+  response_entity: ConnectorInvocationMutationReceipt
+  authorization: {principal: service, ownership_policy: caller_supplies_verified_account_scope}
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.invocation_connector_connection_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_confirmation_required, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.MIDDLEWARE.connector_provider_unavailable, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  privacy: {request_classification: SECRET, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_invocation_command, trace: true, attributes: [operation, capability, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 2000, availability_percent: 99.5}
+  application: {kind: command, facet: ConnectorInvocationCommandFacade, method: invokeCapability, aggregate_owner: ConnectorInvocation, mutation_target: ConnectorInvocation, invariant_target: ConnectorInvocation}
+  description: Assistant 使用受保护 payloadRef 调用厂商无关 capability；每次执行前重新校验连接、授权、确认和运行可用性。
+- method: POST
+  path: /internal/integrations/invocations/{invocationId}/continue
+  operation: ContinueConnectorInvocation
+  actor: none
+  request_entity: ContinueConnectorInvocationRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: invocationId, field: invocationId}]}
+  response_entity: ConnectorInvocationMutationReceipt
+  authorization: {principal: service, ownership_policy: caller_supplies_verified_account_scope}
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.connector_invocation_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_invocation_revision_conflict, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  privacy: {request_classification: SECRET, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_invocation_command, trace: true, attributes: [operation, capability, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorInvocationCommandFacade, method: continueInvocation, aggregate_owner: ConnectorInvocation, mutation_target: ConnectorInvocation, invariant_target: ConnectorInvocation}
+  description: 用户确认或 native/external receipt 到达后续接同一 invocation；提交前重新校验连接和 capability grant。
+consumers:
+- name: app
+  capabilities: [list_connector_invocations, get_connector_invocation]
+- name: assistant-service
+  capabilities: [invoke_connector_capability, continue_connector_invocation]

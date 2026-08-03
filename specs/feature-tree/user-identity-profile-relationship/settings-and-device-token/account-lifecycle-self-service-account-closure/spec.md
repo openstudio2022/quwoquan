@@ -115,6 +115,6 @@
 - 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：实现、local_contract、API integration 与直接 `spec_ref` 已齐。Gamma 真机执行仍依赖可用设备与 gamma-local substitute/SLS materializer；Prod 执行另需经批准注入的真实 Provider/SLS 凭据。禁止用 Mock 或跳过门禁代替。
+- 影响或价值：实现、local_contract、API integration 与直接 `spec_ref` 已齐。Gamma 真机执行仍依赖可用设备、gamma-local Provider substitute 与同候选观测回执；Prod 执行另需经批准注入的真实 Provider 和 managed observability 凭据。禁止用 Mock 或跳过门禁代替。
 - 目标：环境材料与设备到位后通过 `stackctl` 启动 full workload，执行一次性 install identity 的账号注销 Patrol、旧 refresh/access 拒绝、下游 residual probe、DLQ 恢复与排空演练并保留制品。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart'
 import '../../../support/assistant_remote_test_support.dart';
 
 void main() {
-  test('SSE 提前断开后携带 Last-Event-ID 续传且事件不重复', () async {
+  test('SSE 提前断开后携带 canonical resumeToken 续传且事件不重复', () async {
     final transport = _SequentialSseClient(<String>[
       _sseFrame(
         id: 'resume-token-1',
@@ -17,6 +17,12 @@ void main() {
         payload: const <String, Object?>{'text': '第一段'},
       ),
       [
+        _sseFrame(
+          id: 'resume-token-1',
+          seq: 1,
+          eventType: 'answer_delta',
+          payload: const <String, Object?>{'text': '第一段'},
+        ),
         _sseFrame(
           id: 'resume-token-2',
           seq: 2,
@@ -28,12 +34,13 @@ void main() {
         ),
       ].join(),
     ]);
-    final httpClient = CloudHttpClient(client: transport);
+    final httpClient = CloudHttpClient(
+      client: transport,
+      authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+    );
     final repository = RemoteAssistantRepository(
-      httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      sessionInvocationContext: assistantRemoteTestInvocationContext,
-      consentAccountId: 'assistant-stream-resume-test',
+      invocationContext: assistantRemoteTestInvocationContext,
     );
 
     final events = await repository
@@ -47,7 +54,7 @@ void main() {
     ]);
     expect(transport.requests, hasLength(2));
     final resumed = transport.requests.last;
-    expect(resumed.headers['Last-Event-ID'], 'resume-token-1');
+    expect(resumed.headers, isNot(contains('Last-Event-ID')));
     expect(resumed.url.queryParameters['resumeToken'], 'resume-token-1');
   });
 }

@@ -21,9 +21,7 @@ var RouteTable = []RouteEntry{
 	{"PATCH", "/chat/conversations/{conversationId}", "UpdateConversationTitle"},
 	{"PATCH", "/chat/conversations/{conversationId}/announcement", "UpdateAnnouncement"},
 	{"PATCH", "/chat/conversations/{conversationId}/governance", "UpdateGroupGovernanceSettings"},
-	{"GET", "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "GetReceipts"},
 	{"DELETE", "/chat/conversations/{conversationId}", "DissolveConversation"},
-	{"GET", "/chat/inbox", "ListInbox"},
 	{"GET", "/chat/message-home", "ListMessageHome"},
 	{"GET", "/chat/contacts", "ListContacts"},
 	{"GET", "/chat/contact-home", "ListContactHome"},
@@ -32,6 +30,7 @@ var RouteTable = []RouteEntry{
 	{"GET", "/chat/selectable-group-conversations", "ListSelectableGroupConversations"},
 	{"GET", "/chat/selectable-group-conversations/{conversationId}/contact-members", "ListSelectableGroupContactMembers"},
 	{"POST", "/internal/chat/account-closure/dead-letters:recover", "RecoverChatAccountClosureDeadLetter"},
+	{"PUT", "/internal/chat/gathering-conversations/{gatheringId}", "ProjectGatheringConversation"},
 }
 
 func ResolveOperation(method, path string) (string, bool) {

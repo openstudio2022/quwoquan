@@ -113,21 +113,21 @@ final class _LearningFactRemote implements AssistantLearningFactAppendFacet {
       <AssistantLearningFactAppendCommand>[];
 
   @override
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   }) async {
     if (!available) {
       throw StateError('network unavailable');
     }
     requests.add(request);
-    return AssistantLearningFactAppendReceipt(
+    return AssistantLearningFactReceipt(
       eventId: receiptEventId ?? request.eventId,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
       payloadDigest:
           '0000000000000000000000000000000000000000000000000000000000000000',
-      recordedAt: DateTime.utc(2026, 7, 26),
+      recordedAt: DateTime.utc(2026, 7, 26).toIso8601String(),
     );
   }
 }

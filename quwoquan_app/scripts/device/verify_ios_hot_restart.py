@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Run the real canonical Flutter/iOS Simulator hot-restart smoke.
+"""Run a real Flutter/iOS Simulator cold-start and hot-restart smoke.
 
-The smoke deliberately launches through ``quwoquan_app/run.sh``. That keeps
-the Flutter CLI define set identical to a developer launch and makes a missing
-define fail before Flutter builds or installs the kernel.
+The smoke can exercise either the canonical launcher or literal ``flutter run``.
+Both surfaces must retain one canonical runtime handoff across the resident
+compiler's cold start and hot restart.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -38,11 +39,12 @@ from verify_flutter_run_defines import validate_flutter_run_defines
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
 LAUNCHER = APP_DIR / "run.sh"
-ENVIRONMENTS = ("alpha",)
+ENVIRONMENTS = ("alpha", "beta", "gamma")
+LAUNCH_SURFACES = ("canonical_launcher", "direct_flutter_run")
 IOS_BUNDLE = "com.example.quwoquanApp"
 
 
-def _runtime_defines(environment: str) -> dict[str, str]:
+def _runtime_defines(environment: str, launch_surface: str) -> dict[str, str]:
     result = subprocess.run(
         [
             sys.executable,
@@ -52,7 +54,7 @@ def _runtime_defines(environment: str) -> dict[str, str]:
             "--format",
             "json",
             "--launch-mode",
-            "canonical_launcher",
+            launch_surface,
             "--app-instance-id",
             f"{environment}-ios-hot-restart",
             "--app-instance-namespace",
@@ -84,6 +86,13 @@ def _redacted_command(command: list[str]) -> list[str]:
         else:
             redacted.append(item)
     return redacted
+
+
+def _direct_consumer_lease_id(environment: str, device_id: str) -> str:
+    value = (
+        f"ios-simulator\0{environment}-local\0{device_id}\0direct-flutter-run"
+    )
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _pump_pty(
@@ -241,6 +250,90 @@ def _find_descendant_flutter_pid(root_pid: int) -> int | None:
     return None
 
 
+def _terminate_stale_device_runtime(device_id: str, bundle_id: str) -> dict[str, Any]:
+    """Stop only Flutter residents explicitly bound to this Simulator.
+
+    The app-content UAT owns the environment operation lock, so an older
+    resident for the same device cannot remain valid evidence.  Matching the
+    literal UDID keeps unrelated Flutter sessions outside this cleanup scope.
+    """
+
+    terminated_resident_pids: list[int] = []
+    terminated_frontend_server_pids: list[int] = []
+    process_list = subprocess.run(
+        ["ps", "-axo", "pid=,command="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    for line in process_list.stdout.splitlines():
+        normalized = line.strip()
+        if not normalized:
+            continue
+        raw_pid, separator, command = normalized.partition(" ")
+        if not separator or not raw_pid.isdigit():
+            continue
+        is_device_resident = (
+            "flutter_tools.snapshot run" in command and device_id in command
+        )
+        is_workspace_frontend_server = False
+        if "frontend_server.dart.snapshot" in command:
+            cwd_result = subprocess.run(
+                ["lsof", "-a", "-p", raw_pid, "-d", "cwd", "-Fn"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            process_cwd = next(
+                (
+                    line[1:]
+                    for line in cwd_result.stdout.splitlines()
+                    if line.startswith("n")
+                ),
+                "",
+            )
+            is_workspace_frontend_server = process_cwd == str(APP_DIR)
+        if not is_device_resident and not is_workspace_frontend_server:
+            continue
+        pid = int(raw_pid)
+        try:
+            os.kill(pid, signal.SIGTERM)
+            if is_device_resident:
+                terminated_resident_pids.append(pid)
+            else:
+                terminated_frontend_server_pids.append(pid)
+        except OSError:
+            continue
+
+    deadline = time.monotonic() + 5
+    pending = set(terminated_resident_pids + terminated_frontend_server_pids)
+    while pending and time.monotonic() < deadline:
+        for pid in tuple(pending):
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                pending.discard(pid)
+        if pending:
+            time.sleep(0.1)
+    for pid in sorted(pending):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    native = subprocess.run(
+        ["xcrun", "simctl", "terminate", device_id, bundle_id],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return {
+        "terminatedFlutterResidentPids": terminated_resident_pids,
+        "terminatedFrontendServerPids": terminated_frontend_server_pids,
+        "terminatedNativeApp": native.returncode == 0,
+    }
+
+
 def _count_native_launches_since(raw_log: str, since: dt.datetime) -> int:
     count = 0
     for line in raw_log.splitlines():
@@ -372,15 +465,24 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
     parser.add_argument("--device-id", required=True)
     parser.add_argument("--bundle", default=IOS_BUNDLE)
+    parser.add_argument(
+        "--launch-surface",
+        choices=LAUNCH_SURFACES,
+        default="canonical_launcher",
+    )
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--ready-timeout-seconds", type=float, default=180)
     parser.add_argument("--restart-wait-seconds", type=float, default=20)
+    parser.add_argument("--hot-restart-count", type=int, default=3)
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    if args.hot_restart_count < 1:
+        print("--hot-restart-count must be at least 1", file=sys.stderr)
+        return 2
     output_dir = (
         Path(args.output_dir)
         if args.output_dir
@@ -392,32 +494,41 @@ def main(argv: list[str] | None = None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        defines = _runtime_defines(args.env)
+        defines = _runtime_defines(args.env, args.launch_surface)
     except (RuntimeError, json.JSONDecodeError) as error:
         print(str(error), file=sys.stderr)
         return 2
 
     if args.preflight_only:
+        report_path = run_dir / "report.json"
         report = {
             "status": "passed",
             "environment": args.env,
             "deviceId": args.device_id,
             "verifiedDefineKeys": sorted(defines),
             "launchMode": defines.get("QWQ_APP_LAUNCH_MODE"),
+            "consumerLeaseId": _direct_consumer_lease_id(
+                args.env,
+                args.device_id,
+            ),
+            "reportPath": str(report_path),
         }
-        (run_dir / "report.json").write_text(
+        report_path.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
 
-    command = [
-        "bash",
-        str(LAUNCHER),
-        "-d",
+    stale_runtime_cleanup = _terminate_stale_device_runtime(
         args.device_id,
-    ]
+        args.bundle,
+    )
+    command = (
+        ["bash", str(LAUNCHER), "-d", args.device_id]
+        if args.launch_surface == "canonical_launcher"
+        else ["flutter", "run", "-d", args.device_id]
+    )
     baseline_captured_at = dt.datetime.now()
     baseline_simulator_log = _read_simulator_startup_log(args.device_id)
     baseline_attempt_ids = frozenset(
@@ -427,7 +538,21 @@ def main(argv: list[str] | None = None) -> int:
     instance_state_root = run_dir / "app-instance-state"
     environment = dict(os.environ)
     environment["QWQ_IOS_SIMULATOR_UDID"] = args.device_id
-    environment["QWQ_APP_RUNTIME_ENV"] = args.env
+    if args.launch_surface == "canonical_launcher":
+        environment["QWQ_APP_RUNTIME_ENV"] = args.env
+    else:
+        # Direct Debug is selected only by QWQ_ENVIRONMENT. A partial
+        # QWQ_APP_* identity must continue to fail closed.
+        for key in (
+            "QWQ_APP_RUNTIME_ENV",
+            "QWQ_APP_LAUNCH_MODE",
+            "QWQ_LAUNCH_TARGET",
+            "QWQ_DART_DEFINES_DIGEST",
+            "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+            "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+        ):
+            environment.pop(key, None)
+        environment["QWQ_ENVIRONMENT"] = args.env
     environment["QWQ_APP_INSTANCE_PRESERVE_TTY"] = "1"
     environment["APP_INSTANCE_STATE_ROOT"] = str(instance_state_root)
     master_fd, slave_fd = pty.openpty()
@@ -442,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     os.close(slave_fd)
     output = bytearray()
-    hot_restart_trigger = ""
+    hot_restart_triggers: list[str] = []
     try:
         cold_ready = _wait_for_cold_startup(
             master_fd,
@@ -452,61 +577,76 @@ def main(argv: list[str] | None = None) -> int:
             excluded_attempt_ids=baseline_attempt_ids,
             timeout_seconds=args.ready_timeout_seconds,
         )
+        observed_attempt_ids = set(baseline_attempt_ids)
         if cold_ready and process.poll() is None:
-            terminal_state = termios.tcgetattr(master_fd)
-            try:
-                # Flutter may not switch to single-character mode when the
-                # launcher is nested under a noninteractive shell. Set the
-                # PTY raw for the one command so R cannot remain line-buffered.
-                tty.setraw(master_fd)
-                hot_restart_output_offset = len(output)
-                os.write(master_fd, b"R")
-                hot_grace_seconds = min(8.0, args.restart_wait_seconds)
-                hot_attempt_ready = _wait_for_hot_restart(
-                    master_fd,
-                    process,
-                    args.device_id,
-                    output,
-                    excluded_attempt_ids=baseline_attempt_ids,
-                    timeout_seconds=hot_grace_seconds,
-                    require_safe_terminal=False,
+            observed_attempt_ids.update(
+                str(item.get("attemptId") or "")
+                for item in extract_dart_startup_attempts(
+                    _read_simulator_startup_log(args.device_id)
                 )
-                hot_restart_trigger = "R"
-                hot_restart_cli_started = b"Performing hot restart" in output[
-                    hot_restart_output_offset:
-                ]
-                if (
-                    not hot_attempt_ready
-                    and not hot_restart_cli_started
-                    and process.poll() is None
-                ):
-                    flutter_pid = _read_flutter_pid(
-                        instance_state_root,
-                        args.env,
+            )
+            for _ in range(args.hot_restart_count):
+                terminal_state = termios.tcgetattr(master_fd)
+                trigger = "R"
+                try:
+                    # Flutter may not switch to single-character mode when the
+                    # launcher is nested under a noninteractive shell. Set the
+                    # PTY raw for the one command so R cannot remain line-buffered.
+                    tty.setraw(master_fd)
+                    hot_restart_output_offset = len(output)
+                    os.write(master_fd, b"R")
+                    hot_grace_seconds = min(8.0, args.restart_wait_seconds)
+                    hot_attempt_ready = _wait_for_hot_restart(
+                        master_fd,
+                        process,
                         args.device_id,
+                        output,
+                        excluded_attempt_ids=observed_attempt_ids,
+                        timeout_seconds=hot_grace_seconds,
+                        require_safe_terminal=False,
                     )
-                    if flutter_pid is None:
-                        flutter_pid = _find_descendant_flutter_pid(process.pid)
-                    if flutter_pid is not None:
-                        try:
-                            os.kill(flutter_pid, signal.SIGUSR2)
-                            hot_restart_trigger = "SIGUSR2_fallback"
-                        except OSError:
-                            hot_restart_trigger = "SIGUSR2_fallback_failed"
-                _wait_for_hot_restart(
-                    master_fd,
-                    process,
-                    args.device_id,
-                    output,
-                    excluded_attempt_ids=baseline_attempt_ids,
-                    timeout_seconds=max(
-                        0.0,
-                        args.restart_wait_seconds - hot_grace_seconds,
-                    ),
-                    require_safe_terminal=True,
-                )
-            finally:
-                termios.tcsetattr(master_fd, termios.TCSANOW, terminal_state)
+                    hot_restart_cli_started = b"Performing hot restart" in output[
+                        hot_restart_output_offset:
+                    ]
+                    if (
+                        not hot_attempt_ready
+                        and not hot_restart_cli_started
+                        and process.poll() is None
+                    ):
+                        flutter_pid = _read_flutter_pid(
+                            instance_state_root,
+                            args.env,
+                            args.device_id,
+                        )
+                        if flutter_pid is None:
+                            flutter_pid = _find_descendant_flutter_pid(process.pid)
+                        if flutter_pid is not None:
+                            try:
+                                os.kill(flutter_pid, signal.SIGUSR2)
+                                trigger = "SIGUSR2_fallback"
+                            except OSError:
+                                trigger = "SIGUSR2_fallback_failed"
+                    _wait_for_hot_restart(
+                        master_fd,
+                        process,
+                        args.device_id,
+                        output,
+                        excluded_attempt_ids=observed_attempt_ids,
+                        timeout_seconds=max(
+                            0.0,
+                            args.restart_wait_seconds - hot_grace_seconds,
+                        ),
+                        require_safe_terminal=True,
+                    )
+                    hot_restart_triggers.append(trigger)
+                    observed_attempt_ids.update(
+                        str(item.get("attemptId") or "")
+                        for item in extract_dart_startup_attempts(
+                            _read_simulator_startup_log(args.device_id)
+                        )
+                    )
+                finally:
+                    termios.tcsetattr(master_fd, termios.TCSANOW, terminal_state)
     finally:
         if process.poll() is None:
             try:
@@ -537,10 +677,7 @@ def main(argv: list[str] | None = None) -> int:
         (item for item in attempt_reports if not item["hotRestart"]),
         None,
     )
-    hot = next(
-        (item for item in reversed(attempt_reports) if item["hotRestart"]),
-        None,
-    )
+    hot_restarts = [item for item in attempt_reports if item["hotRestart"]]
     native_did_finish_count = _count_native_launches_since(
         simulator_log,
         baseline_captured_at,
@@ -548,11 +685,24 @@ def main(argv: list[str] | None = None) -> int:
     issues: list[str] = []
     if cold is None:
         issues.append("cold Dart startup attempt was not observed")
-    if hot is None:
-        issues.append("hot-restart Dart startup attempt was not observed")
-    for label, item in (("cold", cold), ("hot_restart", hot)):
+    if len(hot_restarts) != args.hot_restart_count:
+        issues.append(
+            "expected "
+            f"{args.hot_restart_count} hot-restart Dart startup attempts, "
+            f"got {len(hot_restarts)}"
+        )
+    labeled_attempts = [("cold", cold)] + [
+        (f"hot_restart_{index}", item)
+        for index, item in enumerate(hot_restarts, start=1)
+    ]
+    for label, item in labeled_attempts:
         if item is None:
             continue
+        if item["launchMode"] != args.launch_surface:
+            issues.append(
+                f"{label}: launchMode is {item['launchMode']!r}, "
+                f"expected {args.launch_surface!r}"
+            )
         if item["bootstrapFailure"]:
             issues.append(f"{label}: startup_bootstrap_failure observed")
         if item["canonicalTerminal"] != "routerShell":
@@ -580,12 +730,16 @@ def main(argv: list[str] | None = None) -> int:
             "native relaunch must not be mistaken for hot restart"
         )
 
+    report_path = run_dir / "report.json"
     report = {
         "status": "passed" if not issues else "failed",
         "environment": args.env,
         "deviceId": args.device_id,
         "launchMode": defines.get("QWQ_APP_LAUNCH_MODE"),
-        "hotRestartTrigger": hot_restart_trigger,
+        "consumerLeaseId": _direct_consumer_lease_id(args.env, args.device_id),
+        "hotRestartCount": args.hot_restart_count,
+        "hotRestartTriggers": hot_restart_triggers,
+        "staleRuntimeCleanup": stale_runtime_cleanup,
         "flutterRunExitCode": process.returncode,
         "nativeDidFinishLaunchingCount": native_did_finish_count,
         "attempts": attempt_reports,
@@ -593,8 +747,9 @@ def main(argv: list[str] | None = None) -> int:
         "flutterRunLog": str(run_dir / "flutter-run.log"),
         "iosStartupLog": str(run_dir / "ios-startup.log"),
         "command": _redacted_command(command),
+        "reportPath": str(report_path),
     }
-    (run_dir / "report.json").write_text(
+    report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
+	tombstonemodel "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/model"
+	tombstoneports "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/ports"
 )
 
 // OutboxEvent 是 Post 聚合变更与版本提交同事务写入的不可变事实。
@@ -26,13 +28,7 @@ type OutboxEvent struct {
 // （canonical object content.DeletedPostTombstone）。它与聚合提交同事务
 // 持久化到 deleted_post_tombstones，_id 复用 postId 作唯一 dedupe key；
 // 保留期由 expireAt TTL 索引承载。
-type PostDeletionTombstone struct {
-	PostID    string
-	AuthorID  string
-	Reason    string
-	DeletedAt time.Time
-	ExpireAt  time.Time
-}
+type PostDeletionTombstone = tombstonemodel.Tombstone
 
 // Commit 是 PostCommandFacade 交给 PostAggregateStore 的唯一写模型。
 // ExpectedVersion=0 仅用于创建；其余命令必须携带已装载版本。
@@ -108,3 +104,5 @@ type TombstoneReader interface {
 		postID string,
 	) (PostDeletionTombstone, bool, error)
 }
+
+type TombstoneStore = tombstoneports.Store

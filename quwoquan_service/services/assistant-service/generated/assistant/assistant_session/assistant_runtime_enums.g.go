@@ -264,6 +264,7 @@ const (
 	AssistantPresentationNodeKindEntityReference AssistantPresentationNodeKind = "entity_reference"
 	AssistantPresentationNodeKindSourceReference AssistantPresentationNodeKind = "source_reference"
 	AssistantPresentationNodeKindTimeline AssistantPresentationNodeKind = "timeline"
+	AssistantPresentationNodeKindRouteMap AssistantPresentationNodeKind = "route_map"
 	AssistantPresentationNodeKindComparisonTable AssistantPresentationNodeKind = "comparison_table"
 	AssistantPresentationNodeKindSourceList AssistantPresentationNodeKind = "source_list"
 	AssistantPresentationNodeKindMediaGallery AssistantPresentationNodeKind = "media_gallery"
@@ -312,6 +313,8 @@ func ParseAssistantPresentationNodeKind(raw string) (AssistantPresentationNodeKi
 		return AssistantPresentationNodeKindSourceReference, nil
 	case "timeline":
 		return AssistantPresentationNodeKindTimeline, nil
+	case "route_map":
+		return AssistantPresentationNodeKindRouteMap, nil
 	case "comparison_table":
 		return AssistantPresentationNodeKindComparisonTable, nil
 	case "source_list":
@@ -628,6 +631,106 @@ func ParseSkillSubscriptionDestinationType(raw string) (SkillSubscriptionDestina
 }
 
 func (value SkillSubscriptionDestinationType) WireName() string { return string(value) }
+
+type SkillUserSettingStatus string
+
+const (
+	SkillUserSettingStatusEnabled SkillUserSettingStatus = "enabled"
+	SkillUserSettingStatusDisabled SkillUserSettingStatus = "disabled"
+)
+
+func ParseSkillUserSettingStatus(raw string) (SkillUserSettingStatus, error) {
+	switch strings.TrimSpace(raw) {
+	case "enabled":
+		return SkillUserSettingStatusEnabled, nil
+	case "disabled":
+		return SkillUserSettingStatusDisabled, nil
+	default:
+		return "", fmt.Errorf("unknown SkillUserSettingStatus wire value %q", raw)
+	}
+}
+
+func (value SkillUserSettingStatus) WireName() string { return string(value) }
+
+type SkillMemoryPolicy string
+
+const (
+	SkillMemoryPolicyPackageDefault SkillMemoryPolicy = "package_default"
+	SkillMemoryPolicyConfirmBeforeSave SkillMemoryPolicy = "confirm_before_save"
+	SkillMemoryPolicyDisabled SkillMemoryPolicy = "disabled"
+)
+
+func ParseSkillMemoryPolicy(raw string) (SkillMemoryPolicy, error) {
+	switch strings.TrimSpace(raw) {
+	case "package_default":
+		return SkillMemoryPolicyPackageDefault, nil
+	case "confirm_before_save":
+		return SkillMemoryPolicyConfirmBeforeSave, nil
+	case "disabled":
+		return SkillMemoryPolicyDisabled, nil
+	default:
+		return "", fmt.Errorf("unknown SkillMemoryPolicy wire value %q", raw)
+	}
+}
+
+func (value SkillMemoryPolicy) WireName() string { return string(value) }
+
+type SkillSurfaceKind string
+
+const (
+	SkillSurfaceKindConversation SkillSurfaceKind = "conversation"
+	SkillSurfaceKindCircle SkillSurfaceKind = "circle"
+)
+
+func ParseSkillSurfaceKind(raw string) (SkillSurfaceKind, error) {
+	switch strings.TrimSpace(raw) {
+	case "conversation":
+		return SkillSurfaceKindConversation, nil
+	case "circle":
+		return SkillSurfaceKindCircle, nil
+	default:
+		return "", fmt.Errorf("unknown SkillSurfaceKind wire value %q", raw)
+	}
+}
+
+func (value SkillSurfaceKind) WireName() string { return string(value) }
+
+type SkillSurfacePlacementPolicy string
+
+const (
+	SkillSurfacePlacementPolicyAllSharedEligible SkillSurfacePlacementPolicy = "all_shared_eligible"
+)
+
+func ParseSkillSurfacePlacementPolicy(raw string) (SkillSurfacePlacementPolicy, error) {
+	switch strings.TrimSpace(raw) {
+	case "all_shared_eligible":
+		return SkillSurfacePlacementPolicyAllSharedEligible, nil
+	default:
+		return "", fmt.Errorf("unknown SkillSurfacePlacementPolicy wire value %q", raw)
+	}
+}
+
+func (value SkillSurfacePlacementPolicy) WireName() string { return string(value) }
+
+type SkillSurfacePlacementStatus string
+
+const (
+	SkillSurfacePlacementStatusActive SkillSurfacePlacementStatus = "active"
+	SkillSurfacePlacementStatusArchived SkillSurfacePlacementStatus = "archived"
+)
+
+func ParseSkillSurfacePlacementStatus(raw string) (SkillSurfacePlacementStatus, error) {
+	switch strings.TrimSpace(raw) {
+	case "active":
+		return SkillSurfacePlacementStatusActive, nil
+	case "archived":
+		return SkillSurfacePlacementStatusArchived, nil
+	default:
+		return "", fmt.Errorf("unknown SkillSurfacePlacementStatus wire value %q", raw)
+	}
+}
+
+func (value SkillSurfacePlacementStatus) WireName() string { return string(value) }
 
 type AssistantLearningFactType string
 

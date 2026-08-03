@@ -41,13 +41,13 @@ class _EntryCountFacet extends TestContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentPageSlice> listComments({
+  Future<CommentPageSlice> listComments({
     required String postId,
     String? cursor,
     int limit = 20,
     ContentCommentSort sort = ContentCommentSort.hot,
   }) async {
-    return ContentCommentPageSlice(
+    return CommentPageSlice(
       items: items.take(3).toList(growable: false),
       nextCursor: null,
       total: totalCount,

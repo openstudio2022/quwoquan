@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show FeedObjectCard;
 
 /// 首页固定以 20 条请求一页；响应超过请求预算时必须 fail-closed，不能截断后
 /// 跳过同一 opaque continuation 中的内容。
@@ -33,14 +34,14 @@ final class DiscoveryFeedPageBudgetExceeded implements Exception {
 final class DiscoveryFeedResidentPage {
   DiscoveryFeedResidentPage({
     required this.incomingCursor,
-    required List<PostBaseDto> items,
+    required List<ContentPostViewData> items,
     required this.nextCursor,
     this.previousCursor,
     this.paginationExpiresAt,
-    List<FeedObjectCardDto> objectCards = const <FeedObjectCardDto>[],
+    List<FeedObjectCard> objectCards = const <FeedObjectCard>[],
     int maxItems = homeFeedPageItemLimit,
-  }) : items = List<PostBaseDto>.unmodifiable(items),
-       objectCards = List<FeedObjectCardDto>.unmodifiable(objectCards) {
+  }) : items = List<ContentPostViewData>.unmodifiable(items),
+       objectCards = List<FeedObjectCard>.unmodifiable(objectCards) {
     if (items.length > maxItems) {
       throw DiscoveryFeedPageBudgetExceeded(
         actualItems: items.length,
@@ -52,7 +53,7 @@ final class DiscoveryFeedResidentPage {
   factory DiscoveryFeedResidentPage.fromEnvelope({
     required String? incomingCursor,
     required DiscoveryFeedPage page,
-    List<PostBaseDto>? visibleItems,
+    List<ContentPostViewData>? visibleItems,
     int maxItems = homeFeedPageItemLimit,
   }) {
     // 预算约束针对 Remote envelope，而不是去重后的展示投影。否则 21 条响应
@@ -80,11 +81,11 @@ final class DiscoveryFeedResidentPage {
   }
 
   final String? incomingCursor;
-  final List<PostBaseDto> items;
+  final List<ContentPostViewData> items;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
-  final List<FeedObjectCardDto> objectCards;
+  final List<FeedObjectCard> objectCards;
 
   DiscoveryFeedResidentPage withPreviousCursor(String? cursor) {
     return DiscoveryFeedResidentPage(
@@ -124,7 +125,7 @@ final class DiscoveryFeedResidentPage {
 
   DiscoveryFeedResidentPage insertPost({
     required int index,
-    required PostBaseDto post,
+    required ContentPostViewData post,
   }) {
     final insertionIndex = index.clamp(0, items.length);
     final nextItems = items.toList(growable: true)
@@ -132,7 +133,8 @@ final class DiscoveryFeedResidentPage {
     final nextObjectCards = objectCards
         .map((card) {
           final anchorIndex = card.anchorIndex.clamp(0, items.length);
-          return card.copyWith(
+          return _feedObjectCardAt(
+            card,
             anchorIndex: anchorIndex >= insertionIndex
                 ? anchorIndex + 1
                 : anchorIndex,
@@ -270,17 +272,19 @@ final class DiscoveryFeedResidentPageWindow {
     yield* trailingPages;
   }
 
-  List<PostBaseDto> get visibleItems => List<PostBaseDto>.unmodifiable(
-    residentPages.expand((page) => page.items),
-  );
+  List<ContentPostViewData> get visibleItems =>
+      List<ContentPostViewData>.unmodifiable(
+        residentPages.expand((page) => page.items),
+      );
 
-  List<FeedObjectCardDto> get visibleObjectCards {
-    final cards = <FeedObjectCardDto>[];
+  List<FeedObjectCard> get visibleObjectCards {
+    final cards = <FeedObjectCard>[];
     var precedingItems = 0;
     for (final page in residentPages) {
       for (final card in page.objectCards) {
         cards.add(
-          card.copyWith(
+          _feedObjectCardAt(
+            card,
             anchorIndex:
                 precedingItems + card.anchorIndex.clamp(0, page.items.length),
           ),
@@ -288,7 +292,7 @@ final class DiscoveryFeedResidentPageWindow {
       }
       precedingItems += page.items.length;
     }
-    return List<FeedObjectCardDto>.unmodifiable(cards);
+    return List<FeedObjectCard>.unmodifiable(cards);
   }
 
   Set<String> get retainedPostIds => _allPages
@@ -461,7 +465,7 @@ final class DiscoveryFeedResidentPageWindow {
 
   DiscoveryFeedResidentPageWindow restoreVisiblePost({
     required DiscoveryFeedVisiblePostPlacement placement,
-    required PostBaseDto post,
+    required ContentPostViewData post,
   }) {
     final normalizedPostId = post.id.trim();
     if (normalizedPostId.isEmpty ||
@@ -482,7 +486,7 @@ final class DiscoveryFeedResidentPageWindow {
       );
       final nextItems = page.items.toList(growable: true)
         ..insert(insertionIndex, post);
-      final nextObjectCards = <FeedObjectCardDto>[];
+      final nextObjectCards = <FeedObjectCard>[];
       for (var index = 0; index < page.objectCards.length; index += 1) {
         final card = page.objectCards[index];
         final originalAnchor = placement.objectCardAnchorIndices[index].clamp(
@@ -490,7 +494,8 @@ final class DiscoveryFeedResidentPageWindow {
           nextItems.length,
         );
         nextObjectCards.add(
-          card.copyWith(
+          _feedObjectCardAt(
+            card,
             anchorIndex: originalAnchor > placement.pageItemIndex
                 ? (card.anchorIndex + 1).clamp(0, nextItems.length)
                 : card.anchorIndex.clamp(0, nextItems.length),
@@ -567,7 +572,7 @@ final class DiscoveryFeedResidentPageWindow {
 
   DiscoveryFeedResidentPageWindow insertVisiblePost({
     required int index,
-    required PostBaseDto post,
+    required ContentPostViewData post,
   }) {
     if (residentPages.isEmpty || retainedPostIds.contains(post.id)) {
       return this;
@@ -597,10 +602,10 @@ String? _normalizedCursor(String? value) {
   return normalized.isEmpty ? null : normalized;
 }
 
-List<FeedObjectCardDto> _rebasePageObjectCardsAfterDeduplication({
-  required List<PostBaseDto> remoteItems,
-  required List<PostBaseDto> visibleItems,
-  required List<FeedObjectCardDto> objectCards,
+List<FeedObjectCard> _rebasePageObjectCardsAfterDeduplication({
+  required List<ContentPostViewData> remoteItems,
+  required List<ContentPostViewData> visibleItems,
+  required List<FeedObjectCard> objectCards,
 }) {
   if (objectCards.isEmpty || identical(remoteItems, visibleItems)) {
     return objectCards;
@@ -624,7 +629,8 @@ List<FeedObjectCardDto> _rebasePageObjectCardsAfterDeduplication({
   }
   return objectCards
       .map(
-        (card) => card.copyWith(
+        (card) => _feedObjectCardAt(
+          card,
           anchorIndex:
               visiblePrefixCounts[card.anchorIndex.clamp(
                 0,
@@ -634,3 +640,18 @@ List<FeedObjectCardDto> _rebasePageObjectCardsAfterDeduplication({
       )
       .toList(growable: false);
 }
+
+FeedObjectCard _feedObjectCardAt(
+  FeedObjectCard source, {
+  required int anchorIndex,
+}) => FeedObjectCard(
+  objectKind: source.objectKind,
+  objectId: source.objectId,
+  title: source.title,
+  subtitle: source.subtitle,
+  coverUrl: source.coverUrl,
+  tagRefs: source.tagRefs,
+  reasonText: source.reasonText,
+  recallPath: source.recallPath,
+  anchorIndex: anchorIndex,
+);

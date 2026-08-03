@@ -6,6 +6,8 @@ fields:
 - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, tag_ref: true}
 - {name: entityRefs, source: entityRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection}
+- {name: primaryHomepageId, source: primaryHomepageId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: primaryHomepageSnapshot, source: primaryHomepageSnapshot, type: RecommendationObjectCardCandidate, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 - {name: publishedAt, source: publishedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
 - {name: viewCount, source: viewCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: likeCount, source: likeCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
@@ -21,3 +23,13 @@ fields:
 - {name: entityTagIds, source: entityTagIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: sourceSequence, source: sourceSequence, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: projection}
+types:
+  RecommendationObjectCardCandidate:
+    description: 从 Post lifecycle 冻结的可路由 Homepage 公开候选快照；Recommendation 只选择，不回查 Entity 私有存储。
+    fields:
+    - {name: homepageId, source: homepageId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: canonicalEntityId, source: canonicalEntityId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: subtitle, source: subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: coverUrl, source: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}

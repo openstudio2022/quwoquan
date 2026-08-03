@@ -11,7 +11,15 @@ type SearchItem struct {
 	HomepageID    string
 	EntityID      string
 	DisplayName   string
+	Summary       string
 	EntityType    string
+	Tags          []string
+	City          string
+	Address       string
+	SourcePlaceID string
+	RatingCount   int
+	Latitude      *float64
+	Longitude     *float64
 	SourceVersion int64
 	UpdatedAt     time.Time
 }
@@ -33,4 +41,18 @@ func (p *Projector) Upsert(ctx context.Context, item SearchItem) (bool, error) {
 		return false, errors.New("homepage search item identity, displayName and sourceVersion are required")
 	}
 	return p.index.UpsertIfNewer(ctx, item)
+}
+
+func (p *Projector) Delete(
+	ctx context.Context,
+	homepageID string,
+	sourceVersion int64,
+) (bool, error) {
+	if p == nil || p.index == nil {
+		return false, errors.New("homepage search index is unavailable")
+	}
+	if strings.TrimSpace(homepageID) == "" || sourceVersion <= 0 {
+		return false, errors.New("homepage search tombstone identity and sourceVersion are required")
+	}
+	return p.index.DeleteIfNotOlder(ctx, strings.TrimSpace(homepageID), sourceVersion)
 }

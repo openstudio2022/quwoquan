@@ -11,11 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	referencefence "quwoquan_service/runtime/media/referencefence"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediareferencefence"
 )
 
 type postCommandReceiptDocument struct {
@@ -36,36 +36,28 @@ type MongoPostStore struct {
 	outbox          *mongo.Collection
 	sequences       *mongo.Collection
 	checkpoints     *mongo.Collection
-	tombstones      *mongo.Collection
-	mediaReferences *mediareferencefence.Manager
+	tombstones      postports.TombstoneStore
+	mediaReferences referencefence.Fence
 }
 
-func NewMongoPostStore(coll *mongo.Collection) *MongoPostStore {
-	db := coll.Database()
-	mediaReferences, err := mediareferencefence.New(db)
-	if err != nil {
-		panic(err)
+func NewMongoPostStore(
+	coll *mongo.Collection,
+	tombstones postports.TombstoneStore,
+	mediaReferences referencefence.Fence,
+) *MongoPostStore {
+	if coll == nil || tombstones == nil || mediaReferences == nil {
+		panic("Post Mongo store requires collection, DeletedPostTombstone store, and MediaAsset reference fence")
 	}
+	db := coll.Database()
 	return &MongoPostStore{
 		coll:            coll,
 		receipts:        db.Collection("post_command_receipts"),
 		outbox:          db.Collection("content_outbox"),
 		sequences:       db.Collection("content_outbox_sequences"),
 		checkpoints:     db.Collection("projection_checkpoints"),
-		tombstones:      db.Collection("deleted_post_tombstones"),
+		tombstones:      tombstones,
 		mediaReferences: mediaReferences,
 	}
-}
-
-// deletedPostTombstoneDocument 是 content.DeletedPostTombstone 的持久化形态：
-// _id 复用 postId 作唯一 dedupe key，expireAt TTL 索引承载保留期自动清理。
-type deletedPostTombstoneDocument struct {
-	ID        string    `bson:"_id"`
-	PostID    string    `bson:"postId"`
-	AuthorID  string    `bson:"authorId"`
-	Reason    string    `bson:"reason"`
-	DeletedAt time.Time `bson:"deletedAt"`
-	ExpireAt  time.Time `bson:"expireAt"`
 }
 
 func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
@@ -182,20 +174,7 @@ func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	if _, err := s.tombstones.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "postId", Value: 1}},
-			Options: options.Index().SetName("idx_tombstone_post").SetUnique(true),
-		},
-		{
-			Keys:    bson.D{{Key: "deletedAt", Value: -1}},
-			Options: options.Index().SetName("idx_tombstone_deleted_at"),
-		},
-		{
-			Keys:    bson.D{{Key: "expireAt", Value: 1}},
-			Options: options.Index().SetName("idx_tombstone_expire").SetExpireAfterSeconds(0),
-		},
-	}); err != nil {
+	if err := s.tombstones.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("create deleted post tombstone indexes: %w", err)
 	}
 	return s.ensureOutboxIndexes(ctx)
@@ -207,24 +186,7 @@ func (s *MongoPostStore) FindTombstone(
 	ctx context.Context,
 	postID string,
 ) (postports.PostDeletionTombstone, bool, error) {
-	var document deletedPostTombstoneDocument
-	err := s.tombstones.FindOne(
-		ctx,
-		bson.M{"_id": strings.TrimSpace(postID)},
-	).Decode(&document)
-	if err == mongo.ErrNoDocuments {
-		return postports.PostDeletionTombstone{}, false, nil
-	}
-	if err != nil {
-		return postports.PostDeletionTombstone{}, false, err
-	}
-	return postports.PostDeletionTombstone{
-		PostID:    document.PostID,
-		AuthorID:  document.AuthorID,
-		Reason:    document.Reason,
-		DeletedAt: document.DeletedAt,
-		ExpireAt:  document.ExpireAt,
-	}, true, nil
+	return s.tombstones.Find(ctx, postID)
 }
 
 func (s *MongoPostStore) Load(ctx context.Context, id string) (*postmodel.Post, bool, error) {
@@ -304,8 +266,8 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 				txCtx,
 				postMediaReferences(next),
 			); err != nil {
-				if errors.Is(err, mediareferencefence.ErrDeletionInProgress) ||
-					errors.Is(err, mediareferencefence.ErrReferenceUnavailable) {
+				if errors.Is(err, referencefence.ErrDeletionInProgress) ||
+					errors.Is(err, referencefence.ErrReferenceUnavailable) {
 					return nil, mediaerrors.AppErrorFromMediaNotFound(
 						"media asset became unavailable before Post commit",
 					)
@@ -370,20 +332,7 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 		}
 
 		if commit.Tombstone != nil {
-			tombstone := deletedPostTombstoneDocument{
-				ID:        strings.TrimSpace(commit.Tombstone.PostID),
-				PostID:    strings.TrimSpace(commit.Tombstone.PostID),
-				AuthorID:  strings.TrimSpace(commit.Tombstone.AuthorID),
-				Reason:    strings.TrimSpace(commit.Tombstone.Reason),
-				DeletedAt: commit.Tombstone.DeletedAt.UTC(),
-				ExpireAt:  commit.Tombstone.ExpireAt.UTC(),
-			}
-			if _, upsertErr := s.tombstones.UpdateOne(
-				txCtx,
-				bson.M{"_id": tombstone.ID},
-				bson.M{"$setOnInsert": tombstone},
-				options.UpdateOne().SetUpsert(true),
-			); upsertErr != nil {
+			if _, upsertErr := s.tombstones.AppendIfAbsent(txCtx, *commit.Tombstone); upsertErr != nil {
 				return nil, upsertErr
 			}
 		}
@@ -413,14 +362,14 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 	return result, nil
 }
 
-func postMediaReferences(post postmodel.Post) []mediareferencefence.Reference {
+func postMediaReferences(post postmodel.Post) []referencefence.Reference {
 	assetIDs := append([]string(nil), post.MediaAssetIds...)
 	if illustrationID := strings.TrimSpace(post.IllustrationAssetId); illustrationID != "" {
 		assetIDs = append(assetIDs, illustrationID)
 	}
-	references := make([]mediareferencefence.Reference, 0, len(assetIDs))
+	references := make([]referencefence.Reference, 0, len(assetIDs))
 	for _, assetID := range assetIDs {
-		references = append(references, mediareferencefence.Reference{
+		references = append(references, referencefence.Reference{
 			AssetID: assetID,
 			OwnerID: post.AuthorId,
 		})

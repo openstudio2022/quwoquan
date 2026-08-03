@@ -1,7 +1,7 @@
 read_model: EventDrilldownSlice
 description: 三天内原始 EventRecord 的受限查询结果。sessionId 精确筛选仅用于有审计权限的
   诊断；响应仍默认掩码。rtc_media_qoe 项返回端侧已上报的 QoE 终态，不合成或暴露 RTC callId。
-storage_backend: aliyun_sls
+storage_backend: elasticsearch
 projection_mode: authoritative_query
 source_entities:
 - EventRecord

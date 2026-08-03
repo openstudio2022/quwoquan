@@ -3,13 +3,18 @@ package local_contract
 
 import (
 	"context"
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
 	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"strings"
 	"testing"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type assistantSessionChatMentionServiceFakeChatGroundingClient struct {
@@ -23,18 +28,16 @@ func (f *assistantSessionChatMentionServiceFakeChatGroundingClient) ListMessages
 	_ context.Context,
 	chatConversationID string,
 	creatorPersonaID string,
-	assistantSkillID string,
 	beforeSeq int64,
 	limit int,
 ) ([]ports.ChatGroundingMessage, error) {
 	f.listMessagesCalled = chatConversationID == "conv-1" &&
 		creatorPersonaID == "user-a" &&
-		assistantSkillID == "general" &&
 		beforeSeq == 12 &&
 		limit == 20
 	return []ports.ChatGroundingMessage{
-		{MessageID: "msg-10", Seq: 10, SenderID: "user-a", SenderName: "小明", Content: "周末去川西怎么样？"},
-		{MessageID: "msg-11", Seq: 11, SenderID: "user-b", SenderName: "小红", Content: "我想知道自驾路线和住宿。"},
+		{MessageID: "msg-10", Seq: 10, SenderID: "user-a", SenderName: "小明", Type: "text", Content: "周末去川西怎么样？"},
+		{MessageID: "msg-11", Seq: 11, SenderID: "user-b", SenderName: "小红", Type: "text", Content: "我想知道自驾路线和住宿。"},
 	}, nil
 }
 
@@ -43,12 +46,10 @@ func (f *assistantSessionChatMentionServiceFakeChatGroundingClient) ResolveAssis
 	chatConversationID string,
 	creatorPersonaID string,
 	assistantMemberID string,
-	assistantSkillID string,
 ) (bool, error) {
 	f.membershipChecked = chatConversationID == "conv-1" &&
 		creatorPersonaID == "user-a" &&
-		assistantMemberID == "assistant" &&
-		assistantSkillID == "general"
+		assistantMemberID == "assistant"
 	return !f.membershipDenied, nil
 }
 
@@ -62,29 +63,37 @@ func (f *assistantSessionChatMentionServiceFakeChatGroundingClient) SendMessage(
 
 func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testing.T) {
 	chat := &assistantSessionChatMentionServiceFakeChatGroundingClient{}
+	model := &contextAssemblyRecordingModel{}
 	loop := NewAgentLoop(
-		proactiveSkillRuntime{},
-		ReactRuntime{Model: proactiveFinalModel{}},
+		nil,
+		ReactRuntime{Model: model},
 		nil,
 	)
+	loop.Catalog = skillfixture.Loader{}
+	loop.PromptAssets = promptassets.MustResolver(t)
+	runOption, runtime := canonicalRunTestRuntime(t, loop)
+	registry, err := skillcontextinfra.NewRuntimeRegistry(runtime, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop.SkillContexts = skillcontext.NewAssembler(registry)
 	service := NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		nil,
-		WithSessionRunStore(persistence.NewMemorySessionRunStore()),
+		WithSessionStore(persistence.NewMemorySessionStore()),
 		WithAgentLoop(loop),
-		canonicalRunTestOption(t, loop),
+		runOption,
 		WithChatGroundingClient(chat),
-		testFrozenPolicyOption(),
 	)
 
-	err := service.HandleAssistantMentioned(context.Background(), AssistantMentionedEvent{
+	err = service.HandleAssistantMentioned(context.Background(), AssistantMentionedEvent{
 		ChatConversationID: "conv-1",
 		MessageID:          "msg-12",
 		Seq:                12,
+		SenderAccountID:    "account-a",
 		SenderID:           "user-a",
-		Content:            "@小趣 总结一下",
+		Content:            "@小趣 根据前文规划川西自驾行程和住宿",
 		AssistantMemberID:  "assistant",
-		AssistantSkillID:   "general",
 	})
 	if err != nil {
 		t.Fatalf("HandleAssistantMentioned returned error: %v", err)
@@ -102,8 +111,7 @@ func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testi
 	if reply.ChatConversationID != "conv-1" {
 		t.Fatalf("reply chatConversation=%s, want conv-1", reply.ChatConversationID)
 	}
-	if reply.CreatorPersonaID != "user-a" ||
-		reply.AssistantSkillID != "general" {
+	if reply.CreatorPersonaID != "user-a" {
 		t.Fatalf("reply authorization coordinates drifted: %+v", reply)
 	}
 	if strings.TrimSpace(reply.Content) == "" {
@@ -111,6 +119,48 @@ func TestHandleAssistantMentionedReadsChatConversationContextAndReplies(t *testi
 	}
 	if !strings.HasPrefix(reply.ClientMsgID, "assistant-") {
 		t.Fatalf("reply clientMsgId=%s, want assistant-*", reply.ClientMsgID)
+	}
+	storedRun, err := runtime.Load(
+		context.Background(),
+		strings.TrimPrefix(reply.ClientMsgID, "assistant-"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := storedRun.ContextSnapshot["conversationContext"].(map[string]any); !ok {
+		t.Fatalf("canonical Run lost conversation context: %#v", storedRun.ContextSnapshot)
+	}
+	if _, err := (skillcontextinfra.ConversationContextResolver{Runs: runtime}).Resolve(
+		context.Background(),
+		skillcontext.ResolveRequest{
+			RunID:   storedRun.RunID,
+			SkillID: "travel_companion",
+		},
+	); err != nil {
+		t.Fatalf("canonical Run conversation context is not resolvable: %v", err)
+	}
+	if len(model.assemblies) == 0 || model.assemblies[0] == nil {
+		t.Fatal("model did not receive the canonical Run context assembly")
+	}
+	snapshot, ok := model.assemblies[0].ContextEnvelope["skillContextSnapshot"].(skillcontext.Snapshot)
+	if !ok {
+		t.Fatalf("skill context snapshot=%#v", model.assemblies[0].ContextEnvelope["skillContextSnapshot"])
+	}
+	var conversation *skillcontext.Segment
+	for index := range snapshot.Segments {
+		if snapshot.Segments[index].SlotID == "conversation_context" {
+			conversation = &snapshot.Segments[index]
+			break
+		}
+	}
+	if conversation == nil ||
+		conversation.Sensitivity != assistantgenerated.AssistantContextSensitivityInternal ||
+		conversation.Value["trust"] != "untrusted_conversation_data" {
+		t.Fatalf("conversation context was not assembled as internal untrusted data: %#v", snapshot)
+	}
+	messages, ok := conversation.Value["messages"].([]any)
+	if !ok || len(messages) != 2 {
+		t.Fatalf("conversation messages=%#v, want 2 structured messages", conversation.Value["messages"])
 	}
 }
 
@@ -121,24 +171,23 @@ func TestHandleAssistantMentionedDropsEventWhenAssistantWasRemoved(t *testing.T)
 	service := NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		nil,
-		WithSessionRunStore(persistence.NewMemorySessionRunStore()),
+		WithSessionStore(persistence.NewMemorySessionStore()),
 		WithAgentLoop(NewAgentLoop(
 			proactiveSkillRuntime{},
 			ReactRuntime{Model: proactiveFinalModel{}},
 			nil,
 		)),
 		WithChatGroundingClient(chat),
-		testFrozenPolicyOption(),
 	)
 
 	err := service.HandleAssistantMentioned(context.Background(), AssistantMentionedEvent{
 		ChatConversationID: "conv-1",
 		MessageID:          "msg-12",
 		Seq:                12,
+		SenderAccountID:    "account-a",
 		SenderID:           "user-a",
 		Content:            "@小趣 总结一下",
 		AssistantMemberID:  "assistant",
-		AssistantSkillID:   "general",
 	})
 	if err != nil {
 		t.Fatalf("removed assistant event must be ack-and-drop, got error: %v", err)

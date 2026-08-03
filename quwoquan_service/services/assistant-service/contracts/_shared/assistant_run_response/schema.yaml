@@ -6,7 +6,7 @@ kind: shared_wire_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart
   - package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart
-  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
   - package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart
   - package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart
 fields:

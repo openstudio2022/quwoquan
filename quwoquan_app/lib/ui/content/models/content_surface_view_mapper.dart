@@ -1,27 +1,29 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 
-/// 统一展示模型的唯一映射器：`PostBaseDto (+ wire)` → [ContentSurfaceView]。
+/// 统一展示模型的唯一映射器：`ContentPostViewData (+ wire)` → [ContentSurfaceView]。
 ///
 /// 标题/正文/封面/长文模板字段复用 metadata 对齐的 [PostReadPresentation]，
-/// 媒体 URL 在此展示边界解析，作者/统计复用 `PostBaseDto` 的契约派生 getter，
+/// 媒体 URL 在此展示边界解析，作者/统计复用 `ContentPostViewData` 的契约派生 getter，
 /// 确保四 surface 同源、字段口径与 metadata 投影一致。禁止对 DTO 子类做
 /// `is/as/whereType`。
 class ContentSurfaceViewMapper {
   const ContentSurfaceViewMapper._();
 
   static ContentSurfaceView fromDto(
-    PostBaseDto dto, {
+    ContentPostViewData dto, {
     Map<String, dynamic>? wire,
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
     MediaDeliveryResolver? mediaResolver,
   }) {
-    final read = PostReadPresentation.fromPostBase(dto, wire: wire);
+    final read = PostReadPresentationMapper.fromViewData(dto, wire: wire);
     final endpoints = MediaEndpointConfig.tryCreateAvailable(
       avatarBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
       imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
@@ -147,7 +149,7 @@ class ContentSurfaceViewMapper {
     ContentSurfaceReferral referral = const ContentSurfaceReferral(),
   }) {
     final wire = payload.mergedArticleWireMap;
-    final dto = postBaseDtoFromMap(wire);
+    final dto = contentPostViewDataFromReadModelMap(wire);
     final base = fromDto(dto, wire: wire, referral: referral);
     return base.copyWith(
       article: projectArticleDetailViewFromPayload(
@@ -157,8 +159,8 @@ class ContentSurfaceViewMapper {
     );
   }
 
-  /// 媒体形态判别：仅用 `PostBaseDto` 的契约派生 getter（无 `is/as`）。
-  static ContentSurfaceKind _kindFor(PostBaseDto dto) {
+  /// 媒体形态判别：仅用 `ContentPostViewData` 的契约派生 getter（无 `is/as`）。
+  static ContentSurfaceKind _kindFor(ContentPostViewData dto) {
     if (dto.isVideoLike) {
       return ContentSurfaceKind.video;
     }

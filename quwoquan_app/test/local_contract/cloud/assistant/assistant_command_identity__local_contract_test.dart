@@ -40,12 +40,13 @@ void main() {
           'createdAt': '2026-07-24T09:00:01Z',
         },
       ]);
-      final httpClient = CloudHttpClient(client: transport);
+      final httpClient = CloudHttpClient(
+        client: transport,
+        authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+      );
       final repository = RemoteAssistantRepository(
-        httpClient: httpClient,
         operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-        sessionInvocationContext: assistantRemoteTestInvocationContext,
-        consentAccountId: 'assistant-command-identity-test',
+        invocationContext: assistantRemoteTestInvocationContext,
       );
 
       await repository.createAssistantSession(
@@ -78,8 +79,6 @@ void main() {
       expect(startBody['intent'], <String, dynamic>{
         'kind': 'answer',
         'answer': <String, dynamic>{'text': 'help me plan today'},
-        'search': null,
-        'creationAssistance': null,
       });
       expect(
         startBody['surfaceCapabilities'],
@@ -101,12 +100,13 @@ void main() {
 
   test('assistant command rejects an empty client request identity', () async {
     final transport = _AssistantCommandClient(const <Map<String, Object?>>[]);
-    final httpClient = CloudHttpClient(client: transport);
+    final httpClient = CloudHttpClient(
+      client: transport,
+      authTokenProvider: const AssistantRemoteTestAuthTokenProvider(),
+    );
     final repository = RemoteAssistantRepository(
-      httpClient: httpClient,
       operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-      sessionInvocationContext: assistantRemoteTestInvocationContext,
-      consentAccountId: 'assistant-command-identity-test',
+      invocationContext: assistantRemoteTestInvocationContext,
     );
 
     await expectLater(

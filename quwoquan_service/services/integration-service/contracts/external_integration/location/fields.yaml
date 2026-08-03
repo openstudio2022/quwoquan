@@ -13,12 +13,23 @@ types:
   LocationPoi:
     description: 外部位置 provider 返回的标准化 POI 读模型。
     fields:
-      - {name: id, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: name, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: id, type: string, constraints: [PK, NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: name, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: latitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
       - {name: longitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
       - {name: address, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: mask, api_exposure: read, ops_exposure: read}
       - {name: distanceMeters, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  LocationPoiListSlice:
+    description: 附近与关键词位置查询共用的有界 POI 结果切片。
+    fields:
+      - name: items
+        source: items
+        type: '[]LocationPoi'
+        constraints: [NOT_NULL]
+        classification: PII
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
   LocationNearbyQueriedEvent:
     fields:
       - {name: provider, type: enum, enum_ref: LocationProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}

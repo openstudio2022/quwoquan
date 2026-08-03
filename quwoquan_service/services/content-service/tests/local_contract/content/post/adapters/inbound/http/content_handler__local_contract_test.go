@@ -2,10 +2,8 @@ package http_test
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	. "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
@@ -16,6 +14,7 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
@@ -23,7 +22,9 @@ import (
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
+	reporthttp "quwoquan_service/services/content-service/internal/trust_safety/report/adapters/inbound/http"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
+	feedsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 type allowAllFeedViewerBlockReader struct{}
@@ -37,48 +38,6 @@ func (allowAllFeedViewerBlockReader) ListBlockedPersonaIDs(
 
 type readyFeedActiveSupplyReader struct{}
 
-type failingBehaviorSignalProcessor struct {
-	err error
-}
-
-func (p failingBehaviorSignalProcessor) ProcessSignal(
-	_ context.Context,
-	_ rtrec.BehaviorSignal,
-) error {
-	return p.err
-}
-
-func (p failingBehaviorSignalProcessor) ProcessSignalBatch(
-	_ context.Context,
-	_ []rtrec.BehaviorSignal,
-) error {
-	return p.err
-}
-
-type releaseBoundLocalCandidateSource struct {
-	inner rtrec.CandidateSource
-}
-
-func (s releaseBoundLocalCandidateSource) Recall(
-	ctx context.Context,
-	req rtrec.RecallRequest,
-) ([]rtrec.ContentCandidate, error) {
-	items, err := s.inner.Recall(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	for i := range items {
-		items[i].SourceOwner = "qwq_data"
-		items[i].ReleaseID = req.ActiveReleaseID
-		items[i].ManifestDigest = req.ActiveManifestDigest
-		items[i].LifecycleStatus = "active"
-		if strings.TrimSpace(items[i].SupplySource) == "" {
-			items[i].SupplySource = "data_engineering"
-		}
-	}
-	return items, nil
-}
-
 func (readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 	context.Context,
 ) (feedapp.ActiveSupplySnapshot, error) {
@@ -90,7 +49,6 @@ func (readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ReadbackStatus:  "passed",
 		Posts:           1,
-		DiscoveryPosts:  1,
 		PlayableVideos:  1,
 	}, nil
 }
@@ -152,19 +110,37 @@ func newTestHandler() http.Handler {
 func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
 	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
-	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-	source := releaseBoundLocalCandidateSource{
-		inner: recinfra.NewPostProjectionSource(store, store),
+	seedPosts := recinfra.DefaultSeedPosts()
+	store := testsupport.NewPostStore(seedPosts)
+	candidates := make([]rtrec.ContentCandidate, 0, len(seedPosts))
+	for _, post := range seedPosts {
+		candidates = append(candidates, rtrec.ContentCandidate{
+			ContentID:    post.ID,
+			ContentType:  post.ContentType,
+			AuthorID:     post.AuthorId,
+			Title:        post.Title,
+			Tags:         append([]string(nil), post.TagRefs...),
+			PublishedAt:  post.PublishedAt,
+			ViewCount:    post.ViewCount,
+			LikeCount:    post.LikeCount,
+			CommentCount: post.CommentCount,
+			ShareCount:   post.ShareCount,
+		})
 	}
-	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
+	rankedEngine := rtrec.NewEngine(
+		hotPath,
+		[]rtrec.CandidateSource{handlerCandidateSource{candidates: candidates}},
+	)
 	feedService := feedapp.NewFeedService(
-		engine,
 		testsupport.NewPostFeedReader(store),
-		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
-		feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
-		feedapp.WithFeedDeliveryPageStore(
-			deliveryredis.NewStore(rtredis.NewMemoryClient()),
-		),
+		feedsupport.RankedRecommendationOptions(
+			rankedEngine,
+			feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+			feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
+			feedapp.WithFeedDeliveryPageStore(
+				deliveryredis.NewStore(rtredis.NewMemoryClient()),
+			),
+		)...,
 	)
 	postService := postapp.NewPostService(
 		postapp.BindDataPorts(store),
@@ -199,60 +175,26 @@ func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
 		postQueryService,
 		nil,
 		nil,
-		reportapp.BindFacades(reportService),
+		reporthttp.NewHandler(reportapp.BindFacades(reportService)),
 		behaviorService,
+		WithContentBehaviorHandler(behaviorhttp.NewHandler(behaviorService)),
 	).Routes()
 	return handler, hotPath
 }
 
-func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
-	redis := testsupport.NewFakeRedis()
-	hotPath := rtrec.NewHotPath(redis)
-	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-	source := releaseBoundLocalCandidateSource{
-		inner: recinfra.NewPostProjectionSource(store, store),
+type handlerCandidateSource struct {
+	candidates []rtrec.ContentCandidate
+}
+
+func (source handlerCandidateSource) Recall(
+	_ context.Context,
+	request rtrec.RecallRequest,
+) ([]rtrec.ContentCandidate, error) {
+	limit := request.Limit
+	if limit <= 0 || limit > len(source.candidates) {
+		limit = len(source.candidates)
 	}
-	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
-	feedService := feedapp.NewFeedService(
-		engine,
-		testsupport.NewPostFeedReader(store),
-		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
-		feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
-		feedapp.WithFeedDeliveryPageStore(
-			deliveryredis.NewStore(rtredis.NewMemoryClient()),
-		),
-	)
-	postService := postapp.NewPostService(
-		postapp.BindDataPorts(store),
-		postapp.WithPublicationAdmission(
-			testsupport.AllowPublicationRateGate{},
-			testsupport.FixedPublicationSafetyGate{},
-		),
-	)
-	reportStore := testsupport.NewReportStore()
-	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
-	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
-	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
-		Detail:     localPostDetailReader{store: store},
-		Tombstones: store,
-	})
-	return NewContentHandler(
-		feedService,
-		postapp.BindFacades(postService),
-		postQueryService,
-		nil,
-		nil,
-		reportapp.BindFacades(reportService),
-		behaviorService,
-	).Routes()
-}
-
-type stubFeatureProvider struct {
-	features *rtrec.UserFeatureVector
-}
-
-func (s *stubFeatureProvider) GetFeatures(_ context.Context, _ string) (*rtrec.UserFeatureVector, error) {
-	return s.features, nil
+	return append([]rtrec.ContentCandidate(nil), source.candidates[:limit]...), nil
 }
 
 func setActorHeaders(req *http.Request, ownerID, personaID string) {
@@ -566,252 +508,6 @@ func TestPostCommandBodiesBindOnlyCanonicalRequestEntityFields(t *testing.T) {
 	}
 }
 
-func TestReportBehaviorsEndpoint(t *testing.T) {
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	req := httptest.NewRequest(
-		"POST",
-		"/content/behaviors",
-		bytes.NewBufferString(fmt.Sprintf(
-			`{"userId":"u1","events":[{"clientEventId":"evt-handler-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
-			occurredAt,
-		)),
-	)
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("unexpected behaviors status: %d", rec.Code)
-	}
-}
-
-func TestReportBehaviorsMapsOperationalFailuresToDeclaredHTTPCodes(t *testing.T) {
-	testCases := []struct {
-		name         string
-		failure      error
-		status       int
-		expectedCode string
-	}{
-		{
-			name:         "storage write failure",
-			failure:      fmt.Errorf("controlled behavior write failure"),
-			status:       http.StatusInternalServerError,
-			expectedCode: "CONTENT.SYSTEM.storage_write_failed",
-		},
-		{
-			name:         "dependency timeout",
-			failure:      context.DeadlineExceeded,
-			status:       http.StatusGatewayTimeout,
-			expectedCode: "CONTENT.MIDDLEWARE.upstream_timeout",
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-			behaviorService := behaviorapp.NewBehaviorService(
-				failingBehaviorSignalProcessor{err: testCase.failure},
-				store,
-			)
-			handler := NewContentHandler(
-				nil,
-				nil,
-				nil,
-				nil,
-				nil,
-				nil,
-				behaviorService,
-			).Routes()
-			occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-			req := httptest.NewRequest(
-				http.MethodPost,
-				"/content/behaviors",
-				bytes.NewBufferString(fmt.Sprintf(
-					`{"userId":"u-failure","events":[{"clientEventId":"evt-failure-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
-					occurredAt,
-				)),
-			)
-			rec := httptest.NewRecorder()
-
-			handler.ServeHTTP(rec, req)
-
-			if rec.Code != testCase.status {
-				t.Fatalf(
-					"status=%d want=%d: %s",
-					rec.Code,
-					testCase.status,
-					rec.Body.String(),
-				)
-			}
-			if !strings.Contains(rec.Body.String(), testCase.expectedCode) {
-				t.Fatalf(
-					"expected canonical error %s: %s",
-					testCase.expectedCode,
-					rec.Body.String(),
-				)
-			}
-		})
-	}
-}
-
-// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
-func TestReportBehaviorsOnboardingInterestCreatesCanonicalTagPrior(t *testing.T) {
-	handler, hotPath := newTestHandlerWithHotPath()
-	const (
-		userID    = "onboarding-user"
-		sessionID = "onboarding-session"
-		eventID   = "evt-onboarding-interest-001"
-	)
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":%q,"action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[" Topic/兴趣/旅行 ","Audience/用户/兴趣偏好/摄影","Topic/兴趣/旅行",""]}]}`,
-		userID,
-		eventID,
-		occurredAt,
-		sessionID,
-	)
-
-	for attempt := 0; attempt < 2; attempt++ {
-		req := httptest.NewRequest(
-			http.MethodPost,
-			"/content/behaviors",
-			bytes.NewBufferString(payload),
-		)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf(
-				"onboarding behavior attempt %d returned %d: %s",
-				attempt+1,
-				rec.Code,
-				rec.Body.String(),
-			)
-		}
-	}
-
-	state, err := hotPath.GetSessionState(context.Background(), userID, sessionID)
-	if err != nil {
-		t.Fatalf("read onboarding hotpath state: %v", err)
-	}
-	if len(state.TagWeights) != 2 {
-		t.Fatalf("expected exactly two canonical tag priors, got %+v", state.TagWeights)
-	}
-	for _, tagRef := range []string{
-		"Topic/兴趣/旅行",
-		"Audience/用户/兴趣偏好/摄影",
-	} {
-		if state.TagWeights[tagRef] != rtrec.SignalWeights["onboarding_interest"] {
-			t.Fatalf(
-				"expected one onboarding weight for %q, got %+v",
-				tagRef,
-				state.TagWeights,
-			)
-		}
-	}
-
-	invalidReq := httptest.NewRequest(
-		http.MethodPost,
-		"/content/behaviors",
-		bytes.NewBufferString(fmt.Sprintf(
-			`{"userId":"onboarding-invalid","events":[{"clientEventId":"evt-onboarding-interest-empty","occurredAt":%q,"sessionId":"onboarding-invalid-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[""," "]}]}`,
-			occurredAt,
-		)),
-	)
-	invalidRec := httptest.NewRecorder()
-	handler.ServeHTTP(invalidRec, invalidReq)
-	if invalidRec.Code != http.StatusBadRequest {
-		t.Fatalf(
-			"expected canonical invalid-argument failure for empty onboarding tags, got %d: %s",
-			invalidRec.Code,
-			invalidRec.Body.String(),
-		)
-	}
-	if !strings.Contains(
-		invalidRec.Body.String(),
-		"CONTENT.USER.invalid_argument",
-	) {
-		t.Fatalf(
-			"expected structured invalid-argument failure, got: %s",
-			invalidRec.Body.String(),
-		)
-	}
-	invalidState, err := hotPath.GetSessionState(
-		context.Background(),
-		"onboarding-invalid",
-		"onboarding-invalid-session",
-	)
-	if err != nil {
-		t.Fatalf("read rejected onboarding hotpath state: %v", err)
-	}
-	if len(invalidState.TagWeights) != 0 {
-		t.Fatalf(
-			"rejected onboarding request must not create recommendation priors: %+v",
-			invalidState.TagWeights,
-		)
-	}
-}
-
-// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
-func TestReportBehaviorsRejectsRetiredCatalogVersionBeforeWrites(t *testing.T) {
-	handler, hotPath := newTestHandlerWithHotPath()
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	// Retired catalogVersion input must be rejected by the strict decoder; it
-	// cannot be ignored or translated into the canonical taxonomy release.
-	payload := fmt.Sprintf(
-		`{"userId":"onboarding-retired-field","events":[{"clientEventId":"evt-onboarding-retired-field","occurredAt":%q,"sessionId":"onboarding-retired-session","action":"onboarding_interest","catalogVersion":"retired","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行"]}]}`,
-		occurredAt,
-	)
-	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("retired catalogVersion status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "CONTENT.USER.invalid_argument") {
-		t.Fatalf("expected canonical invalid-argument failure, got: %s", rec.Body.String())
-	}
-	state, err := hotPath.GetSessionState(
-		context.Background(),
-		"onboarding-retired-field",
-		"onboarding-retired-session",
-	)
-	if err != nil {
-		t.Fatalf("read rejected onboarding state: %v", err)
-	}
-	if len(state.TagWeights) != 0 {
-		t.Fatalf("retired catalogVersion input wrote recommendation priors: %+v", state.TagWeights)
-	}
-}
-
-func TestReportBehaviorsAcceptsGzipAndOccurredAt(t *testing.T) {
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	payload := fmt.Sprintf(
-		`{"userId":"u-gzip","events":[{"clientEventId":"evt-gzip-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
-		occurredAt,
-	)
-	var compressed bytes.Buffer
-	writer := gzip.NewWriter(&compressed)
-	if _, err := writer.Write([]byte(payload)); err != nil {
-		t.Fatalf("compress behavior payload: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close gzip writer: %v", err)
-	}
-
-	req := httptest.NewRequest(
-		"POST",
-		"/content/behaviors",
-		bytes.NewReader(compressed.Bytes()),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("gzip behavior payload rejected: %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 // TestFeedIssuesServerFeedRequestID 断言首页推荐主链路服务端权威下发 feedRequestId（frq_ 前缀）
 // 与 policyDigest，并在客户端回显时保持同一归因 id（feedRequestId echo）。
 func TestFeedIssuesServerFeedRequestID(t *testing.T) {
@@ -860,36 +556,6 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	}
 }
 
-func TestFeedRecommendUsesLongTermTagFeatures(t *testing.T) {
-	handler := newFeedHandlerWithFeatures(&stubFeatureProvider{features: &rtrec.UserFeatureVector{
-		TagAffinities: map[string]float64{"art": 10},
-	}})
-	req := httptest.NewRequest("GET", "/content/feed?sort=recommend&limit=1", nil)
-	req.Header.Set("X-Client-User-Id", "u1")
-	req.Header.Set("X-Client-Session-Id", "long-term-tag-feature-session")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("unexpected feed status: %d", rec.Code)
-	}
-	var body struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode feed response: %v", err)
-	}
-	if len(body.Items) == 0 {
-		t.Fatalf("expected feed items")
-	}
-	postID, _ := body.Items[0]["postId"].(string)
-	if postID == "" {
-		t.Fatalf("missing postId in first item: %+v", body.Items[0])
-	}
-	if _, legacyID := body.Items[0]["_id"]; legacyID {
-		t.Fatalf("feed item must not expose storage _id: %+v", body.Items[0])
-	}
-}
-
 func TestFeedWithSessionIdFromHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
@@ -902,25 +568,6 @@ func TestFeedWithSessionIdFromHeader(t *testing.T) {
 			rec.Code,
 			rec.Body.String(),
 		)
-	}
-}
-
-func TestBehaviorsWithSessionIdFromHeader(t *testing.T) {
-	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
-	req := httptest.NewRequest(
-		"POST",
-		"/content/behaviors",
-		bytes.NewBufferString(fmt.Sprintf(
-			`{"events":[{"clientEventId":"evt-handler-header-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
-			occurredAt,
-		)),
-	)
-	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
-	req.Header.Set("X-Client-User-Id", "user_123")
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("unexpected behaviors status with header auth: %d", rec.Code)
 	}
 }
 
@@ -1054,10 +701,7 @@ func TestGetPostTombstoneReturnsGone(t *testing.T) {
 	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
 	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-	source := recinfra.NewPostProjectionSource(store, store)
-	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	feedService := feedapp.NewFeedService(
-		engine,
 		testsupport.NewPostFeedReader(store),
 		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
 	)
@@ -1081,6 +725,7 @@ func TestGetPostTombstoneReturnsGone(t *testing.T) {
 		nil,
 		nil,
 		behaviorService,
+		WithContentBehaviorHandler(behaviorhttp.NewHandler(behaviorService)),
 	).Routes()
 
 	createReq := httptest.NewRequest(

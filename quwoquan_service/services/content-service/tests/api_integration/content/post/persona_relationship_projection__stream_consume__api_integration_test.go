@@ -7,26 +7,26 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 )
 
-func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T) {
+func TestPersonaRelationshipStreamProjectsContentAccessReadModel(t *testing.T) {
 	ctx := context.Background()
 	db := requireMongoDB(t)
-	relationships := db.Collection("persona_follow_projection")
-	inbox := db.Collection("persona_relationship_projection_inbox")
+	access := db.Collection(accessinfra.ContentPersonaAccessProjectionCollection)
+	inbox := db.Collection(accessinfra.ContentPersonaAccessInboxCollection)
 	cleanup := func() {
-		_, _ = relationships.DeleteMany(ctx, bson.M{"sourcePersonaId": bson.M{"$regex": "^stream_"}})
+		_, _ = access.DeleteMany(ctx, bson.M{"sourcePersonaId": bson.M{"$regex": "^stream_"}})
 		_, _ = inbox.DeleteMany(ctx, bson.M{"eventId": bson.M{"$regex": "^stream_"}})
 	}
 	cleanup()
 	t.Cleanup(cleanup)
 
-	projector := recinfra.NewPersonaRelationshipProjection(db)
+	projector := accessinfra.NewPersonaAccessProjection(db)
 	if err := projector.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure persona relationship projection indexes: %v", err)
 	}
-	consumer := recinfra.NewPersonaRelationshipProjectionConsumer(
+	consumer := accessinfra.NewPersonaAccessProjectionConsumer(
 		requireTestRouter(t).Scene("general"), projector, "content-contract-worker", nil,
 	)
 	if err := consumer.EnsureGroup(ctx); err != nil {
@@ -45,7 +45,7 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 			"eventId": "stream_block_3", "eventName": "PersonaBlocked", "pairId": "stream_pair", "sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target", "following": "false", "version": "3", "clearedFollowDirections": "2", "occurredAt": now.Add(2 * time.Second).Format(time.RFC3339Nano),
 		},
 	} {
-		if _, err := stream.XAdd(ctx, recinfra.PersonaRelationshipEventStream, event); err != nil {
+		if _, err := stream.XAdd(ctx, accessinfra.PersonaRelationshipEventStream, event); err != nil {
 			t.Fatalf("append relationship stream event: %v", err)
 		}
 	}
@@ -57,20 +57,18 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 	if processed != 3 {
 		t.Fatalf("processed=%d want 3", processed)
 	}
-	for _, direction := range []struct{ source, target string }{
-		{source: "stream_viewer", target: "stream_target"},
-		{source: "stream_target", target: "stream_viewer"},
-	} {
-		var doc struct {
-			Following bool  `bson:"following"`
-			Version   int64 `bson:"version"`
-		}
-		if err := relationships.FindOne(ctx, bson.M{"sourcePersonaId": direction.source, "targetPersonaId": direction.target}).Decode(&doc); err != nil {
-			t.Fatalf("read projected %s -> %s: %v", direction.source, direction.target, err)
-		}
-		if doc.Following || doc.Version != 3 {
-			t.Fatalf("projected %s -> %s = %+v, want blocked false version 3", direction.source, direction.target, doc)
-		}
+	if count, err := access.CountDocuments(ctx, bson.M{"following": bson.M{"$exists": true}}); err != nil || count != 0 {
+		t.Fatalf("Content must not persist follow state count=%d err=%v", count, err)
+	}
+	var blockDoc struct {
+		Blocked      bool  `bson:"blocked"`
+		BlockVersion int64 `bson:"blockVersion"`
+	}
+	if err := access.FindOne(ctx, bson.M{"sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target"}).Decode(&blockDoc); err != nil {
+		t.Fatalf("read projected access marker: %v", err)
+	}
+	if !blockDoc.Blocked || blockDoc.BlockVersion != 3 {
+		t.Fatalf("projected access marker=%+v want blocked version 3", blockDoc)
 	}
 	count, err := inbox.CountDocuments(ctx, bson.M{"eventId": bson.M{"$regex": "^stream_"}})
 	if err != nil || count != 3 {
@@ -78,7 +76,7 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 	}
 
 	// PersonaBlocked 之后：block 事实投影可被读路径判定（双向）。
-	blockReader := recinfra.NewPersonaBlockReader(db)
+	blockReader := accessinfra.NewPersonaBlockReader(db)
 	blocked, err := blockReader.IsBlockedBetween(ctx, "stream_viewer", "stream_target")
 	if err != nil || !blocked {
 		t.Fatalf("IsBlockedBetween(viewer, target)=%v err=%v want true", blocked, err)
@@ -99,7 +97,7 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 	}
 
 	// PersonaUnblocked 之后：block 标记清除、follow 不恢复。
-	if _, err := stream.XAdd(ctx, recinfra.PersonaRelationshipEventStream, map[string]string{
+	if _, err := stream.XAdd(ctx, accessinfra.PersonaRelationshipEventStream, map[string]string{
 		"eventId": "stream_unblock_4", "eventName": "PersonaUnblocked", "pairId": "stream_pair",
 		"sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target",
 		"following": "false", "version": "4",
@@ -122,13 +120,7 @@ func TestPersonaRelationshipStreamProjectsCanonicalFollowReadModel(t *testing.T)
 			err,
 		)
 	}
-	var direction struct {
-		Following bool `bson:"following"`
-	}
-	if err := relationships.FindOne(ctx, bson.M{"sourcePersonaId": "stream_viewer", "targetPersonaId": "stream_target"}).Decode(&direction); err != nil {
-		t.Fatalf("read direction after unblock: %v", err)
-	}
-	if direction.Following {
-		t.Fatalf("unblock must not restore follow state")
+	if count, err := access.CountDocuments(ctx, bson.M{"following": bson.M{"$exists": true}}); err != nil || count != 0 {
+		t.Fatalf("unblock must not create follow state count=%d err=%v", count, err)
 	}
 }

@@ -3,13 +3,17 @@
 """Re-export request/response models for API use."""
 
 from ..models.request_response import (
+    RecommendationObjectCard,
     RankedRecommendationItem,
     CreateRankedRecommendationWindowCommand,
+    GetRankedRecommendationPageQuery,
     RankedRecommendationPage,
 )
 
 __all__ = [
+    "RecommendationObjectCard",
     "RankedRecommendationItem",
     "CreateRankedRecommendationWindowCommand",
+    "GetRankedRecommendationPageQuery",
     "RankedRecommendationPage",
 ]

@@ -64,13 +64,11 @@ class NotificationApiMetadata {
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
-    'GetAppMessage': 'AppMessage',
-    'GetAppMessageUnreadCount': 'AppMessageUnreadCountSlice',
-    'ListAppMessages': 'AppMessageInboxSlice',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
+    'AckAppMessage': 'object',
     'AckIncomingCallPresentation': 'object',
     'GetAppMessage': 'object',
     'GetAppMessageUnreadCount': 'object',
@@ -78,6 +76,7 @@ class NotificationApiMetadata {
     'GetNotificationDeliveryJobMetrics': 'object',
     'ListAppMessages': 'page',
     'ListNotificationDeliveryJobDeadLetters': 'page',
+    'ReadAppMessage': 'object',
     'RecoverNotificationDeliveryJob': 'object',
   };
 

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	releaseimport "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/releaseimport"
+	releaseimport "quwoquan_service/services/user-service/internal/profile_projection/creator_runtime_profile/infrastructure/releaseimport"
 )
 
 func TestCreatorPersonaCommandMetaSeparatesActivationRuns(t *testing.T) {

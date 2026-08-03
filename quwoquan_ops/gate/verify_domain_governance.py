@@ -33,6 +33,9 @@ from quwoquan_ops.cli.lib.media_delivery_manifest import (
     build_media_delivery_url,
     load_media_delivery_manifest,
 )
+from quwoquan_ops.gate.verify_domain_model_storage_governance import (
+    collect_storage_governance_issues,
+)
 
 
 RETIRED_AUTHORITY_TOKENS = (
@@ -126,6 +129,7 @@ def _tracked_files() -> list[Path]:
 
 def main() -> int:
     issues: list[str] = []
+    issues.extend(collect_storage_governance_issues(ROOT))
     topology = load_environment_topology()
     media_assets = load_media_delivery_manifest()
     tracked_files = _tracked_files()

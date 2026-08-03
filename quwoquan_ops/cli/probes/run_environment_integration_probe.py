@@ -326,7 +326,10 @@ def build_checks(
             "name": "global_search",
             "method": "POST",
             "url": f"{base}/search",
-            "headers": _json_headers(args.test_auth_token),
+            "headers": {
+                **_json_headers(args.test_auth_token),
+                "X-Session-Id": "stackctl-environment-probe",
+            },
             "body": json.dumps(
                 {"query": "西湖", "mode": "result", "limit": 1},
                 ensure_ascii=False,

@@ -3,36 +3,21 @@ package application
 import (
 	"context"
 	"errors"
-	"strings"
-	"time"
+
+	tombstonemodel "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/model"
+	tombstoneports "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/domain/ports"
 )
 
-type Tombstone struct {
-	PostID        string
-	AuthorID      string
-	SourceEventID string
-	DeletedAt     time.Time
-	RecordedAt    time.Time
-}
+type Appender struct{ store tombstoneports.Store }
 
-type Store interface {
-	AppendIfAbsent(context.Context, Tombstone) (bool, error)
-	Exists(context.Context, string) (bool, error)
-}
+func NewAppender(store tombstoneports.Store) *Appender { return &Appender{store: store} }
 
-type Appender struct{ store Store }
-
-func NewAppender(store Store) *Appender { return &Appender{store: store} }
-
-func (a *Appender) Append(ctx context.Context, tombstone Tombstone) (bool, error) {
+func (a *Appender) Append(ctx context.Context, tombstone tombstonemodel.Tombstone) (bool, error) {
 	if a == nil || a.store == nil {
 		return false, errors.New("deleted post tombstone store is unavailable")
 	}
-	if strings.TrimSpace(tombstone.PostID) == "" || strings.TrimSpace(tombstone.SourceEventID) == "" || tombstone.DeletedAt.IsZero() {
-		return false, errors.New("deleted post tombstone identity and deletedAt are required")
-	}
-	if tombstone.RecordedAt.IsZero() {
-		tombstone.RecordedAt = time.Now().UTC()
+	if err := tombstone.Validate(); err != nil {
+		return false, err
 	}
 	return a.store.AppendIfAbsent(ctx, tombstone)
 }

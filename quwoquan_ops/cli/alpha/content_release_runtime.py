@@ -37,7 +37,7 @@ from quwoquan_ops.cli.lib.immutable_image_composition import (
     bind_packaged_image_composition,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import (
-    load_protected_provider_environment,
+    load_nonprod_provider_environment,
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     assert_local_runtime_available,
@@ -219,9 +219,10 @@ def _compose_build_environment() -> dict[str, str]:
 def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[str, str]:
     ports = profile_ports(load_port_manifest(), TARGET)
     auth = prepare_local_environment_auth(ENVIRONMENT, TARGET)
-    provider = load_protected_provider_environment(
+    provider = load_nonprod_provider_environment(
         environment=ENVIRONMENT,
         target_name=TARGET,
+        source=auth.environment,
     )
     storage = prepare_local_alpha_object_storage(edge_port=ports["object-storage-edge"])
     env = os.environ.copy()

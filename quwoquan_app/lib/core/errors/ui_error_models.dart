@@ -35,6 +35,11 @@ enum UiErrorTone { neutral, info, caution, critical }
 /// 技术诊断仅进入脱敏日志和遥测。
 enum AppUserRecoveryGroup {
   connectNetwork,
+  connectionUnavailable,
+  requestTimedOut,
+  serviceUnavailable,
+  invalidContent,
+  guestSessionUnavailable,
   reloadLater,
   loginAgain,
   enablePermission,

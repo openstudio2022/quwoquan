@@ -1,0 +1,63 @@
+description: Connector native/OAuth 授权状态、一次性 grant receipt 与命令输入。
+fields:
+- {name: authorizationId, source: authorizationId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: connectorId, source: connectorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: authorizationMode, source: authorizationMode, type: enum, enum_ref: ConnectorAuthorizationMode, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: requestedCapabilities, source: requestedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: ConnectorAuthorizationStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: continuationDigest, source: continuationDigest, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: proofDigest, source: proofDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: grantReceiptDigest, source: grantReceiptDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: credentialRef, source: credentialRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: verifiedAt, source: verifiedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: consumedAt, source: consumedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+types:
+  StartConnectorAuthorizationRequest:
+    fields:
+    - {name: connectorId, source: connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: requestedCapabilities, source: requestedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+  GetConnectorAuthorizationQuery:
+    fields:
+    - {name: authorizationId, source: path.authorizationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+  ConnectorAuthorizationView:
+    description: App 可恢复授权旅程的脱敏状态；不含 continuation、proof、credential 或 grant receipt。
+    fields:
+    - {name: authorizationId, source: authorizationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: connectorId, source: connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: authorizationMode, source: authorizationMode, type: enum, enum_ref: ConnectorAuthorizationMode, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: requestedCapabilities, source: requestedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: status, source: status, type: enum, enum_ref: ConnectorAuthorizationStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: verifiedAt, source: verifiedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+  ConnectorAuthorizationIntent:
+    description: App 启动 native 或 OAuth handoff 所需的短期不透明 continuation；不包含任意 URL 或 Provider 参数。
+    fields:
+    - {name: authorization, source: authorization, type: ConnectorAuthorizationView, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: continuationRef, source: continuationRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: none}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CompleteNativeConnectorAuthorizationRequest:
+    fields:
+    - {name: authorizationId, source: path.authorizationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: nativeGrantProofRef, source: nativeGrantProofRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+  CompleteOAuthConnectorAuthorizationRequest:
+    fields:
+    - {name: authorizationId, source: path.authorizationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: oauthCallbackRef, source: oauthCallbackRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+  ConnectorAuthorizationGrantReceipt:
+    description: 验证成功后一次性返回给同账号连接创建命令的短期 bearer reference；不得记录或展示。
+    fields:
+    - {name: authorization, source: authorization, type: ConnectorAuthorizationView, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: grantReceiptRef, source: grantReceiptRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: none}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

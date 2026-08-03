@@ -1,5 +1,5 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -23,14 +23,14 @@ class MemberDtoListSectionData {
   const MemberDtoListSectionData({required this.header, required this.members});
 
   final String header;
-  final List<ChatConversationMemberDto> members;
+  final List<ConversationMemberListRow> members;
 }
 
-String memberDtoDisplayName(ChatConversationMemberDto m) =>
+String memberDtoDisplayName(ConversationMemberListRow m) =>
     m.displayName.trim().isNotEmpty ? m.displayName.trim() : '';
 
 List<MemberDtoListSectionData> buildGroupedMemberDtoSections(
-  List<ChatConversationMemberDto> members,
+  List<ConversationMemberListRow> members,
 ) {
   final owners = members.where((m) => m.role == 'owner').toList();
   final rest = members.where((m) => m.role != 'owner').toList();
@@ -38,10 +38,10 @@ List<MemberDtoListSectionData> buildGroupedMemberDtoSections(
     (a, b) => memberDtoDisplayName(a).compareTo(memberDtoDisplayName(b)),
   );
 
-  final buckets = <String, List<ChatConversationMemberDto>>{};
+  final buckets = <String, List<ConversationMemberListRow>>{};
   for (final m in rest) {
     final key = _bucketKeyForName(memberDtoDisplayName(m));
-    buckets.putIfAbsent(key, () => <ChatConversationMemberDto>[]).add(m);
+    buckets.putIfAbsent(key, () => <ConversationMemberListRow>[]).add(m);
   }
 
   final keys = buckets.keys.toList()..sort(_compareBucketKeys);
