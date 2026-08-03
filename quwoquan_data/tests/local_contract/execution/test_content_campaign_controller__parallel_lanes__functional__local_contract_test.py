@@ -10,7 +10,7 @@ import pytest
 from core.control_types import TargetSelector
 from core.execution_branch import current_git_branch, stamp_execution_branch
 from core.io import read_json
-from content.execution import campaign_controller, campaign_submission
+from content.execution import campaign_controller, campaign_orchestrator, campaign_submission
 from content.execution.campaign_workspace import CampaignRuntimePaths
 from content.execution.request import RuntimeExecutionRequest
 
@@ -332,6 +332,18 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     event_log = tmp_path / "events.ndjson"
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
     monkeypatch.setenv("SLOW_REVIEW_CARRIER", "video")
+    report_updates: list[dict[str, object]] = []
+    write_report = campaign_orchestrator.write_report
+
+    def recording_write_report(*args, **kwargs):
+        report_updates.append(json.loads(json.dumps(kwargs)))
+        return write_report(*args, **kwargs)
+
+    monkeypatch.setattr(
+        campaign_orchestrator,
+        "write_report",
+        recording_write_report,
+    )
 
     report_path = campaign_controller.run_campaign(
         ROOT_ID,
@@ -379,6 +391,25 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
         assert lane["publishReturnCode"] == 0
         assert lane["qualifiedCount"] == 1
         assert lane["finalizedCount"] == 1
+    clone_progress = {
+        sum(
+            1
+            for lane in update["lanes"].values()
+            if lane["status"] == "clone_ready"
+        )
+        for update in report_updates
+        if update["status"] == "running" and update["phase"] == "clone"
+    }
+    assert {1, 2, 3, 4} <= clone_progress
+    assert any(
+        update["status"] == "running"
+        and update["phase"] == "publish"
+        and any(
+            int(lane.get("finalizedCount") or 0) > 0
+            for lane in update["lanes"].values()
+        )
+        for update in report_updates
+    )
     _assert_clones_cleaned(runtime, report)
 
 

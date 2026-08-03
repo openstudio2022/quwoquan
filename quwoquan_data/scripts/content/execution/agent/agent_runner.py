@@ -73,6 +73,25 @@ def _prompt_cursor_agent(
         agent.close()
 
 
+def _close_cursor_client(
+    client: Any,
+    *,
+    workspace: Path,
+    terminate_bridges: bool,
+) -> None:
+    """Close the public client and reap any managed-local bridge it leaves behind."""
+    try:
+        client.close()
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"[cursor-agent] client close failed: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+    finally:
+        if terminate_bridges:
+            _terminate_workspace_cursor_bridges(workspace)
+
+
 def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
     """Run Cursor SDK and return the sole typed managed-agent result."""
     from content.execution.agent.outcome import AgentRunOutcome
@@ -321,13 +340,11 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             request_bridge_retry = retryable
         finally:
             if client is not None:
-                try:
-                    client.close()
-                except Exception as exc:  # noqa: BLE001
-                    print(
-                        f"[cursor-agent] client close failed: {type(exc).__name__}",
-                        file=sys.stderr,
-                    )
+                _close_cursor_client(
+                    client,
+                    workspace=workspace,
+                    terminate_bridges=_managed_uses_serial_local_cursor(ctx),
+                )
 
         if result is not None:
             break

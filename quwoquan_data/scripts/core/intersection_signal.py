@@ -24,7 +24,7 @@ from core.paths import service_contracts_root
 INTERSECTION_CONTRACT_PATH = (
     service_contracts_root("recommendation-service")
     / "recommendation"
-    / "recommendation_model_release"
+    / "recommendation_feature_profile_view"
     / "projections"
     / "intersection_reason.yaml"
 )
@@ -44,19 +44,17 @@ MIN_HINTS = 2
 
 @lru_cache(maxsize=1)
 def contract_field_names() -> frozenset[str]:
-    """读契约 client_projection.fields 的字段名集合，作为 hint 字段对齐校验的真相源。"""
+    """读契约 fields 的字段名集合，作为 hint 字段对齐校验的真相源。"""
     if not INTERSECTION_CONTRACT_PATH.is_file():
         raise FileNotFoundError(
             f"IntersectionReason metadata is required: {INTERSECTION_CONTRACT_PATH}"
         )
     with INTERSECTION_CONTRACT_PATH.open(encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
-    fields = ((data.get("client_projection") or {}).get("fields")) or []
+    fields = data.get("fields") or []
     names = frozenset(str(f.get("name")) for f in fields if f.get("name"))
     if not names:
-        raise ValueError(
-            "IntersectionReason metadata must declare client_projection.fields"
-        )
+        raise ValueError("IntersectionReason metadata must declare fields")
     return names
 
 

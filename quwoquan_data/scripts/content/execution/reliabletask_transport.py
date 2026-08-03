@@ -1,6 +1,7 @@
 """Resolve and probe the Ops-owned ReliableTask fleet transport."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import socket
 import subprocess
@@ -10,7 +11,7 @@ from dataclasses import dataclass
 from typing import Mapping
 from urllib.parse import urlparse
 
-from core.paths import REPO_ROOT
+from core.paths import DATA_LOCAL_ROOT, REPO_ROOT
 
 
 _STACKCTL_PATH = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
@@ -104,32 +105,51 @@ def _transport_socket_parts(
     return (mongo.hostname, mongo.port), (redis_host, int(redis_port))
 
 
+@contextmanager
+def _fleet_reconciliation_guard():
+    """Serialize readiness checks with side-effecting stackctl reconciliation."""
+    lock_path = DATA_LOCAL_ROOT / "cache" / "reliabletask-fleet-preflight.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import fcntl  # type: ignore
+    except Exception:  # noqa: BLE001
+        yield
+        return
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def reliabletask_fleet_preflight() -> dict[str, object]:
     """Probe the resolved fleet control plane before expensive source work starts."""
-    transport = resolve_reliabletask_fleet_transport()
-    from core.runtime_policy import active_runtime_policy
+    with _fleet_reconciliation_guard():
+        transport = resolve_reliabletask_fleet_transport()
+        from core.runtime_policy import active_runtime_policy
 
-    timeout = float(active_runtime_policy().preflight_network_timeout_seconds)
-    if not _fleet_transport_ready(transport, socket_timeout_seconds=timeout):
-        _ensure_reliabletask_fleet_transport(transport)
-    mongo, redis = _transport_socket_parts(transport)
-    checks: list[tuple[str, tuple[str, int]]] = [("mongo", mongo), ("redis", redis)]
-    outcomes: dict[str, bool] = {}
-    issues: list[str] = []
-    for name, address in checks:
-        try:
-            with socket.create_connection(address, timeout=timeout):
-                outcomes[name] = True
-        except OSError as exc:
-            outcomes[name] = False
-            issues.append(f"{name} endpoint unavailable: {type(exc).__name__}")
-    return {
-        "ready": not issues,
-        "target": transport.target,
-        "mongo": outcomes["mongo"],
-        "redis": outcomes["redis"],
-        "issues": issues,
-    }
+        timeout = float(active_runtime_policy().preflight_network_timeout_seconds)
+        if not _fleet_transport_ready(transport, socket_timeout_seconds=timeout):
+            _ensure_reliabletask_fleet_transport(transport)
+        mongo, redis = _transport_socket_parts(transport)
+        checks: list[tuple[str, tuple[str, int]]] = [("mongo", mongo), ("redis", redis)]
+        outcomes: dict[str, bool] = {}
+        issues: list[str] = []
+        for name, address in checks:
+            try:
+                with socket.create_connection(address, timeout=timeout):
+                    outcomes[name] = True
+            except OSError as exc:
+                outcomes[name] = False
+                issues.append(f"{name} endpoint unavailable: {type(exc).__name__}")
+        return {
+            "ready": not issues,
+            "target": transport.target,
+            "mongo": outcomes["mongo"],
+            "redis": outcomes["redis"],
+            "issues": issues,
+        }
 
 
 def _fleet_transport_ready(

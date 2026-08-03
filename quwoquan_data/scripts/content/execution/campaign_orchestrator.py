@@ -87,20 +87,24 @@ def run_campaign(
                 )
             final_phase = "freeze"
             plan, plan_digest = freeze_plan(runtime, root_id, submissions)
-            write_report(
-                runtime,
-                root_id,
-                status="running",
-                phase="clone",
-                plan_digest=plan_digest,
-                git_branch=str(plan["gitBranch"]),
-                git_commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-                entity_catalog_digest=str(plan["entityCatalogDigest"]),
-                lanes=lanes,
-                started_at=started_at,
-                failure=None,
-            )
+
+            def persist_running_report(phase: str) -> None:
+                write_report(
+                    runtime,
+                    root_id,
+                    status="running",
+                    phase=phase,
+                    plan_digest=plan_digest,
+                    git_branch=str(plan["gitBranch"]),
+                    git_commit_sha=str(plan["gitCommitSha"]),
+                    source_digest=str(plan["sourceDigest"]),
+                    entity_catalog_digest=str(plan["entityCatalogDigest"]),
+                    lanes=lanes,
+                    started_at=started_at,
+                    failure=None,
+                )
+
+            persist_running_report("clone")
             final_phase = "clone"
             for carrier in CAMPAIGN_CARRIERS:
                 clone = prepare_detached_clone(
@@ -122,6 +126,7 @@ def run_campaign(
                         "cleanupStatus": "pending",
                     }
                 )
+                persist_running_report("clone")
             assert_frozen_main_tree(
                 runtime.repo_root,
                 git_branch=str(plan["gitBranch"]),
@@ -161,6 +166,7 @@ def run_campaign(
                 )
                 if code != 0:
                     lanes[carrier]["status"] = "blocked"
+                    persist_running_report("publish")
                     return
                 try:
                     receipt = load_lane_receipt(
@@ -172,6 +178,7 @@ def run_campaign(
                 except (OSError, ValueError) as exc:
                     lanes[carrier]["status"] = "blocked"
                     lanes[carrier]["error"] = str(exc)
+                    persist_running_report("publish")
                     return
                 if str(receipt.get("executionId") or "") != str(
                     submissions[carrier]["executionId"]
@@ -180,8 +187,10 @@ def run_campaign(
                     lanes[carrier]["error"] = (
                         f"{carrier} publish receipt executionId drift"
                     )
+                    persist_running_report("publish")
                     return
                 apply_receipt_fields(lanes, carrier, receipt, phase="publish")
+                persist_running_report("publish")
 
             def handle_review_result(
                 carrier: str,
@@ -197,6 +206,7 @@ def run_campaign(
                 )
                 if code != 0:
                     lanes[carrier]["status"] = "blocked"
+                    persist_running_report("review")
                     return
                 receipt = load_review_for_lane(
                     runtime,
@@ -210,6 +220,7 @@ def run_campaign(
                     lanes[carrier]["error"] = (
                         error or f"{carrier} review receipt missing after success"
                     )
+                    persist_running_report("review")
                     return
                 apply_receipt_fields(lanes, carrier, receipt, phase="review")
                 if int(receipt["qualifiedCount"]) > 0 and str(
@@ -218,6 +229,7 @@ def run_campaign(
                     publish_reviewed_lane(carrier)
                 else:
                     lanes[carrier]["status"] = "blocked"
+                    persist_running_report("review")
 
             run_phase(
                 clones,
@@ -230,20 +242,7 @@ def run_campaign(
                 lane_runner=lane_runner,
                 on_result=handle_review_result,
             )
-            write_report(
-                runtime,
-                root_id,
-                status="running",
-                phase="publish",
-                plan_digest=plan_digest,
-                git_branch=str(plan["gitBranch"]),
-                git_commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-                entity_catalog_digest=str(plan["entityCatalogDigest"]),
-                lanes=lanes,
-                started_at=started_at,
-                failure=None,
-            )
+            persist_running_report("publish")
             final_phase = "publish"
             assert_frozen_revision(
                 runtime.repo_root,

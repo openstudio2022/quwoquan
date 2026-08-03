@@ -1,7 +1,7 @@
 """交集信号 intersectionHints 红绿测试 ——「明」：讲清推荐理由 + 对齐 IntersectionReason 口径。
 
 覆盖：
-- 契约字段对齐：hint 字段集 ⊆ model_release/intersection_reason.yaml 的 client_projection.fields。
+- 契约字段对齐：hint 字段集 ⊆ feature_profile_view/intersection_reason.yaml 的 fields。
 - build_intersection_hints：entityRefs→content、非地理 tag→interest。
 - 完备性门：缺维度/不足条数/枚举非法/锚点悬空/off-contract 字段均报。
 - materialize 端到端：产出 manifest.intersectionHints 且完备性门全绿。
@@ -30,6 +30,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.intersection_signal import (  # noqa: E402
     HINT_FIELDS,
+    INTERSECTION_CONTRACT_PATH,
     build_intersection_hints,
     contract_field_names,
     intersection_hint_issues,
@@ -49,8 +50,16 @@ _MANIFEST = {
 
 def test_hint_fields_align_with_contract():
     contract = contract_field_names()
-    assert contract, "必须能读到 model_release/intersection_reason.yaml 契约字段"
+    assert contract, "必须能读到 feature_profile_view/intersection_reason.yaml 契约字段"
     assert set(HINT_FIELDS) <= contract, set(HINT_FIELDS) - contract
+
+
+def test_intersection_contract_uses_current_feature_profile_owner():
+    assert INTERSECTION_CONTRACT_PATH.parts[-3:] == (
+        "recommendation_feature_profile_view",
+        "projections",
+        "intersection_reason.yaml",
+    )
 
 
 def test_build_hints_covers_content_interest():

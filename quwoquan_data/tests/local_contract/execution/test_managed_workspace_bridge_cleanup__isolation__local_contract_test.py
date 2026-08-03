@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from content.execution.agent import agent_worker, managed_workspace
+from content.execution.agent import agent_runner, agent_worker, managed_workspace
 from content.execution.controller import preflight
 
 
@@ -35,3 +35,30 @@ def test_bridge_cleanup_only_terminates_explicit_same_workspace(monkeypatch, tmp
     managed_workspace.terminate_workspace_cursor_bridges(workspace)
 
     assert terminated == [101, 103]
+
+
+def test_client_close_reaps_managed_local_bridge_even_after_success(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    events: list[tuple[str, object]] = []
+
+    class Client:
+        def close(self) -> None:
+            events.append(("close", None))
+
+    monkeypatch.setattr(
+        agent_runner,
+        "_terminate_workspace_cursor_bridges",
+        lambda path: events.append(("terminate", path)),
+    )
+
+    agent_runner._close_cursor_client(
+        Client(),
+        workspace=workspace,
+        terminate_bridges=True,
+    )
+
+    assert events == [("close", None), ("terminate", workspace)]

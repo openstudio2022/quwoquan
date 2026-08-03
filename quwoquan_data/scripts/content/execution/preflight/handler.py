@@ -356,9 +356,12 @@ def handle_ready(args: argparse.Namespace) -> None:
         return
     prepare = prepare_data_runtime_cache()
     preflight_python = Path(str(prepare.get("python") or "")).expanduser()
+    delegated_to_runtime_child = bool(
+        prepare.get("ready") and preflight_python.is_file()
+    )
     preflight = (
         _preflight_in_python(args, preflight_python)
-        if prepare.get("ready") and preflight_python.is_file()
+        if delegated_to_runtime_child
         else environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
@@ -370,7 +373,10 @@ def handle_ready(args: argparse.Namespace) -> None:
             cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
         )
     )
-    if os.environ.get(_RUNTIME_CHILD_ENV) != "1":
+    # `_preflight_in_python` forwards the fleet requirement to the verified
+    # runtime child. Running the same side-effecting topology reconciliation
+    # again in this parent races sibling campaign lanes during cold start.
+    if not delegated_to_runtime_child:
         _apply_reliabletask_fleet_gate(preflight, args)
     startup_timeout_seconds = _startup_timeout_seconds(args)
     cursor_startup = (
