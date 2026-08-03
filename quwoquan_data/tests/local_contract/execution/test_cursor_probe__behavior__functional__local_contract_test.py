@@ -12,14 +12,26 @@ from content.execution.preflight import handler as preflight_handler
 
 
 def test_cursor_sdk_dependency_pin_matches_repaired_runtime() -> None:
-    requirements = Path(__file__).resolve().parents[3] / "requirements.txt"
+    data_root = Path(__file__).resolve().parents[3]
+    requirements = data_root / "requirements.txt"
     pins = {
         line.strip()
         for line in requirements.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
 
-    assert "cursor-sdk==0.1.9" in pins
+    assert "cursor-sdk==1.0.26" in pins
+    sdk_boundary = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            data_root / "scripts/core/cursor_startup_probe.py",
+            data_root / "scripts/content/execution/agent/agent_runner.py",
+            data_root / "scripts/content/execution/controller/preflight.py",
+        )
+    )
+    assert "cursor_sdk._tool_callback" not in sdk_boundary
+    assert "_patch_cursor_sdk_tool_callback_token" not in sdk_boundary
+    assert "ModelSelection(" in sdk_boundary
 
 
 def test_cursor_startup_probe_suite_classifies_auth_5xx_and_bridge(monkeypatch):
@@ -87,6 +99,46 @@ def test_cursor_startup_probe_suite_realizes_runtime_policy_concurrency(monkeypa
     )
     assert report["unrecoveredFailures"] == 0
     assert [row["attempt"] for row in report["results"]] == list(range(1, 7))
+
+
+def test_cursor_workspace_probe_suite_realizes_four_isolated_lanes(
+    monkeypatch,
+    tmp_path,
+):
+    workspaces = tuple(
+        tmp_path / carrier
+        for carrier in ("homepage", "article", "image", "video")
+    )
+    for workspace in workspaces:
+        workspace.mkdir()
+
+    def _ready_probe(*, cwd, **_kwargs):
+        time.sleep(0.02)
+        return {
+            "ready": True,
+            "status": "finished",
+            "agentId": f"agent-{cwd.name}",
+            "runId": f"run-{cwd.name}",
+            "sdkVersion": "1.0.26",
+        }
+
+    monkeypatch.setattr(pr, "cursor_startup_probe", _ready_probe)
+
+    report = pr.cursor_workspace_probe_suite(
+        workspaces=workspaces,
+        model="auto",
+    )
+
+    assert report["ready"] is True
+    assert report["successCount"] == 4
+    assert report["effectiveConcurrency"] == 4
+    assert {row["workspace"] for row in report["runs"]} == {
+        "homepage",
+        "article",
+        "image",
+        "video",
+    }
+    assert all(row["agentId"] and row["runId"] for row in report["runs"])
 
 
 def test_cached_cursor_startup_probe_reuses_recent_ready_result(monkeypatch, tmp_path):

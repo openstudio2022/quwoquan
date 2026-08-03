@@ -28,6 +28,27 @@ _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = active_runtime_policy().bridge_launch_c
 _CURSOR_BRIDGE_READY_DELAY_SECONDS = active_runtime_policy().bridge_ready_delay_seconds
 
 
+def _cursor_provider_rejection(message: str, *, code: str = "") -> bool:
+    """Identify non-retryable account/quota rejection from the public SDK."""
+    lowered = str(message or "").casefold()
+    code_lower = str(code or "").casefold()
+    return code_lower in {
+        "billing_limit_reached",
+        "insufficient_credits",
+        "quota_exceeded",
+        "usage_limit",
+    } or any(
+        marker in lowered
+        for marker in (
+            "you've hit your usage limit",
+            "usage limit",
+            "spend limit",
+            "monthly cycle ends",
+            "insufficient credits",
+        )
+    )
+
+
 def _prompt_cursor_agent(
     agent_cls: Any,
     prompt: str,
@@ -54,12 +75,10 @@ def _prompt_cursor_agent(
 
 def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
     """Run Cursor SDK and return the sole typed managed-agent result."""
-    from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
     from content.execution.agent.outcome import AgentRunOutcome
     from content.execution.controller.preflight import (
         _cursor_bridge_error_is_retryable,
         _cursor_bridge_launch_guard,
-        _patch_cursor_sdk_tool_callback_token,
     )
 
     provider = AgentProvider.CURSOR_SDK
@@ -98,6 +117,8 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             Client,
             CursorAgentError,
             LocalAgentOptions,
+            ModelParameterValue,
+            ModelSelection,
         )
     except (ImportError, ModuleNotFoundError) as exc:
         return failure(
@@ -111,7 +132,13 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             AgentFailureKind.CREDENTIAL_INVALID,
             "cursor API key file missing or invalid",
         )
-    _patch_cursor_sdk_tool_callback_token()
+    sdk_model = ModelSelection(
+        id=ctx.model_selection.model_id,
+        params=tuple(
+            ModelParameterValue(id=parameter.id, value=parameter.value)
+            for parameter in ctx.model_selection.parameters
+        ),
+    )
 
     workspace = Path.cwd()
     last_error: AgentRunOutcome | None = None
@@ -123,7 +150,6 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
 
     for attempt in range(_CURSOR_BRIDGE_MAX_RETRIES):
         client: Any | None = None
-        bridge_pids: list[int] = []
         request_bridge_retry = False
         try:
             if attempt and _managed_uses_serial_local_cursor(ctx):
@@ -134,24 +160,18 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                     max_retries=_CURSOR_BRIDGE_MAX_RETRIES,
                     allow_api_key_env_fallback=False,
                 )
-            owned_bridge = getattr(client, "_owned_bridge", None)
-            endpoint = getattr(owned_bridge, "endpoint", None)
-            process = getattr(owned_bridge, "process", None)
-            for pid in (getattr(process, "pid", None), getattr(endpoint, "pid", None)):
-                if isinstance(pid, int) and pid > 0 and pid not in bridge_pids:
-                    bridge_pids.append(pid)
             if _CURSOR_BRIDGE_READY_DELAY_SECONDS:
                 time.sleep(_CURSOR_BRIDGE_READY_DELAY_SECONDS)
             if str(ctx.runtime) == "cloud":
                 options = AgentOptions(
                     api_key=key,
-                    model=ctx.model_selection.to_sdk_document(),
+                    model=sdk_model,
                     cloud=CloudAgentOptions(repos=[]),
                 )
             else:
                 options = AgentOptions(
                     api_key=key,
-                    model=ctx.model_selection.to_sdk_document(),
+                    model=sdk_model,
                     local=LocalAgentOptions(cwd=str(workspace)),
                 )
 
@@ -185,6 +205,18 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                             AgentFailureKind.CREDENTIAL_INVALID,
                             f"cursor credential invalid (auth): {message}",
                             error_code=error_code,
+                            request_id=request_id,
+                            attempts=attempt + 1,
+                            warm_attempts=warm_attempt + 1,
+                        )
+                    if _cursor_provider_rejection(message, code=error_code):
+                        return failure(
+                            AgentFailureKind.PROVIDER_REJECTED,
+                            message,
+                            started=True,
+                            error_code=(
+                                error_code or AgentFailureKind.PROVIDER_REJECTED.value
+                            ),
                             request_id=request_id,
                             attempts=attempt + 1,
                             warm_attempts=warm_attempt + 1,
@@ -253,6 +285,16 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                         attempts=attempt + 1,
                     )
             else:
+                if _cursor_provider_rejection(message, code=error_code):
+                    return failure(
+                        AgentFailureKind.PROVIDER_REJECTED,
+                        message,
+                        error_code=(
+                            error_code or AgentFailureKind.PROVIDER_REJECTED.value
+                        ),
+                        request_id=request_id,
+                        attempts=attempt + 1,
+                    )
                 retryable = _cursor_bridge_error_is_retryable(
                     message,
                     code=error_code,
@@ -286,8 +328,6 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
                         f"[cursor-agent] client close failed: {type(exc).__name__}",
                         file=sys.stderr,
                     )
-            for pid in bridge_pids:
-                _terminate_pid_tree_if_alive(pid)
 
         if result is not None:
             break

@@ -6,9 +6,13 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-from core.cursor_startup_probe import cursor_startup_probe_suite
+from core.cursor_startup_probe import (
+    cursor_startup_probe_suite,
+    cursor_workspace_probe_suite,
+)
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
 from core.python_environment import prepare_data_runtime_cache
 from core.python_runtime import environment_preflight
@@ -86,7 +90,32 @@ def _print_cursor_probe(report: dict, *, as_json: bool) -> None:
         f"bridgeDisconnectRate={report.get('bridgeDisconnectRate')} "
         f"startupLatencyP95={report.get('startupLatencyP95')}"
     )
+    catalog = report.get("modelCatalog") or {}
+    if catalog.get("checked"):
+        print(
+            "[env cursor-probe] "
+            f"sdkVersion={catalog.get('sdkVersion') or '<unknown>'} "
+            f"accountModels={catalog.get('modelCount') or 0} "
+            "autoSelection=auto"
+        )
     print("[env cursor-probe] READY" if report.get("ready") else "[env cursor-probe] FAILED")
+    for item in report.get("issues") or []:
+        print(f"  - {item}", file=sys.stderr)
+
+
+def _print_cursor_workspace_smoke(report: dict) -> None:
+    print(
+        "[env cursor-workspace-smoke] "
+        f"workspaces={report.get('workspaceCount')} "
+        f"success={report.get('successCount')} "
+        f"effectiveConcurrency={report.get('effectiveConcurrency')} "
+        f"cleanup={report.get('cleanupStatus')}"
+    )
+    print(
+        "[env cursor-workspace-smoke] READY"
+        if report.get("ready")
+        else "[env cursor-workspace-smoke] FAILED"
+    )
     for item in report.get("issues") or []:
         print(f"  - {item}", file=sys.stderr)
 
@@ -100,6 +129,7 @@ def _capacity_soak_report() -> dict:
         attempts=policy.startup_probe_suite_attempts,
         timeout_seconds=policy.startup_timeout_seconds,
         cwd=Path.cwd(),
+        include_catalog=True,
     )
     issues = list(report.get("issues") or [])
     if int(report.get("successCount") or 0) != policy.startup_probe_suite_attempts:
@@ -123,6 +153,44 @@ def _capacity_soak_report() -> dict:
     }
     report["issues"] = list(dict.fromkeys(str(issue) for issue in issues if str(issue)))
     report["ready"] = not report["issues"]
+    return report
+
+
+def _workspace_smoke_report() -> dict:
+    """Exercise four independent campaign-lane workspaces concurrently."""
+    from content.execution.campaign_process import CAMPAIGN_CARRIERS
+
+    policy = active_runtime_policy()
+    smoke_parent = DATA_LOCAL_ROOT / "cache/cursor/workspace-smoke"
+    smoke_parent.mkdir(parents=True, exist_ok=True)
+    smoke_path: Path | None = None
+    with tempfile.TemporaryDirectory(
+        prefix="cursor-auto-",
+        dir=smoke_parent,
+    ) as temporary:
+        smoke_path = Path(temporary)
+        workspaces: list[Path] = []
+        for carrier in CAMPAIGN_CARRIERS:
+            workspace = smoke_path / carrier
+            workspace.mkdir()
+            workspaces.append(workspace)
+        report = cursor_workspace_probe_suite(
+            workspaces=workspaces,
+            model=policy.cursor_model_selection,
+            runtime=policy.cursor_runtime.value,
+            timeout_seconds=policy.startup_timeout_seconds,
+        )
+    cleanup_status = (
+        "cleaned"
+        if smoke_path is not None and not smoke_path.exists()
+        else "failed"
+    )
+    report["cleanupStatus"] = cleanup_status
+    if cleanup_status != "cleaned":
+        report["ready"] = False
+        report.setdefault("issues", []).append(
+            "Cursor workspace smoke temporary workspaces were not cleaned"
+        )
     return report
 
 
@@ -203,6 +271,7 @@ def handle_cursor_probe(args: argparse.Namespace) -> None:
         cwd=Path(str(getattr(args, "cwd", "") or ".")).expanduser().resolve()
         if getattr(args, "cwd", None)
         else None,
+        include_catalog=True,
     )
     report_out = getattr(args, "report_out", None)
     if report_out:
@@ -319,6 +388,15 @@ def handle_ready(args: argparse.Namespace) -> None:
         if run_soak and bool(prepare.get("ready")) and bool(preflight.get("ready"))
         else {}
     )
+    run_workspace_smoke = bool(getattr(args, "workspace_smoke", False))
+    workspace_smoke = (
+        _workspace_smoke_report()
+        if run_workspace_smoke
+        and bool(prepare.get("ready"))
+        and bool(preflight.get("ready"))
+        and (not run_soak or bool(capacity_soak.get("ready")))
+        else {}
+    )
     report = {
         "schema": "quwoquan_data.task_preflight",
         "prepare": prepare,
@@ -326,11 +404,16 @@ def handle_ready(args: argparse.Namespace) -> None:
         "cursorApiKey": preflight.get("cursorApiKey") or {},
         "cursorStartup": cursor_startup,
         "capacitySoak": capacity_soak,
+        "workspaceSmoke": workspace_smoke,
         "startupTimeoutSeconds": startup_timeout_seconds,
         "ready": (
             bool(prepare.get("ready"))
             and bool(preflight.get("ready"))
             and (not run_soak or bool(capacity_soak.get("ready")))
+            and (
+                not run_workspace_smoke
+                or bool(workspace_smoke.get("ready"))
+            )
         ),
     }
     report_out = getattr(args, "report_out", None)
@@ -351,6 +434,8 @@ def handle_ready(args: argparse.Namespace) -> None:
         _print_preflight(preflight, as_json=False)
         if run_soak:
             _print_cursor_probe(capacity_soak, as_json=False)
+        if run_workspace_smoke:
+            _print_cursor_workspace_smoke(workspace_smoke)
         print("[task preflight] READY" if report.get("ready") else "[task preflight] FAILED")
     if not report.get("ready"):
         raise SystemExit(1)
@@ -364,6 +449,27 @@ def _compact_ready_evidence(report: dict) -> dict:
     network = preflight.get("network") if isinstance(preflight.get("network"), dict) else {}
     startup = report.get("cursorStartup") if isinstance(report.get("cursorStartup"), dict) else {}
     capacity = report.get("capacitySoak") if isinstance(report.get("capacitySoak"), dict) else {}
+    workspace_smoke = (
+        report.get("workspaceSmoke")
+        if isinstance(report.get("workspaceSmoke"), dict)
+        else {}
+    )
+    catalog = (
+        capacity.get("modelCatalog")
+        if isinstance(capacity.get("modelCatalog"), dict)
+        else {}
+    )
+    capacity_runs = [
+        {
+            "attempt": row.get("attempt"),
+            "status": row.get("status"),
+            "agentId": row.get("agentId"),
+            "runId": row.get("runId"),
+            "sdkVersion": row.get("sdkVersion"),
+        }
+        for row in capacity.get("results") or []
+        if isinstance(row, dict)
+    ]
     fleet = (
         preflight.get("reliableTaskFleet")
         if isinstance(preflight.get("reliableTaskFleet"), dict)
@@ -401,6 +507,9 @@ def _compact_ready_evidence(report: dict) -> dict:
             "ready": bool(startup.get("checked")) and bool(startup.get("ready")),
             "runtime": startup.get("runtime"),
             "model": startup.get("model"),
+            "agentId": startup.get("agentId"),
+            "runId": startup.get("runId"),
+            "sdkVersion": startup.get("sdkVersion"),
             "issues": list(startup.get("issues") or []),
         },
         "capacitySoak": {
@@ -411,7 +520,40 @@ def _compact_ready_evidence(report: dict) -> dict:
             "bridgeDisconnectCount": capacity.get("bridgeDisconnectCount"),
             "probeJobsPerHour": capacity.get("probeJobsPerHour"),
             "startupLatencyP95": capacity.get("startupLatencyP95"),
+            "modelCatalog": {
+                "ready": bool(catalog.get("ready")),
+                "sdkVersion": catalog.get("sdkVersion"),
+                "modelCount": catalog.get("modelCount"),
+                "modelIds": list(catalog.get("modelIds") or []),
+                "autoSelection": catalog.get("autoSelection") or {},
+                "issues": list(catalog.get("issues") or []),
+            },
+            "runs": capacity_runs,
             "issues": list(capacity.get("issues") or []),
+        },
+        "workspaceSmoke": {
+            "ready": bool(workspace_smoke.get("ready")),
+            "workspaceCount": workspace_smoke.get("workspaceCount"),
+            "successCount": workspace_smoke.get("successCount"),
+            "configuredConcurrency": workspace_smoke.get("configuredConcurrency"),
+            "effectiveConcurrency": workspace_smoke.get("effectiveConcurrency"),
+            "elapsedSeconds": workspace_smoke.get("elapsedSeconds"),
+            "cleanupStatus": workspace_smoke.get("cleanupStatus"),
+            "runs": [
+                {
+                    "lane": row.get("lane"),
+                    "workspace": row.get("workspace"),
+                    "status": row.get("status"),
+                    "agentId": row.get("agentId"),
+                    "runId": row.get("runId"),
+                    "sdkVersion": row.get("sdkVersion"),
+                    "startedAt": row.get("startedAt"),
+                    "finishedAt": row.get("finishedAt"),
+                }
+                for row in workspace_smoke.get("runs") or []
+                if isinstance(row, dict)
+            ],
+            "issues": list(workspace_smoke.get("issues") or []),
         },
         "issues": list(preflight.get("issues") or []),
     }
@@ -427,6 +569,11 @@ def register_task_preflight_parser(subparsers: argparse._SubParsersAction) -> No
     pr.add_argument("--cursor-startup", action="store_true", help=argparse.SUPPRESS)
     pr.add_argument("--require-reliabletask-fleet", action="store_true", help=argparse.SUPPRESS)
     pr.add_argument("--soak", action="store_true", help="运行 runtime policy 定义的 Cursor SDK 并发容量探针")
+    pr.add_argument(
+        "--workspace-smoke",
+        action="store_true",
+        help="并发验证四个隔离 campaign workspace 的 Cursor Auto 启动边界",
+    )
     pr.add_argument("--report-out", dest="report_out", help="写出精简、脱敏的运行准入证据")
     pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

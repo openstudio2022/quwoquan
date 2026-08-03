@@ -10,7 +10,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from typing import Sequence
+
 from core.cursor_probe_classification import (
     cursor_probe_attempt_has_5xx as _cursor_probe_attempt_has_5xx,
     cursor_probe_attempt_is_auth as _cursor_probe_attempt_is_auth,
@@ -29,6 +30,126 @@ from core.python_environment import (
     _redact_secret_value,
     resolve_data_agent_python,
 )
+
+
+def cursor_model_catalog() -> dict:
+    """Read the account-visible model catalog through the public Cursor facade."""
+    try:
+        from core.cursor_credentials import resolve_cursor_api_key
+    except Exception:  # noqa: BLE001
+        from cursor_credentials import resolve_cursor_api_key  # type: ignore
+    key = resolve_cursor_api_key()
+    if not key:
+        return {
+            "schema": "quwoquan_data.cursor_model_catalog",
+            "checked": False,
+            "ready": False,
+            "issues": ["credential_not_ready"],
+            "modelIds": [],
+        }
+    catalog_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
+    code = r'''
+import importlib.metadata
+import json
+import sys
+
+try:
+    from cursor_sdk import Cursor
+except Exception as exc:
+    print(json.dumps({
+        "ready": False,
+        "errorClass": type(exc).__name__,
+        "error": f"cursor_sdk unavailable: {exc}",
+    }, ensure_ascii=False))
+    raise SystemExit(0)
+
+api_key = sys.stdin.readline().strip()
+try:
+    models = Cursor().models.list(api_key=api_key)
+    model_ids = sorted({
+        str(getattr(model, "id", "") or "").strip()
+        for model in models
+        if str(getattr(model, "id", "") or "").strip()
+    })
+    print(json.dumps({
+        "ready": bool(model_ids),
+        "sdkVersion": importlib.metadata.version("cursor-sdk"),
+        "modelIds": model_ids,
+    }, ensure_ascii=False))
+except Exception as exc:
+    print(json.dumps({
+        "ready": False,
+        "errorClass": type(exc).__name__,
+        "error": str(exc),
+    }, ensure_ascii=False))
+'''
+    try:
+        proc = subprocess.run(
+            [str(catalog_python), "-c", code],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=max(
+                10,
+                active_runtime_policy().preflight_network_timeout_seconds * 3,
+            ),
+            env={
+                name: value
+                for name, value in os.environ.items()
+                if name != "CURSOR_API_KEY"
+            },
+            input=f"{key}\n",
+            cwd=REPO_ROOT,
+        )
+        payload = json.loads((proc.stdout or "{}").strip() or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("Cursor model catalog returned a non-object payload")
+        model_ids = [
+            str(model_id)
+            for model_id in payload.get("modelIds") or []
+            if str(model_id)
+        ]
+        ready = bool(proc.returncode == 0 and payload.get("ready") and model_ids)
+        error = _redact_secret_text(
+            str(payload.get("error") or proc.stderr or ""),
+            secrets=(key,),
+        )
+        return {
+            "schema": "quwoquan_data.cursor_model_catalog",
+            "checked": True,
+            "ready": ready,
+            "sdkVersion": str(payload.get("sdkVersion") or ""),
+            "modelCount": len(model_ids),
+            "modelIds": model_ids,
+            "autoSelection": {
+                "requestedId": "auto",
+                "literalCatalogEntry": "auto" in model_ids,
+                "providerDefaultEntry": "default" in model_ids,
+            },
+            "errorClass": payload.get("errorClass"),
+            "error": error or None,
+            "issues": (
+                []
+                if ready
+                else [
+                    error
+                    or "Cursor account model catalog request failed"
+                ]
+            ),
+        }
+    except (json.JSONDecodeError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        return {
+            "schema": "quwoquan_data.cursor_model_catalog",
+            "checked": True,
+            "ready": False,
+            "sdkVersion": "",
+            "modelCount": 0,
+            "modelIds": [],
+            "errorClass": type(exc).__name__,
+            "error": _redact_secret_text(str(exc), secrets=(key,)),
+            "issues": ["Cursor account model catalog request failed"],
+        }
+
 
 def cursor_startup_probe(
     *,
@@ -71,40 +192,51 @@ def cursor_startup_probe(
     probe_cwd = str((cwd or REPO_ROOT).resolve())
     probe_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
     code = r'''
+import importlib.metadata
 import json
 import os
 import sys
 
-token_patch_warning = None
 try:
-    from cursor_sdk import Agent, AgentOptions, CloudAgentOptions, LocalAgentOptions, Client
-    from cursor_sdk.types import ModelSelection
-    try:
-        from cursor_sdk.errors import CursorAgentError
-    except Exception:
-        from cursor_sdk import CursorAgentError
-    try:
-        import cursor_sdk._tool_callback as tool_callback
-        _original_new_auth_token = getattr(tool_callback, "_new_auth_token", None)
-        if callable(_original_new_auth_token) and not getattr(_original_new_auth_token, "_qwq_safe_token_factory", False):
-            def _new_auth_token_without_leading_dash():
-                token = str(_original_new_auth_token() or "")
-                if token.startswith("-"):
-                    return "qwq_" + token.lstrip("-")
-                return token
-            setattr(_new_auth_token_without_leading_dash, "_qwq_safe_token_factory", True)
-            setattr(tool_callback, "_new_auth_token", _new_auth_token_without_leading_dash)
-    except Exception as exc:
-        token_patch_warning = type(exc).__name__
+    from cursor_sdk import (
+        Agent,
+        AgentOptions,
+        CloudAgentOptions,
+        Client,
+        CursorAgentError,
+        LocalAgentOptions,
+        ModelParameterValue,
+        ModelSelection,
+    )
 except Exception as exc:
     print(json.dumps({"ready": False, "started": False, "error": f"cursor_sdk unavailable: {exc}"}, ensure_ascii=False))
     raise SystemExit(0)
 
 api_key = sys.stdin.readline().strip()
-model = ModelSelection.from_json(json.loads(sys.argv[1]))
+model_doc = json.loads(sys.argv[1])
+model = ModelSelection(
+    id=str(model_doc["id"]),
+    params=tuple(
+        ModelParameterValue(id=str(parameter["id"]), value=str(parameter["value"]))
+        for parameter in model_doc.get("params", [])
+    ),
+)
 runtime = sys.argv[2]
 cwd = sys.argv[3]
 bridge_timeout = int(sys.argv[4])
+def is_provider_rejection(message):
+    lowered = str(message or "").casefold()
+    return any(
+        marker in lowered
+        for marker in (
+            "you've hit your usage limit",
+            "usage limit",
+            "spend limit",
+            "monthly cycle ends",
+            "insufficient credits",
+        )
+    )
+
 try:
     with Client.launch_bridge(
         workspace=cwd,
@@ -112,8 +244,6 @@ try:
         local=LocalAgentOptions(cwd=cwd, setting_sources=[]),
         allow_api_key_env_fallback=False,
     ) as client:
-        bridge = getattr(client, "_owned_bridge", None)
-        endpoint = getattr(bridge, "endpoint", None)
         if runtime == "cloud":
             opts = AgentOptions(api_key=api_key, model=model, cloud=CloudAgentOptions(repos=[]))
         else:
@@ -140,38 +270,52 @@ try:
             result = run.wait()
         finally:
             agent.close()
-    status = getattr(result, "status", "")
+    raw_status = getattr(result, "status", "")
+    status = str(getattr(raw_status, "value", raw_status))
+    agent_id = str(getattr(result, "agent_id", "") or "")
+    run_id = str(getattr(result, "id", "") or "")
+    identity_ready = bool(agent_id and run_id)
+    ready = status == "finished" and identity_ready
     print(json.dumps({
-        "ready": status == "finished",
+        "ready": ready,
         "started": True,
         "probeType": "agent_prompt_smoke",
         "status": status,
-        "errorClass": "AgentStatusError" if status != "finished" else None,
-        "error": terminal_status_message if status != "finished" else None,
-        "errorCode": "provider_rejected" if terminal_status_message else None,
+        "errorClass": "AgentStatusError" if not ready else None,
+        "error": (
+            terminal_status_message
+            if status != "finished"
+            else ("finished Cursor run is missing agentId/runId" if not identity_ready else None)
+        ),
+        "errorCode": (
+            "provider_rejected"
+            if terminal_status_message
+            else ("invalid_run_identity" if not identity_ready else None)
+        ),
         "retryable": False,
-        "agentId": getattr(result, "agent_id", None),
-        "runId": getattr(result, "id", None),
-        "bridgePid": getattr(endpoint, "pid", None),
-        "bridgeVersion": getattr(endpoint, "server_version", ""),
-        "tokenPatchWarning": token_patch_warning,
+        "agentId": agent_id or None,
+        "runId": run_id or None,
+        "sdkVersion": importlib.metadata.version("cursor-sdk"),
     }, ensure_ascii=False))
 except CursorAgentError as exc:
+    error_message = getattr(exc, "message", str(exc))
+    provider_rejected = is_provider_rejection(error_message)
     print(json.dumps({
         "ready": False,
         "started": False,
         "probeType": "agent_prompt_smoke",
         "status": "error",
         "errorClass": type(exc).__name__,
-        "error": getattr(exc, "message", str(exc)),
-        "retryable": bool(getattr(exc, "is_retryable", False)),
-        "errorCode": getattr(exc, "code", None),
+        "error": error_message,
+        "retryable": False if provider_rejected else bool(getattr(exc, "is_retryable", False)),
+        "errorCode": "provider_rejected" if provider_rejected else getattr(exc, "code", None),
         "httpStatus": getattr(exc, "status", None),
         "protoErrorCode": getattr(exc, "proto_error_code", None),
         "requestId": getattr(exc, "request_id", None),
         "details": getattr(exc, "details", None),
         "headers": dict(getattr(exc, "headers", {}) or {}),
         "retryAfter": getattr(exc, "retry_after", None),
+        "sdkVersion": importlib.metadata.version("cursor-sdk"),
     }, ensure_ascii=False))
 except Exception as exc:
     print(json.dumps({
@@ -181,6 +325,7 @@ except Exception as exc:
         "status": "error",
         "errorClass": type(exc).__name__,
         "error": str(exc),
+        "sdkVersion": importlib.metadata.version("cursor-sdk"),
     }, ensure_ascii=False))
 '''
     deadline = time.monotonic() + max(1, effective_timeout_seconds)
@@ -366,6 +511,9 @@ except Exception as exc:
             payload.get("retryAfter"),
             secrets=(key,),
         ),
+        "agentId": payload.get("agentId"),
+        "runId": payload.get("runId"),
+        "sdkVersion": payload.get("sdkVersion"),
         "attemptCount": len(attempts),
         "attempts": attempts,
         "issues": issues,
@@ -379,6 +527,7 @@ def cursor_startup_probe_suite(
     attempts: int | None = None,
     timeout_seconds: float | None = None,
     cwd: Path | None = None,
+    include_catalog: bool = False,
 ) -> dict:
     """Run repeated Cursor startup probes and classify admission blockers.
 
@@ -404,6 +553,7 @@ def cursor_startup_probe_suite(
     )
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     suite_started = time.monotonic()
+    catalog = cursor_model_catalog() if include_catalog else None
     rows: list[dict] = []
     latencies: list[float] = []
     success_count = 0
@@ -491,6 +641,9 @@ def cursor_startup_probe_suite(
                 "errorClass": _redact_secret_value(payload.get("errorClass")),
                 "errorCode": payload.get("errorCode"),
                 "httpStatus": payload.get("httpStatus"),
+                "agentId": payload.get("agentId"),
+                "runId": payload.get("runId"),
+                "sdkVersion": payload.get("sdkVersion"),
                 "primaryClass": primary,
                 "authFailure": primary == "auth",
                 "startupTimeout": primary == "startupTimeout",
@@ -526,10 +679,13 @@ def cursor_startup_probe_suite(
         )
     if success_count == 0:
         issues.append("Cursor startup probe never succeeded")
+    if catalog is not None and not catalog.get("ready"):
+        issues.extend(str(issue) for issue in catalog.get("issues") or [])
     return {
         "schema": "quwoquan_data.cursor_startup_probe_suite",
         "model": selection.model_id,
         "modelParameters": selection.parameters_document(),
+        "modelCatalog": catalog,
         "runtime": runtime,
         "attempts": total,
         "timeoutSeconds": round(effective_timeout_seconds, 4),
@@ -553,4 +709,117 @@ def cursor_startup_probe_suite(
         "startedAt": started_at,
         "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "results": rows,
+    }
+
+
+def cursor_workspace_probe_suite(
+    *,
+    workspaces: Sequence[Path],
+    model: str | CursorModelSelection = DEFAULT_CURSOR_STARTUP_MODEL,
+    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    timeout_seconds: float | None = None,
+) -> dict:
+    """Prove that isolated campaign workspaces can start Cursor runs together."""
+    resolved = tuple(Path(workspace).resolve() for workspace in workspaces)
+    if not resolved:
+        raise ValueError("Cursor workspace smoke requires at least one workspace")
+    if len(set(resolved)) != len(resolved):
+        raise ValueError("Cursor workspace smoke paths must be unique")
+    missing = [workspace.as_posix() for workspace in resolved if not workspace.is_dir()]
+    if missing:
+        raise ValueError(f"Cursor workspace smoke paths are missing: {missing}")
+
+    policy = active_runtime_policy()
+    selection = CursorModelSelection.from_value(model)
+    worker_limit = min(len(resolved), policy.campaign_lane_workers)
+    effective_timeout_seconds = float(
+        timeout_seconds
+        if timeout_seconds is not None
+        else policy.startup_timeout_seconds
+    )
+    active_workers = 0
+    maximum_active_workers = 0
+    active_lock = threading.Lock()
+    suite_started = time.monotonic()
+
+    def run_probe(index: int, workspace: Path) -> dict:
+        nonlocal active_workers, maximum_active_workers
+        with active_lock:
+            active_workers += 1
+            maximum_active_workers = max(maximum_active_workers, active_workers)
+        started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        started = time.monotonic()
+        try:
+            payload = cursor_startup_probe(
+                model=selection,
+                runtime=runtime,
+                timeout_seconds=effective_timeout_seconds,
+                cwd=workspace,
+            )
+        except Exception as exc:  # noqa: BLE001 - external SDK boundary
+            payload = {
+                "ready": False,
+                "status": "error",
+                "errorClass": type(exc).__name__,
+                "error": _redact_secret_text(str(exc)),
+            }
+        finally:
+            with active_lock:
+                active_workers -= 1
+        return {
+            "lane": index,
+            "workspace": workspace.name,
+            "startedAt": started_at,
+            "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "elapsedSeconds": round(time.monotonic() - started, 4),
+            "ready": bool(payload.get("ready")),
+            "status": payload.get("status"),
+            "agentId": payload.get("agentId"),
+            "runId": payload.get("runId"),
+            "sdkVersion": payload.get("sdkVersion"),
+            "errorClass": _redact_secret_value(payload.get("errorClass")),
+            "errorCode": payload.get("errorCode"),
+        }
+
+    with ThreadPoolExecutor(max_workers=worker_limit) as executor:
+        futures = [
+            executor.submit(run_probe, index, workspace)
+            for index, workspace in enumerate(resolved, start=1)
+        ]
+        rows = [future.result() for future in as_completed(futures)]
+    rows.sort(key=lambda row: int(row["lane"]))
+
+    ready_rows = [row for row in rows if row["ready"]]
+    agent_ids = [str(row.get("agentId") or "") for row in ready_rows]
+    run_ids = [str(row.get("runId") or "") for row in ready_rows]
+    issues: list[str] = []
+    if len(ready_rows) != len(rows):
+        issues.append(
+            f"Cursor workspace smoke requires every lane ready: "
+            f"{len(ready_rows)}/{len(rows)}"
+        )
+    if maximum_active_workers < worker_limit:
+        issues.append(
+            "Cursor workspace smoke did not realize configured parallelism: "
+            f"{maximum_active_workers}<{worker_limit}"
+        )
+    if any(not value for value in (*agent_ids, *run_ids)):
+        issues.append("Cursor workspace smoke returned an empty agentId/runId")
+    if len(set(agent_ids)) != len(agent_ids):
+        issues.append("Cursor workspace smoke agentId values must be lane-unique")
+    if len(set(run_ids)) != len(run_ids):
+        issues.append("Cursor workspace smoke runId values must be lane-unique")
+    return {
+        "schema": "quwoquan_data.cursor_workspace_probe_suite",
+        "model": selection.model_id,
+        "modelParameters": selection.parameters_document(),
+        "runtime": runtime,
+        "workspaceCount": len(resolved),
+        "configuredConcurrency": worker_limit,
+        "effectiveConcurrency": maximum_active_workers,
+        "successCount": len(ready_rows),
+        "elapsedSeconds": round(time.monotonic() - suite_started, 4),
+        "ready": not issues,
+        "issues": issues,
+        "runs": rows,
     }

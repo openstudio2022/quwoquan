@@ -1,7 +1,7 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, Callable, DEFAULT_CURSOR_AGENT_MODEL, ExecutionContext, Mapping, Path, REFERENCE_ONLY_NO_IMAGE_RELEASE, Sequence, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _normalize_managed_agent_provider, _resolve_managed_model, argparse, contextmanager, cursor_api_key_file, execution_baseline_freeze_packet_path, execution_branch_issues, execution_branch_payload, execution_root, hashlib, image_asset_strategy, image_asset_strategy_scale_issues, os, read_json, resolve_cursor_startup_timeout_seconds, store, subprocess, tempfile, time, validate_image_asset_strategy, write_json
+from content.execution.support import Any, DEFAULT_CURSOR_AGENT_MODEL, ExecutionContext, Mapping, Path, REFERENCE_ONLY_NO_IMAGE_RELEASE, Sequence, _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, _normalize_managed_agent_provider, _resolve_managed_model, argparse, contextmanager, cursor_api_key_file, execution_baseline_freeze_packet_path, execution_branch_issues, execution_branch_payload, execution_root, hashlib, image_asset_strategy, image_asset_strategy_scale_issues, os, read_json, resolve_cursor_startup_timeout_seconds, store, subprocess, tempfile, time, validate_image_asset_strategy, write_json
 
 _LOCAL_PROCESS_PROBE_TIMEOUT_SECONDS = active_runtime_policy().local_process_probe_timeout_seconds
 
@@ -362,32 +362,6 @@ def _cursor_bridge_error_is_retryable(
         or code_lower == "internal"
         or any(marker in lowered for marker in retry_markers)
     )
-
-def _cursor_safe_auth_token_factory(original: Callable[[], str]) -> Callable[[], str]:
-    """Wrap Cursor SDK callback token generation for argv parsers.
-    The bundled Cursor bridge accepts `--tool-callback-auth-token <value>`.
-    `secrets.token_urlsafe(...)` may legally return a value beginning with `-`;
-    the bridge parser can then treat the token as another flag and fail with
-    "Missing value for --tool-callback-auth-token". Keep the token random, but
-    prefix the rare leading-dash case before it reaches argv.
-    """
-    def _factory() -> str:
-        token = str(original() or "")
-        if token.startswith("-"):
-            return "qwq_" + token.lstrip("-")
-        return token
-    setattr(_factory, "_qwq_safe_token_factory", True)
-    return _factory
-
-def _patch_cursor_sdk_tool_callback_token() -> None:
-    try:
-        import cursor_sdk._tool_callback as tool_callback  # type: ignore
-    except Exception:  # noqa: BLE001
-        return
-    original = getattr(tool_callback, "_new_auth_token", None)
-    if not callable(original) or getattr(original, "_qwq_safe_token_factory", False):
-        return
-    setattr(tool_callback, "_new_auth_token", _cursor_safe_auth_token_factory(original))
 
 def _cursor_bridge_launch_lock_path(workspace: str | Path) -> Path:
     """Resolve the Cursor bridge launch serialization lock (per-workspace by default).

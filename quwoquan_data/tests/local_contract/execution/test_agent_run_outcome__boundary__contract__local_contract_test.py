@@ -8,7 +8,10 @@ from content.execution.agent.history import (
     ManagedAgentScheduler,
     dedupe_managed_agent_runs,
 )
-from content.execution.agent.agent_runner import _prompt_cursor_agent
+from content.execution.agent.agent_runner import (
+    _cursor_provider_rejection,
+    _prompt_cursor_agent,
+)
 from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
 from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus, ExecutionStage
 from core.data_issue import DataIssueCode, DataRecoveryAction
@@ -40,6 +43,19 @@ def test_agent_run_outcome__provider_rejection__reliability__local_contract_test
     assert issue is not None
     assert issue.code is DataIssueCode.AGENT_PROVIDER_REJECTED
     assert issue.recovery is DataRecoveryAction.STOP
+
+
+def test_cursor_usage_limit__provider_rejection__reliability__local_contract_test() -> None:
+    message = (
+        "You've hit your usage limit. Set a Spend Limit to continue with Auto; "
+        "your usage limits reset when your monthly cycle ends."
+    )
+
+    assert _cursor_provider_rejection(message)
+    assert not _cursor_provider_rejection(
+        "Bridge request failed: ConnectError: connection refused",
+        code="internal",
+    )
 
 
 def test_cursor_prompt__preserves_terminal_status_message__contract__local_contract_test() -> None:
