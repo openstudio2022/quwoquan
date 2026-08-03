@@ -5,13 +5,15 @@ api_routes:
   path: /assistant/entry
   operation: GetAssistantEntry
   actor: persona
+  request_entity: AssistantEntryQuery
+  request_body_kind: none
   commercial: {status: blocked, block_reason: AssistantEntryView 对象源与投影测试尚待闭环, gap_id: ASSISTANT_ENTRY_VIEW_MODEL_GOVERNANCE, target_story: app-cloud-business-object-commercial-closure}
   application: {kind: query, facet: AssistantEntryViewQueryFacade, method: getEntry, reader: AssistantEntryViewReader, slice: AssistantEntryResponse}
   request_bindings:
     query: [{name: pageType, field: pageType, required: false}, {name: objectId, field: objectId, required: false}]
   response_entity: AssistantEntryResponse
   reliability: {timeout_ms: 500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
-  error_codes: [ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument]
+  error_codes: [ASSISTANT.USER.entry_unauthorized, ASSISTANT.USER.entry_invalid_argument, ASSISTANT.SYSTEM.entry_projection_unavailable]
   privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: assistant_entry_view_query, trace: true, attributes: [operation, outcome, error_code]}
   slo: {latency_p95_ms: 500, availability_percent: 99.5}

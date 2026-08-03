@@ -19,7 +19,7 @@ final class RemoteContentPostReactionFacet implements ContentPostReactionFacet {
   final ContentPostReactionInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentPostReactionStateSlice> getReactionState(
+  Future<ContentReactionStateSlice> getReactionState(
     GetContentPostReactionStateQuery query,
   ) => client.contentContentReactionGetContentReactionState(
     query,

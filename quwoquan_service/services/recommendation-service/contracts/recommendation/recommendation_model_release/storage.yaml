@@ -37,4 +37,28 @@ collections:
     - name: uq_model_release_outbox_aggregate_version_event
       keys: {aggregateId: 1, aggregateVersion: 1, eventType: 1}
       unique: true
+  rec_training_samples:
+    entity: RecommendationTrainingSample
+    role: append_only
+    description: 由 canonical 行为、曝光和特征快照构建的不可变训练样本；模型训练不得回读上游服务存储。
+    indexes:
+    - name: uq_recommendation_training_sample_source
+      keys: {sourceSampleId: 1}
+      unique: true
+  rec_replay_datasets:
+    entity: RecommendationReplayDataset
+    role: authoritative
+    description: Stage 前冻结的 replay 数据集身份、样本边界与 digest；与不可变 model release revision 绑定。
+    indexes:
+    - name: uq_recommendation_replay_dataset_digest
+      keys: {datasetDigest: 1}
+      unique: true
+  rec_replay_samples:
+    entity: RecommendationReplaySample
+    role: append_only
+    description: replay dataset 的不可变成员样本；只通过 datasetId 归属 RecommendationModelRelease。
+    indexes:
+    - name: uq_recommendation_replay_sample_identity
+      keys: {datasetId: 1, sourceSampleId: 1}
+      unique: true
 role: authoritative

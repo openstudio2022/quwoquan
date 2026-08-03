@@ -151,9 +151,14 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
         executionReceipt = _calendarExecutionReceipt(reminder, result);
         if (!result.created) {
           decision = 'rejected';
+          final retryPrompt = _latestUserPrompt();
+          if (retryPrompt.isNotEmpty) {
+            _rememberRetry(_PersonalAssistantRetryKind.send, retryPrompt);
+          }
           _actionsState = _actionsState.copyWith(
-            errorMessage: AssistantText.assistantDeviceActionUnavailable,
-            retryAvailable: false,
+            errorMessage: _deviceActionFailureMessage(result.status),
+            errorFailure: null,
+            retryAvailable: retryPrompt.isNotEmpty,
           );
         }
       }
@@ -391,12 +396,34 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
       actionKind: 'calendar_create_reminder',
       idempotencyKey: request.idempotencyKey,
       outcome: outcome,
-      executedAt: DateTime.now().toUtc().toIso8601String(),
+      executedAt: DateTime.now().toUtc(),
       deviceObjectId: result.deviceObjectId.trim().isEmpty
           ? null
           : result.deviceObjectId.trim(),
       failureCode: failureCode,
     );
+  }
+
+  String _deviceActionFailureMessage(AssistantDeviceActionStatus status) {
+    return switch (status) {
+      AssistantDeviceActionStatus.denied =>
+        AssistantText.assistantDeviceActionPermissionDenied,
+      AssistantDeviceActionStatus.unavailable =>
+        AssistantText.assistantDeviceActionUnavailable,
+      AssistantDeviceActionStatus.failed =>
+        AssistantText.assistantDeviceActionFailed,
+      AssistantDeviceActionStatus.created => '',
+    };
+  }
+
+  String _latestUserPrompt() {
+    for (var index = _actionsState.transcript.length - 1; index >= 0; index--) {
+      final row = _actionsState.transcript[index];
+      if (row is UserTranscriptTimelineRow && row.content.trim().isNotEmpty) {
+        return row.content.trim();
+      }
+    }
+    return '';
   }
 
   Future<void> refreshManagementSummary() async {

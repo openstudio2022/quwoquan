@@ -10,31 +10,32 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidArgument                   = errors.New("CHAT.USER.invalid_argument")
-	ErrCircleGroupBindingWriteForbidden  = errors.New("CHAT.USER.circle_group_binding_write_forbidden")
-	ErrConversationNotFound              = errors.New("CHAT.USER.conversation_not_found")
-	ErrUnauthorized                      = errors.New("CHAT.USER.unauthorized")
-	ErrMessageNotFound                   = errors.New("CHAT.USER.message_not_found")
-	ErrMessageRecallForbidden            = errors.New("CHAT.USER.message_recall_forbidden")
-	ErrMessageRecallExpired              = errors.New("CHAT.USER.message_recall_expired")
-	ErrMessageIdempotencyConflict        = errors.New("CHAT.USER.message_idempotency_conflict")
-	ErrConversationIdempotencyConflict   = errors.New("CHAT.USER.conversation_idempotency_conflict")
-	ErrMessageTooLong                    = errors.New("CHAT.USER.message_too_long")
-	ErrMessageInvalid                    = errors.New("CHAT.USER.message_invalid")
-	ErrMessageMediaInvalid               = errors.New("CHAT.USER.message_media_invalid")
-	ErrMessageMediaUnavailable           = errors.New("CHAT.SYSTEM.message_media_unavailable")
-	ErrNotMutual                         = errors.New("CHAT.USER.not_mutual")
-	ErrGreetingRequired                  = errors.New("CHAT.USER.greeting_required")
-	ErrBlocked                           = errors.New("CHAT.USER.blocked")
-	ErrGroupMemberNotMutual              = errors.New("CHAT.USER.group_member_not_mutual")
-	ErrGroupMemberBlocked                = errors.New("CHAT.USER.group_member_blocked")
-	ErrGroupGovernanceForbidden          = errors.New("CHAT.USER.group_governance_forbidden")
-	ErrCircleGroupManagedByCircle        = errors.New("CHAT.USER.circle_group_managed_by_circle")
-	ErrCircleGroupBindingConflict        = errors.New("CHAT.SYSTEM.circle_group_binding_conflict")
-	ErrGroupFull                         = errors.New("CHAT.USER.group_full")
-	ErrConversationDissolved             = errors.New("CHAT.USER.conversation_dissolved")
-	ErrGroupOwnerMustTransferBeforeLeave = errors.New("CHAT.USER.group_owner_must_transfer_before_leave")
-	ErrInternalError                     = errors.New("CHAT.SYSTEM.internal_error")
+	ErrInvalidArgument                    = errors.New("CHAT.USER.invalid_argument")
+	ErrSourceManagedBindingWriteForbidden = errors.New("CHAT.USER.source_managed_binding_write_forbidden")
+	ErrGatheringBindingConflict           = errors.New("CHAT.USER.gathering_binding_conflict")
+	ErrConversationNotFound               = errors.New("CHAT.USER.conversation_not_found")
+	ErrUnauthorized                       = errors.New("CHAT.USER.unauthorized")
+	ErrMessageNotFound                    = errors.New("CHAT.USER.message_not_found")
+	ErrMessageRecallForbidden             = errors.New("CHAT.USER.message_recall_forbidden")
+	ErrMessageRecallExpired               = errors.New("CHAT.USER.message_recall_expired")
+	ErrMessageIdempotencyConflict         = errors.New("CHAT.USER.message_idempotency_conflict")
+	ErrConversationIdempotencyConflict    = errors.New("CHAT.USER.conversation_idempotency_conflict")
+	ErrMessageTooLong                     = errors.New("CHAT.USER.message_too_long")
+	ErrMessageInvalid                     = errors.New("CHAT.USER.message_invalid")
+	ErrMessageMediaInvalid                = errors.New("CHAT.USER.message_media_invalid")
+	ErrMessageMediaUnavailable            = errors.New("CHAT.SYSTEM.message_media_unavailable")
+	ErrNotMutual                          = errors.New("CHAT.USER.not_mutual")
+	ErrGreetingRequired                   = errors.New("CHAT.USER.greeting_required")
+	ErrBlocked                            = errors.New("CHAT.USER.blocked")
+	ErrGroupMemberNotMutual               = errors.New("CHAT.USER.group_member_not_mutual")
+	ErrGroupMemberBlocked                 = errors.New("CHAT.USER.group_member_blocked")
+	ErrGroupGovernanceForbidden           = errors.New("CHAT.USER.group_governance_forbidden")
+	ErrSourceManagedConversation          = errors.New("CHAT.USER.source_managed_conversation")
+	ErrCircleGroupBindingConflict         = errors.New("CHAT.SYSTEM.circle_group_binding_conflict")
+	ErrGroupFull                          = errors.New("CHAT.USER.group_full")
+	ErrConversationDissolved              = errors.New("CHAT.USER.conversation_dissolved")
+	ErrGroupOwnerMustTransferBeforeLeave  = errors.New("CHAT.USER.group_owner_must_transfer_before_leave")
+	ErrInternalError                      = errors.New("CHAT.SYSTEM.internal_error")
 )
 
 // AppErrorFromInvalidArgument returns *AppError for CHAT.USER.invalid_argument (user_message from errors.yaml).
@@ -43,10 +44,16 @@ func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromCircleGroupBindingWriteForbidden returns *AppError for CHAT.USER.circle_group_binding_write_forbidden (user_message from errors.yaml).
-func AppErrorFromCircleGroupBindingWriteForbidden(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrCircleGroupBindingWriteForbidden.Error()))
-	return rerrors.NewAppError(code, "圈群绑定只能由系统创建", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+// AppErrorFromSourceManagedBindingWriteForbidden returns *AppError for CHAT.USER.source_managed_binding_write_forbidden (user_message from errors.yaml).
+func AppErrorFromSourceManagedBindingWriteForbidden(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrSourceManagedBindingWriteForbidden.Error()))
+	return rerrors.NewAppError(code, "来源对象绑定只能由所属领域创建", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGatheringBindingConflict returns *AppError for CHAT.USER.gathering_binding_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringBindingConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringBindingConflict.Error()))
+	return rerrors.NewAppError(code, "相聚会话绑定冲突", debugMessage).WithMetadata("gathering_binding_conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromConversationNotFound returns *AppError for CHAT.USER.conversation_not_found (user_message from errors.yaml).
@@ -151,10 +158,10 @@ func AppErrorFromGroupGovernanceForbidden(debugMessage string) *rerrors.AppError
 	return rerrors.NewAppError(code, "只有群主或管理员可以执行该操作", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
-// AppErrorFromCircleGroupManagedByCircle returns *AppError for CHAT.USER.circle_group_managed_by_circle (user_message from errors.yaml).
-func AppErrorFromCircleGroupManagedByCircle(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrCircleGroupManagedByCircle.Error()))
-	return rerrors.NewAppError(code, "该群成员与角色由圈群管理，请在群组管理页操作", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+// AppErrorFromSourceManagedConversation returns *AppError for CHAT.USER.source_managed_conversation (user_message from errors.yaml).
+func AppErrorFromSourceManagedConversation(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrSourceManagedConversation.Error()))
+	return rerrors.NewAppError(code, "该会话由来源对象管理，请从来源对象操作", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCircleGroupBindingConflict returns *AppError for CHAT.SYSTEM.circle_group_binding_conflict (user_message from errors.yaml).

@@ -18,6 +18,8 @@
 /// CI：由 .github/workflows/e2e.yaml 在 pre-release tag 时触发。
 library;
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 import 'package:patrol/patrol.dart';
@@ -33,6 +35,10 @@ const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
 );
+const _runtimeEnv = String.fromEnvironment(
+  'APP_RUNTIME_ENV',
+  defaultValue: 'gamma',
+);
 
 void main() {
   patrolTest(
@@ -44,8 +50,9 @@ void main() {
       await launchPatrolAppOnce($);
 
       assert(
-        _apiContractEnv == 'gamma',
-        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
+        _apiContractEnv == _runtimeEnv &&
+            const {'alpha', 'beta', 'gamma'}.contains(_runtimeEnv),
+        'Patrol user_acceptance tests must bind API_CONTRACT_ENV to the selected nonprod runtime',
       );
 
       // ── 等待首页真实 feed 卡片渲染（默认推荐频道可能是双列发现卡）───────
@@ -54,10 +61,33 @@ void main() {
       expect(
         visibleFeedCard,
         isTrue,
-        reason: 'At least one gamma-local feed card must be visible after load',
+        reason:
+            'At least one $_runtimeEnv feed card must be visible after load',
+      );
+      final visibleCardKeys = _visibleFeedCardKeys();
+      expect(visibleCardKeys, isNotEmpty);
+      debugPrint(
+        'QWQ_FEED_CONTENT_EVIDENCE '
+        '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'visibleCardCount': visibleCardKeys.length, 'visibleCardKeys': visibleCardKeys})}',
       );
     },
   );
+}
+
+List<String> _visibleFeedCardKeys() {
+  final visible = <String>[];
+  for (var index = 0; index < 20; index += 1) {
+    for (final prefix in const <String>[
+      'home-feed-card-',
+      'dual-discovery-card-',
+    ]) {
+      final key = '$prefix$index';
+      if (find.byKey(ValueKey<String>(key)).evaluate().isNotEmpty) {
+        visible.add(key);
+      }
+    }
+  }
+  return visible;
 }
 
 Future<bool> _waitForAnyFeedCard(PatrolIntegrationTester $) async {

@@ -1,4 +1,14 @@
 description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。
 api_routes: []
+runtime_entrypoints:
+- name: ProjectRecommendationCandidateIndex
+  kind: projector
+  phase: event_projection
+  source_events: [content.PostPublished, content.PostUpdated, content.PostSettingsUpdated, content.PostPromotedToWork, content.PostDeleted, content.PostPrivacyRedacted, content.PostPurged, ops.PremiumPoolEntryUpserted, ops.PremiumPoolEntryRolledBack, ops.PremiumPoolEntryTakedownEjected]
+  checkpoint: per_source_partition_sequence
+  rebuild: recreate_candidate_indexes_then_replay_all_source_events
+  tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint
+  idempotency: aggregate_version
+  application: {kind: command, facet: RecommendationCandidateIndexViewProjector, method: apply, object_owner: RecommendationCandidateIndexView}
 consumers:
 - {name: recommendation-ranking, capabilities: [list_candidates, list_premium_candidates, list_entity_tag_candidates]}

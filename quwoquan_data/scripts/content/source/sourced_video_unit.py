@@ -25,6 +25,10 @@ from core.video_source_admission import (
     VIDEO_SOURCE_KINDS,
     assert_video_source_admitted,
 )
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 
 
 def _commercial_source_use_mode(
@@ -34,7 +38,7 @@ def _commercial_source_use_mode(
     rights_basis: str,
     authorization_proof_url: str | None,
 ) -> str:
-    """Derive a publishable use mode only from verified commercial rights."""
+    """Derive a commercial use mode only from verified rights."""
     if publication_admission != "commercial_release":
         raise ValueError(
             "risk-only sourced video is not eligible for canonical commercial publish"
@@ -64,6 +68,29 @@ def _commercial_source_use_mode(
             "commercial sourced video requires HTTPS authorization proof"
         )
     return "licensed_adaptation"
+
+
+def _source_use_mode(
+    *,
+    publication_admission: str,
+    commercial_authorization_status: str,
+    rights_basis: str,
+    authorization_proof_url: str | None,
+) -> str:
+    """Derive an explicit research/commercial mode from governed lifecycle."""
+    policy = load_content_distribution_policy()
+    if policy.product_lifecycle_state is ProductLifecycleState.RESEARCH:
+        if publication_admission != "research_release":
+            raise ValueError(
+                "research lifecycle requires publicationAdmission=research_release"
+            )
+        return "rights_audit_only"
+    return _commercial_source_use_mode(
+        publication_admission=publication_admission,
+        commercial_authorization_status=commercial_authorization_status,
+        rights_basis=rights_basis,
+        authorization_proof_url=authorization_proof_url,
+    )
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -116,12 +143,13 @@ def write_admitted_sourced_video_unit(
         source_kind=source_kind,
         publication_admission=publication_admission,
     )
-    source_use_mode = _commercial_source_use_mode(
+    source_use_mode = _source_use_mode(
         publication_admission=publication_admission,
         commercial_authorization_status=commercial_authorization_status,
         rights_basis=rights_basis,
         authorization_proof_url=authorization_proof_url,
     )
+    research_release = source_use_mode == "rights_audit_only"
     manifest = write_source_unit(
         object_dir,
         ordinal=int(source_unit.get("ordinal") or 1),
@@ -134,7 +162,11 @@ def write_admitted_sourced_video_unit(
         extractor="sourced_video_direct_download",
         policy_revision="sourced-video-attribution",
         source_use_mode=source_use_mode,
-        rights_mode="attribution_no_watermark",
+        rights_mode=(
+            "rights_audit_only"
+            if research_release
+            else "attribution_no_watermark"
+        ),
         publish_media_mode="attributed_external_video",
         source_role="primary_video",
         research_lane="video",
@@ -168,6 +200,7 @@ def write_admitted_sourced_video_unit(
         asset_path,
         declared_status=audio_rights_status,
         authorization_proof_url=audio_authorization_proof_url,
+        allow_unverified_rights=research_release,
     )
     collected_at = datetime.now(UTC).isoformat()
     media_probe_path = unit_dir / "media" / "probe.json"
@@ -182,6 +215,22 @@ def write_admitted_sourced_video_unit(
         raise ValueError("sourced video audio rights admission blocked")
 
     asset_sha256 = sha256_file(asset_path)
+    rights_status = (
+        str(source_unit.get("rightsStatus") or "unverified").strip()
+        if research_release
+        else "verified"
+    )
+    if rights_status not in {"verified", "unverified", "unknown"}:
+        raise ValueError(
+            f"research sourced video rightsStatus is not admissible: {rights_status}"
+        )
+    rights_issues = [
+        str(item).strip()
+        for item in source_unit.get("rightsIssues") or []
+        if str(item).strip()
+    ]
+    if rights_status != "verified" and not rights_issues:
+        rights_issues = ["commercial distribution authorization is unverified"]
     content_type = {
         ".mp4": "video/mp4",
         ".webm": "video/webm",
@@ -211,11 +260,13 @@ def write_admitted_sourced_video_unit(
                     "licenseSnapshot": (
                         f"{rights_basis} recorded by sourced-video admission"
                     ),
-                    "usageScope": "app_publish",
+                    "usageScope": (
+                        "research_internal" if research_release else "app_publish"
+                    ),
                     "collectionPageUrl": source_post_url,
                     "authorizationProof": authorization_proof_url or "",
-                    "rightsAuditStatus": "verified",
-                    "rightsAuditIssues": [],
+                    "rightsAuditStatus": rights_status,
+                    "rightsAuditIssues": rights_issues,
                     "modelReleaseStatus": model_release_status,
                     "propertyReleaseStatus": property_release_status,
                     "fetchedAt": collected_at,
@@ -233,6 +284,11 @@ def write_admitted_sourced_video_unit(
         "rightsBasis": rights_basis,
         "commercialAuthorizationStatus": commercial_authorization_status,
         "publicationAdmission": publication_admission,
+        "productLifecycleState": (
+            "research" if research_release else "commercial"
+        ),
+        "authorizationRequired": rights_status != "verified",
+        "rightsIssues": rights_issues,
         "authorizationProofUrl": authorization_proof_url,
         "termsUrl": terms_url,
         "riskAcceptanceId": risk_acceptance_id,

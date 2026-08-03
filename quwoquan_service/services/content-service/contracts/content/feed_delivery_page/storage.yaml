@@ -42,5 +42,12 @@ redis_cache:
   value: <scopeHash>:<payloadBytes>
   description: >-
     精确 owner/payload bytes 元数据；从有界 index 重算用量，不维护可漂移计数器。
+streams:
+  events.content.feed_page_delivered:
+    entity: FeedDeliveryPage
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Content 权限 hydration 和 FeedDeliveryPage 持久化成功后的唯一曝光归因 transport。
 codegen:
   enabled: false

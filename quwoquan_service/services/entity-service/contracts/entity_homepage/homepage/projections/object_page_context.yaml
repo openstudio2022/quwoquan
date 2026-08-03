@@ -8,60 +8,26 @@ consumers:
 - app
 - assistant
 - recommendation
-client_projection:
-  dart_class: ObjectPageContext
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/object_page_context.g.dart
-  fields:
-  - name: objectType
-    dart_type: String
-    nullable: false
-    source: objectType
-    default: ''''''
-  - name: objectId
-    dart_type: String
-    nullable: false
-    source: objectId
-    default: ''''''
-  - name: canonicalEntityId
-    dart_type: String
-    nullable: false
-    source: canonicalEntityId
-    default: ''''''
-  - name: tagRefs
-    dart_type: List<String>
-    nullable: false
-    source: tagRefs
-  - name: entityRefs
-    dart_type: List<String>
-    nullable: false
-    source: entityRefs
-  - name: relationEdgeIds
-    dart_type: List<String>
-    nullable: false
-    source: relationEdgeIds
-  - name: referralSource
-    dart_type: String
-    nullable: false
-    source: referralSource
-    default: ''''''
-  - name: feedRequestId
-    dart_type: String
-    nullable: false
-    source: feedRequestId
-    default: ''''''
-  - name: recommendationTraceId
-    dart_type: String
-    nullable: false
-    source: recommendationTraceId
-    default: ''''''
-  - name: experimentBucket
-    dart_type: String
-    nullable: false
-    source: experimentBucket
-    default: ''''''
-  - name: rolloutCohort
-    dart_type: String
-    nullable: false
-    source: rolloutCohort
-    default: ''''''
+fields:
+- name: objectType
+  type: string
+- name: objectId
+  type: string
+- name: canonicalEntityId
+  type: string
+- name: tagRefs
+  type: '[]string'
+- name: entityRefs
+  type: '[]string'
+- name: relationEdgeIds
+  type: '[]string'
+- name: referralSource
+  type: string
+- name: feedRequestId
+  type: string
+- name: recommendationTraceId
+  type: string
+- name: experimentBucket
+  type: string
+- name: rolloutCohort
+  type: string

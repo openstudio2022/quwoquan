@@ -116,20 +116,20 @@
 
 - 文章阅读器必须通过 product-ops catalog 记录 `enter`、`dwell`、`exit`、`error` 与 `recovery`；`dwell` 为 10% 采样，其余 lifecycle 事件全量采样。
 - `error` 与 `recovery` 必须记录 metadata canonical `errorCode` 和 `recoveryAction`；`objectId` 只能进入 raw 明细，禁止进入 Prometheus label 或小时聚合维度。
-- product-ops 必须从同一 catalog 提供 enter latency、lifecycle outcome 与 sampled dwell 指标，SLS 小时聚合、SLO 和告警必须消费这些同源事件。
+- product-ops 必须从同一 catalog 提供 enter latency、lifecycle outcome 与 sampled dwell 指标，Elasticsearch 小时聚合、SLO 和告警必须消费这些同源事件。
 - WorkBrowser 直达读取与文章详情 hydration 遇到 transient typed `RuntimeFailure` 时，必须展示可执行 Retry；Retry 只能重放同一 typed Remote reader，成功后恢复 canonical 内容，不得回退至 fixture、发现流或伪成功。
 
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser`
 - canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml#entities.post.navigation`
-- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/work_browser_item.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/post_read_presentation.yaml#PostReadPresentation`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#work_format_filters`
-- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 - canonical：`quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#article_dark_paper_themes`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml#entityRefs`
-- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_wire.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml#ContentPostDetailSlice`
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail`
 - canonical：`quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart`
 
@@ -228,7 +228,7 @@
 
 - GIVEN 用户进入文章阅读器，并发生停留、退出、详情 hydration 失败或 Retry。
 - WHEN App 上报 lifecycle 事件或用户执行 Retry。
-- THEN 每个事件均通过生成的 product-ops payload 进入同一 catalog；error/recovery 带 canonical error/recovery 语义，SLS/Prometheus/告警不引入对象级高基数维度。
+- THEN 每个事件均通过生成的 product-ops payload 进入同一 catalog；error/recovery 带 canonical error/recovery 语义，Elasticsearch/Prometheus/告警不引入对象级高基数维度。
 - AND transient typed Remote 失败后的 Retry 成功恢复 canonical 内容，且不会回退至 Mock、发现流或空白成功状态。
 
 ## 6. 依赖

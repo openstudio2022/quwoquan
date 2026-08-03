@@ -52,6 +52,66 @@ class AvailableGeoContext {
       };
 
   factory AvailableGeoContext.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'countryCode',
+      'countryLabel',
+      'regionCode',
+      'regionLabel',
+      'cityLabel',
+      'districtLabel',
+      'lat',
+      'lng',
+      'timezone',
+      'source',
+      'confidence',
+      'capturedAt',
+      'privacyTier',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AvailableGeoContext response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('countryCode') && json['countryCode'] != null && (json['countryCode'] is! String)) {
+      throw const FormatException('AvailableGeoContext field countryCode has an invalid wire value');
+    }
+    if (json.containsKey('countryLabel') && json['countryLabel'] != null && (json['countryLabel'] is! String)) {
+      throw const FormatException('AvailableGeoContext field countryLabel has an invalid wire value');
+    }
+    if (json.containsKey('regionCode') && json['regionCode'] != null && (json['regionCode'] is! String)) {
+      throw const FormatException('AvailableGeoContext field regionCode has an invalid wire value');
+    }
+    if (json.containsKey('regionLabel') && json['regionLabel'] != null && (json['regionLabel'] is! String)) {
+      throw const FormatException('AvailableGeoContext field regionLabel has an invalid wire value');
+    }
+    if (json.containsKey('cityLabel') && json['cityLabel'] != null && (json['cityLabel'] is! String)) {
+      throw const FormatException('AvailableGeoContext field cityLabel has an invalid wire value');
+    }
+    if (json.containsKey('districtLabel') && json['districtLabel'] != null && (json['districtLabel'] is! String)) {
+      throw const FormatException('AvailableGeoContext field districtLabel has an invalid wire value');
+    }
+    if (json.containsKey('lat') && json['lat'] != null && (json['lat'] is! num)) {
+      throw const FormatException('AvailableGeoContext field lat has an invalid wire value');
+    }
+    if (json.containsKey('lng') && json['lng'] != null && (json['lng'] is! num)) {
+      throw const FormatException('AvailableGeoContext field lng has an invalid wire value');
+    }
+    if (json.containsKey('timezone') && json['timezone'] != null && (json['timezone'] is! String)) {
+      throw const FormatException('AvailableGeoContext field timezone has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('AvailableGeoContext field source has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('AvailableGeoContext field confidence has an invalid wire value');
+    }
+    if (json.containsKey('capturedAt') && json['capturedAt'] != null && (json['capturedAt'] is! String)) {
+      throw const FormatException('AvailableGeoContext field capturedAt has an invalid wire value');
+    }
+    if (json.containsKey('privacyTier') && json['privacyTier'] != null && (json['privacyTier'] is! String)) {
+      throw const FormatException('AvailableGeoContext field privacyTier has an invalid wire value');
+    }
     return AvailableGeoContext(
       countryCode: (json['countryCode'] as String?)?.trim() ?? "",
       countryLabel: (json['countryLabel'] as String?)?.trim() ?? "",
@@ -116,6 +176,42 @@ class ContextAssemblyResult {
       };
 
   factory ContextAssemblyResult.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'contextEnvelope',
+      'fillTasks',
+      'canEnterDomain',
+      'summaryText',
+      'hasRealtimeNeed',
+      'hasLongtermNeed',
+      'availableGeoContext',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ContextAssemblyResult response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('contextEnvelope') && json['contextEnvelope'] != null && (json['contextEnvelope'] is! Map)) {
+      throw const FormatException('ContextAssemblyResult field contextEnvelope has an invalid wire value');
+    }
+    if (json.containsKey('fillTasks') && json['fillTasks'] != null && (json['fillTasks'] is! List || (json['fillTasks'] as List).any((item) => item is! Map))) {
+      throw const FormatException('ContextAssemblyResult field fillTasks has an invalid wire value');
+    }
+    if (json.containsKey('canEnterDomain') && json['canEnterDomain'] != null && (json['canEnterDomain'] is! bool)) {
+      throw const FormatException('ContextAssemblyResult field canEnterDomain has an invalid wire value');
+    }
+    if (json.containsKey('summaryText') && json['summaryText'] != null && (json['summaryText'] is! String)) {
+      throw const FormatException('ContextAssemblyResult field summaryText has an invalid wire value');
+    }
+    if (json.containsKey('hasRealtimeNeed') && json['hasRealtimeNeed'] != null && (json['hasRealtimeNeed'] is! bool)) {
+      throw const FormatException('ContextAssemblyResult field hasRealtimeNeed has an invalid wire value');
+    }
+    if (json.containsKey('hasLongtermNeed') && json['hasLongtermNeed'] != null && (json['hasLongtermNeed'] is! bool)) {
+      throw const FormatException('ContextAssemblyResult field hasLongtermNeed has an invalid wire value');
+    }
+    if (json.containsKey('availableGeoContext') && json['availableGeoContext'] != null && (json['availableGeoContext'] is! Map)) {
+      throw const FormatException('ContextAssemblyResult field availableGeoContext has an invalid wire value');
+    }
     return ContextAssemblyResult(
       contextEnvelope: (json['contextEnvelope'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       fillTasks: (json['fillTasks'] as List?)?.whereType<Map>().map((item) => ContextFillTask.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ContextFillTask>[],

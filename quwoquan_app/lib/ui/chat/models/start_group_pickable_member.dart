@@ -30,6 +30,6 @@ class StartGroupFriendLetterRow {
   final String avatarUrl;
   final String letter;
 
-  /// 事实交集证据：认识来源（云侧 ChatContactRowDto.metFrom 透传）。
+  /// 事实交集证据：认识来源（云侧 ChatContactRowViewData.metFrom 透传）。
   final String metFrom;
 }

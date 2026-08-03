@@ -1,7 +1,7 @@
 commercial_defaults:
   status: blocked
-  block_reason: gamma full cold-start and websocket runtime evidence blocked by missing controlled product
-    telemetry SLS credential
+  block_reason: gamma full cold-start and websocket runtime evidence still lacks a candidate-bound
+    canonical observability receipt
   gap_id: REALTIME_CONNECTION_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 privacy_contract:
@@ -219,57 +219,6 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: GET
-  path: /internal/realtime/personas/{personaId}/presence
-  operation: GetPersonaPresence
-  actor: none
-  application:
-    kind: query
-    facet: PresenceViewQueryFacet
-    method: getPersonaPresence
-    reader: PresenceViewReader
-    slice: PresenceView
-  description: notification-service 按 persona 读取当前仍有有效 heartbeat 的设备级在线投影；读取时逐 field 清理陈旧项
-  request_bindings:
-    path:
-    - name: personaId
-      field: personaId
-  response_body: PresenceView
-  response_body_kind: object
-  authorization:
-    principal: service
-    scopes:
-    - realtime.presence.read
-    ownership_policy: notification_incoming_call_coordinator
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - REALTIME.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: realtime_presence_view_device_count
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 100
-    availability_percent: 99.95
-  security:
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
 - method: GET
   path: /config/realtime
   operation: GetRealtimeConfig

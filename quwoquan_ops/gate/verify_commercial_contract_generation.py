@@ -41,6 +41,32 @@ def _method_name(operation_id: str) -> str:
     )
 
 
+def _qualified_symbol_pattern(symbol: str) -> str:
+    """Match a generated symbol with its optional domain import qualifier."""
+
+    return rf"(?:[A-Za-z][A-Za-z0-9_]*\.)?{re.escape(symbol)}"
+
+
+def _has_typed_method(
+    source: str,
+    *,
+    response_type: str,
+    method_name: str,
+) -> bool:
+    return re.search(
+        rf"\bFuture<{_qualified_symbol_pattern(response_type)}>\s+"
+        rf"{re.escape(method_name)}\s*\(",
+        source,
+    ) is not None
+
+
+def _has_response_decoder(source: str, decoder: str) -> bool:
+    return re.search(
+        rf"\bresponseDecoder:\s*{_qualified_symbol_pattern(decoder)}\b",
+        source,
+    ) is not None
+
+
 def main() -> int:
     failures: list[str] = []
     for path in (GRAPH, LOCK, GO_DESCRIPTORS, DART_CLIENT):
@@ -107,6 +133,7 @@ def main() -> int:
         if forbidden in dart_source:
             failures.append(f"Dart generated client retains raw ABI: {forbidden}")
 
+    typed_exposed = 0
     ready_exposed = 0
     for operation in operations:
         operation_id = str(operation.get("id", ""))
@@ -120,24 +147,34 @@ def main() -> int:
             reason = str(commercial.get("blockReason", "")).strip()
             if not reason:
                 failures.append(f"{operation_id}: blocked without blockReason")
-            continue
-        if status != "ready":
+        elif status == "ready":
+            if operation_id in exposed:
+                ready_exposed += 1
+        else:
             failures.append(f"{operation_id}: invalid commercial status {status!r}")
-            continue
         if operation_id not in exposed:
             continue
-        ready_exposed += 1
+        typed_exposed += 1
         client = operation.get("clientContract")
         if not isinstance(client, dict):
-            failures.append(f"{operation_id}: ready App operation lacks clientContract")
+            failures.append(f"{operation_id}: App operation lacks clientContract")
             continue
         method_name = _method_name(operation_id)
-        response_type = str(client.get("responseType", ""))
-        signature = f"Future<{response_type}> {method_name}("
-        if signature not in dart_source:
+        response_type = str(client.get("responseType", "")).strip()
+        if not response_type:
+            failures.append(f"{operation_id}: responseType is empty")
+            continue
+        if not _has_typed_method(
+            dart_source,
+            response_type=response_type,
+            method_name=method_name,
+        ):
             failures.append(f"{operation_id}: typed Dart method missing")
-        decoder = str(client.get("responseDecoder", ""))
-        if f"responseDecoder: {decoder}" not in dart_source:
+        decoder = str(client.get("responseDecoder", "")).strip()
+        if not decoder:
+            failures.append(f"{operation_id}: responseDecoder is empty")
+            continue
+        if not _has_response_decoder(dart_source, decoder):
             failures.append(f"{operation_id}: response decoder not wired")
         response_body = str(operation.get("responseBody", "")).strip()
         response_body_kind = str(operation.get("responseBodyKind", "")).strip()
@@ -147,8 +184,18 @@ def main() -> int:
                 f"responseBodyKind, got {response_body_kind!r}"
             )
 
-    if ready_exposed == 0:
-        failures.append("no commercial-ready App operation has a typed client")
+    orphan_exposures = sorted(set(exposed) - graph_ids)
+    if orphan_exposures:
+        failures.append(
+            f"App lock exposes operations absent from ContractGraph: {orphan_exposures}"
+        )
+    if typed_exposed != len(exposed):
+        failures.append(
+            "not every App-exposed operation was checked for a typed client: "
+            f"checked={typed_exposed}, exposed={len(exposed)}"
+        )
+    if typed_exposed == 0:
+        failures.append("no App-exposed operation has a typed client")
 
     for source_path in sorted(REMOTE_ROOT.rglob("*.dart")):
         source = source_path.read_text(encoding="utf-8")
@@ -164,7 +211,8 @@ def main() -> int:
     print(
         "[commercial-contract] OK: "
         f"graph={graph_sha}, operations={len(graph_ids)}, "
-        f"App-exposed={len(exposed)}, typed-ready={ready_exposed}"
+        f"App-exposed={len(exposed)}, typed={typed_exposed}, "
+        f"commercial-ready={ready_exposed}"
     )
     return 0
 

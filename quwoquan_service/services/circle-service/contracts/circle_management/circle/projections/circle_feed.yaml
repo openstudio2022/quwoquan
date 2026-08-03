@@ -1,5 +1,5 @@
 read_model: CircleFeed
-description: '圈子动态流 ReadModel。服务端联合已发布 Post 本地投影与
+description: '圈子动态流 ReadModel。服务端联合 Post 生命周期事件形成的 CircleFeedItem 本地投影与
 
   CirclePostPlacement 聚合读集合；成员关系不直接改变 Feed，
 
@@ -10,13 +10,19 @@ description: '圈子动态流 ReadModel。服务端联合已发布 Post 本地�
   '
 storage_backend: mongodb
 collections:
-- posts
+- circle_feed_items
 - circle_post_placements
 source_entities:
 - Post
 - CirclePostPlacement
 source_events:
 - PostPublished
+- PostUpdated
+- PostSettingsUpdated
+- PostPromotedToWork
+- PostModerationRejected
+- PostPrivacyRedacted
+- PostPurged
 - CirclePostPlaced
 - CirclePostPlacementPresentationChanged
 - CirclePostPlacementRemoved
@@ -50,6 +56,12 @@ fields:
 - name: featuredAt
   type: timestamp
 indexes:
+- name: idx_circle_feed_item_author_state
+  collection: circle_feed_items
+  keys:
+    authorId: 1
+    status: 1
+    updatedAt: -1
 - name: idx_circle_post_placement_feed
   collection: circle_post_placements
   keys:

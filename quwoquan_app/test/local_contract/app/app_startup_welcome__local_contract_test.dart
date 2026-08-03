@@ -160,7 +160,9 @@ void main() {
       _FixedNativeTimingBridge(
         const NativeStartupProcessSegments(
           elapsedSinceProcessStartMs: 5950,
-          deadlineOrigin: 'android_process',
+          elapsedSinceAttemptStartMs: 5950,
+          attemptKind: 'cold',
+          deadlineOrigin: 'nativeProcess',
         ),
       ),
     );
@@ -506,8 +508,9 @@ final class _FixedNativeTimingBridge implements StartupTimingsNativeBridge {
   final NativeStartupProcessSegments _segments;
 
   @override
-  Future<NativeStartupProcessSegments?> readProcessSegments() async =>
-      _segments;
+  Future<NativeStartupProcessSegments?> beginStartupAttempt(
+    String attemptId,
+  ) async => _segments;
 }
 
 final class _BlockingAuthSessionStore implements AuthSessionStore {

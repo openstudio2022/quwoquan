@@ -1,0 +1,76 @@
+description: MessageReceiptFact 由 ConversationUserState 已读命令在同一事务追加，并由对象自己的 named reader 查询。
+commercial_defaults:
+  status: blocked
+  block_reason: operation 尚未逐项完成商业证据绑定
+  gap_id: CHAT_MESSAGE_RECEIPT_COMMERCIAL_EVIDENCE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: GET
+  path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
+  operation: GetReceipts
+  request_bindings:
+    path:
+    - name: conversationId
+      field: conversationId
+    - name: messageId
+      field: messageId
+  actor: persona
+  commercial:
+    status: ready
+  application:
+    kind: query
+    facet: MessageReceiptQueryFacet
+    method: getReceipts
+    reader: MessageReceiptReader
+    slice: MessageReceiptPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: conversation_member
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: chat_message_receipt_query
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  description: 获取不可变消息回执列表；仅 Conversation 当前成员可读，且 message 必须属于 path 中的 Conversation。
+  response_entity: MessageReceiptPageSlice
+  response_body: ChatMessageReceipt
+  response_body_kind: page
+  error_codes:
+  - CHAT.USER.unauthorized
+  - CHAT.USER.blocked
+  - CHAT.USER.message_not_found
+  - CHAT.SYSTEM.internal_error
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  request_entity: ChatGetMessageReceiptsQuery
+  request_body_kind: none
+runtime_entrypoints:
+- name: AppendMessageReceiptFact
+  kind: internal_port
+  phase: transactional_append
+  source_objects:
+  - chat.ConversationUserState
+  - chat.Message
+  idempotency: transaction_identity
+  application:
+    kind: command
+    facet: MessageReceiptFactAppender
+    method: append
+    object_owner: MessageReceiptFact

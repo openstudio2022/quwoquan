@@ -10,10 +10,10 @@ class CreateCircleService {
     final result = await circleQuery.list(CircleListQuery(limit: 20));
     final out = <CreateCircleOption>[];
     for (final circle in result.items) {
-      if (circle.circleId.isEmpty || circle.name.isEmpty) continue;
+      if (circle.id.isEmpty || circle.name.isEmpty) continue;
       out.add(
         CreateCircleOption(
-          id: circle.circleId,
+          id: circle.id,
           name: circle.name,
           memberCount: circle.memberCount,
           postCount: circle.postCount,

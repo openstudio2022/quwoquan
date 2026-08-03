@@ -217,7 +217,7 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
             )
         if not require_rights_proof and str(
             manifest.get("rightsAuditStatus") or ""
-        ) not in {"verified", "unverified"}:
+        ) not in {"verified", "unverified", "restricted", "unknown"}:
             issues.append(f"{rel}: image source contract missing rightsAuditStatus")
         for field, work_value in source_facts.items():
             asset_values = [

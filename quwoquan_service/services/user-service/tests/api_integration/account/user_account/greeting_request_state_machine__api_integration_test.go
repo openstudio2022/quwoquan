@@ -32,6 +32,29 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 		t.Fatalf("expected greeting id, got %#v", sendBody)
 	}
 
+	for _, listing := range []struct {
+		path    string
+		headers map[string]string
+	}{
+		{path: "/user/greeting-request/inbox", headers: authHeadersForPersona("gr_tgt", "sa_gr_tgt")},
+		{path: "/user/greeting-request/outbox", headers: authHeadersForPersona("gr_req", "sa_gr_req")},
+	} {
+		listRec := doRequest(t, http.MethodGet, listing.path, "", listing.headers)
+		if listRec.Code != http.StatusOK {
+			t.Fatalf("list %s: expected 200, got %d: %s", listing.path, listRec.Code, listRec.Body.String())
+		}
+		listBody := parseJSON(t, listRec)
+		if len(listBody) != 2 || listBody["items"] == nil {
+			t.Fatalf("list %s must return exact GreetingRequestSlice: %#v", listing.path, listBody)
+		}
+		if _, legacy := listBody["cursor"]; legacy {
+			t.Fatalf("list %s retains legacy cursor response key: %#v", listing.path, listBody)
+		}
+		if _, exists := listBody["nextCursor"]; !exists {
+			t.Fatalf("list %s missing canonical nextCursor: %#v", listing.path, listBody)
+		}
+	}
+
 	dupRec := doRequest(
 		t,
 		http.MethodPost,

@@ -379,6 +379,55 @@ func (s *Store) PurgeDataContentExecution(
 	return result, nil
 }
 
+// CountDataContentOutboxes returns the declared objects for one immutable
+// execution stage without exposing the underlying Mongo collection to the
+// Content composition root.
+func (s *Store) CountDataContentOutboxes(
+	ctx context.Context,
+	executionID string,
+	stage string,
+) (int64, error) {
+	executionID = strings.TrimSpace(executionID)
+	stage = strings.TrimSpace(stage)
+	if executionID == "" || (stage != "author" && stage != "publish") {
+		return 0, errors.New("data content executionId and stage are required")
+	}
+	return s.outboxes.CountDocuments(ctx, bson.M{
+		"taskType":            reliabletask.DataContentTaskType,
+		"payload.executionId": executionID,
+		"payload.stage":       stage,
+	})
+}
+
+// ListDataContentExecutionTasks returns only tasks from one immutable
+// execution in stable job order. Callers never receive a generic collection
+// handle and therefore cannot scan another object's queue.
+func (s *Store) ListDataContentExecutionTasks(
+	ctx context.Context,
+	executionID string,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	cursor, err := s.tasks.Find(ctx, bson.M{
+		"taskType":            reliabletask.DataContentTaskType,
+		"payload.executionId": executionID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var tasks []reliabletask.ReliableAsyncTask
+	if err := cursor.All(ctx, &tasks); err != nil {
+		return nil, err
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
+	})
+	return tasks, nil
+}
+
 func (s *Store) listReadyTaskFilter(
 	ctx context.Context,
 	filter bson.M,

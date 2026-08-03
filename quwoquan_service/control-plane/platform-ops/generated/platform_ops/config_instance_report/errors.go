@@ -10,11 +10,18 @@ import (
 //
 //nolint:gochecknoglobals
 var (
+	ErrConfigInstanceReportUnauthorized         = errors.New("OPS.USER.config_instance_report_unauthorized")
 	ErrConfigInstanceReportInvalid              = errors.New("OPS.USER.config_instance_report_invalid")
 	ErrConfigInstanceReportConflict             = errors.New("OPS.USER.config_instance_report_conflict")
 	ErrConfigInstanceReportCandidateUnavailable = errors.New("OPS.SYSTEM.config_instance_report_candidate_unavailable")
 	ErrConfigInstanceReportStorageFailed        = errors.New("OPS.SYSTEM.config_instance_report_storage_failed")
 )
+
+// AppErrorFromConfigInstanceReportUnauthorized returns *AppError for OPS.USER.config_instance_report_unauthorized (user_message from errors.yaml).
+func AppErrorFromConfigInstanceReportUnauthorized(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportUnauthorized.Error()))
+	return rerrors.NewAppError(code, "实例配置报告服务身份未授权", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+}
 
 // AppErrorFromConfigInstanceReportInvalid returns *AppError for OPS.USER.config_instance_report_invalid (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportInvalid(debugMessage string) *rerrors.AppError {

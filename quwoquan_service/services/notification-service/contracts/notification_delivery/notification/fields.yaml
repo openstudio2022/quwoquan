@@ -191,6 +191,32 @@ types:
       - {name: interestTags, source: interestTags, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
       - {name: matchedSegments, source: matchedSegments, type: '[]string', constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
       - {name: lifecycleStage, source: lifecycleStage, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: write, ops_exposure: read}
+  AppMessage:
+    description: 当前账户可见的统一应用消息；messageId 是 HTTP canonical identity。
+    fields:
+      - {name: messageId, source: messageId, type: string, constraints: [PK, NOT_NULL, NOT_BLANK], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: userId, source: userId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: messageType, source: messageType, type: enum, enum_ref: NotificationType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: source, source: source, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sourceId, source: sourceId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: destination, source: destination, type: AppMessageDestination, constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: title, source: title, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: read}
+      - {name: summary, source: summary, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: read}
+      - {name: target, source: target, type: AppMessageTarget, constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: read, source: read, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: deliveredAt, source: deliveredAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: ackedAt, source: ackedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: readAt, source: readAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  AppMessageInboxSlice:
+    description: 当前账户 AppMessage 的有界游标切片。
+    fields:
+      - {name: items, source: items, type: '[]AppMessage', constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: nextCursor, source: nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+  AppMessageUnreadCountSlice:
+    description: 当前账户实时计算的未读消息数量。
+    fields:
+      - {name: unreadCount, source: unreadCount, type: int, constraints: [NOT_NULL, NON_NEGATIVE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   NotificationPushRequestedEvent:
     description: Notification 与 NotificationDeliveryJob 同事务创建后写入投递 outbox 的严格载荷。
     fields:

@@ -1,0 +1,45 @@
+kind: aggregate_root
+description: >-
+  Product Ops 对单个内容进入全局精选池、运营回滚和高危下架的唯一事务边界。
+  聚合以 contentId 为身份，状态、workflow、audit、幂等回执和 outbox 必须原子提交；
+  Recommendation 只消费其 typed event 构建候选投影。
+identity:
+  fields: [contentId]
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: runtime
+  kind: reference
+  name: content
+  on_delete: retain
+  reference_fields: [contentId]
+  target_object: content.Post
+local_identity_reasons:
+  auditId: >-
+    准入证据在 PremiumPoolEntry 聚合内的不可变审计引用；它不拥有独立生命周期、
+    Store 或可单独修改的业务对象身份
+  sourceTaskId: >-
+    可选的上游任务溯源 token，只用于关联一次准入来源；它不是业务对象身份，
+    也不得作为跨对象查询或写入入口
+capabilities: [commandable, queryable]
+taggable: false
+vector_enabled: false
+business_rules:
+- contentId 创建后不可变；scope 只允许 global，qualityAdmission 只允许 approved
+- qualityScore 必须大于等于 0.75，expiresAt 必须晚于命令提交时间
+- active 可回滚为 rolled_back 或经双签下架为 takedown_ejected；重新准入只允许通过新的 Upsert command
+- takedownEjected 只由 status 是否等于 takedown_ejected 派生，不持久化为第二状态字段
+- Upsert 与 Rollback 的聚合、workflow、audit、幂等回执和 outbox 必须在同一 PostgreSQL transaction 提交
+- Takedown 必须由两个不同受信 operator 对同一 revision 和 payload digest 双签后原子提交
+- 只有 PremiumPoolEntry outbox dispatcher 可以发布精选池事件；禁止 handler 同步发布或直写 Recommendation 投影
+lifecycle:
+  state_field: status
+  states: [active, rolled_back, takedown_ejected]
+  optimistic_concurrency: revision
+  idempotency: command_receipt

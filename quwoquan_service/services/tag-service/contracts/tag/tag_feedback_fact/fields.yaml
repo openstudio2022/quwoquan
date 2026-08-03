@@ -141,8 +141,6 @@ types:
         enum_ref: TagFeedbackAction
         constraints:
           - NOT_NULL
-        client_dart_type: TagFeedbackAction
-        client_wire: canonicalEnum
       - name: context
         type: string
         constraints:

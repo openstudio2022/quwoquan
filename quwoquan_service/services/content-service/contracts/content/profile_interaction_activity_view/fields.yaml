@@ -526,6 +526,12 @@ fields:
     ops_exposure: redacted
     role: projection
 types:
+  ProfileInteractionActivityPageSlice:
+    description: Owner-scoped keyset page of durable profile interaction projection rows.
+    fields:
+      - {name: items, type: '[]ProfileInteractionActivityView', constraints: [NOT_NULL], classification: PII, log_policy: metadata_only, api_exposure: read, ops_exposure: redacted}
+      - {name: nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: redacted}
+      - {name: hasMore, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   ContentProfileInteractionPageQuery:
     fields:
       - name: personaId
@@ -535,10 +541,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: type
-        type: string
+        type: enum
         enum_ref: InteractionActivityType
-        client_dart_type: ContentProfileInteractionType
-        client_wire: canonicalEnum
       - name: cursor
         type: string
         constraints:

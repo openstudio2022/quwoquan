@@ -1,6 +1,5 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from collections import defaultdict
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
 from content.execution.controller.content_plan_assets import (
@@ -11,80 +10,17 @@ from content.execution.controller.content_plan_assets import (
     source_ref as _source_ref,
 )
 from content.execution.controller.content_plan_output import write_content_plan_diagnostics, write_content_plan_packet
+from content.execution.controller.content_plan_decisions import (
+    ContentPlanRejectLedger,
+    absorb_video_content_plan_shortfalls,
+    missing_source_diagnostic,
+    persist_video_content_plan_absorb as _persist_video_content_plan_absorb,
+)
 from core.entity_focus import (
     VERDICT_STRONG as _VERDICT_STRONG,
     classify_entity_focus as _classify_entity_focus,
     coverage_targets_mentioned as _coverage_targets_mentioned,
 )
-
-def _persist_video_content_plan_absorb(
-    execution_id: str,
-    *,
-    successful_names: list[str],
-    failed_names: list[str],
-) -> None:
-    """Persist ready/ineligible repartition after video oversample absorb."""
-    from core.paths import now_iso
-
-    availability_path = (
-        execution_root(execution_id) / "_shared" / "source_unavailable_targets.json"
-    )
-    existing = read_json(availability_path) if availability_path.is_file() else {}
-    if not isinstance(existing, dict):
-        existing = {}
-    ineligible = [
-        row
-        for row in (existing.get("ineligibleTargets") or [])
-        if isinstance(row, dict)
-        and str(row.get("entityId") or "").strip() not in set(successful_names)
-    ]
-    known_inel = {
-        str(row.get("entityId") or "").strip()
-        for row in ineligible
-        if str(row.get("entityId") or "").strip()
-    }
-    for name in failed_names:
-        if name in known_inel:
-            continue
-        ineligible.append(
-            {
-                "entityId": name,
-                "lanes": ["video"],
-                "issues": [
-                    f"{name}: [DATA.MEDIA.PUBLISHABLE_SHORTFALL] content_plan "
-                    "oversample absorb; retained rights-cleared frames below minimum"
-                ],
-                "blockers": [
-                    {
-                        "code": "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
-                        "stage": "content_plan",
-                        "ref": name,
-                        "lane": "video",
-                        "recovery": "retry_source_discovery",
-                        "message": (
-                            f"{name}: video oversample absorb after frame shortfall"
-                        ),
-                        "attrs": {"carrier": "video", "absorbed": "true"},
-                    }
-                ],
-                "recoveries": ["retry_source_discovery"],
-            }
-        )
-    write_json(
-        availability_path,
-        {
-            "schema": existing.get("schema")
-            or "quwoquan_data.source_unavailable_targets",
-            "executionId": execution_id,
-            "source": "content_plan_video_oversample_absorb",
-            "updatedAt": now_iso(),
-            "readyTargets": list(successful_names),
-            "readyTargetCount": len(successful_names),
-            "ineligibleTargets": ineligible,
-            "ineligibleTargetCount": len(ineligible),
-        },
-    )
-
 
 def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
@@ -187,31 +123,15 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
             continue
         if not source_units:
             reason = f"{target}: sources directory missing"
-            source_diagnostics[target] = {
-                "desiredArticleSources": per_target_articles,
-                "minimumRequiredArticleSources": minimum_required_articles,
-                "rawArticleBaseSources": 0,
-                "qualifiedArticleBaseSources": 0,
-                "pickedArticleBaseSources": 0,
-                "desiredImageSources": per_target_images,
-                "minimumRequiredImageSources": minimum_required_images,
-                "rawImageAssets": 0,
-                "qualifiedImageAssets": 0,
-                "pickedImageSources": 0,
-                "articleLaneEnabled": article_lane_enabled,
-                "imageLaneEnabled": image_lane_enabled,
-                "minimumQualityPassed": False,
-                "articleQualityScore": 0.0,
-                "articleLengthScore": 0.0,
-                "imageCountScore": 0.0,
-                "compositeScore": 0.0,
-                "articleRejects": {"sources_directory_missing": 1} if article_lane_enabled else {},
-                "articleRejectExamples": {"sources_directory_missing": [target]} if article_lane_enabled else {},
-                "articleImageSoftWarnings": {},
-                "articleImageSoftWarningExamples": {},
-                "imageRejects": {"sources_directory_missing": 1} if image_lane_enabled else {},
-                "imageRejectExamples": {"sources_directory_missing": [target]} if image_lane_enabled else {},
-            }
+            source_diagnostics[target] = missing_source_diagnostic(
+                target=target,
+                per_target_articles=per_target_articles,
+                minimum_articles=minimum_required_articles,
+                per_target_images=per_target_images,
+                minimum_images=minimum_required_images,
+                article_lane_enabled=article_lane_enabled,
+                image_lane_enabled=image_lane_enabled,
+            )
             if commercial_closure:
                 continue
             issues.append(data_issue(
@@ -226,27 +146,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         image_candidates: list[dict[str, Any]] = []
         article_raw_count = 0
         image_raw_count = 0
-        image_rejects: dict[str, int] = defaultdict(int)
-        image_reject_examples: dict[str, list[str]] = defaultdict(list)
-        article_rejects: dict[str, int] = defaultdict(int)
-        article_reject_examples: dict[str, list[str]] = defaultdict(list)
-        article_image_soft_warnings: dict[str, int] = defaultdict(int)
-        article_image_soft_warning_examples: dict[str, list[str]] = defaultdict(list)
-        def _reject_article(reason: str, source_id: str, detail: str = "") -> None:
-            article_rejects[reason] += 1
-            examples = article_reject_examples[reason]
-            if len(examples) < 5:
-                examples.append(f"{source_id}{(': ' + detail) if detail else ''}")
-        def _soft_warn_article_image(reason: str, source_id: str, detail: str = "") -> None:
-            article_image_soft_warnings[reason] += 1
-            examples = article_image_soft_warning_examples[reason]
-            if len(examples) < 5:
-                examples.append(f"{source_id}{(': ' + detail) if detail else ''}")
-        def _reject_image(reason: str, source_id: str, detail: str = "") -> None:
-            image_rejects[reason] += 1
-            examples = image_reject_examples[reason]
-            if len(examples) < 5:
-                examples.append(f"{source_id}{(': ' + detail) if detail else ''}")
+        rejects = ContentPlanRejectLedger()
         for source_dir in source_units:
             meta_path = source_dir / "meta.json"
             if not meta_path.is_file() or not (source_dir / "source.md").is_file():
@@ -266,7 +166,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 article_raw_count += 1
                 if bool(meta.get("hasVideo")):
                     # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
-                    _reject_article("contains_video", source_id, "来源含内联视频，文章类放弃")
+                    rejects.reject_article("contains_video", source_id, "来源含内联视频，文章类放弃")
                     continue
                 source_ref = _source_ref(ctx, source_dir)
                 base_body = load_base_draft_text(ctx.execution_id, source_ref)
@@ -277,7 +177,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 )
                 text_len = int(readiness["effectiveChars"])
                 if not readiness["ready"]:
-                    _reject_article(
+                    rejects.reject_article(
                         "text_too_short",
                         source_id,
                         f"{text_len}<{ARTICLE_MIN_BASE_DRAFT_CHARS}; "
@@ -296,14 +196,14 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 qunar_focus_verdict = str(meta.get("entityFocusVerdict") or "").strip() or focus_verdict
                 qunar_block = qunar_article_base_block_reason(meta, qunar_focus_verdict)
                 if qunar_block:
-                    _reject_article(qunar_block, source_id, "Qunar 模板底稿不可作为当前实体 article base")
+                    rejects.reject_article(qunar_block, source_id, "Qunar 模板底稿不可作为当前实体 article base")
                     continue
                 # 底稿中心 1:1：实体退化为多标签，文章不再因"未整体指代单一实体"弃稿
                 # （多目的地游记照样按单一底稿成稿，实体作为标签集合）；focus 仅留作诊断信号。
                 draft_title = extract_source_title(ctx.execution_id, source_ref)
                 if not draft_title:
                     # 标题取自底稿：文章源无法提取可用发布标题 → 上游诚实弃稿（不成稿）。
-                    _reject_article("no_source_title", source_id, "底稿无法提取发布标题")
+                    rejects.reject_article("no_source_title", source_id, "底稿无法提取发布标题")
                     continue
                 entity_tags = sorted(
                     {
@@ -312,7 +212,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                     }
                 )
                 if not rows:
-                    _soft_warn_article_image("no_source_assets", source_id)
+                    rejects.warn_article_image("no_source_assets", source_id)
                 article_candidates.append(
                     {
                         "sourceDir": source_dir,
@@ -347,18 +247,18 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                     asset_ref = _asset_ref(ctx, source_dir, row)
                     collection_id = str(row.get("sourceCollectionId") or "").strip()
                     if not asset_ref:
-                        _reject_image("missing_asset_ref", source_id)
+                        rejects.reject_image("missing_asset_ref", source_id)
                         continue
                     if not collection_id:
-                        _reject_image("missing_source_collection_id", source_id, asset_ref)
+                        rejects.reject_image("missing_source_collection_id", source_id, asset_ref)
                         continue
                     asset_path = root / asset_ref
                     if not asset_path.is_file():
-                        _reject_image("asset_file_missing", source_id, asset_ref)
+                        rejects.reject_image("asset_file_missing", source_id, asset_ref)
                         continue
                     verdict = _assess_content_plan_publish_image(asset_path, ctx)
                     if verdict.blocks_image_publish:
-                        _reject_image(
+                        rejects.reject_image(
                             "image_safety_blocked",
                             source_id,
                             f"{asset_ref}:{'/'.join(verdict.reasons) or verdict.status}",
@@ -411,7 +311,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 claimed_shas=used_asset_shas,
                 claimed_collections=used_collection_ids,
             ):
-                _reject_image(
+                rejects.reject_image(
                     "source_asset_reused",
                     str(candidate.get("sourceId") or candidate.get("sourceRef") or ""),
                     str(candidate.get("assetRef") or ""),
@@ -432,11 +332,11 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 break
             source_ref = str(candidate.get("sourceRef") or "").strip()
             if source_ref in used_article_source_refs:
-                _reject_article("source_ref_reused", str(candidate["sourceId"]))
+                rejects.reject_article("source_ref_reused", str(candidate["sourceId"]))
                 continue
             refs, shas, collections, asset_refs = _article_asset_claims(ctx, root, candidate)
             if not asset_refs:
-                _soft_warn_article_image("no_publishable_source_asset", str(candidate["sourceId"]))
+                rejects.warn_article_image("no_publishable_source_asset", str(candidate["sourceId"]))
             elif _claims_conflict(
                 refs,
                 shas,
@@ -445,7 +345,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 claimed_shas=used_asset_shas,
                 claimed_collections=used_collection_ids,
             ):
-                _soft_warn_article_image("source_asset_reused", str(candidate["sourceId"]))
+                rejects.warn_article_image("source_asset_reused", str(candidate["sourceId"]))
                 refs, shas, collections, asset_refs = [], [], [], []
             claimed_candidate = dict(candidate)
             claimed_candidate["assetRefs"] = asset_refs
@@ -519,12 +419,12 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 picked_images=tuple(picked_images),
                 article_lane_enabled=article_lane_enabled,
                 image_lane_enabled=image_lane_enabled,
-                article_rejects=dict(article_rejects),
-                article_reject_examples=dict(article_reject_examples),
-                article_image_warnings=dict(article_image_soft_warnings),
-                article_image_warning_examples=dict(article_image_soft_warning_examples),
-                image_rejects=dict(image_rejects),
-                image_reject_examples=dict(image_reject_examples),
+                article_rejects=dict(rejects.article_rejects),
+                article_reject_examples=dict(rejects.article_reject_examples),
+                article_image_warnings=dict(rejects.article_image_warnings),
+                article_image_warning_examples=dict(rejects.article_image_warning_examples),
+                image_rejects=dict(rejects.image_rejects),
+                image_reject_examples=dict(rejects.image_reject_examples),
             )
         )
         from content.execution.controller.content_plan_items import (
@@ -553,54 +453,14 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         # planned videos to meet approvedQuota, demote the shortfall tail and
         # continue. Rights gates stay strict — only the oversample discard
         # pool is absorbed, matching download_fetch absorb semantics.
-        absorbed = False
-        if video_lane_enabled:
-            from content.execution.spec_contract import approved_quota
-
-            quota = approved_quota(ctx.execution_id)
-            absorbable_codes = {
-                DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                DataIssueCode.SOURCE_MISSING,
-                DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-            }
-            if (
-                len(items) >= quota
-                and bool(issues)
-                and all(issue.code in absorbable_codes for issue in issues)
-            ):
-                successful_names: list[str] = []
-                seen: set[str] = set()
-                for item in items:
-                    tags = item.get("entityTags") or []
-                    name = str(tags[0] if tags else "").strip()
-                    if name and name not in seen:
-                        seen.add(name)
-                        successful_names.append(name)
-                if len(successful_names) >= quota:
-                    failed_names = {
-                        str(issue.ref or "").strip()
-                        for issue in issues
-                        if str(issue.ref or "").strip()
-                    }
-                    scope = active_spec.setdefault("scope", {})
-                    coverage = list(scope.get("coverageTargets") or [])
-                    scope["coverageTargets"] = [
-                        row
-                        for row in coverage
-                        if str((row or {}).get("name") or "").strip() in seen
-                    ]
-                    _persist_video_content_plan_absorb(
-                        ctx.execution_id,
-                        successful_names=successful_names,
-                        failed_names=sorted(failed_names),
-                    )
-                    print(
-                        "[content_plan] absorbed video oversample shortfall "
-                        f"planned={len(successful_names)}/quota={quota} "
-                        f"discarded={len(failed_names)}"
-                    )
-                    issues = []
-                    absorbed = True
+        absorbed = absorb_video_content_plan_shortfalls(
+            ctx=ctx,
+            active_spec=active_spec,
+            items=items,
+            issues=issues,
+            video_lane_enabled=video_lane_enabled,
+            persist_absorb=_persist_video_content_plan_absorb,
+        )
         if not absorbed:
             _clean_content_plan_outputs(ctx)
             return issues

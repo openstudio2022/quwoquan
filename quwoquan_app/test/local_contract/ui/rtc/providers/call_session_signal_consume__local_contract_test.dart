@@ -20,12 +20,12 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  CallSessionDto session({
+  CallSession session({
     String callId = 'call_signal_001',
     CallStatus status = CallStatus.inCall,
   }) {
     final now = DateTime.utc(2026, 7, 20);
-    return CallSessionDto(
+    return CallSession(
       callId: callId,
       callType: CallType.audio,
       status: status,
@@ -33,13 +33,13 @@ void main() {
       roomId: 'rtc-room-$callId',
       maxParticipants: 2,
       participantCount: 2,
-      participants: const <CallParticipantDto>[
-        CallParticipantDto(
+      participants: const <CallParticipant>[
+        CallParticipant(
           userId: 'user_a',
           role: ParticipantRole.initiator,
           status: ParticipantStatus.connected,
         ),
-        CallParticipantDto(
+        CallParticipant(
           userId: 'user_b',
           role: ParticipantRole.invitee,
           status: ParticipantStatus.connected,
@@ -620,12 +620,12 @@ void main() {
   });
 }
 
-CallSessionDto _fixtureSession({
+CallSession _fixtureSession({
   String callId = 'call_signal_001',
   CallStatus status = CallStatus.inCall,
 }) {
   final now = DateTime.utc(2026, 7, 20);
-  return CallSessionDto(
+  return CallSession(
     callId: callId,
     callType: CallType.audio,
     status: status,
@@ -633,13 +633,13 @@ CallSessionDto _fixtureSession({
     roomId: 'rtc-room-$callId',
     maxParticipants: 2,
     participantCount: 2,
-    participants: const <CallParticipantDto>[
-      CallParticipantDto(
+    participants: const <CallParticipant>[
+      CallParticipant(
         userId: 'user_a',
         role: ParticipantRole.initiator,
         status: ParticipantStatus.connected,
       ),
-      CallParticipantDto(
+      CallParticipant(
         userId: 'user_b',
         role: ParticipantRole.invitee,
         status: ParticipantStatus.connected,
@@ -653,11 +653,11 @@ CallSessionDto _fixtureSession({
 final class _RecordingCallQuery implements CallQuery {
   _RecordingCallQuery({required this.response});
 
-  final CallSessionDto response;
+  final CallSession response;
   final List<String> requestedCallIds = <String>[];
 
   @override
-  Future<CallSessionDto> getCall(RtcGetCallQuery query) async {
+  Future<CallSession> getCall(RtcGetCallQuery query) async {
     requestedCallIds.add(query.callId);
     return response;
   }
@@ -681,20 +681,20 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
   int cancelCount = 0;
 
   @override
-  Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) async {
-    return RtcAnswerCallResultDto(
+  Future<RtcAnswerCallResult> answerCall(RtcCallIdCommand command) async {
+    return RtcAnswerCallResult(
       session: _fixtureSession(
         callId: command.callId,
         status: CallStatus.connecting,
       ),
-      mediaAccess: const RtcMediaSessionAccessDto(
+      mediaAccess: const RtcMediaSessionAccess(
         accessToken: 'fixture-media-access',
       ),
     );
   }
 
   @override
-  Future<CallSessionDto> hangupCall(RtcCallIdCommand command) async {
+  Future<CallSession> hangupCall(RtcCallIdCommand command) async {
     hangupCount += 1;
     if (shouldFailHangup) {
       throw StateError('fixture hangup failure');
@@ -706,7 +706,7 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
   }
 
   @override
-  Future<CallSessionDto> cancelCall(RtcCallIdCommand command) async {
+  Future<CallSession> cancelCall(RtcCallIdCommand command) async {
     cancelCount += 1;
     if (shouldFailCancel) {
       throw StateError('fixture cancel failure');
@@ -718,22 +718,22 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
   }
 
   @override
-  Future<RtcInitiateCallResultDto> initiateCall(
+  Future<RtcInitiateCallResult> initiateCall(
     RtcInitiateCallCommand command,
   ) async {
-    return RtcInitiateCallResultDto(
+    return RtcInitiateCallResult(
       session: _fixtureSession(status: CallStatus.ringing).copyWith(
         callType: command.callType,
         conversationId: command.conversationId,
       ),
-      mediaAccess: const RtcMediaSessionAccessDto(
+      mediaAccess: const RtcMediaSessionAccess(
         accessToken: 'fixture-media-access',
       ),
     );
   }
 
   @override
-  Future<CallSessionDto> rejectCall(RtcCallIdCommand command) async {
+  Future<CallSession> rejectCall(RtcCallIdCommand command) async {
     if (shouldFailReject) {
       throw StateError('fixture reject failure');
     }
@@ -756,17 +756,17 @@ final class _RecordingParticipantWriter
   final List<String> reportedCallIds = <String>[];
 
   @override
-  Future<CallSessionDto> reportMediaConnected(RtcCallIdCommand command) async {
+  Future<CallSession> reportMediaConnected(RtcCallIdCommand command) async {
     reportedCallIds.add(command.callId);
     return _fixtureSession(callId: command.callId, status: reportStatus);
   }
 
   @override
-  Future<RtcJoinCredentialsDto> joinCall(RtcCallIdCommand command) =>
+  Future<RtcJoinCredentials> joinCall(RtcCallIdCommand command) =>
       throw UnimplementedError();
 
   @override
-  Future<CallSessionDto> leaveCall(RtcCallIdCommand command) async {
+  Future<CallSession> leaveCall(RtcCallIdCommand command) async {
     if (shouldFailLeave) {
       throw StateError('fixture leave failure');
     }
@@ -777,7 +777,7 @@ final class _RecordingParticipantWriter
   }
 
   @override
-  Future<CallSessionDto> inviteToCall(RtcInviteToCallCommand command) =>
+  Future<CallSession> inviteToCall(RtcInviteToCallCommand command) =>
       throw UnimplementedError();
 }
 
@@ -806,7 +806,7 @@ final class _RecordingMediaControlWriter implements CallMediaControlWriter {
   bool shouldFailMute;
 
   @override
-  Future<CallSessionDto> toggleMute(RtcToggleMuteCommand command) async {
+  Future<CallSession> toggleMute(RtcToggleMuteCommand command) async {
     events.add('command.mute:${command.muted}');
     if (shouldFailMute) {
       throw StateError('fixture mute command failure');
@@ -815,7 +815,7 @@ final class _RecordingMediaControlWriter implements CallMediaControlWriter {
   }
 
   @override
-  Future<CallSessionDto> toggleCamera(RtcToggleCameraCommand command) async {
+  Future<CallSession> toggleCamera(RtcToggleCameraCommand command) async {
     events.add('command.camera:${command.cameraOn}');
     return _fixtureSession(
       callId: command.callId,
@@ -861,7 +861,7 @@ final class _RecordingScreenShareWriter implements CallScreenShareWriter {
   int stopCount = 0;
 
   @override
-  Future<CallSessionDto> startScreenShare(RtcCallIdCommand command) async {
+  Future<CallSession> startScreenShare(RtcCallIdCommand command) async {
     startCount += 1;
     events?.add('command.start');
     return _fixtureSession(callId: command.callId).copyWith(
@@ -872,7 +872,7 @@ final class _RecordingScreenShareWriter implements CallScreenShareWriter {
   }
 
   @override
-  Future<CallSessionDto> stopScreenShare(RtcCallIdCommand command) async {
+  Future<CallSession> stopScreenShare(RtcCallIdCommand command) async {
     stopCount += 1;
     events?.add('command.stop');
     return _fixtureSession(

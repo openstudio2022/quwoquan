@@ -78,3 +78,18 @@ SuggestedActionsGenerator：根据服务端核验的 `PageContext`（页面类�
 - WHEN 参与者发起“runtime assistant 能力”对应动作。
 - THEN 直属 Story 共同交付八类页面的可执行 SuggestedActions；首算与缓存命中保留相同
   payload，页面上下文缺失或不匹配时可区分地失败且不产生伪成功事实。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 Suggested Actions 八类页面运行时闭环尚未实现
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺实现或直接 `spec_ref`；当前 metadata 仅声明 `get_suggested_actions` consumer capability、字段和 Redis keyspace，尚未形成
+  canonical operation、Assistant Service handler、八类页面生成器、缓存等价性实现及直接引用本 SIT 的
+  `local_contract / api_integration / user_acceptance` 证据。
+- 在上述对象、运行时错误链路和三层证据闭合前，本 SIT 保持阻断；不得用 App 展示层的
+  suggested-action typed double 或其他 Assistant Story 的局部测试代替。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效。

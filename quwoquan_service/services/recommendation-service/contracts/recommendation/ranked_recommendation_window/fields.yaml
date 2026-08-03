@@ -12,9 +12,21 @@ fields:
 - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: items, source: items, type: '[]RankedRecommendationItem', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: objectCards, source: objectCards, type: '[]RecommendationObjectCard', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 types:
+  RecommendationObjectCard:
+    description: 排序窗口内冻结的个性化对象卡；Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。
+    fields:
+    - {name: objectKind, source: objectKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: subtitle, source: subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: coverUrl, source: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: reasonKey, source: reasonKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: recallPath, source: recallPath, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   RankedRecommendationItem:
     description: 排序窗口中不可变序位的一项候选。
     fields:
@@ -30,6 +42,13 @@ types:
     - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
     - {name: limit, source: limit, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  GetRankedRecommendationPageQuery:
+    description: 读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。
+    fields:
+    - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: fromOrdinal, source: fromOrdinal, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
   RankedRecommendationPage:
     description: 稳定窗口的一页排序结果。
     fields:
@@ -43,5 +62,6 @@ types:
     - {name: featureSnapshotAt, source: featureSnapshotAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: userFeatureSnapshot, source: userFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: items, source: items, type: '[]RankedRecommendationItem', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: objectCards, source: objectCards, type: '[]RecommendationObjectCard', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: nextOrdinal, source: nextOrdinal, type: int, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}

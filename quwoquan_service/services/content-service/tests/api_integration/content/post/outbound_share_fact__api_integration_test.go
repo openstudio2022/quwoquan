@@ -69,28 +69,19 @@ func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
 	if fact["destination"] != nil || fact["providerReceiptId"] != nil || fact["destinationDigest"] == nil {
 		t.Fatalf("sensitive destination leaked or digest missing: %#v", fact)
 	}
-	for _, target := range []struct {
-		collection string
-		filter     bson.M
-	}{
-		{collection: "posts", filter: bson.M{"_id": postID}},
-		{collection: "rm_discovery_feed", filter: bson.M{"postId": postID}},
-	} {
-		var projection struct {
-			ShareCount int64 `bson:"shareCount"`
-		}
-		if err := mongoDB.Collection(target.collection).FindOne(
-			ctx,
-			target.filter,
-		).Decode(&projection); err != nil {
-			t.Fatalf("read %s share count: %v", target.collection, err)
-		}
-		if projection.ShareCount != 1 {
-			t.Fatalf(
-				"%s shareCount=%d, want authoritative count 1",
-				target.collection,
-				projection.ShareCount,
-			)
-		}
+	var projection struct {
+		ShareCount int64 `bson:"shareCount"`
+	}
+	if err := mongoDB.Collection("posts").FindOne(
+		ctx,
+		bson.M{"_id": postID},
+	).Decode(&projection); err != nil {
+		t.Fatalf("read Post share count: %v", err)
+	}
+	if projection.ShareCount != 1 {
+		t.Fatalf(
+			"Post shareCount=%d, want authoritative count 1",
+			projection.ShareCount,
+		)
 	}
 }

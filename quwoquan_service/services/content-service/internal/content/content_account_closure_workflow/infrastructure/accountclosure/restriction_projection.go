@@ -50,7 +50,6 @@ type MongoAccountRestrictionProjection struct {
 	watermarks     *mongo.Collection
 	posts          *mongo.Collection
 	comments       *mongo.Collection
-	discoveryFeed  *mongo.Collection
 	closedSubjects PersistentSubjectClosureLookup
 	now            func() time.Time
 }
@@ -73,7 +72,6 @@ func NewAccountRestrictionProjection(
 		watermarks:     db.Collection(contentAccountRestrictionWatermarkCollection),
 		posts:          db.Collection("posts"),
 		comments:       db.Collection("comments"),
-		discoveryFeed:  db.Collection("rm_discovery_feed"),
 		closedSubjects: closedSubjects,
 		now:            time.Now,
 	}, nil
@@ -330,7 +328,6 @@ func (projection *MongoAccountRestrictionProjection) applyOwnedMutations(
 	}{
 		{"post", projection.posts},
 		{"comment", projection.comments},
-		{"discovery feed", projection.discoveryFeed},
 	}
 	var affected int64
 	for _, target := range targets {

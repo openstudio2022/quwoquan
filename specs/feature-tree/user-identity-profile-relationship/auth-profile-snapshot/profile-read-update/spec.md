@@ -52,7 +52,7 @@
 - 编辑资料页必须采用 iOS 分组列表：封面/头像为独立紧凑媒体区块，基础资料、账号社交、扩展资料拆分为独立区块；普通字段的右侧值、图标和 chevron 必须在同一右侧槽位对齐。
 - 编辑资料读取必须使用本人私有 `ProfileEditSnapshotWire`，公开主页资料不得暴露手机号、生日等私有字段；手机号只展示 owner credential 脱敏摘要。
 - 我的二维码由服务端 `ProfileQrCardWire` 生成唯一公开主页 HTTPS payload，并附可撤销 `qrTokenId`；payload 禁止编码手机号、ownerId、样式版本或 bearer token。App 侧必须使用真实二维码 SDK 渲染 payload，不得用静态占位图或模拟图案。
-- 标签选择必须进入 tag-service 标签体系：职业 V1 单选，兴趣 V1 多选；`identityTags` 只作为展示摘要和兼容投影，不作为 App 侧第二套标签真相源。
+- 标签选择必须进入 tag-service 标签体系：职业单选，兴趣多选；`identityTags` 只作为展示摘要，不作为 App 侧第二套标签真相源。
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 - 资料编辑字段、错误码、请求上下文、route/surface、DTO projection 先走 metadata，再由 codegen/verify 闭合；禁止手改生成物作为契约来源。
 - 手机号绑定必须复用登录域 OTP/运营商一键能力：`SendOtp(sourceOperation=bind_phone)` + `BindPhoneCredential` 或 `BindCarrierPhoneCredential`；通用 `BindCredential` 不再承担手机号验证。
@@ -77,7 +77,7 @@
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/fields.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/projections/profile_edit_snapshot_wire.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/projections/profile_qr_card_wire.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml#ProfileQrCardWire`
 - canonical：`quwoquan_service/services/tag-service/contracts/tag/tag_node_view/operations.yaml`
 - canonical：`quwoquan_service/services/tag-service/contracts/tag/tag_node_view/operations.yaml#ListTagChildren`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml#UpdateUserProfile`

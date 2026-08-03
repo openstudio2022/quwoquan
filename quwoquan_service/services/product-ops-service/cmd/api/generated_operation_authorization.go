@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
-	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 )
 
@@ -13,18 +12,10 @@ import (
 // from canonical contracts; object handlers must not copy operation scopes or
 // principal-role policy.
 func productOpsGeneratedOperationDescriptors() []rtauth.OperationSecurityDescriptor {
-	opsDescriptors := operationsecurity.ForDomain("ops")
-	descriptors := make(
-		[]rtauth.OperationSecurityDescriptor,
-		0,
-		len(opsDescriptors)+len(generatedcontrolplane.ProductOperationSecurityDescriptors),
-	)
-	descriptors = append(descriptors, opsDescriptors...)
-	descriptors = append(
-		descriptors,
+	return append(
+		[]rtauth.OperationSecurityDescriptor(nil),
 		generatedcontrolplane.ProductOperationSecurityDescriptors...,
 	)
-	return descriptors
 }
 
 func requireProductOpsGeneratedOperationAuthorization(

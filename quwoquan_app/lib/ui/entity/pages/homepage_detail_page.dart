@@ -6,11 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart'
-    show HomepageIntroduction;
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
@@ -24,13 +22,6 @@ import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show
-        CloudOperationCancellationSignal,
-        ChatMessageCardObjectRef,
-        FollowSubjectCommand,
-        FollowSubjectKind,
-        UnfollowSubjectCommand;
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
   const HomepageDetailPage({
@@ -207,7 +198,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       thumbnailUrl: detail.coverUrl ?? '',
       deeplink: AppLinkTemplates.entityHomepageAppDeepLink(widget.homepageId),
       landingUrl: AppPublicContentLinks.entityHomepageWebUrl(widget.homepageId),
-      objectRef: ChatMessageCardObjectRef(
+      objectRef: MessageCardObjectRef(
         objectTypeRef: 'homepage',
         objectId: widget.homepageId,
         routeId: 'homepageDetail',
@@ -342,7 +333,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           .read(homepageDetailEntityWishlistStateReaderProvider)
           .getEntityWishlistState(
             objectId: widget.homepageId,
-            objectKind: FollowSubjectKind.homepage.wireValue,
+            objectKind: FollowSubjectKind.homepage.wireName,
           );
       return state.wishlisted;
     } catch (error, stackTrace) {
@@ -481,7 +472,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (wishlisted) {
       tracker.trackWishlistAdd(
         widget.homepageId,
-        objectKind: FollowSubjectKind.homepage.wireValue,
+        objectKind: FollowSubjectKind.homepage.wireName,
         displayName: detail.title,
         sourceSurface: AppUiSurfaces.homepageDetail.id,
         feedRequestId: widget.feedRequestId,
@@ -490,7 +481,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     } else {
       tracker.trackWishlistRemove(
         widget.homepageId,
-        objectKind: FollowSubjectKind.homepage.wireValue,
+        objectKind: FollowSubjectKind.homepage.wireName,
         sourceSurface: AppUiSurfaces.homepageDetail.id,
         feedRequestId: widget.feedRequestId,
         referralSource: widget.referralSource,
@@ -539,19 +530,20 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       if (!mounted) {
         return;
       }
-      final delta = result.following == following
+      final resultFollowing = result.state == SubjectFollowState.following;
+      final delta = resultFollowing == following
           ? 0
-          : (result.following ? 1 : -1);
+          : (resultFollowing ? 1 : -1);
       setState(
         () => _detail = detail.copyWith(
-          viewerFollowsHomepage: result.following,
+          viewerFollowsHomepage: resultFollowing,
           followerCount: (detail.followerCount + delta).clamp(0, 1 << 31),
         ),
       );
       unawaited(
         trackHomepageProductAction(
           ref,
-          action: result.following ? 'follow' : 'unfollow',
+          action: resultFollowing ? 'follow' : 'unfollow',
           pageName: AppUiSurfaces.homepageDetail.id,
           result: 'success',
           startedAt: startedAt,

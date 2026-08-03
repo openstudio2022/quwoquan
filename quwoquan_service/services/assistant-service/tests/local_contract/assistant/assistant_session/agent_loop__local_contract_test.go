@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
@@ -39,6 +40,12 @@ func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
 		orchestration.ReactRuntime{Model: assistantSessionAgentLoopFinalModel{}},
 		func() time.Time { return time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC) },
 	)
+	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+		SkillID:      "general_qa",
+		DisplayName:  "通用问答",
+		DomainID:     "assistant",
+		ProblemClass: "general",
+	}}}
 
 	events, failure, err := loop.RunTurn(t.Context(), assistant.AssistantTurn{
 		TurnID:    "turn-local-contract-1",

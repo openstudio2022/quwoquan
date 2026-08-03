@@ -84,7 +84,7 @@ class VideoSourceFrameEvidence:
             ) from exc
         rights_audit_issues = _strings(payload.get("rightsAuditIssues"))
         if (
-            rights_audit_status is RightsAuditStatus.UNVERIFIED
+            rights_audit_status is not RightsAuditStatus.VERIFIED
             and not rights_audit_issues
         ):
             raise ValueError(

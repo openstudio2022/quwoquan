@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/entity/homepage_operation_ports.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -23,7 +24,7 @@ final class RemoteHomepageCommandWriter
   final HomepageCommandInvocationContextFactory invocationContext;
 
   @override
-  Future<HomepageDetailProjection> suggest(
+  Future<HomepageDetailView> suggest(
     SuggestHomepageCandidateCommand command,
   ) => client.entityHomepageSuggestHomepageCandidate(
     command,
@@ -34,7 +35,7 @@ final class RemoteHomepageCommandWriter
   );
 
   @override
-  Future<HomepageDetailProjection> updateClaimedBasics(
+  Future<HomepageDetailView> updateClaimedBasics(
     UpdateClaimedHomepageBasicsCommand command,
   ) => client.entityHomepageUpdateClaimedHomepageBasics(
     command,

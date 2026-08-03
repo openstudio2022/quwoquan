@@ -2,6 +2,7 @@ kind: projection
 description: Conversation、Message 与 persona 私有会话状态事件合并出的收件箱排序视图；不拥有消息或成员事实。
 identity:
   fields:
+  - userId
   - conversationId
   version_source: checkpoint
 access:
@@ -13,17 +14,44 @@ relationships:
   cardinality: N:1
   consistency: eventual
   kind: projection_source
+  name: persona
+  on_delete: tombstone
+  reference_fields:
+  - userId
+  target_object: user.Persona
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
   name: conversationEvents
   on_delete: tombstone
   reference_fields:
   - conversationId
   target_object: chat.Conversation
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: lastMessage
+  on_delete: detach
+  reference_fields:
+  - lastMessageId
+  target_object: chat.Message
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: projection_source
+  name: circle
+  on_delete: detach
+  reference_fields:
+  - circleId
+  target_object: circle.Circle
 business_rules:
 - 每个 persona 与 conversation 至多一条 inbox 行，排序游标由最后已提交消息序列和时间共同决定。
 - 未读数只由 Message 与 ConversationUserState 事件推进，查询不得回扫 message 集合补算。
 - Conversation tombstone 必须移除可见内容并保留幂等处理水位。
 lifecycle:
-  source_events: [ConversationCreated, ConversationUpdated, ConversationDissolved, MessageSent, ConversationUserStateChanged]
+  source_events: [ConversationCreated, ConversationUpdated, ConversationDissolved, ConversationMemberAdded, ConversationMemberRemoved, ConversationMemberLeft, MessageSent, ConversationUserSettingsChanged, ConversationReadWatermarkAdvanced]
   checkpoint: chat_outbox_sequence
   rebuild: replay_chat_authoritative_outbox
   tombstone: hide_conversation_and_retain_checkpoint

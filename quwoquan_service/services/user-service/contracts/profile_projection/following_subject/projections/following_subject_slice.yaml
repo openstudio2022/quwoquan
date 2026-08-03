@@ -1,0 +1,9 @@
+read_model: FollowingSubjectSlice
+description: 当前 Persona 的关注对象 keyset 分页。
+source_entities:
+- FollowingSubject
+consumers:
+- app
+fields:
+- {name: items, type: '[]FollowingSubjectItemView', nullable: false}
+- {name: nextCursor, type: string, nullable: true}

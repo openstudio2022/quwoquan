@@ -54,29 +54,26 @@ func DefaultTransportConfig() RealtimeTransportConfig {
 }
 
 type Handler struct {
-	tickets        *application.TicketService
-	hub            *application.Hub
-	resumeReader   application.ResumableEventReader
-	presenceReader application.PresenceViewReader
-	config         RealtimeTransportConfig
+	tickets      *application.TicketService
+	hub          *application.Hub
+	resumeReader application.ResumableEventReader
+	config       RealtimeTransportConfig
 }
 
 func NewHandler(
 	tickets *application.TicketService,
 	hub *application.Hub,
 	resumeReader application.ResumableEventReader,
-	presenceReader application.PresenceViewReader,
 	config RealtimeTransportConfig,
 ) (*Handler, error) {
-	if tickets == nil || hub == nil || resumeReader == nil || presenceReader == nil {
-		return nil, errors.New("realtime http handler requires ticket, hub and presence reader")
+	if tickets == nil || hub == nil || resumeReader == nil {
+		return nil, errors.New("realtime http handler requires ticket, hub and resume reader")
 	}
 	return &Handler{
-		tickets:        tickets,
-		hub:            hub,
-		resumeReader:   resumeReader,
-		presenceReader: presenceReader,
-		config:         config,
+		tickets:      tickets,
+		hub:          hub,
+		resumeReader: resumeReader,
+		config:       config,
 	}, nil
 }
 
@@ -85,10 +82,6 @@ func NewHandler(
 func (h *Handler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /realtime/tickets", h.handleIssueTicket)
 	mux.HandleFunc("GET /realtime/poll", h.handleLongPoll)
-	mux.HandleFunc(
-		"GET /internal/realtime/personas/{personaId}/presence",
-		h.handleGetPersonaPresence,
-	)
 	mux.HandleFunc("GET /config/realtime", h.handleGetConfig)
 }
 
@@ -235,33 +228,6 @@ func collectLongPollEvents(
 		events = append(events, drainEvents(ctx, ephemeral)...)
 		return events, cursor, nil
 	}
-}
-
-func (h *Handler) handleGetPersonaPresence(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
-	personaID := strings.TrimSpace(r.PathValue("personaId"))
-	if personaID == "" {
-		writeError(
-			w,
-			r,
-			generated.AppErrorFromInternalError("personaId is required"),
-		)
-		return
-	}
-	view, err := h.presenceReader.ReadPresence(
-		r.Context(),
-		personaID,
-		time.Now().UTC(),
-	)
-	if err != nil {
-		writeError(w, r, generated.AppErrorFromInternalError(
-			"realtime presence query failed",
-		))
-		return
-	}
-	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *Handler) handleGetConfig(w http.ResponseWriter, _ *http.Request) {

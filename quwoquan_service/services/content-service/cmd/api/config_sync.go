@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"quwoquan_service/runtime/controlplane"
-	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 )
 
 // startConfigSyncLoop 接入控制面热配置通道，并把交集展示文案的运营态覆盖解析器

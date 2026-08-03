@@ -2,7 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// PersonaCircleReader projection 到页面只读模型的单向映射。
-CircleDto circleDtoFromPersonaCircleSummary(PersonaCircleSummary summary) =>
+CircleDto circleDtoFromPersonaCircleSummary(PersonaCircleSlice summary) =>
     CircleDto(
       id: summary.circleId,
       name: summary.name,
@@ -11,7 +11,7 @@ CircleDto circleDtoFromPersonaCircleSummary(PersonaCircleSummary summary) =>
       iconUrl: summary.iconUrl,
       ownerId: summary.ownerPersonaId,
       category: summary.category,
-      tags: summary.tags,
+      tags: summary.tags ?? const <String>[],
       memberCount: summary.memberCount,
       postCount: summary.postCount,
       weeklyActiveCount: summary.weeklyActiveCount,

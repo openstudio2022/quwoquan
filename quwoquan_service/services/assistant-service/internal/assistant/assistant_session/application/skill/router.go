@@ -33,9 +33,9 @@ func (r Router) Route(turn assistant.AssistantTurn) Manifest {
 		score := 0
 		specificity := 0
 		for _, hint := range manifest.RoutingHints {
-			if hint != "" && strings.Contains(input, strings.ToLower(hint)) {
-				score++
-				specificity += len([]rune(hint))
+			if matched, weight := matchRoutingHint(input, hint); matched {
+				score += weight
+				specificity += len([]rune(strings.ReplaceAll(hint, " ", "")))
 			}
 		}
 		if score > bestScore || (score == bestScore && specificity > bestSpecificity) {
@@ -53,4 +53,21 @@ func (r Router) Route(turn assistant.AssistantTurn) Manifest {
 		}
 	}
 	return r.Catalog[0]
+}
+
+// matchRoutingHint keeps routing semantics in package assets while supporting
+// a small declarative conjunction: whitespace-separated terms must all occur
+// in the input. A conjunction carries the number of matched terms as weight,
+// so a specific intent such as "安排 行程" wins over either generic term.
+func matchRoutingHint(input, hint string) (bool, int) {
+	terms := strings.Fields(strings.ToLower(hint))
+	if len(terms) == 0 {
+		return false, 0
+	}
+	for _, term := range terms {
+		if !strings.Contains(input, term) {
+			return false, 0
+		}
+	}
+	return true, len(terms)
 }

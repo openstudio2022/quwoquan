@@ -28,8 +28,8 @@ class GreetingInboxPage extends ConsumerStatefulWidget {
 
 class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
   final Set<String> _busyRequestIds = <String>{};
-  List<GreetingRequestDto> _received = const <GreetingRequestDto>[];
-  List<GreetingRequestDto> _sent = const <GreetingRequestDto>[];
+  List<GreetingRequestViewData> _received = const <GreetingRequestViewData>[];
+  List<GreetingRequestViewData> _sent = const <GreetingRequestViewData>[];
   _GreetingBox _box = _GreetingBox.received;
   Object? _rawError;
   bool _loading = true;
@@ -47,8 +47,8 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     });
     try {
       final repository = ref.read(greetingRepositoryProvider);
-      final results = await Future.wait<List<GreetingRequestDto>>(
-        <Future<List<GreetingRequestDto>>>[
+      final results = await Future.wait<List<GreetingRequestViewData>>(
+        <Future<List<GreetingRequestViewData>>>[
           repository.listInbox(status: '', limit: 100),
           repository.listOutbox(status: '', limit: 100),
         ],
@@ -71,7 +71,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     }
   }
 
-  Future<void> _reply(GreetingRequestDto request) async {
+  Future<void> _reply(GreetingRequestViewData request) async {
     await _runAction(
       request,
       action: 'reply_greeting',
@@ -101,7 +101,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     );
   }
 
-  Future<void> _ignore(GreetingRequestDto request) async {
+  Future<void> _ignore(GreetingRequestViewData request) async {
     await _runAction(
       request,
       action: 'ignore_greeting',
@@ -118,7 +118,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     );
   }
 
-  Future<void> _confirmCancel(GreetingRequestDto request) async {
+  Future<void> _confirmCancel(GreetingRequestViewData request) async {
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
@@ -156,7 +156,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
   }
 
   Future<void> _runAction(
-    GreetingRequestDto request, {
+    GreetingRequestViewData request, {
     required String action,
     required Future<void> Function() operation,
   }) async {
@@ -230,7 +230,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     }
   }
 
-  void _replaceReceived(GreetingRequestDto updated) {
+  void _replaceReceived(GreetingRequestViewData updated) {
     if (!mounted) {
       return;
     }
@@ -239,7 +239,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     });
   }
 
-  void _replaceSent(GreetingRequestDto updated) {
+  void _replaceSent(GreetingRequestViewData updated) {
     if (!mounted) {
       return;
     }
@@ -248,9 +248,9 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     });
   }
 
-  List<GreetingRequestDto> _replaceById(
-    List<GreetingRequestDto> source,
-    GreetingRequestDto updated,
+  List<GreetingRequestViewData> _replaceById(
+    List<GreetingRequestViewData> source,
+    GreetingRequestViewData updated,
   ) {
     return source
         .map((item) => item.id == updated.id ? updated : item)

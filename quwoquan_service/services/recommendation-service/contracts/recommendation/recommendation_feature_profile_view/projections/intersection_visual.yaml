@@ -1,0 +1,19 @@
+read_model: IntersectionVisual
+description: "交集样本视觉标识（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。\n按 assetKind 渲染头像簇 / 圈子封面 / 校徽 / logo\
+  \ / 缩略图等对象级视觉信号，\n禁用用户头像冒充非用户对象（与 §20.4 数字与视觉标识约束对齐）。\n可点击进 target（对象主页）。R1/R2 人级 kind 必带结构化 sampleVisuals\n\
+  （注册表 sampleVisualsRequired=true），取代裸 sampleAvatarUrls 字符串簇。\n\n闭集枚举（端按字符串解析，未知 assetKind 走通用占位）：\n \
+  \ assetKind: avatar | circleAvatar | cover | emblem | logo | thumbnail | coverImage | icon\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: assetKind
+  type: string
+- name: imageUrl
+  type: string
+- name: displayName
+  type: string
+- name: target
+  type: IntersectionTarget
+  nullable: true

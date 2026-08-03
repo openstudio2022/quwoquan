@@ -9,15 +9,15 @@ void main() {
 
       expect(
         settings.captureDisclosure,
-        MediaCaptureDisclosureGroup.values.toSet(),
+        CaptureMetadataDisclosureGroup.values.toSet(),
       );
     });
 
     test('披露集合可经 toMap/fromMap 往返', () {
       const settings = PublishSettings(
-        captureDisclosure: <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.gear,
-          MediaCaptureDisclosureGroup.parameters,
+        captureDisclosure: <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.gear,
+          CaptureMetadataDisclosureGroup.parameters,
         },
       );
 
@@ -28,7 +28,7 @@ void main() {
 
     test('显式关闭全部分组不会被回退成默认值', () {
       const settings = PublishSettings(
-        captureDisclosure: <MediaCaptureDisclosureGroup>{},
+        captureDisclosure: <CaptureMetadataDisclosureGroup>{},
       );
 
       final restored = PublishSettings.fromMap(settings.toMap());
@@ -49,8 +49,8 @@ void main() {
         'captureDisclosure': <String>['gear', 'not_a_group'],
       });
 
-      expect(restored.captureDisclosure, <MediaCaptureDisclosureGroup>{
-        MediaCaptureDisclosureGroup.gear,
+      expect(restored.captureDisclosure, <CaptureMetadataDisclosureGroup>{
+        CaptureMetadataDisclosureGroup.gear,
       });
     });
 
@@ -58,24 +58,24 @@ void main() {
       const settings = PublishSettings(locationName: '西湖');
 
       final updated = settings.copyWith(
-        captureDisclosure: <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.time,
+        captureDisclosure: <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.time,
         },
       );
 
-      expect(updated.captureDisclosure, <MediaCaptureDisclosureGroup>{
-        MediaCaptureDisclosureGroup.time,
+      expect(updated.captureDisclosure, <CaptureMetadataDisclosureGroup>{
+        CaptureMetadataDisclosureGroup.time,
       });
       expect(updated.locationName, '西湖');
     });
 
     test('关闭拍摄地点后 metadata 裁剪结果不含坐标', () {
       const settings = PublishSettings(
-        captureDisclosure: <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.gear,
+        captureDisclosure: <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.gear,
         },
       );
-      const captured = MediaCaptureMetadata(
+      const captured = ExtractedMediaCaptureMetadata(
         cameraModel: 'ILCE-7M4',
         gpsLatitude: 30.24,
         gpsLongitude: 120.14,
@@ -91,7 +91,7 @@ void main() {
   });
 
   group('capture payload boundary', () {
-    const captured = MediaCaptureMetadata(
+    const captured = ExtractedMediaCaptureMetadata(
       cameraMake: 'SONY',
       cameraModel: 'ILCE-7M4',
       focalLengthMm: 200,
@@ -112,8 +112,8 @@ void main() {
     test('关闭某组后请求只保留仍披露的闭集', () {
       final settings = const PublishSettings(captureMetadata: captured)
           .copyWith(
-            captureDisclosure: <MediaCaptureDisclosureGroup>{
-              MediaCaptureDisclosureGroup.gear,
+            captureDisclosure: <CaptureMetadataDisclosureGroup>{
+              CaptureMetadataDisclosureGroup.gear,
             },
           );
 
@@ -122,7 +122,7 @@ void main() {
 
     test('拍摄元数据不落草稿：toMap 不含 PII，恢复后为空', () {
       const settings = PublishSettings(
-        captureMetadata: MediaCaptureMetadata(
+        captureMetadata: ExtractedMediaCaptureMetadata(
           gpsLatitude: 30.24,
           gpsLongitude: 120.14,
           cameraModel: 'ILCE-7M4',
@@ -134,7 +134,7 @@ void main() {
       expect(serialized.toString(), isNot(contains('30.24')));
       expect(
         PublishSettings.fromMap(serialized).captureMetadata,
-        MediaCaptureMetadata.empty,
+        ExtractedMediaCaptureMetadata.empty,
       );
     });
   });

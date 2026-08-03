@@ -7,75 +7,6 @@ externalDependencies:
     scenes: [general]
 api_routes:
   - method: GET
-    path: /homepages/search
-    operation: SearchHomepages
-    actor: none
-    commercial:
-      status: ready
-    authorization:
-      principal: public
-      ownership_policy: published_homepage_search
-    reliability:
-      timeout_ms: 6000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: optional
-    error_codes:
-      - ENTITY.USER.invalid_argument
-      - ENTITY.SYSTEM.internal_error
-    privacy:
-      request_classification: PUBLIC
-      response_classification: PUBLIC
-      log_policy: metadata_only
-    telemetry:
-      metric: entity_homepage_search
-      trace: true
-      attributes:
-        - homepage_type
-        - outcome
-    slo:
-      latency_p95_ms: 300
-      availability_percent: 99.5
-    security:
-      auth_mode: optional
-      principal: public
-      token_transport: bearer
-      anonymous_policy: allow
-      visibility: public
-    application:
-      kind: query
-      facet: HomepageQueryFacade
-      method: search
-      reader: HomepageSearchReader
-      slice: HomepageSearchSlice
-    description: 搜索共享主页
-    request_bindings:
-      query:
-        - name: query
-          field: query
-        - name: homepageType
-          field: homepageType
-          required: false
-        - name: city
-          field: city
-          required: false
-        - name: status
-          field: status
-          required: false
-        - name: cursor
-          field: cursor
-          required: false
-        - name: limit
-          field: limit
-    response_entity: HomepageSearchItemView
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageSearchSlice
-      response_decoder: decodeHomepageSearchSlice
-    request_entity: HomepageSearchQuery
-    request_body_kind: none
-  - method: GET
     path: /homepages/candidates
     operation: ListHomepageCandidates
     actor: account
@@ -90,6 +21,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.read]
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -144,6 +76,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.write]
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -220,10 +153,7 @@ api_routes:
       availability_percent: 99.9
     description: 补充缺失主页
     request_entity: SuggestHomepageCandidateCommand
-    client_contract:
-      dart_import: ../entity/homepage_commands.dart
-      response_type: HomepageDetailProjection
-      response_decoder: decodeHomepageDetail
+    response_entity: HomepageDetailView
     security:
       auth_mode: required
       principal: persona
@@ -247,6 +177,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.write]
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -333,10 +264,6 @@ api_routes:
       slice: HomepageDetailView
     description: 获取共享主页详情
     response_entity: HomepageDetailView
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageDetailProjection
-      response_decoder: decodeHomepageDetail
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: GET
@@ -389,10 +316,6 @@ api_routes:
       slice: HomepageShellSlice
     description: 获取共享主页阅读壳层
     response_entity: HomepageShellView
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageShellProjection
-      response_decoder: decodeHomepageShell
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: GET
@@ -445,10 +368,6 @@ api_routes:
       slice: HomepageIntroductionSlice
     description: 获取主页完整介绍页
     response_entity: HomepageIntroduction
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageIntroductionProjection
-      response_decoder: decodeHomepageIntroduction
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: GET
@@ -517,10 +436,6 @@ api_routes:
           field: rolloutCohort
           required: false
     response_entity: ObjectPageBundle
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageObjectPageBundleProjection
-      response_decoder: decodeHomepageObjectPageBundle
     request_entity: HomepageObjectPageBundleQuery
     request_body_kind: none
   - method: GET
@@ -573,10 +488,6 @@ api_routes:
       slice: EntityImpactSlice
     description: 实体（共享主页）影响摘要（连接型帮助结果，端侧实体主页「影响力」模块使用）
     response_entity: EntityImpactSummary
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageImpactSummaryProjection
-      response_decoder: decodeHomepageImpactSummary
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: GET
@@ -629,10 +540,6 @@ api_routes:
       slice: HomepageReviewSummarySlice
     description: 获取共享主页评分与口碑摘要
     response_entity: HomepageReviewSummaryView
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageReviewSummaryProjection
-      response_decoder: decodeHomepageReviewSummary
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: GET
@@ -685,10 +592,6 @@ api_routes:
       slice: HomepageRelatedGroupsSlice
     description: 获取共享主页相关群组摘要
     response_entity: HomepageRelatedGroupSummaryView
-    client_contract:
-      dart_import: ../entity/homepage_queries.dart
-      response_type: HomepageRelatedGroupsSlice
-      response_decoder: decodeHomepageRelatedGroups
     request_entity: HomepageByIdQuery
     request_body_kind: none
   - method: PATCH
@@ -738,11 +641,7 @@ api_routes:
         - name: homepageId
           field: homepageId
     description: 更新已认领主页的基础资料；仅认领 owner persona 可执行，服务端内部 version CAS 保护
-    response_entity: Homepage
-    client_contract:
-      dart_import: ../entity/homepage_commands.dart
-      response_type: HomepageDetailProjection
-      response_decoder: decodeHomepageDetail
+    response_entity: HomepageDetailView
     security:
       auth_mode: required
       principal: persona

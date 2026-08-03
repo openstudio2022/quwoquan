@@ -361,7 +361,7 @@ func (s *MemberService) projectCircleGroupMembership(
 	if err != nil {
 		return err
 	}
-	if conv.CircleId != event.CircleID || !IsCircleBoundConversation(*conv) {
+	if conv.CircleId != event.CircleID || !IsManagedConversation(*conv) {
 		return generated.AppErrorFromCircleGroupBindingConflict(
 			"CircleGroupMembership does not match an active CircleGroup-bound conversation",
 		)
@@ -448,7 +448,7 @@ func (s *MemberService) projectCircleGroupMembership(
 		if err != nil {
 			return err
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, conv.ID, &count); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, conv.ID, &count); err != nil {
 			return err
 		}
 		roster, err := s.rosterUpdatedEvent(

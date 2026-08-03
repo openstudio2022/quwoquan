@@ -4,7 +4,6 @@ from __future__ import annotations
 import fcntl
 from contextlib import contextmanager
 from functools import wraps
-from pathlib import Path
 from typing import Callable, Iterator, ParamSpec, TypeVar
 
 P = ParamSpec("P")
@@ -14,13 +13,9 @@ R = TypeVar("R")
 @contextmanager
 def canonical_publish_lock() -> Iterator[None]:
     """Fence the whole-root audit/apply sequence across workers and executions."""
-    from core.paths import OUTPUT_ROOT
+    from core.paths import publish_lock_path
 
-    lock_path = (
-        Path(OUTPUT_ROOT)
-        / "data/local/workspace/object-transactions"
-        / ".canonical-publish.lock"
-    )
+    lock_path = publish_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)

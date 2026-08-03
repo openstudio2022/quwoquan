@@ -7,7 +7,7 @@ errors:
   reason: experiment_invalid_argument
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [UpdateExperimentRollout]}
+  - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -31,7 +31,7 @@ errors:
   reason: version_conflict
   http_status: 409
   emitted_by:
-  - {surface: http, operations: [UpdateExperimentRollout]}
+  - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: refresh
   dart_const: versionConflict
   go_const: ErrVersionConflict
@@ -43,7 +43,7 @@ errors:
   reason: idempotency_conflict
   http_status: 409
   emitted_by:
-  - {surface: http, operations: [UpdateExperimentRollout]}
+  - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: refresh
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
@@ -68,7 +68,7 @@ errors:
   reason: experiment_storage_write_failed
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [UpdateExperimentRollout]}
+  - {surface: http, operations: [CreateExperiment, UpdateExperimentRollout]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: storageWriteFailed

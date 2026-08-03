@@ -1,0 +1,41 @@
+description: 官方 Connector 目录与有界查询输入。
+fields:
+- {name: connectorId, source: connectorId, type: string, constraints: [PK, NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: displayName, source: displayName, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: description, source: description, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: capabilities, source: capabilities, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: authorizationMode, source: authorizationMode, type: enum, enum_ref: ConnectorAuthorizationMode, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: confirmationPolicy, source: confirmationPolicy, type: enum, enum_ref: ConnectorConfirmationPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: dataClassification, source: dataClassification, type: enum, enum_ref: ConnectorDataClassification, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: supportedSurfaceKinds, source: supportedSurfaceKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: ConnectorDefinitionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: releaseDigest, source: releaseDigest, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: publishedAt, source: publishedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+types:
+  ListConnectorDefinitionsQuery:
+    fields:
+    - {name: capability, source: capability, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE, POSITIVE, MAX_100], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  GetConnectorDefinitionQuery:
+    fields:
+    - {name: connectorId, source: path.connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  ConnectorDefinitionListSlice:
+    fields:
+    - {name: items, source: items, type: '[]ConnectorDefinition', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+  PublishConnectorDefinitionRequest:
+    description: 仅供受信 release publisher 提交已经完成签名与 digest 校验的官方 Connector 定义。
+    fields:
+    - {name: connectorId, source: connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: displayName, source: displayName, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: description, source: description, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: capabilities, source: capabilities, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: authorizationMode, source: authorizationMode, type: enum, enum_ref: ConnectorAuthorizationMode, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: confirmationPolicy, source: confirmationPolicy, type: enum, enum_ref: ConnectorConfirmationPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: dataClassification, source: dataClassification, type: enum, enum_ref: ConnectorDataClassification, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: supportedSurfaceKinds, source: supportedSurfaceKinds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: status, source: status, type: enum, enum_ref: ConnectorDefinitionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: releaseDigest, source: releaseDigest, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  PublishConnectorDefinitionReceipt:
+    fields:
+    - {name: definition, source: definition, type: ConnectorDefinition, constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

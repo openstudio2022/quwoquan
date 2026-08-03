@@ -22,17 +22,8 @@ type artifact struct {
 }
 
 type generatedOperationSecurity struct {
-	domain          string
-	objectType      string
-	operation       string
-	method          string
-	path            string
-	scopes          []string
-	idempotency     string
-	actor           string
-	principal       string
-	authMode        string
-	ownershipPolicy string
+	domain              string
+	contractOperationID string
 }
 
 var compileContractSource = contractcodegen.NewSource
@@ -198,43 +189,26 @@ func collectOperationSecurity(artifacts []artifact) []generatedOperationSecurity
 			continue
 		}
 		domain := textValue(document["domain"])
-		prefix := "/control-plane/" + domain + "/"
 		objectTypes, _ := document["object_types"].([]any)
 		for _, rawObject := range objectTypes {
 			object, _ := rawObject.(map[string]any)
-			objectType := textValue(object["object_type"])
 			operations, _ := object["operations"].([]any)
 			for _, rawOperation := range operations {
 				operation, _ := rawOperation.(map[string]any)
-				if textValue(operation["contract_operation_id"]) != "" {
-					continue
-				}
-				if authMode := textValue(operation["auth_mode"]); authMode != "" &&
-					authMode != "operator_oidc" && authMode != "required" {
-					continue
-				}
-				path := textValue(operation["path"])
-				if !strings.HasPrefix(path, prefix) {
+				contractOperationID := textValue(operation["contract_operation_id"])
+				if contractOperationID == "" {
 					continue
 				}
 				out = append(out, generatedOperationSecurity{
-					domain: domain, objectType: objectType,
-					operation:       textValue(operation["operation"]),
-					method:          strings.ToUpper(textValue(operation["method"])),
-					path:            path,
-					scopes:          stringSlice(operation["scopes"]),
-					idempotency:     textValue(operation["idempotency"]),
-					actor:           textValue(operation["actor"]),
-					principal:       textValue(operation["principal"]),
-					authMode:        textValue(operation["auth_mode"]),
-					ownershipPolicy: textValue(operation["ownership_policy"]),
+					domain:              domain,
+					contractOperationID: contractOperationID,
 				})
 			}
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].domain == out[j].domain {
-			return out[i].operation < out[j].operation
+			return out[i].contractOperationID < out[j].contractOperationID
 		}
 		return out[i].domain < out[j].domain
 	})
@@ -259,78 +233,53 @@ func writeGoOperationSecurity(path string, operations []generatedOperationSecuri
 	content.WriteString("\toperationsecurity \"quwoquan_service/generated/operationsecurity\"\n")
 	content.WriteString("\trtauth \"quwoquan_service/runtime/auth\"\n")
 	content.WriteString(")\n\n")
+	content.WriteString("func mustSelectOperationSecurityDescriptors(operationIDs []string) []rtauth.OperationSecurityDescriptor {\n")
+	content.WriteString("\tavailable := make(map[string]rtauth.OperationSecurityDescriptor, len(operationIDs))\n")
+	content.WriteString("\tdomains := make(map[string]struct{}, len(operationIDs))\n")
+	content.WriteString("\tfor _, operationID := range operationIDs {\n")
+	content.WriteString("\t\tdomain := operationID\n")
+	content.WriteString("\t\tfor index, character := range operationID {\n")
+	content.WriteString("\t\t\tif character == '.' {\n")
+	content.WriteString("\t\t\t\tdomain = operationID[:index]\n")
+	content.WriteString("\t\t\t\tbreak\n")
+	content.WriteString("\t\t\t}\n")
+	content.WriteString("\t\t}\n")
+	content.WriteString("\t\tdomains[domain] = struct{}{}\n")
+	content.WriteString("\t}\n")
+	content.WriteString("\tfor domain := range domains {\n")
+	content.WriteString("\t\tfor _, descriptor := range operationsecurity.ForDomain(domain) {\n")
+	content.WriteString("\t\t\tavailable[descriptor.CanonicalOperationID] = descriptor\n")
+	content.WriteString("\t\t}\n")
+	content.WriteString("\t}\n")
+	content.WriteString("\tselected := make([]rtauth.OperationSecurityDescriptor, 0, len(operationIDs))\n")
+	content.WriteString("\tseen := make(map[string]struct{}, len(operationIDs))\n")
+	content.WriteString("\tfor _, operationID := range operationIDs {\n")
+	content.WriteString("\t\tif _, duplicated := seen[operationID]; duplicated {\n")
+	content.WriteString("\t\t\tpanic(\"duplicate control-plane operation reference: \" + operationID)\n")
+	content.WriteString("\t\t}\n")
+	content.WriteString("\t\tdescriptor, found := available[operationID]\n")
+	content.WriteString("\t\tif !found {\n")
+	content.WriteString("\t\t\tpanic(\"control-plane operation reference missing generated security descriptor: \" + operationID)\n")
+	content.WriteString("\t\t}\n")
+	content.WriteString("\t\tseen[operationID] = struct{}{}\n")
+	content.WriteString("\t\tselected = append(selected, descriptor)\n")
+	content.WriteString("\t}\n")
+	content.WriteString("\treturn selected\n")
+	content.WriteString("}\n\n")
 	for _, domain := range domains {
 		fmt.Fprintf(
 			&content,
-			"var %sOperationSecurityDescriptors = []rtauth.OperationSecurityDescriptor{\n",
+			"var %sOperationSecurityDescriptors = mustSelectOperationSecurityDescriptors([]string{\n",
 			toPascalCase(domain),
 		)
 		for _, operation := range byDomain[domain] {
-			kind := "query"
-			mutationTarget := ""
-			idempotency := operation.idempotency
-			if idempotency == "" {
-				idempotency = "none"
-			}
-			actor := operation.actor
-			if actor == "" {
-				actor = "account"
-			}
-			principal := operation.principal
-			if principal == "" {
-				principal = "operator"
-			}
-			authMode := operation.authMode
-			if authMode == "" {
-				authMode = "required"
-			}
-			ownershipPolicy := operation.ownershipPolicy
-			if ownershipPolicy == "" {
-				ownershipPolicy = "operator_scope"
-			}
-			if operation.method != "GET" {
-				kind = "command"
-				mutationTarget = operation.objectType
-			}
-			fmt.Fprintf(&content, "\t{\n")
-			fmt.Fprintf(
-				&content,
-				"\t\tCanonicalOperationID: %q,\n",
-				"control_plane."+operation.domain+"."+operation.objectType+"."+operation.operation,
-			)
-			fmt.Fprintf(&content, "\t\tContractGraphSHA256: operationsecurity.ContractGraphSHA256,\n")
-			fmt.Fprintf(&content, "\t\tMethod: %q,\n", operation.method)
-			fmt.Fprintf(&content, "\t\tPathTemplate: %q,\n", operation.path)
-			fmt.Fprintf(&content, "\t\tOperationKind: %q,\n", kind)
-			fmt.Fprintf(&content, "\t\tMutationTarget: %q,\n", mutationTarget)
-			fmt.Fprintf(&content, "\t\tInvariantTarget: %q,\n", mutationTarget)
-			fmt.Fprintf(&content, "\t\tAuthMode: %q,\n", authMode)
-			fmt.Fprintf(&content, "\t\tActorRequirement: %q,\n", actor)
-			fmt.Fprintf(&content, "\t\tPrincipal: %q,\n", principal)
-			fmt.Fprintf(&content, "\t\tScopes: %#v,\n", operation.scopes)
-			fmt.Fprintf(&content, "\t\tOwnershipPolicy: %q,\n", ownershipPolicy)
-			fmt.Fprintf(&content, "\t\tTimeoutMilliseconds: %d,\n", 5000)
-			fmt.Fprintf(&content, "\t\tIdempotency: %q,\n", idempotency)
-			fmt.Fprintf(&content, "\t\tCommercialStatus: %q,\n", "ready")
-			content.WriteString("\t},\n")
+			fmt.Fprintf(&content, "\t%q,\n", operation.contractOperationID)
 		}
-		content.WriteString("}\n\n")
+		content.WriteString("})\n\n")
 	}
 	formatted, err := format.Source([]byte(content.String()))
 	must(err)
 	writeFile(path, string(formatted))
-}
-
-func stringSlice(value any) []string {
-	raw, _ := value.([]any)
-	out := make([]string, 0, len(raw))
-	for _, item := range raw {
-		text := strings.TrimSpace(fmt.Sprint(item))
-		if text != "" {
-			out = append(out, text)
-		}
-	}
-	return out
 }
 
 func textValue(value any) string {

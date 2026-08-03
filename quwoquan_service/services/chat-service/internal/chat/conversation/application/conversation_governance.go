@@ -54,7 +54,7 @@ func (s *ConversationService) UpdateAnnouncement(ctx context.Context, req Update
 	if err != nil {
 		return nil, err
 	}
-	if err := rejectCircleGroupManaged(conv, "UpdateAnnouncement"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "UpdateAnnouncement"); err != nil {
 		return nil, err
 	}
 	if conv.Type != "group" {
@@ -160,7 +160,7 @@ func (s *ConversationService) UpdateGroupGovernanceSettings(
 	if err != nil {
 		return nil, err
 	}
-	if err := rejectCircleGroupManaged(conv, "UpdateGroupGovernanceSettings"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "UpdateGroupGovernanceSettings"); err != nil {
 		return nil, err
 	}
 	if conv.Type != "group" {

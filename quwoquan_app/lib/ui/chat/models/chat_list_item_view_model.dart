@@ -1,6 +1,6 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
@@ -43,7 +43,7 @@ class ChatListItemViewModel {
   bool get isNotification => id.startsWith('notification:');
 
   factory ChatListItemViewModel.fromDto(
-    ChatInboxDto dto, {
+    ChatInboxViewData dto, {
     MediaEndpointConfig? mediaEndpointConfig,
   }) {
     final preview = _resolvePreview(
@@ -74,7 +74,7 @@ class ChatListItemViewModel {
   }
 
   factory ChatListItemViewModel.fromMessageHomeDto(
-    MessageHomeRowDto dto, {
+    MessageHomeRow dto, {
     MediaEndpointConfig? mediaEndpointConfig,
   }) {
     final preview = _resolvePreview(MessageType.text, dto.summary);

@@ -3,13 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -535,11 +529,8 @@ class _EvidenceRow extends StatelessWidget {
     );
   }
 
-  static String _formatOccurredAt(String iso) {
-    final value = iso.trim();
-    if (value.isEmpty) return '';
-    final dt = DateTime.tryParse(value);
-    if (dt == null) return '';
+  static String _formatOccurredAt(DateTime value) {
+    final dt = value.toLocal();
     final m = dt.month.toString().padLeft(2, '0');
     final d = dt.day.toString().padLeft(2, '0');
     return '${dt.year}-$m-$d';

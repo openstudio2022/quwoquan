@@ -73,7 +73,7 @@ final class RtcCallEntryPresenter {
     final requestPermission = permissionRequest ?? _requestPermission;
     final permissionOutcome = await requestPermission(
       context,
-      CallType.fromString(intent.mediaType.wireValue),
+      CallType.fromWire(intent.mediaType.wireValue, 'RtcCallEntryIntent.mediaType'),
     );
     if (!context.mounted ||
         permissionOutcome == CallPermissionOutcome.blocked) {

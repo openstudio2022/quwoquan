@@ -6,34 +6,8 @@ source_entities:
 - Post
 consumers:
 - app
-client_projection:
-  dart_class: HelperReadSliceDto
-  base_class: ''
-  output_path: cloud/runtime/generated/content/helper_read_slice_dto.g.dart
-  strict: true
-  fields:
-  - name: postId
-    dart_type: String
-    nullable: false
-    source: postId
-    default: ''''''
-  - name: contentType
-    dart_type: String
-    nullable: false
-    source: contentType
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: summary
-    dart_type: String
-    nullable: false
-    source: summary
-    default: ''''''
 fields:
-- {name: postId}
-- {name: contentType}
-- {name: title}
-- {name: summary}
+- {name: postId, type: string, nullable: false}
+- {name: contentType, type: string, nullable: false}
+- {name: title, type: string, nullable: false}
+- {name: summary, type: string, nullable: false}

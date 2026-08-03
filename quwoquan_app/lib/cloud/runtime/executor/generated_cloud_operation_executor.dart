@@ -15,7 +15,7 @@ typedef CloudTelemetryFailureObserver =
     void Function(Object error, StackTrace stackTrace);
 
 final class AppGeneratedCloudOperationExecutor
-    implements CloudOperationExecutor {
+    implements CloudOperationExecutor, CloudOperationStreamExecutor {
   AppGeneratedCloudOperationExecutor({
     required this.environment,
     required this.transport,
@@ -49,69 +49,14 @@ final class AppGeneratedCloudOperationExecutor
     required CloudOperationResponseDecoder<TResponse> responseDecoder,
     required CloudOperationRequestEncoder requestEncoder,
   }) async {
-    _validateInvocation(operation, context);
-    final startedAt = _now();
-    final operationDeadline = startedAt.add(
-      Duration(milliseconds: operation.timeoutMilliseconds),
+    final prepared = _prepareOperationInvocation(
+      operation,
+      context: context,
+      requestEncoder: requestEncoder,
     );
-    final requestedDeadline = context.deadlineAt;
-    final deadline =
-        requestedDeadline != null &&
-            requestedDeadline.isBefore(operationDeadline)
-        ? requestedDeadline
-        : operationDeadline;
-    try {
-      context.cancellation?.throwIfCancelled();
-    } catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        _asCloudException(error, operation),
-        stackTrace,
-      );
-    }
-    if (!deadline.isAfter(_now())) {
-      throw _asCloudException(
-        TimeoutException(
-          '${operation.canonicalOperationId} deadline exhausted',
-        ),
-        operation,
-      );
-    }
-    late final CloudOperationRequestPayload payload;
-    late final Map<String, String> encodedHeaders;
-    try {
-      payload = requestEncoder();
-      _validatePagination(operation, payload.queryParameters);
-      encodedHeaders = _validatedEncodedHeaders(payload.headers, operation);
-      _validateVersionPrecondition(operation, encodedHeaders);
-    } catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        _asCloudException(error, operation),
-        stackTrace,
-      );
-    }
-    late final Map<String, String> requestHeaders;
-    try {
-      final runtimeHeaders = headerFactory.build(
-        operation: operation,
-        invocation: context,
-        effectiveDeadlineAt: deadline,
-      );
-      for (final key in encodedHeaders.keys) {
-        if (runtimeHeaders.keys.any(
-          (existing) => existing.toLowerCase() == key.toLowerCase(),
-        )) {
-          throw StateError(
-            'Encoded header conflicts with runtime header: $key',
-          );
-        }
-      }
-      requestHeaders = <String, String>{...runtimeHeaders, ...encodedHeaders};
-    } catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        _asCloudException(error, operation),
-        stackTrace,
-      );
-    }
+    final deadline = prepared.deadline;
+    final payload = prepared.payload;
+    final requestHeaders = prepared.requestHeaders;
     final maxAttempts = operation.maxAttempts < 1 ? 1 : operation.maxAttempts;
     final replaySafe = _isReplaySafe(operation, context);
 
@@ -269,6 +214,321 @@ final class AppGeneratedCloudOperationExecutor
       message: 'Generated operation attempt loop exhausted',
       requestPath: operation.pathTemplate,
       functionModule: 'generated_cloud_operation_executor',
+    );
+  }
+
+  @override
+  Stream<TResponse> stream<TResponse>(
+    CloudOperationContract operation, {
+    required CloudOperationInvocationContext context,
+    required CloudOperationResponseDecoder<TResponse> responseDecoder,
+    required CloudOperationRequestEncoder requestEncoder,
+  }) async* {
+    if (operation.transport != 'sse') {
+      throw _asCloudException(
+        StateError('${operation.canonicalOperationId} is not an SSE operation'),
+        operation,
+      );
+    }
+    final streaming = operation.streaming;
+    if (streaming == null) {
+      throw _asCloudException(
+        StateError('${operation.canonicalOperationId} has no streaming policy'),
+        operation,
+      );
+    }
+    final eventTransport = switch (transport) {
+      final CloudEventStreamTransport streamTransport => streamTransport,
+      _ => throw _asCloudException(
+        StateError('Configured Cloud transport does not support SSE'),
+        operation,
+      ),
+    };
+    final prepared = _prepareOperationInvocation(
+      operation,
+      context: context,
+      requestEncoder: requestEncoder,
+    );
+    final deadline = prepared.deadline;
+    final payload = prepared.payload;
+    final requestHeaders = prepared.requestHeaders;
+    final maxAttempts = operation.maxAttempts < 1 ? 1 : operation.maxAttempts;
+    final replaySafe = _isReplaySafe(operation, context);
+    var resumeToken = payload.queryParameters[streaming.resumeRequestField]
+        ?.trim();
+    var lastDeliveredResumeToken = '';
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        context.cancellation?.throwIfCancelled();
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          _asCloudException(error, operation),
+          stackTrace,
+        );
+      }
+      final remaining = deadline.difference(_now());
+      if (remaining <= Duration.zero) {
+        throw _asCloudException(
+          TimeoutException(
+            '${operation.canonicalOperationId} deadline exhausted',
+          ),
+          operation,
+        );
+      }
+      final stopwatch = Stopwatch()..start();
+      final abortTrigger = _OperationAbortTrigger(
+        remaining: remaining,
+        cancellation: context.cancellation,
+      );
+      try {
+        var terminalEventObserved = false;
+        final eventFrames = eventTransport.stream(
+          CloudJsonTransportRequest(
+            method: operation.method,
+            authMode: operation.authMode,
+            uri: _resolveUri(
+              operation.pathTemplate,
+              payload.pathParameters,
+              <String, String>{
+                ...payload.queryParameters,
+                if (resumeToken?.isNotEmpty ?? false)
+                  streaming.resumeRequestField: resumeToken!,
+              },
+            ),
+            gatewayOrigin: environment.gatewayBaseUri,
+            headers: <String, String>{
+              ...requestHeaders,
+              'X-Client-Attempt': '$attempt',
+            },
+            abortTrigger: abortTrigger.future,
+            body: _bodyAsJsonMap(operation, payload.body),
+            maximumResponseBodyBytes: operation.maximumResponseBodyBytes,
+          ),
+        );
+        await for (final eventFrame in eventFrames) {
+          context.cancellation?.throwIfCancelled();
+          final rawEvent = eventFrame.data;
+          if (rawEvent is! Map) {
+            throw const FormatException(
+              'Generated SSE event must be a JSON object',
+            );
+          }
+          final eventMap = rawEvent.cast<Object?, Object?>();
+          final eventResumeToken = streaming.resumeResponseField == 'eventId'
+              ? eventFrame.eventId
+              : eventMap[streaming.resumeResponseField];
+          if (eventResumeToken is! String || eventResumeToken.trim().isEmpty) {
+            throw FormatException(
+              '${operation.canonicalOperationId} event is missing '
+              '${streaming.resumeResponseField}',
+            );
+          }
+          final normalizedResumeToken = eventResumeToken.trim();
+          final terminalValue = eventMap[streaming.terminalField];
+          terminalEventObserved =
+              terminalValue is String &&
+              streaming.terminalValues.contains(terminalValue);
+          if (normalizedResumeToken == lastDeliveredResumeToken) {
+            if (terminalEventObserved) break;
+            continue;
+          }
+          final decoded = responseDecoder(rawEvent);
+          lastDeliveredResumeToken = normalizedResumeToken;
+          resumeToken = normalizedResumeToken;
+          yield decoded;
+          if (terminalEventObserved) break;
+        }
+        if (!terminalEventObserved) {
+          throw CloudErrorMapper.fromStatusCode(
+            503,
+            requestPath: operation.pathTemplate,
+          );
+        }
+        stopwatch.stop();
+        _record(
+          operation: operation,
+          context: context,
+          elapsed: stopwatch.elapsed,
+          succeeded: true,
+          attempt: attempt,
+          requestHeaders: requestHeaders,
+        );
+        return;
+      } catch (error, stackTrace) {
+        stopwatch.stop();
+        final cloudError = _normalizeAttemptError(
+          error,
+          operation,
+          context.cancellation,
+        );
+        var effectiveError = cloudError;
+        var effectiveStackTrace = stackTrace;
+        var retryReason = _retryReason(cloudError);
+        var shouldRetry =
+            attempt < maxAttempts &&
+            replaySafe &&
+            retryReason != null &&
+            deadline.isAfter(_now());
+        if (shouldRetry && cloudError.statusCode == 401) {
+          final refreshRemaining = deadline.difference(_now());
+          if (refreshRemaining <= Duration.zero) {
+            shouldRetry = false;
+          } else {
+            final refreshAbortTrigger = _OperationAbortTrigger(
+              remaining: refreshRemaining,
+              cancellation: context.cancellation,
+            );
+            try {
+              shouldRetry = await transport.refreshAuthorization(
+                abortTrigger: refreshAbortTrigger.future,
+              );
+            } catch (refreshError, refreshStackTrace) {
+              effectiveError = _normalizeAttemptError(
+                refreshError,
+                operation,
+                context.cancellation,
+              );
+              effectiveStackTrace = refreshStackTrace;
+              retryReason = null;
+              shouldRetry = false;
+            } finally {
+              refreshAbortTrigger.dispose();
+            }
+          }
+        }
+        Duration? retryDelay;
+        if (shouldRetry) {
+          retryDelay = _retryDelay(effectiveError, completedAttempt: attempt);
+          if (retryDelay >= deadline.difference(_now())) {
+            shouldRetry = false;
+          }
+        }
+        _record(
+          operation: operation,
+          context: context,
+          elapsed: stopwatch.elapsed,
+          succeeded: false,
+          attempt: attempt,
+          requestHeaders: requestHeaders,
+          statusCode: effectiveError.statusCode,
+          failureCode: effectiveError.runtimeFailure.code,
+          retryReason: shouldRetry ? retryReason : null,
+          recoveryAction: shouldRetry
+              ? 'retry'
+              : effectiveError.runtimeFailure.recovery.action,
+          disruptionLevel: shouldRetry
+              ? 'silent'
+              : effectiveError.runtimeFailure.recovery.disruptionLevel,
+        );
+        if (!shouldRetry) {
+          Error.throwWithStackTrace(effectiveError, effectiveStackTrace);
+        }
+        try {
+          await _waitBeforeRetry(
+            retryDelay!,
+            deadline: deadline,
+            cancellation: context.cancellation,
+          );
+        } catch (waitError, waitStackTrace) {
+          final waitCloudError = _asCloudException(waitError, operation);
+          _record(
+            operation: operation,
+            context: context,
+            elapsed: Duration.zero,
+            succeeded: false,
+            attempt: attempt,
+            requestHeaders: requestHeaders,
+            failureCode: waitCloudError.runtimeFailure.code,
+            retryReason: 'retry_interrupted',
+            recoveryAction: waitCloudError.runtimeFailure.recovery.action,
+            disruptionLevel:
+                waitCloudError.runtimeFailure.recovery.disruptionLevel,
+          );
+          Error.throwWithStackTrace(waitCloudError, waitStackTrace);
+        }
+      } finally {
+        abortTrigger.dispose();
+      }
+    }
+    throw CloudErrorMapper.invalidResponse(
+      message: 'Generated SSE operation attempt loop exhausted',
+      requestPath: operation.pathTemplate,
+      functionModule: 'generated_cloud_operation_executor',
+    );
+  }
+
+  _PreparedOperationInvocation _prepareOperationInvocation(
+    CloudOperationContract operation, {
+    required CloudOperationInvocationContext context,
+    required CloudOperationRequestEncoder requestEncoder,
+  }) {
+    _validateInvocation(operation, context);
+    final operationDeadline = _now().add(
+      Duration(milliseconds: operation.timeoutMilliseconds),
+    );
+    final requestedDeadline = context.deadlineAt;
+    final deadline =
+        requestedDeadline != null &&
+            requestedDeadline.isBefore(operationDeadline)
+        ? requestedDeadline
+        : operationDeadline;
+    try {
+      context.cancellation?.throwIfCancelled();
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        _asCloudException(error, operation),
+        stackTrace,
+      );
+    }
+    if (!deadline.isAfter(_now())) {
+      throw _asCloudException(
+        TimeoutException(
+          '${operation.canonicalOperationId} deadline exhausted',
+        ),
+        operation,
+      );
+    }
+    late final CloudOperationRequestPayload payload;
+    late final Map<String, String> encodedHeaders;
+    try {
+      payload = requestEncoder();
+      _validatePagination(operation, payload.queryParameters);
+      encodedHeaders = _validatedEncodedHeaders(payload.headers, operation);
+      _validateVersionPrecondition(operation, encodedHeaders);
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        _asCloudException(error, operation),
+        stackTrace,
+      );
+    }
+    late final Map<String, String> requestHeaders;
+    try {
+      final runtimeHeaders = headerFactory.build(
+        operation: operation,
+        invocation: context,
+        effectiveDeadlineAt: deadline,
+      );
+      for (final key in encodedHeaders.keys) {
+        if (runtimeHeaders.keys.any(
+          (existing) => existing.toLowerCase() == key.toLowerCase(),
+        )) {
+          throw StateError(
+            'Encoded header conflicts with runtime header: $key',
+          );
+        }
+      }
+      requestHeaders = <String, String>{...runtimeHeaders, ...encodedHeaders};
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        _asCloudException(error, operation),
+        stackTrace,
+      );
+    }
+    return _PreparedOperationInvocation(
+      deadline: deadline,
+      payload: payload,
+      requestHeaders: requestHeaders,
     );
   }
 
@@ -443,14 +703,10 @@ final class AppGeneratedCloudOperationExecutor
     CloudOperationContract operation,
     CloudOperationInvocationContext context,
   ) {
-    if (operation.commercialStatus != 'ready') {
-      throw CloudErrorMapper.invalidResponse(
-        message:
-            '${operation.canonicalOperationId} is not commercially enabled',
-        requestPath: operation.pathTemplate,
-        functionModule: 'generated_cloud_operation_executor',
-      );
-    }
+    // Commercial status is release evidence, not a runtime feature flag.
+    // Candidate-bound Remote/UAT calls must be executable so the release gates
+    // can gather the evidence that advances a blocked operation. Packaging and
+    // rollout continue to fail closed in the commercial/feature-tree gates.
     if (operation.timeoutMilliseconds <= 0) {
       throw CloudErrorMapper.invalidResponse(
         message:
@@ -615,6 +871,18 @@ final class AppGeneratedCloudOperationExecutor
       _telemetryFailureObserver(error, stackTrace);
     }
   }
+}
+
+final class _PreparedOperationInvocation {
+  const _PreparedOperationInvocation({
+    required this.deadline,
+    required this.payload,
+    required this.requestHeaders,
+  });
+
+  final DateTime deadline;
+  final CloudOperationRequestPayload payload;
+  final Map<String, String> requestHeaders;
 }
 
 /// Per-attempt abort source whose deadline timer is released as soon as the

@@ -34,6 +34,10 @@ class LocalDeviceTrustError(RuntimeError):
     pass
 
 
+class AndroidSystemTrustUnavailable(LocalDeviceTrustError):
+    """The selected Emulator cannot modify its system CA store."""
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -236,12 +240,20 @@ def _probe_ios_system_trust(target: str, device: str) -> str:
     return result.stdout.strip()
 
 
-def _install_ios(target: str, device: str, root: Path) -> str:
+def _install_ios(
+    target: str,
+    device: str,
+    root: Path,
+    *,
+    endpoint_probe: bool,
+) -> str:
     _require_success(
         ["xcrun", "simctl", "keychain", device, "add-root-cert", str(root)],
         action="iOS Simulator root certificate installation",
     )
-    return _probe_ios_system_trust(target, device)
+    if endpoint_probe:
+        return _probe_ios_system_trust(target, device)
+    return "system-root-installed; endpoint-probe-deferred"
 
 
 def _android_property(device: str, name: str) -> str:
@@ -266,9 +278,19 @@ def _install_android(target: str, device: str, root: Path) -> str:
     if re.fullmatch(r"[0-9a-fA-F]{8}", subject_hash) is None:
         raise LocalDeviceTrustError("Android CA subject hash is invalid")
     remote = f"/system/etc/security/cacerts/{subject_hash}.0"
-    _require_success(["adb", "-s", device, "root"], action="Android Emulator adb root")
+    adb_root = _run(["adb", "-s", device, "root"])
+    if adb_root.returncode != 0:
+        raise AndroidSystemTrustUnavailable(
+            "Android Emulator system CA store is not writable; "
+            "use a managed debug AVD for endpoint verification"
+        )
     _require_success(["adb", "-s", device, "wait-for-device"], action="Android Emulator wait")
-    _require_success(["adb", "-s", device, "remount"], action="Android Emulator remount")
+    remount = _run(["adb", "-s", device, "remount"])
+    if remount.returncode != 0:
+        raise AndroidSystemTrustUnavailable(
+            "Android Emulator system CA store is not writable; "
+            "use a managed debug AVD for endpoint verification"
+        )
     staged = f"/data/local/tmp/{subject_hash}.0"
     _require_success(["adb", "-s", device, "push", str(root), staged], action="Android CA push")
     _require_success(
@@ -300,7 +322,13 @@ def install_device_trust(
     platform_name: str,
     device: str = "",
     lease_id: str = "",
+    endpoint_probe: bool = True,
+    allow_unprovisioned_system_trust: bool = False,
 ) -> dict[str, Any]:
+    if allow_unprovisioned_system_trust and platform_name != "android-emulator":
+        raise LocalDeviceTrustError(
+            "unprovisioned system trust is supported only for Android Emulator app startup"
+        )
     verify_certificate(target)
     selected = resolve_managed_device(platform_name, device)
     root = root_certificate_path(target)
@@ -311,21 +339,43 @@ def install_device_trust(
     normalized_lease = str(lease_id or "").strip() or uuid4().hex
     if normalized_lease not in leases:
         leases.append(normalized_lease)
-    proof = (
-        _install_ios(target, selected, root)
-        if platform_name == "ios-simulator"
-        else _install_android(target, selected, root)
-    )
+    try:
+        proof = (
+            _install_ios(
+                target,
+                selected,
+                root,
+                endpoint_probe=endpoint_probe,
+            )
+            if platform_name == "ios-simulator"
+            else _install_android(target, selected, root)
+        )
+        system_trust_store = True
+    except AndroidSystemTrustUnavailable:
+        if not allow_unprovisioned_system_trust:
+            raise
+        proof = (
+            "system-root-unprovisioned; "
+            "managed debug AVD required for endpoint verification"
+        )
+        system_trust_store = False
     payload = {
         "schema": SCHEMA,
         "target": target,
         "platform": platform_name,
         "device": selected,
         "rootFingerprintSha256": fingerprint,
-        "systemTrustStore": True,
+        "systemTrustStore": system_trust_store,
+        "endpointProbe": (
+            "verified"
+            if platform_name == "ios-simulator" and endpoint_probe
+            else "deferred"
+            if platform_name == "ios-simulator"
+            else "not_applicable"
+        ),
         "verification": proof,
         "leases": sorted(leases),
-        "status": "installed",
+        "status": "installed" if system_trust_store else "launch-degraded",
         "updatedAt": _utc_now(),
     }
     _write_receipt(path, payload)
@@ -351,6 +401,7 @@ def verify_device_trust(
         or receipt.get("device") != selected
         or receipt.get("rootFingerprintSha256") != fingerprint
         or receipt.get("status") != "installed"
+        or receipt.get("systemTrustStore") is not True
     ):
         raise LocalDeviceTrustError("device system-trust receipt identity mismatch")
     proof = (
@@ -379,7 +430,15 @@ def release_device_trust(
     payload = {
         **receipt,
         "leases": leases,
-        "status": "installed" if leases else "managed-root-retained",
+        "status": (
+            "installed"
+            if leases and receipt.get("systemTrustStore") is True
+            else "launch-degraded"
+            if leases
+            else "managed-root-retained"
+            if receipt.get("systemTrustStore") is True
+            else "unprovisioned"
+        ),
         "updatedAt": _utc_now(),
     }
     _write_receipt(path, payload)

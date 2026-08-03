@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 package api_integration
 
 import (
@@ -66,17 +66,18 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScope": "personal_content_access"},
+		map[string]any{"grantedScopes": []string{"personal_content_access", "travel.trip.read"}},
 	)
 	if granted.Code != http.StatusOK {
 		t.Fatalf("grant status=%d body=%s", granted.Code, granted.Body.String())
 	}
 	var grantPayload struct {
 		Consent struct {
-			ID        string `json:"id"`
-			AccountID string `json:"accountId"`
-			SkillID   string `json:"skillId"`
-			Granted   bool   `json:"granted"`
+			ID            string   `json:"id"`
+			AccountID     string   `json:"accountId"`
+			SkillID       string   `json:"skillId"`
+			GrantedScopes []string `json:"grantedScopes"`
+			Granted       bool     `json:"granted"`
 		} `json:"consent"`
 		Replayed bool `json:"replayed"`
 	}
@@ -86,6 +87,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 	if grantPayload.Consent.ID == "" ||
 		grantPayload.Consent.AccountID != "consent-http-account" ||
 		grantPayload.Consent.SkillID != "personal_content_access" ||
+		len(grantPayload.Consent.GrantedScopes) != 2 ||
 		!grantPayload.Consent.Granted || grantPayload.Replayed {
 		t.Fatalf("grant response=%+v", grantPayload)
 	}
@@ -97,7 +99,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScope": "personal_content_access"},
+		map[string]any{"grantedScopes": []string{"travel.trip.read", "personal_content_access"}},
 	)
 	if replay.Code != http.StatusOK ||
 		!strings.Contains(replay.Body.String(), `"replayed":true`) {
@@ -111,7 +113,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		"/assistant/skills/another_skill/consent",
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScope": "another_scope"},
+		map[string]any{"grantedScopes": []string{"another_scope"}},
 	)
 	if conflict.Code != http.StatusConflict ||
 		!strings.Contains(conflict.Body.String(), "consent_idempotency_conflict") {
@@ -128,8 +130,27 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		nil,
 	)
 	if list.Code != http.StatusOK ||
-		!strings.Contains(list.Body.String(), `"granted":true`) {
+		!strings.Contains(list.Body.String(), `"granted":true`) ||
+		!strings.Contains(list.Body.String(), `"grantedScopes":["personal_content_access","travel.trip.read"]`) {
 		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
+	}
+
+	scopeConflict := skillConsentRequest(
+		t,
+		handler,
+		http.MethodPost,
+		path,
+		"consent-http-account",
+		"consent-http-scope-conflict",
+		map[string]any{"grantedScopes": []string{"personal_content_access", "travel.trip.read", "travel.stay.read"}},
+	)
+	if scopeConflict.Code != http.StatusConflict ||
+		!strings.Contains(scopeConflict.Body.String(), "consent_scope_conflict") {
+		t.Fatalf(
+			"scope conflict status=%d body=%s",
+			scopeConflict.Code,
+			scopeConflict.Body.String(),
+		)
 	}
 
 	revoked := skillConsentRequest(
@@ -182,7 +203,7 @@ func TestSkillConsentConcurrentGrantKeepsOneActiveFact(t *testing.T) {
 				key,
 				"concurrent-account",
 				"personal_content_access",
-				"personal_content_access",
+				[]string{"personal_content_access", "travel.trip.read"},
 			)
 			results <- commandResult{result: result, err: err}
 		}()
@@ -227,7 +248,7 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		"history-grant-first",
 		"history-account",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"personal_content_access"},
 	)
 	if err != nil || first.Consent == nil {
 		t.Fatalf("first grant result=%+v error=%v", first, err)
@@ -245,7 +266,7 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		"history-grant-second",
 		"history-account",
 		"personal_content_access",
-		"personal_content_access",
+		[]string{"personal_content_access"},
 	)
 	if err != nil || second.Consent == nil {
 		t.Fatalf("second grant result=%+v error=%v", second, err)
@@ -285,7 +306,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"",
 		"unauthorized-command",
-		map[string]any{"grantedScope": "personal_content_access"},
+		map[string]any{"grantedScopes": []string{"personal_content_access"}},
 	)
 	if unauthorized.Code != http.StatusUnauthorized ||
 		!strings.Contains(unauthorized.Body.String(), "ASSISTANT.USER.consent_unauthorized") {
@@ -298,7 +319,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"identity-account",
 		"",
-		map[string]any{"grantedScope": "personal_content_access"},
+		map[string]any{"grantedScopes": []string{"personal_content_access"}},
 	)
 	if missingKey.Code != http.StatusBadRequest ||
 		!strings.Contains(missingKey.Body.String(), "consent_invalid_argument") {

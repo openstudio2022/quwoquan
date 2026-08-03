@@ -19,7 +19,7 @@ final class RemoteChatConversationUserStateCommandWriter
   invocationContext;
 
   @override
-  Future<ChatCommandAck> markMessageRead(
+  Future<ConversationUserStateCommandAck> markMessageRead(
     ChatMarkConversationMessageReadCommand command, {
     required String idempotencyKey,
   }) {
@@ -30,7 +30,7 @@ final class RemoteChatConversationUserStateCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> updateConversationSettings(
+  Future<ConversationUserStateCommandAck> updateConversationSettings(
     ChatUpdateConversationSettingsCommand command, {
     required String idempotencyKey,
   }) {

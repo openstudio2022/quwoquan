@@ -339,14 +339,10 @@ types:
           - NULLABLE
         client_dart_type: bool?
       - name: profileVisibility
-        type: ProfileVisibility
+        type: enum
         enum_ref: ProfileVisibility
         constraints:
           - NULLABLE
-        client_dart_type: ProfileVisibility?
-        client_wire: canonicalEnum
-        client_enum_members:
-          private: privateProfile
       - name: blockedKeywords
         type: '[]string'
         constraints:
@@ -361,28 +357,20 @@ types:
   UpdateAppearanceSettingsCommand:
     fields:
       - name: themeMode
-        type: ThemeModeSetting
+        type: enum
         enum_ref: ThemeModeSetting
-        client_dart_type: ThemeModeSetting
-        client_wire: canonicalEnum
       - name: fontSizePreset
-        type: FontSizePreset
+        type: enum
         enum_ref: FontSizePreset
-        client_dart_type: FontSizePreset
-        client_wire: canonicalEnum
       - name: applyScope
-        type: AppearanceApplyScope
+        type: enum
         enum_ref: AppearanceApplyScope
-        client_dart_type: AppearanceApplyScope
-        client_wire: canonicalEnum
   UpdateCallSettingsCommand:
     fields:
       - name: defaultIncomingCallRingtoneId
-        type: object
+        type: string
         constraints:
           - NULLABLE
-        client_dart_type: NullableSettingMutation<OfficialRingtoneId>?
-        client_wire: nullableMutationWireValue
       - name: allowCallerRingtoneOverride
         type: bool
         constraints:
@@ -413,14 +401,10 @@ types:
           - NULLABLE
         client_dart_type: bool?
       - name: quietHoursStart
-        type: object
+        type: time
         constraints:
           - NULLABLE
-        client_dart_type: NullableSettingMutation<QuietHoursTime>?
-        client_wire: nullableMutationWireValue
       - name: quietHoursEnd
-        type: object
+        type: time
         constraints:
           - NULLABLE
-        client_dart_type: NullableSettingMutation<QuietHoursTime>?
-        client_wire: nullableMutationWireValue

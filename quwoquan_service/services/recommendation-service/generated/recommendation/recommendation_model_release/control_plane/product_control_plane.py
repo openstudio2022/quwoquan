@@ -21,6 +21,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "l1l4_metric_snapshot",
       "operations": [
         {
+          "contract_operation_id": "ops.event_record.ListL1L4MetricSnapshots",
           "method": "GET",
           "operation": "ListL1L4MetricSnapshots",
           "path": "/control-plane/product/metrics/l1l4",
@@ -29,6 +30,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.GetServiceRouteRED",
           "method": "GET",
           "operation": "GetServiceRouteRED",
           "path": "/control-plane/product/metrics/red-routes",
@@ -37,6 +39,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.GetGrowthOverview",
           "method": "GET",
           "operation": "GetGrowthOverview",
           "path": "/control-plane/product/growth/overview",
@@ -45,6 +48,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.GetPageExperience",
           "method": "GET",
           "operation": "GetPageExperience",
           "path": "/control-plane/product/experience/pages",
@@ -95,6 +99,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "product_control_plane_journal",
       "operations": [
         {
+          "contract_operation_id": "ops.event_record.ListProductWorkflows",
           "method": "GET",
           "operation": "ListProductWorkflows",
           "path": "/control-plane/product/workflows",
@@ -103,6 +108,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.ListProductAudits",
           "method": "GET",
           "operation": "ListProductAudits",
           "path": "/control-plane/product/audits",
@@ -111,6 +117,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.ListProductApprovals",
           "method": "GET",
           "operation": "ListProductApprovals",
           "path": "/control-plane/product/approvals",
@@ -119,6 +126,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.GetProductProjectionSummary",
           "method": "GET",
           "operation": "GetProductProjectionSummary",
           "path": "/control-plane/product/projections/summary",
@@ -127,6 +135,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "ops.event_record.GetProductTriageSummary",
           "method": "GET",
           "operation": "GetProductTriageSummary",
           "path": "/control-plane/product/triage/summary",
@@ -146,6 +155,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "report_queue",
       "operations": [
         {
+          "contract_operation_id": "content.report.ListReports",
           "method": "GET",
           "operation": "ListReports",
           "path": "/content/reports",
@@ -154,6 +164,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "content.report.GetReport",
           "method": "GET",
           "operation": "GetReport",
           "path": "/content/reports/{reportId}",
@@ -162,6 +173,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "content.report.BeginReportReview",
           "method": "POST",
           "operation": "BeginReportReview",
           "path": "/content/reports/{reportId}/review",
@@ -171,6 +183,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "content.report.ResolveReport",
           "danger_level": "high",
           "method": "PATCH",
           "operation": "ResolveReport",
@@ -180,6 +193,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "content.report.DismissReport",
           "method": "POST",
           "operation": "DismissReport",
           "path": "/content/reports/{reportId}:dismiss",
@@ -188,6 +202,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "content.post_moderation_case.GetCurrentPostModerationCase",
           "method": "GET",
           "operation": "GetCurrentPostModerationCase",
           "path": "/internal/content/posts/{postId}/moderation-case",
@@ -196,6 +211,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "content.post_moderation_case.ReviewPostModerationCase",
           "method": "POST",
           "operation": "ReviewPostModerationCase",
           "path": "/internal/content/posts/{postId}:review-moderation",
@@ -205,6 +221,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "content.post_moderation_case.DecidePostModeration",
           "danger_level": "high",
           "method": "POST",
           "operation": "DecidePostModeration",
@@ -225,6 +242,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_candidate_queue",
       "operations": [
         {
+          "contract_operation_id": "entity.homepage.ListHomepageCandidates",
           "method": "GET",
           "operation": "ListHomepageCandidates",
           "path": "/homepages/candidates",
@@ -233,6 +251,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
           ]
         },
         {
+          "contract_operation_id": "entity.homepage.IntakeHomepageCandidate",
           "method": "POST",
           "operation": "IntakeHomepageCandidate",
           "path": "/homepages/candidates",
@@ -242,6 +261,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "entity.homepage.PublishHomepageCandidate",
           "danger_level": "high",
           "method": "POST",
           "operation": "PublishHomepageCandidate",
@@ -262,6 +282,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_claim_request_queue",
       "operations": [
         {
+          "contract_operation_id": "entity.homepage_claim_request.ListHomepageClaimRequests",
           "method": "GET",
           "operation": "ListHomepageClaimRequests",
           "path": "/homepage-claim-requests",
@@ -271,6 +292,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "entity.homepage_claim_request.ReviewHomepageClaimRequest",
           "danger_level": "high",
           "method": "POST",
           "operation": "ReviewHomepageClaimRequest",
@@ -291,6 +313,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "homepage_status_report_queue",
       "operations": [
         {
+          "contract_operation_id": "entity.homepage_status_report.ListHomepageStatusReports",
           "method": "GET",
           "operation": "ListHomepageStatusReports",
           "path": "/homepage-status-reports",
@@ -300,6 +323,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "entity.homepage_status_report.ReviewHomepageStatusReport",
           "danger_level": "high",
           "method": "POST",
           "operation": "ReviewHomepageStatusReport",
@@ -319,6 +343,15 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "label": "实验",
       "object_type": "experiment",
       "operations": [
+        {
+          "contract_operation_id": "ops.experiment.CreateExperiment",
+          "method": "POST",
+          "operation": "CreateExperiment",
+          "path": "/control-plane/product/experiments",
+          "scopes": [
+            "ops.experiment.write"
+          ]
+        },
         {
           "contract_operation_id": "ops.experiment.ListExperiments",
           "method": "GET",
@@ -351,6 +384,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
       "object_type": "premium_pool_entry",
       "operations": [
         {
+          "contract_operation_id": "ops.premium_pool_entry.ListPremiumPoolEntries",
           "method": "GET",
           "operation": "ListPremiumPoolEntries",
           "path": "/control-plane/product/recommendation/premium-pool",
@@ -360,6 +394,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "ops.premium_pool_entry.UpsertPremiumPoolEntry",
           "danger_level": "high",
           "method": "POST",
           "operation": "UpsertPremiumPoolEntry",
@@ -370,6 +405,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "single",
+          "contract_operation_id": "ops.premium_pool_entry.RollbackPremiumPoolEntry",
           "danger_level": "high",
           "method": "POST",
           "operation": "RollbackPremiumPoolEntry",
@@ -380,8 +416,8 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         },
         {
           "approval_mode": "dual",
+          "contract_operation_id": "ops.premium_pool_entry.TakedownPremiumPoolEntry",
           "danger_level": "critical",
-          "idempotency": "required",
           "method": "POST",
           "operation": "TakedownPremiumPoolEntry",
           "path": "/control-plane/product/recommendation/premium-pool/{contentId}:takedown",
@@ -391,7 +427,7 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
         }
       ],
       "risk_level": "high",
-      "source_entity": "VisitRecord",
+      "source_entity": "PremiumPoolEntry",
       "view_kind": "policy",
       "view_model": "PremiumPoolEntry"
     }

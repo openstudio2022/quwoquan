@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../support/runtime_failure_fixtures.dart';
 
@@ -67,9 +68,21 @@ void main() {
             contains('TLS'),
             contains('HTTP'),
             contains('证书'),
+            contains('趣我圈'),
           ),
         ),
         reason: group.name,
+      );
+      expect(copy.title.trim(), isNot(copy.message.trim()), reason: group.name);
+      expect(
+        copy.title.trim(),
+        isNot(copy.action.label.trim()),
+        reason: group.name,
+      );
+      expect(
+        copy.message,
+        isNot(contains(copy.action.label)),
+        reason: '${group.name} 的说明不应复述动作',
       );
     }
     expect(
@@ -182,7 +195,7 @@ void main() {
     expect(semantic.primaryAction?.type, UiErrorActionType.dismiss);
   });
 
-  testWidgets('仅系统确认离线进入连网组，拒绝连接进入稍后重载组', (tester) async {
+  testWidgets('仅系统确认离线进入连网组，拒绝连接进入连接不可用组', (tester) async {
     final context = await pumpContext(tester);
     final offline = UiErrorSemanticResolver.resolve(
       context,
@@ -211,16 +224,19 @@ void main() {
       ),
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-      sourceOperationId: 'GetFeed',
+      sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
     );
 
     expect(offline.userRecoveryGroup, AppUserRecoveryGroup.connectNetwork);
     expect(offline.title, SearchText.recoveryConnectNetworkTitle);
     expect(offline.message, SearchText.recoveryConnectNetworkMessage);
-    expect(refused.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
-    expect(refused.title, SearchText.recoveryReloadLaterTitle);
-    expect(refused.message, SearchText.recoveryReloadLaterMessage);
-    expect(refused.sourceOperationId, 'GetFeed');
+    expect(
+      refused.userRecoveryGroup,
+      AppUserRecoveryGroup.connectionUnavailable,
+    );
+    expect(refused.title, SearchText.recoveryConnectionUnavailableTitle);
+    expect(refused.message, SearchText.recoveryConnectionUnavailableMessage);
+    expect(refused.sourceOperationId, AppCloudOperationIds.contentPostGetFeed);
     expect(refused.requestId, 'request-1');
     expect(refused.traceId, 'trace-1');
   });
@@ -249,45 +265,79 @@ void main() {
     expect(semantic.title, isNot(SearchText.feedVersionMismatchTitle));
   });
 
-  testWidgets('DNS、TLS、5xx、超时和未知异常统一进入稍后重载组', (tester) async {
+  testWidgets('DNS、TLS、5xx、超时、响应异常和未知异常进入各自恢复组', (tester) async {
     final context = await pumpContext(tester);
-    final cases = <({Object error})>[
-      (
-        error: CloudException(
-          type: CloudErrorType.network,
-          message: 'dns',
-          runtimeFailure: testRuntimeFailure(
-            code: RuntimeFailureCodes.appNetworkNameResolutionFailed,
-            kind: RuntimeFailureKind.network,
-            nature: RuntimeFailureNature.transient,
+    final cases =
+        <
+          ({
+            Object error,
+            AppUserRecoveryGroup group,
+            String title,
+            String message,
+          })
+        >[
+          (
+            error: CloudException(
+              type: CloudErrorType.network,
+              message: 'dns',
+              runtimeFailure: testRuntimeFailure(
+                code: RuntimeFailureCodes.appNetworkNameResolutionFailed,
+                kind: RuntimeFailureKind.network,
+                nature: RuntimeFailureNature.transient,
+              ),
+            ),
+            group: AppUserRecoveryGroup.connectionUnavailable,
+            title: SearchText.recoveryConnectionUnavailableTitle,
+            message: SearchText.recoveryConnectionUnavailableMessage,
           ),
-        ),
-      ),
-      (
-        error: CloudException(
-          type: CloudErrorType.network,
-          message: 'tls',
-          runtimeFailure: testRuntimeFailure(
-            code: RuntimeFailureCodes.appNetworkSecureConnectionFailed,
-            kind: RuntimeFailureKind.network,
-            nature: RuntimeFailureNature.permanent,
+          (
+            error: CloudException(
+              type: CloudErrorType.network,
+              message: 'tls',
+              runtimeFailure: testRuntimeFailure(
+                code: RuntimeFailureCodes.appNetworkSecureConnectionFailed,
+                kind: RuntimeFailureKind.network,
+                nature: RuntimeFailureNature.permanent,
+              ),
+            ),
+            group: AppUserRecoveryGroup.connectionUnavailable,
+            title: SearchText.recoveryConnectionUnavailableTitle,
+            message: SearchText.recoveryConnectionUnavailableMessage,
           ),
-        ),
-      ),
-      (
-        error: CloudErrorMapper.fromStatusCode(
-          500,
-          requestPath: '/content/feed',
-        ),
-      ),
-      (
-        error: CloudErrorMapper.fromStatusCode(
-          504,
-          requestPath: '/content/feed',
-        ),
-      ),
-      (error: Exception('unexpected response shape')),
-    ];
+          (
+            error: CloudErrorMapper.fromStatusCode(
+              500,
+              requestPath: '/content/feed',
+            ),
+            group: AppUserRecoveryGroup.serviceUnavailable,
+            title: SearchText.recoveryServiceUnavailableTitle,
+            message: SearchText.recoveryServiceUnavailableMessage,
+          ),
+          (
+            error: CloudErrorMapper.fromStatusCode(
+              504,
+              requestPath: '/content/feed',
+            ),
+            group: AppUserRecoveryGroup.requestTimedOut,
+            title: SearchText.recoveryRequestTimedOutTitle,
+            message: SearchText.recoveryRequestTimedOutMessage,
+          ),
+          (
+            error: CloudErrorMapper.invalidResponse(
+              message: 'unexpected response shape',
+              requestPath: '/content/feed',
+            ),
+            group: AppUserRecoveryGroup.invalidContent,
+            title: SearchText.recoveryInvalidContentTitle,
+            message: SearchText.recoveryInvalidContentMessage,
+          ),
+          (
+            error: Exception('unexpected response shape'),
+            group: AppUserRecoveryGroup.reloadLater,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
+          ),
+        ];
 
     for (final entry in cases) {
       final semantic = UiErrorSemanticResolver.resolve(
@@ -296,11 +346,29 @@ void main() {
         category: UiErrorCategory.pageLoad,
         scope: UiErrorScope.page,
       );
-      expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
-      expect(semantic.title, SearchText.recoveryReloadLaterTitle);
-      expect(semantic.message, SearchText.recoveryReloadLaterMessage);
+      expect(semantic.userRecoveryGroup, entry.group);
+      expect(semantic.title, entry.title);
+      expect(semantic.message, entry.message);
       expect(semantic.primaryAction?.type, UiErrorActionType.retry);
     }
+  });
+
+  testWidgets('公开或可选鉴权 Feed 的 401 重试游客会话而不要求登录', (tester) async {
+    final semantic = UiErrorSemanticResolver.resolve(
+      await pumpContext(tester),
+      error: CloudErrorMapper.fromStatusCode(401, requestPath: '/content/feed'),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+      sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
+    );
+
+    expect(
+      semantic.userRecoveryGroup,
+      AppUserRecoveryGroup.guestSessionUnavailable,
+    );
+    expect(semantic.title, SearchText.recoveryGuestSessionUnavailableTitle);
+    expect(semantic.message, SearchText.recoveryGuestSessionUnavailableMessage);
+    expect(semantic.primaryAction?.type, UiErrorActionType.retry);
   });
 
   testWidgets('明确删除事实与普通 404 使用不同视觉语义', (tester) async {
@@ -340,15 +408,15 @@ void main() {
     final context = await pumpContext(tester);
     const expected = <int, AppUserRecoveryGroup>{
       400: AppUserRecoveryGroup.reloadLater,
-      401: AppUserRecoveryGroup.loginAgain,
+      401: AppUserRecoveryGroup.guestSessionUnavailable,
       403: AppUserRecoveryGroup.noAccess,
       404: AppUserRecoveryGroup.contentUnavailable,
       409: AppUserRecoveryGroup.reloadLater,
       422: AppUserRecoveryGroup.reloadLater,
       429: AppUserRecoveryGroup.waitThenReload,
-      500: AppUserRecoveryGroup.reloadLater,
-      503: AppUserRecoveryGroup.reloadLater,
-      504: AppUserRecoveryGroup.reloadLater,
+      500: AppUserRecoveryGroup.serviceUnavailable,
+      503: AppUserRecoveryGroup.serviceUnavailable,
+      504: AppUserRecoveryGroup.requestTimedOut,
     };
 
     for (final entry in expected.entries) {
@@ -361,7 +429,7 @@ void main() {
         ),
         category: UiErrorCategory.pageLoad,
         scope: UiErrorScope.page,
-        sourceOperationId: 'GetFeed',
+        sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
       );
       final copy = AppUserRecoveryContract.copyFor(
         entry.value,

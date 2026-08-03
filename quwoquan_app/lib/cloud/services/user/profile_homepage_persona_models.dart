@@ -103,8 +103,8 @@ class ProfileInteractionActivityViewData {
   final DateTime? seenAt;
   final DateTime? readAt;
 
-  factory ProfileInteractionActivityViewData.fromContentActivity(
-    ContentProfileInteractionActivity w,
+  factory ProfileInteractionActivityViewData.fromWire(
+    ProfileInteractionActivityView w,
   ) {
     final actorDisplayName = w.actorDisplayName.isNotEmpty
         ? w.actorDisplayName
@@ -115,16 +115,17 @@ class ProfileInteractionActivityViewData {
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
         : (actorDisplayName.isNotEmpty ? actorDisplayName : displayPersonaId);
-    final displayAvatarUrl = w.displayAvatarUrl.isNotEmpty
-        ? w.displayAvatarUrl
-        : w.actorAvatarUrl;
+    final rawActorAvatarUrl = w.actorAvatarUrl ?? '';
+    final displayAvatarUrl = (w.displayAvatarUrl ?? '').isNotEmpty
+        ? w.displayAvatarUrl!
+        : rawActorAvatarUrl;
     final actorAvatarVersion = w.actorAvatarVersion;
     final displayAvatarVersion = w.displayAvatarVersion > 0
         ? w.displayAvatarVersion
-        : (displayAvatarUrl == w.actorAvatarUrl ? w.actorAvatarVersion : 0);
+        : (displayAvatarUrl == rawActorAvatarUrl ? w.actorAvatarVersion : 0);
     final primaryText = w.primaryText;
-    final previewObjectId = w.previewObjectId.isNotEmpty
-        ? w.previewObjectId
+    final previewObjectId = (w.previewObjectId ?? '').isNotEmpty
+        ? w.previewObjectId!
         : w.targetContentId;
     final previewMediaKind = w.previewMediaKind.isNotEmpty
         ? w.previewMediaKind
@@ -134,33 +135,33 @@ class ProfileInteractionActivityViewData {
       ...w.filterKeys.map((key) => key.trim()).where((key) => key.isNotEmpty),
     }.toList(growable: false);
     final actorAvatarUrl = resolveAvatarImageUrl(
-      w.actorAvatarUrl,
+      rawActorAvatarUrl,
       avatarVersion: actorAvatarVersion,
     );
     final resolvedDisplayAvatarUrl = resolveAvatarImageUrl(
       displayAvatarUrl,
       avatarVersion: displayAvatarVersion,
     );
-    final previewImageUrl = resolveContentMediaUrl(w.previewImageUrl);
+    final previewImageUrl = resolveContentMediaUrl(w.previewImageUrl ?? '');
     return ProfileInteractionActivityViewData(
       activityId: w.activityId,
-      activityType: w.activityType,
-      direction: w.direction,
+      activityType: w.activityType.wireName,
+      direction: w.direction.wireName,
       commentKind: w.commentKind,
-      commentId: w.commentId,
-      parentCommentId: w.parentCommentId,
-      viewerReaction: w.viewerReaction,
+      commentId: w.commentId ?? '',
+      parentCommentId: w.parentCommentId ?? '',
+      viewerReaction: w.viewerReaction.wireName,
       actorPersonaId: w.actorPersonaId,
       actorDisplayName: actorDisplayName,
       actorAvatarUrl: actorAvatarUrl,
       actorAvatarVersion: actorAvatarVersion,
-      counterpartPersonaId: w.counterpartPersonaId,
-      counterpartDisplayName: w.counterpartDisplayName,
-      counterpartAvatarUrl: resolveAvatarImageUrl(w.counterpartAvatarUrl),
+      counterpartPersonaId: w.counterpartPersonaId ?? '',
+      counterpartDisplayName: w.counterpartDisplayName ?? '',
+      counterpartAvatarUrl: resolveAvatarImageUrl(w.counterpartAvatarUrl ?? ''),
       targetPersonaId: w.targetPersonaId,
       targetContentId: w.targetContentId,
-      targetContentType: w.targetContentType,
-      targetContentSummary: w.targetContentSummary,
+      targetContentType: w.targetContentType.wireName,
+      targetContentSummary: w.targetContentSummary ?? '',
       targetKind: w.targetKind,
       targetAvailability: w.targetAvailability,
       targetReplyCount: w.targetReplyCount,
@@ -168,19 +169,19 @@ class ProfileInteractionActivityViewData {
       displayName: displayName,
       displayAvatarUrl: resolvedDisplayAvatarUrl,
       displayAvatarVersion: displayAvatarVersion,
-      displayUserRouteId: w.displayUserRouteId,
+      displayUserRouteId: w.displayUserRouteId ?? '',
       primaryText: primaryText,
-      contextText: w.contextText,
+      contextText: w.contextText ?? '',
       previewMediaKind: previewMediaKind,
       previewImageUrl: previewImageUrl,
-      previewText: w.previewText,
+      previewText: w.previewText ?? '',
       previewUnavailable: w.previewUnavailable,
       previewObjectId: previewObjectId,
-      previewRouteId: w.previewRouteId,
-      outboundShareEventId: w.outboundShareEventId,
-      shareText: w.shareText,
-      impactPrimaryText: w.impactPrimaryText,
-      impactDeepLink: w.impactDeepLink,
+      previewRouteId: w.previewRouteId ?? '',
+      outboundShareEventId: w.outboundShareEventId ?? '',
+      shareText: w.shareText ?? '',
+      impactPrimaryText: w.impactPrimaryText ?? '',
+      impactDeepLink: w.impactDeepLink ?? '',
       filterKeys: filterKeys,
       createdAt: w.createdAt,
       occurredAt: w.occurredAt,
@@ -232,34 +233,8 @@ class ActivePersonaContextViewData {
     };
   }
 
-  factory ActivePersonaContextViewData.fromActivePersonaContextWire(
-    ActivePersonaContextWireDto w,
-  ) {
-    final personaId = w.personaId;
-    var ownerUserId = w.ownerUserId;
-    if (ownerUserId.isEmpty) {
-      ownerUserId = personaId;
-    }
-    final displayName = w.displayName.isNotEmpty ? w.displayName : personaId;
-    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'persona';
-    return ActivePersonaContextViewData(
-      personaId: personaId,
-      ownerUserId: ownerUserId,
-      subjectType: subjectType,
-      displayName: displayName,
-      avatarUrl: resolveAvatarImageUrl(
-        w.avatarUrl,
-        avatarVersion: w.avatarVersion,
-      ),
-      avatarVersion: w.avatarVersion,
-      contextVersion: w.contextVersion,
-      personaSnapshotVersion: w.personaSnapshotVersion,
-      isPrimary: w.isPrimary,
-    );
-  }
-
-  factory ActivePersonaContextViewData.fromActivePersonaContextProjection(
-    ActivePersonaContextProjection projection,
+  factory ActivePersonaContextViewData.fromWire(
+    ActivePersonaContextView projection,
   ) {
     final personaId = projection.personaId;
     final ownerUserId = projection.ownerUserId.isEmpty
@@ -268,14 +243,12 @@ class ActivePersonaContextViewData {
     return ActivePersonaContextViewData(
       personaId: personaId,
       ownerUserId: ownerUserId,
-      subjectType: projection.subjectType.isEmpty
-          ? 'persona'
-          : projection.subjectType,
+      subjectType: projection.subjectType.wireName,
       displayName: projection.displayName.isEmpty
           ? personaId
           : projection.displayName,
       avatarUrl: resolveAvatarImageUrl(
-        projection.avatarUrl,
+        projection.avatarUrl ?? '',
         avatarVersion: projection.avatarVersion,
       ),
       avatarVersion: projection.avatarVersion,
@@ -353,43 +326,8 @@ class PersonaManagementItemViewData {
 
   bool get isRetired => status == 'retired';
 
-  /// 纠正 wire 默认 `subjectType: persona`：无 `personaId` 时视为 account 主行。
-  factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
-    PersonaManagementItemWireDto w,
-  ) {
-    final displayName = w.displayName.isNotEmpty ? w.displayName : w.personaId;
-    final subjectType = w.personaId.isEmpty
-        ? (w.subjectType.isEmpty || w.subjectType == 'persona'
-              ? 'account'
-              : w.subjectType)
-        : (w.subjectType.isNotEmpty ? w.subjectType : 'persona');
-    return PersonaManagementItemViewData(
-      personaId: w.personaId,
-      displayName: displayName,
-      userHandle: w.userHandle,
-      avatarUrl: resolveAvatarImageUrl(
-        w.avatarUrl,
-        avatarVersion: w.avatarVersion,
-      ),
-      avatarVersion: w.avatarVersion,
-      isolationLevel: w.isolationLevel,
-      profileVisibility: w.profileVisibility,
-      isPrimary: w.isPrimary,
-      isActive: w.isActive,
-      status: w.status,
-      retiredAt: w.retiredAt,
-      hasPublishedContent: w.hasPublishedContent,
-      inheritsProfileFromOwner: w.inheritsProfileFromOwner,
-      overriddenProfileFields: w.overriddenProfileFields,
-      lastProfileSyncAt: w.lastProfileSyncAt,
-      lastProfileSyncSource: w.lastProfileSyncSource,
-      lastActivatedAt: w.lastActivatedAt,
-      subjectType: subjectType,
-    );
-  }
-
-  factory PersonaManagementItemViewData.fromPersonaManagementItemProjection(
-    PersonaManagementItemProjection projection,
+  factory PersonaManagementItemViewData.fromWire(
+    PersonaManagementItemView projection,
   ) {
     final displayName = projection.displayName.isEmpty
         ? projection.personaId
@@ -397,25 +335,26 @@ class PersonaManagementItemViewData {
     return PersonaManagementItemViewData(
       personaId: projection.personaId,
       displayName: displayName,
-      userHandle: projection.userHandle,
+      userHandle: projection.userHandle ?? '',
       avatarUrl: resolveAvatarImageUrl(
         projection.avatarUrl ?? '',
-        avatarVersion: projection.avatarVersion,
+        avatarVersion: 0,
       ),
-      avatarVersion: projection.avatarVersion,
-      isolationLevel: projection.isolationLevel,
-      profileVisibility: projection.profileVisibility,
+      avatarVersion: 0,
+      isolationLevel: projection.isolationLevel.wireName,
+      profileVisibility: projection.profileVisibility.wireName,
       isPrimary: projection.isPrimary,
       isActive: projection.isActive,
-      status: projection.status,
+      status: projection.status.wireName,
       retiredAt: projection.retiredAt,
-      hasPublishedContent: projection.hasPublishedContent,
+      hasPublishedContent: false,
       inheritsProfileFromOwner: projection.inheritsProfileFromOwner,
-      overriddenProfileFields: projection.overriddenProfileFields,
+      overriddenProfileFields:
+          projection.overriddenProfileFields ?? const <String>[],
       lastProfileSyncAt: projection.lastProfileSyncAt,
       lastProfileSyncSource: projection.lastProfileSyncSource ?? '',
       lastActivatedAt: projection.lastActivatedAt,
-      subjectType: projection.subjectType,
+      subjectType: 'persona',
     );
   }
 }
@@ -456,19 +395,8 @@ class PersonaManagementQuotaViewData {
 
   bool get quotaReached => usedPersonas >= maxPersonas;
 
-  factory PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
-    PersonaManagementQuotaWireDto w,
-  ) {
-    var max = w.maxPersonas;
-    if (max <= 0) max = 5;
-    return PersonaManagementQuotaViewData(
-      maxPersonas: max,
-      usedPersonas: w.usedPersonas,
-    );
-  }
-
-  factory PersonaManagementQuotaViewData.fromPersonaManagementQuotaProjection(
-    PersonaManagementQuotaProjection projection,
+  factory PersonaManagementQuotaViewData.fromWire(
+    PersonaManagementQuotaView projection,
   ) {
     final max = projection.quotaLimit <= 0 ? 5 : projection.quotaLimit;
     return PersonaManagementQuotaViewData(
@@ -494,26 +422,14 @@ class PersonaLifecycleGuardViewData {
   final String reason;
   final bool requiresSuccessor;
 
-  factory PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
-    PersonaLifecycleGuardWireDto w,
-  ) {
-    return PersonaLifecycleGuardViewData(
-      personaId: w.personaId,
-      requestedAction: w.requestedAction,
-      allowed: w.allowed,
-      reason: w.reason,
-      requiresSuccessor: w.requiresSuccessor,
-    );
-  }
-
-  factory PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardProjection(
-    PersonaLifecycleGuardProjection projection,
+  factory PersonaLifecycleGuardViewData.fromWire(
+    PersonaLifecycleGuardView projection,
   ) {
     return PersonaLifecycleGuardViewData(
       personaId: projection.personaId,
-      requestedAction: projection.requestedAction,
+      requestedAction: projection.requestedAction.wireName,
       allowed: projection.allowed,
-      reason: projection.reason,
+      reason: projection.reason.wireName,
       requiresSuccessor: projection.requiresSuccessor,
     );
   }
@@ -531,47 +447,20 @@ class PersonaManagementSummaryViewData {
   final PersonaManagementQuotaViewData quota;
   final ActivePersonaContextViewData? activeContext;
 
-  factory PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
-    PersonaManagementSummaryWireDto w,
-  ) {
-    final items = w.items
-        .map(
-          (m) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
-            PersonaManagementItemWireDto.fromMap(m),
-          ),
-        )
-        .toList(growable: false);
-    final quotaMap =
-        w.quota ??
-        <String, dynamic>{'usedPersonas': items.length, 'maxPersonas': 5};
-    final activeMap = w.activeContext;
-    return PersonaManagementSummaryViewData(
-      items: items,
-      quota: PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
-        PersonaManagementQuotaWireDto.fromMap(quotaMap),
-      ),
-      activeContext: activeMap == null
-          ? null
-          : ActivePersonaContextViewData.fromActivePersonaContextWire(
-              ActivePersonaContextWireDto.fromMap(activeMap),
-            ),
-    );
-  }
-
-  factory PersonaManagementSummaryViewData.fromProjection(
-    PersonaManagementSummaryProjection projection,
+  factory PersonaManagementSummaryViewData.fromWire(
+    PersonaManagementSummaryView projection,
   ) {
     final items = projection.items
-        .map(PersonaManagementItemViewData.fromPersonaManagementItemProjection)
+        .map(PersonaManagementItemViewData.fromWire)
         .toList(growable: false);
     return PersonaManagementSummaryViewData(
       items: items,
       quota:
-          PersonaManagementQuotaViewData.fromPersonaManagementQuotaProjection(
+          PersonaManagementQuotaViewData.fromWire(
             projection.quota,
           ),
       activeContext:
-          ActivePersonaContextViewData.fromActivePersonaContextProjection(
+          ActivePersonaContextViewData.fromWire(
             projection.activeContext,
           ),
     );

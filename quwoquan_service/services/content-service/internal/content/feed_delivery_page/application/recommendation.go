@@ -23,10 +23,8 @@ type RankedRecommendationGateway interface {
 		transport.CreateRankedRecommendationWindowCommand,
 	) (transport.RankedRecommendationPage, error)
 	GetPage(
-		ctx context.Context,
-		windowID string,
-		fromOrdinal int,
-		limit int,
+		context.Context,
+		transport.GetRankedRecommendationPageQuery,
 	) (transport.RankedRecommendationPage, error)
 }
 

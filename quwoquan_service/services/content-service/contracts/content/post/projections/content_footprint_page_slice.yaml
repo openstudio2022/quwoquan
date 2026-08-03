@@ -1,0 +1,8 @@
+read_model: ContentFootprintPageSlice
+description: 当前 persona 私有足迹的 keyset page envelope。
+source_entities: [ContentBehaviorFact, Post]
+source_projections: [ContentFootprintEntry]
+consumers: [app]
+fields:
+  - {name: items, type: '[]ContentFootprintEntry', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}

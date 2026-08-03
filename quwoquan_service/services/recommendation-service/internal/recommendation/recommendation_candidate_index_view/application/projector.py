@@ -7,6 +7,16 @@ from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
+class RecommendationObjectCardCandidate:
+    homepage_id: str
+    canonical_entity_id: str
+    title: str
+    subtitle: str | None
+    cover_url: str | None
+    tag_refs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CandidateLifecycleSnapshot:
     scenario: str
     content_id: str
@@ -19,6 +29,7 @@ class CandidateLifecycleSnapshot:
     entity_tag_ids: tuple[str, ...]
     source_sequence: int
     updated_at: datetime
+    object_card: RecommendationObjectCardCandidate | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +96,17 @@ class Projector:
         for values in (snapshot.tag_refs, snapshot.entity_refs, snapshot.entity_tag_ids):
             if any(not value.strip() for value in values) or len(set(values)) != len(values):
                 raise ValueError("candidate lifecycle references must be non-empty and unique")
+        if snapshot.object_card is not None:
+            card = snapshot.object_card
+            if not all(
+                value.strip()
+                for value in (card.homepage_id, card.canonical_entity_id, card.title)
+            ):
+                raise ValueError("recommendation object card candidate is incomplete")
+            if any(not value.strip() for value in card.tag_refs) or len(
+                set(card.tag_refs)
+            ) != len(card.tag_refs):
+                raise ValueError("recommendation object card tags must be unique")
         return self._store.upsert_lifecycle_if_newer(snapshot)
 
     def remove(self, *, scenario: str, content_id: str, source_sequence: int) -> bool:

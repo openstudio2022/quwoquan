@@ -7,7 +7,8 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projecti
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CitationDestination;
 
 enum AssistantJourneyBlockKind {
   narrative,

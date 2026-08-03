@@ -39,19 +39,41 @@ func TestCircleContractEnumsAreGeneratedAsStrictCanonicalWireTypes(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	content, err := renderCircleContractEnumsDart(enums, refs)
+	content, err := renderCircleContractEnumsDart(
+		enums,
+		enumRefsWithout(refs, "HomepageType"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
 		"enum CircleStatus",
 		"inviteOnly(\"invite_only\")",
-		"travelPhoto(\"travel_photo\")",
 		"static CircleVisibility fromWire(Object? raw)",
-		"throw FormatException('invalid HomepageType: $raw')",
 	} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("generated Circle enums missing %q:\n%s", expected, content)
+		}
+	}
+	if strings.Contains(content, "HomepageType") {
+		t.Fatal("Circle enum owner retained cross-domain HomepageType")
+	}
+	homepageType, err := renderSharedOperationEnumDart(
+		"HomepageType",
+		enums["HomepageType"],
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"enum HomepageType",
+		"travelPhoto(\"travel_photo\")",
+		"final String wireName",
+		"fromWire(Object? value, [String path = 'HomepageType'])",
+		"throw FormatException('$path has an invalid enum value')",
+	} {
+		if !strings.Contains(homepageType, expected) {
+			t.Fatalf("generated HomepageType missing %q:\n%s", expected, homepageType)
 		}
 	}
 }

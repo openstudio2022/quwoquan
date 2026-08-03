@@ -335,7 +335,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
       final dto = detail.post;
       final raw = detail.mergedArticleWireMap;
       final interactionSnapshot = buildMediaViewerInteractionSnapshot(
-        posts: <PostBaseDto>[dto],
+        posts: <ContentPostViewData>[dto],
         discoveryState: ref.read(discoveryStateProvider),
         relationshipState: ref.read(userRelationshipStateProvider),
         postInteractionState: ref.read(postInteractionStateProvider),
@@ -357,7 +357,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
           posts: <ContentSurfaceView>[
             ContentSurfaceViewMapper.fromDto(dto, wire: raw),
           ],
-          dtoPosts: <PostBaseDto>[dto],
+          dtoPosts: <ContentPostViewData>[dto],
           initialIndex: 0,
           source: 'global-search-network',
           rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),

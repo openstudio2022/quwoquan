@@ -53,20 +53,17 @@ api_routes:
 
       circleGroupId 非空的会话只能由 CircleGroupMembership durable projector 写入，本 operation 返回
 
-      circle_group_managed_by_circle。
+      source_managed_conversation。
 
 '
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.conversation_dissolved
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.USER.group_member_not_mutual
       - CHAT.USER.group_member_blocked
       - CHAT.USER.group_full
@@ -132,17 +129,14 @@ api_routes:
       circleGroupId 非空时由 CircleGroupMembership 管理并拒绝本 operation。
 
 '
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.conversation_dissolved
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -203,17 +197,14 @@ api_routes:
       circleGroupId 非空时必须从 CircleGroupMembership 入口离开并拒绝本 operation。
 
 '
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.conversation_dissolved
       - CHAT.USER.group_owner_must_transfer_before_leave
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -232,7 +223,6 @@ api_routes:
       query:
         - {name: creatorPersonaId, field: creatorPersonaId, required: false}
         - {name: assistantMemberId, field: assistantMemberId, required: false}
-        - {name: assistantSkillId, field: assistantSkillId, required: false}
     actor: none
     commercial:
       status: ready
@@ -266,11 +256,11 @@ api_routes:
     slo:
       latency_p95_ms: 400
       availability_percent: 99.95
-    description: 按 creator Persona 与 assistant skill 精确复核当前会话成员资格；不分页、不暴露成员名册。
+    description: 按 creator Persona 与小趣成员身份精确复核当前会话成员资格；不分页、不暴露成员名册。
     response_entity: AssistantDeliveryMembershipView
     response_fields:
       - creatorMember
-      - assistantSkillMember
+      - assistantMember
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.invalid_argument
@@ -324,16 +314,13 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    description: 邀请小趣助手加入会话（创建 memberType=assistant 的 ConversationMember），可指定 skillId；助手已在会话为 no-op
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    description: 邀请同一位小趣助手加入会话（创建 memberType=assistant 的 ConversationMember）；可用 Skill 由 Assistant active package 与共享 Placement 决定，助手已在会话为 no-op。
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -342,7 +329,7 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     request_entity: ChatInviteConversationAssistantCommand
-    request_body_kind: object
+    request_body_kind: none
   - method: DELETE
     path: /chat/conversations/{conversationId}/assistant
     operation: RemoveAssistant
@@ -386,15 +373,12 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 移除小趣助手（删除 memberType=assistant 的成员；助手已不在会话为 no-op）
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -447,16 +431,13 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 私建群转让群主（目标已是群主为 no-op 并重放原回执）；circleGroupId 非空时由 CircleGroupMembership 管理并拒绝本 operation。
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -509,16 +490,13 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 设置私建群管理员列表（与当前列表一致为 no-op 并重放原回执）；circleGroupId 非空时由 CircleGroupMembership 管理并拒绝本 operation。
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: ConversationMembershipCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
       - CHAT.USER.group_governance_forbidden
-      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.source_managed_conversation
       - CHAT.SYSTEM.internal_error
     security:
       auth_mode: required
@@ -588,13 +566,9 @@ api_routes:
         - name: query
           field: query
           required: false
-    response_entity: ConversationMemberListRow
+    response_entity: ConversationMemberPageSlice
     response_body: ConversationMemberListRow
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/conversation_membership_contracts.dart
-      response_type: ChatConversationMemberPageSlice
-      response_decoder: decodeChatConversationMemberPageSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found
@@ -606,3 +580,38 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     request_entity: ChatListConversationMembersQuery
+  - method: PUT
+    path: /internal/chat/gathering-conversations/{gatheringId}/members/{personaId}
+    operation: ProjectGatheringConversationMembership
+    actor: none
+    application:
+      kind: command
+      facet: GatheringConversationMembershipProjectionFacet
+      method: projectGatheringConversationMembership
+      aggregate_owner: ConversationMembership
+      mutation_target: ConversationMembership
+      invariant_target: ConversationMembership
+    request_bindings:
+      path:
+      - {name: gatheringId, field: gatheringId}
+      - {name: personaId, field: personaId}
+    request_entity: GatheringConversationMembershipProjectionCommand
+    response_entity: GatheringConversationMembershipProjectionResult
+    authorization:
+      principal: service
+      scopes: [chat.gathering.write]
+      ownership_policy: gathering_source_projection
+    commercial: {status: ready}
+    reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 3, idempotency: required}
+    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: chat_gathering_membership_project, trace: true, attributes: [outcome, state]}
+    slo: {latency_p95_ms: 800, availability_percent: 99.9}
+    description: 以 Gathering participant sourceVersion 幂等投影 Chat membership；不经过互关邀请门，也不开放客户端入口。
+    error_codes: [CHAT.USER.invalid_argument, CHAT.USER.conversation_not_found, CHAT.USER.gathering_binding_conflict, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    request_body_kind: object

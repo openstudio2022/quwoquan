@@ -252,7 +252,7 @@ class LocalCircleGroupSnapshotStore {
     )).items;
     final snapshots = <LocalCircleGroupSnapshotRecord>[];
     for (final circle in circles) {
-      final circleId = _string(circle.circleId);
+      final circleId = _string(circle.id);
       if (circleId.isEmpty) {
         continue;
       }

@@ -2,8 +2,8 @@
 // store (cold start / reconcile for entity.search_index_worker).
 //
 // It ensures the shared ES/OpenSearch index exists, then lists every published
-// homepage, projects it through the single shared projection
-// (application.ProjectHomepageToSearchDocument) and bulk-upserts it. Run it after
+// homepage, projects it through HomepageSearchItemView's one typed projector and
+// records its monotonic checkpoint. Run it after
 // a fresh import or to repair drift; the write-time projector keeps the index in
 // sync afterwards.
 //
@@ -28,9 +28,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	entitycomposition "quwoquan_service/services/entity-service/cmd/internal/composition"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/searchindex"
+	searchitempersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/persistence"
+	searchitemindex "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/infrastructure/searchindex"
 )
 
 func main() {
@@ -44,8 +46,8 @@ func main() {
 
 	// Build ES config from the shared SEARCH_ES_* env, then apply explicit flag
 	// overrides so local/manual reconcile runs work without mutating env.
-	esCfg := searchindex.ESConfig{Index: strings.TrimSpace(*esIndex)}
-	searchindex.ApplyESEnvOverrides(&esCfg)
+	esCfg := searchitemindex.ESConfig{Index: strings.TrimSpace(*esIndex)}
+	searchitemindex.ApplyESEnvOverrides(&esCfg)
 	if eps := strings.TrimSpace(*esEndpoints); eps != "" {
 		parts := strings.Split(eps, ",")
 		out := make([]string, 0, len(parts))
@@ -73,14 +75,15 @@ func main() {
 		_ = client.Disconnect(shutdownCtx)
 	}()
 
-	store := homepagepersistence.NewMongoHomepageStore(client.Database(*entityDB), false)
+	database := client.Database(*entityDB)
+	store := homepagepersistence.NewMongoHomepageStore(database, false)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("[search-backfill] ensure homepage indexes: %v", err)
 	}
 	// Backfill 通过 HomepageQueryFacade cursor 扫描权威 homepages 集合。
 	service := application.NewHomepageServiceWithStore(ctx, store)
 
-	built, err := searchindex.Build(esCfg)
+	built, err := searchitemindex.Build(esCfg)
 	if err != nil {
 		log.Fatalf("[search-backfill] es client build: %v", err)
 	}
@@ -88,10 +91,46 @@ func main() {
 		log.Fatalf("[search-backfill] es disabled after config resolution")
 	}
 
-	report, err := searchindex.Backfill(ctx, built.Client, service, *batchSize)
-	if err != nil {
-		log.Fatalf("[search-backfill] backfill failed (indexed=%d batches=%d): %v", report.IndexedHomepages, report.BatchesPushed, err)
+	index := searchitempersistence.NewESIndex(built.Indexer, database)
+	if err := index.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("[search-backfill] ensure checkpoint indexes: %v", err)
 	}
-	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d batches=%d",
-		*env, built.Client.IndexName(), report.TotalHomepages, report.IndexedHomepages, report.DeletedHomepages, report.BatchesPushed)
+	projection := entitycomposition.NewHomepageSearchItemProjection(index)
+	limit := *batchSize
+	if limit <= 0 {
+		limit = 500
+	}
+	total, indexed, deleted := 0, 0, 0
+	cursor := ""
+	for {
+		homepages, nextCursor, scanErr := service.ScanHomepagesForIndex(ctx, cursor, limit)
+		if scanErr != nil {
+			log.Fatalf("[search-backfill] scan failed after total=%d: %v", total, scanErr)
+		}
+		for index := range homepages {
+			homepage := homepages[index]
+			eventType := application.ProjectorEventHomepageUpserted
+			if !application.HomepageSearchEligible(homepage) {
+				eventType = application.ProjectorEventHomepageRemoved
+			}
+			if projectErr := projection.Project(ctx, application.ProjectorEvent{
+				Type: eventType, HomepageID: homepage.ID, SourceVersion: homepage.Version,
+				Homepage: &homepage,
+			}); projectErr != nil {
+				log.Fatalf("[search-backfill] project homepageId=%s: %v", homepage.ID, projectErr)
+			}
+			total++
+			if eventType == application.ProjectorEventHomepageRemoved {
+				deleted++
+			} else {
+				indexed++
+			}
+		}
+		if nextCursor == "" {
+			break
+		}
+		cursor = nextCursor
+	}
+	log.Printf("[search-backfill] OK env=%s index=%s total=%d indexed=%d deleted=%d",
+		*env, built.Client.IndexName(), total, indexed, deleted)
 }

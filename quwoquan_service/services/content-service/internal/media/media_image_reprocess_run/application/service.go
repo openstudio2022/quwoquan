@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	"quwoquan_service/runtime/commandmeta"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	reprocessmodel "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/domain/model"
 	reprocessports "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/domain/ports"
 )

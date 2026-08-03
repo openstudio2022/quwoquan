@@ -1,14 +1,28 @@
 domain: ASSISTANT
 aggregate: SkillCatalog
-description: SkillCatalog 可信账号、授权读取与 canonical catalog source 的 fail-closed 错误。
+description: SkillCatalog 可信账号与 active package canonical catalog source 的 fail-closed 错误。
 errors:
+- code: ASSISTANT.USER.skill_catalog_not_found
+  kind: USER
+  reason: skill_catalog_not_found
+  http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [GetSkillCatalogItem]
+  recovery_action: surface
+  dart_const: skillCatalogNotFound
+  go_const: ErrSkillCatalogNotFound
+  l10n_key: assistant.error.skill_catalog_not_found
+  user_message:
+    zh: 这个技能当前不可用
+    en: This skill is currently unavailable
 - code: ASSISTANT.USER.skill_catalog_invalid_argument
   kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [ListSkills]
+    operations: [ListSkills, GetSkillCatalogItem]
   recovery_action: surface
   dart_const: skillCatalogInvalidArgument
   go_const: ErrSkillCatalogInvalidArgument
@@ -22,7 +36,7 @@ errors:
   http_status: 401
   emitted_by:
   - surface: http
-    operations: [ListSkills]
+    operations: [ListSkills, GetSkillCatalogItem]
   recovery_action: surface
   dart_const: skillCatalogUnauthorized
   go_const: ErrSkillCatalogUnauthorized
@@ -30,28 +44,13 @@ errors:
   user_message:
     zh: 请先登录后查看技能目录
     en: Please sign in to view the skill catalog
-- code: ASSISTANT.SYSTEM.skill_catalog_consent_unavailable
-  kind: SYSTEM
-  reason: skill_catalog_consent_unavailable
-  http_status: 503
-  emitted_by:
-  - surface: http
-    operations: [ListSkills]
-  recovery_action: retry
-  recovery_after_seconds: 3
-  dart_const: skillCatalogConsentUnavailable
-  go_const: ErrSkillCatalogConsentUnavailable
-  l10n_key: assistant.error.skill_catalog_consent_unavailable
-  user_message:
-    zh: 授权状态暂时无法读取，请稍后重试
-    en: Consent status is temporarily unavailable; please retry
 - code: ASSISTANT.SYSTEM.skill_catalog_unavailable
   kind: SYSTEM
   reason: skill_catalog_unavailable
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [ListSkills]
+    operations: [ListSkills, GetSkillCatalogItem]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: skillCatalogUnavailable

@@ -5,6 +5,7 @@ import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -173,14 +174,14 @@ final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
   final AlphaTagFacet _inner;
 
   @override
-  Future<List<TagChild>> listChildren(
+  Future<List<TagChildView>> listChildren(
     String parentTagRef, {
     int limit = TagApiDefaults.childrenLimit,
   }) async {
     final children = await _inner.listChildren(parentTagRef, limit: limit);
-    return <TagChild>[
+    return <TagChildView>[
       for (final child in children)
-        TagChild(
+        TagChildView(
           tagRef: child.tagRef,
           label: child.label,
           displayLabel: child.displayLabel,
@@ -195,15 +196,15 @@ final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
   }
 
   @override
-  Future<TagResolve> resolveTag(String tagRef) => _inner.resolveTag(tagRef);
+  Future<TagResolveView> resolveTag(String tagRef) => _inner.resolveTag(tagRef);
 
   @override
-  Future<TagValidationResult> validateRefs({
+  Future<TagValidationResultView> validateRefs({
     required String expectedTaxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
     if (expectedTaxonomyReleaseId != releaseId) {
-      return TagValidationResult(
+      return TagValidationResultView(
         taxonomyReleaseId: releaseId,
         valid: const <String>[],
         invalid: tagRefs,
@@ -213,7 +214,7 @@ final class _ReleaseOverrideTagCatalogQuery implements TagCatalogQuery {
       expectedTaxonomyReleaseId: _inner.taxonomyReleaseId,
       tagRefs: tagRefs,
     );
-    return TagValidationResult(
+    return TagValidationResultView(
       taxonomyReleaseId: releaseId,
       valid: innerResult.valid,
       invalid: innerResult.invalid,

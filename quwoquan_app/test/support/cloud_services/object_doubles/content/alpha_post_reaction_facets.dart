@@ -5,11 +5,11 @@ final class AlphaContentPostReactionFacet implements ContentPostReactionFacet {
   final Map<String, bool> _liked = <String, bool>{};
 
   @override
-  Future<ContentPostReactionStateSlice> getReactionState(
+  Future<ContentReactionStateSlice> getReactionState(
     GetContentPostReactionStateQuery query,
   ) async {
     final liked = _liked[query.postId] ?? false;
-    return ContentPostReactionStateSlice(
+    return ContentReactionStateSlice(
       found: _liked.containsKey(query.postId),
       postId: query.postId,
       liked: liked,

@@ -13,21 +13,21 @@ final class RemoteCallParticipantCommandWriter
   final RtcCallInvocationContextFactory invocationContext;
 
   @override
-  Future<RtcJoinCredentialsDto> joinCall(RtcCallIdCommand command) =>
+  Future<RtcJoinCredentials> joinCall(RtcCallIdCommand command) =>
       client.rtcCallSessionJoinCall(
         command,
         context: invocationContext(RtcRequestPageIds.joinCall, command: true),
       );
 
   @override
-  Future<CallSessionDto> leaveCall(RtcCallIdCommand command) =>
+  Future<CallSession> leaveCall(RtcCallIdCommand command) =>
       client.rtcCallSessionLeaveCall(
         command,
         context: invocationContext(RtcRequestPageIds.leaveCall, command: true),
       );
 
   @override
-  Future<CallSessionDto> inviteToCall(RtcInviteToCallCommand command) =>
+  Future<CallSession> inviteToCall(RtcInviteToCallCommand command) =>
       client.rtcCallSessionInviteToCall(
         command,
         context: invocationContext(
@@ -37,7 +37,7 @@ final class RemoteCallParticipantCommandWriter
       );
 
   @override
-  Future<CallSessionDto> reportMediaConnected(RtcCallIdCommand command) =>
+  Future<CallSession> reportMediaConnected(RtcCallIdCommand command) =>
       client.rtcCallSessionReportMediaConnected(
         command,
         context: rtcInvocationWithIdempotencyKey(

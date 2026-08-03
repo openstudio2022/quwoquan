@@ -58,7 +58,7 @@ func canonicalRequestEnumMembers(
 	for _, value := range values {
 		member := overrides[value]
 		if member == "" {
-			member = toDartValueName(value)
+			member = canonicalDartEnumMemberName(field.EnumRef, value)
 		}
 		if previous, exists := seenMembers[member]; exists {
 			return nil, fmt.Errorf(
@@ -76,6 +76,19 @@ func canonicalRequestEnumMembers(
 		})
 	}
 	return result, nil
+}
+
+// canonicalDartEnumMemberName keeps wire values language-neutral while
+// deriving one stable Dart member name for every request and response use.
+// ProfileVisibility.private historically cannot use the ambiguous bare
+// `private` member in the public App contract, so the semantic enum name is
+// part of its deterministic projection rather than a field-local override.
+func canonicalDartEnumMemberName(enumName, wireValue string) string {
+	if strings.TrimSpace(enumName) == "ProfileVisibility" &&
+		strings.TrimSpace(wireValue) == "private" {
+		return "privateProfile"
+	}
+	return toDartValueName(wireValue)
 }
 
 func canonicalRequestEnumMembersFingerprint(values map[string]string) string {

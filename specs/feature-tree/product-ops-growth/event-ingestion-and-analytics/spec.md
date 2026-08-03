@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-统一采集 App 产品事件、异常和受限启动诊断，经同一 `ObservabilityLogSinkPort` 形成可查询明细与聚合，并将推荐反馈保持在唯一行为事实边界；Gamma 使用 Elasticsearch 本地替身验证完整端云语义，Prod 使用真实 SLS。
+统一采集 App 产品事件、异常和受限启动诊断，经同一 `ObservabilityLogSinkPort` 和 Elasticsearch 存储合同形成可查询明细与聚合，并将推荐反馈保持在唯一行为事实边界；Alpha、Beta、Gamma、Prod 不再按环境切换日志后端。
 
 ## 2. 范围与非目标
 
@@ -15,12 +15,12 @@
 - 九字段事件目录、页面目录、App 加密 outbox、product-ops 日志端口单轨与 Portal 查询。
 - 启动与运行时不可恢复异常的十字段匿名接收与 app_startup 产品投影隔离。
 - BehaviorReporter 到 HotPath/投影/推荐/指标单出口。
-- Gamma Elasticsearch 替身与 Prod SLS 共用写入、幂等、查询、脱敏和错误合同；调用方不得感知供应商。
+- 四环境 Elasticsearch 共用写入、幂等、查询、脱敏、保留和错误合同；调用方不得感知环境或集群身份。
 
 ### Out of Scope
 
 - ClickHouse、消息队列、对象存储归档、Assistant 学习并入 Ops。
-- App、Portal 或领域服务直连 Elasticsearch/SLS，以及任一 Provider 失败后回退到另一存储。
+- App、Portal 或领域服务直连 Elasticsearch，以及任一集群失败后回退到另一存储。
 
 ## 3. Journey / Scenario 贡献
 
@@ -53,8 +53,8 @@
 ### REQ-002 Provider 中立写入幂等、聚合与查询门面
 
 - 写入必须校验 canonical digest 与整批 payload；重复 ACK、超时后已写入确认和重复查询不得产生第二份事实。
-- Gamma 的 `ext.obs.elasticsearch_local` 必须覆盖产品事件、启动诊断、运行日志与小时聚合四个逻辑分区，并通过同一 product-ops 查询门面证明写入、批次确认、明细、汇总、页面体验、活跃会话和 RTC QoE 语义。
-- Prod 的 `ext.obs.aliyun_sls` 继续使用真实 SLS 资源、TTL 与 Scheduled SQL；Gamma ES 证据不得冒充 Prod SLS 的鉴权、限流、索引、告警或回滚证据。
+- Alpha、Beta、Gamma、Prod 均绑定 `ext.obs.elasticsearch`，覆盖产品事件、启动诊断、运行日志与小时聚合四个逻辑分区，并通过同一 product-ops 查询门面证明写入、批次确认、明细、汇总、页面体验、活跃会话和 RTC QoE 语义。
+- 四环境使用相同索引模板、ILM、rollup 代数、脱敏和错误合同；环境证据按各自 package、集群、身份与回滚回执隔离，任一环境的 ES receipt 不得替代另一环境。
 - Portal 只经 product-ops 查询；任何环境都禁止调用方直连 Provider、双写、自动 fallback 或暴露后端身份。
 
 <a id="req-003"></a>
@@ -113,8 +113,8 @@
 - GIVEN 执行“Provider 中立写入幂等、聚合与查询门面”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“Provider 中立写入幂等、聚合与查询门面”对应动作。
 - THEN canonical digest 与整批 payload 通过校验；重复 ACK、超时后已写入确认和重复查询只返回原事实。
-- THEN Gamma 经 Elasticsearch 替身返回与公开合同一致的 raw、hourly、页面体验、活跃会话和 RTC QoE 结果，且无 SLS 凭据、后端身份或敏感标识泄露。
-- THEN Prod 独立证明真实 SLS 的资源、TTL、Scheduled SQL、鉴权、告警和回滚；Gamma receipt 不能替代 Prod receipt。
+- THEN Alpha、Beta、Gamma、Prod 分别经 Elasticsearch 返回与公开合同一致的 raw、hourly、页面体验、活跃会话和 RTC QoE 结果，且无集群身份或敏感标识泄露。
+- THEN 每个环境独立证明 ES 索引模板、ILM、rollup、鉴权、告警和回滚，且 receipt 不能跨环境替代。
 
 <a id="sit-003"></a>
 ### SIT-003 不可恢复异常与产品启动事件隔离
@@ -137,13 +137,13 @@
 ## 8. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 产品遥测的 Gamma ES 与 Prod SLS Provider 证据未闭合
+### OPEN-001 产品遥测的四环境 Elasticsearch Provider 证据未闭合
 
 - 类型：`risk`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：Gamma Elasticsearch 替身的完整 Port 证据与 Prod 真实 SLS 资源、鉴权、TTL、告警和回滚证据尚未共同闭合；真机恢复补报仅由 `OPEN-004` 跟踪。
-- 完成判定：`SIT-002` 与 Prod hosted Provider receipt 均通过。
+- 影响或价值：四环境统一 Elasticsearch 的完整 Port、索引模板、ILM、鉴权、告警和回滚证据尚未共同闭合；真机恢复补报仅由 `OPEN-004` 跟踪。
+- 完成判定：`SIT-002` 与四环境各自的 Provider receipt 均通过。
 
 <a id="open-002"></a>
 ### OPEN-002 九字段目录与 App 可靠交付
@@ -160,7 +160,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Gamma Elasticsearch 与 Prod SLS 通过同一端口完成 canonical digest、全批校验、重复 ACK、超时后已写入确认和查询去重验证。
+- 影响或价值：尚缺真实环境验收证据；四环境 Elasticsearch 已完成单轨代码与契约收口，但同一候选四环境 Provider receipt 对 canonical digest、全批校验、重复 ACK、超时后已写入确认和查询去重的真实闭环尚未完成。
 - 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
@@ -169,7 +169,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺 Prod 真实 SLS 接收、Android/iPhone 本地加密队列和真机补报证据的共同闭合；恢复异常必须严格保持十字段，并与产品事件和身份事实完全隔离。
+- 影响或价值：尚缺 Prod 真实 Elasticsearch 接收、Android/iPhone 本地加密队列和真机补报证据的共同闭合；恢复异常必须严格保持十字段，并与产品事件和身份事实完全隔离。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-005"></a>

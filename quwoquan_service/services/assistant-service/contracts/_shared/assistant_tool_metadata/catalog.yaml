@@ -59,6 +59,23 @@ tools:
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: []
     readOnly: false
+    capability:
+      capabilityKey: calendar.event.create
+      connectorRequirement: required
+      consentScopes: [calendar.event.create]
+      allowedSurfaceKinds: [personal]
+      recheckAtExecution: true
+    confirmation:
+      templateRef: assistant.tool_confirmation
+      title: 确认创建系统日程
+      description: 确认后，小趣会请求当前设备创建以下日程提醒。
+      completionSummary: 设备上的系统日程已创建。
+      displayFields:
+        - {inputKey: title, label: 标题}
+        - {inputKey: startsAt, label: 开始时间}
+        - {inputKey: durationMinutes, label: 时长（分钟）}
+        - {inputKey: reminderMinutes, label: 提前提醒（分钟）}
+        - {inputKey: notes, label: 备注}
     resilience: {timeoutMs: 30000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 1}
     recovery: {action: ask_user, disruptionLevel: partial}
 

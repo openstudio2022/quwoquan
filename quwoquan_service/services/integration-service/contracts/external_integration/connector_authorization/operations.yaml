@@ -1,0 +1,73 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Connector 授权需完成受信 native attestation/OAuth callback adapter、credential lifecycle、双端 continuation 与三环境 conformance 后准出
+  gap_id: INTEGRATION_CONNECTOR_AUTHORIZATION_COMMERCIAL_EVIDENCE
+  target_story: user-connector-capability-gateway
+api_routes:
+- method: POST
+  path: /integrations/connector-authorizations
+  operation: StartConnectorAuthorization
+  actor: account
+  request_entity: StartConnectorAuthorizationRequest
+  request_body_kind: object
+  response_entity: ConnectorAuthorizationIntent
+  authorization: {principal: account, ownership_policy: connector_authorization_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_authorization_invalid_argument, INTEGRATION.USER.authorization_connector_definition_not_found, INTEGRATION.USER.connector_authorization_capability_denied, INTEGRATION.USER.connector_authorization_mode_unsupported, INTEGRATION.USER.connector_authorization_idempotency_conflict, INTEGRATION.SYSTEM.connector_authorization_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_authorization_command, trace: true, attributes: [operation, authorization_mode, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 700, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorAuthorizationCommandFacade, method: startAuthorization, aggregate_owner: ConnectorAuthorization, mutation_target: ConnectorAuthorization, invariant_target: ConnectorAuthorization}
+  description: 为当前账号创建短期 native/OAuth authorization；返回 typed opaque continuation，不返回 URL、token 或 Provider 参数。
+- method: GET
+  path: /integrations/connector-authorizations/{authorizationId}
+  operation: GetConnectorAuthorization
+  actor: account
+  request_entity: GetConnectorAuthorizationQuery
+  request_body_kind: none
+  request_bindings: {path: [{name: authorizationId, field: authorizationId}]}
+  response_entity: ConnectorAuthorizationView
+  authorization: {principal: account, ownership_policy: connector_authorization_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_authorization_invalid_argument, INTEGRATION.USER.connector_authorization_not_found, INTEGRATION.USER.connector_authorization_unauthorized, INTEGRATION.SYSTEM.connector_authorization_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_authorization_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorAuthorizationQueryFacade, method: getAuthorization, reader: ConnectorAuthorizationReader, slice: ConnectorAuthorization}
+  description: 读取当前账号拥有的脱敏授权状态，供 App 重启后恢复；不返回 continuation、proof 或 grant receipt。
+- method: POST
+  path: /integrations/connector-authorizations/{authorizationId}/complete-native
+  operation: CompleteNativeConnectorAuthorization
+  actor: account
+  request_entity: CompleteNativeConnectorAuthorizationRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: authorizationId, field: authorizationId}]}
+  response_entity: ConnectorAuthorizationGrantReceipt
+  authorization: {principal: account, ownership_policy: connector_authorization_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_authorization_invalid_argument, INTEGRATION.USER.connector_authorization_not_found, INTEGRATION.USER.connector_authorization_unauthorized, INTEGRATION.USER.connector_authorization_mode_mismatch, INTEGRATION.USER.connector_authorization_expired, INTEGRATION.USER.connector_native_grant_proof_invalid, INTEGRATION.USER.connector_authorization_revision_conflict, INTEGRATION.USER.connector_authorization_idempotency_conflict, INTEGRATION.MIDDLEWARE.connector_authorization_provider_unavailable, INTEGRATION.SYSTEM.connector_authorization_unavailable]
+  privacy: {request_classification: SECRET, response_classification: SECRET, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_authorization_command, trace: true, attributes: [operation, authorization_mode, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorAuthorizationCommandFacade, method: completeNativeAuthorization, aggregate_owner: ConnectorAuthorization, mutation_target: ConnectorAuthorization, invariant_target: ConnectorAuthorization}
+  description: 由受信 native attestation adapter 校验平台授权证明并生成一次性 grant receipt；客户端自报 capability 不构成证明。
+- method: POST
+  path: /internal/integrations/connector-authorizations/{authorizationId}/complete-oauth
+  operation: CompleteOAuthConnectorAuthorization
+  actor: none
+  request_entity: CompleteOAuthConnectorAuthorizationRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: authorizationId, field: authorizationId}]}
+  response_entity: ConnectorAuthorizationGrantReceipt
+  authorization: {principal: service, scopes: [integration.connector_oauth_callback.write], ownership_policy: connector_oauth_callback_state_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_authorization_invalid_argument, INTEGRATION.USER.connector_authorization_not_found, INTEGRATION.USER.connector_authorization_mode_mismatch, INTEGRATION.USER.connector_authorization_expired, INTEGRATION.USER.connector_oauth_callback_invalid, INTEGRATION.USER.connector_authorization_revision_conflict, INTEGRATION.USER.connector_authorization_idempotency_conflict, INTEGRATION.MIDDLEWARE.connector_authorization_provider_unavailable, INTEGRATION.SYSTEM.connector_authorization_unavailable]
+  privacy: {request_classification: SECRET, response_classification: SECRET, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_authorization_command, trace: true, attributes: [operation, authorization_mode, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 1200, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorAuthorizationCommandFacade, method: completeOAuthAuthorization, aggregate_owner: ConnectorAuthorization, mutation_target: ConnectorAuthorization, invariant_target: ConnectorAuthorization}
+  description: OAuth callback edge 先完成 state/PKCE/provider 校验并把受保护 callbackRef 交给本命令；公开 callback 参数不进入业务 DTO。

@@ -1,0 +1,8 @@
+events:
+- name: SkillUserSettingChanged
+  description: 个人 Skill 显式设置完成创建或 CAS 更新。
+  producer: assistant-service
+  consumers: [assistant-run]
+  channel: assistant.skill_user_setting
+  payload_entity: SkillUserSetting
+  payload_fields: [id, accountId, skillId, status, configurationSchemaDigest, memoryPolicy, connectorConnectionRefs, revision, updatedAt]

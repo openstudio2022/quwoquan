@@ -1,13 +1,151 @@
 // ignore_for_file: prefer_single_quotes
 import 'dart:convert';
 
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
-import '../repository_mock_reexports.dart';
+import '../object_doubles/object_scenario_seed_reader.dart';
 import 'home_showcase_core_fixture.g.dart';
 
-/// 内容域 mock 数据（canonical 字段，与 FeedItemDto schema 严格对齐）。
+ContentPostViewData _contentViewDataFromFixtureMap(Map<String, dynamic> raw) {
+  final normalized = Map<String, dynamic>.from(raw);
+  normalized['postId'] = normalized['postId'] ?? normalized.remove('id');
+  normalized['contentType'] =
+      normalized['contentType'] ?? normalized.remove('type');
+  normalized['contentIdentity'] =
+      normalized['contentIdentity'] ?? normalized.remove('identity');
+  normalized['authorDisplayName'] =
+      normalized['authorDisplayName'] ?? normalized.remove('displayName');
+  normalized['authorAvatarUrl'] =
+      normalized['authorAvatarUrl'] ?? normalized.remove('avatarUrl');
+  normalized['mediaUrls'] =
+      normalized['mediaUrls'] ?? normalized.remove('imageUrls');
+  normalized['intersectionReasons'] = _canonicalFixtureIntersectionReasons(
+    normalized['intersectionReasons'],
+    postId: normalized['postId']?.toString() ?? 'fixture-post',
+  );
+  return contentPostViewDataFromReadModelMap(normalized);
+}
+
+List<Map<String, Object?>> _canonicalFixtureIntersectionReasons(
+  Object? raw, {
+  required String postId,
+}) {
+  if (raw is! List) return const <Map<String, Object?>>[];
+  return raw.indexed
+      .where((entry) => entry.$2 is Map)
+      .map((entry) {
+        final source = Map<String, Object?>.from(entry.$2 as Map);
+        final primaryText = _fixtureText(source['primaryText']);
+        final dimension = _fixtureText(
+          source['dimension'],
+          fallback: 'fixture',
+        );
+        final sourceRef = _fixtureText(source['source'], fallback: 'fixture');
+        final intersectionId = _fixtureText(
+          source['intersectionId'],
+          fallback: '$postId:intersection:${entry.$1}',
+        );
+        return <String, Object?>{
+          'kind': _fixtureText(source['kind'], fallback: 'fixture'),
+          'vertical': _fixtureText(source['vertical'], fallback: 'content'),
+          'dimension': dimension,
+          'tagRefs': _fixtureStringList(source['tagRefs']),
+          'relationKind': _fixtureText(source['relationKind']),
+          'objectKind': _fixtureText(source['objectKind']),
+          'relationObjectId': _fixtureText(source['relationObjectId']),
+          'strength': _fixtureDouble(source['strength']),
+          'primaryText': primaryText,
+          'primaryTextL10nKey': _fixtureText(source['primaryTextL10nKey']),
+          'displayBinding': _fixtureText(
+            source['displayBinding'],
+            fallback: 'host_implicit',
+          ),
+          'secondaryText': _fixtureText(source['secondaryText']),
+          'weightTier': _fixtureText(source['weightTier']),
+          'actionType': _fixtureText(source['actionType']),
+          'actionTargetId': _fixtureText(source['actionTargetId']),
+          'source': sourceRef,
+          'intersectionId': intersectionId,
+          'intersectionClass': _fixtureText(
+            source['intersectionClass'],
+            fallback: 'fact',
+          ),
+          'avatarUrl': _fixtureText(source['avatarUrl']),
+          'displayName': _fixtureText(source['displayName']),
+          'confidenceLabel': _fixtureText(source['confidenceLabel']),
+          'modelReasonBucket': _fixtureText(source['modelReasonBucket']),
+          'freshAt': _fixtureText(source['freshAt']),
+          'expiresAt': _fixtureText(source['expiresAt']),
+          'intersectionPoints': const <Object?>[],
+          'pointSummarySnapshotId': _fixtureText(
+            source['pointSummarySnapshotId'],
+          ),
+          'actorEvidenceTotalCount': _fixtureInt(
+            source['actorEvidenceTotalCount'],
+          ),
+          'actorEvidenceCompleteness': _fixtureText(
+            source['actorEvidenceCompleteness'],
+            fallback: 'fixture',
+          ),
+          'actorEvidence': const <Object?>[],
+          'factPointCount': _fixtureInt(source['factPointCount']),
+          'recommendedPointCount': _fixtureInt(source['recommendedPointCount']),
+          'totalPointCount': _fixtureInt(source['totalPointCount']),
+          'dimensionPointSummary': const <Object?>[],
+          'pointClassLabel': _fixtureText(source['pointClassLabel']),
+          'connectionSummary': _fixtureText(
+            source['connectionSummary'],
+            fallback: primaryText,
+          ),
+          'lastRecommendedAt': _fixtureText(source['lastRecommendedAt']),
+          'seenAt': _fixtureText(source['seenAt']),
+          'rankState': _fixtureText(source['rankState']),
+          'primarySpans': const <Object?>[],
+          'sampleVisuals': const <Object?>[],
+          'actionHints': const <Object?>[],
+          'lifecycleState': _fixtureText(
+            source['lifecycleState'],
+            fallback: 'active',
+          ),
+          'previousStrength': _fixtureDouble(source['previousStrength']),
+          'strengthDelta': _fixtureDouble(source['strengthDelta']),
+          'edgeWeight': _fixtureDouble(source['edgeWeight']),
+          'iconKey': _fixtureText(source['iconKey']),
+          'tone': _fixtureText(source['tone']),
+          'timeBucket': _fixtureText(source['timeBucket']),
+          'dedupeKey': _fixtureText(
+            source['dedupeKey'],
+            fallback: intersectionId,
+          ),
+          'anchorUserWeight': _fixtureDouble(source['anchorUserWeight']),
+          'mutualCount': _fixtureInt(source['mutualCount']),
+          'moment': _fixtureText(source['moment']),
+          'subjectId': _fixtureText(source['subjectId']),
+          'subjectContext': _fixtureText(source['subjectContext']),
+        };
+      })
+      .toList(growable: false);
+}
+
+String _fixtureText(Object? raw, {String fallback = ''}) {
+  final value = raw?.toString().trim() ?? '';
+  return value.isEmpty ? fallback : value;
+}
+
+int _fixtureInt(Object? raw) => raw is num ? raw.toInt() : 0;
+
+double _fixtureDouble(Object? raw) => raw is num ? raw.toDouble() : 0;
+
+List<String> _fixtureStringList(Object? raw) {
+  if (raw is! Iterable) return const <String>[];
+  return raw
+      .map((value) => value.toString().trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+/// 内容域 mock 数据（canonical 字段，与 ContentPostViewData schema 严格对齐）。
 ///
 /// 字段命名以 _projections/discovery_feed.yaml client_projection 为权威：
 /// - authorId / displayName / avatarUrl（扁平，无嵌套 user/author sub-map）
@@ -18,33 +156,36 @@ import 'home_showcase_core_fixture.g.dart';
 class ContentMockData {
   ContentMockData._();
 
-  static List<FeedItemDto> _withCanonicalMedia(
+  static List<ContentPostViewData> _withCanonicalMedia(
     List<Map<String, dynamic>> items,
   ) {
     return items
-        .map((raw) => FeedItemDto.fromMap(Map<String, dynamic>.from(raw)))
+        .map(
+          (raw) =>
+              _contentViewDataFromFixtureMap(Map<String, dynamic>.from(raw)),
+        )
         .toList(growable: false);
   }
 
-  static List<FeedItemDto> _expandDiscoveryFeed(
-    List<FeedItemDto> source, {
+  static List<ContentPostViewData> _expandDiscoveryFeed(
+    List<ContentPostViewData> source, {
     required int targetCount,
     required String cloneLabel,
   }) {
     if (source.length >= targetCount) {
       return source;
     }
-    final expanded = <FeedItemDto>[...source];
+    final expanded = <ContentPostViewData>[...source];
     var cloneIndex = 1;
     while (expanded.length < targetCount) {
       final base = source[(expanded.length - source.length) % source.length];
       expanded.add(
         base.copyWith(
           id: '${base.id}_${cloneLabel}_$cloneIndex',
-          title: base.title == null || base.title!.trim().isEmpty
+          title: base.title.trim().isEmpty
               ? base.title
               : '${base.title} · ${cloneIndex + 1}',
-          summary: base.summary == null || base.summary!.trim().isEmpty
+          summary: base.summary.trim().isEmpty
               ? base.summary
               : '${base.summary}（扩展批次 ${cloneIndex + 1}）',
           createdAt: base.createdAt.subtract(Duration(minutes: cloneIndex)),
@@ -52,13 +193,13 @@ class ContentMockData {
       );
       cloneIndex += 1;
     }
-    return List<FeedItemDto>.unmodifiable(expanded);
+    return List<ContentPostViewData>.unmodifiable(expanded);
   }
 
   /// alpha showcase 全样式样本：唯一真相源为 contract seed `home_showcase_core`
   /// （content_scenarios[.lite|.gamma-curated].json），四环境同源 archived 媒体。
   /// MockRepository 与发现区 wire 查找均消费本 getter，端侧不再维护第二套样本列表。
-  static List<FeedItemDto> get seededShowcaseFeedItems {
+  static List<ContentPostViewData> get seededShowcaseFeedItems {
     final seed = objectScenarioSeedReader.contentSeedSet('home_showcase_core');
     final hostSeed = _feedItemsFromSeed(seed);
     if (hostSeed.isNotEmpty) {
@@ -69,36 +210,43 @@ class ContentMockData {
 
   /// 移动端运行时无法读取宿主仓库文件，必须使用随 App 编译进来的生成常量。
   /// host-side 测试仍优先使用 [seededShowcaseFeedItems] 的 contract fixture 读链。
-  static Future<List<FeedItemDto>> seededShowcaseFeedItemsAsync() async {
+  static Future<List<ContentPostViewData>>
+  seededShowcaseFeedItemsAsync() async {
     return seededShowcaseFeedItems;
   }
 
-  static List<FeedItemDto> _feedItemsFromPostsJson(String raw) {
+  static List<ContentPostViewData> _feedItemsFromPostsJson(String raw) {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! List) {
-        return const <FeedItemDto>[];
+        return const <ContentPostViewData>[];
       }
       return decoded
           .whereType<Map>()
-          .map((item) => FeedItemDto.fromMap(item.cast<String, dynamic>()))
+          .map(
+            (item) =>
+                _contentViewDataFromFixtureMap(item.cast<String, dynamic>()),
+          )
           .toList(growable: false);
     } catch (_) {
-      return const <FeedItemDto>[];
+      return const <ContentPostViewData>[];
     }
   }
 
-  static List<FeedItemDto> _feedItemsFromSeed(Object? seed) {
+  static List<ContentPostViewData> _feedItemsFromSeed(Object? seed) {
     if (seed is! Map) {
-      return const <FeedItemDto>[];
+      return const <ContentPostViewData>[];
     }
     final posts = seed['posts'];
     if (posts is! List) {
-      return const <FeedItemDto>[];
+      return const <ContentPostViewData>[];
     }
     return posts
         .whereType<Map>()
-        .map((item) => FeedItemDto.fromMap(item.cast<String, dynamic>()))
+        .map(
+          (item) =>
+              _contentViewDataFromFixtureMap(item.cast<String, dynamic>()),
+        )
         .toList(growable: false);
   }
 
@@ -206,12 +354,12 @@ class ContentMockData {
     final trimmed = id.trim();
     if (trimmed.isEmpty) return null;
     try {
-      final row = <FeedItemDto>[
+      final row = <ContentPostViewData>[
         ...discoveryArticleData,
         ...seededShowcaseFeedItems.where((item) => item.type == 'article'),
       ].firstWhere((a) => a.id == trimmed);
-      final title = row.title ?? '';
-      final summary = row.summary ?? row.body ?? '';
+      final title = row.title;
+      final summary = row.summary.isNotEmpty ? row.summary : row.body ?? '';
       final imageUrls = row.imageUrls
           .map((url) => url.trim())
           .where((url) => url.isNotEmpty)
@@ -219,21 +367,27 @@ class ContentMockData {
       final markdown = _buildLongformMockArticleMarkdown(
         title: title,
         summary: summary,
-        template: row.articleTemplate ?? 'journal',
-        fontPreset: row.articleFontPreset ?? 'clean',
-        coverUrl: row.coverUrl,
+        template: row.articleTemplate.isEmpty ? 'journal' : row.articleTemplate,
+        fontPreset: row.articleFontPreset.isEmpty
+            ? 'clean'
+            : row.articleFontPreset,
+        coverUrl: row.coverUrl ?? '',
         imageUrls: imageUrls,
       );
       return <String, dynamic>{
-        ...row.toDiscoveryWireMap(),
+        ...row.toPresentationMap(),
         'id': row.id,
         'type': 'article',
         'articleMarkdown': markdown,
         'markdownDialect': 'qwq-rich-md',
         'articleAssetManifest': const <String, dynamic>{'assets': []},
         'articleRenderProfile': <String, dynamic>{
-          'template': row.articleTemplate ?? 'journal',
-          'fontPreset': row.articleFontPreset ?? 'clean',
+          'template': row.articleTemplate.isEmpty
+              ? 'journal'
+              : row.articleTemplate,
+          'fontPreset': row.articleFontPreset.isEmpty
+              ? 'clean'
+              : row.articleFontPreset,
         },
       };
     } catch (_) {
@@ -310,7 +464,8 @@ class ContentMockData {
   // width/height：主图尺寸（px），用于前端直接计算宽高比，无需请求图片元数据。
   // 比例来源于 Unsplash 图片的真实宽高比。
   // authorBackgroundUrl：作者主页背景图，每个作者 ID 固定一张。
-  static List<FeedItemDto> get discoveryPhotoData => _expandDiscoveryFeed(
+  static List<ContentPostViewData>
+  get discoveryPhotoData => _expandDiscoveryFeed(
     _withCanonicalMedia([
       {
         'id': 'd1',
@@ -554,7 +709,8 @@ class ContentMockData {
   // width/height：视频分辨率（px），处理管道写入。
   // 竖屏短视频通常为 1080×1920，横屏为 1920×1080。
 
-  static List<FeedItemDto> get discoveryVideoData => _expandDiscoveryFeed(
+  static List<ContentPostViewData>
+  get discoveryVideoData => _expandDiscoveryFeed(
     _withCanonicalMedia([
       {
         'id': 'video_tokyo_midnight',
@@ -640,7 +796,8 @@ class ContentMockData {
 
   // ─── Moment feed（微趣 tab）───────────────────────────────────────────────
 
-  static List<FeedItemDto> get discoveryMomentData => _withCanonicalMedia([
+  static List<ContentPostViewData>
+  get discoveryMomentData => _withCanonicalMedia([
     {
       'id': 'm4',
       'type': 'micro',
@@ -779,7 +936,8 @@ class ContentMockData {
 
   // ─── Article feed（文章 tab）──────────────────────────────────────────────
 
-  static List<FeedItemDto> get discoveryArticleData => _expandDiscoveryFeed(
+  static List<ContentPostViewData>
+  get discoveryArticleData => _expandDiscoveryFeed(
     _withCanonicalMedia([
       _buildArticlePost(
         postId: 'web-dev',

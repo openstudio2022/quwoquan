@@ -36,26 +36,26 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
             self.assertNotIn("objectId", allowed)
             self.assertNotIn("userId", allowed)
 
-        resource = yaml.safe_load(
+        rollups = yaml.safe_load(
             (
                 ROOT
-                / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
             ).read_text(encoding="utf-8")
-        )["spec"]
-        jobs = {item["name"]: item for item in resource["scheduledSql"]["jobs"]}
-        funnel = jobs["app-product-telemetry-search-funnel-hourly"]
-        self.assertEqual(funnel["rowKind"], "search_funnel")
+        )
+        funnel = next(item for item in rollups["jobs"] if item["row_kind"] == "search_funnel")
+        measures = {item["name"] for item in funnel["measures"]}
         for metric in (
             "querySubmitCount",
             "nonEmptyResultCount",
             "effectiveActionRequestCount",
             "firstActionableHistogram",
         ):
-            self.assertIn(metric, funnel["sql"])
+            self.assertIn(metric, measures)
         for forbidden_dimension in ("objectId", "userId", "sessionId"):
-            self.assertNotIn(forbidden_dimension, funnel["sql"])
+            self.assertNotIn(forbidden_dimension, funnel["dimensions"])
 
-        alerts = {item["name"]: item for item in resource["alerts"]}
+        alert_policy = yaml.safe_load((ROOT / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml").read_text(encoding="utf-8"))["spec"]
+        alerts = {item["name"]: item for item in alert_policy["alerts"]}
         expected_alerts = {
             "product-search-effective-success-rate-low": (
                 "submitCount >= 100",

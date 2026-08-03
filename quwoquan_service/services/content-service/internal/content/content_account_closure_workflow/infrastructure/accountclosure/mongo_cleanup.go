@@ -2,9 +2,7 @@ package accountclosure
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -24,38 +22,24 @@ type postClosureRow struct {
 }
 
 type cleanupInventory struct {
-	postRows             []postClosureRow
-	postIDs              []string
-	commentRows          []commentClosureRow
-	commentIDs           []string
-	commentRefIDs        []string
-	reactionRows         []reactionClosureRow
-	reactionIDs          []string
-	activityRows         []activityClosureRow
-	activityDocIDs       []string
-	activityIDs          []string
-	readFactIDs          []string
-	shareRows            []shareClosureRow
-	shareFactIDs         []string
-	moderationCaseIDs    []string
-	mediaSessionIDs      []string
-	mediaAssetIDs        []string
-	mediaArtifactRows    []MediaArtifactClosureRow
-	relationshipEventIDs []string
-	relationshipPairIDs  []string
-	replayDatasetIDs     []string
-	impactAdjustments    []authorImpactAdjustment
-	affectedPostIDs      []string
-}
-
-type authorImpactAdjustment struct {
-	AuthorID              string
-	HelpType              string
-	Action                string
-	IntersectionDimension string
-	TagRef                string
-	Source                string
-	Count                 int64
+	postRows          []postClosureRow
+	postIDs           []string
+	commentRows       []commentClosureRow
+	commentIDs        []string
+	commentRefIDs     []string
+	reactionRows      []reactionClosureRow
+	reactionIDs       []string
+	activityRows      []activityClosureRow
+	activityDocIDs    []string
+	activityIDs       []string
+	readFactIDs       []string
+	shareRows         []shareClosureRow
+	shareFactIDs      []string
+	moderationCaseIDs []string
+	mediaSessionIDs   []string
+	mediaAssetIDs     []string
+	mediaArtifactRows []MediaArtifactClosureRow
+	affectedPostIDs   []string
 }
 
 func (store *MongoStore) applyContentCleanup(
@@ -86,7 +70,7 @@ func (store *MongoStore) applyContentCleanup(
 	if err := store.deleteAggregateData(ctx, subjectIDs, inventory); err != nil {
 		return err
 	}
-	if err := store.deleteDerivedData(ctx, event, subjectIDs, inventory); err != nil {
+	if err := store.deleteDerivedData(ctx, subjectIDs, inventory); err != nil {
 		return err
 	}
 	if err := store.anonymizeRetainedAudit(ctx, event, subjectIDs); err != nil {
@@ -215,58 +199,6 @@ func (store *MongoStore) collectCleanupInventory(
 	for _, row := range mediaArtifactRows {
 		mediaAssetIDs = append(mediaAssetIDs, row.ID)
 	}
-	relationshipFilter := bson.M{"$or": bson.A{
-		bson.M{"sourcePersonaId": bson.M{"$in": subjectIDs}},
-		bson.M{"targetPersonaId": bson.M{"$in": subjectIDs}},
-	}}
-	relationshipEventIDs, err := collectStringField(
-		ctx,
-		store.db.Collection("persona_follow_projection"),
-		relationshipFilter,
-		"eventId",
-	)
-	if err != nil {
-		return cleanupInventory{}, fmt.Errorf(
-			"collect closed-account relationship events: %w",
-			err,
-		)
-	}
-	relationshipPairIDs, err := collectStringField(
-		ctx,
-		store.db.Collection("persona_follow_projection"),
-		relationshipFilter,
-		"pairId",
-	)
-	if err != nil {
-		return cleanupInventory{}, fmt.Errorf(
-			"collect closed-account relationship pairs: %w",
-			err,
-		)
-	}
-	replayDatasetIDs, err := collectStringField(
-		ctx,
-		store.db.Collection("rec_replay_samples"),
-		bson.M{"$or": bson.A{
-			bson.M{"userId": bson.M{"$in": subjectIDs}},
-			bson.M{"targetId": bson.M{"$in": postIDs}},
-		}},
-		"datasetId",
-	)
-	if err != nil {
-		return cleanupInventory{}, fmt.Errorf(
-			"collect closed-account replay datasets: %w",
-			err,
-		)
-	}
-	impactAdjustments, err := store.collectAuthorImpactAdjustments(
-		ctx,
-		subjectIDs,
-		postIDs,
-	)
-	if err != nil {
-		return cleanupInventory{}, err
-	}
-
 	affectedPostIDs := append([]string(nil), postIDs...)
 	for _, row := range commentRows {
 		affectedPostIDs = append(affectedPostIDs, row.PostID)
@@ -280,94 +212,25 @@ func (store *MongoStore) collectCleanupInventory(
 		affectedPostIDs = append(affectedPostIDs, row.PostID)
 	}
 	return cleanupInventory{
-		postRows:             postRows,
-		postIDs:              postIDs,
-		commentRows:          commentRows,
-		commentIDs:           commentIDs,
-		commentRefIDs:        commentReferenceIDs,
-		reactionRows:         reactionRows,
-		reactionIDs:          rowIDs(reactionRows),
-		activityRows:         activityRows,
-		activityDocIDs:       rowIDs(activityRows),
-		activityIDs:          uniqueStrings(activityIDs),
-		readFactIDs:          readFactIDs,
-		shareRows:            shareRows,
-		shareFactIDs:         shareFactIDs,
-		moderationCaseIDs:    moderationCaseIDs,
-		mediaSessionIDs:      mediaSessionIDs,
-		mediaAssetIDs:        mediaAssetIDs,
-		mediaArtifactRows:    mediaArtifactRows,
-		relationshipEventIDs: relationshipEventIDs,
-		relationshipPairIDs:  relationshipPairIDs,
-		replayDatasetIDs:     replayDatasetIDs,
-		impactAdjustments:    impactAdjustments,
-		affectedPostIDs:      uniqueStrings(affectedPostIDs),
+		postRows:          postRows,
+		postIDs:           postIDs,
+		commentRows:       commentRows,
+		commentIDs:        commentIDs,
+		commentRefIDs:     commentReferenceIDs,
+		reactionRows:      reactionRows,
+		reactionIDs:       rowIDs(reactionRows),
+		activityRows:      activityRows,
+		activityDocIDs:    rowIDs(activityRows),
+		activityIDs:       uniqueStrings(activityIDs),
+		readFactIDs:       readFactIDs,
+		shareRows:         shareRows,
+		shareFactIDs:      shareFactIDs,
+		moderationCaseIDs: moderationCaseIDs,
+		mediaSessionIDs:   mediaSessionIDs,
+		mediaAssetIDs:     mediaAssetIDs,
+		mediaArtifactRows: mediaArtifactRows,
+		affectedPostIDs:   uniqueStrings(affectedPostIDs),
 	}, nil
-}
-
-func (store *MongoStore) collectAuthorImpactAdjustments(
-	ctx context.Context,
-	subjectIDs []string,
-	postIDs []string,
-) ([]authorImpactAdjustment, error) {
-	cursor, err := store.db.Collection("rm_author_impact_evidence").Aggregate(
-		ctx,
-		mongo.Pipeline{
-			{{Key: "$match", Value: bson.M{"$or": bson.A{
-				bson.M{"authorId": bson.M{"$in": subjectIDs}},
-				bson.M{"actorId": bson.M{"$in": subjectIDs}},
-				bson.M{"contentId": bson.M{"$in": postIDs}},
-			}}}},
-			{{Key: "$group", Value: bson.M{
-				"_id": bson.M{
-					"authorId":              "$authorId",
-					"helpType":              "$helpType",
-					"action":                "$action",
-					"intersectionDimension": "$intersectionDimension",
-					"tagRef":                "$tagRef",
-					"source":                "$source",
-				},
-				"count": bson.M{"$sum": 1},
-			}}},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"collect closed-account author-impact adjustments: %w",
-			err,
-		)
-	}
-	defer cursor.Close(ctx)
-	var rows []struct {
-		ID struct {
-			AuthorID              string `bson:"authorId"`
-			HelpType              string `bson:"helpType"`
-			Action                string `bson:"action"`
-			IntersectionDimension string `bson:"intersectionDimension"`
-			TagRef                string `bson:"tagRef"`
-			Source                string `bson:"source"`
-		} `bson:"_id"`
-		Count int64 `bson:"count"`
-	}
-	if err := cursor.All(ctx, &rows); err != nil {
-		return nil, fmt.Errorf(
-			"decode closed-account author-impact adjustments: %w",
-			err,
-		)
-	}
-	adjustments := make([]authorImpactAdjustment, 0, len(rows))
-	for _, row := range rows {
-		adjustments = append(adjustments, authorImpactAdjustment{
-			AuthorID:              row.ID.AuthorID,
-			HelpType:              row.ID.HelpType,
-			Action:                row.ID.Action,
-			IntersectionDimension: row.ID.IntersectionDimension,
-			TagRef:                row.ID.TagRef,
-			Source:                row.ID.Source,
-			Count:                 row.Count,
-		})
-	}
-	return adjustments, nil
 }
 
 func findPostClosureRows(
@@ -596,60 +459,6 @@ func (store *MongoStore) scrubRetainedCommentReferences(
 	return nil
 }
 
-func (store *MongoStore) applyAuthorImpactAdjustments(
-	ctx context.Context,
-	adjustments []authorImpactAdjustment,
-) error {
-	if len(adjustments) == 0 {
-		return nil
-	}
-	now := time.Now().UTC()
-	models := make([]mongo.WriteModel, 0, len(adjustments))
-	affectedFilters := make(bson.A, 0, len(adjustments))
-	for _, adjustment := range adjustments {
-		filter := bson.M{
-			"authorId":              adjustment.AuthorID,
-			"helpType":              adjustment.HelpType,
-			"action":                adjustment.Action,
-			"intersectionDimension": adjustment.IntersectionDimension,
-			"tagRef":                adjustment.TagRef,
-			"source":                adjustment.Source,
-		}
-		affectedFilters = append(affectedFilters, filter)
-		models = append(models, mongo.NewUpdateOneModel().
-			SetFilter(filter).
-			SetUpdate(bson.M{
-				"$inc": bson.M{"count": -adjustment.Count},
-				"$set": bson.M{"updatedAt": now},
-			}))
-	}
-	if _, err := store.db.Collection("rm_author_impact").BulkWrite(
-		ctx,
-		models,
-		options.BulkWrite().SetOrdered(false),
-	); err != nil {
-		return fmt.Errorf(
-			"adjust closed-account author-impact summaries: %w",
-			err,
-		)
-	}
-	if _, err := store.db.Collection("rm_author_impact").DeleteMany(
-		ctx,
-		bson.M{
-			"$and": bson.A{
-				bson.M{"$or": affectedFilters},
-				bson.M{"count": bson.M{"$lte": 0}},
-			},
-		},
-	); err != nil {
-		return fmt.Errorf(
-			"delete empty closed-account author-impact summaries: %w",
-			err,
-		)
-	}
-	return nil
-}
-
 type mongoDeleteOperation struct {
 	name       string
 	collection string
@@ -673,7 +482,6 @@ func (store *MongoStore) runDeleteOperations(
 
 func (store *MongoStore) deleteDerivedData(
 	ctx context.Context,
-	event UserAccountClosedEvent,
 	subjectIDs []string,
 	inventory cleanupInventory,
 ) error {
@@ -686,189 +494,17 @@ func (store *MongoStore) deleteDerivedData(
 		{"profile interaction activities", "profile_interaction_activity_views", bson.M{"_id": bson.M{"$in": inventory.activityDocIDs}}},
 		{"behavior events", "rm_behavior_events", bson.M{"$or": subjectOrPost}},
 		{"wishlist events", "entity_wishlist_events", bson.M{"userId": bson.M{"$in": subjectIDs}}},
-		{"learning events", "rec_learning_events", bson.M{"$or": bson.A{
-			bson.M{"userId": bson.M{"$in": subjectIDs}},
-			bson.M{"personaId": bson.M{"$in": subjectIDs}},
-			bson.M{"targetId": bson.M{"$in": inventory.postIDs}},
-			bson.M{"labels.authorId": bson.M{"$in": subjectIDs}},
-		}}},
-		{"training samples", "rec_training_samples", bson.M{"$or": bson.A{
-			bson.M{"userId": bson.M{"$in": subjectIDs}},
-			bson.M{"targetId": bson.M{"$in": inventory.postIDs}},
-		}}},
-		{"replay samples", "rec_replay_samples", bson.M{"$or": bson.A{
-			bson.M{"userId": bson.M{"$in": subjectIDs}},
-			bson.M{"targetId": bson.M{"$in": inventory.postIDs}},
-		}}},
-		{"recommendation user features", "rm_recommend_feature", bson.M{"userId": bson.M{"$in": subjectIDs}}},
-		{"recommendation search intent", "rm_search_intent", bson.M{"userId": bson.M{"$in": subjectIDs}}},
-		{"discovery feed rows", "rm_discovery_feed", bson.M{"$or": bson.A{
-			bson.M{"postId": bson.M{"$in": inventory.postIDs}},
-			bson.M{"authorId": bson.M{"$in": subjectIDs}},
-		}}},
-		{"collaborative i2i rows", "rm_collaborative_i2i", bson.M{"$or": bson.A{
-			bson.M{"seedContentId": bson.M{"$in": inventory.postIDs}},
-			bson.M{"contentId": bson.M{"$in": inventory.postIDs}},
-		}}},
-		{"collaborative u2i rows", "rm_collaborative_u2i", bson.M{"$or": bson.A{
-			bson.M{"userId": bson.M{"$in": subjectIDs}},
-			bson.M{"contentId": bson.M{"$in": inventory.postIDs}},
-		}}},
-		{"object-relation edges", "rm_object_relation_edges", bson.M{"evidenceRefs": bson.M{"$in": inventory.postIDs}}},
-		{"viewer intersections", "rm_viewer_object_intersection", viewerIntersectionFilter(subjectIDs)},
-		{"intersection watermarks", "rm_intersection_watermark", bson.M{"_id": bson.M{"$in": subjectIDs}}},
-		{"persona relationship projections", "persona_follow_projection", bson.M{"$or": bson.A{
+		{"persona access projection", "content_persona_access_projection", bson.M{"$or": bson.A{
 			bson.M{"sourcePersonaId": bson.M{"$in": subjectIDs}},
 			bson.M{"targetPersonaId": bson.M{"$in": subjectIDs}},
 		}}},
-		{"persona relationship inbox", "persona_relationship_projection_inbox", bson.M{"$or": bson.A{
-			bson.M{"eventId": bson.M{"$in": inventory.relationshipEventIDs}},
-			bson.M{"pairId": bson.M{"$in": inventory.relationshipPairIDs}},
+		{"persona access projection inbox", "content_persona_access_projection_inbox", bson.M{"$or": bson.A{
+			bson.M{"sourcePersonaId": bson.M{"$in": subjectIDs}},
+			bson.M{"targetPersonaId": bson.M{"$in": subjectIDs}},
 		}}},
-		{"author-impact summaries", "rm_author_impact", bson.M{"authorId": bson.M{"$in": subjectIDs}}},
-		{"author-impact evidence", "rm_author_impact_evidence", bson.M{"$or": bson.A{
-			bson.M{"authorId": bson.M{"$in": subjectIDs}},
-			bson.M{"actorId": bson.M{"$in": subjectIDs}},
-			bson.M{"contentId": bson.M{"$in": inventory.postIDs}},
-		}}},
-	}
-	if err := store.invalidateReplayDatasets(
-		ctx,
-		event,
-		inventory.replayDatasetIDs,
-	); err != nil {
-		return err
 	}
 	if err := store.runDeleteOperations(ctx, operations); err != nil {
 		return err
-	}
-	if err := store.applyAuthorImpactAdjustments(
-		ctx,
-		inventory.impactAdjustments,
-	); err != nil {
-		return err
-	}
-	if err := store.removeRecommendationMapReferences(
-		ctx,
-		"userFeatures.authorInteraction",
-		subjectIDs,
-	); err != nil {
-		return err
-	}
-	if err := store.removeSearchIntentObjectReferences(
-		ctx,
-		inventory.postIDs,
-	); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (store *MongoStore) invalidateReplayDatasets(
-	ctx context.Context,
-	event UserAccountClosedEvent,
-	datasetIDs []string,
-) error {
-	datasetIDs = uniqueStrings(datasetIDs)
-	if len(datasetIDs) == 0 {
-		return nil
-	}
-	_, err := store.db.Collection("rec_replay_datasets").UpdateMany(
-		ctx,
-		bson.M{"_id": bson.M{"$in": datasetIDs}},
-		bson.M{"$set": bson.M{
-			"privacyStatus":             "privacy_invalidated",
-			"privacyInvalidatedAt":      event.Payload.UpdatedAt.UTC(),
-			"privacyInvalidationReason": "account_closed",
-		}},
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"invalidate closed-account replay datasets: %w",
-			err,
-		)
-	}
-	return nil
-}
-
-func (store *MongoStore) removeSearchIntentObjectReferences(
-	ctx context.Context,
-	objectIDs []string,
-) error {
-	objectIDs = uniqueStrings(objectIDs)
-	if len(objectIDs) == 0 {
-		return nil
-	}
-	_, err := store.db.Collection("rm_search_intent").UpdateMany(
-		ctx,
-		bson.M{"engagedObjectIds": bson.M{"$in": objectIDs}},
-		bson.M{"$pull": bson.M{
-			"engagedObjectIds": bson.M{"$in": objectIDs},
-		}},
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"remove closed-account search intent references: %w",
-			err,
-		)
-	}
-	return nil
-}
-
-func viewerIntersectionFilter(subjectIDs []string) bson.M {
-	filters := bson.A{
-		bson.M{"_id": bson.M{"$in": subjectIDs}},
-	}
-	for _, subjectID := range subjectIDs {
-		encodedSubjectID, _ := json.Marshal(subjectID)
-		filters = append(filters, bson.M{
-			"reasonsJson": bson.M{
-				"$regex": regexp.QuoteMeta(string(encodedSubjectID)),
-			},
-		})
-	}
-	return bson.M{"$or": filters}
-}
-
-func (store *MongoStore) removeRecommendationMapReferences(
-	ctx context.Context,
-	field string,
-	keys []string,
-) error {
-	keys = uniqueStrings(keys)
-	if len(keys) == 0 {
-		return nil
-	}
-	_, err := store.db.Collection("rm_recommend_feature").UpdateMany(
-		ctx,
-		bson.M{},
-		mongo.Pipeline{bson.D{{Key: "$set", Value: bson.M{
-			field: bson.M{
-				"$arrayToObject": bson.M{
-					"$filter": bson.M{
-						"input": bson.M{
-							"$objectToArray": bson.M{
-								"$ifNull": bson.A{"$" + field, bson.M{}},
-							},
-						},
-						"as": "entry",
-						"cond": bson.M{
-							"$not": bson.A{
-								bson.M{
-									"$in": bson.A{"$$entry.k", keys},
-								},
-							},
-						},
-					},
-				},
-			},
-		}}}},
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"remove closed-account recommendation references: %w",
-			err,
-		)
 	}
 	return nil
 }
@@ -945,7 +581,6 @@ func (store *MongoStore) recomputePostCounters(
 	}
 	now := time.Now().UTC()
 	postModels := make([]mongo.WriteModel, 0, len(postIDs))
-	feedModels := make([]mongo.WriteModel, 0, len(postIDs))
 	for _, postID := range postIDs {
 		update := bson.M{"$set": bson.M{
 			"commentCount": commentCounts[postID],
@@ -956,9 +591,6 @@ func (store *MongoStore) recomputePostCounters(
 		postModels = append(postModels, mongo.NewUpdateOneModel().
 			SetFilter(bson.M{"_id": postID}).
 			SetUpdate(update))
-		feedModels = append(feedModels, mongo.NewUpdateOneModel().
-			SetFilter(bson.M{"postId": postID}).
-			SetUpdate(update))
 	}
 	if _, err := store.db.Collection("posts").BulkWrite(
 		ctx,
@@ -966,13 +598,6 @@ func (store *MongoStore) recomputePostCounters(
 		options.BulkWrite().SetOrdered(false),
 	); err != nil {
 		return fmt.Errorf("update closed-account Post counters: %w", err)
-	}
-	if _, err := store.db.Collection("rm_discovery_feed").BulkWrite(
-		ctx,
-		feedModels,
-		options.BulkWrite().SetOrdered(false),
-	); err != nil {
-		return fmt.Errorf("update closed-account discovery counters: %w", err)
 	}
 	return nil
 }

@@ -50,10 +50,6 @@ api_routes:
       method: search
       reader: SearchIndexReader
       slice: SearchResponseView
-    client_contract:
-      dart_import: ../search/search_query_contracts.dart
-      response_type: SearchResponseView
-      response_decoder: decodeSearchResponseView
     description: 统一对象检索；query 为主输入，objectTypes/filters 为受控收窄条件。
     request_entity: CanonicalSearchQuery
     response_entity: SearchResponseView

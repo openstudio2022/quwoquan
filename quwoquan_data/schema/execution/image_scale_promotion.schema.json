@@ -74,15 +74,9 @@
       "additionalProperties": false,
       "properties": {
         "provider": { "const": "cursor_sdk" },
-        "authorModel": { "const": "grok-4.5" },
-        "authorModelFamily": { "const": "grok" },
-        "authorModelParameters": {
-          "type": "array",
-          "const": [
-            { "id": "effort", "value": "high" },
-            { "id": "fast", "value": "true" }
-          ]
-        },
+        "authorModel": { "type": "string", "minLength": 1 },
+        "authorModelFamily": { "type": "string", "minLength": 1 },
+        "authorModelParameters": { "type": "array" },
         "reviewerModel": { "type": "string", "minLength": 1 },
         "reviewerModelFamily": { "type": "string", "minLength": 1 },
         "reviewerModelParameters": { "type": "array" }

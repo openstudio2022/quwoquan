@@ -1,6 +1,9 @@
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        CitationDestination,
+        CitationDestinationKind,
+        parseCitationDestinationKindStrict;
 
 sealed class ResolvedCitationDestination {
   const ResolvedCitationDestination();

@@ -35,10 +35,8 @@ api_routes:
       - aggregateVersion
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/device_registration_contracts.dart
-      response_type: DevicePushEndpointCommandResultDto
-      response_decoder: decodeDevicePushEndpointCommandResult
+    response_body: DevicePushEndpointCommandResult
+    response_body_kind: object
     authorization:
       principal: account
       ownership_policy: trusted_current_account_device
@@ -113,10 +111,8 @@ api_routes:
       - aggregateVersion
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/device_registration_contracts.dart
-      response_type: DevicePushEndpointCommandResultDto
-      response_decoder: decodeDevicePushEndpointCommandResult
+    response_body: DevicePushEndpointCommandResult
+    response_body_kind: object
     authorization:
       principal: account
       ownership_policy: trusted_current_account_device

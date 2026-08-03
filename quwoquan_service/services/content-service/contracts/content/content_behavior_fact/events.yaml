@@ -5,4 +5,4 @@ events:
   consumers: [recommendation-service]
   channel: events.content.behavior_facts
   payload_entity: ContentBehaviorFact
-  payload_fields: [clientEventId, personaId, deviceActorId, sessionId, contentId, contentType, action, state, duration, feedRequestId, tagRefs, entityRefs, authorId, channelId, recallPath, contentVertical, supplySource, intersectionDimension, intersectionTagRefs, intersectionId, intersectionClass, intersectionSourceRef, intersectionEvidenceId, occurredAt]
+  payload_fields: [clientEventId, personaId, deviceActorId, sessionId, contentId, contentType, objectId, objectKind, displayName, sourceSurface, action, state, duration, feedRequestId, tagRefs, entityRefs, authorId, impactHelpType, channelId, recallPath, contentVertical, supplySource, intersectionDimension, intersectionTagRefs, intersectionId, intersectionClass, intersectionSourceRef, intersectionEvidenceId, occurredAt]

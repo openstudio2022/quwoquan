@@ -203,7 +203,7 @@
           ]
         },
         "rightsAuditStatus": {
-          "enum": ["verified", "unverified"]
+          "enum": ["verified", "unverified", "restricted", "unknown"]
         },
         "rightsAuditIssues": {
           "type": "array",

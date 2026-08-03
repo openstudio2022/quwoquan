@@ -23,31 +23,51 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	commentmessaging "quwoquan_service/services/content-service/internal/content/comment/infrastructure/messaging"
+	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
+	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
+	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactionmessaging "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/messaging"
+	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
+	tombstonepost "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/adapters/inbound/post"
+	tombstonepersistence "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/infrastructure/persistence"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
+	outboundsharehttp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/adapters/inbound/http"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	outboundshareinfra "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
-	profileinteractioninfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/profile_interaction/persistence"
+	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
+	profileactivityhttp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/adapters/inbound/http"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
+	profileinteractioninfra "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/infrastructure/persistence"
+	profilereadfacthttp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/adapters/inbound/http"
 	profileinteractionreadapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
+	profilereadfactinfra "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/infrastructure/persistence"
+	mediaassethttp "quwoquan_service/services/content-service/internal/media/media_asset/adapters/inbound/http"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
+	"quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/mediareferencefence"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
+	originalaccesshttp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/http"
+	originalaccessapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"
+	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
 	uploadsessionhttp "quwoquan_service/services/content-service/internal/media/media_upload_session/adapters/inbound/http"
 	uploadsessionapp "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
 )
 
 var (
@@ -56,35 +76,42 @@ var (
 	testPostService             *postapp.PostService
 	testCommentService          *commentapp.CommentService
 	postOutboxRelay             *postapp.OutboxRelay
-	postProjectionRelay         *postapp.OutboxRelay
 	postReactionLifecycleRelay  *postapp.OutboxRelay
 	postCommentTombstoneRelay   *postapp.OutboxRelay
 	commentOutboxRelay          *commentapp.OutboxRelay
 	commentCountProjectionRelay *commentapp.OutboxRelay
-	commentFeedCountRelay       *commentapp.OutboxRelay
 	reactionOutboxRelay         *reactionapp.OutboxRelay
 	reactionPostProjectionRelay *reactionapp.OutboxRelay
-	reactionFeedProjectionRelay *reactionapp.OutboxRelay
-	reactionRecommendRelay      *reactionapp.OutboxRelay
 	profileReactionRelay        *reactionapp.OutboxRelay
 	profileCommentRelay         *commentapp.OutboxRelay
 	profileShareRelay           *outboundshareapp.OutboxRelay
 	sharePostCountRelay         *outboundshareapp.OutboxRelay
-	shareFeedCountRelay         *outboundshareapp.OutboxRelay
 	profileReadFactRelay        *profileinteractionreadapp.ReadFactOutboxRelay
 	profilePostTargetRelay      *postapp.OutboxRelay
-	testReactionStore           *persistence.MongoContentReactionStore
+	testReactionStore           *reactionpersistence.MongoContentReactionStore
 	testReactionService         *reactionapp.Service
-	testModerationStore         *persistence.MongoPostModerationCaseStore
+	testModerationStore         *moderationpersistence.MongoPostModerationCaseStore
 	testModerationFacades       *moderationapp.Facades
 	eventSpy                    *testinfra.EventSpy
 	mongoDB                     *mongo.Database
 	mongoClient                 *mongo.Client
 	testRouter                  *rtredis.Router
-	testBehaviorProjectionRelay *recinfra.BehaviorProjectionRelay
-	testBehaviorProjectionMu    sync.Mutex
 	testPostgresFixture         *testinfra.PostgresFixture
 )
+
+func newMongoPostStore(collection *mongo.Collection) *persistence.MongoPostStore {
+	fence, err := mediareferencefence.New(collection.Database())
+	if err != nil {
+		panic("create Post MediaAsset reference fence: " + err.Error())
+	}
+	return persistence.NewMongoPostStore(
+		collection,
+		tombstonepost.NewStorePort(
+			tombstonepersistence.NewMongoStore(collection.Database()),
+		),
+		fence,
+	)
+}
 
 const (
 	integrationEnvironment    = "api_integration"
@@ -134,6 +161,18 @@ func requireMongoDB(tb testing.TB) *mongo.Database {
 	return mongoDB
 }
 
+func newMongoCommentDataAdapter(
+	tb testing.TB,
+	database *mongo.Database,
+) *commentpersistence.MongoCommentDataAdapter {
+	tb.Helper()
+	fence, err := mediareferencefence.New(database)
+	if err != nil {
+		tb.Fatalf("create Comment MediaAsset reference fence: %v", err)
+	}
+	return commentpersistence.NewMongoCommentDataAdapter(database, fence)
+}
+
 func requireTestRouter(tb testing.TB) *rtredis.Router {
 	tb.Helper()
 	if testRouter == nil {
@@ -153,16 +192,13 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 	if postOutboxRelay == nil {
 		return fmt.Errorf("content-service api_integration requires a Post outbox relay")
 	}
-	if postProjectionRelay == nil || postReactionLifecycleRelay == nil ||
+	if postReactionLifecycleRelay == nil ||
 		postCommentTombstoneRelay == nil ||
 		profilePostTargetRelay == nil {
 		return fmt.Errorf("content-service api_integration requires a Post projection relay")
 	}
 	if _, err := postOutboxRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Post outbox: %w", err)
-	}
-	if _, err := postProjectionRelay.Drain(ctx, 100); err != nil {
-		return fmt.Errorf("drain Post discovery projection: %w", err)
 	}
 	if _, err := postReactionLifecycleRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Post ContentReaction lifecycle: %w", err)
@@ -179,7 +215,6 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 func drainReactionOutbox(t *testing.T) {
 	t.Helper()
 	if reactionOutboxRelay == nil || reactionPostProjectionRelay == nil ||
-		reactionFeedProjectionRelay == nil || reactionRecommendRelay == nil ||
 		profileReactionRelay == nil {
 		t.Fatal("content-service api_integration requires ContentReaction outbox relays")
 	}
@@ -189,12 +224,6 @@ func drainReactionOutbox(t *testing.T) {
 	if _, err := reactionPostProjectionRelay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("drain ContentReaction Post projection outbox: %v", err)
 	}
-	if _, err := reactionFeedProjectionRelay.Drain(context.Background(), 100); err != nil {
-		t.Fatalf("drain ContentReaction DiscoveryFeed projection outbox: %v", err)
-	}
-	if _, err := reactionRecommendRelay.Drain(context.Background(), 100); err != nil {
-		t.Fatalf("drain ContentReaction RecommendFeature projection outbox: %v", err)
-	}
 	if _, err := profileReactionRelay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("drain ContentReaction profile interaction projection outbox: %v", err)
 	}
@@ -202,7 +231,7 @@ func drainReactionOutbox(t *testing.T) {
 
 func drainCommentOutboxForHarness(ctx context.Context) error {
 	if commentOutboxRelay == nil || commentCountProjectionRelay == nil ||
-		commentFeedCountRelay == nil || profileCommentRelay == nil {
+		profileCommentRelay == nil {
 		return fmt.Errorf("content-service api_integration requires Comment outbox relays")
 	}
 	if _, err := commentOutboxRelay.Drain(ctx, 100); err != nil {
@@ -210,9 +239,6 @@ func drainCommentOutboxForHarness(ctx context.Context) error {
 	}
 	if _, err := commentCountProjectionRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Comment count projection outbox: %w", err)
-	}
-	if _, err := commentFeedCountRelay.Drain(ctx, 100); err != nil {
-		return fmt.Errorf("drain Comment DiscoveryFeed count projection outbox: %w", err)
 	}
 	if _, err := profileCommentRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Comment profile interaction projection outbox: %w", err)
@@ -279,32 +305,32 @@ func TestMain(m *testing.M) {
 		panic("failed to connect to mongo: " + err.Error())
 	}
 	mongoDB = mongoClient.Database("content_test")
-	testBehaviorProjector := recinfra.NewRecommendFeatureProjector(mongoDB)
-	if err := testBehaviorProjector.EnsureIndexes(ctx); err != nil {
-		panic("failed to initialize behavior recommendation projection indexes: " + err.Error())
+	personaAccessProjection := accessinfra.NewPersonaAccessProjection(mongoDB)
+	if err := personaAccessProjection.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize Content persona access projection: " + err.Error())
 	}
-	// 测试进程内复用同一个 relay owner；每个 case 创建新 owner 会被上一 case
-	// 15 秒 lease 阻塞，造成把“standby 尚未接管”误判为“投影已完成”的假绿/假红。
-	testBehaviorProjectionRelay = recinfra.NewBehaviorProjectionRelay(
-		mongoDB,
-		testBehaviorProjector,
-		recinfra.NewDiscoveryFeedProjector(mongoDB),
-	).WithWatermarkLag(0).WithConsumer(
-		fmt.Sprintf("api-integration-behavior-feature-projection-%d", time.Now().UnixNano()),
-	)
-	postStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	personaBlockReader := accessinfra.NewPersonaBlockReader(mongoDB)
+	postStore := newMongoPostStore(mongoDB.Collection("posts"))
 	if err := postStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize Post aggregate/outbox indexes: " + err.Error())
 	}
-	commentStore := persistence.NewMongoCommentDataAdapter(mongoDB)
+	commentReferenceFence, err := mediareferencefence.New(mongoDB)
+	if err != nil {
+		panic("failed to initialize Comment MediaAsset reference fence: " + err.Error())
+	}
+	commentStore := commentpersistence.NewMongoCommentDataAdapter(mongoDB, commentReferenceFence)
 	if err := commentStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize Comment aggregate/outbox indexes: " + err.Error())
 	}
-	mediaStore := persistence.NewMongoMediaStore(mongoDB)
+	mediaStore := mediaassetpersistence.NewMongoMediaStore(mongoDB)
 	if err := mediaStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize MediaAsset indexes: " + err.Error())
 	}
 	mediaObjects := newAPIIntegrationMediaObjectGateway()
+	mediaOriginalAccessStore := originalaccesspersistence.NewMongoStore(mongoDB)
+	if err := mediaOriginalAccessStore.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize MediaOriginalAccessFact indexes: " + err.Error())
+	}
 	mediaUploadSessionStore := uploadsessionpersistence.NewMongoStore(
 		mongoDB.Collection("media_upload_sessions"),
 		mediaStore,
@@ -320,24 +346,29 @@ func TestMain(m *testing.M) {
 	mediaService := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(mediaStore),
 		mediaObjects,
-		mediaapp.WithOriginalAccessPostVisibilityReader(
-			postapp.NewMediaAssetVisibilityReader(
-				mediaPostReader,
-				recinfra.NewPersonaBlockReader(mongoDB),
-			),
-		),
 	)
-	testReactionStore = persistence.NewMongoContentReactionStore(mongoDB)
+	mediaOriginalAccessService := originalaccessapp.NewService(
+		mediaOriginalAccessStore,
+		mediaStore,
+		postapp.NewMediaAssetVisibilityReader(mediaPostReader, personaBlockReader),
+		mediaObjects,
+	)
+	testReactionStore = reactionpersistence.NewMongoContentReactionStore(mongoDB)
 	if err := testReactionStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize ContentReaction aggregate/outbox indexes: " + err.Error())
+	}
+	commentViewerRelationships :=
+		commentpersistence.NewCommentViewerRelationshipMongoProjection(mongoDB)
+	if err := commentViewerRelationships.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize Comment viewer relationship indexes: " + err.Error())
 	}
 	testCommentService = commentapp.NewCommentService(
 		commentapp.BindDataPorts(
 			commentStore,
-			persistence.NewCommentAttachmentReader(mediaStore, mediaObjects),
+			commentpersistence.NewCommentAttachmentReader(mediaStore, mediaObjects),
 			testReactionStore,
-			persistence.NewCommentViewerRelationMongoReader(mongoDB),
-			recinfra.NewPersonaBlockReader(mongoDB),
+			commentViewerRelationships,
+			commentViewerRelationships,
 		),
 		// fixture seed 是受控测试装配（同一 author 批量种评论），关闭滑动窗口
 		// 频控避免与生产默认（30s ≤ 5 条）冲突；频控行为本身由专属
@@ -349,7 +380,7 @@ func TestMain(m *testing.M) {
 	reactionService := reactionapp.NewService(
 		reactionapp.BindDataPorts(
 			testReactionStore,
-			persistence.NewReactionTargetReader(commentStore, commentStore),
+			reactionpersistence.NewReactionTargetReader(commentStore, commentStore),
 		),
 	)
 	testReactionService = reactionService
@@ -368,7 +399,7 @@ func TestMain(m *testing.M) {
 	reactionOutboxRelay = reactionapp.NewOutboxRelay(
 		testReactionStore,
 		testReactionStore,
-		contentmessaging.NewContentReactionOutboxPublisher(eventSpy),
+		reactionmessaging.NewContentReactionOutboxPublisher(eventSpy),
 		"api-integration-reaction-events",
 	)
 	reactionPostProjectionRelay = reactionapp.NewOutboxRelay(
@@ -376,24 +407,6 @@ func TestMain(m *testing.M) {
 		testReactionStore,
 		reactionapp.NewActiveReactionCountProjector(testReactionStore, postStore),
 		"api-integration-reaction-like-count",
-	)
-	reactionFeedProjectionRelay = reactionapp.NewOutboxRelay(
-		testReactionStore,
-		testReactionStore,
-		reactionapp.NewActiveReactionCountProjector(
-			testReactionStore,
-			persistence.NewMongoDiscoveryFeedLikeCountWriter(mongoDB),
-		),
-		"api-integration-reaction-feed-like-count",
-	)
-	reactionRecommendRelay = reactionapp.NewOutboxRelay(
-		testReactionStore,
-		testReactionStore,
-		reactionapp.NewPersonaLikeCountProjector(
-			testReactionStore,
-			persistence.NewMongoRecommendFeatureLikeCountWriter(mongoDB),
-		),
-		"api-integration-reaction-recommend-like-count",
 	)
 	// Wire services with redis.Router. Every scene uses an isolated DB on the same
 	// real Redis runtime so EXPIRE/DEL/SET, serialization and key routing all cross
@@ -410,11 +423,6 @@ func TestMain(m *testing.M) {
 		DefaultScene: "general",
 	})
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec")))
-	// Match the production Remote composition: recommendation recall owns the
-	// rm_discovery_feed projection, including immutable-release identity. The
-	// aggregate-backed PostProjectionSource is reserved for local/in-memory use.
-	source := recinfra.NewMongoCandidateSource(mongoDB)
-	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	// Feed candidate recall, hydration and the active-release readback must observe
 	// the same materialized database as production. Test cleanup preserves only
 	// this fixed release-bound supply row; case-owned UGC remains isolated.
@@ -431,7 +439,6 @@ func TestMain(m *testing.M) {
 	); err != nil {
 		panic(fmt.Errorf("seed api integration active supply snapshot: %w", err))
 	}
-	activeSupplyNow := time.Now().UTC()
 	if _, err := activeSupplyDB.Collection("posts").UpdateOne(ctx,
 		bson.M{"_id": integrationSupplyPostID},
 		bson.M{"$set": bson.M{
@@ -443,22 +450,9 @@ func TestMain(m *testing.M) {
 		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
 		panic(fmt.Errorf("seed api integration active supply post: %w", err))
 	}
-	if _, err := activeSupplyDB.Collection("rm_discovery_feed").UpdateOne(ctx,
-		bson.M{"postId": integrationSupplyPostID},
-		bson.M{"$set": bson.M{
-			"sourceOwner": "qwq_data", "releaseId": integrationReleaseID,
-			"manifestDigest":  integrationManifestDigest,
-			"lifecycleStatus": "active", "status": "published", "visibility": "public",
-			"contentIdentity": "work", "contentType": "video", "supplySource": "data_engineering",
-			"authorId": "creator_api_integration", "title": "API integration canonical video",
-			"publishedAt": activeSupplyNow, "qualityScore": 0.95, "recScore": 0.95,
-		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
-		panic(fmt.Errorf("seed api integration active supply discovery post: %w", err))
-	}
 	feedService := feedapp.NewFeedService(
-		engine,
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
-		feedapp.WithFeedViewerBlockReader(recinfra.NewPersonaBlockReader(mongoDB)),
+		feedapp.WithFeedViewerBlockReader(personaBlockReader),
 		feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
 			activeSupplyDB,
 			integrationEnvironment,
@@ -485,7 +479,7 @@ func TestMain(m *testing.M) {
 	if err := profileActivityStore.EnsureIndexes(ctx); err != nil {
 		panic(fmt.Errorf("ensure ProfileInteractionActivityView indexes: %w", err))
 	}
-	profileReadFactStore := profileinteractioninfra.NewMongoReadFactStore(mongoDB)
+	profileReadFactStore := profilereadfactinfra.NewMongoReadFactStore(mongoDB)
 	if err := profileReadFactStore.EnsureIndexes(ctx); err != nil {
 		panic(fmt.Errorf("ensure ProfileInteractionReadFact indexes: %w", err))
 	}
@@ -524,15 +518,6 @@ func TestMain(m *testing.M) {
 		outboundshareapp.NewShareCountProjector(outboundShareSink, postStore),
 		"api-integration-share-post-count",
 	)
-	shareFeedCountRelay = outboundshareapp.NewOutboxRelay(
-		outboundShareSink,
-		outboundShareSink,
-		outboundshareapp.NewShareCountProjector(
-			outboundShareSink,
-			persistence.NewMongoDiscoveryFeedShareCountWriter(mongoDB),
-		),
-		"api-integration-share-feed-count",
-	)
 	profileReadFactRelay = profileinteractionreadapp.NewReadFactOutboxRelay(
 		profileReadFactStore,
 		profileReadFactStore,
@@ -564,20 +549,10 @@ func TestMain(m *testing.M) {
 		contentmessaging.NewPostOutboxPublisher(eventSpy),
 		"api-integration-event-spy",
 	)
-	postProjectionRelay = postapp.NewOutboxRelay(
-		postStore,
-		postStore,
-		contentmessaging.NewPostOutboxPublisher(
-			contentmessaging.NewInProcessProjectorPublisher(&discoveryProjectorAdapter{
-				projector: recinfra.NewDiscoveryFeedProjector(mongoDB),
-			}),
-		),
-		"api-integration-discovery-projection",
-	)
 	commentOutboxRelay = commentapp.NewOutboxRelay(
 		commentStore,
 		commentStore,
-		contentmessaging.NewCommentOutboxPublisher(eventSpy),
+		commentmessaging.NewCommentOutboxPublisher(eventSpy),
 		"api-integration-comment-events",
 	)
 	commentCountProjectionRelay = commentapp.NewOutboxRelay(
@@ -586,19 +561,8 @@ func TestMain(m *testing.M) {
 		commentapp.NewCommentCountProjector(commentStore, postStore),
 		"api-integration-comment-count",
 	)
-	commentFeedCountRelay = commentapp.NewOutboxRelay(
-		commentStore,
-		commentStore,
-		commentapp.NewCommentCountProjector(
-			commentStore,
-			persistence.NewMongoDiscoveryFeedCommentCountWriter(mongoDB),
-		),
-		"api-integration-comment-feed-count",
-	)
-	dailyMetricsStore := persistence.NewDailyMetricsStore(mongoDB, slog.Default())
-	authorImpactStore := persistence.NewAuthorImpactStore(mongoDB, slog.Default())
-	authorImpactEvidenceStore := persistence.NewAuthorImpactEvidenceStore(mongoDB, slog.Default())
-	testModerationStore = persistence.NewMongoPostModerationCaseStore(
+	dailyMetricsStore := behaviorpersistence.NewDailyMetricsStore(mongoDB, slog.Default())
+	testModerationStore = moderationpersistence.NewMongoPostModerationCaseStore(
 		mongoDB.Collection("post_moderation_cases"),
 	)
 	if err := testModerationStore.EnsureIndexes(ctx); err != nil {
@@ -636,8 +600,6 @@ func TestMain(m *testing.M) {
 		behaviorapp.WithWishlistEventStore(wishlistStore),
 		behaviorapp.WithWishlistStateReader(wishlistStore),
 		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
-		behaviorapp.WithAuthorImpactStore(authorImpactStore),
-		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	)
 	baseHandler := contenhttp.NewContentHandler(
 		feedService,
@@ -646,21 +608,30 @@ func TestMain(m *testing.M) {
 			Detail:       postQueryReader,
 			Author:       postQueryReader,
 			Tombstones:   postStore,
-			ViewerBlocks: recinfra.NewPersonaBlockReader(mongoDB),
+			ViewerBlocks: personaBlockReader,
 		}),
-		commentapp.BindFacades(testCommentService),
-		reactionapp.BindFacades(reactionService),
+		commenthttp.NewHandler(commentapp.BindFacades(testCommentService)),
+		reactionhttp.NewHandler(reactionapp.BindFacades(reactionService)),
 		nil,
 		behaviorService,
-		contenhttp.WithOutboundShareService(outboundShareFacades),
-		contenhttp.WithProfileInteractionService(profileInteractionFacades),
-		contenhttp.WithMediaService(mediaapp.BindFacades(mediaService)),
+		contenhttp.WithContentBehaviorHandler(behaviorhttp.NewHandler(behaviorService)),
+		contenhttp.WithOutboundShareHandler(outboundsharehttp.NewHandler(outboundShareFacades)),
+		contenhttp.WithProfileInteractionHandlers(
+			profileactivityhttp.NewHandler(profileInteractionFacades.ActivityQueryFacade),
+			profilereadfacthttp.NewHandler(profileInteractionFacades.ReadFactAppendFacade),
+		),
+		contenhttp.WithMediaAssetHandler(
+			mediaassethttp.NewHandler(mediaapp.BindFacades(mediaService)),
+		),
+		contenhttp.WithMediaOriginalAccessHandler(
+			originalaccesshttp.NewHandler(mediaOriginalAccessService),
+		),
 		contenhttp.WithMediaUploadSessionHandler(
 			uploadsessionhttp.NewHandler(mediaUploadSessionService),
 		),
-		contenhttp.WithModerationService(testModerationFacades),
-		contenhttp.WithAuthorImpactStore(authorImpactStore),
-		contenhttp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
+		contenhttp.WithPostModerationCaseHandler(
+			moderationhttp.NewHandler(testModerationFacades),
+		),
 	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Persona-Id")) == "" {
@@ -725,9 +696,6 @@ func TestMain(m *testing.M) {
 			}
 			if _, err := sharePostCountRelay.Drain(r.Context(), 100); err != nil {
 				panic(fmt.Errorf("drain OutboundShareFact Post count projection: %w", err))
-			}
-			if _, err := shareFeedCountRelay.Drain(r.Context(), 100); err != nil {
-				panic(fmt.Errorf("drain OutboundShareFact feed count projection: %w", err))
 			}
 			if _, err := profileReadFactRelay.Drain(r.Context(), 100); err != nil {
 				panic(fmt.Errorf("drain ProfileInteractionReadFact projection: %w", err))
@@ -870,6 +838,8 @@ func cleanPosts(t *testing.T) {
 		"comment_author_rate_limit_locks",
 		"comment_outbox",
 		"comment_projection_checkpoints",
+		"comment_viewer_relationship_projection",
+		"comment_viewer_relationship_inbox",
 		"outbound_share_facts",
 		"outbound_share_receipts",
 		"outbound_share_outbox",
@@ -880,9 +850,6 @@ func cleanPosts(t *testing.T) {
 		"profile_interaction_read_fact_outbox",
 		"profile_interaction_read_fact_outbox_sequences",
 		"profile_interaction_read_fact_projection_checkpoints",
-		"rm_discovery_feed",
-		"rm_recommend_feature",
-		"rm_search_intent",
 		"comments",
 		"media_upload_sessions",
 		"media_assets",
@@ -898,26 +865,10 @@ func cleanPosts(t *testing.T) {
 		switch coll {
 		case "posts":
 			filter = bson.M{"_id": bson.M{"$ne": integrationSupplyPostID}}
-		case "rm_discovery_feed":
-			filter = bson.M{"postId": bson.M{"$ne": integrationSupplyPostID}}
 		}
 		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, filter); err != nil {
 			t.Logf("cleanPosts(%s): %v", coll, err)
 		}
 	}
 	eventSpy.Reset()
-}
-
-type discoveryProjectorAdapter struct {
-	projector *recinfra.DiscoveryFeedProjector
-}
-
-func (a *discoveryProjectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
-	return a.projector.Project(ctx, recinfra.ProjectorEvent{
-		Type:          event.Type,
-		AggregateType: event.AggregateType,
-		AggregateID:   event.AggregateID,
-		Payload:       event.Payload,
-		OccurredAt:    event.OccurredAt,
-	})
 }

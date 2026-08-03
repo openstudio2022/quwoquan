@@ -1,45 +1,21 @@
 read_model: LocationPoi
-description: 'integration/external_integration/location 附近与搜索 API 返回的 POI 标准化视图。
-
-  与 fields.yaml 的 LocationPoi 对齐，端侧通过 fromMap 解析，禁止硬编码字段名。
-
-  '
+description: integration/external_integration/location 附近与搜索 API 返回的 POI 标准化视图；端侧只使用由 fields.yaml 派生的 generated wire 类型。
 source_entities:
 - LocationPoi
 consumers:
 - app (create/entry location selector)
-client_projection:
-  dart_class: LocationPoiDto
-  base_class: ''
-  output_path: cloud/runtime/generated/integration/external_integration/location_poi_dto.g.dart
-  fields:
-  - name: id
-    dart_type: String
-    nullable: false
-    source: id
-    default: ''''''
-  - name: name
-    dart_type: String
-    nullable: false
-    source: name
-    default: ''''''
-  - name: latitude
-    dart_type: double
-    nullable: false
-    source: latitude
-    default: '0.0'
-  - name: longitude
-    dart_type: double
-    nullable: false
-    source: longitude
-    default: '0.0'
-  - name: address
-    dart_type: String
-    nullable: true
-    source: address
-    default: ''''''
-  - name: distanceMeters
-    dart_type: int
-    nullable: true
-    source: distanceMeters
-    default: 'null'
+fields:
+- name: id
+  type: string
+- name: name
+  type: string
+- name: latitude
+  type: double
+- name: longitude
+  type: double
+- name: address
+  type: string
+  nullable: true
+- name: distanceMeters
+  type: int
+  nullable: true

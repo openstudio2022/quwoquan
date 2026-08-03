@@ -26,7 +26,7 @@ final class RemoteUserProfileQueryFacet
   final UserProfileQueryInvocationContextFactory invocationContext;
 
   @override
-  Future<PersonaProfileProjection> getMeProfile(GetMeProfileQuery query) {
+  Future<PersonaProfileView> getMeProfile(GetMeProfileQuery query) {
     return client.userUserAccountGetMeProfile(
       query,
       context: invocationContext(
@@ -48,7 +48,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<PersonaManagementSummaryProjection> getPersonaManagementSummary(
+  Future<PersonaManagementSummaryView> getPersonaManagementSummary(
     GetPersonaManagementSummaryQuery query,
   ) {
     return client.userUserAccountGetPersonaManagementSummary(
@@ -61,7 +61,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<ActivePersonaContextProjection> getActivePersonaContext(
+  Future<ActivePersonaContextView> getActivePersonaContext(
     GetActivePersonaContextQuery query,
   ) {
     return client.userUserAccountGetActivePersonaContext(
@@ -74,7 +74,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<PersonaLifecycleGuardProjection> getPersonaLifecycleGuard(
+  Future<PersonaLifecycleGuardView> getPersonaLifecycleGuard(
     GetPersonaLifecycleGuardQuery query,
   ) {
     return client.userUserAccountGetPersonaLifecycleGuard(
@@ -87,7 +87,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<PersonaProfileProjection> getPersonaProfile(
+  Future<PersonaProfileView> getPersonaProfile(
     GetPersonaProfileQuery query,
   ) {
     return client.userUserAccountGetPersonaProfile(
@@ -100,7 +100,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<UserHomepageBundleProjection> getUserHomepageBundle(
+  Future<UserHomepageBundleWire> getUserHomepageBundle(
     GetUserHomepageBundleQuery query,
   ) {
     return client.userUserAccountGetUserHomepageBundle(
@@ -113,7 +113,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<ProfileEditSnapshotProjection> getProfileEditSnapshot(
+  Future<ProfileEditSnapshotWire> getProfileEditSnapshot(
     GetProfileEditSnapshotQuery query,
   ) {
     return client.userUserAccountGetProfileEditSnapshot(
@@ -126,7 +126,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<ProfileQrCardProjection> getProfileQrCard(
+  Future<ProfileQrCardWire> getProfileQrCard(
     GetProfileQrCardQuery query,
   ) {
     return client.userUserAccountGetProfileQrCard(
@@ -139,7 +139,7 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<ProfileQrResolveProjection> resolveProfileQrToken(
+  Future<ProfileQrResolveWire> resolveProfileQrToken(
     ResolveProfileQrTokenQuery query,
   ) {
     return client.userUserAccountResolveProfileQrToken(

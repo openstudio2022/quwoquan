@@ -69,7 +69,7 @@
 - canonical：`quwoquan_app/lib/ui/content/comments/providers/comment_provider.dart`
 - canonical：`quwoquan_data/schema/content/post_manifest.schema.json`
 - canonical：`quwoquan_service/services/content-service/cmd/import/main.go`
-- canonical：`quwoquan_app/lib/cloud/runtime/generated/content/post_base_dto.dart`
+- canonical：`quwoquan_app/lib/cloud/runtime/models/content_post_view_data.dart`
 - canonical：`quwoquan_app/lib/components/media/video/player/video_playback_session.dart`
 - canonical：`quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_controls.dart`
 - canonical：`specs/feature-tree/runtime/runtime-media/design.md`

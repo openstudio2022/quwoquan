@@ -96,6 +96,15 @@ fields:
     ops_exposure: read
     role: append_only_fact
 types:
+  OutboundShareFactResult:
+    description: Append result for one immutable outbound share fact.
+    fields:
+      - {name: eventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: channel, type: enum, enum_ref: OutboundShareChannel, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: referralId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   OutboundShareRecordedPayload:
     fields:
       - {name: eventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -117,15 +126,11 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: channel
-        type: OutboundShareChannel
+        type: enum
         enum_ref: OutboundShareChannel
-        client_dart_type: OutboundShareChannel
-        client_wire: canonicalEnum
       - name: destinationKind
-        type: OutboundShareDestinationKind
+        type: enum
         enum_ref: OutboundShareDestinationKind
-        client_dart_type: OutboundShareDestinationKind
-        client_wire: canonicalEnum
       - name: destination
         type: string
         constraints:

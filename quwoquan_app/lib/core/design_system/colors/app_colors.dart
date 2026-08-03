@@ -585,7 +585,7 @@ class ArticleTemplateColors {
 class ArticlePaperPaletteColors {
   ArticlePaperPaletteColors._();
 
-  // Work Browser Dark Paper V1.0
+  // Work Browser Dark Paper
   static const Color darkPaperStage = Color(0xFF0F1115);
   static const Color darkPaperPaper = Color(0xFF161A20);
   static const Color darkPaperBorder = Color(0xFF242A33);

@@ -1,0 +1,72 @@
+package ports
+
+import (
+	"context"
+	"time"
+
+	"quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
+)
+
+// Store is the only persistence port allowed to mutate SkillSubscription.
+// External commands commit aggregate state, receipt, and outbox atomically;
+// delivery methods use the stable delivery identity as their internal fence.
+type Store interface {
+	GetSkillSubscriptionCommandResult(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+	) (model.SkillSubscription, bool, error)
+	CreateSkillSubscription(
+		context.Context,
+		string,
+		string,
+		model.SkillSubscription,
+	) (model.SkillSubscription, bool, error)
+	GetSkillSubscription(context.Context, string, string) (model.SkillSubscription, error)
+	ListSkillSubscriptions(context.Context, string, string, int) ([]model.SkillSubscription, error)
+	ListActiveSkillSubscriptionsForDelivery(context.Context, time.Time, int) ([]model.SkillSubscription, error)
+	UpdateSkillSubscriptionStatus(
+		context.Context,
+		string,
+		string,
+		string,
+		*time.Time,
+		time.Time,
+		string,
+		string,
+	) (model.SkillSubscription, bool, error)
+	BeginSkillSubscriptionDelivery(
+		context.Context,
+		string,
+		string,
+		string,
+		time.Time,
+	) (model.SkillSubscription, bool, error)
+	CompleteSkillSubscriptionDelivery(
+		context.Context,
+		string,
+		string,
+		string,
+		time.Time,
+		time.Time,
+	) (model.SkillSubscription, error)
+	RecordSkillSubscriptionDeliveryFailure(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+		time.Time,
+		time.Time,
+	) (model.SkillSubscription, error)
+	ClearPendingSkillSubscriptionDelivery(
+		context.Context,
+		string,
+		string,
+		string,
+		time.Time,
+		time.Time,
+	) error
+}

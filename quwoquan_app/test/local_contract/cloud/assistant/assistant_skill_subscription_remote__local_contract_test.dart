@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +96,11 @@ void main() {
             as Map<String, dynamic>)['clientRequestId'],
         'create-intent-1',
       );
+      expect(
+        ((jsonDecode(requests[2].body) as Map<String, dynamic>)['trigger']
+            as Map<String, dynamic>)['timezone'],
+        'Asia/Shanghai',
+      );
     },
   );
 }
@@ -102,6 +108,7 @@ void main() {
 Map<String, Object?> _subscriptionResponse({String status = 'active'}) {
   return <String, Object?>{
     'subscriptionId': 'subscription-1',
+    'version': 1,
     'owner': <String, Object?>{'ownerType': 'user', 'ownerId': 'account-1'},
     'createdByUserId': 'account-1',
     'createdByPersonaId': 'persona-1',
@@ -113,7 +120,11 @@ Map<String, Object?> _subscriptionResponse({String status = 'active'}) {
       'rawText': 'daily digest',
       'queries': <String>['daily digest'],
     },
-    'trigger': <String, Object?>{'type': 'cron', 'cron': '0 8 * * *'},
+    'trigger': <String, Object?>{
+      'type': 'cron',
+      'cron': '0 8 * * *',
+      'timezone': 'Asia/Shanghai',
+    },
     'destination': <String, Object?>{
       'destinationType': 'user',
       'destinationId': 'account-1',

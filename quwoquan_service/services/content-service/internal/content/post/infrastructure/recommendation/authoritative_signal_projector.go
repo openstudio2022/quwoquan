@@ -5,11 +5,9 @@ package recommendation
 // 行为端点显式拒收、comment/report 无注入方。本文件把三个对象服务 outbox 的
 // 服务端确认事实转为 BehaviorSignal，注入：
 //  1. SignalProcessor（HotPath 实时会话特征 / 负反馈集）；
-//  2. rm_behavior_events 持久轨（N0-2 relay → rm_recommend_feature 长期特征）；
-//  3. 若事实携带最终下发的 feedRequestId，FeedbackRecorder 写入可关联的训练标签。
-//
-// outbox 的权威事实通常没有 requestId：它们仍服务实时/长期特征，但不能伪造一条
-// 无法与曝光关联的 rec_learning_events 反馈事实。
+//  2. ContentBehaviorFact 对象存储与 typed stream。
+// Recommendation 独立消费 typed fact，形成自己的反馈与特征投影；Content
+// 禁止再写本地学习事实或 Recommendation 存储。
 //
 // 事实源为对象 outbox（服务端确认后的事实），不依赖端侧补报，天然防伪造。
 // relay at-least-once 重放由 rm_behavior_events 的 userId+clientEventId 唯一索引
@@ -33,12 +31,11 @@ import (
 	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )
 
-// AuthoritativeSignalSink 统一三个出口；nil 成员安全跳过（如 learning 未启用）。
+// AuthoritativeSignalSink 统一 Content 自有实时状态和事实出口。
 type AuthoritativeSignalSink struct {
-	signals  rtrec.SignalProcessor
-	events   ports.BehaviorEventStore
-	feedback *rtrec.FeedbackRecorder
-	posts    *mongo.Collection
+	signals rtrec.SignalProcessor
+	events  ports.BehaviorEventStore
+	posts   *mongo.Collection
 }
 
 func NewAuthoritativeSignalSink(
@@ -54,12 +51,6 @@ func NewAuthoritativeSignalSink(
 		sink.posts = db.Collection("posts")
 	}
 	return sink
-}
-
-// AttachFeedback 注入 learning 记录器（FeedbackRecorder 在装配序列后段构造，
-// relay 必须在 sink 完整后启动，避免学习标签漏采窗口）。
-func (s *AuthoritativeSignalSink) AttachFeedback(feedback *rtrec.FeedbackRecorder) {
-	s.feedback = feedback
 }
 
 // postSignalContext 从 posts 集合补齐信号的推荐上下文（tags 驱动 HotPath
@@ -111,11 +102,6 @@ func (s *AuthoritativeSignalSink) Emit(ctx context.Context, signal rtrec.Behavio
 		}
 		if err := s.events.InsertBatch(ctx, []ports.RawBehaviorEvent{raw}); err != nil {
 			return fmt.Errorf("authoritative signal event store (%s): %w", signal.Action, err)
-		}
-	}
-	if s.feedback != nil && strings.TrimSpace(signal.FeedRequestID) != "" {
-		if err := s.feedback.RecordEngagement(ctx, signal, 0); err != nil {
-			return fmt.Errorf("authoritative signal learning (%s): %w", signal.Action, err)
 		}
 	}
 	rtrec.RecordBehaviorIngest(signal)

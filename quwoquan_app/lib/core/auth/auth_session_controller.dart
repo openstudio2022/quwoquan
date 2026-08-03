@@ -739,9 +739,6 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   bool _shouldClearSessionForRefreshFailure(Object error) {
-    if (error is AccountSessionTokenExpiredException) {
-      return true;
-    }
     if (error is CloudException) {
       return error.code == UserErrorCode.accountDeleted.code ||
           error.code == UserErrorCode.tokenStale.code ||

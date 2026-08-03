@@ -353,8 +353,9 @@ func (p *HTTPExternalProvider) rejectedCode() string {
 func validateProviderName(operation string, name string) error {
 	allowed := map[string]map[string]struct{}{
 		reliabletask.ExternalInteractionOperationSmsOTP: {
-			"aliyun_sms":  {},
-			"tencent_sms": {},
+			"aliyun_sms":        {},
+			"tencent_sms":       {},
+			"local_capture_sms": {},
 		},
 	}
 	providers, ok := allowed[operation]

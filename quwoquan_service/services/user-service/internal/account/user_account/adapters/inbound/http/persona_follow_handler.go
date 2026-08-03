@@ -87,7 +87,7 @@ func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
 func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +102,7 @@ func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
 // parseListSearchQuery 读取粉丝/关注列表的服务端搜索词（SIT2：搜索走云侧
@@ -215,7 +215,6 @@ func (h *UserHandler) buildFollowListItems(
 			"userHandle":        view["userHandle"],
 			"displayName":       view["displayName"],
 			"avatarUrl":         view["avatarUrl"],
-			"avatarVersion":     view["avatarVersion"],
 			"profileVisibility": view["profileVisibility"],
 			"followedAt":        optionalTimestampRFC3339(edges[i].FollowedAt),
 		}

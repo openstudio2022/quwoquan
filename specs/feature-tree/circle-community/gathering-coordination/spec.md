@@ -102,12 +102,12 @@
 ## 8. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 Gathering 聚合尚不存在
+### OPEN-001 Gathering 端到端承接尚未闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前交集行动阶梯的同行与线下两级没有任何承接对象，发起结伴只能落到裸建群，加入类行动全部处于不可承接状态。行动阶梯在这两级上断开。
+- 影响或价值：尚缺 App 的 gatheringDetail/发起/加入/名单/进入会话承接及同一候选 SIT/UAT；Gathering 聚合、Circle API、真实 Mongo 事务、Chat 唯一会话/成员投影与 durable reconciliation 已形成单轨，但行动阶梯仍不能对用户准出。
 - 完成判定：`SIT-001` 与 `SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

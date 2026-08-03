@@ -11,14 +11,12 @@ import (
 	"quwoquan_service/services/chat-service/generated/chat/conversation"
 	userstateevent "quwoquan_service/services/chat-service/generated/chat/conversation_user_state/contract/event"
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	userstateapp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/application"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
+	receiptmodel "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/domain/model"
 )
 
-type MarkAsReadRequest struct {
-	ConversationId string
-	MessageId      string
-	UserId         string
-}
+type MarkAsReadRequest = userstateapp.MarkAsReadRequest
 
 // MarkAsRead 是 ConversationUserState 聚合的已读水位命令：readSeq 只单调
 // 前进，旧水位重放为 no-op；state、命令回执、MessageReceiptFact 与
@@ -130,9 +128,9 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 		}
 		if conv.ReceiptEnabled {
 			// MessageReceiptFact：dedupe key (messageId,userId) 由唯一索引保证。
-			receiptErr := s.receiptFacts.AppendReceiptFact(
+			_, _, receiptErr := s.receiptFacts.Append(
 				txCtx,
-				&messagemodel.MessageReceiptFact{
+				receiptmodel.Fact{
 					ID:             generateID(),
 					MessageID:      req.MessageId,
 					ConversationID: req.ConversationId,
@@ -140,11 +138,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 					ReadAt:         now,
 				},
 			)
-			if receiptErr != nil &&
-				!errors.Is(
-					receiptErr,
-					messagemodel.ErrMessageReceiptFactAlreadyExists,
-				) {
+			if receiptErr != nil {
 				return receiptErr
 			}
 		}
@@ -172,7 +166,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 	})
 }
 
-func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId, viewerID string) (_ []messagemodel.MessageReceiptFact, err error) {
+func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId, viewerID string) (_ []receiptmodel.Fact, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.GetReceipts",
 		attribute.String("conversation.id", conversationId),
 		attribute.String("message.id", messageId))
@@ -191,5 +185,5 @@ func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messag
 		return nil, generated.AppErrorFromMessageNotFound("receipt target does not belong to conversation")
 	}
 
-	return s.receiptFacts.ListReceiptFactsByMessage(ctx, messageId)
+	return s.receiptFacts.ListByMessage(ctx, messageId)
 }

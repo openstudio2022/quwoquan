@@ -9,22 +9,12 @@ import (
 	"time"
 
 	signalapplication "quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/application"
+	requestdomain "quwoquan_service/services/search-service/internal/search/search_request_fact/domain"
 )
 
 // QueryLog is the immutable SearchRequestFact write payload. SearchRequestID
 // correlates later feedback and ranking observations with this one request.
-type QueryLog struct {
-	SearchRequestID  string
-	Query            string
-	SessionID        string
-	Mode             string
-	ViewerID         string
-	ObjectTypes      []string
-	ResultCount      int
-	ExperimentBucket string
-	RelatedTerms     []string
-	CreatedAt        time.Time
-}
+type QueryLog = requestdomain.QueryLog
 
 // QueryLogSink appends SearchRequestFact records without exposing MongoDB to
 // the query facade.
@@ -61,6 +51,10 @@ func (r *Recorder) Record(ctx context.Context, query QueryLog) {
 	}
 	if query.CreatedAt.IsZero() {
 		query.CreatedAt = time.Now().UTC()
+	}
+	if err := query.Validate(); err != nil {
+		r.logger.WarnContext(ctx, "invalid SearchRequestFact", slog.String("err", err.Error()))
+		return
 	}
 	if err := r.sink.Log(ctx, query); err != nil {
 		r.logger.WarnContext(

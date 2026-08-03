@@ -209,10 +209,6 @@ api_routes:
     slo:
       latency_p95_ms: 300
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/filter_catalog_facets.dart
-      response_type: FilterCatalogSnapshot
-      response_decoder: decodeFilterCatalogSnapshot
     description: 公开读取当前完整 active release；内部字段由字段策略删除。
     response_entity: FilterCatalogSlice
     response_body: FilterCatalogSlice

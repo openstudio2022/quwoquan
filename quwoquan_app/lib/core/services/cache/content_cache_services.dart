@@ -9,13 +9,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
-        ContentDiscoveryFeedEmptyReason,
-        ContentDiscoveryFeedOutcome,
+        ContentFeedEmptyReason,
+        ContentFeedOutcome,
         isCanonicalSha256Digest;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,7 +25,7 @@ part 'content_query_snapshot_persistence_codec.dart';
 class PostObjectCacheService {
   PostObjectCacheService({
     ObjectCacheStore<ContentPostDetailPayload>? detailStore,
-    ObjectCacheStore<PostBaseDto>? projectionStore,
+    ObjectCacheStore<ContentPostViewData>? projectionStore,
     int maxMemoryEntries = 200,
   }) : _detailStore =
            detailStore ??
@@ -34,19 +35,19 @@ class PostObjectCacheService {
            ),
        _projectionStore =
            projectionStore ??
-           ObjectCacheStore<PostBaseDto>(
+           ObjectCacheStore<ContentPostViewData>(
              maxMemoryEntries: maxMemoryEntries,
              freshFor: const Duration(minutes: 10),
            );
 
   final ObjectCacheStore<ContentPostDetailPayload> _detailStore;
-  final ObjectCacheStore<PostBaseDto> _projectionStore;
+  final ObjectCacheStore<ContentPostViewData> _projectionStore;
 
   CacheReadResult<ContentPostDetailPayload>? getDetail(String postId) {
     return _detailStore.get(postId);
   }
 
-  CacheReadResult<PostBaseDto>? getProjection(String postId) {
+  CacheReadResult<ContentPostViewData>? getProjection(String postId) {
     return _projectionStore.get(postId);
   }
 
@@ -62,7 +63,7 @@ class PostObjectCacheService {
     putProjection(post);
   }
 
-  void putProjection(PostBaseDto post) {
+  void putProjection(ContentPostViewData post) {
     if (post.id.trim().isEmpty) {
       return;
     }
@@ -74,7 +75,7 @@ class PostObjectCacheService {
     );
   }
 
-  void putProjections(Iterable<PostBaseDto> posts) {
+  void putProjections(Iterable<ContentPostViewData> posts) {
     for (final post in posts) {
       putProjection(post);
     }
@@ -114,7 +115,7 @@ class ContentQuerySnapshot {
     this.paginationSessionId,
     this.feedRequestId,
     this.policyDigest,
-    this.outcome = ContentDiscoveryFeedOutcome.content,
+    this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
   }) {
     final digest = policyDigest;
@@ -126,7 +127,7 @@ class ContentQuerySnapshot {
   }
 
   final String key;
-  final List<PostBaseDto> items;
+  final List<ContentPostViewData> items;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
@@ -136,11 +137,11 @@ class ContentQuerySnapshot {
   /// 服务端权威下发的归因上下文（随 feed envelope 缓存，命中缓存时一并回放）。
   final String? feedRequestId;
   final String? policyDigest;
-  final ContentDiscoveryFeedOutcome outcome;
-  final ContentDiscoveryFeedEmptyReason? emptyReason;
+  final ContentFeedOutcome outcome;
+  final ContentFeedEmptyReason? emptyReason;
 
-  CursorPage<PostBaseDto> toCursorPage() {
-    return CursorPage<PostBaseDto>(items: items, nextCursor: nextCursor);
+  CursorPage<ContentPostViewData> toCursorPage() {
+    return CursorPage<ContentPostViewData>(items: items, nextCursor: nextCursor);
   }
 
   DiscoveryFeedPage toDiscoveryFeedPage({
@@ -192,7 +193,7 @@ class ContentQuerySnapshot {
       }
       final items = rawItems
           .whereType<Map>()
-          .map((item) => postBaseDtoFromMap(_normalizePostSnapshotMap(item)))
+          .map((item) => contentPostViewDataFromReadModelMap(_normalizePostSnapshotMap(item)))
           .toList(growable: false);
       final isDiscoveryFeed = _queryKeyParts(key)['surface'] == 'discoveryFeed';
       final outcome = isDiscoveryFeed
@@ -201,9 +202,9 @@ class ContentQuerySnapshot {
       final emptyReason = _snapshotFeedEmptyReason(map['emptyReason']);
       if (isDiscoveryFeed) {
         final validEnvelope = items.isEmpty
-            ? outcome == ContentDiscoveryFeedOutcome.empty &&
+            ? outcome == ContentFeedOutcome.empty &&
                   emptyReason != null
-            : outcome == ContentDiscoveryFeedOutcome.content &&
+            : outcome == ContentFeedOutcome.content &&
                   emptyReason == null;
         if (!validEnvelope) {
           return null;
@@ -211,7 +212,7 @@ class ContentQuerySnapshot {
       }
       return ContentQuerySnapshot(
         key: key,
-        items: List<PostBaseDto>.unmodifiable(items),
+        items: List<ContentPostViewData>.unmodifiable(items),
         fetchedAt: DateTime.parse(rawFetchedAt).toLocal(),
         nextCursor: map['nextCursor']?.toString(),
         previousCursor: map['previousCursor']?.toString(),
@@ -242,36 +243,36 @@ String? _optionalSnapshotPolicyDigest(Object? value) {
   return value;
 }
 
-ContentDiscoveryFeedOutcome _requiredSnapshotFeedOutcome(Object? value) {
+ContentFeedOutcome _requiredSnapshotFeedOutcome(Object? value) {
   return switch (value) {
-    'content' => ContentDiscoveryFeedOutcome.content,
-    'empty' => ContentDiscoveryFeedOutcome.empty,
+    'content' => ContentFeedOutcome.content,
+    'empty' => ContentFeedOutcome.empty,
     _ => throw const FormatException('feed snapshot outcome is invalid'),
   };
 }
 
-ContentDiscoveryFeedOutcome _optionalSnapshotFeedOutcome(Object? value) =>
+ContentFeedOutcome _optionalSnapshotFeedOutcome(Object? value) =>
     value == null
-    ? ContentDiscoveryFeedOutcome.content
+    ? ContentFeedOutcome.content
     : _requiredSnapshotFeedOutcome(value);
 
-ContentDiscoveryFeedEmptyReason? _snapshotFeedEmptyReason(Object? value) {
+ContentFeedEmptyReason? _snapshotFeedEmptyReason(Object? value) {
   return switch (value) {
-    'no_active_release' => ContentDiscoveryFeedEmptyReason.noActiveRelease,
-    'no_eligible_content' => ContentDiscoveryFeedEmptyReason.noEligibleContent,
-    'following_empty' => ContentDiscoveryFeedEmptyReason.followingEmpty,
-    'continuation_end' => ContentDiscoveryFeedEmptyReason.continuationEnd,
+    'no_active_release' => ContentFeedEmptyReason.noActiveRelease,
+    'no_eligible_content' => ContentFeedEmptyReason.noEligibleContent,
+    'following_empty' => ContentFeedEmptyReason.followingEmpty,
+    'continuation_end' => ContentFeedEmptyReason.continuationEnd,
     null => null,
     _ => throw const FormatException('feed snapshot emptyReason is invalid'),
   };
 }
 
-String? _feedEmptyReasonToWire(ContentDiscoveryFeedEmptyReason? reason) {
+String? _feedEmptyReasonToWire(ContentFeedEmptyReason? reason) {
   return switch (reason) {
-    ContentDiscoveryFeedEmptyReason.noActiveRelease => 'no_active_release',
-    ContentDiscoveryFeedEmptyReason.noEligibleContent => 'no_eligible_content',
-    ContentDiscoveryFeedEmptyReason.followingEmpty => 'following_empty',
-    ContentDiscoveryFeedEmptyReason.continuationEnd => 'continuation_end',
+    ContentFeedEmptyReason.noActiveRelease => 'no_active_release',
+    ContentFeedEmptyReason.noEligibleContent => 'no_eligible_content',
+    ContentFeedEmptyReason.followingEmpty => 'following_empty',
+    ContentFeedEmptyReason.continuationEnd => 'continuation_end',
     null => null,
   };
 }
@@ -582,15 +583,15 @@ class ContentQuerySnapshotStore {
 
   void put({
     required String key,
-    required List<PostBaseDto> items,
+    required List<ContentPostViewData> items,
     String? nextCursor,
     String? previousCursor,
     DateTime? paginationExpiresAt,
     String? paginationSessionId,
     String? feedRequestId,
     String? policyDigest,
-    ContentDiscoveryFeedOutcome outcome = ContentDiscoveryFeedOutcome.content,
-    ContentDiscoveryFeedEmptyReason? emptyReason,
+    ContentFeedOutcome outcome = ContentFeedOutcome.content,
+    ContentFeedEmptyReason? emptyReason,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
@@ -598,8 +599,8 @@ class ContentQuerySnapshotStore {
     }
     if (_queryKeyParts(normalized)['surface'] == 'discoveryFeed') {
       final validEnvelope = items.isEmpty
-          ? outcome == ContentDiscoveryFeedOutcome.empty && emptyReason != null
-          : outcome == ContentDiscoveryFeedOutcome.content &&
+          ? outcome == ContentFeedOutcome.empty && emptyReason != null
+          : outcome == ContentFeedOutcome.content &&
                 emptyReason == null;
       if (!validEnvelope) {
         throw const FormatException(
@@ -610,7 +611,7 @@ class ContentQuerySnapshotStore {
     _snapshots.remove(normalized);
     _snapshots[normalized] = ContentQuerySnapshot(
       key: normalized,
-      items: List<PostBaseDto>.unmodifiable(items),
+      items: List<ContentPostViewData>.unmodifiable(items),
       nextCursor: nextCursor,
       previousCursor: previousCursor,
       paginationExpiresAt: paginationExpiresAt,
@@ -851,16 +852,16 @@ String contentUserPostsQueryKey({
   return parts.join('&');
 }
 
-String _resolvePostVersion(PostBaseDto post) {
-  final map = post.toMap();
+String _resolvePostVersion(ContentPostViewData post) {
+  final map = post.toPresentationMap();
   // 缓存版本只消费 canonical updatedAt；缺失时使用对象主键。
   // 不再用 publishedAt 借壳——发布时间不是内容变更时间。
   final version = map['updatedAt']?.toString().trim();
   return version?.isNotEmpty == true ? version! : post.id;
 }
 
-Map<String, dynamic> _postSnapshotMap(PostBaseDto post) {
-  final map = Map<String, dynamic>.from(post.toMap());
+Map<String, dynamic> _postSnapshotMap(ContentPostViewData post) {
+  final map = Map<String, dynamic>.from(post.toPresentationMap());
   map['postId'] = post.id;
   map['contentType'] = post.type;
   map['contentIdentity'] = post.identity;

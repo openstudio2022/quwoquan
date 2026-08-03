@@ -66,6 +66,16 @@ errors:
   dart_const: gatheringConversationBindingFailed
   go_const: ErrGatheringConversationBindingFailed
   user_message: {zh: 相聚会话暂时未就绪，请重试, en: Gathering conversation is not ready}
+- code: CIRCLE.DEPENDENCY.gathering_target_unavailable
+  kind: DEPENDENCY
+  reason: gathering_target_unavailable
+  emitted_by: [{surface: http, operations: [CreateGathering]}]
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: gatheringTargetUnavailable
+  go_const: ErrGatheringTargetUnavailable
+  user_message: {zh: 目标对象暂时不可验证，请重试, en: Gathering target cannot be verified right now}
 - code: CIRCLE.SYSTEM.gathering_storage_failed
   kind: SYSTEM
   reason: gathering_storage_failed

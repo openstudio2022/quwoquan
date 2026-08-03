@@ -49,10 +49,7 @@ void main() {
       find.text(CreationText.publishTaskPendingReviewStatus),
       findsOneWidget,
     );
-    expect(
-      find.text(CreationText.publishTaskRejectedStatus),
-      findsOneWidget,
-    );
+    expect(find.text(CreationText.publishTaskRejectedStatus), findsOneWidget);
     expect(
       find.text(CreationText.publishTaskPreparingMediaStatus),
       findsOneWidget,
@@ -82,6 +79,42 @@ void main() {
       find.byKey(const ValueKey<String>('publication_task_retry_draft-media')),
       findsNothing,
     );
+  });
+
+  testWidgets('Post 已发布但后续关联阻断时保留重试入口', (tester) async {
+    String? retriedDraftId;
+    final createdAt = DateTime.utc(2026, 8, 2);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: CupertinoPageScaffold(
+          child: PostPublicationTaskSection(
+            intents: <LocalPostPublicationIntent>[
+              _intent(
+                draftId: 'draft-continuation',
+                createdAt: createdAt,
+                publicationState: ContentPostPublicationState.published,
+                postId: 'post-continuation',
+                blocked: true,
+                retryCount: 1,
+                blockReason:
+                    LocalPostPublicationBlockReason.continuationRejected,
+              ),
+            ],
+            onRetry: (intent) => retriedDraftId = intent.command.localDraftId,
+            onEdit: (_) {},
+            onRemove: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(CreationText.publishTaskFinalizingStatus), findsOneWidget);
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('publication_task_retry_draft-continuation'),
+      ),
+    );
+    expect(retriedDraftId, 'draft-continuation');
   });
 
   testWidgets('素材清理中的任务保持可见且只允许重试清理', (tester) async {

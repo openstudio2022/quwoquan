@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,8 +27,21 @@ func NewExternalInteractionClient(baseURL string, env string, client *http.Clien
 	if normalized == "" {
 		normalized = "https://integration-service.local"
 	}
-	if !strings.HasPrefix(normalized, "https://") {
-		return nil, fmt.Errorf("integration service base url must use https")
+	parsed, err := url.Parse(normalized)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("integration service base url is invalid")
+	}
+	switch strings.TrimSpace(env) {
+	case "alpha", "beta", "gamma":
+		if parsed.Scheme != "http" || parsed.Host != "integration-service:18086" || (parsed.Path != "" && parsed.Path != "/") {
+			return nil, fmt.Errorf("nonprod integration service base url must be canonical internal http")
+		}
+	case "prod":
+		if parsed.Scheme != "https" {
+			return nil, fmt.Errorf("prod integration service base url must use https")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported integration service environment %q", env)
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 3 * time.Second}

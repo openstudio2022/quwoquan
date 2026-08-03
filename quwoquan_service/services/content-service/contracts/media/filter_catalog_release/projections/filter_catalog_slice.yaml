@@ -1,25 +1,15 @@
 read_model: FilterCatalogSlice
-description: 'App 公开读取的完整 active 滤镜目录。只暴露渲染目录所需字段，
-
-  不包含 sourceOwner、version、command receipt 或发布审计信息。
-
-  '
-source_entities:
-- FilterCatalogRelease
-consumers:
-- app
-client_projection:
-  dart_class: FilterCatalogSnapshot
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart
+description: Active FilterCatalogRelease 的完整公开渲染目录；不暴露 sourceOwner、CAS version 或 command receipt。
+source_entities: [FilterCatalogRelease]
+consumers: [app]
 fields:
-- releaseId
-- canonicalDigest
-- status
-- categoryCount
-- presetCount
-- categories
-- presets
-- recommendedFallbackPresetIds
-- importedAt
-- activatedAt
+  - {name: releaseId, type: string, nullable: false}
+  - {name: canonicalDigest, type: string, nullable: false}
+  - {name: status, type: enum, enum_ref: FilterCatalogReleaseStatus, nullable: false}
+  - {name: categoryCount, type: int, nullable: false}
+  - {name: presetCount, type: int, nullable: false}
+  - {name: categories, type: '[]FilterCategoryDefinition', nullable: false}
+  - {name: presets, type: '[]FilterPresetDefinition', nullable: false}
+  - {name: recommendedFallbackPresetIds, type: '[]string', nullable: false}
+  - {name: importedAt, type: timestamp, nullable: false}
+  - {name: activatedAt, type: timestamp, nullable: true}

@@ -68,7 +68,7 @@ func (handler *Handler) handleGrant(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	var body struct {
-		GrantedScope string `json:"grantedScope"`
+		GrantedScopes []string `json:"grantedScopes"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 64<<10))
 	decoder.DisallowUnknownFields()
@@ -85,7 +85,7 @@ func (handler *Handler) handleGrant(writer http.ResponseWriter, request *http.Re
 		strings.TrimSpace(request.Header.Get("Idempotency-Key")),
 		accountID,
 		strings.TrimSpace(request.PathValue("skillId")),
-		strings.TrimSpace(body.GrantedScope),
+		body.GrantedScopes,
 	)
 	if err != nil {
 		writeHTTPError(writer, request, mapDomainError(err))
@@ -131,24 +131,24 @@ func (handler *Handler) handleRevoke(writer http.ResponseWriter, request *http.R
 }
 
 type consentView struct {
-	ID           string     `json:"id"`
-	AccountID    string     `json:"accountId"`
-	SkillID      string     `json:"skillId"`
-	GrantedScope string     `json:"grantedScope"`
-	GrantedAt    time.Time  `json:"grantedAt"`
-	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
-	Granted      bool       `json:"granted"`
+	ID            string     `json:"id"`
+	AccountID     string     `json:"accountId"`
+	SkillID       string     `json:"skillId"`
+	GrantedScopes []string   `json:"grantedScopes"`
+	GrantedAt     time.Time  `json:"grantedAt"`
+	RevokedAt     *time.Time `json:"revokedAt,omitempty"`
+	Granted       bool       `json:"granted"`
 }
 
 func newConsentView(consent model.Consent) consentView {
 	return consentView{
-		ID:           consent.ID,
-		AccountID:    consent.AccountID,
-		SkillID:      consent.SkillID,
-		GrantedScope: consent.GrantedScope,
-		GrantedAt:    consent.GrantedAt,
-		RevokedAt:    consent.RevokedAt,
-		Granted:      consent.IsGranted(),
+		ID:            consent.ID,
+		AccountID:     consent.AccountID,
+		SkillID:       consent.SkillID,
+		GrantedScopes: append([]string{}, consent.GrantedScopes...),
+		GrantedAt:     consent.GrantedAt,
+		RevokedAt:     consent.RevokedAt,
+		Granted:       consent.IsGranted(),
 	}
 }
 
@@ -168,6 +168,8 @@ func mapDomainError(err error) error {
 		return consenterrors.AppErrorFromConsentInvalidArgument(err.Error())
 	case errors.Is(err, model.ErrIdempotencyConflict):
 		return consenterrors.AppErrorFromConsentIdempotencyConflict(err.Error())
+	case errors.Is(err, model.ErrScopeConflict):
+		return consenterrors.AppErrorFromConsentScopeConflict(err.Error())
 	case errors.Is(err, model.ErrStorageUnavailable):
 		return consenterrors.AppErrorFromConsentUnavailable(err.Error())
 	default:

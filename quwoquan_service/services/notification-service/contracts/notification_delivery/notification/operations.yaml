@@ -142,10 +142,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../notification/app_message_contracts.dart
-      response_type: AppMessageInboxSlice
-      response_decoder: decodeAppMessageInboxSlice
     description: 读取当前账户的统一应用消息列表。
     request_bindings:
       query:
@@ -162,6 +158,7 @@ api_routes:
           field: limit
     response_body: AppMessageInboxSlice
     response_body_kind: page
+    response_entity: AppMessageInboxSlice
     security:
       auth_mode: required
       principal: owner
@@ -209,10 +206,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../notification/app_message_contracts.dart
-      response_type: AppMessage
-      response_decoder: decodeAppMessage
     description: 读取当前账户拥有的单条统一应用消息。
     request_bindings:
       path:
@@ -220,6 +213,7 @@ api_routes:
           field: messageId
     response_body: AppMessageDetailSlice
     response_body_kind: object
+    response_entity: AppMessage
     security:
       auth_mode: required
       principal: owner
@@ -268,10 +262,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../notification/app_message_contracts.dart
-      response_type: AppMessage
-      response_decoder: decodeAppMessage
     description: 幂等记录端侧已收到消息，不等价于已读。
     request_bindings:
       path:
@@ -285,6 +275,9 @@ api_routes:
       visibility: private
     request_entity: AckAppMessageCommand
     request_body_kind: none
+    response_body: AppMessageDetailSlice
+    response_body_kind: object
+    response_entity: AppMessage
   - method: POST
     path: /app-messages/{messageId}/read
     operation: ReadAppMessage
@@ -325,10 +318,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../notification/app_message_contracts.dart
-      response_type: AppMessage
-      response_decoder: decodeAppMessage
     description: 幂等标记当前账户拥有的单条消息已读。
     request_bindings:
       path:
@@ -342,6 +331,9 @@ api_routes:
       visibility: private
     request_entity: ReadAppMessageCommand
     request_body_kind: none
+    response_body: AppMessageDetailSlice
+    response_body_kind: object
+    response_entity: AppMessage
   - method: GET
     path: /app-messages/unread-count
     operation: GetAppMessageUnreadCount
@@ -379,13 +371,10 @@ api_routes:
     slo:
       latency_p95_ms: 300
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../notification/app_message_contracts.dart
-      response_type: AppMessageUnreadCountSlice
-      response_decoder: decodeAppMessageUnreadCountSlice
     description: 读取当前账户统一应用消息未读计数。
     response_body: AppMessageUnreadCountSlice
     response_body_kind: object
+    response_entity: AppMessageUnreadCountSlice
     security:
       auth_mode: required
       principal: owner

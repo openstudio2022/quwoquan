@@ -23,7 +23,7 @@ class DiscoveryFeedText {
 
   // ==================== 交集入口与解释 ====================
   static const String intersectionMoreLabel = '全部交集';
-  // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
+  // Work Browser 作者区交集入口与详情解释层：N 个交集 › → 弹出推荐解释
   static String intersectionEntrySummary(int count) => '$count 个交集';
   static const String intersectionDetailTitle = '与你相关的线索';
   static const String homeFeedIntersectionReasonLabel = '推荐理由';

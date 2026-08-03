@@ -11,6 +11,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	feedbackstore "quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
 	httpadapter "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/http"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application/queryheat"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/queryheatstore"
@@ -39,6 +40,7 @@ func TestHotQueriesReturnsTermHeatRanking(t *testing.T) {
 
 	store := queryheatstore.NewStore(
 		mongoDB,
+		feedbackstore.NewStore(mongoDB),
 		queryheat.Config{Now: func() time.Time { return now.Add(time.Minute) }},
 		slog.Default(),
 	)
@@ -99,6 +101,7 @@ func TestHotQueriesRejectsMissingReaderAndInvalidLimit(t *testing.T) {
 
 	store := queryheatstore.NewStore(
 		mongoDB,
+		feedbackstore.NewStore(mongoDB),
 		queryheat.Config{},
 		slog.Default(),
 	)

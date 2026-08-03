@@ -55,6 +55,27 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             outputs,
         )
         self.assertIn(
+            "packages/quwoquan_cloud_contracts/lib/src/travel/"
+            "travel_operation_contracts.g.dart",
+            outputs,
+        )
+        self.assertIn(
+            "packages/quwoquan_cloud_contracts/lib/src/generated/requests/"
+            "travel/travel_operation_contracts.g.requests.g.dart",
+            outputs,
+        )
+        for domain in ("tag", "integration", "notification"):
+            self.assertIn(
+                "packages/quwoquan_cloud_contracts/lib/src/"
+                f"{domain}/{domain}_operation_contracts.g.dart",
+                outputs,
+            )
+            self.assertIn(
+                "packages/quwoquan_cloud_contracts/lib/src/generated/requests/"
+                f"{domain}/{domain}_operation_contracts.g.requests.g.dart",
+                outputs,
+            )
+        self.assertIn(
             "lib/app/navigation/generated/app_route_paths.g.dart",
             outputs,
         )

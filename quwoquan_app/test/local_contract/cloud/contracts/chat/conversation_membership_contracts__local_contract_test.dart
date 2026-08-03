@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -46,7 +47,6 @@ void main() {
             'avatarUrl': 'https://cdn.example/user-1.png',
             'role': 'owner',
             'memberType': 'user',
-            'assistantSkillId': null,
             'joinedAt': '2026-07-21T06:00:00Z',
             'isCurrentUser': true,
           },
@@ -58,6 +58,27 @@ void main() {
       expect(page.items.single.userHandle, 'xiaoq_public');
       expect(page.items.single.isCurrentUser, isTrue);
       expect(page.nextCursor, 'next-member-token');
+    });
+
+    test('rejects retired assistantSkillId member binding', () {
+      expect(
+        () => decodeChatConversationMemberPageSlice(<String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'userId': 'assistant',
+              'userHandle': 'xiaoq',
+              'displayName': '小趣',
+              'avatarUrl': '',
+              'role': 'member',
+              'memberType': 'assistant',
+              'assistantSkillId': 'travel_companion',
+              'joinedAt': '2026-07-21T06:00:00Z',
+              'isCurrentUser': false,
+            },
+          ],
+        }),
+        throwsFormatException,
+      );
     });
   });
 }

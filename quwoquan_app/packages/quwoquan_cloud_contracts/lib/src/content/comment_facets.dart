@@ -1,50 +1,46 @@
-import 'comment_contracts.dart';
-import 'content_reaction_contracts.dart';
+import 'content_operation_contracts.g.dart';
 
 abstract interface class ContentCommentQuery {
-  Future<ContentCommentPageSlice> listComments({
+  Future<CommentPageSlice> listComments({
     required String postId,
     String? cursor,
     int limit = 20,
-    ContentCommentSort sort = ContentCommentSort.hot,
+    CommentSort sort = CommentSort.hot,
   });
 
-  Future<ContentCommentReplyPageSlice> listReplies({
+  Future<ReplyPageSlice> listReplies({
     required String postId,
     required String commentId,
     String? cursor,
     int limit = 10,
   });
 
-  Future<ContentAuthorCommentPageSlice> listByAuthor({
-    String? cursor,
-    int limit = 20,
-  });
+  Future<AuthorCommentPageSlice> listByAuthor({String? cursor, int limit = 20});
 
-  Future<ContentReceivedCommentPageSlice> listReceived({
+  Future<ReceivedCommentPageSlice> listReceived({
     String? cursor,
     int limit = 20,
   });
 }
 
 abstract interface class ContentCommentCommandWriter {
-  Future<ContentCommentCommandResult> createComment(
+  Future<CommentCommandResult> createComment(
     CreateContentCommentCommand command,
   );
 
-  Future<ContentCommentCommandResult> deleteComment(
+  Future<CommentCommandResult> deleteComment(
     DeleteContentCommentCommand command,
   );
 
-  Future<ContentCommentCommandResult> pinComment(
+  Future<CommentCommandResult> pinComment(
     ChangeContentCommentPinCommand command,
   );
 
-  Future<ContentCommentCommandResult> unpinComment(
+  Future<CommentCommandResult> unpinComment(
     ChangeContentCommentPinCommand command,
   );
 
-  Future<ContentCommentCommandResult> bindAttachments(
+  Future<CommentCommandResult> bindAttachments(
     BindContentCommentAttachmentsCommand command,
   );
 }

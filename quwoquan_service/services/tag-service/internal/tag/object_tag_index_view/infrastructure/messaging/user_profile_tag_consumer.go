@@ -16,7 +16,7 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	ports "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
+	ports "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/ports"
 )
 
 const (

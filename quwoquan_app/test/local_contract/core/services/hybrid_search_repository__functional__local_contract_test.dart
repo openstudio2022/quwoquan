@@ -258,7 +258,7 @@ final class _RecordingRemoteRepository implements SearchRepository {
                 title: '云侧摄影讨论',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: SearchHitPayloadCircleGroup(
-                  CircleSearchItemView(
+                  CircleSearchHitViewData(
                     circleId: 'circle-remote',
                     name: '云侧摄影讨论',
                     memberCount: 12,

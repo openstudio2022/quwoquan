@@ -24,6 +24,13 @@ def _fields() -> dict[bytes, bytes]:
         "updatedAt": "2026-07-31T11:00:00Z",
         "tagRefs": ["Topic/旅行", "Entity/地点/景区"],
         "entityRefs": ["地点/景区/色达"],
+        "primaryHomepageId": "homepage-001",
+        "primaryHomepageSnapshot": {
+            "canonicalEntityId": "地点/景区/色达",
+            "title": "色达",
+            "subtitle": "川西高原目的地",
+            "coverUrl": "https://cdn.example/homepage-001.jpg",
+        },
     }
     values = {
         "eventId": "event-001",
@@ -99,12 +106,21 @@ class _Projection:
         self.cleared.append(stream_id)
 
 
+class _SubjectClosures:
+    def __init__(self, *closed_subjects: str) -> None:
+        self.closed_subjects = set(closed_subjects)
+
+    def exists(self, subject_id: str) -> bool:
+        return subject_id in self.closed_subjects
+
+
 def test_consumer_projects_then_acks_one_typed_post_event() -> None:
     redis = _Redis()
     projection = _Projection()
     consumer = PostLifecycleConsumer(
         redis_client=redis,
         projection=projection,
+        subject_closures=_SubjectClosures(),
         consumer="candidate-test",
     )
     assert consumer.process_once() == 1
@@ -112,6 +128,9 @@ def test_consumer_projects_then_acks_one_typed_post_event() -> None:
     assert event["event_id"] == "event-001"
     assert event["snapshot"].source_sequence == 4
     assert event["snapshot"].entity_tag_ids == ("Entity/地点/景区",)
+    assert event["snapshot"].object_card.homepage_id == "homepage-001"
+    assert event["snapshot"].object_card.canonical_entity_id == "地点/景区/色达"
+    assert event["snapshot"].object_card.title == "色达"
     assert redis.acked == [(POST_LIFECYCLE_STREAM, CONSUMER_GROUP, "1000-0")]
     assert projection.cleared == ["1000-0"]
 
@@ -132,12 +151,54 @@ def test_incomplete_upsert_snapshot_cannot_be_interpreted_as_candidate_removal()
         lifecycle_snapshot(decode_post_lifecycle(values))
 
 
+def test_post_lifecycle_requires_the_single_canonical_post_id_field() -> None:
+    values = {key.decode(): value.decode() for key, value in _fields().items()}
+    payload = json.loads(values["payload"])
+    payload["id"] = payload.pop("postId")
+    values["payload"] = json.dumps(payload)
+
+    with pytest.raises(ValueError, match="aggregate identity mismatch"):
+        decode_post_lifecycle(values)
+
+
+def test_homepage_identity_and_public_snapshot_must_arrive_atomically() -> None:
+    values = {key.decode(): value.decode() for key, value in _fields().items()}
+    payload = json.loads(values["payload"])
+    payload.pop("primaryHomepageSnapshot")
+    values["payload"] = json.dumps(payload)
+    with pytest.raises(ValueError, match="requires primaryHomepageSnapshot"):
+        lifecycle_snapshot(decode_post_lifecycle(values))
+
+    payload = json.loads(_fields()[b"payload"])
+    payload.pop("primaryHomepageId")
+    values["payload"] = json.dumps(payload)
+    with pytest.raises(ValueError, match="requires primaryHomepageId"):
+        lifecycle_snapshot(decode_post_lifecycle(values))
+
+
+def test_closed_author_event_can_only_advance_a_removal_tombstone() -> None:
+    redis = _Redis()
+    projection = _Projection()
+    consumer = PostLifecycleConsumer(
+        redis_client=redis,
+        projection=projection,
+        subject_closures=_SubjectClosures("persona-001"),
+        consumer="candidate-test",
+    )
+
+    assert consumer.process_once() == 1
+    event = projection.events[0]
+    assert event["snapshot"] is None
+    assert event["removal"] == ("content_feed", "post-001", 4)
+
+
 def test_consumer_dead_letters_and_acks_only_after_fifth_failure() -> None:
     redis = _Redis()
     projection = _Projection(fail=True)
     consumer = PostLifecycleConsumer(
         redis_client=redis,
         projection=projection,
+        subject_closures=_SubjectClosures(),
         consumer="candidate-test",
     )
     for attempt in range(1, 6):

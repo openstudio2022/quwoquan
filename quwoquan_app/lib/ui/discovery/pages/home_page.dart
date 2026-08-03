@@ -52,6 +52,7 @@ class _HomePageState extends ConsumerState<HomePage>
   late final JourneyEventTracker _journeyTracker;
   late final DiscoveryFeedMapNotifier _feedNotifier;
   int _activeChannelReconcileGeneration = 0;
+  int _surfaceActivityGeneration = 0;
   String? _pendingActiveChannelFallbackId;
 
   /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
@@ -81,6 +82,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
+    _surfaceActivityGeneration += 1;
     _feedNotifier.cancelChannelRequests(_activeChannelId);
     // R20 · 页面级停留：离开首页时上报停留时长（含异常退出路径）。
     // 使用 initState 捕获的 tracker 实例，禁止在 dispose 中读取 `ref`。
@@ -99,11 +101,13 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isStartupHomeActive && !widget.isStartupHomeActive) {
-      // HomePage 位于 shell 的 IndexedStack，切到其它主 Tab 时不会 dispose。
-      // 主动终止当前频道请求；build 随后卸载 feed surface，释放媒体资源，
-      // provider 正文与 container-scoped 滚动锚点仍保留供返回时恢复。
-      _feedNotifier.deactivateChannel(_activeChannelId);
+    if (oldWidget.isStartupHomeActive != widget.isStartupHomeActive) {
+      if (widget.isStartupHomeActive) {
+        // 重新激活会废止尚未执行的离屏回收；首页正文由当前 frame 继续恢复。
+        _surfaceActivityGeneration += 1;
+      } else {
+        _deactivateSurfaceAfterFrame();
+      }
     }
     if (oldWidget.routeLocation == widget.routeLocation) {
       return;
@@ -118,6 +122,25 @@ class _HomePageState extends ConsumerState<HomePage>
       setState(() {
         _activeChannelId = routeTab;
       });
+    });
+  }
+
+  void _deactivateSurfaceAfterFrame() {
+    final channelId = _activeChannelId;
+    final generation = ++_surfaceActivityGeneration;
+    // 先同步撤销在途请求；此方法不发布 Provider 状态，可安全地在
+    // IndexedStack 的 didUpdateWidget 阶段执行。
+    _feedNotifier.cancelChannelRequests(channelId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _surfaceActivityGeneration ||
+          widget.isStartupHomeActive ||
+          channelId != _activeChannelId) {
+        return;
+      }
+      // 状态裁剪延后到 frame 结束，避免 Riverpod 在祖先 IndexedStack build
+      // 期间触发 markNeedsBuild。
+      _feedNotifier.deactivateChannel(channelId);
     });
   }
 
@@ -430,9 +453,9 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _openFeedPost(
-    PostBaseDto post,
+    ContentPostViewData post,
     int mediaIndex, {
-    List<PostBaseDto>? feedPosts,
+    List<ContentPostViewData>? feedPosts,
   }) {
     // post → 沉浸 viewer 的统一动作（移动端 / Web 壳共用），保证归因链与
     // MediaViewerExtra 构造同源。

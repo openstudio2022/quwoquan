@@ -28,11 +28,8 @@ from quwoquan_ops.cli.lib.output_paths import (
     service_deployment_package_dir,
 )
 
-_PRODUCT_TELEMETRY_SLS_RUNTIME_VARIABLES = (
-    "PRODUCT_OPS_SLS_ENDPOINT",
-    "ALIBABA_CLOUD_ACCESS_KEY_ID",
-    "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
-    "ALIBABA_CLOUD_SECURITY_TOKEN",
+_PRODUCT_TELEMETRY_SECRET_RUNTIME_VARIABLES = (
+    "PRODUCT_OPS_ELASTICSEARCH_API_KEY",
 )
 
 SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -403,8 +400,8 @@ def validate_service_provenance(
     return issues
 
 
-def validate_product_telemetry_sls_package(package_dir: Path) -> list[str]:
-    """Require SLS runtime bindings to remain unresolved in deploy packages."""
+def validate_product_telemetry_secret_package(package_dir: Path) -> list[str]:
+    """Require the Elasticsearch credential to remain deployment-injected."""
     issues: list[str] = []
     for path in sorted(candidate for candidate in package_dir.rglob("*") if candidate.is_file()):
         try:
@@ -412,16 +409,16 @@ def validate_product_telemetry_sls_package(package_dir: Path) -> list[str]:
         except UnicodeDecodeError:
             continue
         for line_number, line in enumerate(lines, 1):
-            for variable in _PRODUCT_TELEMETRY_SLS_RUNTIME_VARIABLES:
+            for variable in _PRODUCT_TELEMETRY_SECRET_RUNTIME_VARIABLES:
                 match = re.match(
                     rf"^\s*{re.escape(variable)}\s*[:=]\s*(?P<value>.+?)\s*$",
                     line,
                 )
-                if match and not _sls_package_value_is_unresolved(
+                if match and not _secret_package_value_is_unresolved(
                     variable,
                     match.group("value"),
                 ):
-                    issues.append(_sls_package_value_issue(path, line_number, variable))
+                    issues.append(_secret_package_value_issue(path, line_number, variable))
                     continue
                 if not re.match(
                     rf"^\s*-\s+name:\s*{re.escape(variable)}\s*$",
@@ -435,12 +432,12 @@ def validate_product_telemetry_sls_package(package_dir: Path) -> list[str]:
                     if re.match(r"^\s*-\s+name:\s*", nested_line):
                         break
                     value_match = re.match(r"^\s*value:\s*(?P<value>.+?)\s*$", nested_line)
-                    if value_match and not _sls_package_value_is_unresolved(
+                    if value_match and not _secret_package_value_is_unresolved(
                         variable,
                         value_match.group("value"),
                     ):
                         issues.append(
-                            _sls_package_value_issue(
+                            _secret_package_value_issue(
                                 path,
                                 nested_line_number,
                                 variable,
@@ -450,15 +447,15 @@ def validate_product_telemetry_sls_package(package_dir: Path) -> list[str]:
     return issues
 
 
-def _sls_package_value_is_unresolved(variable: str, raw_value: str) -> bool:
+def _secret_package_value_is_unresolved(variable: str, raw_value: str) -> bool:
     value = raw_value.strip().strip("\"'")
     return value in {f"${{{variable}}}", f"${{{variable}:-}}", ""}
 
 
-def _sls_package_value_issue(path: Path, line_number: int, variable: str) -> str:
+def _secret_package_value_issue(path: Path, line_number: int, variable: str) -> str:
     return (
         f"{_display(path)}:{line_number} embeds {variable}; "
-        "SLS values must be injected at deployment time"
+        "Elasticsearch credentials must be injected at deployment time"
     )
 
 
@@ -575,7 +572,7 @@ def main() -> int:
             for issue in validate_service_provenance(report, service_dir, service, env_name):
                 issues.append(f"{_display(report_path)} {issue}")
             if service == "product-ops-service":
-                issues.extend(validate_product_telemetry_sls_package(service_dir))
+                issues.extend(validate_product_telemetry_secret_package(service_dir))
             for issue in package_output_boundary_issues(service_dir, package_root):
                 issues.append(f"{_display(service_dir)} {issue}")
 

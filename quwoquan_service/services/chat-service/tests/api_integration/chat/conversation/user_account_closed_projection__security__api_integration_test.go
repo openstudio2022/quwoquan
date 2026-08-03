@@ -491,30 +491,33 @@ func TestUserAccountClosedProjectionDeletesPrivateStateAndAnonymizesAudit(
 	assertClosureCount(t, "conversation_user_states_outbox", bson.M{}, 0)
 	assertClosureCount(t, "messages", bson.M{"conversationId": conversationID}, 3)
 	assertClosureCount(t, "conversations", bson.M{"_id": conversationID}, 1)
+	// Chat only owns its aggregate and projections. Notification and the
+	// reliable-task runtime consume UserAccountClosed independently; this
+	// projection must never mutate their collections.
 	assertClosureCount(t, "notification_delivery_ledger", bson.M{
 		"recipientId": personaA,
-	}, 0)
+	}, 1)
 	assertClosureCount(t, "notification_delivery_ledger", bson.M{
 		"recipientId": otherUser,
 	}, 1)
 
 	notification := closureDocument(t, "notification_outbox", "notification-close")
-	if containsClosureString(notification["recipientIds"], personaA) ||
+	if !containsClosureString(notification["recipientIds"], personaA) ||
 		!containsClosureString(notification["recipientIds"], otherUser) {
-		t.Fatalf("notification recipients were not cleaned: %#v", notification)
+		t.Fatalf("chat mutated notification-owned recipients: %#v", notification)
 	}
 	for _, task := range []struct {
 		collection string
 		id         string
 		wantActor  string
 	}{
-		{"reliable_task_outbox", "task-outbox-close", anonymousA},
-		{"reliable_async_task", "async-task-close", anonymousB},
-		{"notification_outbox", "notification-close", anonymousA},
+		{"reliable_task_outbox", "task-outbox-close", personaA},
+		{"reliable_async_task", "async-task-close", personaB},
+		{"notification_outbox", "notification-close", personaA},
 	} {
 		document := closureDocument(t, task.collection, task.id)
 		if closureNestedString(document["payload"], "actorID") != task.wantActor {
-			t.Fatalf("%s actor was not anonymized: %#v", task.collection, document)
+			t.Fatalf("chat mutated %s actor state: %#v", task.collection, document)
 		}
 	}
 	for _, key := range []string{

@@ -30,16 +30,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: grantedScope
-  source: grantedScope
-  type: string
+- name: grantedScopes
+  source: grantedScopes
+  type: '[]string'
   constraints:
   - NOT_NULL
   classification: SENSITIVE
   log_policy: mask
   api_exposure: read
   ops_exposure: read
-  description: 授权范围（上下文维度 + tool 权限）
+  description: 一次明确授权的完整规范化 scope 集合（上下文维度 + tool 权限）；非空、去重并按字典序固定。
   role: authoritative_state
 - name: grantedAt
   source: grantedAt
@@ -77,4 +77,34 @@ unique_constraints:
   - accountId
   - skillId
   condition: revokedAt IS NULL
-  description: 每账号每 Skill 只有一个生效授权
+  description: 每账号每 Skill 只有一个携带完整 scope 集合的生效授权
+types:
+  GrantSkillConsentRequest:
+    description: 由可信账号主体授权指定 Skill 的幂等命令；账号身份只由认证上下文注入。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: idempotencyKey, source: header.Idempotency-Key, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: grantedScopes, source: grantedScopes, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none, description: 用户当次明确授权的完整 scope 集合；服务端拒绝空集合、空白项、重复项或超过 32 项。}
+  RevokeSkillConsentRequest:
+    description: 由可信账号主体撤销指定 Skill 授权的幂等命令。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: idempotencyKey, source: header.Idempotency-Key, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+  ListSkillConsentsQuery:
+    description: 读取可信账号主体当前生效 Skill 授权的空参数查询。
+    fields: []
+  GrantSkillConsentReceipt:
+    description: Skill 授权命令的权威对象状态与幂等重放结果。
+    fields:
+    - {name: consent, source: consent, type: SkillConsent, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  RevokeSkillConsentReceipt:
+    description: Skill 撤销命令的权威幂等回执。
+    fields:
+    - {name: status, source: status, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: skillId, source: skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  SkillConsentListSlice:
+    description: 当前账号所有生效 SkillConsent 的强类型列表。
+    fields:
+    - {name: items, source: items, type: '[]SkillConsent', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}

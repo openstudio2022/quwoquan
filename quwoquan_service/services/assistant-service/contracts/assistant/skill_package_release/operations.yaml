@@ -1,8 +1,3 @@
-commercial_defaults:
-  status: blocked
-  block_reason: Skill Package 发布只允许受控 publisher 通过对象 Facade 执行，当前阶段不暴露 HTTP route
-  gap_id: ASSISTANT_SKILL_PACKAGE_UNDECLARED_OPERATION
-  target_story: skill-context-proactive-runtime
 description: >-
   SkillPackageRelease 的 Stage、CAS Activate、Rollback 与 active Reader
   应用边界；服务端核心先保持 typed port，公开或内部 HTTP 接线需独立声明后方可开放。
@@ -19,7 +14,7 @@ api_routes:
     mutation_target: SkillPackageRelease
     invariant_target: SkillPackageRelease
   authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
-  commercial: {status: blocked, block_reason: publisher 身份与生产 artifact store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_PUBLISHER_COMPOSITION, target_story: skill-context-proactive-runtime}
+  commercial: {status: ready}
   reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   request_entity: SkillPackageRelease
   request_body_kind: object
@@ -46,7 +41,7 @@ api_routes:
     mutation_target: SkillPackageRelease
     invariant_target: SkillPackageRelease
   authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
-  commercial: {status: blocked, block_reason: publisher 身份与生产 activation store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_ACTIVATION_COMPOSITION, target_story: skill-context-proactive-runtime}
+  commercial: {status: ready}
   reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   request_entity: ActivateSkillPackageCommand
   request_body_kind: object
@@ -74,7 +69,7 @@ api_routes:
     mutation_target: SkillPackageRelease
     invariant_target: SkillPackageRelease
   authorization: {principal: service, scopes: [assistant.skill_package.manage], ownership_policy: internal_skill_package_publish_plane}
-  commercial: {status: blocked, block_reason: publisher 身份与生产 activation store 尚未完成 composition, gap_id: ASSISTANT_SKILL_PACKAGE_ACTIVATION_COMPOSITION, target_story: skill-context-proactive-runtime}
+  commercial: {status: ready}
   reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
   request_entity: RollbackSkillPackageCommand
   request_body_kind: object

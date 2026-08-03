@@ -24,7 +24,7 @@ void main() {
     final seed = <String, AsyncValue<DiscoveryFeedState>>{
       _channel: AsyncData(
         DiscoveryFeedState(
-          items: <PostBaseDto>[_post('p0'), _post('p1')],
+          items: <ContentPostViewData>[_post('p0'), _post('p1')],
           seenItemIds: const <String>['p0', 'p1'],
           feedRequestId: 'frq_handler_1',
         ),
@@ -100,8 +100,8 @@ void main() {
   });
 }
 
-PostBaseDto _post(String id) {
-  return postBaseDtoFromMap(<String, dynamic>{
+ContentPostViewData _post(String id) {
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     '_id': id,
     'postId': id,

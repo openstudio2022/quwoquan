@@ -72,7 +72,13 @@ if phase == "publish":
         raise SystemExit(31)
 
 event("start")
-time.sleep(0.25)
+delay = 0.25
+if (
+    phase == "review"
+    and os.environ.get("SLOW_REVIEW_CARRIER") == carrier
+):
+    delay = 1.0
+time.sleep(delay)
 if (
     phase == "review"
     and os.environ.get("DRIFT_CARRIER") == carrier
@@ -325,6 +331,7 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     _submit_all(repo, runtime, monkeypatch)
     event_log = tmp_path / "events.ndjson"
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("SLOW_REVIEW_CARRIER", "video")
 
     report_path = campaign_controller.run_campaign(
         ROOT_ID,
@@ -365,6 +372,7 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     assert set(publish_starts) == set(CARRIERS)
     for carrier in CARRIERS:
         assert publish_starts[carrier] >= review_ends[carrier]
+    assert min(publish_starts.values()) < review_ends["video"]
     assert len({row["pid"] for row in review_events}) == 4
     for lane in report["lanes"].values():
         assert lane["reviewReturnCode"] == 0

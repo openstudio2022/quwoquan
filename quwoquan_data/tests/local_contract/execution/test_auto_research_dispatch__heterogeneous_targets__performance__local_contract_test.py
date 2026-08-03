@@ -3,11 +3,24 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from content.execution.agent import auto_research
+from content.execution.agent.agent_checkpoint import _managed_checkpoint_job_issues
+from content.execution.agent.checkpoint_prompts import _checkpoint_prompts
 from content.execution.context import ExecutionContext
 from content.execution.recovery import download_unresolved
 from content.source.research import auto_plan_public
 from core.io import write_json
+from core.runtime_policy import active_runtime_policy
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
+
+
+def test_cursor_auto_runtime_reserves_bounded_m1000_lane_window():
+    policy = active_runtime_policy()
+
+    assert policy.author_workers == 1
+    assert policy.research_workers == 1
+    assert policy.campaign_lane_timeout_seconds >= 72 * 60 * 60
+    # 单对象失控保护不随批次总时限放宽。
+    assert policy.queue_max_wall_clock_seconds == 40 * 60
 
 
 def test_auto_research_dispatches_mixed_entity_types_in_one_worker_pool(monkeypatch, tmp_path):
@@ -106,3 +119,162 @@ def test_auto_research_resume_preserves_unstarted_waves(monkeypatch, tmp_path):
     )
 
     assert calls == [[entity_ids[3], entity_ids[4]]]
+
+
+def test_auto_research_report_preserves_all_lane_evidence_across_waves(
+    monkeypatch,
+    tmp_path,
+):
+    execution_id = "20260724--travel-video-coverage--test-region-a--scale-003"
+    plan_path = tmp_path / "plan.json"
+    ctx = SimpleNamespace(execution_id=execution_id)
+    monkeypatch.setattr(
+        download_unresolved,
+        "_auto_research_plan_path",
+        lambda _ctx: plan_path,
+    )
+
+    row_keys = (
+        "updated",
+        "issues",
+        "candidates",
+        "articleSourceDiscovery",
+        "imageCollections",
+        "homepageMediaCollections",
+        "homepageMediaAdvisories",
+        "sourceUnavailable",
+        "rescueEvents",
+        "videoFrames",
+        "videoDiscovery",
+        "videoProviderFunnels",
+    )
+
+    def wave(entity_id: str) -> dict[str, object]:
+        report: dict[str, object] = {
+            key: [{"entityId": entity_id, "field": key}]
+            for key in row_keys
+        }
+        report["sourceAvailability"] = {
+            "readyTargets": [entity_id],
+            "readyTargetCount": 1,
+            "ineligibleTargets": [],
+            "ineligibleTargetCount": 0,
+        }
+        report["throughput"] = {
+            "maxWorkers": 1,
+            "entityCount": 1,
+            "elapsedSeconds": 2.0,
+            "entitiesPerMinute": 30.0,
+        }
+        return report
+
+    auto_research._write_auto_research_report(
+        ctx,
+        wave("甲"),
+        scope="primary",
+        entity_ids=["甲"],
+    )
+    aggregate = auto_research._write_auto_research_report(
+        ctx,
+        wave("乙"),
+        scope="primary_wave_2",
+        entity_ids=["乙"],
+    )
+
+    for key in row_keys:
+        assert [row["entityId"] for row in aggregate[key]] == ["甲", "乙"]
+    assert aggregate["sourceAvailability"]["readyTargets"] == ["甲", "乙"]
+    assert aggregate["throughput"] == {
+        "maxWorkers": 1,
+        "entityCount": 2,
+        "elapsedSeconds": 4.0,
+        "entitiesPerMinute": 30.0,
+        "waveCount": 2,
+    }
+
+
+def test_download_plan_prompts_use_each_frozen_target_entity_type(
+    monkeypatch,
+    tmp_path,
+):
+    from content.execution.recovery import download_gate, stage_reset
+
+    execution_id = "20260724--travel-image-coverage--test-region-a--scale-004"
+    targets = (
+        {"name": "异构景区甲", "entityType": "地点/景区"},
+        {"name": "异构打卡地乙", "entityType": "地点/打卡地"},
+    )
+    builder = ExecutionFixtureBuilder(execution_id, targets=targets)
+    builder.build()
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=tuple(str(target["name"]) for target in targets),
+        spec=builder.spec(),
+        managed=True,
+    )
+    monkeypatch.setattr(stage_reset, "_source_plan_filled", lambda _ctx: (False, ["missing"]))
+    monkeypatch.setattr(
+        download_gate,
+        "_download_research_lane_issues",
+        lambda _ctx, _entity, _etype, lane: ["missing"] if lane == "image" else [],
+    )
+    monkeypatch.setattr(
+        download_gate,
+        "_download_repair_path",
+        lambda _ctx: tmp_path / "missing-download-repair.json",
+    )
+    monkeypatch.setattr(
+        "content.execution.agent.checkpoint_prompts.issue_messages",
+        lambda values: [str(value) for value in values],
+    )
+
+    prompts = _checkpoint_prompts(ctx, "download_plan")
+
+    prompt_by_entity = {
+        next(
+            line.removeprefix("对象: ")
+            for line in prompt.splitlines()
+            if line.startswith("对象: ")
+        ): prompt
+        for prompt in prompts
+    }
+    assert "/entities/地点/景区/异构景区甲/1.download/image_source_plan.json" in (
+        prompt_by_entity["异构景区甲"]
+    )
+    assert "/entities/地点/打卡地/异构打卡地乙/1.download/image_source_plan.json" in (
+        prompt_by_entity["异构打卡地乙"]
+    )
+
+
+def test_download_plan_job_gate_reads_the_prompt_entity_from_its_frozen_type(
+    monkeypatch,
+):
+    execution_id = "20260724--travel-image-coverage--test-region-a--scale-005"
+    target = {"name": "冻结景区甲", "entityType": "地点/景区"}
+    builder = ExecutionFixtureBuilder(execution_id, targets=(target,))
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=(str(target["name"]),),
+        spec=builder.spec(),
+        managed=True,
+    )
+    observed_types: list[str] = []
+
+    def record_type(_ctx, _entity, entity_type, _lane):
+        observed_types.append(entity_type)
+        return []
+
+    monkeypatch.setattr(download_unresolved, "_pending_download_repair_unresolved", lambda _ctx: {})
+    monkeypatch.setattr(
+        "content.execution.recovery.download_gate._download_research_lane_issues",
+        record_type,
+    )
+
+    issues = _managed_checkpoint_job_issues(
+        ctx,
+        stage="download_plan",
+        prompt="[AGENT_LANE:image]\n对象: 冻结景区甲\n",
+    )
+
+    assert issues == []
+    assert observed_types == ["地点/景区"]

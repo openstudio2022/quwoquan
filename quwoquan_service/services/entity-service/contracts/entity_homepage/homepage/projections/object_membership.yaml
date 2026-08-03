@@ -9,56 +9,26 @@ consumers:
 - app
 - recommendation
 - assistant
-client_projection:
-  dart_class: ObjectMembership
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/object_membership.g.dart
-  fields:
-  - name: membershipId
-    dart_type: String
-    nullable: false
-    source: membershipId
-    default: ''''''
-  - name: userId
-    dart_type: String
-    nullable: false
-    source: userId
-    default: ''''''
-  - name: organizationObjectId
-    dart_type: String
-    nullable: false
-    source: organizationObjectId
-    default: ''''''
-  - name: organizationObjectType
-    dart_type: String
-    nullable: false
-    source: organizationObjectType
-    default: '''organization'''
-  - name: role
-    dart_type: String
-    nullable: false
-    source: role
-    default: ''''''
-  - name: status
-    dart_type: String
-    nullable: false
-    source: status
-    default: '''self_declared'''
-  - name: evidenceSource
-    dart_type: String
-    nullable: false
-    source: evidenceSource
-    default: ''''''
-  - name: visibility
-    dart_type: String
-    nullable: false
-    source: visibility
-    default: '''public'''
-  - name: joinedAt
-    dart_type: DateTime?
-    nullable: true
-    source: joinedAt
-  - name: expiresAt
-    dart_type: DateTime?
-    nullable: true
-    source: expiresAt
+fields:
+- name: membershipId
+  type: string
+- name: userId
+  type: string
+- name: organizationObjectId
+  type: string
+- name: organizationObjectType
+  type: string
+- name: role
+  type: string
+- name: status
+  type: string
+- name: evidenceSource
+  type: string
+- name: visibility
+  type: string
+- name: joinedAt
+  type: timestamp
+  nullable: true
+- name: expiresAt
+  type: timestamp
+  nullable: true

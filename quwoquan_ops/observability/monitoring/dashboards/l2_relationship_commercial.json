@@ -38,7 +38,7 @@
       },
       {
         "title": "添加联系人有效成功率（服务代理指标）",
-        "description": "2xx FollowUser / 全部 FollowUser。互关形成率必须由 SLS product_action + capability relationState 对账，不能从本面板推断。",
+        "description": "2xx FollowUser / 全部 FollowUser。互关形成率必须由 Elasticsearch product_action + capability relationState 对账，不能从本面板推断。",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
         "targets": [
@@ -122,7 +122,7 @@
         "gridPos": { "h": 7, "w": 24, "x": 0, "y": 32 },
         "options": {
           "mode": "markdown",
-          "content": "业务黄金指标以 SLS `product_action` 为事实源：`follow_contact_*` 有效添加率、follow→mutual 互关形成率、GreetingRequest send→reply 回复率、显式 `summaryIntersections` 展示→`open_contact` 有效行动率。Prometheus 面板只表示服务健康，禁止把请求量或推荐分数冒充关系/交集事实。"
+          "content": "业务黄金指标以 Elasticsearch `product_action` 为事实源：`follow_contact_*` 有效添加率、follow→mutual 互关形成率、GreetingRequest send→reply 回复率、显式 `summaryIntersections` 展示→`open_contact` 有效行动率。Prometheus 面板只表示服务健康，禁止把请求量或推荐分数冒充关系/交集事实。"
         }
       }
     ]

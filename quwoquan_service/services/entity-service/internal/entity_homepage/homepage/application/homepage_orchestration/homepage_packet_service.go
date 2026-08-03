@@ -20,8 +20,6 @@ import (
 	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
-	claimapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/application"
-	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 )
 
 type GeoPoint = homepageapp.GeoPoint
@@ -50,18 +48,6 @@ type HomepageDataStore interface {
 	homepageports.ProjectionCheckpointStore
 }
 
-type HomepageClaimFacade interface {
-	Create(ctx context.Context, command claimapp.CreateCommand) (claimapp.ClaimRequestView, error)
-	Review(ctx context.Context, command claimapp.ReviewCommand) (claimapp.ClaimRequestView, error)
-	ListQueue(ctx context.Context, query claimapp.QueueQuery) (claimapp.ClaimRequestSlice, error)
-}
-
-type HomepageStatusReportFacade interface {
-	Create(ctx context.Context, command statusapp.CreateCommand) (statusapp.StatusReportView, error)
-	Review(ctx context.Context, command statusapp.ReviewCommand) (statusapp.StatusReportView, error)
-	ListQueue(ctx context.Context, query statusapp.QueueQuery) (statusapp.StatusReportSlice, error)
-}
-
 type ObjectIntersectionQuery struct {
 	ViewerPersonaID   string
 	ObjectID          string
@@ -79,8 +65,6 @@ type HomepageService struct {
 	queries         *homepageapp.QueryFacade
 	imports         *homepageapp.ImportFacade
 	store           HomepageDataStore
-	claims          HomepageClaimFacade
-	statusReports   HomepageStatusReportFacade
 	intersections   ObjectIntersectionReader
 	searchProjector Projector
 }
@@ -89,22 +73,6 @@ type HomepageServiceOption func(*HomepageService)
 
 func WithProjector(projector Projector) HomepageServiceOption {
 	return func(service *HomepageService) { service.searchProjector = projector }
-}
-
-func WithClaimFacade(facade HomepageClaimFacade) HomepageServiceOption {
-	return func(service *HomepageService) { service.claims = facade }
-}
-
-func WithStatusReportFacade(facade HomepageStatusReportFacade) HomepageServiceOption {
-	return func(service *HomepageService) { service.statusReports = facade }
-}
-
-func (s *HomepageService) SetClaimFacade(facade HomepageClaimFacade) {
-	s.claims = facade
-}
-
-func (s *HomepageService) SetStatusReportFacade(facade HomepageStatusReportFacade) {
-	s.statusReports = facade
 }
 
 func WithIntersectionReader(reader ObjectIntersectionReader) HomepageServiceOption {
@@ -155,9 +123,8 @@ func (observer homepageCommitObserver) OnHomepageCommitted(
 	}
 	view := homepageapp.ViewFromSnapshot(event.Snapshot)
 	projectorEvent := ProjectorEvent{
-		Type:       ProjectorEventHomepageUpserted,
-		HomepageID: view.ID,
-		Homepage:   &view,
+		Type: ProjectorEventHomepageUpserted, HomepageID: view.ID,
+		SourceVersion: event.Snapshot.Version, Homepage: &view,
 	}
 	if event.Snapshot.Status == homepagemodel.StatusOffline {
 		projectorEvent.Type = ProjectorEventHomepageRemoved
@@ -251,22 +218,20 @@ func (s *HomepageService) FindHomepageStatus(
 	return s.queries.FindHomepageStatus(ctx, homepageID)
 }
 
-func (s *HomepageService) FindHomepageState(
+func (s *HomepageService) FindHomepageClaimState(
 	ctx context.Context,
 	homepageID string,
-) (claimapp.HomepageState, bool, error) {
+) (status string, claimStatus string, found bool, err error) {
 	view, err := s.queries.Get(ctx, homepageID, "", true)
 	if err != nil {
 		var appError *rterr.AppError
 		if errors.As(err, &appError) &&
 			appError.Code.String() == entitygenerated.ErrHomepageNotFound.Error() {
-			return claimapp.HomepageState{}, false, nil
+			return "", "", false, nil
 		}
-		return claimapp.HomepageState{}, false, err
+		return "", "", false, err
 	}
-	return claimapp.HomepageState{
-		Status: view.Status, ClaimStatus: view.ClaimStatus,
-	}, true, nil
+	return view.Status, view.ClaimStatus, true, nil
 }
 
 func (s *HomepageService) GetHomepageForViewer(

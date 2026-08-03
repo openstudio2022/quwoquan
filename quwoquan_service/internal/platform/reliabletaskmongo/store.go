@@ -23,6 +23,13 @@ type Store struct {
 	leases           *mongo.Collection
 }
 
+// DataContentStore is the Post import task adapter. It intentionally exposes
+// only the task state machine; notification, provider and shard-lease
+// collections are not initialized in the content database.
+type DataContentStore struct {
+	*Store
+}
+
 var (
 	_ reliabletask.Store                            = (*Store)(nil)
 	_ reliabletask.ProviderAttemptLedgerStore       = (*Store)(nil)
@@ -31,6 +38,7 @@ var (
 	_ reliabletask.IdempotentDLQRecoveryStore       = (*Store)(nil)
 	_ reliabletask.RetentionCleanupStore            = (*Store)(nil)
 	_ reliabletask.MetricsStore                     = (*Store)(nil)
+	_ reliabletask.DataContentExecutionStore        = (*DataContentStore)(nil)
 )
 
 // New 创建 MongoDB 可靠任务存储适配器。
@@ -53,6 +61,18 @@ func NewExternalInteraction(db *mongo.Database) *Store {
 // 不得借此构造跨限界上下文共享的通知仓库。
 func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
 	return newStore(db, "notification_delivery_jobs", "notification_delivery_job_recipients")
+}
+
+// NewDataContentImport binds the reliable task state machine to collections
+// owned by content.Post. Reusing Integration's generic queue names would make
+// a Content worker a cross-service database writer.
+func NewDataContentImport(db *mongo.Database) *DataContentStore {
+	return &DataContentStore{Store: &Store{
+		db:               db,
+		outboxes:         db.Collection("post_import_task_outbox"),
+		tasks:            db.Collection("post_import_task"),
+		recoveryReceipts: db.Collection("post_import_task_recovery_receipt"),
+	}}
 }
 
 func newStore(db *mongo.Database, notificationCollection, ledgerCollection string) *Store {
@@ -83,42 +103,10 @@ func (s *Store) RunInTransaction(ctx context.Context, fn func(context.Context) e
 }
 
 func (s *Store) EnsureIndexes(ctx context.Context) error {
-	_, err := s.outboxes.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys: bson.D{{Key: "idempotencyKey", Value: 1}},
-			Options: options.Index().
-				SetUnique(true).
-				SetPartialFilterExpression(bson.M{"idempotencyKey": bson.M{"$type": "string", "$gt": ""}}),
-		},
-		{
-			Keys: bson.D{{Key: "dedupeKey", Value: 1}, {Key: "status", Value: 1}},
-			Options: options.Index().
-				SetUnique(true).
-				SetPartialFilterExpression(bson.M{"status": reliabletask.TaskOutboxStatusPending}),
-		},
-		{Keys: bson.D{{Key: "startAt", Value: 1}, {Key: "status", Value: 1}}},
-		{Keys: bson.D{{Key: "shardId", Value: 1}, {Key: "startAt", Value: 1}, {Key: "status", Value: 1}}},
-	})
-	if err != nil {
+	if err := s.ensureTaskIndexes(ctx); err != nil {
 		return err
 	}
-	_, err = s.tasks.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys: bson.D{{Key: "dedupeKey", Value: 1}, {Key: "status", Value: 1}},
-			Options: options.Index().
-				SetUnique(true).
-				SetPartialFilterExpression(bson.M{"status": bson.M{"$in": bson.A{
-					reliabletask.TaskStatusReady,
-					reliabletask.TaskStatusProcessing,
-					reliabletask.TaskStatusRetryWait,
-				}}}),
-		},
-		{Keys: bson.D{{Key: "nextAttemptAt", Value: 1}, {Key: "status", Value: 1}}},
-	})
-	if err != nil {
-		return err
-	}
-	_, err = s.notifications.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err := s.notifications.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "dedupeKey", Value: 1}}, Options: options.Index().SetUnique(true)},
 		{Keys: bson.D{{Key: "nextAttemptAt", Value: 1}, {Key: "status", Value: 1}}},
 	})
@@ -165,19 +153,7 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 			return err
 		}
 	}
-	_, err = s.recoveryReceipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "taskId", Value: 1}},
-			Options: options.Index().SetName("idx_reliable_task_recovery_receipt_task"),
-		},
-		{
-			Keys: bson.D{{Key: "expiresAt", Value: 1}},
-			Options: options.Index().
-				SetName("idx_reliable_task_recovery_receipt_expiry").
-				SetExpireAfterSeconds(0),
-		},
-	})
-	if err != nil {
+	if err := s.ensureRecoveryIndexes(ctx); err != nil {
 		return err
 	}
 	_, err = s.leases.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -193,4 +169,63 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "leaseUntil", Value: 1}}},
 	})
 	return err
+}
+
+func (s *Store) ensureTaskIndexes(ctx context.Context) error {
+	_, err := s.outboxes.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "idempotencyKey", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"idempotencyKey": bson.M{"$type": "string", "$gt": ""}}),
+		},
+		{
+			Keys: bson.D{{Key: "dedupeKey", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"status": reliabletask.TaskOutboxStatusPending}),
+		},
+		{Keys: bson.D{{Key: "startAt", Value: 1}, {Key: "status", Value: 1}}},
+		{Keys: bson.D{{Key: "shardId", Value: 1}, {Key: "startAt", Value: 1}, {Key: "status", Value: 1}}},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.tasks.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "dedupeKey", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"status": bson.M{"$in": bson.A{
+					reliabletask.TaskStatusReady,
+					reliabletask.TaskStatusProcessing,
+					reliabletask.TaskStatusRetryWait,
+				}}}),
+		},
+		{Keys: bson.D{{Key: "nextAttemptAt", Value: 1}, {Key: "status", Value: 1}}},
+	})
+	return err
+}
+
+func (s *Store) ensureRecoveryIndexes(ctx context.Context) error {
+	_, err := s.recoveryReceipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "taskId", Value: 1}},
+			Options: options.Index().SetName("idx_reliable_task_recovery_receipt_task"),
+		},
+		{
+			Keys: bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().
+				SetName("idx_reliable_task_recovery_receipt_expiry").
+				SetExpireAfterSeconds(0),
+		},
+	})
+	return err
+}
+
+func (s *DataContentStore) EnsureIndexes(ctx context.Context) error {
+	if err := s.ensureTaskIndexes(ctx); err != nil {
+		return err
+	}
+	return s.ensureRecoveryIndexes(ctx)
 }

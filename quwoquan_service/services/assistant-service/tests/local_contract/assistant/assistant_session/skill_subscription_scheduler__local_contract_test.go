@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/scheduling"
+	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
 
 type recordingSkillSubscriptionCronTicker struct {
@@ -18,12 +18,12 @@ type recordingSkillSubscriptionCronTicker struct {
 
 func (f *recordingSkillSubscriptionCronTicker) TickSkillSubscriptionCron(
 	context.Context,
-	assistant.SkillSubscriptionCronTickInput,
-) (assistant.SkillSubscriptionCronTickResult, error) {
+	skillmodel.SkillSubscriptionCronTickInput,
+) (skillmodel.SkillSubscriptionCronTickResult, error) {
 	if f.calls.Add(1) >= 2 {
 		f.cancel()
 	}
-	return assistant.SkillSubscriptionCronTickResult{}, nil
+	return skillmodel.SkillSubscriptionCronTickResult{}, nil
 }
 
 func TestSkillSubscriptionSchedulerTicksImmediatelyAndContinues(

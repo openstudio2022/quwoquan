@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	reporterrors "quwoquan_service/services/content-service/generated/trust_safety/report"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
 	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )

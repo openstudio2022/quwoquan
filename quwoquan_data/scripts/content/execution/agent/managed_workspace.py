@@ -140,7 +140,9 @@ def managed_local_workspace_guard(ctx: ExecutionContext):
 
 def terminate_workspace_cursor_bridges(workspace: Path) -> None:
     """Best-effort cleanup for half-started Cursor SDK bridges in this workspace."""
+    from content.execution.agent.agent_conflicts import _cursor_bridge_in_workspace
     from content.execution.agent.agent_worker import _terminate_pid_tree_if_alive
+    from content.execution.controller.preflight import _process_cwd
 
     try:
         proc = subprocess.run(
@@ -152,10 +154,10 @@ def terminate_workspace_cursor_bridges(workspace: Path) -> None:
         )
     except Exception:  # noqa: BLE001
         return
-    workspace_text = str(workspace)
+    workspace_path = workspace.resolve()
     current_pid = os.getpid()
     for line in proc.stdout.splitlines():
-        if "cursor-sdk-bridge" not in line or workspace_text not in line:
+        if "cursor-sdk-bridge" not in line:
             continue
         parts = line.strip().split(maxsplit=1)
         if not parts:
@@ -165,6 +167,12 @@ def terminate_workspace_cursor_bridges(workspace: Path) -> None:
         except ValueError:
             continue
         if pid <= 0 or pid == current_pid:
+            continue
+        if not _cursor_bridge_in_workspace(
+            parts[1] if len(parts) > 1 else "",
+            _process_cwd(pid),
+            workspace_path,
+        ):
             continue
         _terminate_pid_tree_if_alive(pid)
 

@@ -92,10 +92,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 参与者名单尚未进入真实会话同步链
+### OPEN-001 App 名单承接与端云一致性验收尚未闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺真实 Chat durable membership projector、Circle API composition 与 App 名单页；参与者值对象、容量/幂等/审批/退出裁决和事务 Store 已落地，本地 saga 测试证明 Chat 写失败不会伪造 joined。
+- 影响或价值：尚缺 App 名单页、审批/退出交互以及同一候选端云一致性验收；真实 Chat durable membership projector、Circle API composition、容量/幂等/审批/退出裁决、事务 Store 与失败重试已经落地。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

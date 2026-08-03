@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -25,57 +23,6 @@ func TestAssistantWireEntityOrderSortsDependenciesDeterministically(t *testing.T
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("attempt %d order = %v, want %v", attempt, got, want)
 		}
-	}
-}
-
-func TestAssistantPreferenceMetadataGeneratesTypedWire(t *testing.T) {
-	appDir := t.TempDir()
-	metadataDir := initializeTestContractGraph(t)
-	if err := generateAssistantCloudApiWireDart(metadataDir, appDir); err != nil {
-		t.Fatalf("generateAssistantCloudApiWireDart() error = %v", err)
-	}
-	outputPath := filepath.Join(
-		appDir,
-		"lib",
-		"cloud",
-		"runtime",
-		"generated",
-		"assistant",
-		"assistant_cloud_api_wire.g.dart",
-	)
-	payload, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatalf("read generated assistant wire: %v", err)
-	}
-	output := string(payload)
-	for _, required := range []string{
-		"import 'assistant_runtime_enums.g.dart';",
-		"class AssistantPreference {",
-		"final String? sourceSessionId;",
-		"final String? confirmedAt;",
-		"class AssistantPreferenceListView {",
-		"final List<AssistantPreference> items;",
-		"class SetAssistantPreferenceRequest {",
-		"final bool confirmed;",
-		"class AssistantStartRunRequest {",
-		"final AssistantRunIntent intent;",
-		"class AssistantAnswerRunIntent {",
-		"class AssistantSearchRunIntent {",
-		"class AssistantCreationRunIntent {",
-		"class AssistantCreateSessionRequest {",
-		"final String clientRequestId;",
-		"class AssistantRunTerminalSnapshotView {",
-		"class AssistantTurnSummaryView {",
-		"class AssistantTurnListView {",
-		"final List<AssistantTurnSummaryView> items;",
-	} {
-		if !strings.Contains(output, required) {
-			t.Fatalf("generated assistant wire missing %q", required)
-		}
-	}
-	if strings.Contains(output, "enum AssistantPreferenceScope") ||
-		strings.Contains(output, "class AssistantWireEnumParseFailure") {
-		t.Fatal("cloud wire must reuse the canonical Assistant runtime enum source")
 	}
 }
 

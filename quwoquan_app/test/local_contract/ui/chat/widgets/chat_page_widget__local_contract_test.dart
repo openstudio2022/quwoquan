@@ -15,6 +15,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -33,16 +34,16 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AckAppMessageCommand,
         AppMessage,
-        AppMessageCommandWriter,
         AppMessageDestination,
         AppMessageInboxSlice,
-        AppMessageQuery,
+        AppMessageRouteQuery,
         AppMessageTarget,
         AppMessageUnreadCountSlice,
         GetAppMessageQuery,
         GetAppMessageUnreadCountQuery,
         GreetingRequestRecord,
         ListAppMessagesQuery,
+        NotificationType,
         ReadAppMessageCommand;
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
@@ -169,7 +170,7 @@ final class _HomepageReminderAppMessageFacet extends _EmptyAppMessageFacet {
         AppMessage(
           messageId: 'app_msg_homepage_reminder',
           userId: 'mock_me',
-          messageType: 'content',
+          messageType: NotificationType.content,
           source: 'homepage',
           sourceId: 'homepage-1',
           destination: const AppMessageDestination(type: 'user', id: 'mock_me'),
@@ -178,6 +179,7 @@ final class _HomepageReminderAppMessageFacet extends _EmptyAppMessageFacet {
           target: const AppMessageTarget(
             targetType: 'homepage',
             targetId: 'homepage-1',
+            query: AppMessageRouteQuery(),
           ),
           read: false,
           createdAt: DateTime.utc(2026, 5, 1, 12),

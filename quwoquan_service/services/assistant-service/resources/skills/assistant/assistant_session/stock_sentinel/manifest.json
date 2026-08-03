@@ -10,5 +10,11 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.chart",
   "evaluationProfileRef": "evaluation.realtime_info",
-  "replayAssetRef": "assistant.replay.stock_sentinel.v1"
+  "replayAssetRef": "assistant.replay.stock_sentinel",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none",
+  "promptAssets": ["stock_sentinel.proactive", "assistant.evidence_discipline"]
 }

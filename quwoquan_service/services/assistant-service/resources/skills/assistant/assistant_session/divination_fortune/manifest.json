@@ -20,5 +20,10 @@
   "capabilityProfileRef": "capability.web2",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.divination_fortune.v1"
+  "replayAssetRef": "assistant.replay.divination_fortune",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

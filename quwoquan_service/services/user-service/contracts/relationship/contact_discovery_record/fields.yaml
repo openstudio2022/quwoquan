@@ -126,6 +126,31 @@ state_machine:
       to:
         - dismissed
 types:
+  ContactDiscoveryMatchResult:
+    fields:
+      - {name: hashedPhone, type: string, constraints: [NOT_BLANK]}
+      - {name: personaId, type: string, constraints: [NOT_BLANK]}
+      - {name: userHandle, type: string, constraints: [NOT_NULL]}
+      - {name: displayName, type: string, constraints: [NOT_NULL]}
+      - {name: avatarUrl, type: string, constraints: [NULLABLE]}
+      - {name: avatarVersion, type: int, constraints: [NOT_NULL]}
+      - {name: region, type: string, constraints: [NULLABLE]}
+      - name: relationshipCapability
+        type: object
+        object_ref: RelationshipCapabilityView
+        constraints: [NOT_NULL]
+  ContactDiscoveryResult:
+    fields:
+      - {name: id, type: string, constraints: [NOT_BLANK]}
+      - {name: status, type: enum, enum_ref: DiscoveryStatus, constraints: [NOT_NULL]}
+      - {name: matchedPersonaIds, type: '[]string', constraints: [NOT_NULL]}
+      - {name: matchCount, type: int, constraints: [NOT_NULL]}
+      - {name: matches, type: '[]ContactDiscoveryMatchResult', constraints: [NOT_NULL]}
+      - {name: expireAt, type: timestamp, constraints: [NULLABLE]}
+      - {name: completedAt, type: timestamp, constraints: [NULLABLE]}
+  ContactDiscoveryDismissResult:
+    fields:
+      - {name: status, type: enum, enum_ref: DiscoveryStatus, constraints: [NOT_NULL]}
   InitiateContactDiscoveryCommand:
     fields:
       - name: hashedPhones

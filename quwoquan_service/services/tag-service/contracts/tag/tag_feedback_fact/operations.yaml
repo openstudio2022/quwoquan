@@ -69,10 +69,6 @@ api_routes:
     response_entity: TagFeedbackResultView
     response_fields:
       - accepted
-    client_contract:
-      dart_import: ../tag/tag_feedback_fact_contracts.dart
-      response_type: TagFeedbackAck
-      response_decoder: decodeTagFeedbackAck
 consumers:
   - name: app
     capabilities:

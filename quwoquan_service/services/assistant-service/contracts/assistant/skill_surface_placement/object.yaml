@@ -1,0 +1,50 @@
+kind: aggregate_root
+description: >-
+  小趣在一个 Conversation 或 Circle 中的共享 Skill 路由策略聚合。它只拥有共享场景的
+  all_shared_eligible 策略和禁用清单，不拥有 Chat/Circle 成员、个人设置、个人记忆或 Connector。
+identity:
+  fields: [id]
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: createdByAccount
+  on_delete: retain
+  reference_fields: [createdByAccountId]
+  target_object: user.UserAccount
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: updatedByAccount
+  on_delete: retain
+  reference_fields: [updatedByAccountId]
+  target_object: user.UserAccount
+local_identity_reasons:
+  surfaceId: >-
+    由 surfaceKind 判别的 chat.Conversation 或 circle.Circle 外部对象引用；
+    只通过所属服务的 typed reader 校验存在性和管理员权限
+  disabledSkillIds: >-
+    active SkillPackageRelease 内的稳定 Skill key 集合；不是本聚合拥有的子对象身份
+capabilities: [commandable, queryable, idempotent_commands]
+taggable: false
+vector_enabled: false
+business_rules:
+- 同一 surfaceKind + surfaceId 最多一个 Placement；Conversation 与 Circle 的事实和成员权限仍归所属服务
+- all_shared_eligible 使 active package 中 shared-safe 且未禁用的官方 Skill 对新 Run 可用
+- disabledSkillIds 必须规范化去重并只引用 active package Skill；新 shared-safe Skill 无需修改 Placement 即可进入可用集合
+- 只有所属 surface 管理员可修改；普通成员读取不得获得管理员身份、个人设置、个人记忆或 Connector references
+- Placement 变更在新 Run 立即生效，既有 Run 在下一个安全边界重算；权限/Reader 不可用时失败关闭
+- 每次写入使用 expectedRevision CAS，并将聚合、幂等回执和审计事件在同一事务提交
+lifecycle:
+  state_field: status
+  states: [active, archived]
+  optimistic_concurrency: revision
+  idempotency: command_receipt

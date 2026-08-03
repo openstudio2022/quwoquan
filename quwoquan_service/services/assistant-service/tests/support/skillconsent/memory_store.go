@@ -76,15 +76,18 @@ func (store *MemoryStore) Apply(
 	switch command.Operation {
 	case model.CommandGrant:
 		if active != nil {
+			if !model.EqualScopes(active.GrantedScopes, command.GrantedScopes) {
+				return model.MutationResult{}, model.ErrScopeConflict
+			}
 			result.Consent = active
 			break
 		}
 		consent := model.Consent{
-			ID:           uuid.NewString(),
-			AccountID:    command.AccountID,
-			SkillID:      command.SkillID,
-			GrantedScope: command.GrantedScope,
-			GrantedAt:    command.OccurredAt,
+			ID:            uuid.NewString(),
+			AccountID:     command.AccountID,
+			SkillID:       command.SkillID,
+			GrantedScopes: append([]string(nil), command.GrantedScopes...),
+			GrantedAt:     command.OccurredAt,
 		}
 		store.items[consent.ID] = consent
 		result.Consent = &consent

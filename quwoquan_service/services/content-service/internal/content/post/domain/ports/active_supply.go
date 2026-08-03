@@ -9,9 +9,8 @@ import (
 var canonicalReleaseDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // ActiveSupplySnapshot identifies the canonical data release whose materialized
-// Post and discovery-feed projections may serve a
-// release-bound initial page. The counts are live readback counts, never the
-// importer's attempted-write counters.
+// Posts may serve a release-bound initial page. Recommendation candidate
+// readiness belongs to recommendation-service and is not duplicated here.
 type ActiveSupplySnapshot struct {
 	Environment     string
 	SourceOwner     string
@@ -20,7 +19,6 @@ type ActiveSupplySnapshot struct {
 	ManifestDigest  string
 	ReadbackStatus  string
 	Posts           int64
-	DiscoveryPosts  int64
 	PlayableVideos  int64
 }
 
@@ -44,18 +42,16 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ManifestDigest) == "" &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
-		snapshot.DiscoveryPosts == 0 &&
 		snapshot.PlayableVideos == 0
 }
 
-func (snapshot ActiveSupplySnapshot) DiscoveryReady() bool {
+func (snapshot ActiveSupplySnapshot) ContentReady() bool {
 	return snapshot.ReleaseBoundReadbackReady() &&
-		snapshot.Posts > 0 &&
-		snapshot.DiscoveryPosts > 0
+		snapshot.Posts > 0
 }
 
 func (snapshot ActiveSupplySnapshot) PlayableVideoReady() bool {
-	return snapshot.DiscoveryReady() && snapshot.PlayableVideos > 0
+	return snapshot.ContentReady() && snapshot.PlayableVideos > 0
 }
 
 func (snapshot ActiveSupplySnapshot) Ready() bool {

@@ -33,10 +33,8 @@ void main() {
         authTokenProvider: const _AssistantQueryAuthTokenProvider(),
       );
       final repository = RemoteAssistantRepository(
-        httpClient: httpClient,
         operationClient: buildAssistantRemoteTestOperationClient(httpClient),
-        sessionInvocationContext: assistantRemoteTestInvocationContext,
-        consentAccountId: 'assistant-query-test',
+        invocationContext: assistantRemoteTestInvocationContext,
       );
 
       final page = await repository.listAssistantSessions(

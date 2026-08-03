@@ -56,14 +56,10 @@ api_routes:
       query:
         - name: limit
           field: limit
-    response_entity: SearchTermHeatView
+    response_entity: SearchTermHeatSlice
     response_fields:
       - query
       - relevance
-    client_contract:
-      dart_import: ../search/hot_query_contracts.dart
-      response_type: HotQuerySlice
-      response_decoder: decodeHotQuerySlice
     security:
       auth_mode: optional
       principal: public

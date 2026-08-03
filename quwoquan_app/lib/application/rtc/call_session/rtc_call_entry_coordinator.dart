@@ -208,7 +208,7 @@ final class RtcCallEntryCoordinator {
 
   final CallLifecycleCommandWriter lifecycleWriter;
 
-  Future<RtcInitiateCallResultDto> initiate(
+  Future<RtcInitiateCallResult> initiate(
     RtcCallEntryIntent intent, {
     List<String> selectedInviteeIds = const <String>[],
   }) async {
@@ -231,7 +231,7 @@ final class RtcCallEntryCoordinator {
     }
     return lifecycleWriter.initiateCall(
       RtcInitiateCallCommand(
-        callType: CallType.fromString(intent.mediaType.wireValue),
+        callType: CallType.fromWire(intent.mediaType.wireValue, 'callType'),
         inviteeIds: inviteeIds,
         conversationId: _nonEmpty(intent.conversationId),
         circleId: _nonEmpty(intent.circleId),

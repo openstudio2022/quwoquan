@@ -20,11 +20,8 @@ type MongoChatStore struct {
 	db                            *mongo.Database
 	conversations                 *mongo.Collection
 	messages                      *mongo.Collection
-	members                       *mongo.Collection
-	userStates                    *mongo.Collection
 	circleGroupProjections        *mongo.Collection
 	circleGroupBindingProjections *mongo.Collection
-	messageReceipts               *mongo.Collection
 	messageCommandReceipts        *mongo.Collection
 	messageSequences              *mongo.Collection
 	messageOutbox                 *mongo.Collection
@@ -36,6 +33,7 @@ var (
 	_ application.TransactionRunner                     = (*MongoChatStore)(nil)
 	_ application.ConversationStore                     = (*MongoChatStore)(nil)
 	_ application.CircleGroupConversationReader         = (*MongoChatStore)(nil)
+	_ application.GatheringConversationReader           = (*MongoChatStore)(nil)
 	_ application.CircleGroupMembershipProjectionStore  = (*MongoChatStore)(nil)
 	_ application.CircleGroupChatBindingProjectionStore = (*MongoChatStore)(nil)
 	_ application.MessageStore                          = (*MongoChatStore)(nil)
@@ -43,9 +41,6 @@ var (
 	_ application.MessageOutboxDispatchStore            = (*MongoChatStore)(nil)
 	_ application.MessageOutboxCheckpointStore          = (*MongoChatStore)(nil)
 	_ application.ConversationMessageProjector          = (*MongoChatStore)(nil)
-	_ application.MemberStore                           = (*MongoChatStore)(nil)
-	_ application.UserStateStore                        = (*MongoChatStore)(nil)
-	_ application.ReceiptFactStore                      = (*MongoChatStore)(nil)
 )
 
 func NewMongoChatStore(db *mongo.Database) *MongoChatStore {
@@ -53,11 +48,8 @@ func NewMongoChatStore(db *mongo.Database) *MongoChatStore {
 		db:                            db,
 		conversations:                 db.Collection("conversations"),
 		messages:                      db.Collection("messages"),
-		members:                       db.Collection("conversation_memberships"),
-		userStates:                    db.Collection("conversation_user_states"),
 		circleGroupProjections:        db.Collection("circle_group_membership_projection_states"),
 		circleGroupBindingProjections: db.Collection("circle_group_chat_binding_projection_states"),
-		messageReceipts:               db.Collection("message_receipts"),
 		messageCommandReceipts:        db.Collection("messages_command_receipts"),
 		messageSequences:              db.Collection("messages_sequences"),
 		messageOutbox:                 db.Collection("messages_outbox"),
@@ -75,6 +67,7 @@ func (s *MongoChatStore) EnsureIndexes(ctx context.Context) error {
 			{Keys: bson.D{{Key: "type", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_conv_type_updated")},
 			{Keys: bson.D{{Key: "circleId", Value: 1}}, Options: options.Index().SetName("idx_conv_circle").SetSparse(true)},
 			{Keys: bson.D{{Key: "circleGroupId", Value: 1}}, Options: options.Index().SetName("uq_conv_circle_group").SetSparse(true).SetUnique(true)},
+			{Keys: bson.D{{Key: "gatheringId", Value: 1}}, Options: options.Index().SetName("uq_conv_gathering").SetSparse(true).SetUnique(true)},
 			{Keys: bson.D{{Key: "status", Value: 1}}, Options: options.Index().SetName("idx_conv_status")},
 			{Keys: bson.D{{Key: "lastMessageTime", Value: -1}}, Options: options.Index().SetName("idx_conv_last_msg_time")},
 			{Keys: bson.D{{Key: "originRequestId", Value: 1}}, Options: options.Index().SetName("uq_conv_origin_request").SetUnique(true).SetSparse(true)},
@@ -86,15 +79,6 @@ func (s *MongoChatStore) EnsureIndexes(ctx context.Context) error {
 			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "mentions", Value: 1}, {Key: "seq", Value: 1}}, Options: options.Index().SetName("idx_messages_conversation_mentions_seq")},
 			{Keys: bson.D{{Key: "replyToMessageId", Value: 1}}, Options: options.Index().SetName("idx_messages_reply").SetSparse(true)},
 		}},
-		{s.members, []mongo.IndexModel{
-			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("uq_conversation_memberships_identity").SetUnique(true)},
-			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "role", Value: 1}, {Key: "joinedAt", Value: 1}}, Options: options.Index().SetName("idx_conversation_memberships_role_joined")},
-			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "displayName", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("idx_conversation_memberships_display_name")},
-		}},
-		{s.userStates, []mongo.IndexModel{
-			{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "conversationId", Value: 1}}, Options: options.Index().SetName("uq_conversation_user_states_identity").SetUnique(true)},
-			{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "pinned", Value: -1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_conversation_user_states_inbox")},
-		}},
 		{s.circleGroupProjections, []mongo.IndexModel{
 			{Keys: bson.D{{Key: "circleGroupId", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("uq_circle_group_membership_projection_identity").SetUnique(true)},
 			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "sourceVersion", Value: -1}}, Options: options.Index().SetName("idx_circle_group_membership_projection_conversation")},
@@ -102,10 +86,6 @@ func (s *MongoChatStore) EnsureIndexes(ctx context.Context) error {
 		{s.circleGroupBindingProjections, []mongo.IndexModel{
 			{Keys: bson.D{{Key: "circleGroupId", Value: 1}}, Options: options.Index().SetName("uq_circle_group_chat_binding_projection_group").SetUnique(true)},
 			{Keys: bson.D{{Key: "status", Value: 1}, {Key: "sourceVersion", Value: -1}}, Options: options.Index().SetName("idx_circle_group_chat_binding_projection_status")},
-		}},
-		{s.messageReceipts, []mongo.IndexModel{
-			{Keys: bson.D{{Key: "messageId", Value: 1}, {Key: "userId", Value: 1}}, Options: options.Index().SetName("uq_message_receipts_identity").SetUnique(true)},
-			{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "messageId", Value: 1}}, Options: options.Index().SetName("idx_message_receipts_conversation_message")},
 		}},
 		{s.messageCommandReceipts, []mongo.IndexModel{
 			{Keys: bson.D{{Key: "messageId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_message_command_receipts_message")},
@@ -148,6 +128,13 @@ func (s *MongoChatStore) CreateConversation(ctx context.Context, conv *model.Con
 			"%w: circleGroupId=%s",
 			model.ErrCircleGroupConversationAlreadyBound,
 			conv.CircleGroupId,
+		)
+	}
+	if mongo.IsDuplicateKeyError(err) && strings.TrimSpace(conv.GatheringId) != "" {
+		return fmt.Errorf(
+			"%w: gatheringId=%s",
+			model.ErrGatheringConversationAlreadyBound,
+			conv.GatheringId,
 		)
 	}
 	return err
@@ -206,77 +193,29 @@ func (s *MongoChatStore) FindConversationByCircleGroupID(
 	return &conv, nil
 }
 
+func (s *MongoChatStore) FindConversationByGatheringID(
+	ctx context.Context,
+	gatheringID string,
+) (*model.Conversation, error) {
+	gatheringID = strings.TrimSpace(gatheringID)
+	if gatheringID == "" {
+		return nil, fmt.Errorf("%w: blank Gathering", model.ErrConversationNotFound)
+	}
+	var conversation model.Conversation
+	err := s.conversations.FindOne(ctx, bson.M{"gatheringId": gatheringID}).Decode(&conversation)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, fmt.Errorf("%w: gatheringId=%s", model.ErrConversationNotFound, gatheringID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find conversation for Gathering %s: %w", gatheringID, err)
+	}
+	return &conversation, nil
+}
+
 func (s *MongoChatStore) UpdateConversation(ctx context.Context, id string, conv *model.Conversation) error {
 	conv.UpdatedAt = time.Now()
 	_, err := s.conversations.ReplaceOne(ctx, bson.M{"_id": id}, conv)
 	return err
-}
-
-func (s *MongoChatStore) ListConversationPageByUser(
-	ctx context.Context,
-	userId string,
-	limit int,
-	cursor string,
-) (model.ConversationPage, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-
-	statePage, err := s.ListUserStatePage(ctx, userId, limit, cursor)
-	if err != nil {
-		return model.ConversationPage{}, err
-	}
-
-	convIds := make([]string, 0, len(statePage.Items))
-	for _, st := range statePage.Items {
-		convIds = append(convIds, st.ConversationId)
-	}
-	if len(convIds) == 0 {
-		return model.ConversationPage{NextCursor: statePage.NextCursor}, nil
-	}
-
-	cur, err := s.conversations.Find(ctx, bson.M{"_id": bson.M{"$in": convIds}})
-	if err != nil {
-		return model.ConversationPage{}, err
-	}
-	defer cur.Close(ctx)
-
-	var convs []model.Conversation
-	if err := cur.All(ctx, &convs); err != nil {
-		return model.ConversationPage{}, err
-	}
-
-	convMap := make(map[string]model.Conversation, len(convs))
-	for _, c := range convs {
-		convMap[c.ID] = c
-	}
-
-	result := make([]model.Conversation, 0, len(convIds))
-	for _, id := range convIds {
-		if c, ok := convMap[id]; ok {
-			if c.Status != "active" {
-				continue
-			}
-			result = append(result, c)
-		}
-	}
-	return model.ConversationPage{
-		Items:      result,
-		NextCursor: statePage.NextCursor,
-	}, nil
-}
-
-func (s *MongoChatStore) ListConversationsByUser(
-	ctx context.Context,
-	userId string,
-	limit int,
-	cursor string,
-) ([]model.Conversation, error) {
-	page, err := s.ListConversationPageByUser(ctx, userId, limit, cursor)
-	if err != nil {
-		return nil, err
-	}
-	return page.Items, nil
 }
 
 func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]model.Conversation, error) {
@@ -306,54 +245,5 @@ func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context
 }
 
 // ── Message ──────────────────────────────────────────────────────────────────
-
-func (s *MongoChatStore) FindDirectConversationBetween(ctx context.Context, memberA, memberB string) (*model.Conversation, error) {
-	if strings.TrimSpace(memberA) == "" || strings.TrimSpace(memberB) == "" {
-		return nil, fmt.Errorf("conversation members required")
-	}
-	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{
-			"userId":     bson.M{"$in": []string{memberA, memberB}},
-			"memberType": "user",
-		}}},
-		{{Key: "$group", Value: bson.M{
-			"_id":       "$conversationId",
-			"memberIds": bson.M{"$addToSet": "$userId"},
-			"count":     bson.M{"$sum": 1},
-		}}},
-		{{Key: "$match", Value: bson.M{
-			"count": 2,
-			"memberIds": bson.M{
-				"$all": []string{memberA, memberB},
-			},
-		}}},
-		{{Key: "$limit", Value: 1}},
-	}
-	cur, err := s.members.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(ctx)
-	var rows []struct {
-		ID string `bson:"_id"`
-	}
-	if err := cur.All(ctx, &rows); err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	conv, err := s.FindConversationByID(ctx, rows[0].ID)
-	if err != nil {
-		return nil, err
-	}
-	if conv.Type != "direct" && conv.Type != "encrypted" {
-		return nil, nil
-	}
-	if conv.Status != "" && conv.Status != "active" {
-		return nil, nil
-	}
-	return conv, nil
-}
 
 // ── Receipts ─────────────────────────────────────────────────────────────────

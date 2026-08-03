@@ -11,6 +11,12 @@ from internal.recommendation.recommendation_subject_closure_fact.application.app
 )
 
 
+def _bson_datetime(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(
+        microsecond=(value.microsecond // 1000) * 1000
+    )
+
+
 class MongoSubjectClosureStore:
     def __init__(self, database: Any) -> None:
         self._facts = database["recommendation_subject_closure_facts"]
@@ -55,8 +61,8 @@ class MongoSubjectClosureStore:
             "subjectIds": list(fact.subject_ids),
             "sourceEventId": fact.source_event_id,
             "sourceDigest": fact.source_digest,
-            "closedAt": fact.closed_at,
-            "recordedAt": fact.recorded_at,
+            "closedAt": _bson_datetime(fact.closed_at),
+            "recordedAt": _bson_datetime(fact.recorded_at),
         }
         try:
             result = self._facts.update_one(
@@ -73,7 +79,8 @@ class MongoSubjectClosureStore:
         if (
             persisted.source_event_id != fact.source_event_id
             or persisted.source_digest != fact.source_digest
-            or persisted.closed_at != fact.closed_at
+            or persisted.closed_at != document["closedAt"]
+            or persisted.recorded_at != document["recordedAt"]
         ):
             raise RuntimeError("subject closure identity conflicts with an existing terminal fact")
         return persisted, result.upserted_id is not None

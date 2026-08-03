@@ -37,9 +37,10 @@ func TestTerminalFeedResponseStillPersistsOneDeliveryPage(t *testing.T) {
 		CreatedAt: now, PublishedAt: now,
 	}}
 	store := &recordingDeliveryPageStore{}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(deliveryCandidates(posts)),
 		fixtureFeedReader{posts: posts},
+		readyActiveSupplyOption(),
 		WithFeedDeliveryPageStore(store),
 	)
 	response, err := service.ListFeed(context.Background(), ListFeedRequest{
@@ -67,9 +68,10 @@ func TestDeliveredPagePreviousCursorReplaysIdentityOrderWithoutRecall(t *testing
 	source := &countingDeliveryRecallSource{candidates: deliveryCandidates(posts)}
 	reader := &countingDeliveryPageReader{fixtureFeedReader: fixtureFeedReader{posts: posts}}
 	store := deliveryredis.NewStore(rtredis.NewMemoryClient())
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngineWithSource(source),
 		reader,
+		readyActiveSupplyOption(),
 		WithFeedDeliveryPageStore(store),
 	)
 	request := ListFeedRequest{
@@ -132,9 +134,10 @@ func TestFeedCursorBindsNormalizedPageSize(t *testing.T) {
 		{ID: "page-size-1", AuthorId: "author-1", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
 		{ID: "page-size-2", AuthorId: "author-2", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
 	}
-	service := NewFeedService(
+	service := newTerminalFeedService(
 		newTerminalFeedEngine(deliveryCandidates(posts)),
 		fixtureFeedReader{posts: posts},
+		readyActiveSupplyOption(),
 		WithFeedDeliveryPageStore(deliveryredis.NewStore(rtredis.NewMemoryClient())),
 	)
 	request := ListFeedRequest{UserID: "page-size-user", SessionID: "page-size-session", ChannelID: "following", Limit: 1}

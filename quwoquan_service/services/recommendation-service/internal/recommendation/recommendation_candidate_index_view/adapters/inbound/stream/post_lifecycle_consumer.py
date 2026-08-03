@@ -9,6 +9,7 @@ from typing import Any
 
 from internal.recommendation.recommendation_candidate_index_view.application.projector import (
     CandidateLifecycleSnapshot,
+    RecommendationObjectCardCandidate,
 )
 
 
@@ -76,8 +77,8 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent:
     if not isinstance(payload, dict):
         raise ValueError("Post lifecycle payload must be an object")
     post_id = values.get("aggregateId", "").strip()
-    payload_post_id = str(payload.get("postId") or payload.get("id") or "").strip()
-    if not post_id or payload_post_id and payload_post_id != post_id:
+    payload_post_id = str(payload.get("postId") or "").strip()
+    if not post_id or not payload_post_id or payload_post_id != post_id:
         raise ValueError("Post lifecycle aggregate identity mismatch")
     event = PostLifecycleEvent(
         event_id=values.get("eventId", "").strip(),
@@ -126,6 +127,34 @@ def lifecycle_snapshot(event: PostLifecycleEvent) -> CandidateLifecycleSnapshot 
     tag_refs = _string_tuple(event.payload.get("tagRefs"))
     published_at = _parse_time(event.payload.get("publishedAt"))
     updated_at = _parse_time(event.payload.get("updatedAt"))
+    homepage_id = str(event.payload.get("primaryHomepageId") or "").strip()
+    raw_homepage = event.payload.get("primaryHomepageSnapshot")
+    object_card = None
+    if homepage_id:
+        if not isinstance(raw_homepage, dict):
+            raise ValueError(
+                "Post lifecycle primaryHomepageId requires primaryHomepageSnapshot"
+            )
+        canonical_entity_id = str(
+            raw_homepage.get("canonicalEntityId") or ""
+        ).strip()
+        title = str(raw_homepage.get("title") or "").strip()
+        if not canonical_entity_id or not title:
+            raise ValueError(
+                "Post lifecycle Homepage snapshot identity and title are required"
+            )
+        object_card = RecommendationObjectCardCandidate(
+            homepage_id=homepage_id,
+            canonical_entity_id=canonical_entity_id,
+            title=title,
+            subtitle=(str(raw_homepage.get("subtitle") or "").strip() or None),
+            cover_url=(str(raw_homepage.get("coverUrl") or "").strip() or None),
+            tag_refs=tag_refs,
+        )
+    elif raw_homepage not in (None, {}):
+        raise ValueError(
+            "Post lifecycle primaryHomepageSnapshot requires primaryHomepageId"
+        )
     return CandidateLifecycleSnapshot(
         scenario="content_feed",
         content_id=event.post_id,
@@ -138,6 +167,7 @@ def lifecycle_snapshot(event: PostLifecycleEvent) -> CandidateLifecycleSnapshot 
         entity_tag_ids=tuple(tag for tag in tag_refs if tag.startswith("Entity/")),
         source_sequence=event.post_version,
         updated_at=updated_at,
+        object_card=object_card,
     )
 
 
@@ -147,10 +177,12 @@ class PostLifecycleConsumer:
         *,
         redis_client: Any,
         projection: Any,
+        subject_closures: Any,
         consumer: str,
     ) -> None:
         self._redis = redis_client
         self._projection = projection
+        self._subject_closures = subject_closures
         self._consumer = consumer.strip() or "recommendation-candidate-projection"
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -233,6 +265,9 @@ class PostLifecycleConsumer:
             event = decode_post_lifecycle(values)
             snapshot = lifecycle_snapshot(event)
             removal = None
+            if snapshot is not None and self._subject_closures.exists(snapshot.author_id):
+                snapshot = None
+                removal = ("content_feed", event.post_id, event.post_version)
             if event.event_type in REMOVAL_EVENTS or (
                 event.event_type in UPSERT_EVENTS and snapshot is None
             ):

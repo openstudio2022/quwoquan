@@ -231,12 +231,24 @@ def _execute_cell(
         if requested_image_digest != expected_image_digest:
             raise ValueError("--image-digest does not match the active immutable image")
         image_digest = requested_image_digest
-    adapters = {
-        item.get("adapter_id"): item
+    adapter_candidates = [
+        item
         for item in registry.get("adapters", [])
         if isinstance(item, Mapping)
-    }
-    adapter = adapters.get(args.adapter_id)
+        and item.get("adapter_id") == args.adapter_id
+        and (
+            not str(getattr(args, "capability_id", "") or "").strip()
+            or item.get("capability_id") == getattr(args, "capability_id", "")
+        )
+    ]
+    if len(adapter_candidates) != 1:
+        detail = (
+            "capability-id is required to disambiguate a shared adapter"
+            if adapter_candidates
+            else "adapter/capability pair is not registered"
+        )
+        raise ValueError(f"{args.adapter_id}: {detail}")
+    adapter = adapter_candidates[0]
     if not isinstance(adapter, Mapping):
         raise ValueError(f"unregistered adapter: {args.adapter_id}")
     capability_id = adapter.get("capability_id")
@@ -492,9 +504,10 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     )
         else:
-            if not all((args.adapter_id, args.environment, args.layer)) or args.capability_id:
+            if not all((args.adapter_id, args.environment, args.layer)):
                 raise ValueError(
-                    "single-cell execution requires --adapter-id --environment --layer"
+                    "single-cell execution requires --adapter-id --environment --layer; "
+                    "--capability-id may disambiguate an adapter shared by typed Ports"
                 )
             evidence_paths.append(
                 _execute_cell(

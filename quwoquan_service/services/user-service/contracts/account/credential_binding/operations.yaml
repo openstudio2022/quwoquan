@@ -11,7 +11,7 @@ api_routes:
       reader: ListCredentialsReader
       slice: ListCredentialsSlice
     description: 查看当前账号已绑定的 active 凭证列表（脱敏，不返回 credentialKey）
-    response_entity: CredentialBinding
+    response_entity: ListCredentialsSlice
     response_fields:
       - id
       - credentialType
@@ -56,10 +56,8 @@ api_routes:
       visibility: private
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../user/credential_binding_contracts.dart
-      response_type: ListCredentialsSlice
-      response_decoder: decodeListCredentialsSlice
+    response_body: ListCredentialsSlice
+    response_body_kind: object
     request_entity: ListCredentialsQuery
     request_body_kind: none
   - method: POST
@@ -124,10 +122,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/credential_binding_contracts.dart
-      response_type: CredentialBindingCommandResult
-      response_decoder: decodeCredentialBindingCommandResult
+    response_body: CredentialBindingCommandResult
+    response_body_kind: object
     request_entity: BindPhoneCredentialCommand
     request_body_kind: object
   - method: POST
@@ -201,10 +197,9 @@ api_routes:
       token_transport: none
       anonymous_policy: allow
       visibility: private
-    client_contract:
-      dart_import: ../user/credential_binding_contracts.dart
-      response_type: AuthSessionGrant
-      response_decoder: decodeAuthSessionGrant
+    response_entity: AuthSessionGrant
+    response_body: AuthSessionGrant
+    response_body_kind: object
     request_entity: CompleteFederatedPhoneBindingCommand
     request_body_kind: object
   - method: POST
@@ -268,10 +263,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/credential_binding_contracts.dart
-      response_type: CredentialBindingCommandResult
-      response_decoder: decodeCredentialBindingCommandResult
+    response_body: CredentialBindingCommandResult
+    response_body_kind: object
     request_entity: BindCarrierPhoneCredentialCommand
     request_body_kind: object
   - method: DELETE
@@ -337,9 +330,7 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/credential_binding_contracts.dart
-      response_type: CredentialBindingCommandResult
-      response_decoder: decodeCredentialBindingCommandResult
+    response_body: CredentialBindingCommandResult
+    response_body_kind: object
     request_entity: UnbindCredentialCommand
     request_body_kind: none

@@ -47,6 +47,10 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
+  homepage_review_projection_checkpoints:
+    entity: HomepageReview
+    role: projection
+    description: HomepageReview outbox projector 的可重建消费水位。
 transaction:
   scope:
   - homepage_reviews

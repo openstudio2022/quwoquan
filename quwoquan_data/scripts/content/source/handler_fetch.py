@@ -24,6 +24,7 @@ from content.source.source_inputs import (
 )
 from content.source.fetch_payload import fetch_source_payload
 from content.source.handler_fetch_images import prepare_entity_images
+from content.source.contracts import MediaProvenance
 
 from content.source.handler_plan import _write_download_progress
 from content.source.handler_images import (
@@ -157,6 +158,8 @@ def _fetch_download_entity(
     image_quality_issues = image_result.quality_issues
     rejected_by_category = dict(image_result.rejected_by_category)
     pending_images = image_result.pending_images
+    provider_asset_counts = image_result.provider_asset_counts
+    source_asset_counts = list(provider_asset_counts)
     required_image_work_images = image_result.required_image_work_images
     planned_homepage_source_images = image_result.planned_homepage_source_images
     required_homepage_media = image_result.required_homepage_media
@@ -486,6 +489,39 @@ def _fetch_download_entity(
             build_variants=False,
             source=source_for_unit,
         )
+        candidate_count = int(source_image_funnel.get("candidateCount") or 0)
+        accepted_count = (
+            int(manifest.get("assetCount") or 0)
+            if str(quality.get("quality") or "") != "Reject"
+            else 0
+        )
+        fetch_failures = source_image_funnel.get("fetchFailures")
+        downloaded_count = candidate_count - (
+            len(fetch_failures) if isinstance(fetch_failures, list) else 0
+        )
+        rights_counts = {
+            "verifiedAssetCount": 0,
+            "unverifiedAssetCount": 0,
+            "restrictedAssetCount": 0,
+            "unknownAssetCount": 0,
+        }
+        for image in source_images if accepted_count else ():
+            status = MediaProvenance.from_mapping(
+                image,
+                vertical=vertical,
+            ).rights_audit_status.value
+            rights_counts[f"{status}AssetCount"] += 1
+        source_count_row = {
+            "displayName": str(manifest.get("title") or source["source_id"]),
+            "provider": str(manifest.get("platform") or "web"),
+            "plannedAssetCount": candidate_count,
+            "discoveredAssetCount": candidate_count,
+            "downloadedAssetCount": max(0, downloaded_count),
+            "acceptedAssetCount": accepted_count,
+            "rejectedAssetCount": max(0, candidate_count - accepted_count),
+            **rights_counts,
+        }
+        source_asset_counts.append(source_count_row)
         unit_dir = execution_source_unit_dir(execution_id, str(manifest.get("sourceUnitId") or ""))
         if str(quality.get("quality") or "") == "Reject":
             rejected_dir = _move_rejected_source_unit(object_dir, unit_dir, quality=quality)
@@ -558,6 +594,7 @@ def _fetch_download_entity(
         sources=tuple(sources),
         image_specs=tuple(image_specs),
         pending_images=tuple(pending_images),
+        provider_asset_counts=tuple(source_asset_counts),
         existing_image_source_dirs=frozenset(existing_image_source_dirs),
         written_source_dirs=frozenset(written_source_dirs),
         written_rejected_source_dirs=frozenset(written_rejected_source_dirs),

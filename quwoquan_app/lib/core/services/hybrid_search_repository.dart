@@ -267,7 +267,7 @@ final class HybridSearchRepository implements SearchRepository {
         );
         final hits = records
             .map((record) {
-              final item = CircleSearchItemView(
+              final item = CircleSearchHitViewData(
                 circleId: record.circleId,
                 name: record.name,
                 description: record.description,

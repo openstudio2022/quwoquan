@@ -20,5 +20,10 @@
   "capabilityProfileRef": "capability.web2",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.emotion_companion.v1"
+  "replayAssetRef": "assistant.replay.emotion_companion",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

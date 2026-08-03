@@ -13,6 +13,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 // subagentStubModel 按 stage 返回可控响应，并记录每个 skill 各自的推理请求。
@@ -32,7 +33,7 @@ func (model *subagentStubModel) Complete(
 			"problemShape": "multi_skill",
 			"subagentPlan": []any{
 				map[string]any{"skillId": "weather", "goal": "确认周末天气", "role": "supporting"},
-				map[string]any{"skillId": "travel_transport", "goal": "确认交通方案", "role": "primary"},
+				map[string]any{"skillId": "travel_companion", "goal": "确认吃玩住行与交通方案", "role": "primary"},
 			},
 		}
 		raw, _ := json.Marshal(delta)
@@ -48,7 +49,7 @@ func (model *subagentStubModel) Complete(
 		)
 		model.mu.Unlock()
 		toolName := "web_search"
-		if req.SkillID == "travel_transport" {
+		if req.SkillID == "travel_companion" {
 			toolName = "app_search"
 		}
 		delta := map[string]any{
@@ -126,17 +127,20 @@ func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestratio
 		nil,
 	)
 	loop.PromptAssets = promptassets.MustResolver(t)
-	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model}
+	loop.Catalog = skillfixture.Loader{}
+	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model, Loader: skillfixture.Loader{}}
 	return loop
 }
 
 func multiSkillTurn() assistant.AssistantTurn {
-	selection := testFrozenPolicySelection("assistant-default", "travel_planning", "travel")
+	selection := testFrozenPolicySelection("assistant-default", "fallback_general_search", "assistant")
 	selection.Template.AllowedTools = []string{"web_search", "app_search"}
 	return assistant.AssistantTurn{
 		SessionID:             "session-subagent",
 		TurnID:                "turn-subagent",
 		TraceID:               "trace-subagent",
+		SkillID:               "travel_companion",
+		DomainID:              "travel",
 		Input:                 assistant.AssistantTurnInput{Text: "周末从上海出发去杭州，天气和交通怎么安排"},
 		FrozenPolicySelection: selection,
 	}
@@ -200,7 +204,7 @@ func TestSubagentToolWhitelistIsIsolated(t *testing.T) {
 	model.mu.Lock()
 	defer model.mu.Unlock()
 	weatherTools := model.reasoningTools["weather"]
-	transportTools := model.reasoningTools["travel_transport"]
+	transportTools := model.reasoningTools["travel_companion"]
 	if len(weatherTools) == 0 || len(transportTools) == 0 {
 		t.Fatalf("both subagents must reason: %#v", model.reasoningTools)
 	}

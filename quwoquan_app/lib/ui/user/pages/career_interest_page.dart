@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
@@ -183,7 +184,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         options.add(
           _CareerTagOption(
             tagRef: child.tagRef,
-            label: _tagLabel(child.label, child.displayLabel),
+            label: _tagLabel(child.label, child.displayLabel ?? ''),
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
@@ -210,7 +211,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         for (final child in children)
           _CareerTagOption(
             tagRef: child.tagRef,
-            label: _tagLabel(child.label, child.displayLabel),
+            label: _tagLabel(child.label, child.displayLabel ?? ''),
             parentTagRef: category.tagRef,
             parentLabel: parentLabel,
             categoryId: category.id,
@@ -417,11 +418,11 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           .reportTagFeedback(
             ReportTagFeedbackCommand(tagRef: tagRef, action: action),
           )
+          .then<void>((_) {})
           .catchError((Object error) {
             if (kDebugMode) {
               debugPrint('tag feedback degraded: $error');
             }
-            return const TagFeedbackAck(accepted: false);
           }),
     );
   }

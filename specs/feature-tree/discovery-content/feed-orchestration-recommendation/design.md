@@ -35,9 +35,9 @@
 
 <a id="dec-001"></a>
 ### DEC-001 四类内容共用候选编排并保留类型特有策略
-- 决策：四类内容共用候选编排并保留类型特有策略。
+- 决策：四类内容由 recommendation-service 的单一 Python CandidateIndex/FeatureProfile/RankedRecommendationWindow 编排并保留类型特有策略；Content 只做 Post 权限 hydration、FeedDeliveryPage 与公开响应。
 - 理由：发现流推荐编排的端云行为、流式体验、交集解释、曝光治理集成边界与推荐 SLO 基线。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 被否决方案：由 Content Go、调用方、页面或脚本复制候选/特征/交集/排序状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
 - 影响 Story：[`collaborative-recall`](./collaborative-recall/spec.md)、[`feed-fallback-degrade`](./feed-fallback-degrade/spec.md)、[`feedback-ingestion-sampling`](./feedback-ingestion-sampling/spec.md)、[`interest-onboarding-prior`](./interest-onboarding-prior/spec.md)、[`personalized-ranking`](./personalized-ranking/spec.md)、[`premium-stream-recommendation`](./premium-stream-recommendation/spec.md)、[`quality-score-cold-start`](./quality-score-cold-start/spec.md)、[`ranking-calibration`](./ranking-calibration/spec.md)、[`realtime-feed-baseline`](./realtime-feed-baseline/spec.md)、[`streaming-feed-performance`](./streaming-feed-performance/spec.md)、[`time-decay-contextual-ranking`](./time-decay-contextual-ranking/spec.md)、[`travel-vertical-recommendation`](./travel-vertical-recommendation/spec.md)、[`unified-items-cursor`](./unified-items-cursor/spec.md)

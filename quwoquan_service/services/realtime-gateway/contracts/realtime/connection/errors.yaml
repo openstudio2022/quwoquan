@@ -91,7 +91,7 @@ errors:
   reason: internal_error
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [IssueConnectionTicket, WebSocketUpgrade, LongPoll, GetPersonaPresence, GetRealtimeConfig, HealthCheck, Metrics, RecoverRealtimeAccountClosureDeadLetter]}
+  - {surface: http, operations: [IssueConnectionTicket, WebSocketUpgrade, LongPoll, realtime.presence_view.GetPersonaPresence, GetRealtimeConfig, HealthCheck, Metrics, RecoverRealtimeAccountClosureDeadLetter]}
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: internalError

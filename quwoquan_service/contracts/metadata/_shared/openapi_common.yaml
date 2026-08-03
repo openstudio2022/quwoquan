@@ -254,6 +254,7 @@ components:
             - REALTIME
             - OPS
             - ASSISTANT
+            - TRAVEL
             - NOTIFICATION
             - TAG
             - DB

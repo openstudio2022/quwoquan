@@ -11,9 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/internal/platform/testinfra"
+	indexpersistence "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/persistence"
 	httpadapter "quwoquan_service/services/tag-service/internal/tag/tag_node_view/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
-	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
+	nodepersistence "quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
 	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
@@ -22,8 +23,8 @@ import (
 var (
 	testHandler  http.Handler
 	mongoDB      *mongo.Database
-	tagNodeStore *persistence.MongoTagNodeStore
-	objStore     *persistence.MongoObjectTagIndexStore
+	tagNodeStore *nodepersistence.MongoTagNodeStore
+	objStore     *indexpersistence.MongoObjectTagIndexStore
 	releaseStore *taxonomyreleasestore.Store
 )
 
@@ -39,8 +40,8 @@ func TestMain(m *testing.M) {
 	}
 	mongoDB = mongoRuntime.Database
 
-	tagNodeStore = persistence.NewMongoTagNodeStore(mongoDB.Collection("tag_nodes"))
-	objStore = persistence.NewMongoObjectTagIndexStore(mongoDB.Collection("object_tag_index"))
+	tagNodeStore = nodepersistence.NewMongoTagNodeStore(mongoDB.Collection("tag_nodes"))
+	objStore = indexpersistence.NewMongoObjectTagIndexStore(mongoDB.Collection("object_tag_index"))
 	releaseStore = taxonomyreleasestore.NewStore(mongoDB)
 	indexCtx, indexCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := tagNodeStore.EnsureIndexes(indexCtx); err != nil {

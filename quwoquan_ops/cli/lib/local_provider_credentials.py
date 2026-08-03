@@ -1,9 +1,9 @@
-"""Validate protected non-production Provider material without generating it.
+"""Materialize the canonical Alpha/Beta/Gamma substitute topology.
 
-The service-local environment bindings are the only inventory.  This module
-only copies already injected values into a stackctl child environment; it never
-persists credentials and never fabricates endpoints, tokens, or Provider
-success.
+Service-local environment bindings remain the only adapter inventory. This
+module projects their non-production topology-owned endpoints and reuses the
+target-scoped LiveKit material created by ``local_environment_auth``. It does
+not create business data, Provider success evidence, or any Prod material.
 """
 
 from __future__ import annotations
@@ -47,22 +47,45 @@ _OWNER_ONLY_FILE_KEYS = frozenset(
     }
 )
 
+_NONPROD_SUBSTITUTE_ENVIRONMENT = {
+    "INTEGRATION_SMS_ENDPOINT": (
+        "https://sms-provider-substitute:9443/v1/provider/sms/send"
+    ),
+    "ASSISTANT_MODEL_COMPLETION_URL": (
+        "http://integration-service:18089/v1/chat/completions"
+    ),
+    "ASSISTANT_PUBLIC_SEARCH_URL": (
+        "http://integration-service:18089/search/html"
+    ),
+    "ASSISTANT_WEATHER_GEOCODING_URL": (
+        "http://integration-service:18089/weather/geocoding"
+    ),
+    "ASSISTANT_WEATHER_FORECAST_URL": (
+        "http://integration-service:18089/weather/forecast"
+    ),
+    "ASSISTANT_FINANCE_CHART_URL": (
+        "http://integration-service:18089/finance/chart"
+    ),
+    "CONTENT_EMBEDDING_ENDPOINT": (
+        "http://integration-service:18089/v1/embeddings"
+    ),
+    "NONPROD_PROVIDER_SUBSTITUTE_ADDR": ":18089",
+    "RTC_MEDIA_CONNECTION_URL": "http://livekit-sfu:7880",
+}
 
-def load_protected_provider_environment(
+
+def load_nonprod_provider_environment(
     *,
     environment: str,
     target_name: str,
     source: Mapping[str, str] | None = None,
+    debug_local: bool = True,
 ) -> dict[str, str]:
-    """Return required Provider values already injected by a protected owner.
-
-    Missing or placeholder material is a deployment preflight failure.  Values
-    are never written to a receipt, repository path, or deployment secret file.
-    """
+    """Return topology-owned substitutes and target-scoped LiveKit secrets."""
 
     if environment not in NONPROD_ENVIRONMENTS:
         raise ValueError(
-            "protected non-production Provider material is only valid for "
+            "non-production Provider substitutes are only valid for "
             f"Alpha/Beta/Gamma, got {environment}"
         )
     if target_name != f"{environment}-local":
@@ -72,12 +95,17 @@ def load_protected_provider_environment(
         )
 
     material = os.environ if source is None else source
-    endpoint_keys, secret_keys = _required_material_for_environment(environment)
-    required_keys = sorted(endpoint_keys | secret_keys)
+    endpoint_keys, secret_keys = _required_material_for_environment(
+        environment,
+        debug_local=debug_local,
+    )
+    # local_topology endpoints are derived below and can never be overridden
+    # by the invoking shell. Only target-scoped secrets remain runtime inputs.
+    required_keys = sorted(secret_keys if debug_local else endpoint_keys | secret_keys)
     missing = [key for key in required_keys if not str(material.get(key) or "").strip()]
     if missing:
         raise RuntimeError(
-            "GATE_BLOCK: protected Provider material is missing: "
+            "GATE_BLOCK: target-scoped nonprod Provider material is missing: "
             + ",".join(missing)
         )
 
@@ -88,7 +116,7 @@ def load_protected_provider_environment(
     ]
     if invalid:
         raise RuntimeError(
-            "GATE_BLOCK: protected Provider material contains placeholder values: "
+            "GATE_BLOCK: target-scoped nonprod Provider material contains placeholder values: "
             + ",".join(invalid)
         )
 
@@ -116,7 +144,9 @@ def load_protected_provider_environment(
             + ",".join(weak_file_modes)
         )
 
-    return {key: str(material[key]).strip() for key in required_keys}
+    values = dict(_NONPROD_SUBSTITUTE_ENVIRONMENT) if debug_local else {}
+    values.update({key: str(material[key]).strip() for key in required_keys})
+    return values
 
 
 def provider_environment_reference_names(
@@ -125,16 +155,21 @@ def provider_environment_reference_names(
     """Return canonical Provider env references without reading their values.
 
     Packaging uses this inventory only to satisfy build-tool interpolation.
-    Runtime preflight continues to use ``load_protected_provider_environment``
-    and therefore remains fail-closed on missing or invalid protected values.
+    Runtime preflight uses ``load_nonprod_provider_environment`` and therefore
+    remains fail-closed on missing target-scoped LiveKit material.
     """
 
-    endpoints, secrets = _required_material_for_environment(environment)
+    endpoints, secrets = _required_material_for_environment(
+        environment,
+        debug_local=False,
+    )
     return frozenset(endpoints), frozenset(secrets)
 
 
 def _required_material_for_environment(
     environment: str,
+    *,
+    debug_local: bool = True,
 ) -> tuple[set[str], set[str]]:
     bindings = load_bindings()
     scope = bindings["environments"][environment]
@@ -143,8 +178,14 @@ def _required_material_for_environment(
     for service_bindings in scope.values():
         if not isinstance(service_bindings, Mapping):
             continue
-        for binding in service_bindings.values():
+        for capability, binding in service_bindings.items():
             if not isinstance(binding, Mapping) or binding.get("state") != "enabled":
+                continue
+            if debug_local and str(capability) == "identity.sms.otp":
+                # The service-owned binding remains the managed Provider truth
+                # for formal Alpha/Beta/Gamma deployments. A local target is
+                # projected to the non-promotable Debug protocol substitute.
+                secret_keys.add("INTEGRATION_SMS_TOKEN")
                 continue
             endpoint_ref = str(binding.get("endpointRef") or "")
             # Local infrastructure endpoints are resolved by the packaged

@@ -31,7 +31,7 @@ errors:
   reason: config_storage_read_failed
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [ListServiceConfigs, ResolveEffectiveConfig, ResolveEffectiveConfigForInstance, GetConfigSnapshot, ListConfigDomains]}
+  - {surface: http, operations: [ListServiceConfigs, ResolveEffectiveConfig, ResolveEffectiveConfigForInstance, GetConfigSnapshot, ListConfigDomains, ListServiceCatalogEntries, ListPlaneBindings, GetProdPlaneAccessIsolation, GetGrayRoutingPolicy, ListEnvironmentTopologies, ListRuntimeClusters]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: configStorageReadFailed

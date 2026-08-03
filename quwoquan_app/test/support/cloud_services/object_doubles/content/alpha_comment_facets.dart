@@ -14,7 +14,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   int _sequence = 0;
 
   @override
-  Future<ContentCommentPageSlice> listComments({
+  Future<CommentPageSlice> listComments({
     required String postId,
     String? cursor,
     int limit = 20,
@@ -55,7 +55,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentReplyPageSlice> listReplies({
+  Future<ReplyPageSlice> listReplies({
     required String postId,
     required String commentId,
     String? cursor,
@@ -76,7 +76,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
             return left.id.compareTo(right.id);
           });
     final page = _page(replies, cursor, limit);
-    return ContentCommentReplyPageSlice(
+    return ReplyPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -84,7 +84,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentAuthorCommentPageSlice> listByAuthor({
+  Future<AuthorCommentPageSlice> listByAuthor({
     String? cursor,
     int limit = 20,
   }) async {
@@ -99,7 +99,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
             .toList(growable: false)
           ..sort(_compareLatest);
     final page = _page(comments, cursor, limit);
-    return ContentAuthorCommentPageSlice(
+    return AuthorCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -107,7 +107,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentReceivedCommentPageSlice> listReceived({
+  Future<ReceivedCommentPageSlice> listReceived({
     String? cursor,
     int limit = 20,
   }) async {
@@ -121,7 +121,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
             .toList(growable: false)
           ..sort(_compareLatest);
     final page = _page(comments, cursor, limit);
-    return ContentReceivedCommentPageSlice(
+    return ReceivedCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -154,7 +154,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       attachmentMediaIds: command.attachmentMediaIds,
       attachments: command.attachmentMediaIds
           .map(
-            (mediaId) => ContentCommentAttachment(
+            (mediaId) => CommentAttachmentSlice(
               mediaId: mediaId,
               mediaType: null,
               url: null,
@@ -251,7 +251,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       attachmentMediaIds: command.attachmentMediaIds,
       attachments: command.attachmentMediaIds
           .map(
-            (mediaId) => ContentCommentAttachment(
+            (mediaId) => CommentAttachmentSlice(
               mediaId: mediaId,
               mediaType: null,
               url: null,
@@ -329,7 +329,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     );
   }
 
-  ContentCommentPageSlice _page(
+  CommentPageSlice _page(
     List<ContentCommentListItem> values,
     String? cursor,
     int limit,
@@ -338,7 +338,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
     final start = offset.clamp(0, values.length).toInt();
     final pageSize = limit.clamp(1, 100).toInt();
     final end = (start + pageSize).clamp(0, values.length).toInt();
-    return ContentCommentPageSlice(
+    return CommentPageSlice(
       items: values.sublist(start, end),
       nextCursor: end < values.length ? '$end' : null,
       total: values.length,
@@ -433,7 +433,7 @@ final class AlphaContentCommentFacet implements ContentCommentFacet {
       replyToUserId: raw['replyToUserId']?.toString(),
       parentCommentId: raw['parentCommentId']?.toString(),
       attachmentMediaIds: const <String>[],
-      attachments: const <ContentCommentAttachment>[],
+      attachments: const <CommentAttachmentSlice>[],
       mentions: const <ContentCommentMention>[],
       assistantMentioned: raw['assistantMentioned'] == true,
       assistantReplySource: raw['assistantReplySource']?.toString(),

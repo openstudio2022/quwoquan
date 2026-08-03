@@ -17,5 +17,10 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.complex_reasoning",
-  "replayAssetRef": "assistant.replay.shopping_decision.v1"
+  "replayAssetRef": "assistant.replay.shopping_decision",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

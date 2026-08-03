@@ -3,14 +3,12 @@ package feed_test
 import (
 	"context"
 	"errors"
-	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"testing"
-	"time"
 
-	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
+	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
 )
 
 type staticFeedViewerBlockReader struct {
@@ -34,13 +32,6 @@ func (r *staticFeedViewerBlockReader) ListBlockedPersonaIDs(
 
 func TestListFeedUsesServerProjectedBlockFacts(t *testing.T) {
 	ctx := context.Background()
-	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
-	sessionCache := rtrec.NewSessionCache(
-		rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))),
-		2*time.Second,
-		1000,
-	)
-	engine := rtrec.NewEngine(sessionCache, nil)
 	reader := fixtureFeedReader{posts: []postmodel.Post{
 		{
 			ID:          "post-blocked",
@@ -61,7 +52,6 @@ func TestListFeedUsesServerProjectedBlockFacts(t *testing.T) {
 		blocked: []string{"persona-blocked-author"},
 	}
 	service := NewFeedService(
-		engine,
 		reader,
 		WithFeedViewerBlockReader(blocks),
 		WithFeedDeliveryPageStore(deliveryredis.NewStore(rtredis.NewMemoryClient())),
@@ -87,14 +77,7 @@ func TestListFeedUsesServerProjectedBlockFacts(t *testing.T) {
 }
 
 func TestListFeedFailsClosedWhenBlockProjectionIsUnavailable(t *testing.T) {
-	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
-	sessionCache := rtrec.NewSessionCache(
-		rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))),
-		2*time.Second,
-		1000,
-	)
 	service := NewFeedService(
-		rtrec.NewEngine(sessionCache, nil),
 		fixtureFeedReader{},
 		WithFeedViewerBlockReader(&staticFeedViewerBlockReader{
 			err: errors.New("block projection unavailable"),

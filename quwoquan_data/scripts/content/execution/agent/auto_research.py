@@ -2,6 +2,7 @@
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, ExecutionContext, Mapping, _active_spec, read_json, store, write_json
+from content.source.research.auto_plan_report import AUTO_RESEARCH_MERGE_ROW_KEYS
 from core.runtime_policy import active_runtime_policy
 
 def _aggregate_auto_research_throughput(waves: list[Mapping[str, Any]]) -> dict[str, Any]:
@@ -79,15 +80,7 @@ def _write_auto_research_report(
     else:
         aggregate = dict(existing)
         aggregate["latestWaveSourceAvailability"] = wave_report.get("sourceAvailability") or {}
-        for key in (
-            "updated",
-            "issues",
-            "candidates",
-            "imageCollections",
-            "homepageMediaCollections",
-            "homepageMediaAdvisories",
-            "sourceUnavailable",
-        ):
+        for key in AUTO_RESEARCH_MERGE_ROW_KEYS:
             aggregate[key] = list(aggregate.get(key) or []) + list(wave_report.get(key) or [])
         aggregate["sourceAvailability"] = _merge_auto_research_source_availability(
             aggregate.get("sourceAvailability"),

@@ -502,6 +502,36 @@ LoginFeedback loginFeedbackForError(
       recoveryAction: 'waitThenChangeMethod',
     ),
     _
+        when origin == LoginFailureOrigin.otpSend &&
+            cloudError.runtimeFailure.kind == RuntimeFailureKind.network =>
+      feedback(
+        message: FoundationText.loginNetworkUnavailable,
+        copyKey: 'loginNetworkUnavailable',
+        surface: LoginFeedbackSurface.phone,
+        recoveryAction: 'resendOtp',
+        afterSeconds: 0,
+      ),
+    _
+        when origin == LoginFailureOrigin.otpSend &&
+            cloudError.runtimeFailure.kind == RuntimeFailureKind.timeout =>
+      feedback(
+        message: FoundationText.loginRequestTimeout,
+        copyKey: 'loginRequestTimeout',
+        surface: LoginFeedbackSurface.phone,
+        recoveryAction: 'resendOtp',
+        afterSeconds: 0,
+      ),
+    _
+        when origin == LoginFailureOrigin.otpSend &&
+            cloudError.runtimeFailure.kind == RuntimeFailureKind.unavailable =>
+      feedback(
+        message: FoundationText.loginOtpServiceUnavailable,
+        copyKey: 'loginOtpServiceUnavailable',
+        surface: LoginFeedbackSurface.phone,
+        recoveryAction: 'resendOtp',
+        afterSeconds: 0,
+      ),
+    _
         when origin == LoginFailureOrigin.otpVerify ||
             origin == LoginFailureOrigin.phoneBinding =>
       feedback(
@@ -512,8 +542,8 @@ LoginFeedback loginFeedbackForError(
         preserveOtp: true,
       ),
     _ when origin == LoginFailureOrigin.otpSend => feedback(
-      message: FoundationText.loginOtpSendFailed,
-      copyKey: 'loginOtpSendFailed',
+      message: FoundationText.loginOtpServiceUnavailable,
+      copyKey: 'loginOtpServiceUnavailable',
       surface: LoginFeedbackSurface.phone,
       recoveryAction: 'resendOtp',
     ),
@@ -564,13 +594,10 @@ String resolveLoginErrorMessage(
 
 String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
-bool _isValidMainlandPhone(String value) =>
-    RegExp(r'^1[3-9]\d{9}$').hasMatch(_digitsOnly(value));
+bool _isValidMainlandPhone(String value) => isValidMainlandPhoneNumber(value);
 
-String _validFullPhoneOrEmpty(String value) {
-  final digits = _digitsOnly(value);
-  return _isValidMainlandPhone(digits) ? digits : '';
-}
+String _validFullPhoneOrEmpty(String value) =>
+    mainlandPhoneLocalDigitsOrEmpty(value);
 
 String _maskPhone(String value) {
   final digits = _digitsOnly(value);

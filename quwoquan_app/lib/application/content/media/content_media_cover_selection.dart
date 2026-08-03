@@ -6,11 +6,11 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef ContentMediaCoverCommand =
-    Future<ContentMediaCoverSelectionResult> Function();
+    Future<MediaCoverSelectionResult> Function();
 
 /// Retries one idempotent cover command while processing is pending or its
 /// completion races the cover write. The caller persists one command context.
-Future<ContentMediaCoverSelectionResult> selectContentMediaCoverWhenReady({
+Future<MediaCoverSelectionResult> selectContentMediaCoverWhenReady({
   required ContentMediaCoverCommand command,
   ContentMediaUploadCancellationSignal? cancellationSignal,
   Duration retryDelay = const Duration(seconds: 3),

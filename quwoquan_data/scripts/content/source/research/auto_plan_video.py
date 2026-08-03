@@ -3,9 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from datetime import UTC, datetime
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
 from governance.content_supply_policy import load_content_supply_policy
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 from content.source.research import network_io
 from content.source.research.plan_state import (
     _record_unavailable,
@@ -31,6 +36,7 @@ def discover_commons_sourced_videos(
     """Discover anonymous public Commons video candidates with an audit funnel."""
 
     pages: list[dict[str, Any]] = []
+    lifecycle = load_content_distribution_policy().product_lifecycle_state
     seen_page_ids: set[str] = set()
     search_terms = list(dict.fromkeys([entity_id, *entity_aliases]))[:3]
     funnel = {
@@ -176,7 +182,14 @@ def discover_commons_sourced_videos(
                 # not yet passed probe/OCR/audio admission. Only that later gate
                 # may change this candidate from unverified to publishable.
                 "rightsStatus": "unverified",
-                "publicationAdmission": "commercial_release",
+                "rightsIssues": [
+                    "downloaded bytes have not yet completed media and rights admission"
+                ],
+                "publicationAdmission": (
+                    "research_release"
+                    if lifecycle is ProductLifecycleState.RESEARCH
+                    else "commercial_release"
+                ),
                 "modelReleaseStatus": "not_required",
                 "propertyReleaseStatus": "not_required",
                 "takedownPolicy": "quwoquan_standard_notice_and_takedown",
@@ -185,6 +198,16 @@ def discover_commons_sourced_videos(
                 "downloadMethod": "anonymous_https_direct",
                 "durationSeconds": duration,
                 "sizeBytes": size,
+                "popularitySignals": {
+                    "playCount": None,
+                    "likeCount": None,
+                    "commentCount": None,
+                    "shareCount": None,
+                    "favoriteCount": None,
+                    "observedAt": datetime.now(UTC).isoformat(),
+                    "samePlatformTopicTimeBucketPercentile": None,
+                    "rankingEligible": False,
+                },
             }
         )
     candidates.sort(
@@ -199,6 +222,33 @@ def discover_commons_sourced_videos(
     if diagnostics is not None:
         diagnostics.append(funnel)
     return selected
+
+
+def rank_video_candidates_by_popularity(
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Rank only comparable candidates; missing metrics are never fabricated."""
+
+    def key(item: dict[str, Any]) -> tuple[int, float, int]:
+        signals = item.get("popularitySignals")
+        payload = signals if isinstance(signals, dict) else {}
+        raw_percentile = payload.get("samePlatformTopicTimeBucketPercentile")
+        try:
+            percentile = float(raw_percentile)
+        except (TypeError, ValueError):
+            return (1, 0.0, 0)
+        engagement = sum(
+            int(payload.get(field) or 0)
+            for field in (
+                "likeCount",
+                "commentCount",
+                "shareCount",
+                "favoriteCount",
+            )
+        )
+        return (0, -percentile, -engagement)
+
+    return sorted(candidates, key=key)
 
 
 def _minimum_source_frame_count(vertical: str) -> int:
@@ -406,4 +456,8 @@ def write_video_lane(
         )
 
 
-__all__ = ["qualified_video_frame_count", "write_video_lane"]
+__all__ = [
+    "qualified_video_frame_count",
+    "rank_video_candidates_by_popularity",
+    "write_video_lane",
+]

@@ -4,88 +4,20 @@ description: '商用消息首页行。由 ChatInboxProjection 与 NotificationIn
   App 只消费本 read model，不在 UI/Provider 中根据标题或摘要推导通知、群聊或私聊分类。
 
   '
-client_projection:
-  dart_class: MessageHomeRowDto
-  base_class: ''
-  output_path: cloud/runtime/generated/chat/message_home_row_dto.g.dart
-  fields:
-  - name: id
-    dart_type: String
-    nullable: false
-    source: id
-    default: ''''''
-  - name: kind
-    dart_type: String
-    nullable: false
-    source: kind
-    default: '''conversation'''
-  - name: conversationId
-    dart_type: String
-    nullable: false
-    source: conversationId
-    default: ''''''
-  - name: notificationId
-    dart_type: String
-    nullable: false
-    source: notificationId
-    default: ''''''
-  - name: conversationType
-    dart_type: String
-    nullable: false
-    source: conversationType
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: summary
-    dart_type: String
-    nullable: false
-    source: summary
-    default: ''''''
-  - name: avatarUrl
-    dart_type: String
-    nullable: false
-    source: avatarUrl
-    default: ''''''
-  - name: groupAvatarVersion
-    dart_type: int
-    nullable: false
-    source: groupAvatarVersion
-    default: '0'
-  - name: lastActiveAt
-    dart_type: DateTime
-    nullable: true
-    source: lastActiveAt
-    default: 'null'
-  - name: unreadCount
-    dart_type: int
-    nullable: false
-    source: unreadCount
-    default: '0'
-  - name: mentionUnreadCount
-    dart_type: int
-    nullable: false
-    source: mentionUnreadCount
-    default: '0'
-  - name: muted
-    dart_type: bool
-    nullable: false
-    source: muted
-    default: 'false'
-  - name: pinned
-    dart_type: bool
-    nullable: false
-    source: pinned
-    default: 'false'
-  - name: notificationType
-    dart_type: String
-    nullable: false
-    source: notificationType
-    default: ''''''
-  - name: read
-    dart_type: bool
-    nullable: false
-    source: read
-    default: 'false'
+fields:
+- {name: id, type: string}
+- {name: kind, type: string}
+- {name: conversationId, type: string}
+- {name: notificationId, type: string}
+- {name: conversationType, type: string}
+- {name: title, type: string}
+- {name: summary, type: string}
+- {name: avatarUrl, type: string}
+- {name: groupAvatarVersion, type: int64}
+- {name: lastActiveAt, type: timestamp, nullable: true}
+- {name: unreadCount, type: int}
+- {name: mentionUnreadCount, type: int}
+- {name: muted, type: bool}
+- {name: pinned, type: bool}
+- {name: notificationType, type: string}
+- {name: read, type: bool}

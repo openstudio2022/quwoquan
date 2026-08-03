@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 关系能力位投影 DTO
@@ -52,39 +51,13 @@ class RelationshipCapabilityDto {
   bool get viewerFollowsTarget => isFollowing || isMutual;
   bool get targetFollowsViewer => isFollowedBy || isMutual;
 
-  factory RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-    RelationshipCapabilityWireDto w,
-  ) {
-    return RelationshipCapabilityDto(
-      viewerPersonaId: w.viewerPersonaId,
-      targetPersonaId: w.targetPersonaId,
-      relationState: _requiredWireValue(w.relationState, 'relationState'),
-      canFollow: _requiredWireValue(w.canFollow, 'canFollow'),
-      canUnfollow: _requiredWireValue(w.canUnfollow, 'canUnfollow'),
-      canFollowBack: _requiredWireValue(w.canFollowBack, 'canFollowBack'),
-      canGreet: w.canGreet,
-      canCreateDirectConversation: w.canCreateDirectConversation,
-      canSendMessage: w.canSendMessage,
-      canOpenConversation: _requiredWireValue(
-        w.canOpenConversation,
-        'canOpenConversation',
-      ),
-      hasPendingGreeting: w.hasPendingGreeting,
-      hasFormalConversation: w.hasFormalConversation,
-      canStartVoiceCall: w.canStartVoiceCall,
-      canStartVideoCall: w.canStartVideoCall,
-      isBlocked: w.isBlocked,
-      isBlockedBy: w.isBlockedBy,
-    );
-  }
-
-  factory RelationshipCapabilityDto.fromContract(
-    RelationshipCapabilityResult result,
+  factory RelationshipCapabilityDto.fromWire(
+    RelationshipCapabilityView result,
   ) {
     return RelationshipCapabilityDto(
       viewerPersonaId: result.viewerPersonaId,
       targetPersonaId: result.targetPersonaId,
-      relationState: result.relationState,
+      relationState: result.relationState.wireName,
       canFollow: result.canFollow,
       canUnfollow: result.canUnfollow,
       canFollowBack: result.canFollowBack,
@@ -98,13 +71,6 @@ class RelationshipCapabilityDto {
       canStartVideoCall: result.canStartVideoCall,
       isBlocked: result.isBlocked,
       isBlockedBy: result.isBlockedBy,
-    );
-  }
-
-  factory RelationshipCapabilityDto.fromMap(Map<String, dynamic> map) {
-    _requireCanonicalCapabilityMap(map);
-    return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-      RelationshipCapabilityWireDto.fromMap(map),
     );
   }
 
@@ -128,44 +94,6 @@ class RelationshipCapabilityDto {
   };
 }
 
-T _requiredWireValue<T>(T? value, String field) {
-  if (value == null) {
-    throw FormatException('RelationshipCapabilityWire.$field is required');
-  }
-  return value;
-}
-
-void _requireCanonicalCapabilityMap(Map<String, dynamic> map) {
-  for (final field in const <String>[
-    'viewerPersonaId',
-    'targetPersonaId',
-    'relationState',
-  ]) {
-    if (map[field] is! String) {
-      throw FormatException('RelationshipCapabilityWire.$field is required');
-    }
-  }
-  for (final field in const <String>[
-    'canFollow',
-    'canUnfollow',
-    'canFollowBack',
-    'canGreet',
-    'canOpenConversation',
-    'canCreateDirectConversation',
-    'canSendMessage',
-    'hasPendingGreeting',
-    'hasFormalConversation',
-    'canStartVoiceCall',
-    'canStartVideoCall',
-    'isBlocked',
-    'isBlockedBy',
-  ]) {
-    if (map[field] is! bool) {
-      throw FormatException('RelationshipCapabilityWire.$field is required');
-    }
-  }
-}
-
 /// 关系能力位 Repository（三层模式）
 abstract class RelationshipCapabilityRepository {
   Future<RelationshipCapabilityDto> getCapability(String targetUserId);
@@ -187,6 +115,6 @@ class RemoteRelationshipCapabilityRepository
     final result = await query.getRelationshipCapability(
       GetRelationshipCapabilityQuery(targetPersonaId: targetUserId),
     );
-    return RelationshipCapabilityDto.fromContract(result);
+    return RelationshipCapabilityDto.fromWire(result);
   }
 }

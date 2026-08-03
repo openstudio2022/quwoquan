@@ -89,7 +89,10 @@ func newAccountSecurityConsumer(
 	config.MinIdle = 0
 	consumer, err := streamadapter.NewUserAccountSecurityConsumer(
 		transport,
-		redisstore.NewAccountSecurityStateStore(harness.client),
+		redisstore.NewAccountSecurityStateStore(
+			harness.client,
+			newTestPresenceProjection(t, harness.client),
+		),
 		redisstore.NewAccountSecurityRelay(harness.client),
 		harness.hub,
 		redisstore.NewAccountSecurityEventFailureStore(harness.client),
@@ -311,7 +314,10 @@ func TestAccountSecurityStateIsIdempotentAndRestoreDoesNotReviveOldTicket(
 	if err != nil {
 		t.Fatalf("issue pre-terminal ticket: %v", err)
 	}
-	store := redisstore.NewAccountSecurityStateStore(harness.client)
+	store := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
 	suspended := application.AccountSecurityEvent{
 		EventID:      "event-idempotent",
 		AccountID:    identity.AccountID,
@@ -387,7 +393,10 @@ func TestUserAccountClosedIsIrreversibleAfterRestoreEvent(t *testing.T) {
 	if processed, err := consumer.ProcessOnce(context.Background()); err != nil || processed != 1 {
 		t.Fatalf("consume closed-account restore processed=%d err=%v", processed, err)
 	}
-	store := redisstore.NewAccountSecurityStateStore(harness.client)
+	store := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
 	if err := store.Admit(context.Background(), identity, 3); !errors.Is(
 		err,
 		application.ErrAccountSecurityDenied,
@@ -404,11 +413,14 @@ func TestUserAccountClosedIsIrreversibleAfterRestoreEvent(t *testing.T) {
 
 func TestAccountSecurityRelayEvictsRemoteNodeExactlyOnce(t *testing.T) {
 	harness := newGatewayHarness(t)
-	store := redisstore.NewAccountSecurityStateStore(harness.client)
+	store := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
 	relay := redisstore.NewAccountSecurityRelay(harness.client)
 	remoteHub, err := application.NewHub(
 		redisstore.NewLeaseStore(harness.client),
-		redisstore.NewPresenceStore(harness.client),
+		newTestPresenceProjection(t, harness.client),
 		newTestEventSource(t, harness.client),
 		harness.authority,
 		store,
@@ -641,7 +653,10 @@ func TestAccountSecurityDeadLetterRecoveryReplaysOriginalPEL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new recovery transport: %v", err)
 	}
-	stateStore := redisstore.NewAccountSecurityStateStore(harness.client)
+	stateStore := redisstore.NewAccountSecurityStateStore(
+		harness.client,
+		newTestPresenceProjection(t, harness.client),
+	)
 	failureStore := redisstore.NewAccountSecurityEventFailureStore(harness.client)
 	consumerConfig := streamadapter.DefaultUserAccountSecurityConsumerConfig()
 	consumerConfig.MaxAttempts = 1

@@ -202,6 +202,25 @@ def fetch_admitted_sourced_videos(
             audio_probe = probe_audio_stream(download_path)
             has_audio = audio_probe.get("hasAudio") is True
             terms_url = str(candidate.get("termsUrl") or "").strip()
+            publication_admission = str(
+                candidate.get("publicationAdmission") or ""
+            )
+            research_release = publication_admission == "research_release"
+            audio_rights_status = str(
+                candidate.get("audioRightsStatus")
+                or (
+                    "unverified"
+                    if has_audio and research_release
+                    else "licensed"
+                    if has_audio
+                    else "no_audio"
+                )
+            )
+            audio_proof = str(
+                candidate.get("audioAuthorizationProofUrl") or ""
+            ).strip() or (
+                None if audio_rights_status == "unverified" else terms_url or None
+            )
             evidence_paths.append(
                 write_admitted_sourced_video_unit(
                     execution_id=execution_id,
@@ -219,17 +238,15 @@ def fetch_admitted_sourced_videos(
                     commercial_authorization_status=str(
                         candidate.get("commercialAuthorizationStatus") or ""
                     ),
-                    publication_admission=str(
-                        candidate.get("publicationAdmission") or ""
-                    ),
+                    publication_admission=publication_admission,
                     authorization_proof_url=str(
                         candidate.get("authorizationProofUrl") or ""
                     )
                     or None,
                     terms_url=terms_url or None,
                     risk_acceptance_id=None,
-                    audio_rights_status="licensed" if has_audio else "no_audio",
-                    audio_authorization_proof_url=terms_url if has_audio else None,
+                    audio_rights_status=audio_rights_status,
+                    audio_authorization_proof_url=audio_proof,
                     model_release_status=str(
                         candidate.get("modelReleaseStatus") or "not_required"
                     ),
@@ -257,7 +274,11 @@ def fetch_admitted_sourced_videos(
                     "rightsStatusBeforeAdmission": str(
                         candidate.get("rightsStatus") or "unverified"
                     ),
-                    "rightsStatusAfterAdmission": "verified",
+                    "rightsStatusAfterAdmission": str(
+                        candidate.get("rightsStatus") or "unverified"
+                    )
+                    if research_release
+                    else "verified",
                 },
             )
         finally:

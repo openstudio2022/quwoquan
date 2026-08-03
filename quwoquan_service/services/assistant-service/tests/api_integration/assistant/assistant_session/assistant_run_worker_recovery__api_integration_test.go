@@ -45,8 +45,11 @@ func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
 			return authorizeErr
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		integrationRunPolicyResolver(),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          "worker-recovery-owner",
@@ -133,8 +136,11 @@ func TestAssistantRunSSEFollowsJournalUntilWorkerTerminalEvent(t *testing.T) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
 			return authorizeErr
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		integrationRunPolicyResolver(),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          userID,
@@ -220,8 +226,11 @@ func TestAssistantRunFailedSSECarriesStructuredRuntimeFailure(t *testing.T) {
 			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
 			return authorizeErr
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		integrationRunPolicyResolver(),
 	)
 	run, err := commands.Start(ctx, runruntime.StartCommand{
 		UserID:          userID,

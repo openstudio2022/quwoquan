@@ -252,7 +252,7 @@ class _TestActiveCallNotifier extends ActiveCallNotifier {
 Widget _buildOverlay({
   VoidCallback? onReturnToCall,
   VoidCallback? onHangup,
-  CallParticipant? activeSpeaker,
+  CallParticipantViewData? activeSpeaker,
   ActiveCallState? initialState,
 }) {
   final state =
@@ -395,7 +395,7 @@ void main() {
     testWidgets('activeSpeaker 有头像时显示', (tester) async {
       await tester.pumpWidget(
         _buildOverlay(
-          activeSpeaker: const CallParticipant(
+          activeSpeaker: const CallParticipantViewData(
             userId: 'user_001',
             displayName: 'Alice',
             avatarUrl: 'https://example.com/avatar.jpg',
@@ -413,7 +413,7 @@ void main() {
     testWidgets('activeSpeaker 摄像头开启但尚无轨道时回退头像摘要', (tester) async {
       await tester.pumpWidget(
         _buildOverlay(
-          activeSpeaker: const CallParticipant(
+          activeSpeaker: const CallParticipantViewData(
             userId: 'user_002',
             displayName: 'Bob',
             status: ParticipantStatus.connected,

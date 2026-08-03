@@ -7,22 +7,25 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-
 	rthealth "quwoquan_service/runtime/health"
 	runtimemedia "quwoquan_service/runtime/media"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	iplocation "quwoquan_service/services/content-service/internal/content/comment/application/iplocation"
+	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
+	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	iplocation "quwoquan_service/services/content-service/internal/content/post/application/iplocation"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
-	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
-	mediaprocinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/objectstorage"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
+	mediaprocinfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocess "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
+	mediareprocesspersistence "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/infrastructure/persistence"
+	originalaccessapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"
+	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
 	uploadsession "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	uploadsessionstorage "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/objectstorage"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
@@ -34,6 +37,7 @@ type mediaRuntimeComposition struct {
 	mediaService               *mediaapp.Facades
 	mediaUploadSessionService  *uploadsession.UseCases
 	mediaImageReprocessService *mediareprocess.Service
+	mediaOriginalAccessService *originalaccessapp.Service
 	mediaObjectGateway         *mediainfra.ObjectGateway
 	commentServiceCore         *commentapp.CommentService
 }
@@ -46,13 +50,15 @@ func buildMediaRuntime(
 	instanceID string,
 	logger *slog.Logger,
 	healthChecker *rthealth.Checker,
-	mediaStore *persistence.MongoMediaStore,
+	mediaStore *mediaassetpersistence.MongoMediaStore,
+	mediaOriginalAccessStore *originalaccesspersistence.MongoStore,
+	mediaImageReprocessStore *mediareprocesspersistence.MongoStore,
 	mediaUploadSessionStore *uploadsessionpersistence.MongoStore,
-	commentDataAdapter *persistence.MongoCommentDataAdapter,
-	reactionStore *persistence.MongoContentReactionStore,
-	recDB *mongo.Database,
+	commentDataAdapter *commentpersistence.MongoCommentDataAdapter,
+	reactionStore *reactionpersistence.MongoContentReactionStore,
 	postMediaReader postports.MediaReferencedPostReader,
-	viewerBlockReader *recinfra.PersonaBlockReader,
+	viewerBlockReader *accessinfra.PersonaBlockReader,
+	commentViewerRelationships *commentpersistence.CommentViewerRelationshipMongoProjection,
 ) (mediaRuntimeComposition, func()) {
 	ossBinding, err := objectstorage.LoadBinding(appEnv, runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
@@ -106,18 +112,30 @@ func buildMediaRuntime(
 	if mediaStore == nil {
 		log.Fatal("content-service MediaUploadSession/MediaAsset store is not configured")
 	}
+	if mediaOriginalAccessStore == nil {
+		log.Fatal("content-service MediaOriginalAccessFact store is not configured")
+	}
+	if mediaImageReprocessStore == nil {
+		log.Fatal("content-service MediaImageReprocessRun store is not configured")
+	}
 	if mediaUploadSessionStore == nil {
 		log.Fatal("content-service MediaUploadSession store is not configured")
 	}
 	if postMediaReader == nil || viewerBlockReader == nil {
 		log.Fatal("content-service Post media visibility reader is not configured")
 	}
+	if commentViewerRelationships == nil {
+		log.Fatal("content-service Comment viewer relationship projection is not configured")
+	}
 	mediaServiceCore := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(mediaStore),
 		mediaObjectGateway,
-		mediaapp.WithOriginalAccessPostVisibilityReader(
-			postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
-		),
+	)
+	mediaOriginalAccessService := originalaccessapp.NewService(
+		mediaOriginalAccessStore,
+		mediaStore,
+		postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
+		mediaObjectGateway,
 	)
 	mediaService := mediaapp.BindFacades(mediaServiceCore)
 	mediaUploadSessionGateway, err := uploadsessionstorage.NewGateway(
@@ -180,9 +198,9 @@ func buildMediaRuntime(
 	// facet, but owns a separate operational run cursor/lease. It therefore can
 	// later extract as a worker service without creating a second media state
 	// machine or changing normal upload processing.
-	mediaImageReprocessService := mediareprocess.NewService(mediaStore, mediaStore)
+	mediaImageReprocessService := mediareprocess.NewService(mediaImageReprocessStore, mediaStore)
 	mediaImageReprocessWorker := mediareprocess.NewWorker(
-		mediaStore,
+		mediaImageReprocessStore,
 		mediaStore,
 		mediaProcessor,
 		mediaService,
@@ -212,10 +230,10 @@ func buildMediaRuntime(
 	commentServiceCore := commentapp.NewCommentService(
 		commentapp.BindDataPorts(
 			commentDataAdapter,
-			persistence.NewCommentAttachmentReader(mediaStore, mediaObjectGateway),
+			commentpersistence.NewCommentAttachmentReader(mediaStore, mediaObjectGateway),
 			reactionStore,
-			persistence.NewCommentViewerRelationMongoReader(recDB),
-			viewerBlockReader,
+			commentViewerRelationships,
+			commentViewerRelationships,
 		),
 		commentapp.WithRateLimitConfig(commentapp.RateLimitConfig{
 			BurstWindow: time.Duration(
@@ -236,6 +254,7 @@ func buildMediaRuntime(
 		mediaService:               mediaService,
 		mediaUploadSessionService:  mediaUploadSessionService,
 		mediaImageReprocessService: mediaImageReprocessService,
+		mediaOriginalAccessService: mediaOriginalAccessService,
 		mediaObjectGateway:         mediaObjectGateway,
 		commentServiceCore:         commentServiceCore,
 	}, closeIPLocationResolver

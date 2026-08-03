@@ -12,7 +12,7 @@ class _GreetingRequestCard extends StatelessWidget {
     required this.onOpenConversation,
   });
 
-  final GreetingRequestDto request;
+  final GreetingRequestViewData request;
   final _GreetingBox box;
   final bool isDark;
   final bool busy;

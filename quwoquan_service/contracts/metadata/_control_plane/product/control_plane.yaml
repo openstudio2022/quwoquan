@@ -16,23 +16,11 @@ object_types:
     view_model: ProductMetricSnapshot
     risk_level: medium
     deployment_profile: latency_sensitive
-    operations:
-      - operation: ListL1L4MetricSnapshots
-        method: GET
-        path: /control-plane/product/metrics/l1l4
-        scopes: [ops.product.dashboard.read]
-      - operation: GetServiceRouteRED
-        method: GET
-        path: /control-plane/product/metrics/red-routes
-        scopes: [ops.product.dashboard.read]
-      - operation: GetGrowthOverview
-        method: GET
-        path: /control-plane/product/growth/overview
-        scopes: [ops.product.dashboard.read]
-      - operation: GetPageExperience
-        method: GET
-        path: /control-plane/product/experience/pages
-        scopes: [ops.product.dashboard.read]
+    operation_refs:
+      - operation_id: ops.event_record.ListL1L4MetricSnapshots
+      - operation_id: ops.event_record.GetServiceRouteRED
+      - operation_id: ops.event_record.GetGrowthOverview
+      - operation_id: ops.event_record.GetPageExperience
 
   - object_type: rtc_media_qoe_summary
     view_kind: dashboard
@@ -55,27 +43,12 @@ object_types:
     view_model: ProductControlPlaneJournal
     risk_level: medium
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListProductWorkflows
-        method: GET
-        path: /control-plane/product/workflows
-        scopes: [ops.product.dashboard.read]
-      - operation: ListProductAudits
-        method: GET
-        path: /control-plane/product/audits
-        scopes: [ops.product.dashboard.read]
-      - operation: ListProductApprovals
-        method: GET
-        path: /control-plane/product/approvals
-        scopes: [ops.product.dashboard.read]
-      - operation: GetProductProjectionSummary
-        method: GET
-        path: /control-plane/product/projections/summary
-        scopes: [ops.product.dashboard.read]
-      - operation: GetProductTriageSummary
-        method: GET
-        path: /control-plane/product/triage/summary
-        scopes: [ops.product.dashboard.read]
+    operation_refs:
+      - operation_id: ops.event_record.ListProductWorkflows
+      - operation_id: ops.event_record.ListProductAudits
+      - operation_id: ops.event_record.ListProductApprovals
+      - operation_id: ops.event_record.GetProductProjectionSummary
+      - operation_id: ops.event_record.GetProductTriageSummary
 
   - object_type: report_queue
     view_kind: operational_queue
@@ -84,41 +57,17 @@ object_types:
     view_model: ReportQueue
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListReports
-        method: GET
-        path: /content/reports
-        scopes: [ops.case.read]
-      - operation: GetReport
-        method: GET
-        path: /content/reports/{reportId}
-        scopes: [ops.case.read]
-      - operation: BeginReportReview
-        method: POST
-        path: /content/reports/{reportId}/review
-        scopes: [ops.case.write]
-      - operation: ResolveReport
-        method: PATCH
-        path: /content/reports/{reportId}
-        scopes: [ops.case.write]
+    operation_refs:
+      - operation_id: content.report.ListReports
+      - operation_id: content.report.GetReport
+      - operation_id: content.report.BeginReportReview
+      - operation_id: content.report.ResolveReport
         danger_level: high
         approval_mode: single
-      - operation: DismissReport
-        method: POST
-        path: /content/reports/{reportId}:dismiss
-        scopes: [ops.case.write]
-      - operation: GetCurrentPostModerationCase
-        method: GET
-        path: /internal/content/posts/{postId}/moderation-case
-        scopes: [ops.case.read]
-      - operation: ReviewPostModerationCase
-        method: POST
-        path: /internal/content/posts/{postId}:review-moderation
-        scopes: [ops.case.write]
-      - operation: DecidePostModeration
-        method: POST
-        path: /internal/content/posts/{postId}:moderate
-        scopes: [ops.case.write]
+      - operation_id: content.report.DismissReport
+      - operation_id: content.post_moderation_case.GetCurrentPostModerationCase
+      - operation_id: content.post_moderation_case.ReviewPostModerationCase
+      - operation_id: content.post_moderation_case.DecidePostModeration
         danger_level: high
         approval_mode: single
 
@@ -129,19 +78,10 @@ object_types:
     view_model: HomepageCandidateQueue
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListHomepageCandidates
-        method: GET
-        path: /homepages/candidates
-        scopes: [ops.case.read]
-      - operation: IntakeHomepageCandidate
-        method: POST
-        path: /homepages/candidates
-        scopes: [ops.case.write]
-      - operation: PublishHomepageCandidate
-        method: POST
-        path: /homepages/candidates/{homepageId}:publish
-        scopes: [ops.case.write]
+    operation_refs:
+      - operation_id: entity.homepage.ListHomepageCandidates
+      - operation_id: entity.homepage.IntakeHomepageCandidate
+      - operation_id: entity.homepage.PublishHomepageCandidate
         danger_level: high
         approval_mode: single
 
@@ -152,15 +92,9 @@ object_types:
     view_model: HomepageClaimRequestQueue
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListHomepageClaimRequests
-        method: GET
-        path: /homepage-claim-requests
-        scopes: [ops.case.read]
-      - operation: ReviewHomepageClaimRequest
-        method: POST
-        path: /homepages/{homepageId}/claim-requests/{claimRequestId}:review
-        scopes: [ops.case.write]
+    operation_refs:
+      - operation_id: entity.homepage_claim_request.ListHomepageClaimRequests
+      - operation_id: entity.homepage_claim_request.ReviewHomepageClaimRequest
         danger_level: high
         approval_mode: single
 
@@ -171,15 +105,9 @@ object_types:
     view_model: HomepageStatusReportQueue
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListHomepageStatusReports
-        method: GET
-        path: /homepage-status-reports
-        scopes: [ops.case.read]
-      - operation: ReviewHomepageStatusReport
-        method: POST
-        path: /homepages/{homepageId}/status-reports/{reportId}:review
-        scopes: [ops.case.write]
+    operation_refs:
+      - operation_id: entity.homepage_status_report.ListHomepageStatusReports
+      - operation_id: entity.homepage_status_report.ReviewHomepageStatusReport
         danger_level: high
         approval_mode: single
 
@@ -191,6 +119,7 @@ object_types:
     risk_level: medium
     deployment_profile: latency_sensitive
     operation_refs:
+      - operation_id: ops.experiment.CreateExperiment
       - operation_id: ops.experiment.ListExperiments
       - operation_id: ops.experiment.UpdateExperimentRollout
         danger_level: high
@@ -201,31 +130,19 @@ object_types:
   - object_type: premium_pool_entry
     view_kind: policy
     label: 全局精选池条目
-    source_entity: VisitRecord
+    source_entity: PremiumPoolEntry
     view_model: PremiumPoolEntry
     risk_level: high
     deployment_profile: latency_sensitive
-    operations:
-      - operation: ListPremiumPoolEntries
-        method: GET
-        path: /control-plane/product/recommendation/premium-pool
-        scopes: [ops.reco.read]
-      - operation: UpsertPremiumPoolEntry
-        method: POST
-        path: /control-plane/product/recommendation/premium-pool
-        scopes: [ops.reco.write]
+    operation_refs:
+      - operation_id: ops.premium_pool_entry.ListPremiumPoolEntries
+      - operation_id: ops.premium_pool_entry.UpsertPremiumPoolEntry
         danger_level: high
         approval_mode: single
-      - operation: RollbackPremiumPoolEntry
-        method: POST
-        path: /control-plane/product/recommendation/premium-pool/{contentId}:rollback
-        scopes: [ops.reco.write]
+      - operation_id: ops.premium_pool_entry.RollbackPremiumPoolEntry
         danger_level: high
         approval_mode: single
-      - operation: TakedownPremiumPoolEntry
-        method: POST
-        path: /control-plane/product/recommendation/premium-pool/{contentId}:takedown
-        scopes: [ops.reco.write]
+      - operation_id: ops.premium_pool_entry.TakedownPremiumPoolEntry
         danger_level: critical
         approval_mode: dual
         idempotency: required

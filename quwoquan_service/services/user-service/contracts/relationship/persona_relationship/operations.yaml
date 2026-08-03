@@ -23,10 +23,8 @@ api_routes:
       - relationState
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: FollowCommandResult
-      response_decoder: decodeFollowCommandResult
+    response_body: FollowCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -95,10 +93,8 @@ api_routes:
       - relationState
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: FollowCommandResult
-      response_decoder: decodeFollowCommandResult
+    response_body: FollowCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -167,7 +163,7 @@ api_routes:
       reader: ListFollowingReader
       slice: ListFollowingSlice
     description: 关注列表（按 persona 读取）
-    response_entity: FollowingListItemView
+    response_entity: FollowingRelationshipPageSlice
     response_fields:
       - personaId
       - userHandle
@@ -177,10 +173,8 @@ api_routes:
       - relationState
       - followedAt
       - relationshipCapability
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: PersonaRelationshipPage
-      response_decoder: decodePersonaRelationshipPage
+    response_body: FollowingRelationshipPageSlice
+    response_body_kind: page
     authorization:
       principal: public
       ownership_policy: public_profile_visibility
@@ -246,7 +240,7 @@ api_routes:
       reader: ListFollowersReader
       slice: ListFollowersSlice
     description: 粉丝列表（按 persona 读取）
-    response_entity: FollowerListItemView
+    response_entity: FollowerRelationshipPageSlice
     response_fields:
       - personaId
       - userHandle
@@ -256,10 +250,8 @@ api_routes:
       - relationState
       - followedAt
       - relationshipCapability
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: PersonaRelationshipPage
-      response_decoder: decodePersonaRelationshipPage
+    response_body: FollowerRelationshipPageSlice
+    response_body_kind: page
     authorization:
       principal: public
       ownership_policy: public_profile_visibility
@@ -394,10 +386,8 @@ api_routes:
       - canStartVideoCall
       - isBlocked
       - isBlockedBy
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: RelationshipCapabilityResult
-      response_decoder: decodeRelationshipCapabilityResult
+    response_body: RelationshipCapabilityView
+    response_body_kind: object
     authorization:
       principal: public
       ownership_policy: viewer_relationship_scope
@@ -463,10 +453,8 @@ api_routes:
       - blocked
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: BlockCommandResult
-      response_decoder: decodeBlockCommandResult
+    response_body: BlockCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -530,10 +518,8 @@ api_routes:
       - blocked
       - idempotentReplay
       - updatedAt
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: BlockCommandResult
-      response_decoder: decodeBlockCommandResult
+    response_body: BlockCommandResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -592,17 +578,15 @@ api_routes:
       reader: ListBlockedUsersReader
       slice: ListBlockedUsersSlice
     description: 当前 persona 的已屏蔽对象切片
-    response_entity: BlockedListItemView
+    response_entity: BlockedUserSlice
     response_fields:
       - targetPersonaId
       - displayName
       - userHandle
       - avatarUrl
       - blockedAt
-    client_contract:
-      dart_import: ../user/persona_relationship_contracts.dart
-      response_type: BlockedUserSlice
-      response_decoder: decodeBlockedUserSlice
+    response_body: BlockedUserSlice
+    response_body_kind: page
     authorization:
       principal: persona
       ownership_policy: self

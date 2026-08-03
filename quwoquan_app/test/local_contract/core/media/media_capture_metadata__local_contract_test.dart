@@ -132,7 +132,7 @@ void main() {
     test('非图片字节与截断字节返回空元数据', () {
       expect(
         extractMediaCaptureMetadata(Uint8List.fromList(<int>[1, 2, 3, 4])),
-        MediaCaptureMetadata.empty,
+        ExtractedMediaCaptureMetadata.empty,
       );
       final truncated = Uint8List.sublistView(_jpegWithExif(make: 'SONY'), 0, 8);
       expect(extractMediaCaptureMetadata(truncated).isEmpty, isTrue);
@@ -151,8 +151,8 @@ void main() {
     });
   });
 
-  group('MediaCaptureMetadata.discloseOnly', () {
-    const full = MediaCaptureMetadata(
+  group('ExtractedMediaCaptureMetadata.discloseOnly', () {
+    const full = ExtractedMediaCaptureMetadata(
       cameraMake: 'SONY',
       cameraModel: 'ILCE-7M4',
       lensModel: 'FE 24-70mm F2.8 GM II',
@@ -167,15 +167,15 @@ void main() {
     test('默认披露集合包含四组', () {
       expect(
         kDefaultCaptureDisclosure,
-        MediaCaptureDisclosureGroup.values.toSet(),
+        CaptureMetadataDisclosureGroup.values.toSet(),
       );
     });
 
     test('关闭拍摄地点后坐标整组消失且不出现在 wire 上', () {
       final disclosed = full.discloseOnly(
-        <MediaCaptureDisclosureGroup>{
-          MediaCaptureDisclosureGroup.gear,
-          MediaCaptureDisclosureGroup.parameters,
+        <CaptureMetadataDisclosureGroup>{
+          CaptureMetadataDisclosureGroup.gear,
+          CaptureMetadataDisclosureGroup.parameters,
         },
       );
 
@@ -191,23 +191,23 @@ void main() {
 
     test('关闭全部分组后 payload 为空，等价于相机未记录', () {
       final disclosed = full.discloseOnly(
-        const <MediaCaptureDisclosureGroup>{},
+        const <CaptureMetadataDisclosureGroup>{},
       );
 
-      expect(disclosed, MediaCaptureMetadata.empty);
+      expect(disclosed, ExtractedMediaCaptureMetadata.empty);
       expect(disclosed.toWire(), isEmpty);
     });
 
     test('availableGroups 只包含真正解析到的分组', () {
-      const gearOnly = MediaCaptureMetadata(cameraModel: 'X-T5');
+      const gearOnly = ExtractedMediaCaptureMetadata(cameraModel: 'X-T5');
 
-      expect(gearOnly.availableGroups, <MediaCaptureDisclosureGroup>{
-        MediaCaptureDisclosureGroup.gear,
+      expect(gearOnly.availableGroups, <CaptureMetadataDisclosureGroup>{
+        CaptureMetadataDisclosureGroup.gear,
       });
     });
 
     test('toString 不泄露坐标与拍摄时间', () {
-      final metadata = MediaCaptureMetadata(
+      final metadata = ExtractedMediaCaptureMetadata(
         gpsLatitude: 30.2401,
         gpsLongitude: 120.1402,
         capturedAt: DateTime.utc(2026, 7, 28, 6, 14, 32),
@@ -221,12 +221,12 @@ void main() {
     });
   });
 
-  group('MediaCaptureDisclosureGroup wire', () {
+  group('CaptureMetadataDisclosureGroup wire', () {
     test('wire 取值与解析互为逆运算', () {
-      for (final group in MediaCaptureDisclosureGroup.values) {
-        expect(MediaCaptureDisclosureGroup.fromWire(group.wire), group);
+      for (final group in CaptureMetadataDisclosureGroup.values) {
+        expect(CaptureMetadataDisclosureGroup.fromWire(group.wire), group);
       }
-      expect(MediaCaptureDisclosureGroup.fromWire('unknown'), isNull);
+      expect(CaptureMetadataDisclosureGroup.fromWire('unknown'), isNull);
     });
   });
 }

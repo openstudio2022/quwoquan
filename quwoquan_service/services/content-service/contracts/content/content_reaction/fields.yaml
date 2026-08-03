@@ -109,6 +109,33 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ContentReactionCommandResult:
+    description: Post reaction mutation result returned by the ContentReaction aggregate facade.
+    fields:
+      - {name: reactionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: liked, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: changed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentCommentReactionCommandResult:
+    description: Comment reaction mutation result and authoritative like/dislike counts.
+    fields:
+      - {name: reactionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: reaction, type: enum, enum_ref: CommentReactionType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: changed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: likeCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: dislikeCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentReactionStateSlice:
+    description: Actor-scoped Post reaction read model; it never exposes actor identity.
+    fields:
+      - {name: found, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: liked, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
   ContentReactionChangedPayload:
     fields:
       - {name: reactionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -138,10 +165,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: reaction
-        type: string
+        type: enum
         enum_ref: CommentReactionType
-        client_dart_type: ContentCommentReactionValue
-        client_wire: canonicalEnum
   UnlikeContentPostCommand:
     fields:
       - name: postId

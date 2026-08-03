@@ -20,5 +20,10 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.family_parenting.v1"
+  "replayAssetRef": "assistant.replay.family_parenting",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

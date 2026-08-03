@@ -93,7 +93,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageReview'
+                                $ref: '#/components/schemas/HomepageReviewView'
                 default:
                     description: Runtime failure
                     content:
@@ -130,7 +130,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageReview'
+                                $ref: '#/components/schemas/HomepageReviewView'
                 default:
                     description: Runtime failure
                     content:
@@ -262,7 +262,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageClaimRequest'
+                                $ref: '#/components/schemas/HomepageClaimRequestView'
                 default:
                     description: Runtime failure
                     content:
@@ -355,7 +355,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Homepage'
+                                $ref: '#/components/schemas/HomepageDetailView'
                 default:
                     description: Runtime failure
                     content:
@@ -592,7 +592,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageReview'
+                                $ref: '#/components/schemas/HomepageReviewPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -636,7 +636,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageReview'
+                                $ref: '#/components/schemas/HomepageReviewView'
                 default:
                     description: Runtime failure
                     content:
@@ -669,7 +669,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageReview'
+                                $ref: '#/components/schemas/HomepageReviewView'
                 default:
                     description: Runtime failure
                     content:
@@ -747,7 +747,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageStatusReport'
+                                $ref: '#/components/schemas/HomepageStatusReportView'
                 default:
                     description: Runtime failure
                     content:
@@ -963,8 +963,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SuggestHomepageCandidateCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageDetailView'
                 default:
                     description: Runtime failure
                     content:
@@ -976,14 +980,14 @@ paths:
     /homepages/search:
         get:
             operationId: SearchHomepages
-            x-contract-operation-id: entity.homepage.SearchHomepages
-            x-object-id: entity.homepage
+            x-contract-operation-id: entity.homepage_search_item_view.SearchHomepages
+            x-object-id: entity.homepage_search_item_view
             x-actor: none
             x-application:
                 kind: query
-                facet: HomepageQueryFacade
+                facet: HomepageSearchItemViewQueryFacade
                 method: search
-                reader: HomepageSearchReader
+                reader: HomepageSearchItemViewReader
                 slice: HomepageSearchSlice
             parameters:
                 - name: query
@@ -1028,7 +1032,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HomepageSearchItemView'
+                                $ref: '#/components/schemas/HomepageSearchSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1063,15 +1067,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: EntityImpactSummary
             x-contract-placeholder: true
-        Homepage:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Homepage
-            x-contract-placeholder: true
         HomepageClaimRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageClaimRequest
+            x-contract-placeholder: true
+        HomepageClaimRequestView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HomepageClaimRequestView
             x-contract-placeholder: true
         HomepageDetailView:
             type: object
@@ -1088,20 +1092,30 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageRelatedGroupSummaryView
             x-contract-placeholder: true
-        HomepageReview:
+        HomepageReviewPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: HomepageReview
+            x-contract-entity: HomepageReviewPageSlice
             x-contract-placeholder: true
         HomepageReviewSummaryView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageReviewSummaryView
             x-contract-placeholder: true
+        HomepageReviewView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HomepageReviewView
+            x-contract-placeholder: true
         HomepageSearchItemView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageSearchItemView
+            x-contract-placeholder: true
+        HomepageSearchSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HomepageSearchSlice
             x-contract-placeholder: true
         HomepageShellView:
             type: object
@@ -1112,6 +1126,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageStatusReport
+            x-contract-placeholder: true
+        HomepageStatusReportView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HomepageStatusReportView
             x-contract-placeholder: true
         IntakeHomepageCandidateCommand:
             type: object

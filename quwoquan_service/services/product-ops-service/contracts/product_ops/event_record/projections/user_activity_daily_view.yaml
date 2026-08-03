@@ -1,0 +1,32 @@
+read_model: UserActivityDailyView
+description: EventRecord 按 UTC 日期重放得到的活跃、访问、会话和新增 actor 聚合；不得作为原始事件的第二权威来源。
+storage_backend: mongodb
+projection_mode: rebuildable
+source_entities:
+- EventRecord
+consumers:
+- product-ops-service
+- ops-portal
+checkpoint:
+  source: EventRecord occurredAt 与稳定事件身份
+  resume: inclusive_idempotent
+rebuild:
+  strategy: replay_event_record_window
+  atomic_replace: true
+tombstone:
+  strategy: rebuild_without_removed_source
+fields:
+- name: date
+  type: string
+- name: actorHashes
+  type: '[]string'
+- name: dau
+  type: int64
+- name: pv
+  type: int64
+- name: sessionCount
+  type: int64
+- name: newActors
+  type: int64
+- name: updatedAt
+  type: timestamp

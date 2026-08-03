@@ -66,7 +66,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
   /// realtime 信令消费：只处理当前会话的事件（callId 对齐）。
   void _onSignalEvent(RtcSignalEvent event) {
-    final currentCallId = state.session?.callId ?? '';
+    final currentCallId = state.session?.id ?? '';
     if (currentCallId.isEmpty || event.callId != currentCallId) {
       return;
     }
@@ -78,7 +78,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             state.status == CallStatus.initiated) {
           state = state.copyWith(
             status: CallStatus.connecting,
-            session: state.session?.copyWith(status: CallStatus.connecting),
+            session: state.session == null
+                ? null
+                : projectCallSession(
+                    state.session!,
+                    status: CallStatus.connecting,
+                  ),
           );
         }
       case RtcCallEndedWsPayload(data: final data):
@@ -97,7 +102,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         final session = state.session!;
         state = state.copyWith(
           status: CallStatus.inCall,
-          session: session.copyWith(
+          session: projectCallSession(
+            session,
             status: CallStatus.inCall,
             participantCount: data.participantCount,
           ),
@@ -106,17 +112,23 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         _scheduleSignalRefresh(currentCallId);
       case RtcParticipantJoinedWsPayload(data: final data):
         state = state.copyWith(
-          session: state.session?.copyWith(
-            participantCount: data.participantCount,
-          ),
+          session: state.session == null
+              ? null
+              : projectCallSession(
+                  state.session!,
+                  participantCount: data.participantCount,
+                ),
         );
         _scheduleSignalRefresh(currentCallId);
       case RtcParticipantLeftWsPayload(data: final data):
         // 聚合参与者/建连状态变化：从 CallQuery 拉最新事实刷新 roster。
         state = state.copyWith(
-          session: state.session?.copyWith(
-            participantCount: data.participantCount,
-          ),
+          session: state.session == null
+              ? null
+              : projectCallSession(
+                  state.session!,
+                  participantCount: data.participantCount,
+                ),
         );
         _scheduleSignalRefresh(currentCallId);
       case RtcScreenShareStartedWsPayload(data: final data):
@@ -125,10 +137,13 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             (state.isLocalScreenSharing &&
                 state.session?.screenShareUserId == data.userId);
         state = state.copyWith(
-          session: state.session?.copyWith(
-            isScreenSharing: true,
-            screenShareUserId: data.userId,
-          ),
+          session: state.session == null
+              ? null
+              : projectCallSession(
+                  state.session!,
+                  isScreenSharing: true,
+                  screenShareUserId: data.userId,
+                ),
           isLocalScreenSharing: isLocalScreenShare,
         );
       case RtcScreenShareStoppedWsPayload():
@@ -188,14 +203,14 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     String? trustRelation,
     String? expiresAt,
   }) {
-    final parsedCallType = CallType.fromString(callType);
+    final parsedCallType = CallType.fromWire(callType, 'callType');
     final callerId = initiatorId.trim();
     final displayName = callerName?.trim().isNotEmpty == true
         ? callerName!.trim()
         : callerId;
     final now = DateTime.now().toUtc();
-    final session = CallSessionDto(
-      callId: callId,
+    final session = CallSession(
+      id: callId,
       callType: parsedCallType,
       status: CallStatus.ringing,
       initiatorId: callerId,
@@ -203,14 +218,16 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       roomId: '',
       maxParticipants: 32,
       participantCount: 2,
-      participants: <CallParticipantDto>[
-        CallParticipantDto(
+      participants: <CallParticipant>[
+        CallParticipant(
           userId: callerId,
           role: ParticipantRole.initiator,
           status: ParticipantStatus.ringing,
+          isMuted: false,
           isCameraOn: parsedCallType.isVideo,
         ),
       ],
+      isScreenSharing: false,
       createdAt: now,
       updatedAt: now,
     );
@@ -239,8 +256,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final session = await ref
           .read(rtcCallQueryProvider(AppUiSurfaces.rtcIncoming))
           .getCall(RtcGetCallQuery(callId: callId));
-      if (state.session?.callId != null &&
-          state.session?.callId != session.callId) {
+      if (state.session?.id != null && state.session?.id != session.id) {
         return;
       }
       if (session.status == CallStatus.ended) {
@@ -272,11 +288,11 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> retryCurrentCall() async {
-    final callId = state.session?.callId.trim() ?? '';
+    final callId = state.session?.id.trim() ?? '';
     if (callId.isEmpty) return;
     final generation = ++_signalRefreshGeneration;
     await _refreshCurrentCallFromSignal(callId, generation);
-    if (state.session?.callId == callId &&
+    if (state.session?.id == callId &&
         state.status != CallStatus.ended &&
         _mediaCredentialsCallId == callId &&
         _mediaAccessToken.isNotEmpty) {
@@ -308,7 +324,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           .read(rtcCallQueryProvider(_activeCallSurface))
           .getCall(RtcGetCallQuery(callId: expectedCallId));
       if (generation != _signalRefreshGeneration ||
-          state.session?.callId != expectedCallId ||
+          state.session?.id != expectedCallId ||
           state.status == CallStatus.ended) {
         return;
       }
@@ -320,7 +336,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           nextStatus != CallStatus.inCall &&
           nextStatus != CallStatus.ended) {
         nextStatus = CallStatus.inCall;
-        nextSession = session.copyWith(status: CallStatus.inCall);
+        nextSession = projectCallSession(session, status: CallStatus.inCall);
       }
       if (nextStatus == CallStatus.ended) {
         state = state.copyWith(
@@ -344,7 +360,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       _syncParticipantRoster(nextSession);
     } catch (error) {
       if (generation == _signalRefreshGeneration &&
-          state.session?.callId == expectedCallId &&
+          state.session?.id == expectedCallId &&
           state.status != CallStatus.ended) {
         state = state.copyWith(failure: _failureFrom(error));
       }
@@ -362,7 +378,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       state = state.copyWith(
         isLoading: true,
         clearFailure: true,
-        callType: CallType.fromString(callTypeStr),
+        callType: CallType.fromWire(callTypeStr, 'callType'),
         isCameraOn: callTypeStr == 'video',
         status: CallStatus.initiated,
       );
@@ -384,9 +400,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.callId,
+            callId: session.id,
             callType: callTypeStr,
-            participants: session.participants,
+            participants: session.participants ?? const <CallParticipant>[],
           );
 
       await _connectMediaTransport(
@@ -395,7 +411,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       );
 
       _startTimeoutTimer();
-      return session.callId;
+      return session.id;
     } catch (e) {
       state = state.copyWith(isLoading: false, failure: _failureFrom(e));
       return null;
@@ -432,9 +448,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.callId,
-            callType: session.callType.toApiString(),
-            participants: session.participants,
+            callId: session.id,
+            callType: session.callType.wireName,
+            participants: session.participants ?? const <CallParticipant>[],
           );
 
       await _connectMediaTransport(
@@ -454,18 +470,18 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             rtcCallLifecycleCommandWriterProvider(AppUiSurfaces.rtcIncoming),
           )
           .rejectCall(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId != callId) return;
+      if (state.session?.id != callId) return;
       state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(failure: _failureFrom(e));
       }
     }
   }
 
   Future<void> cancelCall() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     try {
       _cancelTimeoutTimer();
@@ -474,11 +490,11 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             rtcCallLifecycleCommandWriterProvider(AppUiSurfaces.rtcOutgoing),
           )
           .cancelCall(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId != callId) return;
+      if (state.session?.id != callId) return;
       state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(failure: _failureFrom(e));
         _startTimeoutTimer(delay: const Duration(seconds: 5));
       }
@@ -488,7 +504,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   Future<CallSessionActionResult> hangupCall({
     bool clearActiveCall = true,
   }) async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null || callId.isEmpty) {
       return const CallSessionActionResult.notAttempted();
     }
@@ -496,7 +512,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final endedSession = await ref
           .read(rtcCallLifecycleCommandWriterProvider(_activeCallSurface))
           .hangupCall(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId != callId) {
+      if (state.session?.id != callId) {
         return const CallSessionActionResult.notAttempted();
       }
       state = state.copyWith(session: endedSession);
@@ -504,7 +520,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       return const CallSessionActionResult.succeeded();
     } catch (e) {
       final failure = _failureFrom(e);
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(isLoading: false, failure: failure);
       }
       return CallSessionActionResult.failed(failure);
@@ -534,9 +550,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       ref
           .read(activeCallProvider.notifier)
           .startCall(
-            callId: session.callId,
-            callType: session.callType.toApiString(),
-            participants: session.participants,
+            callId: session.id,
+            callType: session.callType.wireName,
+            participants: session.participants ?? const <CallParticipant>[],
           );
 
       await _connectMediaTransport(
@@ -549,24 +565,24 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> leaveCall() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     try {
       final endedSession = await ref
           .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
           .leaveCall(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId != callId) return;
+      if (state.session?.id != callId) return;
       state = state.copyWith(session: endedSession);
       _endCallState();
     } catch (e) {
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(failure: _failureFrom(e));
       }
     }
   }
 
   Future<void> inviteToCall(List<String> inviteeIds) async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     try {
       final session = await ref
@@ -586,7 +602,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> toggleMute() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     final targetMuted = !state.isMuted;
     final writer = ref.read(
@@ -598,13 +614,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         // 关闭采集时隐私优先：先停本地麦克风，再提交聚合投影。
         await _lkRoom.setMicrophoneEnabled(false);
         localMuted = true;
-        if (state.session?.callId != callId) return;
+        if (state.session?.id != callId) return;
         state = state.copyWith(isMuted: true);
         final session = await writer.toggleMute(
           RtcToggleMuteCommand(callId: callId, muted: true),
         );
-        if (state.session?.callId == callId &&
-            state.status != CallStatus.ended) {
+        if (state.session?.id == callId && state.status != CallStatus.ended) {
           state = state.copyWith(
             session: session,
             isMuted: true,
@@ -612,7 +627,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       } catch (error) {
-        if (state.session?.callId == callId) {
+        if (state.session?.id == callId) {
           state = state.copyWith(
             isMuted: localMuted ? true : state.isMuted,
             failure: _failureFrom(error),
@@ -622,13 +637,13 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       return;
     }
 
-    CallSessionDto? unmutedSession;
+    CallSession? unmutedSession;
     try {
       // 开启采集时先让聚合授权，再开放本地麦克风，避免未授权音频短暂发布。
       unmutedSession = await writer.toggleMute(
         RtcToggleMuteCommand(callId: callId, muted: false),
       );
-      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+      if (state.session?.id != callId || state.status == CallStatus.ended) {
         return;
       }
       await _lkRoom.setMicrophoneEnabled(true);
@@ -648,7 +663,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           stackTrace: rollbackStackTrace,
         );
       }
-      CallSessionDto? compensatedSession;
+      CallSession? compensatedSession;
       if (unmutedSession != null) {
         try {
           compensatedSession = await writer.toggleMute(
@@ -663,7 +678,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       }
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(
           session: compensatedSession ?? state.session,
           isMuted: true,
@@ -674,7 +689,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> toggleCamera() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     final targetCameraOn = !state.isCameraOn;
     final writer = ref.read(
@@ -686,13 +701,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         // 关闭画面时隐私优先：先停本地采集，再提交聚合投影。
         await _lkRoom.setCameraEnabled(false);
         localCameraStopped = true;
-        if (state.session?.callId != callId) return;
+        if (state.session?.id != callId) return;
         state = state.copyWith(isCameraOn: false);
         final session = await writer.toggleCamera(
           RtcToggleCameraCommand(callId: callId, cameraOn: false),
         );
-        if (state.session?.callId == callId &&
-            state.status != CallStatus.ended) {
+        if (state.session?.id == callId && state.status != CallStatus.ended) {
           state = state.copyWith(
             session: session,
             isCameraOn: false,
@@ -700,7 +714,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       } catch (error) {
-        if (state.session?.callId == callId) {
+        if (state.session?.id == callId) {
           state = state.copyWith(
             isCameraOn: localCameraStopped ? false : state.isCameraOn,
             failure: _failureFrom(error),
@@ -710,13 +724,13 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       return;
     }
 
-    CallSessionDto? cameraEnabledSession;
+    CallSession? cameraEnabledSession;
     try {
       // 开启画面时先让聚合授权，再开放本地摄像头。
       cameraEnabledSession = await writer.toggleCamera(
         RtcToggleCameraCommand(callId: callId, cameraOn: true),
       );
-      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+      if (state.session?.id != callId || state.status == CallStatus.ended) {
         return;
       }
       await _lkRoom.setCameraEnabled(true);
@@ -736,7 +750,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           stackTrace: rollbackStackTrace,
         );
       }
-      CallSessionDto? compensatedSession;
+      CallSession? compensatedSession;
       if (cameraEnabledSession != null) {
         try {
           compensatedSession = await writer.toggleCamera(
@@ -751,7 +765,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       }
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(
           session: compensatedSession ?? state.session,
           isCameraOn: false,
@@ -794,9 +808,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> startScreenShare() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null || state.isLocalScreenSharing) return;
-    CallSessionDto? startedSession;
+    CallSession? startedSession;
     var mediaStartAttempted = false;
     try {
       // 先由 CallSession 聚合裁决互斥与权限，再发布 LiveKit track，避免在
@@ -804,7 +818,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       startedSession = await ref
           .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
           .startScreenShare(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId != callId || state.status == CallStatus.ended) {
+      if (state.session?.id != callId || state.status == CallStatus.ended) {
         await ref
             .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
             .stopScreenShare(RtcCallIdCommand(callId: callId));
@@ -812,7 +826,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       }
       mediaStartAttempted = true;
       await _lkRoom.startScreenShare();
-      if (state.session?.callId == callId && state.status != CallStatus.ended) {
+      if (state.session?.id == callId && state.status != CallStatus.ended) {
         state = state.copyWith(
           session: startedSession,
           isLocalScreenSharing: true,
@@ -834,7 +848,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       }
-      CallSessionDto? compensatedSession;
+      CallSession? compensatedSession;
       if (startedSession != null) {
         try {
           compensatedSession = await ref
@@ -849,7 +863,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           );
         }
       }
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         final compensationSucceeded = compensatedSession != null;
         state = state.copyWith(
           session: compensationSucceeded
@@ -872,7 +886,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> stopScreenShare() async {
-    final callId = state.session?.callId;
+    final callId = state.session?.id;
     if (callId == null) return;
     Object? mediaStopError;
     StackTrace? mediaStopStackTrace;
@@ -885,14 +899,14 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       // 结构化失败横幅重连同一 CallSession，不创建第二会话。
       await _disconnectLiveKit();
     }
-    if (state.session?.callId == callId) {
+    if (state.session?.id == callId) {
       state = state.copyWith(isLocalScreenSharing: false);
     }
     try {
       final session = await ref
           .read(rtcCallScreenShareWriterProvider(AppUiSurfaces.rtcVideo))
           .stopScreenShare(RtcCallIdCommand(callId: callId));
-      if (state.session?.callId == callId && state.status != CallStatus.ended) {
+      if (state.session?.id == callId && state.status != CallStatus.ended) {
         state = state.copyWith(
           session: projectCallSessionWithoutScreenShare(session),
           isLocalScreenSharing: false,
@@ -901,7 +915,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         );
       }
     } catch (error) {
-      if (state.session?.callId == callId) {
+      if (state.session?.id == callId) {
         state = state.copyWith(
           // 服务端停止失败时保留停止入口，允许幂等重试；本地 track 已先停。
           isLocalScreenSharing: true,
@@ -919,7 +933,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     }
   }
 
-  void loadFromSession(CallSessionDto session) {
+  void loadFromSession(CallSession session) {
     final type = session.callType;
     state = CallSessionState(
       session: session,

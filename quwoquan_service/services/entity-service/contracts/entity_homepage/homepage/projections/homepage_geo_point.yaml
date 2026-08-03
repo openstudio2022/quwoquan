@@ -7,18 +7,8 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageGeoPoint
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_geo_point.g.dart
-  fields:
-  - name: latitude
-    dart_type: double
-    nullable: false
-    source: latitude
-    default: '0.0'
-  - name: longitude
-    dart_type: double
-    nullable: false
-    source: longitude
-    default: '0.0'
+fields:
+- name: latitude
+  type: float64
+- name: longitude
+  type: float64

@@ -5,6 +5,13 @@ commercial_defaults:
   target_story: streaming-feed-performance
 description: FeedDeliveryPage 不暴露独立 transport，只由 Post.GetFeed 经 application port append/load
 api_routes: []
+runtime_entrypoints:
+- name: AppendFeedDeliveryPage
+  kind: internal_port
+  phase: transactional_append
+  source_objects: [content.Post]
+  idempotency: identity_payload_digest
+  application: {kind: command, facet: FeedDeliveryPageAppender, method: append, object_owner: FeedDeliveryPage}
 consumers:
 - name: content.Post.GetFeed
   capabilities:

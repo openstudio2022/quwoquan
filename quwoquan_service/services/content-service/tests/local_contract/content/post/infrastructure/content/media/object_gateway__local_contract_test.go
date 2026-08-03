@@ -5,7 +5,7 @@ package media_test
 import (
 	"context"
 	"net/url"
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	"strings"
 	"testing"
 	"time"

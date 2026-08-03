@@ -57,10 +57,6 @@ type MongoUserAccountClosedProjection struct {
 	membershipOutbox       *mongo.Collection
 	userStateOutbox        *mongo.Collection
 	messageOutbox          *mongo.Collection
-	reliableTaskOutbox     *mongo.Collection
-	reliableAsyncTasks     *mongo.Collection
-	notificationOutbox     *mongo.Collection
-	notificationLedger     *mongo.Collection
 	restrictionStates      *mongo.Collection
 	restrictionInbox       *mongo.Collection
 	inbox                  *mongo.Collection
@@ -91,10 +87,6 @@ func NewMongoUserAccountClosedProjection(
 		membershipOutbox:       db.Collection("conversation_memberships_outbox"),
 		userStateOutbox:        db.Collection("conversation_user_states_outbox"),
 		messageOutbox:          db.Collection("messages_outbox"),
-		reliableTaskOutbox:     db.Collection("reliable_task_outbox"),
-		reliableAsyncTasks:     db.Collection("reliable_async_task"),
-		notificationOutbox:     db.Collection("notification_outbox"),
-		notificationLedger:     db.Collection("notification_delivery_ledger"),
 		restrictionStates:      db.Collection("chat_user_account_restrictions"),
 		restrictionInbox:       db.Collection("chat_user_account_restriction_inbox"),
 		inbox:                  db.Collection(userAccountClosedInboxCollection),
@@ -384,42 +376,6 @@ func (p *MongoUserAccountClosedProjection) projectClosedAccount(
 		); err != nil {
 			return nil, fmt.Errorf("anonymize chat membership inviter: %w", err)
 		}
-		if err := p.anonymizeReliableRuntimeState(
-			ctx,
-			subject,
-			anonymousID,
-		); err != nil {
-			return nil, err
-		}
-	}
-
-	if _, err := p.notificationOutbox.UpdateMany(
-		ctx,
-		bson.M{"recipientIds": bson.M{"$in": subjects}},
-		bson.M{"$pull": bson.M{"recipientIds": bson.M{"$in": subjects}}},
-	); err != nil {
-		return nil, fmt.Errorf(
-			"remove closed chat notification recipients: %w",
-			err,
-		)
-	}
-	if _, err := p.notificationOutbox.DeleteMany(
-		ctx,
-		bson.M{"recipientIds": bson.M{"$size": 0}},
-	); err != nil {
-		return nil, fmt.Errorf(
-			"delete empty closed chat notifications: %w",
-			err,
-		)
-	}
-	if _, err := p.notificationLedger.DeleteMany(
-		ctx,
-		bson.M{"recipientId": bson.M{"$in": subjects}},
-	); err != nil {
-		return nil, fmt.Errorf(
-			"delete closed chat notification delivery state: %w",
-			err,
-		)
 	}
 	if _, err := p.members.DeleteMany(
 		ctx,
@@ -638,31 +594,6 @@ func (p *MongoUserAccountClosedProjection) anonymizeAggregateOutboxes(
 					err,
 				)
 			}
-		}
-	}
-	return nil
-}
-
-func (p *MongoUserAccountClosedProjection) anonymizeReliableRuntimeState(
-	ctx context.Context,
-	subject string,
-	anonymousID string,
-) error {
-	for _, collection := range []*mongo.Collection{
-		p.reliableTaskOutbox,
-		p.reliableAsyncTasks,
-		p.notificationOutbox,
-	} {
-		if _, err := collection.UpdateMany(
-			ctx,
-			bson.M{"payload.actorID": subject},
-			bson.M{"$set": bson.M{"payload.actorID": anonymousID}},
-		); err != nil {
-			return fmt.Errorf(
-				"anonymize %s actor state: %w",
-				collection.Name(),
-				err,
-			)
 		}
 	}
 	return nil

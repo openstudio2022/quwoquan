@@ -14,6 +14,8 @@ from generated.recommendation.ranked_recommendation_window.api.operations import
 )
 from generated.recommendation.ranked_recommendation_window.models.request_response import (
     CreateRankedRecommendationWindowCommand,
+    GetRankedRecommendationPageQuery,
+    RecommendationObjectCard,
     RankedRecommendationItem,
     RankedRecommendationPage,
 )
@@ -84,6 +86,19 @@ def _wire_page(page: DomainPage) -> RankedRecommendationPage:
                 itemFeatureSnapshot=dict(item.item_feature_snapshot),
             )
             for item in page.items
+        ],
+        objectCards=[
+            RecommendationObjectCard(
+                objectKind=card.object_kind,
+                objectId=card.object_id,
+                title=card.title,
+                subtitle=card.subtitle,
+                coverUrl=card.cover_url,
+                tagRefs=list(card.tag_refs),
+                reasonKey=card.reason_key,
+                recallPath=card.recall_path,
+            )
+            for card in page.object_cards
         ],
         nextOrdinal=page.next_ordinal,
         expiresAt=datetime.fromisoformat(page.expires_at),
@@ -159,6 +174,7 @@ def build_router(
     def get_ranked_window_page(
         request: Request,
         windowId: str,
+        subjectId: str = Query(...),
         fromOrdinal: int = Query(default=0, ge=0),
         limit: int = Query(default=20, ge=1, le=100),
         _principal: dict[str, Any] = Depends(require_ranked_window_service),
@@ -166,14 +182,23 @@ def build_router(
         started = time.perf_counter()
         outcome = "failed"
         try:
+            query = GetRankedRecommendationPageQuery.model_validate(
+                {
+                    "subjectId": subjectId,
+                    "windowId": windowId,
+                    "fromOrdinal": fromOrdinal,
+                    "limit": limit,
+                }
+            )
             page = facade_provider(request).read_page(
-                window_id=windowId,
-                from_ordinal=fromOrdinal,
-                limit=limit,
+                subject_id=query.subjectId,
+                window_id=query.windowId,
+                from_ordinal=query.fromOrdinal if query.fromOrdinal is not None else 0,
+                limit=query.limit if query.limit is not None else 20,
             )
             outcome = "ok"
             return _wire_page(page)
-        except ValueError:
+        except (ValidationError, ValueError):
             outcome = "invalid_argument"
             raise _http_error(400, INVALID_ARGUMENT_CODE) from None
         except LookupError:

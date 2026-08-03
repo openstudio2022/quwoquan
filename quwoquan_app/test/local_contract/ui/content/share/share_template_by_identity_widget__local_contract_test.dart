@@ -855,11 +855,11 @@ class _RecordingOutboundShareWriter
   CreateContentOutboundShareCommand? lastCommand;
 
   @override
-  Future<ContentOutboundShareFactResult> appendOutboundShare(
+  Future<OutboundShareFactResult> appendOutboundShare(
     CreateContentOutboundShareCommand command,
   ) async {
     lastCommand = command;
-    return ContentOutboundShareFactResult(
+    return OutboundShareFactResult(
       eventId: 'outbound-share-event-1',
       postId: command.postId,
       channel: command.channel.wireValue,

@@ -238,7 +238,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
   }
 
   @override
-  Future<CacheReadResult<List<MessageDto>>> readTimeline({
+  Future<CacheReadResult<List<ChatMessageViewData>>> readTimeline({
     required LocalSearchNamespace namespace,
     required String conversationId,
     int beforeSeq = 0,
@@ -246,8 +246,8 @@ class LocalChatSearchStore implements LocalChatSearchReader {
   }) async {
     final normalizedConversationId = conversationId.trim();
     if (normalizedConversationId.isEmpty || limit <= 0) {
-      return const CacheReadResult<List<MessageDto>>(
-        value: <MessageDto>[],
+      return const CacheReadResult<List<ChatMessageViewData>>(
+        value: <ChatMessageViewData>[],
         source: CacheReadSource.disk,
         freshness: CacheFreshness.unknown,
         syncState: CacheSyncState.idle,
@@ -279,7 +279,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
         .toList(growable: false)
         .reversed
         .toList(growable: false);
-    return CacheReadResult<List<MessageDto>>(
+    return CacheReadResult<List<ChatMessageViewData>>(
       value: messages,
       source: CacheReadSource.disk,
       freshness: CacheFreshness.unknown,

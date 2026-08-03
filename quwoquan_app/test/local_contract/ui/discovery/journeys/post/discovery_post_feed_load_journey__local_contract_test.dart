@@ -63,7 +63,7 @@ class _ErrorContentRepository extends MockContentRepository {
   }) async => throw Exception(_errorMessage);
 
   @override
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -127,33 +127,46 @@ void main() {
   // 旅程正常路径
   // ──────────────────────────────────────────────────────────────────
   group('旅程正常路径', () {
-    testWidgets('旅程 A1：切换到美图 Tab → Provider 调用 MockRepo → 返回 PhotoPostDto 列表', (
+    testWidgets(
+      '旅程 A1：切换到美图 Tab → Provider 调用 MockRepo → 返回 canonical image ViewData',
+      (tester) async {
+        final mock = MockContentRepository();
+        await tester.pumpWidget(_scopedApp(mock: mock));
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+        );
+
+        await container.read(discoveryFeedMapProvider.notifier).load('photo');
+        await tester.pump();
+
+        final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
+        expect(
+          feedAsync,
+          isNotNull,
+          reason: 'photo tab state should be present',
+        );
+
+        final feed = feedAsync!.value!;
+        expect(feed.items, isNotEmpty, reason: 'MockRepo 应返回 seeded photo 数据');
+        expect(
+          feed.items,
+          everyElement(
+            isA<ContentPostViewData>().having(
+              (item) => item.type,
+              'canonical content type',
+              'image',
+            ),
+          ),
+          reason: 'contentType=image 应归一为唯一 ContentPostViewData',
+        );
+        expect(feed.error, isNull, reason: '正常加载不应有错误');
+      },
+    );
+
+    testWidgets('旅程 A2：切换到视频 Tab → 返回 canonical video ViewData', (
       tester,
     ) async {
-      final mock = MockContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: mock));
-
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(MaterialApp)),
-      );
-
-      await container.read(discoveryFeedMapProvider.notifier).load('photo');
-      await tester.pump();
-
-      final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
-      expect(feedAsync, isNotNull, reason: 'photo tab state should be present');
-
-      final feed = feedAsync!.value!;
-      expect(feed.items, isNotEmpty, reason: 'MockRepo 应返回 seeded photo 数据');
-      expect(
-        feed.items,
-        everyElement(isA<PhotoPostDto>()),
-        reason: 'contentType=image 应 dispatch 为 PhotoPostDto',
-      );
-      expect(feed.error, isNull, reason: '正常加载不应有错误');
-    });
-
-    testWidgets('旅程 A2：切换到视频 Tab → 返回 VideoPostDto 列表', (tester) async {
       final mock = MockContentRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
 
@@ -167,7 +180,9 @@ void main() {
       final feed = container.read(discoveryFeedMapProvider)['video']?.value;
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
-      expect(feed.items.first, isA<VideoPostDto>());
+      expect(feed.items.first, isA<ContentPostViewData>());
+      expect(feed.items.first.type, 'video');
+      expect(feed.items.first.hasVideo, isTrue);
       expect(feed.error, isNull);
     });
 
@@ -275,8 +290,10 @@ void main() {
 
       expect(photoFeed!.items, isNotEmpty);
       expect(videoFeed!.items, isNotEmpty);
-      expect(photoFeed.items.first, isA<PhotoPostDto>());
-      expect(videoFeed.items.first, isA<VideoPostDto>());
+      expect(photoFeed.items.first, isA<ContentPostViewData>());
+      expect(photoFeed.items.first.type, 'image');
+      expect(videoFeed.items.first, isA<ContentPostViewData>());
+      expect(videoFeed.items.first.type, 'video');
     });
 
     testWidgets('旅程 C2：同一 tab 重复加载 → 状态稳定，不崩溃', (tester) async {

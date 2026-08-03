@@ -19,13 +19,11 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: grok-4.5
-  modelFamily: grok
-  modelParameters:
-    - { id: effort, value: high }
-    - { id: fast, value: "true" }
-  reviewModel: composer-2.5
-  reviewModelFamily: composer
+  model: auto
+  modelFamily: auto
+  modelParameters: []
+  reviewModel: auto
+  reviewModelFamily: auto
   reviewModelParameters: []
 readiness:
   minPassRate: 1.0

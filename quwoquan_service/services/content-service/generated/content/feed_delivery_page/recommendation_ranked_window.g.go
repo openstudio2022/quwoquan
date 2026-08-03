@@ -10,6 +10,17 @@ const CreateRankedRecommendationWindowMethod = "POST"
 const GetRankedRecommendationPagePath = "/internal/recommendation/ranked-pages/{windowId}"
 const GetRankedRecommendationPageMethod = "GET"
 
+type RecommendationObjectCard struct {
+	ObjectKind string   `json:"objectKind"`
+	ObjectId   string   `json:"objectId"`
+	Title      string   `json:"title"`
+	Subtitle   *string  `json:"subtitle,omitempty"`
+	CoverUrl   *string  `json:"coverUrl,omitempty"`
+	TagRefs    []string `json:"tagRefs"`
+	ReasonKey  string   `json:"reasonKey"`
+	RecallPath string   `json:"recallPath"`
+}
+
 type RankedRecommendationItem struct {
 	Ordinal               int            `json:"ordinal"`
 	ContentId             string         `json:"contentId"`
@@ -25,6 +36,13 @@ type CreateRankedRecommendationWindowCommand struct {
 	Limit          int    `json:"limit"`
 }
 
+type GetRankedRecommendationPageQuery struct {
+	SubjectId   string `json:"subjectId"`
+	WindowId    string `json:"windowId"`
+	FromOrdinal *int   `json:"fromOrdinal,omitempty"`
+	Limit       *int   `json:"limit,omitempty"`
+}
+
 type RankedRecommendationPage struct {
 	WindowId              string                     `json:"windowId"`
 	Scenario              string                     `json:"scenario"`
@@ -36,6 +54,7 @@ type RankedRecommendationPage struct {
 	FeatureSnapshotAt     time.Time                  `json:"featureSnapshotAt"`
 	UserFeatureSnapshot   map[string]any             `json:"userFeatureSnapshot"`
 	Items                 []RankedRecommendationItem `json:"items"`
+	ObjectCards           []RecommendationObjectCard `json:"objectCards"`
 	NextOrdinal           *int                       `json:"nextOrdinal,omitempty"`
 	ExpiresAt             time.Time                  `json:"expiresAt"`
 }

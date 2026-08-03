@@ -39,9 +39,10 @@ def test_health():
     assert r.json() == {"status": "ok"}
 
 
-def test_content_release_health_does_not_claim_experiment_scoring_readiness():
+@pytest.mark.parametrize("workload", ["content-release", "content-commercial"])
+def test_content_slice_health_does_not_claim_experiment_scoring_readiness(workload):
     _mark_runtime_ready()
-    app.state.runtime_workload = "content-release"
+    app.state.runtime_workload = workload
     app.state.ranked_window_facade = None
     app.state.experiment_policy_consumer = None
 

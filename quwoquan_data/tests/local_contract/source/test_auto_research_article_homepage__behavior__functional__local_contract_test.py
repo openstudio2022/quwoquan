@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
 from urllib.parse import quote
 
 
@@ -440,7 +441,7 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
     assert progress["completedCount"] == 1
 
 
-def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_categories():
+def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases():
     import content.source.research.auto_plan_article as article_mod
     import content.source.research.auto_plan_writer as research_mod
 
@@ -478,6 +479,7 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
         "_qunar_travelogue_sources": article_mod._qunar_travelogue_sources,
         "_known_article_sources": article_mod._known_article_sources,
         "_mediawiki_page_images": article_mod._mediawiki_page_images,
+        "discover_article_source_frontier": article_mod.discover_article_source_frontier,
     }
 
     def fake_qunar(
@@ -497,7 +499,7 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
                 match_confidence=0.95,
                 source_role="base",
                 images=[good_image],
-                # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
+                    # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
                 image_evidence_mode="same_source",
             )
             for index in range(1, 5)
@@ -530,6 +532,10 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
         article_mod._qunar_travelogue_sources = fake_qunar
         article_mod._known_article_sources = lambda entity_id: []
         article_mod._mediawiki_page_images = lambda *_args, **_kwargs: []
+        article_mod.discover_article_source_frontier = lambda *_args, **_kwargs: SimpleNamespace(
+            as_evidence=lambda: {"sources": []},
+            source_documents=lambda: [],
+        )
         report = write_auto_research_plans(
             task,
             [entity],
@@ -543,15 +549,13 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
         for name, value in article_originals.items():
             setattr(article_mod, name, value)
 
-    assert report["issues"] == []
-    assert report["sourceAvailability"]["readyTargets"] == [entity]
-    plan = (
-        resolve_entity_object_dir(task, entity, etype_hint="景区")
-        / "1.download"
-        / "article_source_plan.json"
-    )
-    sources = read_json(plan)["payload"]["sources"]
-    assert any(source["source_id"].startswith("article_qunar_base_") for source in sources)
+    assert report["articleCommercialClosure"] is True
+    assert any("article base sources=0" in issue for issue in report["issues"])
+    candidate_ids = {
+        str(row.get("source_id") or "") for row in report["candidates"]
+    }
+    assert not any(source_id.startswith("article_qunar_base_") for source_id in candidate_ids)
+    assert not any("related_encyclopedia" in source_id for source_id in candidate_ids)
 
 def test_homepage_only_auto_research_runs_media_but_skips_article_discovery():
     import content.source.research.auto_plan_writer as research_mod

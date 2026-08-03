@@ -1,0 +1,99 @@
+backend: postgres
+role: authoritative
+tables:
+  premium_pool_entries:
+    entity: PremiumPoolEntry
+    role: authoritative
+    pk: content_id
+    columns:
+    - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: scope, type: VARCHAR(16), constraints: [NOT_NULL]}
+    - {name: status, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: quality_score, type: DOUBLE PRECISION, constraints: [NOT_NULL]}
+    - {name: quality_admission, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: supply_source, type: VARCHAR(128), constraints: [NULLABLE]}
+    - {name: source_task_id, type: VARCHAR(160), constraints: [NULLABLE]}
+    - {name: audit_id, type: VARCHAR(160), constraints: [NOT_NULL]}
+    - {name: rollback_token, type: VARCHAR(160), constraints: [NOT_NULL]}
+    - {name: featured_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: expires_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: revision, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    indexes:
+    - {name: idx_premium_pool_entries_status_expiry, columns: [status, expires_at, updated_at]}
+    optimistic_lock: revision
+  premium_pool_entry_workflows:
+    entity: PremiumPoolEntry
+    role: authoritative
+    pk: content_id
+    columns:
+    - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: state, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: revision, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: body, type: JSONB, constraints: [NOT_NULL]}
+    - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  premium_pool_entry_approvals:
+    entity: PremiumPoolEntry
+    role: append_only
+    pk: [content_id, payload_digest, decision, actor_id]
+    columns:
+    - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: payload_digest, type: VARCHAR(64), constraints: [PK, NOT_NULL]}
+    - {name: decision, type: VARCHAR(32), constraints: [PK, NOT_NULL]}
+    - {name: actor_id, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
+    - {name: revision, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: approved_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  premium_pool_entry_audits:
+    entity: PremiumPoolEntry
+    role: append_only
+    pk: audit_event_id
+    columns:
+    - {name: audit_event_id, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
+    - {name: content_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: action, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: actor_id, type: VARCHAR(160), constraints: [NOT_NULL]}
+    - {name: environment, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: request_id, type: VARCHAR(160), constraints: [NOT_NULL]}
+    - {name: trace_id, type: VARCHAR(160), constraints: [NOT_NULL]}
+    - {name: before_state, type: JSONB, constraints: [NULLABLE]}
+    - {name: after_state, type: JSONB, constraints: [NOT_NULL]}
+    - {name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  premium_pool_entry_command_receipts:
+    entity: PremiumPoolEntry
+    role: authoritative
+    pk: [content_id, idempotency_key]
+    columns:
+    - {name: content_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: idempotency_key, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
+    - {name: command_digest, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: approval_digest, type: VARCHAR(64), constraints: [NULLABLE]}
+    - {name: intent, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: result_revision, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: result_snapshot, type: JSONB, constraints: [NOT_NULL]}
+    - {name: committed_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  premium_pool_entry_outbox:
+    entity: PremiumPoolEntry
+    role: append_only
+    pk: event_id
+    columns:
+    - {name: event_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: event_type, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: aggregate_type, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: aggregate_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: payload, type: JSONB, constraints: [NOT_NULL]}
+    - {name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: dispatched_at, type: TIMESTAMPTZ, constraints: [NULLABLE]}
+    - {name: retry_count, type: INTEGER, constraints: [NOT_NULL]}
+    - {name: next_attempt_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: last_error, type: TEXT, constraints: [NOT_NULL]}
+    - {name: lease_owner, type: VARCHAR(160), constraints: [NULLABLE]}
+    - {name: leased_until, type: TIMESTAMPTZ, constraints: [NULLABLE]}
+    indexes:
+    - {name: idx_premium_pool_entry_outbox_ready, columns: [dispatched_at, next_attempt_at, occurred_at]}
+streams:
+  events.ops.premium_pool_entry:
+    entity: PremiumPoolEntry
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: PremiumPoolEntry outbox dispatcher 发布的唯一 durable runtime 事件流。

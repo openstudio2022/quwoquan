@@ -1,0 +1,25 @@
+kind: projection
+description: 从同一 TripTimeline source digest 派生的地点顺序、语义路线段与粗粒度 Moment 标记；不拥有轨迹或地图 Provider 数据。
+identity:
+  fields: [tripId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: trip_plan, kind: projection_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [tripId], target_object: travel.TripPlan}
+- {name: current_revision, kind: projection_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: retain, reference_fields: [currentRevisionId], target_object: travel.TripPlanRevision}
+- {name: moments, kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [sourceMomentIds], target_object: travel.TripMoment}
+- {name: content_links, kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [sourceContentLinkIds], target_object: travel.TripPlanContentLink}
+local_identity_reasons:
+  sourceEventId: projector 幂等检查点事件键，不是业务对象身份
+business_rules:
+- 地图只表达 canonical PlaceRef 顺序和粗粒度 Moment 标记，不存连续轨迹、Provider URL、scheme 或导航参数
+- route segment 只连接相邻 place-bearing items；无法解析地点详情时仍保留 typed reference 与顺序降级
+- sourceDigest 必须与同次事务写入的 TripTimelineView 一致
+lifecycle:
+  source_events: [TripPlanCreated, TripPlanRevised, TripPlanLifecycleChanged, TripPlanRevisionAppended, TripMomentChanged, TripPlanContentLinkChanged]
+  checkpoint: shared_with_trip_timeline_projection_receipt
+  rebuild: load_current_trip_revision_and_active_shared_references
+  tombstone: delete_view_keep_projection_checkpoint

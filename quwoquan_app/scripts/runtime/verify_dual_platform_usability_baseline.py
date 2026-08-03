@@ -134,8 +134,12 @@ def main() -> int:
     for required in (
         "ANDROID_SERIAL",
         "enable_android_adb_reverse",
-        "QWQ_APP_RUNTIME_ENV=alpha",
-        "scope media",
+        'export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"',
+        'export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"',
+        'export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"',
+        'app-debug-preflight --target "$QWQ_LAUNCH_TARGET"',
+        '--env "$QWQ_APP_RUNTIME_ENV"',
+        '--target "$QWQ_LAUNCH_TARGET"',
     ):
         if required not in run_sh:
             fail(failures, f"{RUN_SH.relative_to(ROOT)}: missing launcher requirement {required}")
@@ -212,8 +216,10 @@ def main() -> int:
 
     t3 = GAMMA_T3.read_text(encoding="utf-8")
     for required in (
-        'parser.add_argument("--release-id", required=True)',
-        'parser.add_argument("--import-run-id", required=True)',
+        "load_release_content_identity",
+        "resolve_readiness_path",
+        'expected_environment="gamma"',
+        'parser.add_argument(\n        "--release-readiness"',
         '"mutationPolicy": "read_only"',
         '"ship"',
         '"verify"',
@@ -222,6 +228,19 @@ def main() -> int:
             fail(
                 failures,
                 f"{GAMMA_T3.relative_to(ROOT)}: missing release-bound read-only contract {required}",
+            )
+    for forbidden_argument in (
+        'parser.add_argument("--release-id"',
+        'parser.add_argument("--import-run-id"',
+        'parser.add_argument("--verification-run-id"',
+    ):
+        if forbidden_argument in t3:
+            fail(
+                failures,
+                (
+                    f"{GAMMA_T3.relative_to(ROOT)}: release identity must come from "
+                    f"canonical readiness receipt, found {forbidden_argument}"
+                ),
             )
     for forbidden in ("seed_content", "seed_entity", "seed-only", "media.quwoquan.invalid"):
         if forbidden in t3:

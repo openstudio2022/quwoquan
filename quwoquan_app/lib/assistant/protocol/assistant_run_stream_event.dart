@@ -1,11 +1,13 @@
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
+        AssistantRunVisibleProcessView,
+        AssistantRunVisibleReferenceView,
+        AssistantStreamEventWire,
         AssistantStreamEventType,
         AssistantStreamEventTypeX,
+        CitationDestination,
         parseAssistantStreamEventType;
 import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 
 /// AssistantRun 用户可见 SSE 事件的唯一端侧投影。
 ///

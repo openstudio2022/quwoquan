@@ -46,7 +46,10 @@ var SupportedEventTypes = []string{
 	messageevent.AssistantMentioned,
 }
 
-const AssistantMentionedStream = "events.chat.assistant_mentions"
+const (
+	AssistantMentionedStream  = "events.chat.assistant_mentions"
+	AssistantMembershipStream = "events.chat.assistant_memberships"
+)
 
 const (
 	realtimeResumeRetention = 24 * time.Hour
@@ -351,6 +354,7 @@ func (p *EventPublisher) PublishDomainEvent(ctx context.Context, eventType, conv
 		Type:           eventType,
 		ConversationID: conversationId,
 		ActorID:        actorId,
+		Timestamp:      time.Now().UTC(),
 		Payload:        payload,
 	}
 	if err := p.Publish(ctx, evt); err != nil {
@@ -362,6 +366,14 @@ func (p *EventPublisher) PublishDomainEvent(ctx context.Context, eventType, conv
 			assistantMentionedDurableMessage(evt),
 		); err != nil {
 			return fmt.Errorf("publish assistant mentioned stream: %w", err)
+		}
+	}
+	if isAssistantMembershipEvent(evt) {
+		if _, err := p.transport.AppendDurable(
+			ctx,
+			assistantMembershipDurableMessage(evt),
+		); err != nil {
+			return fmt.Errorf("publish assistant membership stream: %w", err)
 		}
 	}
 	return nil
@@ -386,6 +398,7 @@ func (p *EventPublisher) PublishRecordedDomainEvent(
 		Type:           eventType,
 		ConversationID: conversationID,
 		ActorID:        actorID,
+		Timestamp:      time.Now().UTC(),
 		Payload:        payload,
 	}
 	if err := p.Publish(ctx, evt); err != nil {
@@ -397,6 +410,14 @@ func (p *EventPublisher) PublishRecordedDomainEvent(
 			assistantMentionedDurableMessage(evt),
 		); err != nil {
 			return fmt.Errorf("publish assistant mentioned stream: %w", err)
+		}
+	}
+	if isAssistantMembershipEvent(evt) {
+		if _, err := p.transport.AppendDurable(
+			ctx,
+			assistantMembershipDurableMessage(evt),
+		); err != nil {
+			return fmt.Errorf("publish assistant membership stream: %w", err)
 		}
 	}
 	return nil
@@ -426,6 +447,17 @@ func assistantMentionedStreamValues(evt DomainEvent) map[string]string {
 }
 
 func assistantMentionedDurableMessage(evt DomainEvent) runtimemessaging.DurableMessage {
+	return assistantDurableMessage(AssistantMentionedStream, evt)
+}
+
+func assistantMembershipDurableMessage(evt DomainEvent) runtimemessaging.DurableMessage {
+	return assistantDurableMessage(AssistantMembershipStream, evt)
+}
+
+func assistantDurableMessage(
+	stream string,
+	evt DomainEvent,
+) runtimemessaging.DurableMessage {
 	values := assistantMentionedStreamValues(evt)
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -437,9 +469,17 @@ func assistantMentionedDurableMessage(evt DomainEvent) runtimemessaging.DurableM
 		fields = append(fields, runtimemessaging.DurableField{Name: key, Value: values[key]})
 	}
 	return runtimemessaging.DurableMessage{
-		Stream: AssistantMentionedStream,
+		Stream: stream,
 		Fields: fields,
 	}
+}
+
+func isAssistantMembershipEvent(evt DomainEvent) bool {
+	if stringPayload(evt.Payload, "memberType") != "assistant" {
+		return false
+	}
+	return evt.Type == membershipevent.ConversationMemberAdded ||
+		evt.Type == membershipevent.ConversationMemberRemoved
 }
 
 func streamString(value any) string {

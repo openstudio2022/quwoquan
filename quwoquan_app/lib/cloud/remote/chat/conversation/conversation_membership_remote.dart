@@ -21,7 +21,7 @@ final class RemoteChatConversationMembershipQuery
   invocationContext;
 
   @override
-  Future<ChatConversationMemberPageSlice> listMembers(
+  Future<ConversationMemberPageSlice> listMembers(
     ChatListConversationMembersQuery query,
   ) {
     return client.chatConversationMembershipListMembers(
@@ -43,7 +43,7 @@ final class RemoteChatConversationMembershipCommandWriter
   invocationContext;
 
   @override
-  Future<ChatCommandAck> addMembers(
+  Future<ConversationMembershipCommandAck> addMembers(
     ChatAddConversationMembersCommand command, {
     required String idempotencyKey,
   }) {
@@ -54,7 +54,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> removeMember(
+  Future<ConversationMembershipCommandAck> removeMember(
     ChatRemoveConversationMemberCommand command, {
     required String idempotencyKey,
   }) {
@@ -68,7 +68,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> leaveConversation(
+  Future<ConversationMembershipCommandAck> leaveConversation(
     ChatLeaveConversationCommand command, {
     required String idempotencyKey,
   }) {
@@ -82,7 +82,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> inviteAssistant(
+  Future<ConversationMembershipCommandAck> inviteAssistant(
     ChatInviteConversationAssistantCommand command, {
     required String idempotencyKey,
   }) {
@@ -96,7 +96,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> removeAssistant(
+  Future<ConversationMembershipCommandAck> removeAssistant(
     ChatRemoveConversationAssistantCommand command, {
     required String idempotencyKey,
   }) {
@@ -110,7 +110,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> transferOwnership(
+  Future<ConversationMembershipCommandAck> transferOwnership(
     ChatTransferConversationOwnershipCommand command, {
     required String idempotencyKey,
   }) {
@@ -124,7 +124,7 @@ final class RemoteChatConversationMembershipCommandWriter
   }
 
   @override
-  Future<ChatCommandAck> updateAdmins(
+  Future<ConversationMembershipCommandAck> updateAdmins(
     ChatUpdateConversationAdminsCommand command, {
     required String idempotencyKey,
   }) {

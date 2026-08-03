@@ -22,6 +22,26 @@ class SynthesisReadinessResult {
       };
 
   factory SynthesisReadinessResult.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'ready',
+      'reason',
+      'replanTask',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SynthesisReadinessResult response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('ready') && json['ready'] != null && (json['ready'] is! bool)) {
+      throw const FormatException('SynthesisReadinessResult field ready has an invalid wire value');
+    }
+    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
+      throw const FormatException('SynthesisReadinessResult field reason has an invalid wire value');
+    }
+    if (json.containsKey('replanTask') && json['replanTask'] != null && (json['replanTask'] is! Map)) {
+      throw const FormatException('SynthesisReadinessResult field replanTask has an invalid wire value');
+    }
     return SynthesisReadinessResult(
       ready: json['ready'] == true,
       reason: (json['reason'] as String?)?.trim() ?? "",

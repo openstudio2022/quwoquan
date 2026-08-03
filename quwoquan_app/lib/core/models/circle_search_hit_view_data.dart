@@ -1,0 +1,155 @@
+/// 圈子全局搜索视图 DTO。
+///
+/// 字段对齐：contracts/metadata/circle/circle/circle/fields.yaml
+/// `CircleSearchHitViewData` / `CircleSearchFacetBucketViewData` / `CircleSearchResultViewData`。
+
+library;
+
+class CircleSearchHitViewData {
+  const CircleSearchHitViewData({
+    required this.circleId,
+    required this.name,
+    this.description,
+    this.coverUrl,
+    this.categoryId,
+    this.subCategory,
+    this.domainId,
+    this.kind,
+    this.displaySubjectType,
+    required this.memberCount,
+    required this.postCount,
+    this.highlightText,
+    this.matchedField,
+    this.circleName,
+    this.linkedHomepageId,
+    this.linkedHomepageType,
+    this.linkedHomepageTitle,
+  });
+
+  final String circleId;
+  final String name;
+  final String? description;
+  final String? coverUrl;
+  final String? categoryId;
+  final String? subCategory;
+  final String? domainId;
+  final String? kind;
+  final String? displaySubjectType;
+  final int memberCount;
+  final int postCount;
+  final String? highlightText;
+  final String? matchedField;
+
+  /// 群组结果场景下父圈子展示名（wire：`circleName` / `circle_name`）。
+  final String? circleName;
+
+  final String? linkedHomepageId;
+  final String? linkedHomepageType;
+  final String? linkedHomepageTitle;
+
+  factory CircleSearchHitViewData.fromMap(Map<String, dynamic> map) {
+    return CircleSearchHitViewData(
+      circleId: (map['circleId'] ?? '').toString().trim(),
+      name: (map['name'] ?? '').toString().trim(),
+      description: map['description']?.toString(),
+      coverUrl: map['coverUrl']?.toString(),
+      categoryId: map['categoryId']?.toString(),
+      subCategory: map['subCategory']?.toString(),
+      domainId: map['domainId']?.toString(),
+      kind: map['kind']?.toString(),
+      displaySubjectType: map['displaySubjectType']?.toString(),
+      memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
+      postCount: (map['postCount'] as num?)?.toInt() ?? 0,
+      highlightText: map['highlightText']?.toString(),
+      matchedField: map['matchedField']?.toString(),
+      circleName: map['circleName']?.toString(),
+      linkedHomepageId: map['linkedHomepageId']?.toString(),
+      linkedHomepageType: map['linkedHomepageType']?.toString(),
+      linkedHomepageTitle: map['linkedHomepageTitle']?.toString(),
+    );
+  }
+
+  /// 全局搜索 [SearchHit.payload]（与记录手写字段表一致，避免与视图字段漂移）。
+  Map<String, dynamic> toSearchHitPayload() => <String, dynamic>{
+    'circleId': circleId,
+    'name': name,
+    'description': description,
+    'coverUrl': coverUrl,
+    'categoryId': categoryId,
+    'subCategory': subCategory,
+    'domainId': domainId,
+    'kind': kind,
+    'displaySubjectType': displaySubjectType,
+    'memberCount': memberCount,
+    'postCount': postCount,
+    'highlightText': highlightText,
+    'matchedField': matchedField,
+    if (circleName != null && circleName!.trim().isNotEmpty)
+      'circleName': circleName,
+    if (linkedHomepageId != null) 'linkedHomepageId': linkedHomepageId,
+    if (linkedHomepageType != null) 'linkedHomepageType': linkedHomepageType,
+    if (linkedHomepageTitle != null) 'linkedHomepageTitle': linkedHomepageTitle,
+  };
+}
+
+class CircleSearchFacetBucketViewData {
+  const CircleSearchFacetBucketViewData({
+    required this.facetKey,
+    required this.label,
+    this.categoryId,
+    this.subCategory,
+    required this.facetCount,
+  });
+
+  final String facetKey;
+  final String label;
+  final String? categoryId;
+  final String? subCategory;
+  final int facetCount;
+
+  factory CircleSearchFacetBucketViewData.fromMap(Map<String, dynamic> map) {
+    return CircleSearchFacetBucketViewData(
+      facetKey: (map['facetKey'] ?? '').toString().trim(),
+      label: (map['label'] ?? '').toString().trim(),
+      categoryId: map['categoryId']?.toString(),
+      subCategory: map['subCategory']?.toString(),
+      facetCount: (map['facetCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CircleSearchResultViewData {
+  const CircleSearchResultViewData({
+    this.items = const <CircleSearchHitViewData>[],
+    this.facetBuckets = const <CircleSearchFacetBucketViewData>[],
+    this.cursor,
+  });
+
+  final List<CircleSearchHitViewData> items;
+  final List<CircleSearchFacetBucketViewData> facetBuckets;
+  final String? cursor;
+
+  factory CircleSearchResultViewData.fromMap(Map<String, dynamic> map) {
+    final itemMaps =
+        (map['items'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final facetMaps =
+        (map['facetBuckets'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return CircleSearchResultViewData(
+      items: itemMaps
+          .map(CircleSearchHitViewData.fromMap)
+          .toList(growable: false),
+      facetBuckets: facetMaps
+          .map(CircleSearchFacetBucketViewData.fromMap)
+          .toList(growable: false),
+      cursor: map['cursor']?.toString(),
+    );
+  }
+}

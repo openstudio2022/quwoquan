@@ -67,7 +67,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	defer client.Disconnect(ctx)
 	db := client.Database(fmt.Sprintf("reliabletask_data_%d", time.Now().UnixNano()))
 	t.Cleanup(func() { _ = db.Drop(context.Background()) })
-	store := reliabletaskmongo.New(db)
+	store := reliabletaskmongo.NewDataContentImport(db)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if tasks, err := fleet.Dispatch(ctx, total+10); err != nil || len(tasks) != 0 {
 		t.Fatalf("repeat execution dispatch got=%d err=%v", len(tasks), err)
 	}
-	foreignOutboxes, err := db.Collection("reliable_task_outbox").CountDocuments(
+	foreignOutboxes, err := db.Collection("post_import_task_outbox").CountDocuments(
 		ctx,
 		bson.M{
 			"taskType":            reliabletask.DataContentTaskType,
@@ -178,7 +178,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if completed != total {
 		t.Fatalf("fleet did not finalize within budget: %d/%d", completed, total)
 	}
-	count, err := db.Collection("reliable_async_task").CountDocuments(
+	count, err := db.Collection("post_import_task").CountDocuments(
 		ctx,
 		bson.M{"status": reliabletask.TaskStatusSucceeded},
 	)
@@ -188,7 +188,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if count != total {
 		t.Fatalf("succeeded task count=%d want=%d", count, total)
 	}
-	recorded, err := db.Collection("reliable_async_task").CountDocuments(
+	recorded, err := db.Collection("post_import_task").CountDocuments(
 		ctx,
 		bson.M{
 			"result.schema": "quwoquan.data_content_object_result",
@@ -201,7 +201,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if recorded != total {
 		t.Fatalf("contract fixture task result count=%d want=%d", recorded, total)
 	}
-	outboxes, err := db.Collection("reliable_task_outbox").CountDocuments(
+	outboxes, err := db.Collection("post_import_task_outbox").CountDocuments(
 		ctx,
 		bson.M{"payload.executionId": dataJob(0).ExecutionID},
 	)
@@ -219,7 +219,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 		t.Fatalf("terminal replay dispatched duplicate tasks=%d err=%v", len(tasks), err)
 	}
 	if reportOut := os.Getenv("QWQ_RELIABLETASK_REPORT_OUT"); reportOut != "" {
-		cursor, err := db.Collection("reliable_async_task").Find(
+		cursor, err := db.Collection("post_import_task").Find(
 			ctx,
 			bson.M{"taskType": reliabletask.DataContentTaskType},
 		)
@@ -356,7 +356,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	defer client.Disconnect(ctx)
 	db := client.Database(fmt.Sprintf("reliabletask_data_process_%d", time.Now().UnixNano()))
 	t.Cleanup(func() { _ = db.Drop(context.Background()) })
-	store := reliabletaskmongo.New(db)
+	store := reliabletaskmongo.NewDataContentImport(db)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +424,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = db.Collection("reliable_async_task").FindOne(
+		err = db.Collection("post_import_task").FindOne(
 			ctx,
 			bson.M{"payload.jobId": fixture.Job.JobID},
 		).Decode(&task)

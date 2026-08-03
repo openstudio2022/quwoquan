@@ -2,11 +2,12 @@ package application
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	membershipmodel "quwoquan_service/services/chat-service/internal/chat/conversation_membership/domain/model"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
+	receiptmodel "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/domain/model"
 )
 
 // TransactionRunner 定义应用用例所需的事务边界。
@@ -20,14 +21,6 @@ type ConversationStore interface {
 	FindConversationByID(ctx context.Context, id string) (*conversationmodel.Conversation, error)
 	FindConversationsByIDs(ctx context.Context, ids []string) ([]conversationmodel.Conversation, error)
 	UpdateConversation(ctx context.Context, id string, conversation *conversationmodel.Conversation) error
-	ListConversationPageByUser(
-		ctx context.Context,
-		userID string,
-		limit int,
-		cursor string,
-	) (conversationmodel.ConversationPage, error)
-	ListConversationsByUser(ctx context.Context, userID string, limit int, cursor string) ([]conversationmodel.Conversation, error)
-	FindDirectConversationBetween(ctx context.Context, memberA, memberB string) (*conversationmodel.Conversation, error)
 	ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]conversationmodel.Conversation, error)
 }
 
@@ -37,6 +30,15 @@ type CircleGroupConversationReader interface {
 	FindConversationByCircleGroupID(
 		ctx context.Context,
 		circleGroupID string,
+	) (*conversationmodel.Conversation, error)
+}
+
+// GatheringConversationReader resolves the one-to-one Chat binding owned by a
+// Gathering source fact. It is intentionally not a generic query surface.
+type GatheringConversationReader interface {
+	FindConversationByGatheringID(
+		ctx context.Context,
+		gatheringID string,
 	) (*conversationmodel.Conversation, error)
 }
 
@@ -150,27 +152,18 @@ type ConversationMessageProjector interface {
 	ProjectCommittedMessage(ctx context.Context, message messagemodel.Message) error
 }
 
-type MemberListSort string
+type MemberListSort = membershipmodel.ListSort
 
 const (
-	MemberListSortJoinedAsc      MemberListSort = "joined_asc"
-	MemberListSortDisplayNameAsc MemberListSort = "display_name_asc"
+	MemberListSortJoinedAsc      = membershipmodel.ListSortJoinedAsc
+	MemberListSortDisplayNameAsc = membershipmodel.ListSortDisplayNameAsc
 )
 
 func NormalizeMemberListSort(raw string) MemberListSort {
-	if strings.TrimSpace(raw) == string(MemberListSortDisplayNameAsc) {
-		return MemberListSortDisplayNameAsc
-	}
-	return MemberListSortJoinedAsc
+	return membershipmodel.NormalizeListSort(raw)
 }
 
-type ListMembersQuery struct {
-	Limit  int
-	Cursor string
-	Role   string
-	Query  string
-	Sort   MemberListSort
-}
+type ListMembersQuery = membershipmodel.ListQuery
 
 // MemberStore 仅暴露成员名册所需能力，查询参数不携带存储驱动类型。
 type MemberStore interface {
@@ -187,10 +180,14 @@ type MemberStore interface {
 	) error
 	UpdateMemberRole(ctx context.Context, conversationID, userID, role string) error
 	ListMembers(ctx context.Context, conversationID string, query ListMembersQuery) ([]conversationmodel.ConversationMember, error)
-	BumpMembersRosterRevision(ctx context.Context, conversationID string, memberCount *int) error
 	CountMembers(ctx context.Context, conversationID string) (int, error)
 	CountUserMembers(ctx context.Context, conversationID string) (int, error)
 	FindAssistantMember(ctx context.Context, conversationID string) (*conversationmodel.ConversationMember, error)
+	ListSharedConversationIDs(ctx context.Context, memberA, memberB string) ([]string, error)
+}
+
+type ConversationRosterProjector interface {
+	BumpMembersRosterRevision(ctx context.Context, conversationID string, memberCount *int) error
 }
 
 type UserStateStore interface {
@@ -226,8 +223,8 @@ type UserStateStore interface {
 }
 
 type ReceiptFactStore interface {
-	AppendReceiptFact(ctx context.Context, fact *messagemodel.MessageReceiptFact) error
-	ListReceiptFactsByMessage(ctx context.Context, messageID string) ([]messagemodel.MessageReceiptFact, error)
+	Append(ctx context.Context, fact receiptmodel.Fact) (receiptmodel.Fact, bool, error)
+	ListByMessage(ctx context.Context, messageID string) ([]receiptmodel.Fact, error)
 }
 
 // ConversationCache 只承载可丢弃的 Conversation 查询缓存；消息序号和幂等
@@ -241,9 +238,11 @@ type ChatStoragePorts struct {
 	Transactions             TransactionRunner
 	Conversations            ConversationStore
 	CircleGroupConversations CircleGroupConversationReader
+	GatheringConversations   GatheringConversationReader
 	Messages                 MessageStore
 	MessageProjection        ConversationMessageProjector
 	Members                  MemberStore
+	RosterProjection         ConversationRosterProjector
 	UserStates               UserStateStore
 	ReceiptFacts             ReceiptFactStore
 	// 三个非 Message 聚合各自的命令回执 + 事务 outbox 端口；state 写入与

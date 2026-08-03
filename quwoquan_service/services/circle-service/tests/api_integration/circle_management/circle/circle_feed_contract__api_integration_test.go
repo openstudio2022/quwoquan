@@ -18,7 +18,7 @@ import (
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/cache"
 )
 
-func insertPost(t *testing.T, doc bson.M) {
+func insertCircleFeedItem(t *testing.T, doc bson.M) {
 	t.Helper()
 	postDoc := bson.M{}
 	for key, value := range doc {
@@ -44,9 +44,9 @@ func insertPost(t *testing.T, doc bson.M) {
 	delete(postDoc, "pinnedAt")
 	delete(postDoc, "featuredAt")
 
-	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), postDoc)
+	_, err := mongoDB.Collection("circle_feed_items").InsertOne(context.Background(), postDoc)
 	if err != nil {
-		t.Fatalf("insertPost failed: %v", err)
+		t.Fatalf("insertCircleFeedItem failed: %v", err)
 	}
 	postID := fmt.Sprint(postDoc["_id"])
 	now, _ := postDoc["createdAt"].(time.Time)
@@ -125,19 +125,19 @@ func TestListCircleDiscoveryFeed(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert discovery membership: %v", err)
 	}
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id": "post-discovery-mine", "circleIds": []string{mineCircleID},
 		"title": "我的圈帖子", "createdAt": now.Add(-time.Minute),
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id": "post-discovery-recommended", "circleIds": []string{recommendedCircleID},
 		"title": "推荐圈帖子", "createdAt": now,
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id": "post-discovery-draft", "circleIds": []string{recommendedCircleID},
 		"title": "不可见草稿", "status": "draft", "createdAt": now.Add(time.Minute),
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id": "post-discovery-other", "circleIds": []string{otherCircleID},
 		"title": "其他分类帖子", "createdAt": now,
 	})
@@ -547,19 +547,19 @@ func TestGetCircleFeed_Latest(t *testing.T) {
 	circleID := createTestCircle(t, "最新排序圈子")
 	now := time.Now()
 
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":       "post_old",
 		"circleIds": []string{circleID},
 		"title":     "旧帖子",
 		"createdAt": now.Add(-2 * time.Hour),
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":       "post_mid",
 		"circleIds": []string{circleID},
 		"title":     "中间帖子",
 		"createdAt": now.Add(-1 * time.Hour),
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":       "post_new",
 		"circleIds": []string{circleID},
 		"title":     "新帖子",
@@ -598,7 +598,7 @@ func TestGetCircleFeed_Pagination(t *testing.T) {
 	now := time.Now()
 
 	for i := 0; i < 5; i++ {
-		insertPost(t, bson.M{
+		insertCircleFeedItem(t, bson.M{
 			"_id":       fmt.Sprintf("page_post_%d", i),
 			"circleIds": []string{circleID},
 			"title":     fmt.Sprintf("帖子%d", i),
@@ -677,20 +677,20 @@ func TestGetCircleFeed_Featured(t *testing.T) {
 	circleID := createTestCircle(t, "精选排序圈子")
 	now := time.Now()
 
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":       "feat_normal",
 		"circleIds": []string{circleID},
 		"title":     "普通帖子",
 		"createdAt": now,
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":       "feat_pinned",
 		"circleIds": []string{circleID},
 		"title":     "置顶帖子",
 		"createdAt": now.Add(-1 * time.Hour),
 		"pinnedAt":  now,
 	})
-	insertPost(t, bson.M{
+	insertCircleFeedItem(t, bson.M{
 		"_id":        "feat_featured",
 		"circleIds":  []string{circleID},
 		"title":      "精选帖子",

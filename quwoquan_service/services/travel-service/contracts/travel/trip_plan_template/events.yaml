@@ -1,0 +1,8 @@
+description: TripPlanTemplate 变更事件。
+events:
+- name: TripPlanTemplateChanged
+  producer: travel-service
+  consumers: [assistant-service]
+  channel: transactional_outbox
+  payload_entity: TripPlanTemplate
+  payload_fields: [_id, version, ownerPersonaId, status, updatedAt]

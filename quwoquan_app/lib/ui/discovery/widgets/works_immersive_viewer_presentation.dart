@@ -1,7 +1,7 @@
 part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
-  List<PostBaseDto> _buildFeed() {
+  List<ContentPostViewData> _buildFeed() {
     if (_usesExternalFeed) {
       final external = widget.externalPosts!;
       final filterTypes = _effectiveFilterContentTypes;
@@ -42,7 +42,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       // 池召回（recallPath=premium_pool）；池空返回空列表即空态，不混入浏览流。
       final premium =
           ref.watch(discoveryFeedProvider('premium')).value?.items ??
-          const <PostBaseDto>[];
+          const <ContentPostViewData>[];
       final filterTypes = _effectiveFilterContentTypes;
       if (filterTypes.isEmpty) {
         return premium;
@@ -75,7 +75,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return articles;
     }
     if (filterTypes.isNotEmpty) {
-      final result = <PostBaseDto>[];
+      final result = <ContentPostViewData>[];
       final maxLen = max(photos.length, max(videos.length, articles.length));
       for (var i = 0; i < maxLen; i++) {
         if (filterTypes.contains('image') && i < photos.length) {
@@ -91,7 +91,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return result;
     }
 
-    final result = <PostBaseDto>[];
+    final result = <ContentPostViewData>[];
     final maxLen = max(photos.length, max(videos.length, articles.length));
     for (var i = 0; i < maxLen; i++) {
       if (i < photos.length) result.add(photos[i]);
@@ -116,7 +116,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return _hydratedRawPostsById[postId] ?? _rawPostById(postId);
   }
 
-  Map<String, Object?> _rawArticleDataFor(PostBaseDto post) {
+  Map<String, Object?> _rawArticleDataFor(ContentPostViewData post) {
     final raw = _effectiveRawPostById(post.id);
     final hasStructuredPayload = _hasStructuredArticlePayload(raw);
     final rawTitle = raw?['title']?.toString().trim() ?? '';
@@ -146,14 +146,14 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     };
   }
 
-  ContentArticleRender _articleViewFor(PostBaseDto post) {
+  ContentArticleRender _articleViewFor(ContentPostViewData post) {
     return projectArticleDetailView(
       Map<String, dynamic>.from(_rawArticleDataFor(post)),
       fallbackArticleId: post.id,
     );
   }
 
-  int _articlePageCount(PostBaseDto post) {
+  int _articlePageCount(ContentPostViewData post) {
     return (_resolvedArticlePageCount[post.id] ??
             _articleViewFor(post).pages.length)
         .clamp(1, 99);
@@ -177,7 +177,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     });
   }
 
-  ({int current, int total}) _innerProgress(List<PostBaseDto> posts) {
+  ({int current, int total}) _innerProgress(List<ContentPostViewData> posts) {
     if (posts.isEmpty) return (current: 1, total: 1);
     final idx = _currentPage.clamp(0, posts.length - 1);
     final current = posts[idx];
@@ -208,7 +208,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return (current: 1, total: 1);
   }
 
-  bool _isVideoLikePost(PostBaseDto post) {
+  bool _isVideoLikePost(ContentPostViewData post) {
     if (post.isVideoLike) {
       return true;
     }
@@ -218,15 +218,15 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return _videoItemsFor(post).isNotEmpty;
   }
 
-  bool _isArticleLikePost(PostBaseDto post) {
+  bool _isArticleLikePost(ContentPostViewData post) {
     return post.isArticleLike;
   }
 
-  bool _isTextOnlyMomentPost(PostBaseDto post) {
+  bool _isTextOnlyMomentPost(ContentPostViewData post) {
     return post.identity == 'moment' && post.isTextOnly;
   }
 
-  bool _isImageLikePost(PostBaseDto post) {
+  bool _isImageLikePost(ContentPostViewData post) {
     if (_isVideoLikePost(post) ||
         _isArticleLikePost(post) ||
         _isTextOnlyMomentPost(post)) {
@@ -368,7 +368,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     _handlePrimaryTabSwipe(direction);
   }
 
-  List<String> _imageUrlsForPost(PostBaseDto post) {
+  List<String> _imageUrlsForPost(ContentPostViewData post) {
     final projected = _workItemFor(post).effectiveImageUrls
         .map((url) => url.trim())
         .where((url) => url.isNotEmpty)
@@ -393,7 +393,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     ];
   }
 
-  String? _originalMediaIdFor(PostBaseDto post, int imageIndex) {
+  String? _originalMediaIdFor(ContentPostViewData post, int imageIndex) {
     final item = _workItemFor(post);
     final imageItems = item.mediaItems
         .where((media) => media.kind == 'image' && media.url.trim().isNotEmpty)
@@ -413,7 +413,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return null;
   }
 
-  int _defaultImageIndexFor(PostBaseDto post) {
+  int _defaultImageIndexFor(ContentPostViewData post) {
     if (!_usesExternalFeed) return 0;
     final initialPost = widget.externalPosts![_safeInitialPage];
     if (post.id != initialPost.id) return 0;
@@ -422,40 +422,38 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return widget.initialImageIndex.clamp(0, total - 1);
   }
 
-  /// 作品级统一投影：raw wire + PostBaseDto 收敛为 [WorkBrowserItemDto]。
+  /// 作品级统一投影：canonical Post + viewer supplemental 收敛为 ViewData。
   /// 视频集（mediaItems）、图片序列、交集摘要只允许从该投影读取。
-  WorkBrowserItemDto _workItemFor(PostBaseDto post) {
+  WorkBrowserViewData _workItemFor(ContentPostViewData post) {
     final cached = _workItemCache.read(post.id);
     if (cached != null) return cached;
     final raw = _effectiveRawPostById(post.id);
-    final source = raw == null
-        ? post.toMap()
-        : Map<String, dynamic>.from(
-            raw.map((k, v) => MapEntry(k.toString(), v)),
-          );
-    final item = WorkBrowserItemDto.fromMap(source);
+    final item = WorkBrowserViewData.fromPost(
+      post,
+      supplemental: raw == null
+          ? null
+          : Map<String, Object?>.from(
+              raw.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+    );
     _workItemCache.write(post.id, item);
     return item;
   }
 
   /// 视频集序列：契约 mediaItems[kind=video]，为空时回落单视频；边界解析为交付引用。
-  List<_WorksVideoDeliveryItem> _videoItemsFor(PostBaseDto post) {
+  List<_WorksVideoDeliveryItem> _videoItemsFor(ContentPostViewData post) {
     final endpointConfig = ref.watch(mediaEndpointConfigProvider);
     if (endpointConfig == null) {
       return const <_WorksVideoDeliveryItem>[];
     }
     final resolver = MediaDeliveryResolver(endpointConfig);
     final rawItems = _workItemFor(post).videoItems;
-    final sourcePost = post;
-    final VideoPostDto? videoPost = sourcePost is VideoPostDto
-        ? sourcePost
-        : null;
     final sources = rawItems.isNotEmpty
         ? rawItems
         : (post.mediaVideoUrl.isEmpty
-              ? const <WorkBrowserMediaItemDto>[]
-              : <WorkBrowserMediaItemDto>[
-                  WorkBrowserMediaItemDto(
+              ? const <WorkBrowserMediaViewData>[]
+              : <WorkBrowserMediaViewData>[
+                  WorkBrowserMediaViewData(
                     kind: 'video',
                     url: post.mediaVideoUrl,
                     coverUrl: post.mediaVideoCoverUrl.isEmpty
@@ -469,9 +467,9 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
                     ).previewTrackManifestUrl,
                     previewTrackVersion: _workItemFor(post).previewTrackVersion,
                     hlsCmafMasterManifestUrl:
-                        videoPost?.hlsCmafMasterManifestUrl,
+                        post.hlsCmafMasterManifestUrl,
                     hlsCmafDescriptorVersion:
-                        videoPost?.hlsCmafDescriptorVersion,
+                        post.hlsCmafDescriptorVersion,
                   ),
                 ]);
     final resolved = <_WorksVideoDeliveryItem>[];
@@ -543,7 +541,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   VideoPreviewTrackDescriptor? _previewTrackDescriptor({
     required MediaDeliveryResolver resolver,
-    required WorkBrowserMediaItemDto item,
+    required WorkBrowserMediaViewData item,
   }) {
     final assetId = item.mediaAssetId?.trim() ?? '';
     final assetVersion = item.mediaAssetVersion ?? 0;
@@ -601,31 +599,31 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return null;
   }
 
-  Map<String, dynamic> _wireMapForPresentation(PostBaseDto post) {
+  Map<String, dynamic> _wireMapForPresentation(ContentPostViewData post) {
     final raw = _effectiveRawPostById(post.id);
     if (raw == null) {
-      return post.toMap();
+      return post.toPresentationMap();
     }
     return Map<String, dynamic>.from(
       raw.map((k, v) => MapEntry(k.toString(), v)),
     );
   }
 
-  String _titleForPost(PostBaseDto post) {
+  String _titleForPost(ContentPostViewData post) {
     final raw = _effectiveRawPostById(post.id);
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     if (rawTitle.isNotEmpty) return rawTitle;
     final summary = _summaryForPost(post.id);
     final summaryTitle = summary?.title?.trim() ?? '';
     if (summaryTitle.isNotEmpty) return summaryTitle;
-    final pres = PostReadPresentation.fromPostBase(
+    final pres = PostReadPresentationMapper.fromViewData(
       post,
       wire: _wireMapForPresentation(post),
     );
     return pres.title.isNotEmpty ? pres.title : post.normalizedTitle;
   }
 
-  String _bodyForPost(PostBaseDto post) {
+  String _bodyForPost(ContentPostViewData post) {
     final raw = _effectiveRawPostById(post.id);
     final rawBody =
         raw?['body']?.toString().trim() ??
@@ -637,21 +635,21 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     final summary = _summaryForPost(post.id);
     final summaryBody = summary?.body?.trim() ?? '';
     if (summaryBody.isNotEmpty) return summaryBody;
-    final pres = PostReadPresentation.fromPostBase(
+    final pres = PostReadPresentationMapper.fromViewData(
       post,
       wire: _wireMapForPresentation(post),
     );
     return pres.body.isNotEmpty ? pres.body : post.normalizedBody;
   }
 
-  String _overlayTitleForPost(PostBaseDto post) {
+  String _overlayTitleForPost(ContentPostViewData post) {
     if (_isArticleLikePost(post) || _isTextOnlyMomentPost(post)) {
       return '';
     }
     return _titleForPost(post);
   }
 
-  String _overlayBodyForPost(PostBaseDto post) {
+  String _overlayBodyForPost(ContentPostViewData post) {
     if (_isArticleLikePost(post) || _isTextOnlyMomentPost(post)) {
       return '';
     }
@@ -660,7 +658,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   _WorksTopChromeTheme _topChromeThemeForPost(
     BuildContext context,
-    PostBaseDto? post,
+    ContentPostViewData? post,
   ) {
     return _WorksTopChromeTheme(
       overlayStyle: const SystemUiOverlayStyle(
@@ -675,7 +673,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     );
   }
 
-  ArticlePaperTexture _resolveArticlePaperTexture(PostBaseDto post) {
+  ArticlePaperTexture _resolveArticlePaperTexture(ContentPostViewData post) {
     final override = _articlePaperThemeOverrides[post.id];
     if (override != null && override != 'system') {
       return articlePaperTextureFromString(override);
@@ -707,7 +705,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   void _handleArticleInlineMentionTap(
-    PostBaseDto post,
+    ContentPostViewData post,
     ArticleInlineSpan span,
   ) {
     final targetType = span.targetType?.trim();
@@ -740,7 +738,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
         : normalized;
   }
 
-  bool _showsCaptionOverlay(PostBaseDto post) {
+  bool _showsCaptionOverlay(ContentPostViewData post) {
     if (_isArticleLikePost(post)) {
       return false;
     }
@@ -756,7 +754,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
         _overlayBodyForPost(post).isNotEmpty;
   }
 
-  ImmersiveViewerStageLayoutSpec _layoutSpecForPost(PostBaseDto post) {
+  ImmersiveViewerStageLayoutSpec _layoutSpecForPost(ContentPostViewData post) {
     if (_isArticleLikePost(post)) {
       return ImmersiveViewerStageLayoutSpec.articleStage;
     }
@@ -767,7 +765,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   ImmersiveViewerStageLayoutSpec _engagementLayoutSpecForPost(
-    PostBaseDto post,
+    ContentPostViewData post,
   ) {
     if (_isArticleLikePost(post)) {
       return ImmersiveViewerStageLayoutSpec.articleStage;
@@ -778,7 +776,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return ImmersiveViewerStageLayoutSpec.mediaStage;
   }
 
-  double _statusBarContentInsetFor(PostBaseDto post) {
+  double _statusBarContentInsetFor(ContentPostViewData post) {
     if (_isArticleLikePost(post)) {
       return AppSpacing.zero;
     }
@@ -790,7 +788,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
         : widget.topChromeSafeInset;
   }
 
-  bool _shouldMediaInvadeStatusBar(PostBaseDto post) {
+  bool _shouldMediaInvadeStatusBar(ContentPostViewData post) {
     if (_isVideoLikePost(post)) {
       return true;
     }

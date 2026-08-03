@@ -8,141 +8,143 @@ import (
 	"testing"
 	"time"
 
+	runapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	pagehttp "quwoquan_service/services/assistant-service/internal/assistant/page_context/adapters/inbound/http"
+	pageapplication "quwoquan_service/services/assistant-service/internal/assistant/page_context/application"
+	pagemodel "quwoquan_service/services/assistant-service/internal/assistant/page_context/domain/model"
+	pagepersistence "quwoquan_service/services/assistant-service/internal/assistant/page_context/infrastructure/persistence"
 )
 
-func TestPageContextCrossesHTTPRedisAndTurnBoundary(t *testing.T) {
+func TestPageContextCrossesObjectHTTPRedisAndTurnBoundary(t *testing.T) {
 	resetIntegrationState(t)
-	handler := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
-	userID := "page-context-owner"
+	pages := pageapplication.NewFacade(
+		pagepersistence.NewRedisStore(integrationRedisClient),
+		func() time.Time { return time.Now().UTC() },
+	)
+	mux := http.NewServeMux()
+	pagehttp.NewHandler(pages).RegisterRoutes(mux)
+
+	accountID := "page-context-owner"
 	now := time.Now().UTC()
-
-	report := assistantAPIRequest(
-		t,
-		handler,
-		http.MethodPost,
-		"/assistant/page-context",
-		userID,
-		map[string]any{
-			"contextSnapshot": map[string]any{
-				"capturedAt": now.Format(time.RFC3339Nano),
-				"pageType":   "article",
-				"pageObjects": []map[string]any{{
-					"objectTypeRef": "content.post",
-					"objectId":      "post-grounding-api",
-				}},
-				"userActions": []map[string]any{{
-					"action":        "open_assistant_entry",
-					"objectTypeRef": "content.post",
-					"objectId":      "post-grounding-api",
-					"occurredAt":    now.Format(time.RFC3339Nano),
-				}},
-				"consentMatrix": map[string]any{
-					"canReadCurrentPage": true,
-				},
-			},
+	report := assistantAPIRequest(t, mux, http.MethodPost, "/assistant/page-context", accountID, map[string]any{
+		"contextSnapshot": map[string]any{
+			"capturedAt": now.Format(time.RFC3339Nano),
+			"pageType":   "article",
+			"pageObjects": []map[string]any{{
+				"objectTypeRef": "content.Post",
+				"objectId":      "post-grounding-api",
+			}},
+			"userActions": []map[string]any{{
+				"actionType":    "open_assistant_entry",
+				"objectTypeRef": "content.Post",
+				"objectId":      "post-grounding-api",
+			}},
+			"consentGranted": true,
 		},
-	)
+	})
 	if report.Code != http.StatusOK {
-		t.Fatalf("report page context status=%d body=%s", report.Code, report.Body.String())
+		t.Fatalf("report status=%d body=%s", report.Code, report.Body.String())
 	}
-	var ack assistant.PageContextAck
-	if err := json.Unmarshal(report.Body.Bytes(), &ack); err != nil {
-		t.Fatalf("decode page context ack: %v", err)
+	var receipt pagemodel.Receipt
+	if err := json.Unmarshal(report.Body.Bytes(), &receipt); err != nil {
+		t.Fatal(err)
 	}
-	if !ack.Accepted || ack.ContextKey != "page_ctx:"+userID || ack.ExpiresAt == nil {
-		t.Fatalf("page context ack=%+v", ack)
+	if !receipt.Accepted || receipt.ContextKey != pagemodel.StorageKey(accountID) {
+		t.Fatalf("receipt=%+v", receipt)
 	}
-	legacy := assistantAPIRequest(
-		t,
-		handler,
-		http.MethodPost,
-		"/assistant/page-context",
-		userID,
-		map[string]any{
-			"pageType":        "article",
-			"businessObjects": []map[string]any{},
-		},
-	)
-	if legacy.Code != http.StatusBadRequest {
-		t.Fatalf(
-			"legacy page context status=%d body=%s",
-			legacy.Code,
-			legacy.Body.String(),
-		)
+	ttl, err := integrationRedisServer.TTL(t.Context(), 1, receipt.ContextKey)
+	if err != nil || ttl <= 4*time.Minute || ttl > 5*time.Minute {
+		t.Fatalf("ttl=%s err=%v", ttl, err)
+	}
+	current, err := pages.Current(t.Context(), accountID)
+	if err != nil || current == nil || current.Snapshot.PageObjects[0].ObjectID != "post-grounding-api" {
+		t.Fatalf("current=%+v err=%v", current, err)
 	}
 
-	ctx := context.Background()
-	stored, err := integrationRedisClient.Get(ctx, ack.ContextKey)
-	if err != nil {
-		t.Fatalf("read stored page context: %v", err)
-	}
-	var storedSnapshot assistant.AssistantContextSnapshot
-	if err := json.Unmarshal([]byte(stored), &storedSnapshot); err != nil {
-		t.Fatalf("decode stored page context: %v", err)
-	}
-	if storedSnapshot.PageType != "article" ||
-		len(storedSnapshot.PageObjects) != 1 ||
-		storedSnapshot.PageObjects[0].ObjectID != "post-grounding-api" {
-		t.Fatalf("stored page context=%+v", storedSnapshot)
-	}
-	ttl, err := integrationRedisServer.TTL(ctx, 1, ack.ContextKey)
-	if err != nil {
-		t.Fatalf("read page context TTL: %v", err)
-	}
-	if ttl <= 4*time.Minute || ttl > 5*time.Minute {
-		t.Fatalf("page context TTL=%s, want (4m, 5m]", ttl)
-	}
-
-	create := assistantAPIRequest(
-		t,
-		handler,
-		http.MethodPost,
-		"/assistant/sessions",
-		userID,
-		map[string]any{
-			"summary": "页面上下文对话", "clientRequestId": "page-context-session",
-		},
+	service := newIntegrationAssistantService()
+	runContext := runapplication.NewContextResolver(
+		runapplication.CurrentPageContextReaderFunc(func(
+			ctx context.Context,
+			owner string,
+		) (map[string]any, bool, error) {
+			current, readErr := pages.Current(ctx, owner)
+			if readErr != nil || current == nil {
+				return nil, false, readErr
+			}
+			return map[string]any{
+				"capturedAt": current.CapturedAt,
+				"pageType":   current.Snapshot.PageType,
+				"pageObjects": []any{map[string]any{
+					"objectTypeRef": current.Snapshot.PageObjects[0].ObjectTypeRef,
+					"objectId":      current.Snapshot.PageObjects[0].ObjectID,
+				}},
+				"userActions": []any{map[string]any{
+					"action":        current.Snapshot.UserActions[0].ActionType,
+					"objectTypeRef": current.Snapshot.UserActions[0].ObjectTypeRef,
+					"objectId":      current.Snapshot.UserActions[0].ObjectID,
+				}},
+				"consentMatrix": map[string]any{"canReadCurrentPage": true},
+			}, true, nil
+		}),
+		nil,
 	)
+	runHandler := assistanthttp.NewHandler(
+		service,
+		assistanthttp.WithRunContextResolver(runContext),
+	).Routes()
+	create := assistantAPIRequest(t, runHandler, http.MethodPost, "/assistant/sessions", accountID, map[string]any{
+		"clientRequestId": "page-context-session",
+	})
 	if create.Code != http.StatusCreated {
 		t.Fatalf("create session status=%d body=%s", create.Code, create.Body.String())
 	}
 	var session assistant.AssistantSession
 	if err := json.Unmarshal(create.Body.Bytes(), &session); err != nil {
-		t.Fatalf("decode session: %v", err)
+		t.Fatal(err)
 	}
-
-	start := assistantAPIRequest(
-		t,
-		handler,
-		http.MethodPost,
-		"/assistant/sessions/"+session.SessionID+"/runs",
-		userID,
-		map[string]any{
-			"input":           map[string]any{"text": "介绍当前内容"},
-			"clientRequestId": "page-context-run-api",
-		},
-	)
+	start := assistantAPIRequest(t, runHandler, http.MethodPost,
+		"/assistant/sessions/"+session.SessionID+"/runs", accountID, map[string]any{
+			"clientRequestId": "page-context-run",
+			"intent": map[string]any{
+				"kind": "answer", "answer": map[string]any{"text": "介绍当前内容"},
+			},
+		})
 	if start.Code != http.StatusCreated {
 		t.Fatalf("start run status=%d body=%s", start.Code, start.Body.String())
 	}
-	var envelope map[string]any
+	var envelope struct {
+		RunID string `json:"runId"`
+	}
 	if err := json.Unmarshal(start.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode run envelope: %v", err)
+		t.Fatal(err)
 	}
-	if _, leaked := envelope["pageContext"]; leaked {
-		t.Fatalf("run envelope leaked internal page context: %#v", envelope)
+	run, err := integrationRunRepository.Load(t.Context(), envelope.RunID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	turnID, _ := envelope["turnId"].(string)
-	turn, found, err := integrationSessionRunStore.GetTurn(t.Context(), turnID)
-	if err != nil || !found {
-		t.Fatalf("load persisted turn found=%v err=%v", found, err)
+	encodedContext, err := json.Marshal(run.ContextSnapshot)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if turn.PageContext == nil ||
-		turn.PageContext.PageType != "article" ||
-		len(turn.PageContext.UserActions) != 1 ||
-		turn.PageContext.UserActions[0].Action != "open_assistant_entry" {
-		t.Fatalf("turn page context=%+v", turn.PageContext)
+	var persistedContext struct {
+		PageObjects []struct {
+			ObjectID string `json:"objectId"`
+		} `json:"pageObjects"`
+	}
+	if err := json.Unmarshal(encodedContext, &persistedContext); err != nil {
+		t.Fatal(err)
+	}
+	if len(persistedContext.PageObjects) != 1 ||
+		persistedContext.PageObjects[0].ObjectID != "post-grounding-api" {
+		t.Fatalf("run context=%+v", run.ContextSnapshot)
+	}
+
+	legacy := assistantAPIRequest(t, mux, http.MethodPost, "/assistant/page-context", accountID, map[string]any{
+		"pageType": "article",
+	})
+	if legacy.Code != http.StatusBadRequest {
+		t.Fatalf("legacy payload status=%d body=%s", legacy.Code, legacy.Body.String())
 	}
 }

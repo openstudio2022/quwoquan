@@ -2,11 +2,11 @@ package processing_test
 
 import (
 	"encoding/json"
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
 	"strings"
 	"testing"
 
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 // TestPlanPreviewTrackStaysInsideManifestSchema pins every layout output to

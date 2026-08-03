@@ -7,48 +7,20 @@ description: '圈子统计接口 `GetCircleStats` 的稳定响应投影。
 
   '
 consumer: app
-client_projection:
-  dart_class: CircleStatsWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/circle/circle_stats_wire_dto.dart
-  fields:
-  - name: circleId
-    dart_type: String
-    nullable: false
-    source: circleId
-    default: ''''''
-  - name: memberCount
-    dart_type: int
-    nullable: false
-    source: memberCount
-    default: '0'
-  - name: postCount
-    dart_type: int
-    nullable: false
-    source: postCount
-    default: '0'
-  - name: discussionCount
-    dart_type: int
-    nullable: false
-    source: discussionCount
-    default: '0'
-  - name: weeklyActiveCount
-    dart_type: int
-    nullable: false
-    source: weeklyActiveCount
-    default: '0'
-  - name: likeCount
-    dart_type: int
-    nullable: false
-    source: likeCount
-    default: '0'
-  - name: storageUsedBytes
-    dart_type: int
-    nullable: false
-    source: storageUsedBytes
-    default: '0'
-  - name: storageQuotaBytes
-    dart_type: int
-    nullable: false
-    source: storageQuotaBytes
-    default: '0'
+fields:
+- name: circleId
+  type: string
+- name: memberCount
+  type: int64
+- name: postCount
+  type: int64
+- name: discussionCount
+  type: int64
+- name: weeklyActiveCount
+  type: int64
+- name: likeCount
+  type: int64
+- name: storageUsedBytes
+  type: int64
+- name: storageQuotaBytes
+  type: int64

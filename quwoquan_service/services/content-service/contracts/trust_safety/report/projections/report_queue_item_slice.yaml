@@ -3,11 +3,11 @@ description: 举报运营队列分页结果的单项读模型。
 consumers:
 - platform-ops
 fields:
-- id
-- version
-- targetType
-- targetId
-- reason
-- status
-- createdAt
-- updatedAt
+- {name: id, type: string, nullable: false}
+- {name: version, type: int, nullable: false}
+- {name: targetType, type: enum, enum_ref: ReportTargetType, nullable: false}
+- {name: targetId, type: string, nullable: false}
+- {name: reason, type: enum, enum_ref: ReportReason, nullable: false}
+- {name: status, type: enum, enum_ref: ReportStatus, nullable: false}
+- {name: createdAt, type: timestamp, nullable: false}
+- {name: updatedAt, type: timestamp, nullable: false}

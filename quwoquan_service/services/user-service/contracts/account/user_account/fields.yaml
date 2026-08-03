@@ -415,6 +415,18 @@ fields:
     recommend_feature: false
     role: authoritative_state
 types:
+  ListPersonasResult:
+    fields:
+      - {name: items, type: '[]PersonaManagementItemView', constraints: [NOT_NULL]}
+  PersonaManagementSummaryView:
+    fields:
+      - {name: items, type: '[]PersonaManagementItemView', constraints: [NOT_NULL]}
+      - {name: quota, type: PersonaManagementQuotaView, constraints: [NOT_NULL]}
+      - {name: activeContext, type: ActivePersonaContextView, constraints: [NOT_NULL]}
+  SearchSocialRelationsResult:
+    fields:
+      - {name: items, type: '[]SocialRelationSearchItemView', constraints: [NOT_NULL]}
+      - {name: cursor, type: string, constraints: [NOT_NULL]}
   LoginAccountHint:
     description: 登录页历史账号或运营商命中账号的脱敏摘要；只用于展示和二次登录，不是认证事实
     cache_excluded: true
@@ -1742,7 +1754,7 @@ types:
         api_exposure: read
         ops_exposure: read
   PersonaProfileView:
-    description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
+    description: 统一公开主页主体读模型；账号、Persona 与 release Creator 均映射到此闭集，owner 映射只由 ActivePersonaContextView 提供
     fields:
       - name: personaId
         source: personaId
@@ -1754,16 +1766,6 @@ types:
         api_exposure: read
         ops_exposure: read
         description: 稳定公开主体 ID；个人主页、关系图谱与跨域动作统一以此为真相源
-      - name: ownerUserId
-        source: ownerUserId
-        type: string
-        constraints:
-          - NOT_NULL
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 仅用于本人管理/上下文透传；公开读取不得返回
       - name: subjectType
         source: subjectType
         type: enum
@@ -1831,6 +1833,36 @@ types:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: headline
+        source: headline
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: CreatorRuntimeProfile 的公开一句话介绍；普通账号与 Persona 为空
+      - name: expertiseClaims
+        source: expertiseClaims
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: CreatorRuntimeProfile 的公开专业声明快照
+      - name: disclosure
+        source: disclosure
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: CreatorRuntimeProfile 的公开身份披露
       - name: identityTags
         source: identityTags
         type: '[]string'
@@ -2462,7 +2494,8 @@ types:
         ops_exposure: read
       - name: relationshipCapability
         source: relationshipCapability
-        type: RelationshipCapabilityWire
+        type: object
+        object_ref: RelationshipCapabilityView
         constraints:
           - NOT_NULL
         classification: PUBLIC

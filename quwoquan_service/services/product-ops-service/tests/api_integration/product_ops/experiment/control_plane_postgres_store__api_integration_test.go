@@ -17,6 +17,7 @@ import (
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
+	assignmentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/infrastructure/persistence"
 )
 
 func TestPostgresControlPlaneStorePersistsAndIsolatesScopes(t *testing.T) {
@@ -116,6 +117,13 @@ func TestExperimentAggregateAndAssignmentUseAtomicPostgresOutbox(t *testing.T) {
 	if err := store.EnsureSchema(ctx); err != nil {
 		t.Fatalf("ensure experiment schema: %v", err)
 	}
+	assignmentStore, err := assignmentpersistence.NewPostgresStore(controlPlanePGPool)
+	if err != nil {
+		t.Fatalf("create assignment fact store: %v", err)
+	}
+	if err := assignmentStore.EnsureSchema(ctx); err != nil {
+		t.Fatalf("ensure assignment fact schema: %v", err)
+	}
 	experimentID := fmt.Sprintf("exp-%d", time.Now().UnixNano())
 	now := time.Now().UTC().Truncate(time.Second)
 	_, err = controlPlanePGPool.Exec(ctx, `
@@ -131,7 +139,7 @@ INSERT INTO experiments(
 	if err != nil {
 		t.Fatalf("insert experiment fixture through postgres: %v", err)
 	}
-	facade, err := experimentapp.NewFacade(store, store, store, store)
+	facade, err := experimentapp.NewFacade(store, store, assignmentStore, assignmentStore)
 	if err != nil {
 		t.Fatalf("build experiment facade: %v", err)
 	}

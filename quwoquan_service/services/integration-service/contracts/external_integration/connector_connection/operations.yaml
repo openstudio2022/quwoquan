@@ -1,0 +1,94 @@
+commercial_defaults:
+  status: blocked
+  block_reason: Connector 连接需完成 protected credential store、native continuation、撤权和双端真机收据后准出
+  gap_id: INTEGRATION_CONNECTOR_CONNECTION_COMMERCIAL_EVIDENCE
+  target_story: user-connector-capability-gateway
+api_routes:
+- method: GET
+  path: /integrations/connections
+  operation: ListConnectorConnections
+  actor: account
+  request_entity: ListConnectorConnectionsQuery
+  request_body_kind: none
+  request_bindings: {query: [{name: limit, field: limit}]}
+  response_entity: ConnectorConnectionListSlice
+  authorization: {principal: account, ownership_policy: connector_connection_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_connection_unauthorized, INTEGRATION.USER.connector_connection_invalid_argument, INTEGRATION.SYSTEM.connector_connection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_connection_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorConnectionQueryFacade, method: listConnections, reader: ConnectorConnectionReader, slice: ConnectorConnectionListSlice}
+  description: 有界读取当前账号的连接状态和 capability grant，不返回凭证或 Provider 配置。
+- method: GET
+  path: /integrations/connections/{connectionId}
+  operation: GetConnectorConnection
+  actor: account
+  request_entity: GetConnectorConnectionQuery
+  request_body_kind: none
+  request_bindings: {path: [{name: connectionId, field: connectionId}]}
+  response_entity: ConnectorConnectionView
+  authorization: {principal: account, ownership_policy: connector_connection_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_connection_unauthorized, INTEGRATION.USER.connector_connection_not_found, INTEGRATION.SYSTEM.connector_connection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_connection_query, trace: true, attributes: [operation, outcome, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorConnectionQueryFacade, method: getConnection, reader: ConnectorConnectionReader, slice: ConnectorConnection}
+  description: 读取当前账号拥有的单个连接状态。
+- method: POST
+  path: /integrations/connections
+  operation: CreateConnectorConnection
+  actor: account
+  request_entity: CreateConnectorConnectionRequest
+  request_body_kind: object
+  response_entity: ConnectorConnectionMutationReceipt
+  authorization: {principal: account, ownership_policy: connector_connection_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_connection_unauthorized, INTEGRATION.USER.connector_connection_invalid_argument, INTEGRATION.USER.connection_connector_definition_not_found, INTEGRATION.USER.connector_capability_denied, INTEGRATION.USER.connector_grant_receipt_invalid, INTEGRATION.USER.connector_connection_idempotency_conflict, INTEGRATION.SYSTEM.connector_connection_unavailable]
+  privacy: {request_classification: SECRET, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_connection_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorConnectionCommandFacade, method: createConnection, aggregate_owner: ConnectorConnection, mutation_target: ConnectorConnection, invariant_target: ConnectorConnection}
+  description: 使用已经验证的 native/OAuth grant receipt 创建或重连；服务端解析受保护凭证，App 不提交 credentialRef。
+- method: POST
+  path: /integrations/connections/{connectionId}/revoke
+  operation: RevokeConnectorConnection
+  actor: account
+  request_entity: RevokeConnectorConnectionRequest
+  request_body_kind: object
+  request_bindings: {path: [{name: connectionId, field: connectionId}]}
+  response_entity: ConnectorConnectionMutationReceipt
+  authorization: {principal: account, ownership_policy: connector_connection_owner}
+  security: {anonymous_policy: deny, auth_mode: required, principal: owner, token_transport: bearer, visibility: private}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [INTEGRATION.USER.connector_connection_unauthorized, INTEGRATION.USER.connector_connection_not_found, INTEGRATION.USER.connector_connection_revision_conflict, INTEGRATION.USER.connector_connection_idempotency_conflict, INTEGRATION.SYSTEM.connector_connection_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_connection_command, trace: true, attributes: [operation, outcome, error_code, replayed]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: ConnectorConnectionCommandFacade, method: revokeConnection, aggregate_owner: ConnectorConnection, mutation_target: ConnectorConnection, invariant_target: ConnectorConnection}
+  description: 原子撤销连接、credential reference、grant 和待执行 invocation；下一个 Run 安全边界立即失效。
+- method: POST
+  path: /internal/integrations/connector-capability-grants:resolve
+  operation: ResolveConnectorCapabilityGrant
+  actor: none
+  request_entity: ResolveConnectorCapabilityGrantRequest
+  request_body_kind: object
+  response_entity: ConnectorCapabilityGrantDecision
+  authorization: {principal: service, scopes: [integration.connector_grant.read], ownership_policy: connector_grant_service_delegation}
+  security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
+  reliability: {timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [INTEGRATION.USER.connector_connection_invalid_argument, INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied, INTEGRATION.SYSTEM.connector_connection_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: integration_connector_capability_resolution, trace: true, attributes: [operation, surface_kind, outcome, reason, error_code]}
+  slo: {latency_p95_ms: 300, availability_percent: 99.9}
+  application: {kind: query, facet: ConnectorConnectionQueryFacade, method: resolveCapabilityGrant, reader: ConnectorConnectionReader, slice: ConnectorCapabilityGrantDecision}
+  description: 受信服务按账号、surface、capability 与调用方已授权 connection refs 动态求交；只返回脱敏决定，撤权或过期立即 allowed=false。
+consumers:
+- name: app
+  capabilities: [list_connector_connections, create_connector_connection, revoke_connector_connection]
+- name: assistant-service
+  capabilities: [resolve_connector_capability_grant]

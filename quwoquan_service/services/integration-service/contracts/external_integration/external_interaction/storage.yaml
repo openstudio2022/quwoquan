@@ -70,6 +70,15 @@ collections:
       keys:
         expireAt: 1
       ttl_seconds: 0
+  otp_code_reference_vault:
+    entity: ExternalInteractionRequest
+    role: operational
+    description: 外部 OTP provider 引用的短期密文 vault；只保存 opaque reference，绝不进入业务响应。
+    indexes:
+    - name: ttl_otp_code_reference_vault
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
 redis_cache:
 - key: ready:integration:external_interaction:{taskType}
   ttl_seconds: 60

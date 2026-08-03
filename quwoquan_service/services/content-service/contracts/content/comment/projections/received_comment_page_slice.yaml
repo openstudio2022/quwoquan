@@ -1,25 +1,10 @@
 read_model: ReceivedCommentPageSlice
-description: 当前 persona 作为 Post 作者收到的商用组合投影分页；所有 postId 先由 owned-post reader 确定。
-source_entities:
-- Comment
-- ContentReaction
-- MediaAsset
-- Post
-consumers:
-- app
-client_projection:
-  dart_class: ContentReceivedCommentPageSlice
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/comment_contracts.dart
+description: >-
+  当前 persona 作为 Post 作者收到的 owner-scoped keyset page；postId 集合先由
+  owned-post Reader 确定，禁止跨对象存储访问。
+source_entities: [Comment, ContentReaction, MediaAsset, Post]
+consumers: [app]
 fields:
-- attachments
-- replyCount
-- replyPreview
-- replyNextCursor
-- likeCount
-- dislikeCount
-- viewerReaction
-- isAuthor
-- canDelete
-- canReply
-- canReport
-- canPin
+  - {name: items, type: '[]CommentListItem', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: total, type: int, nullable: false}

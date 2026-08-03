@@ -1,0 +1,52 @@
+schema: quwoquan.content_distribution_policy
+policyId: research-cold-start
+productLifecycleState: research
+releaseClass: research
+mediaGeneration:
+  imageAllowed: false
+  videoAllowed: false
+acquisition:
+  bypassLogin: false
+  bypassPaywall: false
+  bypassCaptcha: false
+  bypassAccessControl: false
+researchDiscovery:
+  catalogRevision: research-media-discovery-v1
+  imageProviderPriority:
+    - pinterest
+    - tuchong
+    - openverse
+    - wikimedia_commons
+  imageSearchAxes:
+    - category
+    - entity
+    - season
+    - style
+    - viewpoint
+    - popularity
+  videoPopularitySignals:
+    - play
+    - like
+    - comment
+    - share
+    - favorite
+  popularityNormalization: same_platform_topic_time_bucket_percentile
+researchDistribution:
+  allowedRightsStatuses:
+    - verified
+    - unverified
+    - unknown
+  requireInternalAccessIsolation: true
+commercialDistribution:
+  allowedRightsStatuses:
+    - verified
+  requireAuthorizationProof: true
+articleMedia:
+  minimumIllustratedRate: 0.9
+  maximumTextOnlyRate: 0.1
+  requireCoverAndBodyImage: true
+scaleGates:
+  m100PerCarrier: 100
+  m1000PerCarrier: 1000
+  requireM100PromotionBeforeM1000: true
+  minimumAutomaticRecoveryRate: 0.95

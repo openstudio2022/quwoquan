@@ -19,6 +19,9 @@ CURRENT_USER_ID=""
 INSTANCE_NAMESPACE="${APP_INSTANCE_NAMESPACE:-manual}"
 SERVICE_MODE="${APP_INSTANCE_SERVICE_MODE:-app-only}"
 ROLLOUT_MODE="${APP_ROLLOUT_MODE:-}"
+CONTENT_RELEASE_ID="${QWQ_CONTENT_RELEASE_ID:-}"
+CONTENT_MANIFEST_DIGEST="${QWQ_CONTENT_MANIFEST_DIGEST:-}"
+CONTENT_READINESS_RECEIPT_DIGEST="${QWQ_CONTENT_READINESS_RECEIPT_DIGEST:-}"
 
 usage() {
   cat <<EOF
@@ -132,6 +135,54 @@ if [[ -z "$DEVICE_ID" ]]; then
   echo "FAIL: --device-id is required to avoid interactive Flutter device selection." >&2
   exit 2
 fi
+
+if [[ "$TARGET_NAME" == "alpha-local" \
+   || "$TARGET_NAME" == "beta-local" \
+   || "$TARGET_NAME" == "gamma-local" ]]; then
+  APP_PREFLIGHT_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      app-debug-preflight --target "$TARGET_NAME"
+  )" || {
+    echo "$APP_PREFLIGHT_JSON" >&2
+    echo "GATE_BLOCK: target runtime/content preflight failed for $TARGET_NAME." >&2
+    exit 2
+  }
+  CONTENT_BINDING_EXPORTS="$(
+    python3 - "$APP_PREFLIGHT_JSON" <<'PY'
+import json
+import shlex
+import sys
+
+payload = json.loads(sys.argv[1])
+if payload.get("status") != "passed":
+    raise SystemExit("App Debug preflight did not pass")
+for key, field in (
+    ("CONTENT_RELEASE_ID", "releaseId"),
+    ("CONTENT_MANIFEST_DIGEST", "manifestDigest"),
+    ("CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
+):
+    value = str(payload.get(field) or "").strip()
+    if not value:
+        raise SystemExit(f"App content preflight is missing {field}")
+    print(f"{key}={shlex.quote(value)}")
+PY
+  )" || {
+    echo "GATE_BLOCK: App content preflight returned an invalid receipt." >&2
+    exit 2
+  }
+  eval "$CONTENT_BINDING_EXPORTS"
+fi
+
+if [[ -z "$CONTENT_RELEASE_ID" \
+   || ! "$CONTENT_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
+   || ! "$CONTENT_READINESS_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "GATE_BLOCK: canonical launcher requires release-bound content identity." >&2
+  exit 2
+fi
+export QWQ_CONTENT_RELEASE_ID="$CONTENT_RELEASE_ID"
+export QWQ_CONTENT_MANIFEST_DIGEST="$CONTENT_MANIFEST_DIGEST"
+export QWQ_CONTENT_READINESS_RECEIPT_DIGEST="$CONTENT_READINESS_RECEIPT_DIGEST"
 
 if [[ "$TARGET_NAME" != "prod-hosted" ]]; then
   if ! PYTHONDONTWRITEBYTECODE=1 python3 \
@@ -272,7 +323,10 @@ if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
       --device "$DEVICE_ID" \
       --consumer "$QWQ_RUN_CONSUMER_ID" \
       --package-name com.quwoquan.quwoquan_app \
-      --ports "$QWQ_ANDROID_LOCAL_PORTS"
+      --ports "$QWQ_ANDROID_LOCAL_PORTS" \
+      --release-id "$CONTENT_RELEASE_ID" \
+      --manifest-digest "$CONTENT_MANIFEST_DIGEST" \
+      --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
   )"
   QWQ_CONSUMER_LEASE_ID="$(
     python3 - "$LEASE_JSON" <<'PY'
@@ -302,6 +356,9 @@ handoff_cmd=(
   --app-instance-id "$INSTANCE_ID"
   --app-instance-namespace "$INSTANCE_NAMESPACE"
   --launch-mode canonical_launcher
+  --content-release-id "$CONTENT_RELEASE_ID"
+  --content-manifest-digest "$CONTENT_MANIFEST_DIGEST"
+  --content-readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
 )
 if [[ -n "$GATEWAY_BASE_URL" ]]; then
   handoff_cmd+=(--gateway-base-url "$GATEWAY_BASE_URL")
@@ -406,6 +463,21 @@ export QWQ_APP_RECOVERY_BASE_URL="$RECOVERY_BASE_URL"
 export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
 export QWQ_APP_DOWNLOAD_BASE_URL="$APP_DOWNLOAD_BASE_URL"
 export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"
+if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+    consumer-lease acquire \
+    --target "$QWQ_ANDROID_LOCAL_TARGET" \
+    --device "$DEVICE_ID" \
+    --consumer "$QWQ_RUN_CONSUMER_ID" \
+    --package-name com.quwoquan.quwoquan_app \
+    --ports "$QWQ_ANDROID_LOCAL_PORTS" \
+    --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
+    --release-id "$CONTENT_RELEASE_ID" \
+    --manifest-digest "$CONTENT_MANIFEST_DIGEST" \
+    --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST" \
+    >/dev/null
+fi
 if [[ -t 0 && -e /dev/tty ]]; then
   export QWQ_APP_INSTANCE_PRESERVE_TTY="${QWQ_APP_INSTANCE_PRESERVE_TTY:-1}"
 fi

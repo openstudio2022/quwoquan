@@ -1,30 +1,23 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
 /// 与云侧 ListMembers `sort` 枚举对齐；非法值回退 `joined_asc`。
-List<ChatConversationMemberDto> sortChatMemberDtos(
-  List<ChatConversationMemberDto> members,
+List<ConversationMemberListRow> sortChatMemberRows(
+  List<ConversationMemberListRow> members,
   String? sort,
 ) {
   final normalized = switch (sort?.trim()) {
     'display_name_asc' => 'display_name_asc',
     _ => 'joined_asc',
   };
-  final copy = List<ChatConversationMemberDto>.from(members);
+  final copy = List<ConversationMemberListRow>.from(members);
   if (normalized == 'display_name_asc') {
     copy.sort((a, b) {
       final da = a.displayName.isNotEmpty ? a.displayName : a.userId;
@@ -50,24 +43,24 @@ List<ChatConversationMemberDto> sortChatMemberDtos(
 abstract class ChatConversationRepository {
   // ── 会话 ────────────────────────────────────────────────────────────────────
   /// 收件箱会话列表（强类型，优先用于新代码）。
-  Future<List<ChatInboxDto>> listInbox({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
   /// 记录 wire 形态会话列表；新实现应优先 [listInbox]。
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -75,7 +68,7 @@ abstract class ChatConversationRepository {
     String? idempotencyKey,
   });
 
-  Future<ConversationDto> getConversation(String conversationId);
+  Future<ConversationViewData> getConversation(String conversationId);
 
   /// 更新会话展示标题（群名等），对齐 UpdateConversationTitle operation。
   Future<void> updateConversationTitle(String conversationId, String title);
@@ -90,7 +83,7 @@ abstract class ChatConversationRepository {
   // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
   Future<List<ChatConversationTimestampDto>> getConversationTimestamps();
 
-  Future<List<ConversationDto>> batchGetConversations(List<String> ids);
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids);
 }
 
 /// Chat 消息收发 / 同步 / 已读回执。
@@ -98,7 +91,7 @@ abstract class ChatConversationRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ChatMessageRepository {
   // ── 消息 ────────────────────────────────────────────────────────────────────
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = CloudApiDefaults.pageLimit,
@@ -132,7 +125,7 @@ abstract class ChatMessageRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ChatMemberRepository {
   // ── 成员管理 ──────────────────────────────────────────────────────────────
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -143,7 +136,7 @@ abstract class ChatMemberRepository {
   });
 
   /// `ListMembers(query)` 的服务端字面量搜索；@选择器不得只过滤端侧已加载子集。
-  Future<List<ChatConversationMemberDto>> searchMembers({
+  Future<List<ConversationMemberListRow>> searchMembers({
     required String conversationId,
     required String query,
     int limit = CloudApiDefaults.chatMemberSearchLimit,
@@ -167,10 +160,7 @@ abstract class ChatMemberRepository {
   Future<List<String>> listMemberUserIds(String conversationId);
 
   // ── 助手参与 ──────────────────────────────────────────────────────────────
-  Future<void> inviteAssistant({
-    required String conversationId,
-    String? skillId,
-  });
+  Future<void> inviteAssistant({required String conversationId});
 
   Future<void> removeAssistant({required String conversationId});
 }
@@ -180,18 +170,18 @@ abstract class ChatMemberRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ChatContactRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<List<ChatContactRowDto>> listGroupCandidates({
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -215,7 +205,7 @@ enum ChatSelectableGroupSource {
 abstract class ChatGroupSelectionRepository {
   /// 图四：当前用户所在、且含互关联系人的群会话列表，附 `friendMemberCount`。
   /// 云侧已过滤 `friendMemberCount == 0` 的群。
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -224,7 +214,7 @@ abstract class ChatGroupSelectionRepository {
   });
 
   /// 图五：指定群成员中与当前用户互关的联系人（排除当前用户与非 user 成员）。
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
@@ -237,14 +227,14 @@ abstract class ChatGroupSelectionRepository {
 /// R02：单接口 ≤10 方法。
 abstract class ChatGroupAdminRepository {
   // ── 群管理 ──────────────────────────────────────────────────────────────────
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId);
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId);
 
-  Future<GroupHomeDto> getGroupHome(String conversationId);
+  Future<GroupHome> getGroupHome(String conversationId);
 
   /// 更新群治理开关（对齐 metadata UpdateGroupGovernanceSettings；owner/admin）。
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsDto settings,
+    ChatGroupSettingsViewData settings,
   );
 
   Future<void> updateAnnouncement(String conversationId, String announcement);

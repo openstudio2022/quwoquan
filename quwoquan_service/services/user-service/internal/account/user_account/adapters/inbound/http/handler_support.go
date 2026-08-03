@@ -1,6 +1,12 @@
 package http
 
-import rterr "quwoquan_service/runtime/errors"
+import (
+	"net/http"
+	"strings"
+
+	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
+)
 
 func anyString(value any) string {
 	if value == nil {
@@ -24,4 +30,13 @@ func userErrorDebugMessage(err error) string {
 		return ""
 	}
 	return rterr.NormalizeError(err).DebugMessage
+}
+
+func (h *UserHandler) commandIdempotencyKey(r *http.Request) string {
+	if invocation, ok := operation.FromContext(r.Context()); ok {
+		if key := strings.TrimSpace(invocation.IdempotencyKey); key != "" {
+			return key
+		}
+	}
+	return strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 }

@@ -41,6 +41,11 @@ def transaction_workspace_root() -> Path:
     return core_paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions"
 
 
+def frozen_target_archive_path(execution_id: str) -> Path:
+    archive_root = core_paths.DATA_LOCAL_ROOT / "workspace" / "frozen-target-sets"
+    return archive_root / f"{validate_execution_id(execution_id)}.json"
+
+
 def orphaned_transaction_workspaces() -> tuple[Path, ...]:
     """Return transaction evidence whose execution work package no longer exists."""
     root = transaction_workspace_root()
@@ -327,7 +332,11 @@ def write_frozen_target_set(
 def load_frozen_target_set(execution_id: str) -> dict[str, Any]:
     path = execution_target_set_path(execution_id)
     if not path.is_file():
-        raise FileNotFoundError(f"frozen target set does not exist: {path}")
+        path = frozen_target_archive_path(execution_id)
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"frozen target set and retry archive do not exist: {execution_id}"
+        )
     payload = read_json(path)
     if not isinstance(payload, dict):
         raise ValueError(f"frozen target set is not an object: {path}")
@@ -335,6 +344,29 @@ def load_frozen_target_set(execution_id: str) -> dict[str, Any]:
 
     assert_valid(payload, "execution", "target_set", label=f"target_set:{execution_id}")
     return payload
+
+
+def archive_frozen_target_set(execution_id: str) -> Path:
+    """Create-once archive needed to retry after task output cleanup."""
+    normalized = validate_execution_id(execution_id)
+    source = execution_target_set_path(normalized)
+    if not source.is_file():
+        raise FileNotFoundError(f"frozen target set does not exist: {source}")
+    payload = read_json(source)
+    if not isinstance(payload, dict):
+        raise ValueError(f"frozen target set is not an object: {source}")
+    from core.schema import assert_valid
+
+    assert_valid(payload, "execution", "target_set", label=f"target_set:{normalized}")
+    destination = frozen_target_archive_path(normalized)
+    if destination.is_file():
+        if read_json(destination) != payload:
+            raise ValueError(
+                f"frozen target retry archive drift detected: {normalized}"
+            )
+    else:
+        write_json(destination, payload)
+    return destination
 
 
 def frozen_target_by_name(execution_id: str, name: str) -> FrozenTarget | None:

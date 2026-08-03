@@ -298,6 +298,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
     final attempt = _beginLoginAttempt(LoginOperation.sendingOtp);
     final stopwatch = Stopwatch()..start();
     final purpose = binding ? LoginOtpPurpose.bindPhone : LoginOtpPurpose.login;
+    final wirePhone = mainlandPhoneE164OrEmpty(_flow.phone);
     _trackLoginFunnel('login_otp_send', result: 'started', otpPurpose: purpose);
     try {
       final session = ref.read(authSessionControllerProvider);
@@ -307,7 +308,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           .read(authenticationChallengeCommandWriterProvider)
           .sendOtp(
             SendOtpCommand(
-              phone: _flow.phone,
+              phone: wirePhone,
               deviceId: session.installId.isNotEmpty
                   ? session.installId
                   : stored.installId,
@@ -448,6 +449,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
     try {
       final session = ref.read(authSessionControllerProvider);
       final stored = await ref.read(authSessionStoreProvider).read();
+      final wirePhone = mainlandPhoneE164OrEmpty(state.phone);
       if (!_isCurrentLoginAttempt(attempt)) return;
       late final AuthSessionGrant grant;
       if (binding) {
@@ -456,7 +458,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
             .completeFederatedPhoneBinding(
               CompleteFederatedPhoneBindingCommand(
                 bindingTicket: state.bindingTicket,
-                phone: state.phone,
+                phone: wirePhone,
                 otpCode: state.code,
                 challengeId: state.challengeId,
                 deviceId: session.installId.isNotEmpty
@@ -474,7 +476,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
             .read(accountSessionLoginCommandWriterProvider)
             .loginWithPhone(
               LoginWithPhoneCommand(
-                phone: state.phone,
+                phone: wirePhone,
                 otpCode: state.code,
                 deviceId: session.installId.isNotEmpty
                     ? session.installId

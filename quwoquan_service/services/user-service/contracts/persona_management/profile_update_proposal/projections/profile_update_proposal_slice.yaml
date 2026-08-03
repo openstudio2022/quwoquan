@@ -1,0 +1,9 @@
+read_model: ProfileUpdateProposalSlice
+description: 当前 Persona 的资料修改提案 keyset 分页，只包含 owner 可见的 typed proposal view。
+source_entities:
+- ProfileUpdateProposal
+consumers:
+- app
+fields:
+- {name: items, type: '[]ProfileUpdateProposalView', nullable: false}
+- {name: nextCursor, type: string, nullable: true}

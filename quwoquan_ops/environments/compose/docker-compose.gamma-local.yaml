@@ -120,7 +120,7 @@ services:
       LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT: "${LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT:?LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT is required}"
       SSL_CERT_FILE: /etc/ssl/certs/quwoquan-local-managed.crt
     volumes:
-      - ./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE:?packaged object-storage lifecycle file is required}:/etc/qwq-object-storage/lifecycle.json:ro
       - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/certs/quwoquan-local-managed.crt:ro
     entrypoint:
       - /bin/sh
@@ -138,38 +138,31 @@ services:
         exit 1
     restart: "no"
 
-  elasticsearch:
-    image: "${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
-    # 使用宿主原生镜像架构。Apple Silicon 的 ES 8.13 JVM 在 Colima/VZ 中须由
-    # 启动器注入 arm64 专用的 UseSVE=0；不要强制 amd64 模拟，否则 ES 启动会
-    # 抢占 Docker VM 并使 Gamma 健康检查不可复现。
+  livekit-sfu:
+    profiles: ["edge-media"]
+    image: "livekit/livekit-server:v1.7.2@sha256:27d72fa264baa4db4e635b3b6df12d185b4a95fee5f2ddce03e06d150d599e0e"
+    command: ["--config", "/etc/livekit/livekit.yaml"]
     environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      xpack.security.http.ssl.enabled: "false"
-      # gamma-local 的单节点 ES 共享 Colima 虚拟磁盘；宿主构建缓存水位不代表
-      # 托管 Gamma 集群容量。关闭本地 allocation threshold 会解除历史
-      # read_only_allow_delete block，同时 Search backfill 仍然失败关闭。
-      cluster.routing.allocation.disk.threshold_enabled: "false"
-      CLI_JAVA_OPTS: "${LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
-      ES_JAVA_OPTS: "${LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+      LIVEKIT_KEYS: "${RTC_MEDIA_API_KEY:?RTC_MEDIA_API_KEY is required}: ${RTC_MEDIA_API_SECRET:?RTC_MEDIA_API_SECRET is required}"
     ports:
-      - "${LOCAL_GAMMA_ES_PORT:-19430}:9200"
+      - "${LOCAL_GAMMA_LIVEKIT_HTTP_PORT:?LOCAL_GAMMA_LIVEKIT_HTTP_PORT is required}:7880"
+      - "${LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT:?LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT is required}:7881"
+      - "${LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT:?LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT is required}:7882/udp"
+      - "${LOCAL_GAMMA_LIVEKIT_METRICS_PORT:?LOCAL_GAMMA_LIVEKIT_METRICS_PORT is required}:6789"
     volumes:
-      - local-gamma-es:/usr/share/elasticsearch/data
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - "curl -fsS 'http://localhost:9200/_ilm/status' >/dev/null || exit 1"
-      interval: 10s
-      timeout: 5s
-      start_period: 1200s
-      retries: 60
-
-  # Elasticsearch 是 gamma-local 基础设施而非 content-service 的通用必需物。
-  # beta 的 content-release 切片显式关闭 SEARCH_ES_ENABLED，不能因为不存在
-  # 本地 ES service 而失去可组合的 content 数据面。gamma 开启索引投影时，
-  # content-service 的 gamma 环境覆盖层声明其启动前置条件。
+      - ${LOCAL_GAMMA_LIVEKIT_CONFIG_FILE:?packaged LiveKit config file is required}:/etc/livekit/livekit.yaml:ro
+  coturn:
+    profiles: ["edge-media"]
+    image: "coturn/coturn:4.6-alpine@sha256:e2bca2f79a4269d7240de5872ab60a9305013ad37296d2acf14f9510874346be"
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--realm=rtc.quwoquan.local"
+      - "--fingerprint"
+      - "--no-auth"
+    ports:
+      - "${LOCAL_GAMMA_TURN_TCP_PORT:?LOCAL_GAMMA_TURN_TCP_PORT is required}:3478/tcp"
+      - "${LOCAL_GAMMA_TURN_UDP_PORT:?LOCAL_GAMMA_TURN_UDP_PORT is required}:3478/udp"
 
   gamma-proxy:
     image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17}"
@@ -193,7 +186,7 @@ services:
       - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
-      - ${LOCAL_GAMMA_CADDYFILE:-../gamma/local/Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ${LOCAL_GAMMA_CADDYFILE:?packaged Caddyfile is required}:/etc/caddy/Caddyfile:ro
       - ${QWQ_PUBLIC_TLS_CERT_FILE:?QWQ_PUBLIC_TLS_CERT_FILE is required}:/etc/caddy/tls/fullchain.pem:ro
       - ${QWQ_PUBLIC_TLS_KEY_FILE:?QWQ_PUBLIC_TLS_KEY_FILE is required}:/etc/caddy/tls/privkey.pem:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
@@ -218,6 +211,5 @@ volumes:
   local-gamma-redis:
   local-gamma-object-storage:
   local-gamma-go-cache:
-  local-gamma-es:
   local-gamma-caddy-data:
   local-gamma-caddy-config:

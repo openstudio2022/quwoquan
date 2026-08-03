@@ -72,7 +72,7 @@ final class RemotePersonaRelationshipFollowAdapter
     );
     return CursorPage<ProfileSocialRelationRowViewData>(
       items: page.items
-          .map(ProfileSocialRelationRowViewData.fromPersonaRelationshipListItem)
+          .map(ProfileSocialRelationRowViewData.fromFollowingWire)
           .toList(growable: false),
       nextCursor: page.nextCursor,
     );
@@ -99,7 +99,7 @@ final class RemotePersonaRelationshipFollowAdapter
     );
     return CursorPage<ProfileSocialRelationRowViewData>(
       items: page.items
-          .map(ProfileSocialRelationRowViewData.fromPersonaRelationshipListItem)
+          .map(ProfileSocialRelationRowViewData.fromFollowerWire)
           .toList(growable: false),
       nextCursor: page.nextCursor,
     );

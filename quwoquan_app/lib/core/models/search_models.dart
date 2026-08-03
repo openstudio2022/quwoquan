@@ -2,17 +2,18 @@ import 'package:flutter/foundation.dart' show ValueGetter, setEquals;
 
 export 'package:quwoquan_app/core/models/search_hit_payload.dart';
 export 'package:quwoquan_app/core/models/search_post_item_view.dart';
-export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+export 'package:quwoquan_app/core/models/circle_search_hit_view_data.dart';
 export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show LocationPoiDto;
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
+    show LocationPoi;
+import 'package:quwoquan_app/core/models/circle_search_hit_view_data.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show LocationPoiDto, SocialRelationSearchItemProjection;
+    show LocationPoi;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as cloud_contracts
+    show RecentSearchEntryWire, SocialRelationSearchItemView;
 part 'search_models_presentation.dart';
 part 'search_models_selection.dart';
 
@@ -229,8 +230,8 @@ class SearchConversationAnchorContext {
   final String? sourceQuery;
 }
 
-class SocialRelationSearchItemView {
-  const SocialRelationSearchItemView({
+class SocialRelationSearchItemViewData {
+  const SocialRelationSearchItemViewData({
     required this.personaId,
     required this.userHandle,
     required this.displayName,
@@ -250,49 +251,24 @@ class SocialRelationSearchItemView {
   final bool chatAvailable;
   final RelationshipCapabilityDto relationshipCapability;
 
-  factory SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
-    SocialRelationSearchItemWireDto w,
-  ) {
-    final personaId = w.personaId;
-    final displayName = w.displayName.isNotEmpty ? w.displayName : personaId;
-    final capView = RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-      w.relationshipCapability,
-    );
-    return SocialRelationSearchItemView(
-      personaId: personaId,
-      userHandle: w.userHandle,
-      displayName: displayName,
-      avatarUrl: w.avatarUrl == null
-          ? null
-          : resolveAvatarImageUrl(w.avatarUrl, avatarVersion: w.avatarVersion),
-      avatarVersion: w.avatarVersion,
-      headline: w.headline,
-      chatAvailable: capView.canOpenConversation,
-      relationshipCapability: capView,
-    );
-  }
-
-  factory SocialRelationSearchItemView.fromProjection(
-    SocialRelationSearchItemProjection projection,
+  factory SocialRelationSearchItemViewData.fromWire(
+    cloud_contracts.SocialRelationSearchItemView projection,
   ) {
     final personaId = projection.personaId;
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
         : personaId;
-    final capView = RelationshipCapabilityDto.fromContract(
+    final capView = RelationshipCapabilityDto.fromWire(
       projection.relationshipCapability,
     );
-    return SocialRelationSearchItemView(
+    return SocialRelationSearchItemViewData(
       personaId: personaId,
       userHandle: projection.userHandle,
       displayName: displayName,
       avatarUrl: projection.avatarUrl == null
           ? null
-          : resolveAvatarImageUrl(
-              projection.avatarUrl,
-              avatarVersion: projection.avatarVersion,
-            ),
-      avatarVersion: projection.avatarVersion,
+          : resolveAvatarImageUrl(projection.avatarUrl, avatarVersion: 0),
+      avatarVersion: 0,
       headline: projection.headline,
       chatAvailable: projection.chatAvailable || capView.canOpenConversation,
       relationshipCapability: capView,
@@ -491,8 +467,8 @@ class RecentSearchEntryView {
     );
   }
 
-  factory RecentSearchEntryView.fromRecentSearchEntryWire(
-    RecentSearchEntryWireDto w,
+  factory RecentSearchEntryView.fromWire(
+    cloud_contracts.RecentSearchEntryWire w,
   ) {
     final query = w.query.trim();
     final scope = SearchScope.fromWire(w.scope);
@@ -505,7 +481,7 @@ class RecentSearchEntryView {
       query: query,
       scope: scope,
       facet: facetTrim?.isEmpty == true ? null : facetTrim,
-      updatedAt: w.updatedAt ?? DateTime.now(),
+      updatedAt: w.updatedAt,
     );
   }
 

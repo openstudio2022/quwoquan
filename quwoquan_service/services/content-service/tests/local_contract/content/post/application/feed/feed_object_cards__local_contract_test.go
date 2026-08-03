@@ -9,35 +9,39 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	recpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
+	transport "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	testsupport "quwoquan_service/services/content-service/tests/support"
 )
-
-type stubObjectCardProvider struct {
-	cards []ObjectCardView
-	err   error
-	calls int
-}
-
-func (s *stubObjectCardProvider) ObjectCards(_ context.Context, _ string, limit int) ([]ObjectCardView, error) {
-	s.calls++
-	if s.err != nil {
-		return nil, s.err
-	}
-	if len(s.cards) > limit {
-		return s.cards[:limit], s.err
-	}
-	return s.cards, s.err
-}
 
 func objectCardPolicy(cfg recpolicy.ObjectCardConfig) func() recpolicy.ObjectCardConfig {
 	return func() recpolicy.ObjectCardConfig { return cfg }
 }
 
-func newObjectCardFeedService(t *testing.T, provider ObjectCardProvider, cfg recpolicy.ObjectCardConfig, postCount int) *FeedService {
+func rankedObjectCard(kind, id, title string) transport.RecommendationObjectCard {
+	return transport.RecommendationObjectCard{
+		ObjectKind: kind,
+		ObjectId:   id,
+		Title:      title,
+		TagRefs:    []string{"travel.photography.landmark"},
+		ReasonKey:  "shared_interest",
+		RecallPath: "candidate_index",
+	}
+}
+
+func newObjectCardFeedService(
+	t *testing.T,
+	cards []transport.RecommendationObjectCard,
+	cfg recpolicy.ObjectCardConfig,
+	postCount int,
+) *FeedService {
 	t.Helper()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
-	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	sessionCache := rtrec.NewSessionCache(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))),
+		2*time.Second,
+		1000,
+	)
 	candidates := make([]rtrec.ContentCandidate, 0, postCount)
 	posts := make([]postmodel.Post, 0, postCount)
 	for i := 0; i < postCount; i++ {
@@ -54,25 +58,24 @@ func newObjectCardFeedService(t *testing.T, provider ObjectCardProvider, cfg rec
 		&captureRecallSource{candidates: candidates},
 	})
 	return NewFeedService(
-		engine,
 		fixtureFeedReader{posts: posts},
-		testsupport.RankedRecommendationOptions(
+		testsupport.RankedRecommendationOptionsWithObjectCards(
 			engine,
-			WithObjectCardProvider(provider, objectCardPolicy(cfg)),
+			cards,
+			WithObjectCardPolicy(objectCardPolicy(cfg)),
 			readyActiveSupplyOption(),
 		)...,
 	)
 }
 
-// W5 混合对象卡注入契约（B4 阶段一）：everyN 间隔锚定、maxCards 上限、
-// 尾部不悬挂、仅推荐主链路注入。
+// Recommendation 冻结候选与理由，Content 仅按页面长度和布局策略计算 anchor。
 func TestListFeed_ObjectCardsAnchoredByPolicyInterval(t *testing.T) {
-	provider := &stubObjectCardProvider{cards: []ObjectCardView{
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/大理古城", Title: "大理古城"},
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/都江堰", Title: "都江堰"},
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/青城山", Title: "青城山"},
-	}}
-	svc := newObjectCardFeedService(t, provider, recpolicy.ObjectCardConfig{
+	cards := []transport.RecommendationObjectCard{
+		rankedObjectCard("entity_homepage", "homepage_dali", "大理古城"),
+		rankedObjectCard("entity_homepage", "homepage_dujiangyan", "都江堰"),
+		rankedObjectCard("entity_homepage", "homepage_qingcheng", "青城山"),
+	}
+	svc := newObjectCardFeedService(t, cards, recpolicy.ObjectCardConfig{
 		Enabled:      true,
 		EveryN:       3,
 		MaxCards:     2,
@@ -98,13 +101,15 @@ func TestListFeed_ObjectCardsAnchoredByPolicyInterval(t *testing.T) {
 	}
 }
 
-func TestListFeed_ObjectCardsDisabledPolicyIsZeroCost(t *testing.T) {
-	provider := &stubObjectCardProvider{cards: []ObjectCardView{
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/大理古城", Title: "大理古城"},
-	}}
-	svc := newObjectCardFeedService(t, provider, recpolicy.ObjectCardConfig{
-		Enabled: false,
-	}, 6)
+func TestListFeed_ObjectCardsDisabledPolicyDoesNotDeliverCards(t *testing.T) {
+	svc := newObjectCardFeedService(
+		t,
+		[]transport.RecommendationObjectCard{
+			rankedObjectCard("entity_homepage", "homepage_dali", "大理古城"),
+		},
+		recpolicy.ObjectCardConfig{Enabled: false},
+		6,
+	)
 
 	resp, err := svc.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u_cards_off", SessionID: "s_cards_off", ChannelID: "recommend", Limit: 6,
@@ -113,37 +118,25 @@ func TestListFeed_ObjectCardsDisabledPolicyIsZeroCost(t *testing.T) {
 		t.Fatalf("ListFeed: %v", err)
 	}
 	if len(resp.ObjectCards) != 0 {
-		t.Fatalf("disabled policy must not inject cards, got %+v", resp.ObjectCards)
-	}
-	if provider.calls != 0 {
-		t.Fatalf("disabled policy must not call provider (zero cost), calls=%d", provider.calls)
+		t.Fatalf("disabled policy must not deliver cards, got %+v", resp.ObjectCards)
 	}
 }
 
-func TestListFeed_ObjectCardsAnonymousAndBrowseFlowExcluded(t *testing.T) {
-	provider := &stubObjectCardProvider{cards: []ObjectCardView{
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/大理古城", Title: "大理古城"},
-	}}
-	cfg := recpolicy.ObjectCardConfig{
-		Enabled:      true,
-		EveryN:       2,
-		MaxCards:     2,
-		AllowedKinds: []string{"entity_homepage"},
-	}
+func TestListFeed_ObjectCardsExcludedFromPostBrowseQuery(t *testing.T) {
+	svc := newObjectCardFeedService(
+		t,
+		[]transport.RecommendationObjectCard{
+			rankedObjectCard("entity_homepage", "homepage_dali", "大理古城"),
+		},
+		recpolicy.ObjectCardConfig{
+			Enabled:      true,
+			EveryN:       2,
+			MaxCards:     2,
+			AllowedKinds: []string{"entity_homepage"},
+		},
+		6,
+	)
 
-	svc := newObjectCardFeedService(t, provider, cfg, 6)
-	// 匿名（无 userID）：无个性化对象卡。
-	anon, err := svc.ListFeed(context.Background(), ListFeedRequest{
-		SessionID: "s_anon", ChannelID: "recommend", Limit: 6,
-	})
-	if err != nil {
-		t.Fatalf("ListFeed anon: %v", err)
-	}
-	if len(anon.ObjectCards) != 0 {
-		t.Fatalf("anonymous feed must not carry object cards, got %+v", anon.ObjectCards)
-	}
-
-	// 浏览流具名查询（identity/type）：不混排对象卡。
 	browse, err := svc.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u_browse", SessionID: "s_browse", Identity: "work", Type: "image", Limit: 6,
 	})
@@ -151,44 +144,48 @@ func TestListFeed_ObjectCardsAnonymousAndBrowseFlowExcluded(t *testing.T) {
 		t.Fatalf("ListFeed browse: %v", err)
 	}
 	if len(browse.ObjectCards) != 0 {
-		t.Fatalf("browse flow must not carry object cards, got %+v", browse.ObjectCards)
+		t.Fatalf("Post browse query must not carry recommendation cards, got %+v", browse.ObjectCards)
 	}
 }
 
-func TestListFeed_ObjectCardsProviderFailureFailsOpen(t *testing.T) {
-	provider := &stubObjectCardProvider{err: context.DeadlineExceeded}
-	svc := newObjectCardFeedService(t, provider, recpolicy.ObjectCardConfig{
-		Enabled:      true,
-		EveryN:       2,
-		MaxCards:     1,
-		AllowedKinds: []string{"entity_homepage"},
-	}, 4)
+func TestListFeed_MalformedRankedObjectCardFailsClosed(t *testing.T) {
+	malformed := rankedObjectCard("entity_homepage", "homepage_dali", "大理古城")
+	malformed.ReasonKey = ""
+	svc := newObjectCardFeedService(
+		t,
+		[]transport.RecommendationObjectCard{malformed},
+		recpolicy.ObjectCardConfig{
+			Enabled:      true,
+			EveryN:       2,
+			MaxCards:     1,
+			AllowedKinds: []string{"entity_homepage"},
+		},
+		4,
+	)
 
 	resp, err := svc.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u_cards_err", SessionID: "s_cards_err", ChannelID: "recommend", Limit: 4,
 	})
-	if err != nil {
-		t.Fatalf("feed must not fail when object card provider fails: %v", err)
-	}
-	if len(resp.Items) == 0 {
-		t.Fatalf("feed body must be intact on provider failure")
-	}
-	if len(resp.ObjectCards) != 0 {
-		t.Fatalf("provider failure must degrade to no cards, got %+v", resp.ObjectCards)
+	if err == nil {
+		t.Fatalf("malformed ranked object card must fail closed, response=%+v", resp)
 	}
 }
 
 func TestListFeed_ObjectCardsFilterDisallowedKinds(t *testing.T) {
-	provider := &stubObjectCardProvider{cards: []ObjectCardView{
-		{ObjectKind: "user_card", ObjectID: "u_someone", Title: "某用户"},
-		{ObjectKind: "entity_homepage", ObjectID: "/entity/travel/景区/大理古城", Title: "大理古城"},
-	}}
-	svc := newObjectCardFeedService(t, provider, recpolicy.ObjectCardConfig{
-		Enabled:      true,
-		EveryN:       2,
-		MaxCards:     2,
-		AllowedKinds: []string{"entity_homepage"},
-	}, 6)
+	svc := newObjectCardFeedService(
+		t,
+		[]transport.RecommendationObjectCard{
+			rankedObjectCard("user_card", "user_someone", "某用户"),
+			rankedObjectCard("entity_homepage", "homepage_dali", "大理古城"),
+		},
+		recpolicy.ObjectCardConfig{
+			Enabled:      true,
+			EveryN:       2,
+			MaxCards:     2,
+			AllowedKinds: []string{"entity_homepage"},
+		},
+		6,
+	)
 
 	resp, err := svc.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u_cards_kind", SessionID: "s_cards_kind", ChannelID: "recommend", Limit: 6,
@@ -197,6 +194,6 @@ func TestListFeed_ObjectCardsFilterDisallowedKinds(t *testing.T) {
 		t.Fatalf("ListFeed: %v", err)
 	}
 	if len(resp.ObjectCards) != 1 || resp.ObjectCards[0].ObjectKind != "entity_homepage" {
-		t.Fatalf("S0 must only admit entity_homepage kind, got %+v", resp.ObjectCards)
+		t.Fatalf("Content layout policy must only admit entity_homepage, got %+v", resp.ObjectCards)
 	}
 }

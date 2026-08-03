@@ -435,7 +435,7 @@ def test_retry_inherit_frozen_targets_skips_source_requalification(
                             {
                                 "name": "继承景区乙",
                                 "canonicalName": "继承景区乙",
-                                "entityType": "地点/景区",
+                                "entityType": "地点/宗教场所",
                                 "geoTagRef": "Topic/地理/行政区/中国/test-region-a/甲区",
                                 "typeTagRefs": ["Entity/地点/景区/4A景区"],
                             },
@@ -452,6 +452,33 @@ def test_retry_inherit_frozen_targets_skips_source_requalification(
     def qualify(_target: TargetSourceCandidate) -> TargetSourceQualification:
         raise AssertionError("inherited frozen targets must not re-qualify")
 
+    inherited_targets = (
+        {
+            "name": "继承景区乙",
+            "canonicalName": "继承景区乙",
+            "entityType": "地点/宗教场所",
+            "geoTagRef": "Topic/地理/行政区/中国/test-region-a/甲区",
+            "typeTagRefs": ["Entity/地点/景区/4A景区"],
+            "qualifiedHomepageSource": {
+                "provider": "wikipedia",
+                "title": "继承景区乙",
+                "url": "https://zh.wikipedia.org/wiki/继承景区乙",
+            },
+        },
+        {
+            "name": "继承景区甲",
+            "canonicalName": "继承景区甲",
+            "entityType": "地点/景区",
+            "geoTagRef": "Topic/地理/行政区/中国/test-region-a/甲区",
+            "typeTagRefs": ["Entity/地点/景区/5A景区"],
+            "qualifiedHomepageSource": {
+                "provider": "wikipedia",
+                "title": "继承景区甲",
+                "url": "https://zh.wikipedia.org/wiki/继承景区甲",
+            },
+        },
+    )
+
     targets, report = select_targets(
         discovery_path=path,
         limit=2,
@@ -461,12 +488,15 @@ def test_retry_inherit_frozen_targets_skips_source_requalification(
         target_names=("继承景区乙", "继承景区甲"),
         inherit_frozen_targets=True,
         persist_qualified_source=False,
+        inherited_targets=inherited_targets,
+        category="景区",
     )
 
     assert [item["name"] for item in targets] == ["继承景区乙", "继承景区甲"]
     assert report["strategy"] == "inherited frozen target order"
     assert report["inheritedFrozenTargets"] is True
     assert "sourceQualification" not in report
+    assert targets[0]["qualifiedHomepageSource"]["title"] == "继承景区乙"
 
 
 def test_source_ready_priority_uses_explicit_runtime_targets_before_freezing(tmp_path: Path) -> None:

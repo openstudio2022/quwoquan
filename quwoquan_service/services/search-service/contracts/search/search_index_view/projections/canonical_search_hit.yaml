@@ -9,10 +9,6 @@ consumers:
 - app
 - assistant-service
 - recommendation-engine
-client_projection:
-  dart_class: CanonicalSearchHit
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_hit.g.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_hit.g.dart
 fields:
 - name: target
   type: string

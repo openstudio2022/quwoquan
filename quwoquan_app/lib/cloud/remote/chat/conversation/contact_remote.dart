@@ -14,9 +14,7 @@ final class RemoteChatContactQuery implements ChatContactQuery, ChatInboxQuery {
   final ChatContactInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatContactHomePageSlice> listContactHome(
-    ChatListContactHomeQuery query,
-  ) {
+  Future<ContactHomePageSlice> listContactHome(ChatListContactHomeQuery query) {
     return client.chatConversationListContactHome(
       query,
       context: invocationContext(ChatRequestPageIds.listContactHome),
@@ -24,7 +22,7 @@ final class RemoteChatContactQuery implements ChatContactQuery, ChatInboxQuery {
   }
 
   @override
-  Future<ChatContactPageSlice> listContacts(ChatListContactsQuery query) {
+  Future<ContactPageSlice> listContacts(ChatListContactsQuery query) {
     return client.chatConversationListContacts(
       query,
       context: invocationContext(ChatRequestPageIds.listContacts),
@@ -32,7 +30,7 @@ final class RemoteChatContactQuery implements ChatContactQuery, ChatInboxQuery {
   }
 
   @override
-  Future<ChatContactPageSlice> listGroupCandidates(
+  Future<GroupCandidatePageSlice> listGroupCandidates(
     ChatListGroupCandidatesQuery query,
   ) {
     return client.chatConversationListGroupCandidates(
@@ -43,14 +41,14 @@ final class RemoteChatContactQuery implements ChatContactQuery, ChatInboxQuery {
 
   @override
   Future<ChatInboxPageSlice> listInbox(ChatListInboxQuery query) {
-    return client.chatConversationListInbox(
+    return client.chatChatInboxViewListInbox(
       query,
       context: invocationContext(ChatRequestPageIds.listInbox),
     );
   }
 
   @override
-  Future<ChatContactPageSlice> listSelectableGroupContactMembers(
+  Future<SelectableGroupContactPageSlice> listSelectableGroupContactMembers(
     ChatListSelectableGroupContactMembersQuery query,
   ) {
     return client.chatConversationListSelectableGroupContactMembers(
@@ -62,8 +60,7 @@ final class RemoteChatContactQuery implements ChatContactQuery, ChatInboxQuery {
   }
 
   @override
-  Future<ChatSelectableGroupConversationPageSlice>
-  listSelectableGroupConversations(
+  Future<SelectableGroupConversationPageSlice> listSelectableGroupConversations(
     ChatListSelectableGroupConversationsQuery query,
   ) {
     return client.chatConversationListSelectableGroupConversations(

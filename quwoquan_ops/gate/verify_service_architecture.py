@@ -7,6 +7,7 @@ Kustomize 基线。它不读取服务注册表、人工 topology、readiness 或
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import ast
 import hashlib
 import json
 import os
@@ -107,6 +108,61 @@ GENERATED_OBJECT_SOURCE_RE = re.compile(
 )
 
 
+def is_substantive_implementation_source(path: Path) -> bool:
+    """Return whether *path* contains non-test implementation, not a placeholder.
+
+    Object ownership is code ownership.  Package declarations, imports, comments,
+    docstrings and ``pass``-only Python modules cannot satisfy a DDD layer.
+    """
+
+    if path.suffix not in {".go", ".py"}:
+        return False
+    if (
+        path.name.endswith("_test.go")
+        or path.name.startswith("test_")
+        or "__local_contract_test" in path.name
+        or "__api_integration_test" in path.name
+    ):
+        return False
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if not text.strip():
+        return False
+    if path.suffix == ".py":
+        try:
+            module = ast.parse(text)
+        except SyntaxError:
+            # Syntax validation belongs to the language gate.  It must not let a
+            # malformed file masquerade as an empty placeholder here.
+            return True
+        meaningful = []
+        for node in module.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom, ast.Pass)):
+                continue
+            if (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                continue
+            meaningful.append(node)
+        return bool(meaningful)
+
+    without_block_comments = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    without_line_comments = re.sub(r"(?m)//.*$", "", without_block_comments)
+    without_package = re.sub(
+        r"(?m)^\s*package\s+[A-Za-z_][A-Za-z0-9_]*\s*$", "", without_line_comments
+    )
+    without_import_blocks = re.sub(
+        r'(?ms)^\s*import\s*\(.*?^\s*\)\s*$', "", without_package
+    )
+    without_single_imports = re.sub(
+        r'(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?"[^"]+"\s*$',
+        "",
+        without_import_blocks,
+    )
+    return bool(without_single_imports.strip())
+
+
 def load_yaml(path: Path) -> dict[str, Any]:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
@@ -167,7 +223,12 @@ class Verification:
         self.objects: dict[tuple[str, str, str], tuple[str, Path, dict[str, Any]]] = {}
         self.contexts: set[tuple[str, str]] = set()
         self.source_owners: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+        self.layer_sources: dict[
+            tuple[str, str, str], dict[str, set[Path]]
+        ] = defaultdict(lambda: defaultdict(set))
         self.routed_objects: set[tuple[str, str, str]] = set()
+        self.runtime_entrypoint_objects: set[tuple[str, str, str]] = set()
+        self.runtime_entrypoint_kinds: dict[tuple[str, str, str], str] = {}
         self.application_sources: dict[tuple[str, str, str], set[Path]] = defaultdict(set)
         self.local_contract_objects: set[tuple[str, str, str]] = set()
         self.api_integration_objects: set[tuple[str, str, str]] = set()
@@ -353,17 +414,57 @@ class Verification:
                     )
                 self.objects[key] = (owner, object_path, document)
                 operations_path = object_path.with_name("operations.yaml")
-                if operations_path.is_file():
+                if not operations_path.is_file():
+                    self.error(
+                        f"{relative(object_path.parent)}: canonical object requires "
+                        "operations.yaml with one HTTP or typed non-HTTP entrypoint"
+                    )
+                else:
                     try:
                         operations = load_yaml(operations_path)
                     except (OSError, ValueError, yaml.YAMLError) as exc:
                         self.error(f"{relative(operations_path)}: {exc}")
                     else:
                         api_routes = operations.get("api_routes") or []
+                        runtime_entrypoints = operations.get("runtime_entrypoints") or []
                         if not isinstance(api_routes, list):
                             self.error(f"{relative(operations_path)}: api_routes must be a list")
                         elif api_routes:
                             self.routed_objects.add(key)
+                        if not isinstance(runtime_entrypoints, list):
+                            self.error(
+                                f"{relative(operations_path)}: runtime_entrypoints must be a list"
+                            )
+                        elif runtime_entrypoints:
+                            self.runtime_entrypoint_objects.add(key)
+                            runtime_kind = str(
+                                (runtime_entrypoints[0] or {}).get("kind")
+                                if isinstance(runtime_entrypoints[0], dict)
+                                else ""
+                            ).strip()
+                            self.runtime_entrypoint_kinds[key] = runtime_kind
+                        if not api_routes and not runtime_entrypoints:
+                            self.error(
+                                f"{relative(operations_path)}: canonical object must own an HTTP "
+                                "operation or typed runtime entrypoint"
+                            )
+                        elif api_routes and runtime_entrypoints:
+                            http_mutations = [
+                                route
+                                for route in api_routes
+                                if isinstance(route, dict)
+                                and str(
+                                    ((route.get("application") or {}).get("kind"))
+                                    if isinstance(route.get("application"), dict)
+                                    else ""
+                                ).strip()
+                                != "query"
+                            ]
+                            if http_mutations:
+                                self.error(
+                                    f"{relative(operations_path)}: canonical object must not own "
+                                    "both HTTP mutation operations and runtime mutation entrypoints"
+                                )
                 object_contexts[(domain, object_name)].add(context)
             for other in contracts.glob("*/*/*.yaml"):
                 if other.name != "object.yaml" and re.search(
@@ -466,14 +567,11 @@ class Verification:
                     self.error(f"{relative(path)}: unknown DDD layer {layer!r}")
                     continue
                 key = (domain, context, object_name)
-                self.source_owners[key].add(service.name)
-                if (
-                    layer == "application"
-                    and path.suffix in {".go", ".py"}
-                    and not path.name.endswith("_test.go")
-                    and "__local_contract_test" not in path.name
-                ):
-                    self.application_sources[key].add(path)
+                if is_substantive_implementation_source(path):
+                    self.source_owners[key].add(service.name)
+                    self.layer_sources[key][layer].add(path)
+                    if layer == "application":
+                        self.application_sources[key].add(path)
             tests = service / "tests"
             allowed_test_roots = {"local_contract", "api_integration", "support"}
             for child in tests.iterdir() if tests.is_dir() else []:
@@ -514,13 +612,11 @@ class Verification:
                     self.error(f"{relative(path)}: unknown DDD layer {layer!r}")
                     continue
                 key = (domain, context, object_name)
-                self.source_owners[key].add("platform-ops")
-                if (
-                    layer == "application"
-                    and path.suffix in {".go", ".py"}
-                    and not path.name.endswith("_test.go")
-                ):
-                    self.application_sources[key].add(path)
+                if is_substantive_implementation_source(path):
+                    self.source_owners[key].add("platform-ops")
+                    self.layer_sources[key][layer].add(path)
+                    if layer == "application":
+                        self.application_sources[key].add(path)
             for layer in ("local_contract", "api_integration"):
                 test_root = platform / "tests" / layer
                 for path in test_root.rglob("*") if test_root.is_dir() else []:
@@ -538,6 +634,7 @@ class Verification:
         for key, owners in self.source_owners.items():
             if len(owners) != 1:
                 self.error(f"{'.'.join(key)} has multiple source owners: {sorted(owners)}")
+        self.verify_kind_aware_object_implementation()
         for key, (owner, object_path, _) in sorted(self.objects.items()):
             if owner not in domain_service_names() and owner != "platform-ops":
                 continue
@@ -546,13 +643,13 @@ class Verification:
                     f"{relative(object_path.parent)}: canonical object requires "
                     "object-local non-generated source"
                 )
-        for key in sorted(self.routed_objects):
+        for key in sorted(self.routed_objects | self.runtime_entrypoint_objects):
             owner, object_path, _ = self.objects[key]
             if owner not in domain_service_names() and owner != "platform-ops":
                 continue
             if not self.application_sources.get(key):
                 self.error(
-                    f"{relative(object_path.parent)}: api_routes require a non-test "
+                    f"{relative(object_path.parent)}: typed entrypoint requires a non-test "
                     "application source in the same object"
                 )
         for key, (_, object_path, _) in sorted(self.objects.items()):
@@ -561,12 +658,48 @@ class Verification:
                     f"{relative(object_path.parent)}: canonical object requires "
                     "object-local local_contract evidence"
                 )
-        for key in sorted(self.routed_objects):
+        for key in sorted(self.routed_objects | self.runtime_entrypoint_objects):
             _, object_path, _ = self.objects[key]
             if key not in self.api_integration_objects:
                 self.error(
-                    f"{relative(object_path.parent)}: routed object requires "
+                    f"{relative(object_path.parent)}: routed/subscribed object requires "
                     "object-local api_integration evidence"
+                )
+
+    def verify_kind_aware_object_implementation(self) -> None:
+        required_layers = {
+            "aggregate_root": {"domain", "application", "infrastructure"},
+            "append_only_fact": {"domain", "application", "infrastructure"},
+            "projection": {"application", "infrastructure"},
+            "runtime_session": {"domain", "application", "infrastructure"},
+        }
+        for key, (owner, object_path, document) in sorted(self.objects.items()):
+            if owner not in domain_service_names() and owner != "platform-ops":
+                continue
+            kind = str(document.get("kind") or "")
+            actual = {
+                layer
+                for layer, sources in self.layer_sources.get(key, {}).items()
+                if sources
+            }
+            missing = required_layers.get(kind, set()) - actual
+            if kind == "external_reference":
+                if "application" not in actual:
+                    missing.add("application")
+                if not actual & {"adapters", "infrastructure"}:
+                    missing.add("adapters-or-infrastructure")
+            if key in self.routed_objects and "adapters" not in actual:
+                missing.add("adapters")
+            if (
+                self.runtime_entrypoint_kinds.get(key)
+                in {"projector", "subscription", "internal_port", "external_port"}
+                and "adapters" not in actual
+            ):
+                missing.add("adapters")
+            if missing:
+                self.error(
+                    f"{relative(object_path.parent)}: kind={kind} requires substantive "
+                    f"object-local layers; missing={sorted(missing)} actual={sorted(actual)}"
                 )
 
     def verify_generated_paths(self) -> None:

@@ -77,7 +77,23 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 mock.patch.object(
                     stackctl,
                     "load_candidate_manifest",
-                    return_value={"release": release_bindings},
+                    return_value={
+                        "release": release_bindings,
+                        "packageDigest": f"sha256:{'1' * 64}",
+                        "buildInputDigest": f"sha256:{'2' * 64}",
+                        "imageDigest": f"sha256:{'3' * 64}",
+                        "runtimeConfigDigest": f"sha256:{'4' * 64}",
+                        "environmentRuntimeDigest": f"sha256:{'5' * 64}",
+                        "runtimeSchemaVersion": "environment-runtime-package",
+                        "observabilityLogSink": {
+                            "adapterId": "ext.obs.elasticsearch",
+                            "deploymentMode": "package-bound-local",
+                            "imageDigest": f"sha256:{'6' * 64}",
+                            "bindingDigest": f"sha256:{'7' * 64}",
+                            "deploymentDigest": f"sha256:{'8' * 64}",
+                            "clusterRef": "target:alpha-local/product-ops/elasticsearch",
+                        },
+                    },
                 ),
                 mock.patch.object(
                     stackctl,

@@ -275,7 +275,7 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		recordUserAccountClosedOutcome("held_for_recovery")
 		return nil
 	}
-	values := durableFieldValues(message.Fields)
+	values := runtimemessaging.DurableFieldMap(message.Fields)
 	if restrictionEvent, restrictionErr := accountrestriction.Decode(
 		values,
 	); restrictionErr == nil {

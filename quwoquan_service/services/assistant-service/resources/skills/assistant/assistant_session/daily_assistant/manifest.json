@@ -10,5 +10,11 @@
   "capabilityProfileRef": "capability.app2",
   "presentationProfileRef": "presentation.checkmark",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.daily_assistant.v1"
+  "replayAssetRef": "assistant.replay.daily_assistant",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none",
+  "promptAssets": ["daily_assistant.proactive"]
 }

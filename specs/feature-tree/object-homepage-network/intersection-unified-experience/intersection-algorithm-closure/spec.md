@@ -66,7 +66,7 @@
 ## 4. 契约引用
 
 - canonical：`recommendation/recommendation/recommendation_model_release/projections/recommend_feature.yaml`
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 - canonical：`recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
 - canonical：`recommendation/recommendation/recommendation_model_release/impact_help_type_registry.yaml`
 

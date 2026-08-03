@@ -1,0 +1,65 @@
+kind: aggregate_root
+description: 多人共同旅行的当前计划聚合；当前事实只通过不可变 Revision 的 CAS 推进。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- name: organizer_persona
+  kind: reference
+  cardinality: N:1
+  consistency: eventual
+  access: named_reader
+  on_delete: tombstone
+  reference_fields: [organizerPersonaId]
+  target_object: user.Persona
+- name: current_revision
+  kind: reference
+  cardinality: 1:1
+  consistency: strong
+  access: named_reader
+  on_delete: retain
+  reference_fields: [currentRevisionId]
+  target_object: travel.TripPlanRevision
+- name: source_template
+  kind: reference
+  cardinality: N:1
+  consistency: strong
+  access: named_reader
+  on_delete: retain
+  reference_fields: [sourceTemplateId]
+  target_object: travel.TripPlanTemplate
+- name: source_attribution_personas
+  kind: reference
+  cardinality: N:N
+  consistency: eventual
+  access: named_reader
+  on_delete: tombstone
+  reference_fields: [sourceAttributionPersonaIds]
+  target_object: user.Persona
+- name: source_posts
+  kind: reference
+  cardinality: N:N
+  consistency: eventual
+  access: named_reader
+  on_delete: tombstone
+  reference_fields: [sourcePostIds]
+  target_object: content.Post
+capabilities: [commandable, queryable, idempotent_commands]
+local_identity_reasons:
+  sourceAttributionIds: 从模板冻结到 Trip 的署名条目局部稳定键，不是独立业务对象身份
+business_rules:
+- 创建 Trip 必须在同一事务产生 revision 1、currentRevisionId、命令回执与 outbox
+- 修订必须携带 expectedRevisionNumber；冲突、拒绝或失败不得改变 current Revision
+- 每个成功修订只追加一个不可变 Revision，计划项顺序由服务端校验且 itemId 在 Trip 内稳定
+- planning、active、completed、archived 按声明状态机推进；归档后恢复必须显式命令
+- Assistant 文本、Chat Message、App cache 与 Connector 结果都不能成为 Trip 当前事实
+- 从模板创建 Trip 时只复制模板的公开结构和署名快照；不得复制旧成员、住宿事实、Moment、Chat/Circle Placement 或个人 Connector
+lifecycle:
+  state_field: status
+  states: [planning, active, completed, archived]
+  optimistic_concurrency: version
+  idempotency: command_receipt

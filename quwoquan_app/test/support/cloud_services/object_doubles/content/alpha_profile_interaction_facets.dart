@@ -19,8 +19,8 @@ final class AlphaProfileInteractionFacet
 
   final DateTime Function() _clock;
   final List<_AlphaProfileActivityRow> _rows;
-  final Map<String, ContentProfileInteractionReadFactAck> _facts =
-      <String, ContentProfileInteractionReadFactAck>{};
+  final Map<String, ProfileInteractionReadFactAck> _facts =
+      <String, ProfileInteractionReadFactAck>{};
 
   @override
   Future<ContentProfileInteractionPage> listActivities(
@@ -32,8 +32,8 @@ final class AlphaProfileInteractionFacet
             .where(
               (row) =>
                   row.ownerPersonaId == query.personaId &&
-                  row.activity.direction == direction.wireValue &&
-                  row.activity.activityType == query.type.wireValue,
+                  row.activity.direction == direction.wireName &&
+                  row.activity.activityType == query.type.wireName,
             )
             .toList(growable: false)
           ..sort(
@@ -65,14 +65,14 @@ final class AlphaProfileInteractionFacet
   }
 
   @override
-  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+  Future<ProfileInteractionReadFactAck> appendReadFact(
     AppendContentProfileInteractionReadFactCommand command,
   ) async {
     final rowIndex = _rows.indexWhere(
       (row) =>
           row.ownerPersonaId == command.personaId &&
           row.activity.direction ==
-              ContentProfileInteractionDirection.received.wireValue &&
+              ContentProfileInteractionDirection.received.wireName &&
           row.activity.activityId == command.activityId,
     );
     if (rowIndex < 0) {
@@ -80,10 +80,10 @@ final class AlphaProfileInteractionFacet
     }
     final semanticKey =
         '${command.personaId}\u0000${command.activityId}\u0000'
-        '${command.state.wireValue}';
+        '${command.state.wireName}';
     final replay = _facts[semanticKey];
     if (replay != null) {
-      return ContentProfileInteractionReadFactAck(
+      return ProfileInteractionReadFactAck(
         factId: replay.factId,
         activityId: replay.activityId,
         state: replay.state,
@@ -94,10 +94,10 @@ final class AlphaProfileInteractionFacet
     final occurredAt = _clock();
     final factId =
         'pirf_${sha256.convert(utf8.encode(semanticKey)).toString().substring(0, 32)}';
-    final ack = ContentProfileInteractionReadFactAck(
+    final ack = ProfileInteractionReadFactAck(
       factId: factId,
       activityId: command.activityId,
-      state: command.state.wireValue,
+      state: command.state.wireName,
       occurredAt: occurredAt,
       replayed: false,
     );

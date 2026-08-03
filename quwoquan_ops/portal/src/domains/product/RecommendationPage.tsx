@@ -177,7 +177,7 @@ export function RecommendationPage() {
       <SectionCard title="精选池条目" subtitle="rollback 单签快速撤回；takedown 需两个不同 principal 双签">
         <div className="stack-list">
           {entries.map((entry) => (
-            <div className="policy-item" key={entry.id}>
+            <div className="policy-item" key={entry.contentId}>
               <div>
                 <p className="item-title">{entry.contentId}</p>
                 <p className="item-subtitle">

@@ -20,7 +20,7 @@ void main() {
   });
 
   test('AssistantSession decoder preserves the canonical wire', () {
-    final decoded = decodeAssistantSession(<String, Object?>{
+    final decoded = decodeAssistantSessionWire(<String, Object?>{
       'sessionId': 'session-1',
       'userId': 'user-1',
       'state': 'active',
@@ -34,11 +34,11 @@ void main() {
     expect(decoded.sessionId, 'session-1');
     expect(decoded.activeTurnId, isEmpty);
     expect(decoded.summary, isEmpty);
-    expect(decoded.updatedAt, DateTime.utc(2026, 7, 28, 0, 1));
+    expect(decoded.updatedAt, '2026-07-28T00:01:00Z');
   });
 
   test('AssistantSession list decoder is strict and keeps nullable cursor', () {
-    final page = decodeAssistantSessionList(<String, Object?>{
+    final page = decodeAssistantSessionListView(<String, Object?>{
       'items': <Object?>[
         <String, Object?>{
           'sessionId': 'session-1',
@@ -57,10 +57,10 @@ void main() {
     expect(page.items, hasLength(1));
     expect(page.nextCursor, isNull);
     expect(
-      () => decodeAssistantSession(<String, Object?>{
-        'sessionId': 'session-1',
+      () => decodeAssistantSessionWire(<String, Object?>{
         'userId': 'user-1',
         'state': 'active',
+        'activeTurnId': '',
         'lastTurnId': '',
         'summary': '',
         'createdAt': '2026-07-28T00:00:00Z',

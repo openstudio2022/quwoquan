@@ -26,7 +26,7 @@ void main() {
     );
 
     await expectLater(
-      runtime.hydrateNativeProcessSegments(
+      runtime.beginNativeStartupAttempt(
         budget: const Duration(milliseconds: 5),
       ),
       throwsA(isA<TimeoutException>()),
@@ -37,18 +37,20 @@ void main() {
         Future<NativeStartupProcessSegments?>.value(
           const NativeStartupProcessSegments(
             elapsedSinceProcessStartMs: 7,
-            deadlineOrigin: 'android_process',
+            elapsedSinceAttemptStartMs: 7,
+            attemptKind: 'cold',
+            deadlineOrigin: 'nativeProcess',
           ),
         ),
       ),
     );
 
-    await runtime.hydrateNativeProcessSegments(
+    await runtime.beginNativeStartupAttempt(
       budget: const Duration(milliseconds: 20),
     );
     expect(
       runtime.deadlineOrigin,
-      'android_process',
+      'nativeProcess',
       reason: 'native process time may consume more of the existing budget',
     );
   });
@@ -63,7 +65,7 @@ void main() {
     );
 
     await expectLater(
-      runtime.hydrateNativeProcessSegments(
+      runtime.beginNativeStartupAttempt(
         budget: const Duration(milliseconds: 20),
       ),
       throwsA(isA<StateError>()),
@@ -76,7 +78,7 @@ void main() {
         ),
       ),
     );
-    await runtime.hydrateNativeProcessSegments(
+    await runtime.beginNativeStartupAttempt(
       budget: const Duration(milliseconds: 20),
     );
   });
@@ -89,48 +91,52 @@ void main() {
         Future<NativeStartupProcessSegments?>.value(
           const NativeStartupProcessSegments(
             elapsedSinceProcessStartMs: 5000,
-            deadlineOrigin: 'android_process',
+            elapsedSinceAttemptStartMs: 5000,
+            attemptKind: 'cold',
+            deadlineOrigin: 'nativeProcess',
           ),
         ),
       ),
     );
 
-    await runtime.hydrateNativeProcessSegments(
+    await runtime.beginNativeStartupAttempt(
       budget: const Duration(milliseconds: 20),
     );
 
-    expect(runtime.deadlineOrigin, 'android_process');
+    expect(runtime.deadlineOrigin, 'nativeProcess');
     expect(
       runtime.deadlineElapsedSinceProcessStart,
       greaterThanOrEqualTo(const Duration(milliseconds: 5000)),
     );
   });
 
-  test('stale native timing hydration 不得延长已 arm 的 deadline', () async {
+  test('Hot Restart 只使用本次 attempt 时钟', () async {
     runtime.markBootstrapStarted();
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    final deadlineBeforeHydration = runtime.deadlineElapsedSinceProcessStart;
 
     AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
       _FakeNativeTimingBridge(
         Future<NativeStartupProcessSegments?>.value(
           const NativeStartupProcessSegments(
-            elapsedSinceProcessStartMs: 0,
-            deadlineOrigin: 'android_process',
+            elapsedSinceProcessStartMs: 64325519,
+            elapsedSinceAttemptStartMs: 12,
+            attemptKind: 'hotRestart',
+            deadlineOrigin: 'dartHotRestart',
           ),
         ),
       ),
     );
 
-    await runtime.hydrateNativeProcessSegments(
+    await runtime.beginNativeStartupAttempt(
       budget: const Duration(milliseconds: 20),
     );
 
-    expect(runtime.deadlineOrigin, 'fallbackDart');
+    expect(runtime.deadlineOrigin, 'dartHotRestart');
+    expect(runtime.attemptKind, 'hotRestart');
     expect(
       runtime.deadlineElapsedSinceProcessStart,
-      greaterThanOrEqualTo(deadlineBeforeHydration),
+      lessThan(const Duration(seconds: 1)),
     );
+    expect(runtime.processElapsed, greaterThan(const Duration(hours: 17)));
   });
 
   test('Dart 启动只记录环境摘要与脱敏缺失键', () async {
@@ -148,6 +154,7 @@ void main() {
         });
 
     runtime.markBootstrapStarted();
+    runtime.markConfigurationValidated();
     await Future<void>.delayed(Duration.zero);
 
     final started = events.singleWhere(
@@ -186,23 +193,26 @@ void main() {
       _FakeNativeTimingBridge(
         Future<NativeStartupProcessSegments?>.value(
           const NativeStartupProcessSegments(
-            startupAttemptId: 'native_attempt_1234567890',
+            elapsedSinceAttemptStartMs: 0,
+            attemptKind: 'cold',
+            deadlineOrigin: 'nativeProcess',
           ),
         ),
       ),
     );
 
     runtime.markBootstrapStarted();
-    await runtime.hydrateNativeProcessSegments(
+    await runtime.beginNativeStartupAttempt(
       budget: const Duration(milliseconds: 20),
     );
+    runtime.markConfigurationValidated();
     runtime.markShellFirstPainted();
     await Future<void>.delayed(Duration.zero);
 
     final validated = events.singleWhere(
       (event) => event['eventName'] == 'startup_safe_terminal',
     );
-    expect(validated['attemptId'], 'native_attempt_1234567890');
+    expect(validated['attemptId'], runtime.startupAttemptId);
   });
 
   test('安全终态首帧会通知平台 watchdog，而欢迎首帧不会提前取消', () async {
@@ -261,5 +271,6 @@ final class _FakeNativeTimingBridge implements StartupTimingsNativeBridge {
   final Future<NativeStartupProcessSegments?> _result;
 
   @override
-  Future<NativeStartupProcessSegments?> readProcessSegments() => _result;
+  Future<NativeStartupProcessSegments?> beginStartupAttempt(String attemptId) =>
+      _result;
 }

@@ -16,6 +16,10 @@ from content.release.canonical.release_attestation import (  # noqa: E402
     ReleaseAttestationError,
 )
 from content.release.model import DataSourceOwner, ReleaseKind  # noqa: E402
+from governance.coverage.distribution import (  # noqa: E402
+    ProductLifecycleState,
+    ReleaseClass,
+)
 
 
 def _receipt() -> ReleaseAttestation:
@@ -23,6 +27,18 @@ def _receipt() -> ReleaseAttestation:
         release_id="20260718--travel-homepage-coverage--test-release-a--001",
         source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
+        release_class=ReleaseClass.RESEARCH,
+        product_lifecycle_state=ProductLifecycleState.RESEARCH,
+        contains_unverified_assets=True,
+        rights_status_counts={
+            "verified": 0,
+            "unverified": 12,
+            "restricted": 0,
+            "unknown": 0,
+        },
+        authorization_required_asset_ids=("asset-unverified",),
+        research_accepted_count=12,
+        commercial_accepted_count=0,
         execution_ids=(
             "20260718--travel-homepage-coverage--test-region-a--pilot-001",
             "20260718--travel-homepage-coverage--test-region-b--pilot-001",

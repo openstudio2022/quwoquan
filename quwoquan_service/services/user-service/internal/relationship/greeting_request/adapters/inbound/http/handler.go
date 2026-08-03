@@ -156,7 +156,7 @@ func (handler *Handler) handleListGreetingInbox(w http.ResponseWriter, r *http.R
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
 func (handler *Handler) handleListGreetingOutbox(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +176,7 @@ func (handler *Handler) handleListGreetingOutbox(w http.ResponseWriter, r *http.
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
 func (handler *Handler) handleReplyGreeting(w http.ResponseWriter, r *http.Request) {

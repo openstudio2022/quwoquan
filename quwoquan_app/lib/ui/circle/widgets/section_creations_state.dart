@@ -485,11 +485,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  bool _supportsViewer(PostBaseDto post) {
+  bool _supportsViewer(ContentPostViewData post) {
     return post.supportsUnifiedViewer;
   }
 
-  bool _isVideoPost(PostBaseDto post) {
+  bool _isVideoPost(ContentPostViewData post) {
     return post.isVideoLike;
   }
 

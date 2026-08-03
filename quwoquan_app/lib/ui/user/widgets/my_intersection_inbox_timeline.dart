@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
@@ -30,10 +30,14 @@ UiErrorSemantic resolveIntersectionDetailErrorSemantic(
 
 /// 时间桶归一（交集 / 打动共用）：服务端 [timeBucket] 优先；缺省按 [freshAt] 推导。
 /// 详情页只展示 today/yesterday/last7Days/thisMonth/lastMonth 五个互斥桶。
-String resolveIntersectionTimeBucket(String timeBucket, String freshAt) {
+String resolveIntersectionTimeBucket(String timeBucket, Object? freshAt) {
   final explicit = timeBucket.trim();
   if (explicit.isNotEmpty) return explicit;
-  final fresh = DateTime.tryParse(freshAt);
+  final fresh = switch (freshAt) {
+    DateTime value => value,
+    String value => DateTime.tryParse(value),
+    _ => null,
+  };
   if (fresh == null) return 'lastMonth';
   final now = DateTime.now().toUtc();
   final today = DateTime.utc(now.year, now.month, now.day);

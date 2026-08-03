@@ -1,3 +1,4 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'dart:async';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
@@ -27,8 +28,6 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
@@ -88,7 +87,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   late final ChatInteractionTelemetryTracker _chatTelemetryTracker;
   late final DateTime _enteredAt;
 
-  List<ChatContactRowDto> _contacts = [];
+  List<ChatContactRowViewData> _contacts = [];
   bool _submitting = false;
   String _query = '';
   bool _isLoading = true;
@@ -443,7 +442,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               .take(3)
               .join('、'),
         );
-        final ChatConversationCreatedDto created = await repo
+        final ChatConversationCreatedViewData created = await repo
             .createConversation(
               type: 'group',
               title: title,

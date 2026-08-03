@@ -221,6 +221,10 @@ class AppUiSurfaces {
       'StartAssistantRun',
       'GetAssistantRun',
       'CancelAssistantRun',
+      'PauseAssistantRun',
+      'ResumeAssistantRun',
+      'SteerAssistantRun',
+      'ContinueAssistantToolUse',
       'StreamAssistantRunEvents',
       'ListAppMessages',
       'GetAppMessage',
@@ -327,7 +331,10 @@ class AppUiSurfaces {
     description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
     operationIds: <String>[
       'Search',
+      'CreateAssistantSession',
       'StartAssistantRun',
+      'GetAssistantRun',
+      'StreamAssistantRunEvents',
       'UpsertRecentSearch',
       'ReportSearchFeedback',
     ],
@@ -906,7 +913,25 @@ class AppUiSurfaces {
     pathTemplate: '/assistant/skills',
     description: '私助技能中心',
     operationIds: <String>[
-      'ListAssistantSessions',
+      'ListSkills',
+      'GetSkillCatalogItem',
+      'GetSkillUserSetting',
+      'ListSkillUserSettings',
+      'PutSkillUserSetting',
+      'ListSkillSubscriptions',
+      'CreateSkillSubscription',
+      'UpdateSkillSubscriptionStatus',
+      'ListConsents',
+      'GrantSkillConsent',
+      'RevokeSkillConsent',
+      'ListConnectorDefinitions',
+      'GetConnectorDefinition',
+      'ListConnectorConnections',
+      'GetConnectorConnection',
+      'CreateConnectorConnection',
+      'RevokeConnectorConnection',
+      'ListConnectorInvocations',
+      'GetConnectorInvocation',
     ],
   );
 
@@ -1116,6 +1141,8 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetAuthorImpact',
       'ListAuthorImpactEvidence',
+      'GetMyIntersectionSummary',
+      'ListMyIntersections',
     ],
   );
 
@@ -1126,6 +1153,7 @@ class AppUiSurfaces {
     pathTemplate: '/object/intersections',
     description: '对象全部交集列表',
     operationIds: <String>[
+      'GetObjectIntersections',
     ],
   );
 
@@ -1202,6 +1230,104 @@ class AppUiSurfaces {
     operationIds: <String>[
       'InitiateCall',
       'InviteToCall',
+    ],
+  );
+
+  static const AppUiSurface travelTrips = AppUiSurface(
+    id: 'travelTrips',
+    owner: 'travel',
+    routeId: 'travelTrips',
+    pathTemplate: '/travel/trips',
+    description: '共同旅行计划、成员、现场内容、Placement 与角色任务工作台',
+    operationIds: <String>[
+      'CreateTripPlan',
+      'ListTripPlans',
+      'GetTripPlan',
+      'ReviseTripPlan',
+      'TransitionTripPlan',
+      'PutTripMembership',
+      'DepartTripMembership',
+      'ListTripMemberships',
+      'CreateTripMoment',
+      'AssignTripMoment',
+      'DeleteTripMoment',
+      'PutTripGuideAssignment',
+      'TransitionTripGuideAssignment',
+      'ListTripMoments',
+      'PutTripPlanContentLink',
+      'RemoveTripPlanContentLink',
+      'ListTripPlanContentLinks',
+      'PutTripPlanPlacement',
+      'RemoveTripPlanPlacement',
+      'ListTripPlanPlacements',
+      'ListSurfaceTripPlacements',
+      'ListTripGuideAssignments',
+    ],
+  );
+
+  static const AppUiSurface travelTemplates = AppUiSurface(
+    id: 'travelTemplates',
+    owner: 'travel',
+    routeId: 'travelTemplates',
+    pathTemplate: '/travel/templates',
+    description: '旅行模板创建、修订、浏览与生成新 Trip',
+    operationIds: <String>[
+      'CreateTripPlanTemplate',
+      'ReviseTripPlanTemplate',
+      'GetTripPlanTemplate',
+      'ListTripPlanTemplates',
+      'CreateTripPlanFromTemplate',
+    ],
+  );
+
+  static const AppUiSurface travelTimeline = AppUiSurface(
+    id: 'travelTimeline',
+    owner: 'travel',
+    routeId: 'travelTimeline',
+    pathTemplate: '/travel/trips/{id}/timeline',
+    description: '当前 Trip 的安全时间线投影',
+    operationIds: <String>[
+      'GetTripPlan',
+      'ReviseTripPlan',
+      'TransitionTripPlan',
+      'GetTripTimeline',
+      'GetTripMap',
+      'ListTripMemberships',
+      'GetPersonaProfile',
+      'ListTripMoments',
+      'ListTripPlanContentLinks',
+      'PutTripPlanContentLink',
+      'RemoveTripPlanContentLink',
+      'ListTripPlanPlacements',
+      'ListTripGuideAssignments',
+      'CreateTripMoment',
+      'AssignTripMoment',
+      'DeleteTripMoment',
+      'PutTripGuideAssignment',
+      'TransitionTripGuideAssignment',
+    ],
+  );
+
+  static const AppUiSurface travelMap = AppUiSurface(
+    id: 'travelMap',
+    owner: 'travel',
+    routeId: 'travelMap',
+    pathTemplate: '/travel/trips/{id}/map',
+    description: '当前 Trip 的粗粒度地点与路线投影',
+    operationIds: <String>[
+      'GetTripMap',
+    ],
+  );
+
+  static const AppUiSurface travelShare = AppUiSurface(
+    id: 'travelShare',
+    owner: 'travel',
+    routeId: 'travelShare',
+    pathTemplate: '/travel/share-snapshots/{id}',
+    description: '隐私裁剪后的不可变旅行分享快照',
+    operationIds: <String>[
+      'CreateTripShareSnapshot',
+      'GetTripShareSnapshot',
     ],
   );
 
@@ -1283,6 +1409,11 @@ class AppUiSurfaces {
     rtcVoice,
     rtcVideo,
     rtcPickParticipants,
+    travelTrips,
+    travelTemplates,
+    travelTimeline,
+    travelMap,
+    travelShare,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
@@ -1363,5 +1494,10 @@ class AppUiSurfaces {
     'rtcVoice': rtcVoice,
     'rtcVideo': rtcVideo,
     'rtcPickParticipants': rtcPickParticipants,
+    'travelTrips': travelTrips,
+    'travelTemplates': travelTemplates,
+    'travelTimeline': travelTimeline,
+    'travelMap': travelMap,
+    'travelShare': travelShare,
   };
 }

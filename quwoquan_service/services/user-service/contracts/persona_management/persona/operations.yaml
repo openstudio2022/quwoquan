@@ -74,10 +74,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: PersonaManagementItem
-      response_decoder: decodePersonaManagementItem
+    response_body: PersonaManagementItemView
+    response_body_kind: object
     request_body_kind: object
   - method: PATCH
     path: /user/personas/{personaId}
@@ -159,10 +157,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: PersonaManagementItem
-      response_decoder: decodePersonaManagementItem
+    response_body: PersonaManagementItemView
+    response_body_kind: object
     request_body_kind: object
   - method: POST
     path: /user/personas/{personaId}/profile-sync
@@ -221,10 +217,9 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: PersonaProfileSyncResult
-      response_decoder: decodePersonaProfileSyncResult
+    response_entity: PersonaProfileSyncResult
+    response_body: PersonaProfileSyncResult
+    response_body_kind: object
     request_body_kind: object
   - method: POST
     path: /user/personas/{personaId}/retire
@@ -291,10 +286,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: PersonaLifecycleGuard
-      response_decoder: decodePersonaLifecycleGuard
+    response_body: PersonaLifecycleGuardView
+    response_body_kind: object
     request_entity: RetirePersonaCommand
     request_body_kind: none
   - method: POST
@@ -369,10 +362,8 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: ActivePersonaContext
-      response_decoder: decodeActivePersonaContext
+    response_body: ActivePersonaContextView
+    response_body_kind: object
     request_entity: ActivatePersonaCommand
     request_body_kind: none
   - method: PATCH
@@ -432,8 +423,7 @@ api_routes:
     slo:
       latency_p95_ms: 1500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../user/persona_contracts.dart
-      response_type: ProfileUpdateSnapshot
-      response_decoder: decodeProfileUpdateSnapshot
+    response_entity: ProfileUpdateSnapshot
+    response_body: ProfileUpdateSnapshot
+    response_body_kind: object
     request_body_kind: object

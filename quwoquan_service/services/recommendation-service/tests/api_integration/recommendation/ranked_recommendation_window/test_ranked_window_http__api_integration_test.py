@@ -20,8 +20,11 @@ class _Store:
     def create_or_get(self, window):
         return self.windows.setdefault(window.window_id, window)
 
-    def get(self, window_id):
-        return self.windows.get(window_id)
+    def get(self, subject_id, window_id):
+        window = self.windows.get(window_id)
+        if window is None or window.subject_id != subject_id:
+            return None
+        return window
 
     def erase_subject(self, subject_id):
         removed = [
@@ -36,11 +39,12 @@ class _Store:
 
 class _Ranker:
     def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int):
-        assert limit == 500
+        assert limit == 300
         return RankingResult(
             model_bucket="model",
             model_channel="champion",
             model_release_id="release-001",
+            policy_digest="sha256:2f8a57089882835170b77224eb7ef2db78c5d5d26ae4637b210dbe195713f094",
             feature_snapshot_at=datetime(2020, 7, 31, 12, tzinfo=timezone.utc),
             ranking_snapshot_digest="ranking-digest-001",
             user_feature_snapshot={"engagement": 0.7},
@@ -122,11 +126,18 @@ def test_create_replay_and_continue_ranked_window() -> None:
     continued = client.get(
         "/internal/recommendation/ranked-pages/window-001",
         headers={"Authorization": "Bearer ranked-window-service"},
-        params={"fromOrdinal": 2, "limit": 2},
+        params={"subjectId": "persona-001", "fromOrdinal": 2, "limit": 2},
     )
     assert continued.status_code == 200
     assert [item["ordinal"] for item in continued.json()["items"]] == [2, 3]
     assert continued.json()["nextOrdinal"] == 4
+
+    wrong_subject = client.get(
+        "/internal/recommendation/ranked-pages/window-001",
+        headers={"Authorization": "Bearer ranked-window-service"},
+        params={"subjectId": "persona-other", "fromOrdinal": 2, "limit": 2},
+    )
+    assert wrong_subject.status_code == 404
 
 
 def test_ranked_window_rejects_auth_invalid_body_and_idempotency_conflict() -> None:

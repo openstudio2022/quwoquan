@@ -25,7 +25,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   int _sequence = 0;
 
   @override
-  Future<ContentCommentPageSlice> listComments({
+  Future<CommentPageSlice> listComments({
     required String postId,
     String? cursor,
     int limit = 20,
@@ -49,7 +49,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentCommentReplyPageSlice> listReplies({
+  Future<ReplyPageSlice> listReplies({
     required String postId,
     required String commentId,
     String? cursor,
@@ -70,7 +70,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
       limit: limit,
       compare: _compareReplies,
     );
-    return ContentCommentReplyPageSlice(
+    return ReplyPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -78,7 +78,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentAuthorCommentPageSlice> listByAuthor({
+  Future<AuthorCommentPageSlice> listByAuthor({
     String? cursor,
     int limit = 20,
   }) async {
@@ -97,7 +97,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
       limit: limit,
       compare: _compareLatest,
     );
-    return ContentAuthorCommentPageSlice(
+    return AuthorCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -105,7 +105,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
   }
 
   @override
-  Future<ContentReceivedCommentPageSlice> listReceived({
+  Future<ReceivedCommentPageSlice> listReceived({
     String? cursor,
     int limit = 20,
   }) async {
@@ -119,7 +119,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
       limit: limit,
       compare: _compareLatest,
     );
-    return ContentReceivedCommentPageSlice(
+    return ReceivedCommentPageSlice(
       items: page.items,
       nextCursor: page.nextCursor,
       total: page.total,
@@ -211,7 +211,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
       attachmentMediaIds: command.attachmentMediaIds,
       attachments: command.attachmentMediaIds
           .map(
-            (mediaId) => ContentCommentAttachment(
+            (mediaId) => CommentAttachmentSlice(
               mediaId: mediaId,
               mediaType: null,
               url: null,
@@ -291,7 +291,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     );
   }
 
-  ContentCommentPageSlice _page(
+  CommentPageSlice _page(
     List<ContentCommentListItem> values, {
     required String? cursor,
     required int limit,
@@ -305,7 +305,7 @@ class TestContentCommentFacet implements ContentCommentFacet {
     final offset = int.tryParse(cursor ?? '') ?? 0;
     final start = offset.clamp(0, ordered.length).toInt();
     final end = (start + limit).clamp(0, ordered.length).toInt();
-    return ContentCommentPageSlice(
+    return CommentPageSlice(
       items: ordered.sublist(start, end),
       nextCursor: end < ordered.length ? '$end' : null,
       total: ordered.length,
@@ -409,8 +409,8 @@ ContentCommentListItem testCommentItem({
   String? replyToUserId,
   String? parentCommentId,
   List<String> attachmentMediaIds = const <String>[],
-  List<ContentCommentAttachment> attachments =
-      const <ContentCommentAttachment>[],
+  List<CommentAttachmentSlice> attachments =
+      const <CommentAttachmentSlice>[],
   List<ContentCommentMention> mentions = const <ContentCommentMention>[],
   ContentCommentStatus status = ContentCommentStatus.active,
   bool isPinned = false,

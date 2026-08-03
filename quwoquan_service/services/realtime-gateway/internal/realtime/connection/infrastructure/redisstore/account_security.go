@@ -32,15 +32,20 @@ const (
 // UserAccount authority remains the security truth, while this state closes
 // the asynchronous event/connection race.
 type AccountSecurityStateStore struct {
-	client rtredis.Client
+	client  rtredis.Client
+	revoker application.PresenceRevoker
 }
 
 var _ application.AccountSecurityGate = (*AccountSecurityStateStore)(nil)
 
 func NewAccountSecurityStateStore(
 	client rtredis.Client,
+	revoker application.PresenceRevoker,
 ) *AccountSecurityStateStore {
-	return &AccountSecurityStateStore{client: client}
+	if revoker == nil {
+		panic("realtime account security store requires presence revoker")
+	}
+	return &AccountSecurityStateStore{client: client, revoker: revoker}
 }
 
 type accountSecurityState struct {
@@ -375,9 +380,12 @@ func (s *AccountSecurityStateStore) clearAccountSessions(
 				); err != nil {
 					return err
 				}
-				if err := s.removePresence(
+				if err := s.revoker.RemoveConnection(
 					ctx,
-					record,
+					record.AccountID,
+					record.PersonaID,
+					record.DeviceID,
+					record.ConnectionID,
 				); err != nil {
 					return err
 				}
@@ -390,58 +398,12 @@ func (s *AccountSecurityStateStore) clearAccountSessions(
 	return s.client.Del(ctx, accountSecuritySessionIndexKey(accountID))
 }
 
-func (s *AccountSecurityStateStore) removePresence(
-	ctx context.Context,
-	record accountSecuritySessionRecord,
-) error {
-	key := presenceKeyPrefix + record.PersonaID
-	current, err := s.client.HGet(ctx, key, record.DeviceID)
-	if errors.Is(err, rtredis.ErrKeyNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	var entry presenceEntry
-	if json.Unmarshal([]byte(current), &entry) != nil ||
-		entry.AccountID != record.AccountID ||
-		entry.ConnectionID != record.ConnectionID {
-		return nil
-	}
-	return s.client.HDel(ctx, key, record.DeviceID)
-}
-
 func (s *AccountSecurityStateStore) clearResidualPresence(
 	ctx context.Context,
 	accountID string,
 	personaIDs []string,
 ) error {
-	seen := make(map[string]struct{}, len(personaIDs))
-	for _, personaID := range personaIDs {
-		personaID = strings.TrimSpace(personaID)
-		if personaID == "" {
-			continue
-		}
-		if _, duplicate := seen[personaID]; duplicate {
-			continue
-		}
-		seen[personaID] = struct{}{}
-		key := presenceKeyPrefix + personaID
-		entries, err := s.client.HGetAll(ctx, key)
-		if err != nil && !errors.Is(err, rtredis.ErrKeyNotFound) {
-			return err
-		}
-		for deviceID, payload := range entries {
-			var entry presenceEntry
-			if json.Unmarshal([]byte(payload), &entry) == nil &&
-				entry.AccountID == strings.TrimSpace(accountID) {
-				if err := s.client.HDel(ctx, key, deviceID); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
+	return s.revoker.RemoveAccount(ctx, accountID, personaIDs)
 }
 
 func accountSecurityStateKey(accountID string) string {

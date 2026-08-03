@@ -2,17 +2,17 @@
 
 ## 1. 产品目标与用户价值
 
-趣我圈是一套以“遇见同趣，绽放热爱”为品牌表达、以“别人帮你刷内容，我们帮你遇到对的人”为产品主轴的端云一体社交应用。它通过内容、对象主页、交集、关系、圈子、会话、搜索和小趣助手，把内容消费转化为可证、安全、可沉淀的同趣连接；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
+趣我圈是一套以“遇见同趣，绽放热爱”为品牌表达、以“别人帮你刷内容，我们帮你遇到对的人”为产品主轴的端云一体社交应用。它通过内容、对象主页、交集、关系、圈子、会话、共同出行、搜索和小趣助手，把内容消费转化为可证、安全、可沉淀的同趣连接与共同经历；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
 
 ### 目标受众
 
-第一垂类是旅行摄影，覆盖两类相互供养的人：在旅途中持续产出照片的创作者，以及依赖他人真实影像做出行决策的规划者。创作者需要作品被同好看见，并把一次相遇沉淀为可延续的关系；规划者需要对“这个地方此刻是什么样、谁在相近的时间去过同一个位置”得到可核验的回答。两类人共享同一批照片事实，因此同一份内容既是作品也是决策依据。
+第一垂类是旅行内容与共同出行，首个高密度人群是组织 2–8 人、3–7 天国内自由行的组织者和群主，同时服务参与者、领队、持证导游、本地专家、创作者与寻找搭子的人。组织者最需要的是一条“活的共同旅行时间线”：行前共同计划吃玩住行，行中同步变化、提醒、讲解与随拍，行后自动整理为可编辑、可分享的游记。创作者和本地专家需要内容被真实行程采用并获得持续传播；参与者需要不翻聊天记录就知道下一步，并把共同经历沉淀为可延续的关系。
 
 ### 竞品定位
 
 同类产品各自只覆盖其中一段。出行预订类应用拥有完整地点与行程数据，但不保留照片的拍摄元数据，用户之间的共同经历也没有被表达为社交图谱。摄影社区拥有完整拍摄参数，但没有实体主页网络，作品只按题材聚合而不按现实对象连接。泛内容社区拥有社交关系，但内容不绑定结构化实体，拍摄事实无法参与推荐与解释。
 
-趣我圈的可防御能力是把“现实对象或机位”“拍摄时间窗口”“可披露的拍摄事实”归入同一条可验证内容事实链，再与实体主页网络连接。地点、时间与画面语义参与发现、搜索、推荐和连接；器材与参数只用于作者自愿披露、推荐解释和内容理解，不成为面向用户的筛选轴或交集结论。组合后的事实链而非某个孤立字段，才形成其他产品难以短期补齐的资产。
+趣我圈的可防御能力是把“真实内容事实链”“行程计划与修订”“群聊和圈子协作”“同行关系”“现场 Moment”归入同一条可持续生长的共同旅行时间线，再由小趣以 Skill、站内 Reader、公网证据和受控 Tool 持续服务。地点、时间与画面语义仍参与发现、搜索、推荐和连接；计划、变更、采用、随拍与分享则把一次内容浏览变成真实共同经历。组合后的事实链、协作链与关系链，而非一份孤立 AI 行程文本，才形成其他私人助手或公众服务助手难以短期补齐的资产。
 
 ## 2. 范围与非目标
 
@@ -20,11 +20,14 @@
 
 - 覆盖用户从进入、发现、创作、互动、关系、消息、助手到持续运营的完整应用体验。
 - 以旅行摄影为第一垂类建立标签纵深：地理、机位、画面主体、季节与光线构成可组合计算和解释的语义轴；器材与拍摄参数保留为作者可控披露事实，不进入搜索筛选、Creator chip 或可见交集。
+- 以“活的共同旅行时间线”为旅行旗舰体验，覆盖行前吃玩住行共同计划、行中变化提醒和贴身讲解、随拍归档、行程地图，以及行后游记整理和关系沉淀。
+- 以官方 Skill 为面向用户的能力封装，统一上下文读取、公网证据、受控外部应用连接、主动触发、长任务与 Adaptive Presentation。
 - 境外目的地覆盖到主流出境目的地的一级行政区与主要城市两层，使境外内容与境内内容获得同等的定位精度。
 
 ### Out of Scope
 
 - 不在特性树复制 metadata schema、实现任务、测试排列组合或执行历史。
+- 第一阶段不提供收费、预订支付、私人导游撮合交易、第三方 Skill 市场、连续实时位置跟踪或替代公共应急服务。
 
 ## 3. 术语与全局要求
 
@@ -107,6 +110,8 @@
 - 用户在群聊中 @小趣 时，消息以结构化 mentions 触发 AssistantMentioned，assistant-service 基于最近消息窗口与成员信息回群回复。
 - 用户可订阅主题并投递到用户或会话；投递前执行 consent、频控、静默、去重与审计。
 - 小趣回答后的赞/踩、采纳、撤销和引用打开能回流到 InteractionEvent，并携带 referralSource、triggerMessageId、assistantTurnId。
+- 官方响应式 Skill 默认可发现和使用，用户启用设置、数据/能力 Consent、主动 Subscription 与共享场景 Placement 分别由独立对象表达，不相互冒充。
+- 群聊或圈子中的小趣代表同一助手成员；可用 Skill 由 active package、共享安全声明和管理员禁用策略共同决定，不由 Chat Membership 绑定单一 Skill。
 
 <a id="req-009"></a>
 ### REQ-009 当前全部跨对象 Journey 商用准出
@@ -116,6 +121,9 @@
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - alpha/beta/gamma/prod 均使用同一个 production Remote composition；内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可创建候选绑定的真实非生产验收数据，Prod 只接受真实用户或正式运营行为。
+- 环境名不再隐含内容分发成熟度；`productLifecycleState=research|commercial` 必须由受治理配置、immutable release、activation receipt 与 App readback 同源显式声明。
+- `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
+- `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
 - Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
@@ -139,6 +147,15 @@
 - 每个标签必须能出现在交集句或推荐理由中；无法向用户解释的标签不得作为对用户可见结论的依据。
 - 标签轴之间必须保持正交，同一现实概念跨轴出现时由标签自身声明同义关系，跨轴关联不依赖路径前缀推测。
 
+<a id="req-012"></a>
+### REQ-012 活的共同旅行时间线
+
+- 同一 Trip 的计划项、不可变 Revision、变化提醒、集合与活动、Moment、内容引用、讲解和分享必须在同一时间线与地图投影中保持可追溯关系。
+- 同一 Conversation 或 Circle 可放置多个 Trip 与 Gathering；小趣必须根据明确引用、当前上下文或用户消歧选择目标，不得默认修改错误行程。
+- 行程变化必须形成可读 diff、影响范围和严重等级；主动提醒只投递给相关成员并执行静默、频控、去重和隐私策略。
+- TripMoment 只引用 MediaAsset、Post 或所属 Trip Item，不复制内容事实；公开分享必须移除酒店房间、联系方式、参与者名单和实时精确位置。
+- 行程结束可生成用户可编辑的 LocalPostDraft；只有用户确认后 Content Service 才能发布，助手不得把草稿或生成结果伪装为已发布内容。
+
 ## 4. 用户旅程
 
 ### 领域服务导航
@@ -155,6 +172,7 @@
 - [recommendation-platform](./recommendation-platform/spec.md)
 - [runtime](./runtime/spec.md)
 - [shared-homepage-network](./shared-homepage-network/spec.md)
+- [travel-journey](./travel-journey/spec.md)
 - [user-identity-profile-relationship](./user-identity-profile-relationship/spec.md)
 
 <a id="jny-001"></a>
@@ -324,6 +342,7 @@
 - 失败恢复：失败进入可解释终态，并提供符合 canonical error/recovery 契约的恢复动作。
 - 参与领域：
   - [chat-conversation](./chat-conversation/spec.md)
+  - [circle-community](./circle-community/spec.md)
   - [user-identity-profile-relationship](./user-identity-profile-relationship/spec.md)
   - [circle-community](./circle-community/spec.md)
   - [shared-homepage-network](./shared-homepage-network/spec.md)
@@ -391,6 +410,7 @@
   - [runtime](./runtime/spec.md)
   - [global-search-experience](./global-search-experience/spec.md)
   - [chat-conversation](./chat-conversation/spec.md)
+  - [circle-community](./circle-community/spec.md)
   - [user-identity-profile-relationship](./user-identity-profile-relationship/spec.md)
   - [discovery-content](./discovery-content/spec.md)
   - [shared-homepage-network](./shared-homepage-network/spec.md)
@@ -421,6 +441,13 @@
 
 - 场景目标：用户在首页、内容页、搜索页、个人页和群聊中都能唤起同一个小趣；小趣理解当前对象、最近会话、站内搜索、社交关系、画像与标签，并能在授权后主动把有价值的信息投递给用户或会话。
 - 领域交接：assistant-run-learning → chat-conversation → runtime → user-identity-profile-relationship
+- 对应验收：`UAT-008`
+
+<a id="scn-034"></a>
+#### SCN-034 Skill 发现、设置、授权与共享场景挂载
+
+- 场景目标：用户在 Skill Center 理解官方 Skill 的价值、数据使用、所需连接、主动规则和示例成果，完成个人设置或主动订阅；群/圈管理员维护共享 Skill 禁用策略并查看运行活动。
+- 领域交接：assistant-run-learning → runtime → chat-conversation → circle-community → user-identity-profile-relationship
 - 对应验收：`UAT-008`
 
 <a id="jny-010"></a>
@@ -511,6 +538,51 @@
 - 场景目标：当前用户在自己的主页按互动类型和方向查看可靠、可恢复且不向他人公开的互动历史。
 - 领域交接：user-identity-profile-relationship → discovery-content
 - 对应验收：`UAT-004`
+
+<a id="jny-013"></a>
+### JNY-013 活的共同旅行时间线
+
+- 用户目标：组织者把群聊、内容收藏、公开链接、预算和偏好整理为可共同维护的吃玩住行计划，参与者在行中获得下一步、变化提醒和讲解并把随拍沉淀到同一时间线，行后共同经历成为可编辑、可传播的游记与持续关系。
+- 起点：用户从会话、圈子、Gathering、内容或小趣发起一次 Trip。
+- 成功终态：Trip 拥有当前 Revision、成员与角色、至少一个计划项，并能在时间线和地图中查看计划、变化与 Moment；行程结束后可生成并确认发布分享快照或游记草稿。
+- 失败恢复：目标 Trip 不明确时要求消歧；权限、外部证据、Connector 或领域写入失败时保留当前 Revision 和可恢复 Run，不合成成功。
+- 参与领域：
+  - [travel-journey](./travel-journey/spec.md)
+  - [assistant-run-learning](./assistant-run-learning/spec.md)
+  - [chat-conversation](./chat-conversation/spec.md)
+  - [circle-community](./circle-community/spec.md)
+  - [discovery-content](./discovery-content/spec.md)
+  - [shared-homepage-network](./shared-homepage-network/spec.md)
+  - [user-identity-profile-relationship](./user-identity-profile-relationship/spec.md)
+  - [runtime](./runtime/spec.md)
+
+<a id="scn-030"></a>
+#### SCN-030 从群聊与真实内容共同创建吃玩住行计划
+
+- 场景目标：组织者让小趣从群消息、收藏内容、公开 URL、时间、预算和偏好提取约束，形成可确认的 Trip、Day 和吃玩住行计划项，而不是一次性聊天文本。
+- 领域交接：assistant-run-learning → travel-journey → chat-conversation → discovery-content → shared-homepage-network → runtime
+- 对应验收：`UAT-012`
+
+<a id="scn-031"></a>
+#### SCN-031 行中变更、主动提醒与贴身讲解
+
+- 场景目标：组织者确认计划调整后形成不可变 Revision 和明确 diff，相关成员收到不重复的变化提醒；参与者按时间地点获得下一步、天气交通风险、集合、餐饮住宿提示和有来源的导游讲解。
+- 领域交接：travel-journey → assistant-run-learning → chat-conversation → runtime
+- 对应验收：`UAT-012`
+
+<a id="scn-032"></a>
+#### SCN-032 随拍、内容与行程点组成时间线和地图
+
+- 场景目标：参与者上传照片、视频、语音或文字后，系统建议所属 Day/Item，用户确认即进入共同时间线和地图；既有 Post 可与行程点建立引用关系并供其他成员查看传播。
+- 领域交接：travel-journey → discovery-content → shared-homepage-network → assistant-run-learning
+- 对应验收：`UAT-012`
+
+<a id="scn-033"></a>
+#### SCN-033 行后游记、分段分享与关系延续
+
+- 场景目标：行程结束后，小趣按实际时间线、地图、精选 Moment 和计划差异生成可编辑游记草稿；用户可分享整段、某日、单点、路线或随拍集合，并从共同经历继续 Follow、Conversation、Circle 或 Gathering 关系。
+- 领域交接：travel-journey → assistant-run-learning → discovery-content → user-identity-profile-relationship → chat-conversation → circle-community
+- 对应验收：`UAT-012`
 
 ## 5. 全局验收
 
@@ -609,6 +681,8 @@
 - THEN 用户在群聊中 @小趣 时，消息以结构化 mentions 触发 AssistantMentioned，assistant-service 基于最近消息窗口与成员信息回群回复。
 - THEN 用户可订阅主题并投递到用户或会话；投递前执行 consent、频控、静默、去重与审计。
 - THEN 小趣回答后的赞/踩、采纳、撤销和引用打开能回流到 InteractionEvent，并携带 referralSource、triggerMessageId、assistantTurnId。
+- THEN Skill Center 展示 active package 对应的价值、示例、设置、数据/记忆/写操作说明、Connector 状态、主动订阅、共享 Placement 与最近 Run，且启用、授权、主动投递和共享挂载互不冒充。
+- THEN 群聊或圈子中的小趣可使用全部共享安全且未被管理员禁用的官方 Skill；任何个人记忆、个人 Connector 和个人动作回执均不进入共享回答。
 
 <a id="uat-009"></a>
 ### UAT-009 当前全部跨对象 Journey 商用准出
@@ -620,6 +694,7 @@
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release。
+- AND 环境名与 `productLifecycleState` 解耦；research release 只对受白名单保护的内部 App 开放，commercial release 不得复用 research receipt，App readback 必须回传同一 release 的 `releaseClass/productLifecycleState/releaseId/manifestDigest`。
 - AND 用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效，Alpha/Beta/Gamma 验收数据绑定候选并可受控清理，Prod 不创建测试业务对象。
 - AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
@@ -650,6 +725,17 @@
 - THEN 对象分享进会话后产生可行动 card，行动按云侧行动键与可达性分流，尚不可承接的行动展示为不可执行的规划口径。
 - THEN 发起并加入 Gathering 后进入其绑定群会话，可在该会话内发起群通话，关系沉淀为 mutual 互相关注且不产生任何额外关系等级。
 - AND 全链路交集引用与 referralSource 归因可在指标大盘按 vertical 统计；同一批断言在更换 vertical 后无需改动端侧代码。
+
+<a id="uat-012"></a>
+### UAT-012 活的共同旅行时间线
+
+- GIVEN 2–8 名真实非生产账号处于同一群聊或圈子，且拥有可见内容、地点、Gathering 与公开网页证据。
+- WHEN 组织者创建 3–7 天 Trip，成员共同补充吃玩住行约束，行中确认一次计划变更并追加 Moment，行后生成和确认分享。
+- THEN 同一群可同时放置多个 Trip/Gathering，@小趣在引用明确时选择正确对象，目标不明确时先消歧且不写入任何 Trip。
+- THEN 每次计划修改形成不可变 Revision、可读 diff、影响成员和单次去重提醒；旧 Revision 可回看但不是当前写真相源。
+- THEN Moment 经用户确认归入 Day/Item，时间线与地图从同一事实投影，Post 与 MediaAsset 只通过 canonical 引用关联且不被复制。
+- THEN 行程结束生成可编辑 LocalPostDraft；发布、整段/单日/单点/路线/随拍分享均经所属领域公开 command，公开快照不包含私人住宿、联系人、成员名单或实时精确位置。
+- AND Android/iPhone 真机完成日历确认、地图跳转、Adaptive Presentation、离线降级、后台恢复与变化通知，所有结果绑定同一候选、Skill package digest 和 Trip revision。
 
 ## 6. 开放事项
 
@@ -745,3 +831,13 @@
 - 影响或价值：当前消息域与交集域之间没有任何接口，拍摄事实不上链，Gathering 聚合不存在，行动阶梯的同行与线下两级无承接对象。差异化在消息层面尚不成立。
 - 完成判定：双账号真机完成从事实生产、交集识别、破冰、会话、小趣答疑、Gathering 到实时通话的闭环，且同一批断言在更换 vertical 后无需改动端侧代码，CaseResult 直接引用 `UAT-011`
 - 依赖：[`chat-conversation`](./chat-conversation/spec.md) 的 `intersection-native-messaging`、[`circle-community`](./circle-community/spec.md) 的 `gathering-coordination` 与 [`discovery-content`](./discovery-content/spec.md) 的拍摄信息披露。
+
+<a id="open-010"></a>
+### OPEN-010 活的共同旅行时间线与旅行旗舰 Skill
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前尚缺 Travel 领域对象、用户 Skill 生命周期、共享 Placement、Domain Reader、Connector Gateway、旅行模板资产、时间线/地图 UI 与真实跨域 UAT；助手运行时与本地 Skill 资产双轨也不能证明新增 Skill 无 Go/Dart 分支即可发布。
+- 完成判定：Travel/Assistant/Chat/Circle/Content/Integration 各对象的 local_contract 与 api_integration 通过，Alpha/Beta/Gamma 同一候选完成 `travel_companion` package 激活、群聊多 Trip、Revision 提醒、Moment 归档、地图、游记草稿和分享 readback，Android/iPhone 物理真机 CaseResult 直接引用 `UAT-012`，Prod 另行完成正式 Provider、灰度和回滚。
+- 依赖：[`travel-journey`](./travel-journey/spec.md)、[`assistant-run-learning`](./assistant-run-learning/spec.md)、[`runtime`](./runtime/spec.md)、[`chat-conversation`](./chat-conversation/spec.md)、[`circle-community`](./circle-community/spec.md) 与 [`discovery-content`](./discovery-content/spec.md)。

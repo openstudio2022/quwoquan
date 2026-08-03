@@ -141,13 +141,17 @@ func TestUserAccountSecurityTerminalStateClosesRealRedisAcrossNodes(t *testing.T
 	}
 
 	authority := newIntegrationAccountSecurityAuthority()
-	stateStore := redisstore.NewAccountSecurityStateStore(client)
+	presenceProjection := newIntegrationPresenceProjection(t, client)
+	stateStore := redisstore.NewAccountSecurityStateStore(
+		client,
+		presenceProjection,
+	)
 	relay := redisstore.NewAccountSecurityRelay(client)
 	eventSource := redisstore.NewEventSource(transport)
 	newHub := func(nodeID string) *application.Hub {
 		hub, hubErr := application.NewHub(
 			redisstore.NewLeaseStore(client),
-			redisstore.NewPresenceStore(client),
+			presenceProjection,
 			eventSource,
 			authority,
 			stateStore,

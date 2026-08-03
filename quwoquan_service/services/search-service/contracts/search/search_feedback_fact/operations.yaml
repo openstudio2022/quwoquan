@@ -47,10 +47,8 @@ api_routes:
       availability_percent: 99.5
     description: '上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade）， 驱动排序信号与 relevance 评测。Idempotency-Key 与 canonical payload digest 组成命令幂等边界：同 key 同负载返回首次结果，同 key 异负载返回 SEARCH.USER.feedback_conflict；命令回执以 applying/completed/conflict 持久化， 崩溃重试可继续收敛；(searchRequestId, eventType, objectId) 继续作为事实语义唯一键， 完全相同的跨 key 重放不重复追加且每个已受理 key 均保留独立回执。'
     request_entity: ReportSearchFeedbackCommand
-    client_contract:
-      dart_import: ../search/search_feedback_contracts.dart
-      response_type: SearchFeedbackAck
-      response_decoder: decodeSearchFeedbackAck
+    response_entity: SearchFeedbackAck
+    response_body_kind: ack
     security:
       auth_mode: optional
       principal: public

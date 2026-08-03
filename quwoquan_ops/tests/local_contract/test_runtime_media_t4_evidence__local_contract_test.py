@@ -312,7 +312,7 @@ def _materialize_valid_artifacts(
     resolve(ui["qoeReadbackPath"]).write_text(
         json.dumps(
             {
-                "source": "aliyun_sls",
+                "source": "elasticsearch",
                 "eventType": "video_playback_qoe",
                 "status": "passed",
                 "rows": [_qoe_row("wifi"), _qoe_row("cellular")],

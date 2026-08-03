@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
+	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
 )
 
 var (
@@ -23,25 +24,15 @@ type Store interface {
 	Append(context.Context, model.Fact) (model.Receipt, error)
 }
 
-type RunOwner struct {
-	UserID           string
-	PersonaID        string
-	TriggerMessageID string
-}
-
-type RunOwnerReader interface {
-	ResolveRunOwner(context.Context, string) (RunOwner, bool, error)
-}
-
 type Service struct {
 	store     Store
-	runOwners RunOwnerReader
+	runOwners rundomain.OwnerReader
 	now       func() time.Time
 }
 
 func NewService(
 	store Store,
-	runOwners RunOwnerReader,
+	runOwners rundomain.OwnerReader,
 	now func() time.Time,
 ) *Service {
 	if now == nil {
@@ -130,25 +121,25 @@ func (service *Service) append(
 func (service *Service) resolveRunOwner(
 	ctx context.Context,
 	assistantTurnID string,
-) (RunOwner, error) {
+) (rundomain.Owner, error) {
 	if service.runOwners == nil {
-		return RunOwner{}, ErrStoreUnavailable
+		return rundomain.Owner{}, ErrStoreUnavailable
 	}
 	owner, found, err := service.runOwners.ResolveRunOwner(
 		ctx,
 		strings.TrimSpace(assistantTurnID),
 	)
 	if err != nil {
-		return RunOwner{}, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
+		return rundomain.Owner{}, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
 	}
 	if !found {
-		return RunOwner{}, ErrRunNotFound
+		return rundomain.Owner{}, ErrRunNotFound
 	}
 	owner.UserID = strings.TrimSpace(owner.UserID)
 	owner.PersonaID = strings.TrimSpace(owner.PersonaID)
 	owner.TriggerMessageID = strings.TrimSpace(owner.TriggerMessageID)
 	if owner.UserID == "" || owner.PersonaID == "" {
-		return RunOwner{}, fmt.Errorf(
+		return rundomain.Owner{}, fmt.Errorf(
 			"%w: referenced run has no trusted owner",
 			ErrStoreUnavailable,
 		)

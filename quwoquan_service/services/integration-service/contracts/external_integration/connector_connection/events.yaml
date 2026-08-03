@@ -1,0 +1,16 @@
+events:
+- name: ConnectorConnectionChanged
+  description: 账号连接完成、刷新、过期或失败后的脱敏状态变化。
+  producer: integration-service
+  consumers: [assistant-service]
+  channel: integration.connector_connection
+  payload_entity: ConnectorConnection
+  payload_fields: [connectionId, accountId, connectorId, grantedCapabilities, status, freshnessAt, expiresAt, revision, updatedAt]
+- name: ConnectorConnectionRevoked
+  description: 账号撤权完成；消费者必须在下一个安全边界失效 capability。
+  producer: integration-service
+  consumers: [assistant-service]
+  channel: integration.connector_connection
+  payload_entity: ConnectorConnection
+  payload_fields: [connectionId, accountId, connectorId, status, revokedAt, revision, updatedAt]
+

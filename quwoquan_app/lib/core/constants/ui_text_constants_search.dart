@@ -1,18 +1,27 @@
 part of 'ui_text_constants.dart';
 
 abstract final class SearchText {
-  static const String recoveryConnectNetworkTitle = '网络未连接';
-  static const String recoveryConnectNetworkMessage =
-      '打开手机的 Wi‑Fi 或移动数据后，重新加载。';
-  static const String recoveryReloadLaterTitle = '暂时无法加载';
-  static const String recoveryReloadLaterMessage = '趣我圈暂时没有响应，请稍后重新加载。';
-  static const String recoveryLoginAgainTitle = '需要重新登录';
-  static const String recoveryLoginAgainMessage = '登录后，可以继续刚才的操作。';
-  static const String recoveryLoginAgainAction = '重新登录';
+  static const String recoveryConnectNetworkTitle = '没有网络连接';
+  static const String recoveryConnectNetworkMessage = '连接 Wi‑Fi 或移动网络后即可继续浏览。';
+  static const String recoveryConnectionUnavailableTitle = '暂时无法访问服务';
+  static const String recoveryConnectionUnavailableMessage = '本次内容请求未能到达服务。';
+  static const String recoveryRequestTimedOutTitle = '暂时无法访问服务';
+  static const String recoveryRequestTimedOutMessage = '服务响应时间较长，这次请求已停止等待。';
+  static const String recoveryServiceUnavailableTitle = '暂时无法访问服务';
+  static const String recoveryServiceUnavailableMessage = '服务暂时没有完成这次内容请求。';
+  static const String recoveryInvalidContentTitle = '内容暂时无法显示';
+  static const String recoveryInvalidContentMessage = '返回的内容不完整，暂时无法展示。';
+  static const String recoveryGuestSessionUnavailableTitle = '暂时无法开始浏览';
+  static const String recoveryGuestSessionUnavailableMessage = '我们没能完成本次访客验证。';
+  static const String recoveryReloadLaterTitle = '这次没能打开内容';
+  static const String recoveryReloadLaterMessage = '遇到一个临时问题，我们已经记录。';
+  static const String recoveryLoginAgainTitle = '登录已过期';
+  static const String recoveryLoginAgainMessage = '重新登录后即可继续浏览。';
+  static const String recoveryLoginAgainAction = '去登录';
   static const String recoveryEnablePermissionTitle = '需要开启权限';
-  static const String recoveryEnablePermissionMessage = '在设置中允许此权限后，返回继续。';
+  static const String recoveryEnablePermissionMessage = '允许此权限后即可继续。';
   static const String recoveryEnablePermissionAction = '去设置';
-  static const String recoveryWaitThenReloadTitle = '请稍等一下';
+  static const String recoveryWaitThenReloadTitle = '操作有点频繁';
   static const String recoveryUpdateAppTitle = '需要更新应用';
   static const String recoveryUpdateAppMessage = '更新到最新版本后，可以继续使用。';
   static const String recoveryUpdateAppAction = '立即更新';
@@ -21,14 +30,14 @@ abstract final class SearchText {
   static const String recoveryContentGoneTitle = '内容已不可用';
   static const String recoveryContentGoneMessage = '内容已被删除或下架。';
   static const String recoveryContentUnavailableTitle = '当前内容无法使用';
-  static const String recoveryContentUnavailableMessage = '返回后，可以继续查看其他内容。';
+  static const String recoveryContentUnavailableMessage = '你还可以继续查看其他内容。';
   static const String recoveryReturnAction = '返回';
 
   static String recoveryWaitThenReloadMessage(int seconds) {
-    return seconds > 0 ? '操作有点频繁，$seconds 秒后可以重新加载。' : '操作有点频繁，请稍后重新加载。';
+    return seconds > 0 ? '还需要等待 $seconds 秒。' : '请稍等片刻。';
   }
 
-  static String recoveryCountdownLabel(int seconds) => '$seconds 秒后加载';
+  static String recoveryCountdownLabel(int seconds) => '$seconds 秒后再试';
 
   static const String appendFailedTitle = '后面没加载出来';
   static const String pageLoadFailedTitle = applicationLoadFailedTitle;

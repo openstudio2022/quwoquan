@@ -130,7 +130,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：标签目录、发布导入、资料页和 object_tag_index 已有分层测试；
-  Gamma-local 已由统一材料器装配日志 Port 替身，不需要真实 SLS 租户或凭据；当前仍
+  Gamma-local 已装配 canonical observability capability，不需要外部日志租户；当前仍
   缺可用物理设备上的 production Remote Patrol CaseResult，静态编译不能冒充真机 UAT。
 - 完成判定：`career_interest_reads_remote_tag_catalog` 在 Gamma-local 真机会话中通过并
   产出 CaseResult，页面叶子标签可回溯到 tag-service taxonomy release。

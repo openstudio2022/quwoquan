@@ -56,6 +56,28 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  RecentSearchEntrySlice:
+    description: RecentSearchState 的有界列表响应；items 只包含该对象拥有的条目视图。
+    fields:
+      - name: items
+        type: '[]RecentSearchEntryWire'
+        constraints:
+          - NOT_NULL
+        classification: PII
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+  RecentSearchCommandAck:
+    description: 删除或清空最近搜索后的强类型成功回执；服务端只返回 canonical ok 状态。
+    fields:
+      - name: status
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SearchAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Search 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

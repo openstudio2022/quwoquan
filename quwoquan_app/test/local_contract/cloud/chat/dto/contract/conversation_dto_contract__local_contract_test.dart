@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 
 void main() {
-  group('ConversationDto — 常规契约', () {
+  group('ConversationViewData — 常规契约', () {
     test('fromMap 解析全字段', () {
-      final dto = ConversationDto.fromMap(
+      final dto = ConversationViewData.fromMap(
         _conversationWire(<String, dynamic>{
           'id': 'conv_001',
           'title': '周末登山群',
@@ -39,14 +39,14 @@ void main() {
     });
 
     test('toMap round-trip 保持公开字段且不泄漏存储键', () {
-      final dto = ConversationDto.fromMap(
+      final dto = ConversationViewData.fromMap(
         _conversationWire(<String, dynamic>{
           'id': 'conv_round_trip',
           'receiptEnabled': false,
         }),
       );
       final map = dto.toMap();
-      final decoded = ConversationDto.fromMap(map);
+      final decoded = ConversationViewData.fromMap(map);
 
       expect(decoded.id, equals(dto.id));
       expect(decoded.maxSeq, equals(dto.maxSeq));
@@ -59,7 +59,7 @@ void main() {
     });
 
     test('Greeting 升级交集快照严格 round-trip', () {
-      final dto = ConversationDto.fromMap(
+      final dto = ConversationViewData.fromMap(
         _conversationWire(<String, dynamic>{
           'originType': 'greeting_reply',
           'originIntersectionSnapshot': <String, Object?>{
@@ -76,7 +76,7 @@ void main() {
       );
 
       expect(dto.originIntersectionSnapshot?.primaryText, '你们都去过老君山');
-      final decoded = ConversationDto.fromMap(dto.toMap());
+      final decoded = ConversationViewData.fromMap(dto.toMap());
       expect(decoded.originIntersectionSnapshot?.evidenceId, 'evidence_1');
       expect(
         decoded.originIntersectionSnapshot?.resolvedAt,
@@ -85,7 +85,7 @@ void main() {
     });
   });
 
-  group('ConversationDto — 单轨契约', () {
+  group('ConversationViewData — 单轨契约', () {
     test('拒绝 _id 与 conversationId alias，只认 id', () {
       final storageAlias = _conversationWire(<String, dynamic>{
         '_id': 'conv_storage_alias',
@@ -95,11 +95,11 @@ void main() {
       })..remove('id');
 
       expect(
-        () => ConversationDto.fromMap(storageAlias),
+        () => ConversationViewData.fromMap(storageAlias),
         throwsFormatException,
       );
       expect(
-        () => ConversationDto.fromMap(projectionAlias),
+        () => ConversationViewData.fromMap(projectionAlias),
         throwsFormatException,
       );
     });
@@ -110,7 +110,7 @@ void main() {
         ..remove('memberCount')
         ..remove('messageCount')
         ..remove('originType');
-      final dto = ConversationDto.fromMap(wire);
+      final dto = ConversationViewData.fromMap(wire);
 
       expect(dto.maxSeq, isZero);
       expect(dto.memberCount, isZero);
@@ -119,7 +119,7 @@ void main() {
     });
   });
 
-  group('ConversationDto — 异常/边界契约', () {
+  group('ConversationViewData — 异常/边界契约', () {
     test('缺失必填字段立即失败', () {
       for (final field in <String>{
         'id',
@@ -134,7 +134,7 @@ void main() {
       }) {
         final wire = _conversationWire()..remove(field);
         expect(
-          () => ConversationDto.fromMap(wire),
+          () => ConversationViewData.fromMap(wire),
           throwsFormatException,
           reason: field,
         );
@@ -143,13 +143,13 @@ void main() {
 
     test('无效必填时间与可选时间立即失败', () {
       expect(
-        () => ConversationDto.fromMap(
+        () => ConversationViewData.fromMap(
           _conversationWire(<String, dynamic>{'createdAt': 'not-a-time'}),
         ),
         throwsFormatException,
       );
       expect(
-        () => ConversationDto.fromMap(
+        () => ConversationViewData.fromMap(
           _conversationWire(<String, dynamic>{'lastMessageTime': 'not-a-time'}),
         ),
         throwsFormatException,
@@ -157,7 +157,7 @@ void main() {
     });
 
     test('可选字段缺失不影响完整必填契约', () {
-      final dto = ConversationDto.fromMap(_conversationWire());
+      final dto = ConversationViewData.fromMap(_conversationWire());
 
       expect(dto.title, isNull);
       expect(dto.avatarUrl, isNull);

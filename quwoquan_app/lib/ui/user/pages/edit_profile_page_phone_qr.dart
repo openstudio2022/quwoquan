@@ -70,7 +70,8 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
 
   Future<void> _sendOtp() async {
     final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
+    final wirePhone = mainlandPhoneE164OrEmpty(phone);
+    if (wirePhone.isEmpty) {
       return;
     }
     setState(() => _busy = true);
@@ -79,7 +80,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
           .read(authenticationChallengeCommandWriterProvider)
           .sendOtp(
             SendOtpCommand(
-              phone: phone,
+              phone: wirePhone,
               platform: CloudRequestHeaders.platform(),
               appVersion: CloudRequestHeaders.appVersion,
               sourceOperation: 'bind_phone',
@@ -99,8 +100,10 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
 
   Future<void> _bindOtp() async {
     final phone = _phoneController.text.trim();
+    final localPhone = mainlandPhoneLocalDigitsOrEmpty(phone);
+    final wirePhone = mainlandPhoneE164OrEmpty(phone);
     final otp = _otpController.text.trim();
-    if (phone.isEmpty || otp.isEmpty) {
+    if (wirePhone.isEmpty || otp.isEmpty) {
       return;
     }
     setState(() => _busy = true);
@@ -108,14 +111,14 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
       await ref
           .read(appCredentialBindingCommandWriterProvider)
           .bindPhoneCredential(
-            BindPhoneCredentialCommand(phone: phone, otpCode: otp),
+            BindPhoneCredentialCommand(phone: wirePhone, otpCode: otp),
           );
       if (!mounted) {
         return;
       }
       final credential = ProfileCredentialSummaryData(
         credentialType: 'phone',
-        displayLabel: _maskPhone(phone),
+        displayLabel: _maskPhone(localPhone),
         isBound: true,
       );
       _trackPhoneAction('otp_phone_bind', 'succeeded');

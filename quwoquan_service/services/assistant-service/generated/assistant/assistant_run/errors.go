@@ -9,17 +9,20 @@ import (
 
 //nolint:gochecknoglobals
 var (
+	ErrConnectorCapabilityRequired     = errors.New("ASSISTANT.USER.connector_capability_required")
+	ErrConnectorGatewayUnavailable     = errors.New("ASSISTANT.SYSTEM.connector_gateway_unavailable")
 	ErrFinanceProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.finance_provider_unavailable")
 	ErrIntersectionEvidenceNotFound    = errors.New("ASSISTANT.USER.intersection_evidence_not_found")
 	ErrIntersectionEvidenceUnavailable = errors.New("ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable")
 	ErrModelProviderUnavailable        = errors.New("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
-	ErrPageContextUnavailable          = errors.New("ASSISTANT.SYSTEM.page_context_unavailable")
 	ErrPublicSearchProviderUnavailable = errors.New("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
 	ErrRunExecutionFailed              = errors.New("ASSISTANT.SYSTEM.run_execution_failed")
 	ErrRunIdempotencyConflict          = errors.New("ASSISTANT.USER.run_idempotency_conflict")
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
 	ErrRunNotFound                     = errors.New("ASSISTANT.USER.run_not_found")
 	ErrRunPolicyUnavailable            = errors.New("ASSISTANT.SYSTEM.run_policy_unavailable")
+	ErrRunSkillDisabled                = errors.New("ASSISTANT.USER.run_skill_disabled")
+	ErrRunSkillPackageUnavailable      = errors.New("ASSISTANT.SYSTEM.run_skill_package_unavailable")
 	ErrRunStateConflict                = errors.New("ASSISTANT.USER.run_state_conflict")
 	ErrRunStorageUnavailable           = errors.New("ASSISTANT.SYSTEM.run_storage_unavailable")
 	ErrRunUnauthorized                 = errors.New("ASSISTANT.USER.run_unauthorized")
@@ -33,6 +36,18 @@ var (
 	ErrWebFetchUnavailable             = errors.New("ASSISTANT.MIDDLEWARE.web_fetch_unavailable")
 	ErrWebTargetRejected               = errors.New("ASSISTANT.USER.web_target_rejected")
 )
+
+// AppErrorFromConnectorCapabilityRequired returns *AppError for ASSISTANT.USER.connector_capability_required (user_message from errors.yaml).
+func AppErrorFromConnectorCapabilityRequired(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.connector_capability_required")
+	return rterr.NewAppError(code, "请先连接并授权所需的外部应用能力", debugMessage).WithMetadata("connector_capability_required", 0).WithRecovery("surface", 0)
+}
+
+// AppErrorFromConnectorGatewayUnavailable returns *AppError for ASSISTANT.SYSTEM.connector_gateway_unavailable (user_message from errors.yaml).
+func AppErrorFromConnectorGatewayUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.connector_gateway_unavailable")
+	return rterr.NewAppError(code, "外部应用连接状态暂时无法确认，请稍后重试", debugMessage).WithMetadata("connector_gateway_unavailable", 0).WithRecovery("retry", 3)
+}
 
 // AppErrorFromFinanceProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.finance_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromFinanceProviderUnavailable(debugMessage string) *rterr.AppError {
@@ -56,12 +71,6 @@ func AppErrorFromIntersectionEvidenceUnavailable(debugMessage string) *rterr.App
 func AppErrorFromModelProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
 	return rterr.NewAppError(code, "助手模型服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
-}
-
-// AppErrorFromPageContextUnavailable returns *AppError for ASSISTANT.SYSTEM.page_context_unavailable (user_message from errors.yaml).
-func AppErrorFromPageContextUnavailable(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.page_context_unavailable")
-	return rterr.NewAppError(code, "页面上下文暂时无法保存，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromPublicSearchProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.public_search_provider_unavailable (user_message from errors.yaml).
@@ -98,6 +107,18 @@ func AppErrorFromRunNotFound(debugMessage string) *rterr.AppError {
 func AppErrorFromRunPolicyUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_policy_unavailable")
 	return rterr.NewAppError(code, "助手策略暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromRunSkillDisabled returns *AppError for ASSISTANT.USER.run_skill_disabled (user_message from errors.yaml).
+func AppErrorFromRunSkillDisabled(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.run_skill_disabled")
+	return rterr.NewAppError(code, "该技能在当前场景未启用，请检查个人或群聊技能设置", debugMessage).WithMetadata("skill_disabled", 409).WithRecovery("surface", 0)
+}
+
+// AppErrorFromRunSkillPackageUnavailable returns *AppError for ASSISTANT.SYSTEM.run_skill_package_unavailable (user_message from errors.yaml).
+func AppErrorFromRunSkillPackageUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_skill_package_unavailable")
+	return rterr.NewAppError(code, "助手技能包暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromRunStateConflict returns *AppError for ASSISTANT.USER.run_state_conflict (user_message from errors.yaml).

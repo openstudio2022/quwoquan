@@ -18,13 +18,13 @@ void main() {
 
     await container
         .read(callParticipantsProvider.notifier)
-        .syncRoster(const <CallParticipantDto>[
-          CallParticipantDto(
+        .syncRoster(const <CallParticipant>[
+          CallParticipant(
             userId: 'user-known',
             role: ParticipantRole.invitee,
             status: ParticipantStatus.ringing,
           ),
-          CallParticipantDto(
+          CallParticipant(
             userId: 'user-unknown',
             role: ParticipantRole.invitee,
             status: ParticipantStatus.ringing,
@@ -59,8 +59,8 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(callParticipantsProvider.notifier).syncRoster(
-        const <CallParticipantDto>[
-          CallParticipantDto(
+        const <CallParticipant>[
+          CallParticipant(
             userId: 'caller',
             role: ParticipantRole.initiator,
             status: ParticipantStatus.ringing,

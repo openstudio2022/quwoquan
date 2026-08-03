@@ -24,14 +24,9 @@ import (
 	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
-	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
-	registrationpersistence "quwoquan_service/services/user-service/internal/account/device_registration/infrastructure/persistence"
 	userhttp "quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/http"
 	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
-	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/user/persistence"
-	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
-	usersettingspersistence "quwoquan_service/services/user-service/internal/account/user_settings/infrastructure/persistence"
 )
 
 var accountEnforcementTokenConfig = rtauth.TokenConfig{
@@ -67,10 +62,6 @@ func StartAccountEnforcementRuntime(
 		return nil, fmt.Errorf("run User service managed migrations: %w", err)
 	}
 
-	settingsStore, err := usersettingspersistence.NewPostgresStore(pool)
-	if err != nil {
-		return nil, err
-	}
 	credentialStore, err := credentialpersistence.NewPostgresStore(pool)
 	if err != nil {
 		return nil, err
@@ -96,36 +87,13 @@ func StartAccountEnforcementRuntime(
 	if err != nil {
 		return nil, err
 	}
-	registrationStore, err := registrationpersistence.NewPostgresStore(pool)
-	if err != nil {
-		return nil, err
-	}
-	pushTokenCipher, err := registrationpersistence.NewAESGCMTokenCipher(
-		make([]byte, 32),
-	)
-	if err != nil {
-		return nil, err
-	}
-	personaStore := userpersistence.NewPgPersonaStore(pool)
 	userHandler, err := userhttp.NewUserHandler(
 		nil,
 		nil,
 		nil,
 		nil,
-		usersettingsapp.NewUserSettingsCommandFacade(settingsStore),
-		usersettingsapp.NewUserSettingsQueryFacade(settingsStore),
 		nil,
 		credentialapp.NewCredentialQueryFacade(credentialStore),
-		registrationapp.NewCommandFacade(registrationStore, pushTokenCipher),
-		registrationapp.NewQueryFacade(
-			registrationStore,
-			registrationStore,
-			personaStore,
-			pushTokenCipher,
-		),
-		nil,
-		nil,
-		nil,
 		nil,
 		nil,
 	)

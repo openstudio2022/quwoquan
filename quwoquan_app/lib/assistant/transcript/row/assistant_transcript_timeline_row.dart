@@ -4,7 +4,8 @@ import 'package:quwoquan_app/assistant/transcript/identity/transcript_line_id.da
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_state.dart';
 import 'package:quwoquan_app/assistant/transcript/user_utterance/user_utterance.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AssistantRunTerminalSnapshotView;
 
 /// 受 Codec 管理的非持久化键（其余进入 [extra] 以保证 round-trip）。
 const Set<String> kTranscriptEnvelopeKeys = {

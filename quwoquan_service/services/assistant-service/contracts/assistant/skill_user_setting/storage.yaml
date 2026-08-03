@@ -1,0 +1,31 @@
+backend: postgres
+role: authoritative
+tables:
+  skill_user_settings:
+    entity: SkillUserSetting
+    role: authoritative
+    pk: id
+    columns:
+    - {name: id, type: VARCHAR(36), constraints: [PK, NOT_NULL]}
+    - {name: account_id, type: VARCHAR(36), constraints: [NOT_NULL]}
+    - {name: skill_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: status, type: VARCHAR(16), constraints: [NOT_NULL]}
+    - {name: configuration_data, type: JSONB, constraints: [NOT_NULL]}
+    - {name: configuration_schema_digest, type: VARCHAR(71), constraints: [NOT_NULL]}
+    - {name: memory_policy, type: VARCHAR(32), constraints: [NOT_NULL]}
+    - {name: connector_connection_refs, type: JSONB, constraints: [NOT_NULL]}
+    - {name: revision, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    indexes:
+    - {name: uq_skill_user_settings_account_skill, columns: [account_id, skill_id], unique: true}
+    - {name: idx_skill_user_settings_account_status, columns: [account_id, status, updated_at]}
+    optimistic_lock: revision
+  skill_user_setting_command_receipts:
+    entity: SkillUserSetting
+    role: authoritative
+    description: 与设置聚合和审计事件同事务提交的 owner/idempotency-key 命令回执。
+  skill_user_setting_outbox:
+    entity: SkillUserSetting
+    role: append_only
+    description: 与设置聚合和命令回执同事务提交的 SkillUserSettingChanged 事件。

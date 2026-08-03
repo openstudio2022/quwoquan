@@ -77,6 +77,41 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
     assert findings == [output]
 
 
+def test_public_release_readback_does_not_require_candidate_identity(
+    tmp_path: Path,
+) -> None:
+    completed = ({"ok": True}, "passed", [])
+    with (
+        mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        mock.patch.object(
+            stackctl,
+            "open_reference_acceptance_session",
+            side_effect=AssertionError("public release checks must not open identity"),
+        ),
+        mock.patch.object(
+            stackctl,
+            "_run_script_probe",
+            return_value=completed,
+        ) as run_probe,
+        mock.patch(
+            "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
+            return_value=Path("/tmp/gamma-local-root.crt"),
+        ),
+    ):
+        status, output, findings = stackctl._run_environment_integration_probe(
+            stackctl.load_environment_topology(),
+            "gamma-local",
+            tmp_path,
+            require_non_empty_content_feed=True,
+            only_checks=("content_feed", "video_book_feed", "media_sample"),
+        )
+
+    assert status == {"ok": True}
+    assert output == "passed"
+    assert findings == []
+    assert "TEST_AUTH_TOKEN" not in run_probe.call_args.kwargs["env"]
+
+
 def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None:
     module = runpy.run_path(str(INTERSECTION_SMOKE_RUNNER))
     session = SimpleNamespace(

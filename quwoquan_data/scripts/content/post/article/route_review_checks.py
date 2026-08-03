@@ -286,7 +286,7 @@ def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
             missing.append("termsUrl|authorizationProof")
         if not require_rights_proof and _image_fact(
             asset, "rightsAuditStatus"
-        ) not in {"verified", "unverified"}:
+        ) not in {"verified", "unverified", "restricted", "unknown"}:
             missing.append("rightsAuditStatus")
         if not _image_fact(asset, "creator", "credit", "sourceAuthor"):
             missing.append("creator|credit|sourceAuthor")

@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ContextFillTaskDto {
   const ContextFillTaskDto({
@@ -43,6 +43,54 @@ class ContextFillTaskDto {
       };
 
   factory ContextFillTaskDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'fillType',
+      'targetSlot',
+      'reason',
+      'prompt',
+      'required',
+      'suggestions',
+      'generatedQueryConditions',
+      'scopeExpansionPolicy',
+      'retryPolicy',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ContextFillTaskDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('slotId') && json['slotId'] != null && (json['slotId'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field slotId has an invalid wire value');
+    }
+    if (json.containsKey('fillType') && json['fillType'] != null && (json['fillType'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field fillType has an invalid wire value');
+    }
+    if (json.containsKey('targetSlot') && json['targetSlot'] != null && (json['targetSlot'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field targetSlot has an invalid wire value');
+    }
+    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field reason has an invalid wire value');
+    }
+    if (json.containsKey('prompt') && json['prompt'] != null && (json['prompt'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field prompt has an invalid wire value');
+    }
+    if (json.containsKey('required') && json['required'] != null && (json['required'] is! bool)) {
+      throw const FormatException('ContextFillTaskDto field required has an invalid wire value');
+    }
+    if (json.containsKey('suggestions') && json['suggestions'] != null && (json['suggestions'] is! List || (json['suggestions'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextFillTaskDto field suggestions has an invalid wire value');
+    }
+    if (json.containsKey('generatedQueryConditions') && json['generatedQueryConditions'] != null && (json['generatedQueryConditions'] is! List || (json['generatedQueryConditions'] as List).any((item) => item is! String))) {
+      throw const FormatException('ContextFillTaskDto field generatedQueryConditions has an invalid wire value');
+    }
+    if (json.containsKey('scopeExpansionPolicy') && json['scopeExpansionPolicy'] != null && (json['scopeExpansionPolicy'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field scopeExpansionPolicy has an invalid wire value');
+    }
+    if (json.containsKey('retryPolicy') && json['retryPolicy'] != null && (json['retryPolicy'] is! String)) {
+      throw const FormatException('ContextFillTaskDto field retryPolicy has an invalid wire value');
+    }
     return ContextFillTaskDto(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       fillType: parseContextFillTypeStrict((json['fillType'] as String?)?.trim() ?? ""),

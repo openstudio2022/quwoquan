@@ -14,12 +14,16 @@ import (
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
+	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
 )
 
 func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 	cleanAll(t)
 	ctx := context.Background()
 	store := persistence.NewMongoChatStore(requireMongoDB(t))
+	membershipStore := membershippersistence.NewMongoStore(requireMongoDB(t))
+	userStateStore := userstatepersistence.NewMongoStore(requireMongoDB(t))
 	storage := chatStoragePorts(store)
 	convCache := cache.NewConversationCache(redisRouter.Scene("general"))
 	conversations := application.NewConversationService(
@@ -112,10 +116,10 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 		conv.Status != model.ConversationStatusActive {
 		t.Fatalf("unexpected bound conversation: %+v", conv)
 	}
-	if _, err := store.FindMember(ctx, conv.ID, "owner-1"); err != nil {
+	if _, err := membershipStore.FindMember(ctx, conv.ID, "owner-1"); err != nil {
 		t.Fatalf("owner member must be atomically provisioned: %v", err)
 	}
-	if _, err := store.FindUserState(ctx, "owner-1", conv.ID); err != nil {
+	if _, err := userStateStore.FindUserState(ctx, "owner-1", conv.ID); err != nil {
 		t.Fatalf("owner inbox state must be atomically provisioned: %v", err)
 	}
 
@@ -129,10 +133,10 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 	if processed, err := membershipConsumer.ProcessOnce(ctx); err != nil || processed != 1 {
 		t.Fatalf("project active member: processed=%d err=%v", processed, err)
 	}
-	if _, err := store.FindMember(ctx, conv.ID, "member-1"); err != nil {
+	if _, err := membershipStore.FindMember(ctx, conv.ID, "member-1"); err != nil {
 		t.Fatalf("activated circle member must gain Chat roster row: %v", err)
 	}
-	if _, err := store.FindUserState(ctx, "member-1", conv.ID); err != nil {
+	if _, err := userStateStore.FindUserState(ctx, "member-1", conv.ID); err != nil {
 		t.Fatalf("activated circle member must gain Chat inbox row: %v", err)
 	}
 
@@ -146,10 +150,10 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 	if processed, err := membershipConsumer.ProcessOnce(ctx); err != nil || processed != 1 {
 		t.Fatalf("project terminal member state: processed=%d err=%v", processed, err)
 	}
-	if _, err := store.FindMember(ctx, conv.ID, "member-1"); err == nil {
+	if _, err := membershipStore.FindMember(ctx, conv.ID, "member-1"); err == nil {
 		t.Fatal("left circle member must not remain in Chat roster")
 	}
-	if _, err := store.FindUserState(ctx, "member-1", conv.ID); err == nil {
+	if _, err := userStateStore.FindUserState(ctx, "member-1", conv.ID); err == nil {
 		t.Fatal("left circle member must lose Chat inbox state")
 	}
 
@@ -170,7 +174,7 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 	if conv.Status != model.ConversationStatusDissolved || conv.MemberCount != 0 {
 		t.Fatalf("archive must terminally dissolve bound conversation: %+v", conv)
 	}
-	if _, err := store.FindUserState(ctx, "owner-1", conv.ID); err == nil {
+	if _, err := userStateStore.FindUserState(ctx, "owner-1", conv.ID); err == nil {
 		t.Fatal("archive must remove every member inbox state")
 	}
 
@@ -184,7 +188,7 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 	if processed, err := membershipConsumer.ProcessOnce(ctx); err != nil || processed != 1 {
 		t.Fatalf("late event must be accepted as no-op after archive: processed=%d err=%v", processed, err)
 	}
-	if _, err := store.FindMember(ctx, conv.ID, "member-2"); err == nil {
+	if _, err := membershipStore.FindMember(ctx, conv.ID, "member-2"); err == nil {
 		t.Fatal("late membership event must not revive an archived conversation")
 	}
 }

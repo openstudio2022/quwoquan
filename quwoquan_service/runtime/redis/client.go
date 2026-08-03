@@ -9,6 +9,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"quwoquan_service/runtime/boundedrecord"
@@ -75,6 +76,54 @@ type Client interface {
 	// ── Lifecycle ───────────────────────────────────────────
 	Close() error
 	Ping(ctx context.Context) error
+}
+
+// ErrAtomicHashFieldCompareAndSwapUnavailable is returned when a concrete
+// Redis adapter cannot provide the single-key atomic hash-field primitive.
+// Callers that use fencing or projector checkpoints must fail closed instead
+// of falling back to a racy HGET/HSET sequence.
+var ErrAtomicHashFieldCompareAndSwapUnavailable = errors.New(
+	"redis: atomic hash field compare-and-swap unavailable",
+)
+
+// HashFieldCompareAndSwapClient is an optional atomic capability. It is kept
+// outside Client so third-party read-only adapters do not silently acquire a
+// mutation contract they cannot honour.
+type HashFieldCompareAndSwapClient interface {
+	CompareAndSwapHashField(
+		ctx context.Context,
+		key string,
+		field string,
+		expected *string,
+		replacement *string,
+		ttl time.Duration,
+	) (bool, error)
+}
+
+// CompareAndSwapHashField atomically replaces or deletes one hash field when
+// its current encoded value exactly matches expected. A nil expected means
+// the field must not exist; a nil replacement deletes the matched field.
+func CompareAndSwapHashField(
+	ctx context.Context,
+	client Client,
+	key string,
+	field string,
+	expected *string,
+	replacement *string,
+	ttl time.Duration,
+) (bool, error) {
+	atomicClient, ok := client.(HashFieldCompareAndSwapClient)
+	if !ok {
+		return false, ErrAtomicHashFieldCompareAndSwapUnavailable
+	}
+	return atomicClient.CompareAndSwapHashField(
+		ctx,
+		key,
+		field,
+		expected,
+		replacement,
+		ttl,
+	)
 }
 
 // boundedImmutableRecordAtomicCreator is intentionally optional rather than

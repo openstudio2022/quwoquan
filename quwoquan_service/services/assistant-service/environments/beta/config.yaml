@@ -7,6 +7,7 @@ overrides:
   sys.assistant-service.redis.general.addr: redis:6379
   sys.assistant-service.redis.rec.addr: redis:6379
 secretRefs:
+  sys.assistant-service.skill_package.trusted_public_keys_json: ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON
   sys.assistant-service.mongodb.uri: MONGODB_URI
   sys.assistant-service.postgres.dsn: POSTGRES_DSN
   sys.assistant-service.redis.general.password: REDIS_GENERAL_PASSWORD
@@ -14,27 +15,50 @@ secretRefs:
 externalBindings:
   runtime.message.transport:
     state: enabled
+  integration.connector_grant.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:integration-service
+    endpointEnvs:
+      base: ASSISTANT_INTEGRATION_BASE_URL
+    secretRefs: []
+    timeoutMs: 1200
+  chat.conversation.membership.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:chat-service
+    endpointEnvs:
+      base: ASSISTANT_CHAT_BASE_URL
+    secretRefs: []
+    timeoutMs: 3000
+  circle.membership.self.read:
+    state: enabled
+    adapter: ext.first_party.http_authority
+    endpointRef: service_topology:circle-service
+    endpointEnvs:
+      base: ASSISTANT_CIRCLE_BASE_URL
+    secretRefs: []
+    timeoutMs: 3000
   assistant.model.generation:
     state: enabled
-    adapter: ext.llm.xiaomi_mimo
-    endpointRef: environment_binding:assistant.model
+    adapter: ext.llm.protocol_fixture
+    endpointRef: local_topology:integration.nonprod_provider_substitute
     endpointEnvs:
       completion: ASSISTANT_MODEL_COMPLETION_URL
-    secretRefs:
-    - ASSISTANT_MODEL_API_KEY
+    secretRefs: []
     timeoutMs: 60000
   assistant.public.search:
     state: enabled
-    adapter: ext.search.duckduckgo_html
-    endpointRef: environment_binding:assistant.search
+    adapter: ext.search.protocol_fixture
+    endpointRef: local_topology:integration.nonprod_provider_substitute
     endpointEnvs:
       search: ASSISTANT_PUBLIC_SEARCH_URL
     secretRefs: []
     timeoutMs: 10000
   assistant.weather.forecast:
     state: enabled
-    adapter: ext.weather.open_meteo
-    endpointRef: environment_binding:assistant.weather
+    adapter: ext.weather.protocol_fixture
+    endpointRef: local_topology:integration.nonprod_provider_substitute
     endpointEnvs:
       geocoding: ASSISTANT_WEATHER_GEOCODING_URL
       forecast: ASSISTANT_WEATHER_FORECAST_URL
@@ -42,8 +66,8 @@ externalBindings:
     timeoutMs: 10000
   assistant.finance.quote:
     state: enabled
-    adapter: ext.finance.yahoo_chart
-    endpointRef: environment_binding:assistant.finance
+    adapter: ext.finance.protocol_fixture
+    endpointRef: local_topology:integration.nonprod_provider_substitute
     endpointEnvs:
       chart: ASSISTANT_FINANCE_CHART_URL
     secretRefs: []

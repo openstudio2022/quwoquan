@@ -15,8 +15,14 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
+	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
+	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
+	subscriptionpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/infrastructure/persistence"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
+	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 // TestAssistantSessionSkillSubscriptionService validates the contract at the public assistant application boundary.
@@ -82,7 +88,8 @@ func (proactiveFinalModel) Complete(
 }
 
 func newProactiveDeliveryService(
-	store ports.SkillSubscriptionStore,
+	t *testing.T,
+	store subscriptionports.Store,
 	cache rtredis.Client,
 	policy *proactiveDeliveryPolicyReader,
 	notification *proactiveNotificationWriter,
@@ -93,6 +100,8 @@ func newProactiveDeliveryService(
 		orchestration.ReactRuntime{Model: proactiveFinalModel{}},
 		func() time.Time { return time.Now().UTC() },
 	)
+	loop.Catalog = skillfixture.Loader{}
+	loop.PromptAssets = promptassets.MustResolver(t)
 	runRuntime := assistantruntest.NewMemoryRuntime()
 	runCommands := runruntime.NewCommandService(
 		runRuntime,
@@ -103,25 +112,16 @@ func newProactiveDeliveryService(
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		testRunPolicyResolver(),
 	)
 	runWorker := runruntime.NewDurableWorker(
 		runRuntime,
 		runRuntime,
-		orchestration.NewDurableRunExecutorWithPolicyResolver(
-			loop,
-			func(
-				_ context.Context,
-				request runruntime.ExecutionRequest,
-			) (assistant.AssistantFrozenPolicySelection, error) {
-				return testFrozenPolicySelection(
-					"assistant-default",
-					request.RequestedSkillID,
-					request.RequestedDomainID,
-				), nil
-			},
-		),
+		orchestration.NewDurableRunExecutor(loop),
 		"local-contract-proactive-worker",
 	)
 	workerContext, cancelWorker := context.WithTimeout(
@@ -137,12 +137,12 @@ func newProactiveDeliveryService(
 		orchestration.WithSkillSubscriptionStore(store),
 		orchestration.WithAssistantDeliveryPolicyReader(policy),
 		orchestration.WithNotificationAppMessageCommandWriter(notification),
-		orchestration.WithSessionRunStore(
-			persistence.NewMemorySessionRunStore(),
+		orchestration.WithSessionStore(
+			persistence.NewMemorySessionStore(),
 		),
 		orchestration.WithAgentLoop(loop),
+		orchestration.WithSkillCatalog(skillfixture.Loader{}),
 		orchestration.WithRunCommandService(runCommands),
-		testFrozenPolicyOption(),
 	)
 	return orchestration.NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
@@ -154,26 +154,27 @@ func newProactiveDeliveryService(
 func proactiveSubscription(
 	id string,
 	cron string,
-) assistant.SkillSubscription {
+) skillmodel.SkillSubscription {
 	now := time.Date(2026, 7, 24, 8, 0, 0, 0, time.UTC)
-	return assistant.SkillSubscription{
+	return skillmodel.SkillSubscription{
 		SubscriptionID: id,
-		Owner: assistant.SkillSubscriptionOwner{
+		Owner: skillmodel.SkillSubscriptionOwner{
 			OwnerType: "user",
 			OwnerID:   "account-proactive",
 		},
 		CreatedByUserID:    "account-proactive",
 		CreatedByPersonaID: "persona-proactive",
 		SkillID:            "news_briefing",
-		SearchQueryPlan: assistant.SkillSubscriptionSearchQueryPlan{
+		SearchQueryPlan: skillmodel.SkillSubscriptionSearchQueryPlan{
 			RawText: "请生成本期订阅简报",
 		},
-		Status: assistant.SkillSubscriptionStatusActive,
-		Trigger: assistant.SkillSubscriptionTrigger{
-			Type: "cron",
-			Cron: cron,
+		Status: skillmodel.SkillSubscriptionStatusActive,
+		Trigger: skillmodel.SkillSubscriptionTrigger{
+			Type:     "cron",
+			Cron:     cron,
+			Timezone: "UTC",
 		},
-		Destination: assistant.SkillSubscriptionDestination{
+		Destination: skillmodel.SkillSubscriptionDestination{
 			DestinationType:  "user",
 			DestinationID:    "account-proactive",
 			MaxPerDay:        1,
@@ -196,33 +197,30 @@ func allowProactiveDeliveryPolicy() ports.AssistantDeliveryPolicy {
 func TestSkillSubscriptionCreationAuthorizesDestination(
 	t *testing.T,
 ) {
-	newService := func(
+	newCommands := func(
 		membershipCurrent bool,
-	) *orchestration.AssistantService {
-		return newProactiveDeliveryService(
-			persistence.NewMemorySkillSubscriptionStore(),
-			rtredis.NewMemoryClient(),
-			&proactiveDeliveryPolicyReader{
-				policy: allowProactiveDeliveryPolicy(),
+	) *subscriptionapplication.UseCases {
+		return subscriptionapplication.NewUseCases(
+			subscriptionpersistence.NewMemoryStore(),
+			&assistantSessionChatMentionServiceFakeChatGroundingClient{
+				membershipDenied: !membershipCurrent,
 			},
-			&proactiveNotificationWriter{},
-			orchestration.WithChatGroundingClient(
-				&assistantSessionChatMentionServiceFakeChatGroundingClient{
-					membershipDenied: !membershipCurrent,
-				},
-			),
+			nil,
+			time.Now,
 		)
 	}
-	input := func() assistant.CreateSkillSubscriptionInput {
-		return assistant.CreateSkillSubscriptionInput{
+	input := func() skillmodel.CreateSkillSubscriptionInput {
+		return skillmodel.CreateSkillSubscriptionInput{
 			SkillID:            "news_briefing",
+			DomainID:           "news",
 			CreatedByPersonaID: "persona-proactive",
 			ClientRequestID:    "request-destination",
-			Trigger: assistant.SkillSubscriptionTrigger{
-				Type: "cron",
-				Cron: "30 8 * * *",
+			Trigger: skillmodel.SkillSubscriptionTrigger{
+				Type:     "cron",
+				Cron:     "30 8 * * *",
+				Timezone: "UTC",
 			},
-			Destination: assistant.SkillSubscriptionDestination{
+			Destination: skillmodel.SkillSubscriptionDestination{
 				DestinationType:  "chat_conversation",
 				DestinationID:    "conv-1",
 				MaxPerDay:        1,
@@ -236,7 +234,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 		request := input()
 		request.Destination.DestinationType = "user"
 		request.Destination.DestinationID = "another-account"
-		if _, err := newService(true).CreateSkillSubscription(
+		if _, err := newCommands(true).Create(
 			t.Context(),
 			"account-proactive",
 			request,
@@ -248,7 +246,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 	t.Run("chat conversation destination requires creator persona", func(t *testing.T) {
 		request := input()
 		request.CreatedByPersonaID = ""
-		if _, err := newService(true).CreateSkillSubscription(
+		if _, err := newCommands(true).Create(
 			t.Context(),
 			"account-proactive",
 			request,
@@ -260,7 +258,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 	t.Run("creator and assistant membership are both required", func(t *testing.T) {
 		for _, name := range []string{"creator removed", "assistant removed"} {
 			t.Run(name, func(t *testing.T) {
-				if _, err := newService(false).CreateSkillSubscription(
+				if _, err := newCommands(false).Create(
 					t.Context(),
 					"account-proactive",
 					input(),
@@ -272,7 +270,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 	})
 
 	t.Run("current creator and assistant membership permit creation", func(t *testing.T) {
-		created, err := newService(true).CreateSkillSubscription(
+		created, err := newCommands(true).Create(
 			t.Context(),
 			"account-proactive",
 			input(),
@@ -289,17 +287,16 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 func TestSkillSubscriptionDeliveryIsIdempotentAndPersistsAuditState(
 	t *testing.T,
 ) {
-	store := persistence.NewMemorySkillSubscriptionStore()
+	store := subscriptionpersistence.NewMemoryStore()
 	subscription := proactiveSubscription("subscription-success", "30 8 * * *")
-	if _, err := store.CreateSkillSubscription(t.Context(), subscription); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedSkillSubscription(subscription)
 	cache := rtredis.NewMemoryClient()
 	policy := &proactiveDeliveryPolicyReader{
 		policy: allowProactiveDeliveryPolicy(),
 	}
 	notification := &proactiveNotificationWriter{}
 	service := newProactiveDeliveryService(
+		t,
 		store,
 		cache,
 		policy,
@@ -309,7 +306,7 @@ func TestSkillSubscriptionDeliveryIsIdempotentAndPersistsAuditState(
 
 	first, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: now.Format(time.RFC3339),
 		},
 	)
@@ -318,7 +315,7 @@ func TestSkillSubscriptionDeliveryIsIdempotentAndPersistsAuditState(
 	}
 	second, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: now.Format(time.RFC3339),
 		},
 	)
@@ -371,18 +368,17 @@ func TestSkillSubscriptionDeliveryIsIdempotentAndPersistsAuditState(
 func TestSkillSubscriptionDeliveryRecoversAWhileSchedulerWasDown(
 	t *testing.T,
 ) {
-	store := persistence.NewMemorySkillSubscriptionStore()
+	store := subscriptionpersistence.NewMemoryStore()
 	subscription := proactiveSubscription(
 		"subscription-missed-window",
 		"30 8 * * *",
 	)
 	scheduledAt := time.Date(2026, 7, 24, 8, 30, 0, 0, time.UTC)
 	subscription.DeliveryState.NextAttemptAt = &scheduledAt
-	if _, err := store.CreateSkillSubscription(t.Context(), subscription); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedSkillSubscription(subscription)
 	notification := &proactiveNotificationWriter{}
 	service := newProactiveDeliveryService(
+		t,
 		store,
 		rtredis.NewMemoryClient(),
 		&proactiveDeliveryPolicyReader{
@@ -392,7 +388,7 @@ func TestSkillSubscriptionDeliveryRecoversAWhileSchedulerWasDown(
 	)
 	result, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: scheduledAt.Add(7 * time.Minute).Format(time.RFC3339),
 		},
 	)
@@ -415,7 +411,7 @@ func TestSkillSubscriptionDeliveryRecoversAWhileSchedulerWasDown(
 func TestPausedSkillSubscriptionClearsPendingAndReactivationReschedules(
 	t *testing.T,
 ) {
-	store := persistence.NewMemorySkillSubscriptionStore()
+	store := subscriptionpersistence.NewMemoryStore()
 	subscription := proactiveSubscription(
 		"subscription-status",
 		"* * * * *",
@@ -424,11 +420,10 @@ func TestPausedSkillSubscriptionClearsPendingAndReactivationReschedules(
 	subscription.DeliveryState.PendingDeliveryID = "delivery-before-pause"
 	subscription.DeliveryState.NextAttemptAt = &pendingAt
 	subscription.DeliveryState.ConsecutiveFailures = 2
-	if _, err := store.CreateSkillSubscription(t.Context(), subscription); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedSkillSubscription(subscription)
 	notification := &proactiveNotificationWriter{}
 	service := newProactiveDeliveryService(
+		t,
 		store,
 		rtredis.NewMemoryClient(),
 		&proactiveDeliveryPolicyReader{
@@ -436,12 +431,14 @@ func TestPausedSkillSubscriptionClearsPendingAndReactivationReschedules(
 		},
 		notification,
 	)
-	paused, err := service.UpdateSkillSubscriptionStatus(
+	commands := subscriptionapplication.NewUseCases(store, nil, service, time.Now)
+	paused, err := commands.UpdateStatus(
 		t.Context(),
 		subscription.Owner.OwnerID,
 		subscription.SubscriptionID,
-		assistant.UpdateSkillSubscriptionStatusInput{
-			Status: assistant.SkillSubscriptionStatusPaused,
+		skillmodel.UpdateSkillSubscriptionStatusInput{
+			Status:          skillmodel.SkillSubscriptionStatusPaused,
+			ClientRequestID: "pause-subscription-status",
 		},
 	)
 	if err != nil {
@@ -454,7 +451,7 @@ func TestPausedSkillSubscriptionClearsPendingAndReactivationReschedules(
 	}
 	result, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: time.Now().UTC().Add(time.Hour).Format(time.RFC3339),
 		},
 	)
@@ -464,12 +461,13 @@ func TestPausedSkillSubscriptionClearsPendingAndReactivationReschedules(
 	if result.ProcessedCount != 0 || len(notification.commands) != 0 {
 		t.Fatalf("暂停订阅仍被投递: result=%+v", result)
 	}
-	active, err := service.UpdateSkillSubscriptionStatus(
+	active, err := commands.UpdateStatus(
 		t.Context(),
 		subscription.Owner.OwnerID,
 		subscription.SubscriptionID,
-		assistant.UpdateSkillSubscriptionStatusInput{
-			Status: assistant.SkillSubscriptionStatusActive,
+		skillmodel.UpdateSkillSubscriptionStatusInput{
+			Status:          skillmodel.SkillSubscriptionStatusActive,
+			ClientRequestID: "reactivate-subscription-status",
 		},
 	)
 	if err != nil {
@@ -516,19 +514,15 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			store := persistence.NewMemorySkillSubscriptionStore()
+			store := subscriptionpersistence.NewMemoryStore()
 			subscription := proactiveSubscription(
 				"subscription-"+test.name,
 				"* * * * *",
 			)
-			if _, err := store.CreateSkillSubscription(
-				t.Context(),
-				subscription,
-			); err != nil {
-				t.Fatal(err)
-			}
+			store.SeedSkillSubscription(subscription)
 			notification := &proactiveNotificationWriter{}
 			service := newProactiveDeliveryService(
+				t,
 				store,
 				rtredis.NewMemoryClient(),
 				&proactiveDeliveryPolicyReader{policy: test.policy},
@@ -536,7 +530,7 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 			)
 			result, err := service.TickSkillSubscriptionCron(
 				t.Context(),
-				assistant.SkillSubscriptionCronTickInput{
+				skillmodel.SkillSubscriptionCronTickInput{
 					Now: test.now.Format(time.RFC3339),
 				},
 			)
@@ -555,14 +549,13 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 		})
 	}
 
-	store := persistence.NewMemorySkillSubscriptionStore()
+	store := subscriptionpersistence.NewMemoryStore()
 	subscription := proactiveSubscription("subscription-daily-limit", "* * * * *")
-	if _, err := store.CreateSkillSubscription(t.Context(), subscription); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedSkillSubscription(subscription)
 	cache := rtredis.NewMemoryClient()
 	notification := &proactiveNotificationWriter{}
 	service := newProactiveDeliveryService(
+		t,
 		store,
 		cache,
 		&proactiveDeliveryPolicyReader{
@@ -573,7 +566,7 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 	firstAt := time.Date(2026, 7, 24, 8, 30, 0, 0, time.UTC)
 	if result, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: firstAt.Format(time.RFC3339),
 		},
 	); err != nil || result.ProcessedCount != 1 {
@@ -582,7 +575,7 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 	secondAt := firstAt.Add(61 * time.Minute)
 	result, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: secondAt.Format(time.RFC3339),
 		},
 	)
@@ -612,14 +605,13 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 func TestSkillSubscriptionDeliveryRetriesWithStableIdempotencyCoordinates(
 	t *testing.T,
 ) {
-	store := persistence.NewMemorySkillSubscriptionStore()
+	store := subscriptionpersistence.NewMemoryStore()
 	subscription := proactiveSubscription("subscription-retry", "* * * * *")
-	if _, err := store.CreateSkillSubscription(t.Context(), subscription); err != nil {
-		t.Fatal(err)
-	}
+	store.SeedSkillSubscription(subscription)
 	cache := rtredis.NewMemoryClient()
 	notification := &proactiveNotificationWriter{failures: 1}
 	service := newProactiveDeliveryService(
+		t,
 		store,
 		cache,
 		&proactiveDeliveryPolicyReader{
@@ -630,7 +622,7 @@ func TestSkillSubscriptionDeliveryRetriesWithStableIdempotencyCoordinates(
 	firstAt := time.Date(2026, 7, 24, 8, 30, 0, 0, time.UTC)
 	failed, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: firstAt.Format(time.RFC3339),
 		},
 	)
@@ -663,7 +655,7 @@ func TestSkillSubscriptionDeliveryRetriesWithStableIdempotencyCoordinates(
 	}
 	retried, err := service.TickSkillSubscriptionCron(
 		t.Context(),
-		assistant.SkillSubscriptionCronTickInput{
+		skillmodel.SkillSubscriptionCronTickInput{
 			Now: firstAt.Add(5 * time.Minute).Format(time.RFC3339),
 		},
 	)
@@ -699,20 +691,16 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 	t *testing.T,
 ) {
 	t.Run("sensitive skill consent revoked", func(t *testing.T) {
-		store := persistence.NewMemorySkillSubscriptionStore()
+		store := subscriptionpersistence.NewMemoryStore()
 		subscription := proactiveSubscription(
 			"subscription-consent",
 			"* * * * *",
 		)
 		subscription.SkillID = orchestration.SkillPersonalContentAccess
-		if _, err := store.CreateSkillSubscription(
-			t.Context(),
-			subscription,
-		); err != nil {
-			t.Fatal(err)
-		}
+		store.SeedSkillSubscription(subscription)
 		notification := &proactiveNotificationWriter{}
 		service := newProactiveDeliveryService(
+			t,
 			store,
 			rtredis.NewMemoryClient(),
 			&proactiveDeliveryPolicyReader{
@@ -722,7 +710,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 		)
 		result, err := service.TickSkillSubscriptionCron(
 			t.Context(),
-			assistant.SkillSubscriptionCronTickInput{
+			skillmodel.SkillSubscriptionCronTickInput{
 				Now: time.Date(
 					2026,
 					7,
@@ -751,7 +739,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 	t.Run("destination membership revoked", func(t *testing.T) {
 		for _, name := range []string{"assistant removed", "creator removed"} {
 			t.Run(name, func(t *testing.T) {
-				store := persistence.NewMemorySkillSubscriptionStore()
+				store := subscriptionpersistence.NewMemoryStore()
 				subscription := proactiveSubscription(
 					"subscription-membership-"+name,
 					"* * * * *",
@@ -759,16 +747,12 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				subscription.Destination.DestinationType = "chat_conversation"
 				subscription.Destination.DestinationID = "conv-1"
 				subscription.SkillID = "general"
-				if _, err := store.CreateSkillSubscription(
-					t.Context(),
-					subscription,
-				); err != nil {
-					t.Fatal(err)
-				}
+				store.SeedSkillSubscription(subscription)
 				chat := &assistantSessionChatMentionServiceFakeChatGroundingClient{
 					membershipDenied: true,
 				}
 				service := newProactiveDeliveryService(
+					t,
 					store,
 					rtredis.NewMemoryClient(),
 					&proactiveDeliveryPolicyReader{
@@ -779,7 +763,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				)
 				result, err := service.TickSkillSubscriptionCron(
 					t.Context(),
-					assistant.SkillSubscriptionCronTickInput{
+					skillmodel.SkillSubscriptionCronTickInput{
 						Now: time.Date(
 							2026,
 							7,
@@ -809,21 +793,17 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 	})
 
 	t.Run("current creator and assistant membership delivers to chat", func(t *testing.T) {
-		store := persistence.NewMemorySkillSubscriptionStore()
+		store := subscriptionpersistence.NewMemoryStore()
 		subscription := proactiveSubscription(
 			"subscription-membership-current",
 			"* * * * *",
 		)
 		subscription.Destination.DestinationType = "chat_conversation"
 		subscription.Destination.DestinationID = "conv-1"
-		if _, err := store.CreateSkillSubscription(
-			t.Context(),
-			subscription,
-		); err != nil {
-			t.Fatal(err)
-		}
+		store.SeedSkillSubscription(subscription)
 		chat := &assistantSessionChatMentionServiceFakeChatGroundingClient{}
 		result, err := newProactiveDeliveryService(
+			t,
 			store,
 			rtredis.NewMemoryClient(),
 			&proactiveDeliveryPolicyReader{
@@ -833,7 +813,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 			orchestration.WithChatGroundingClient(chat),
 		).TickSkillSubscriptionCron(
 			t.Context(),
-			assistant.SkillSubscriptionCronTickInput{
+			skillmodel.SkillSubscriptionCronTickInput{
 				Now: time.Date(
 					2026,
 					7,

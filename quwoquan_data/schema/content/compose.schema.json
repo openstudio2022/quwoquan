@@ -23,7 +23,7 @@
         "license": { "$ref": "#/$defs/sourceFact" },
         "termsUrl": { "$ref": "#/$defs/sourceFact" },
         "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-        "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+        "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
         "rightsAuditIssues": { "type": "array", "items": { "type": "string" } }
       }
     },
@@ -108,7 +108,7 @@
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-    "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+    "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "publishLayout": { "type": "string", "enum": ["travel", "campus", "image", "gallery", "video"] },
     "publishAngle": { "type": "string" },

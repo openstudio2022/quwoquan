@@ -15,5 +15,10 @@
   "capabilityProfileRef": "capability.app2",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.complex_reasoning",
-  "replayAssetRef": "assistant.replay.creation_assistant.v1"
+  "replayAssetRef": "assistant.replay.creation_assistant",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

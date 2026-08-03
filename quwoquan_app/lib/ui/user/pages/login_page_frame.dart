@@ -381,7 +381,9 @@ class _PhoneEntryLoginStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final binding = state.step == LoginStep.socialPhoneEntry;
-    final sendFailed = state.feedback?.copyKey == 'loginOtpSendFailed';
+    final sendFailed =
+        state.feedback?.recoveryAction == 'resendOtp' ||
+        state.feedback?.copyKey == 'loginOtpSendFailed';
     return Column(
       children: <Widget>[
         const SizedBox(height: AppSpacing.twenty),

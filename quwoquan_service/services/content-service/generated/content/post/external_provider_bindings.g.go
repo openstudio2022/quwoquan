@@ -20,16 +20,14 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"content.embedding.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.embed.openai_compatible",
-			EndpointRef: "environment_binding:content.embedding",
+			AdapterID:   "ext.embed.protocol_fixture",
+			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
-			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_API_KEY",
-			},
-			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
@@ -61,16 +59,14 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"beta": {
 		"content.embedding.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.embed.openai_compatible",
-			EndpointRef: "environment_binding:content.embedding",
+			AdapterID:   "ext.embed.protocol_fixture",
+			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
-			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_API_KEY",
-			},
-			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",
@@ -102,16 +98,14 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"gamma": {
 		"content.embedding.generation": {
 			State:       "enabled",
-			AdapterID:   "ext.embed.openai_compatible",
-			EndpointRef: "environment_binding:content.embedding",
+			AdapterID:   "ext.embed.protocol_fixture",
+			EndpointRef: "local_topology:integration.nonprod_provider_substitute",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
 			},
-			SecretEnvironmentKeys: []string{
-				"CONTENT_EMBEDDING_API_KEY",
-			},
-			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   10000,
+			RequiredRedisScenes:   []string{},
 		},
 		"runtime.message.transport": {
 			State:                   "enabled",

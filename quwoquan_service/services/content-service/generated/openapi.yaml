@@ -133,8 +133,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/BindContentCommentAttachmentsCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -173,8 +177,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ReactToContentCommentCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentCommentReactionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -359,7 +367,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetMyFootprintPage'
+                                $ref: '#/components/schemas/ContentFootprintPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -402,15 +410,15 @@ paths:
     /content/intersections:
         get:
             operationId: ListMyIntersections
-            x-contract-operation-id: content.post.ListMyIntersections
-            x-object-id: content.post
+            x-contract-operation-id: content.intersection_visit_state.ListMyIntersections
+            x-object-id: content.intersection_visit_state
             x-actor: persona
             x-application:
                 kind: query
                 facet: IntersectionQueryFacet
                 method: listMyIntersections
                 reader: IntersectionListReader
-                slice: IntersectionPageSlice
+                slice: IntersectionReasonPageSlice
             parameters:
                 - name: dimension
                   in: query
@@ -448,7 +456,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListMyIntersectionsPage'
+                                $ref: '#/components/schemas/IntersectionReasonPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -460,15 +468,15 @@ paths:
     /content/intersections/object:
         get:
             operationId: GetObjectIntersections
-            x-contract-operation-id: content.post.GetObjectIntersections
-            x-object-id: content.post
+            x-contract-operation-id: content.intersection_visit_state.GetObjectIntersections
+            x-object-id: content.intersection_visit_state
             x-actor: persona
             x-application:
                 kind: query
                 facet: IntersectionQueryFacet
                 method: getObjectIntersections
                 reader: ObjectIntersectionReader
-                slice: ObjectIntersectionPageSlice
+                slice: ObjectIntersectionReasonSlice
             parameters:
                 - name: objectId
                   in: query
@@ -491,7 +499,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetObjectIntersectionsPage'
+                                $ref: '#/components/schemas/ObjectIntersectionReasonSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -503,15 +511,15 @@ paths:
     /content/intersections/summary:
         get:
             operationId: GetMyIntersectionSummary
-            x-contract-operation-id: content.post.GetMyIntersectionSummary
-            x-object-id: content.post
+            x-contract-operation-id: content.intersection_visit_state.GetMyIntersectionSummary
+            x-object-id: content.intersection_visit_state
             x-actor: persona
             x-application:
                 kind: query
                 facet: IntersectionQueryFacet
                 method: getMyIntersectionSummary
                 reader: IntersectionSummaryReader
-                slice: IntersectionSummarySlice
+                slice: IntersectionInboxSummary
             responses:
                 "200":
                     description: OK
@@ -586,7 +594,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetMediaAssetResponse'
+                                $ref: '#/components/schemas/MediaAssetSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -619,8 +627,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaAssetDiscardResult'
                 default:
                     description: Runtime failure
                     content:
@@ -653,8 +665,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaCoverSelectionResult'
                 default:
                     description: Runtime failure
                     content:
@@ -693,8 +709,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SelectManualContentMediaCoverCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaCoverSelectionResult'
                 default:
                     description: Runtime failure
                     content:
@@ -733,8 +753,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RequestContentMediaOriginalAccessCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaOriginalAccessGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -767,7 +791,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetMediaUploadSessionResponse'
+                                $ref: '#/components/schemas/MediaUploadSessionSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -800,8 +824,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaUploadSessionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -840,8 +868,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CompleteContentMediaUploadCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaUploadSessionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -875,8 +907,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/InitContentMediaUploadCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaUploadSessionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1064,7 +1100,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListProfileInteractionActivitiesReceivedPage'
+                                $ref: '#/components/schemas/ProfileInteractionActivityPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1112,7 +1148,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListProfileInteractionActivitiesSentPage'
+                                $ref: '#/components/schemas/ProfileInteractionActivityPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1170,7 +1206,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListUserPostsPage'
+                                $ref: '#/components/schemas/AuthorPostPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1286,7 +1322,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListCommentsPage'
+                                $ref: '#/components/schemas/CommentPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1325,8 +1361,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateContentCommentCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1364,8 +1404,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1403,8 +1447,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1441,8 +1489,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1490,7 +1542,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListCommentRepliesPage'
+                                $ref: '#/components/schemas/ReplyPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1555,8 +1607,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1589,8 +1645,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentReactionCommandResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1630,8 +1690,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateContentOutboundShareCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OutboundShareFactResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1665,7 +1729,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ContentReaction'
+                                $ref: '#/components/schemas/ContentReactionStateSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1788,8 +1852,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SubmitContentPostPublicationCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PostPublicationReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1822,7 +1890,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListReportsPage'
+                                $ref: '#/components/schemas/ReportQueueItemSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2058,7 +2126,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListCommentsByAuthorPage'
+                                $ref: '#/components/schemas/AuthorCommentPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2096,7 +2164,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListCommentsForPostAuthorPage'
+                                $ref: '#/components/schemas/ReceivedCommentPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2134,7 +2202,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListMyReportsPage'
+                                $ref: '#/components/schemas/MyReportPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -3048,6 +3116,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AuthorImpactSummary
             x-contract-placeholder: true
+        AuthorPostPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AuthorPostPageSlice
+            x-contract-placeholder: true
         BeginReportReviewRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3057,6 +3130,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BindContentCommentAttachmentsCommand
+            x-contract-placeholder: true
+        CommentCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CommentCommandResult
             x-contract-placeholder: true
         CommentPageSlice:
             type: object
@@ -3083,15 +3161,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentArticleSummaryGenerateResponse
             x-contract-placeholder: true
+        ContentCommentReactionCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentCommentReactionCommandResult
+            x-contract-placeholder: true
         ContentDiscoveryFeedPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentDiscoveryFeedPageSlice
             x-contract-placeholder: true
-        ContentFootprintEntry:
+        ContentFootprintPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ContentFootprintEntry
+            x-contract-entity: ContentFootprintPageSlice
             x-contract-placeholder: true
         ContentPostDetailSlice:
             type: object
@@ -3103,10 +3186,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentPostProjection
             x-contract-placeholder: true
-        ContentReaction:
+        ContentReactionCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ContentReaction
+            x-contract-entity: ContentReactionCommandResult
+            x-contract-placeholder: true
+        ContentReactionStateSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentReactionStateSlice
             x-contract-placeholder: true
         CreateContentCommentCommand:
             type: object
@@ -3173,42 +3261,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetMediaAssetReferenceResponse
             x-contract-placeholder: true
-        GetMediaAssetResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetMediaAssetResponse
-            x-contract-placeholder: true
-        GetMediaUploadSessionResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetMediaUploadSessionResponse
-            x-contract-placeholder: true
-        GetMyFootprintPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ContentFootprintEntry'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ContentFootprintEntry
-        GetObjectIntersectionsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/IntersectionReason'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: IntersectionReason
         GetOwnedMediaAssetResponse:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3234,145 +3286,30 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IntersectionInboxSummary
             x-contract-placeholder: true
-        IntersectionReason:
+        IntersectionReasonPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: IntersectionReason
+            x-contract-entity: IntersectionReasonPageSlice
             x-contract-placeholder: true
-        ListCommentRepliesPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ReplyPageSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ReplyPageSlice
-        ListCommentsByAuthorPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/AuthorCommentPageSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: AuthorCommentPageSlice
-        ListCommentsForPostAuthorPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ReceivedCommentPageSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ReceivedCommentPageSlice
-        ListCommentsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/CommentPageSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: CommentPageSlice
-        ListMyIntersectionsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/IntersectionReason'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: IntersectionReason
-        ListMyReportsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/MyReportItemSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: MyReportItemSlice
-        ListProfileInteractionActivitiesReceivedPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ProfileInteractionActivityView'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ProfileInteractionActivityView
-        ListProfileInteractionActivitiesSentPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ProfileInteractionActivityView'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ProfileInteractionActivityView
-        ListReportsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ReportQueueItemSlice'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ReportQueueItemSlice
-        ListUserPostsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ContentPostProjection'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ContentPostProjection
         MarkIntersectionsVisitedRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MarkIntersectionsVisitedRequest
+            x-contract-placeholder: true
+        MediaAssetDiscardResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaAssetDiscardResult
+            x-contract-placeholder: true
+        MediaAssetSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaAssetSlice
+            x-contract-placeholder: true
+        MediaCoverSelectionResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaCoverSelectionResult
             x-contract-placeholder: true
         MediaImageReprocessRun:
             type: object
@@ -3384,20 +3321,45 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MediaImageReprocessRunDetail
             x-contract-placeholder: true
+        MediaOriginalAccessGrant:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaOriginalAccessGrant
+            x-contract-placeholder: true
+        MediaUploadSessionCommandResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaUploadSessionCommandResult
+            x-contract-placeholder: true
+        MediaUploadSessionSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: MediaUploadSessionSlice
+            x-contract-placeholder: true
         ModerateContentCommentCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ModerateContentCommentCommand
             x-contract-placeholder: true
-        MyReportItemSlice:
+        MyReportPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: MyReportItemSlice
+            x-contract-entity: MyReportPageSlice
+            x-contract-placeholder: true
+        ObjectIntersectionReasonSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ObjectIntersectionReasonSlice
             x-contract-placeholder: true
         OpenPostModerationCaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OpenPostModerationCaseRequest
+            x-contract-placeholder: true
+        OutboundShareFactResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OutboundShareFactResult
             x-contract-placeholder: true
         PauseMediaImageReprocessRunRequest:
             type: object
@@ -3409,10 +3371,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PostModerationCaseOpsSlice
             x-contract-placeholder: true
-        ProfileInteractionActivityView:
+        PostPublicationReceipt:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ProfileInteractionActivityView
+            x-contract-entity: PostPublicationReceipt
+            x-contract-placeholder: true
+        ProfileInteractionActivityPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ProfileInteractionActivityPageSlice
             x-contract-placeholder: true
         ProfileInteractionReadFactAck:
             type: object

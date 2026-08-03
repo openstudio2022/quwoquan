@@ -25,10 +25,8 @@ api_routes:
       - subjectType
       - lastVisitedAt
       - hasUnreadChanges
-    client_contract:
-      dart_import: ../user/following_subject_contracts.dart
-      response_type: FollowedSubjectVisitResult
-      response_decoder: decodeFollowedSubjectVisitResult
+    response_body: FollowedSubjectVisitResult
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: self

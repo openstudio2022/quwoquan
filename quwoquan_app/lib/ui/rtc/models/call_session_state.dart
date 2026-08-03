@@ -47,7 +47,7 @@ class CallSessionState {
     this.failure,
   });
 
-  final CallSessionDto? session;
+  final CallSession? session;
   final IncomingCallPresentation? incomingPresentation;
   final CallStatus status;
   final CallType callType;
@@ -69,7 +69,7 @@ class CallSessionState {
       failure == null ? null : runtimeFailureDisplayMessage(failure!);
 
   CallSessionState copyWith({
-    CallSessionDto? session,
+    CallSession? session,
     IncomingCallPresentation? incomingPresentation,
     CallStatus? status,
     CallType? callType,
@@ -100,7 +100,7 @@ class CallSessionState {
       identical(this, other) ||
       other is CallSessionState &&
           runtimeType == other.runtimeType &&
-          session?.callId == other.session?.callId &&
+          session?.id == other.session?.id &&
           session?.status == other.session?.status &&
           session?.participantCount == other.session?.participantCount &&
           session?.isScreenSharing == other.session?.isScreenSharing &&
@@ -121,7 +121,7 @@ class CallSessionState {
 
   @override
   int get hashCode => Object.hash(
-    session?.callId,
+    session?.id,
     session?.status,
     session?.participantCount,
     session?.isScreenSharing,

@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_view_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-String hubCircleStoryTypeLabel(PostBaseDto post) {
+String hubCircleStoryTypeLabel(ContentPostViewData post) {
   if (post.isVideoLike || post.hasVideo) {
     return DiscoveryText.discoveryTabVideo;
   }

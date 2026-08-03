@@ -10,28 +10,8 @@ source_entities:
 - UserProfile
 consumers:
 - app
-client_projection:
-  dart_class: UserHomepageTabCountsWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/user/user_homepage_tab_counts_wire_dto.g.dart
-  fields:
-  - name: worksCount
-    dart_type: int
-    nullable: false
-    source: worksCount
-    default: '0'
-  - name: likesCount
-    dart_type: int
-    nullable: false
-    source: likesCount
-    default: '0'
-  - name: circlesCount
-    dart_type: int
-    nullable: false
-    source: circlesCount
-    default: '0'
-  - name: collectionsCount
-    dart_type: int
-    nullable: false
-    source: collectionsCount
-    default: '0'
+fields:
+- {name: worksCount, type: int, nullable: false}
+- {name: likesCount, type: int, nullable: false}
+- {name: circlesCount, type: int, nullable: false}
+- {name: collectionsCount, type: int, nullable: false}

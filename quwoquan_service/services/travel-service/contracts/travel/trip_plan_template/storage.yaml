@@ -1,0 +1,17 @@
+backend: mongodb
+role: authoritative
+collections:
+  trip_plan_templates:
+    entity: TripPlanTemplate
+    role: authoritative
+    indexes:
+    - {name: idx_trip_plan_template_owner_updated, keys: {ownerPersonaId: 1, updatedAt: -1}}
+  trip_plan_template_command_receipts:
+    entity: TripPlanTemplateCommandReceipt
+    role: authoritative
+  trip_plan_template_outbox:
+    entity: TripPlanTemplateOutbox
+    role: append_only
+  trip_plan_template_outbox_sequences:
+    entity: TripPlanTemplateOutbox
+    role: authoritative

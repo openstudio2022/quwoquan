@@ -1,11 +1,13 @@
+import 'package:quwoquan_app/application/entity/homepage_operation_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_entity_contracts.dart'
+    as wire;
 
 import '../object_scenario_seed_reader.dart';
 
-/// 由不可变 entity fixture 驱动的 alpha/test Homepage typed adapter。
+/// 由不可变 Entity 场景数据驱动的 local_contract typed adapter。
 ///
-/// 不依赖 Flutter 或 App DTO；调用方只能通过 pure-contract projection 与 command
-/// port 访问，避免 production App → mock → App 的反向依赖。
+/// 该替身只实现 canonical generated ports，环境 App 与生产 composition 不可达。
 final class AlphaHomepageFacet
     implements
         HomepageQueryFacet,
@@ -45,61 +47,72 @@ final class AlphaHomepageFacet
     final normalizedType = _normalize(query.homepageType);
     final normalizedCity = _normalize(query.city);
     final normalizedStatus = _normalize(query.status);
-    final items = _records.values
-        .where((record) {
-          final homepage = record.detail;
-          if (normalizedType.isNotEmpty &&
-              _normalize(homepage.homepageType) != normalizedType) {
-            return false;
-          }
-          if (normalizedCity.isNotEmpty &&
-              _normalize(homepage.city) != normalizedCity) {
-            return false;
-          }
-          if (normalizedStatus.isNotEmpty) {
-            if (_normalize(homepage.status) != normalizedStatus) {
-              return false;
-            }
-          } else if (_normalize(homepage.status) != 'published') {
-            return false;
-          }
-          if (normalizedQuery.isEmpty) {
-            return true;
-          }
-          return _searchHaystack(homepage).contains(normalizedQuery);
-        })
-        .take(query.limit)
-        .map(
-          (record) => HomepageSearchItemProjection(
-            homepageId: record.detail.homepageId,
-            homepageType: record.detail.homepageType,
-            title: record.detail.title,
-            canonicalEntityId: record.detail.canonicalEntityId,
-            subtitle: record.detail.subtitle,
-            coverUrl: record.detail.coverUrl,
-            city: record.detail.city,
-            address: record.detail.address,
-            status: record.detail.status,
-            averageRating: record.detail.averageRating,
-            ratingCount: record.detail.ratingCount,
+    final items = <HomepageSearchItemView>[];
+    for (final record in _records.values) {
+      final homepage = record.detail;
+      if (normalizedType.isNotEmpty &&
+          _normalize(homepage.homepageType) != normalizedType) {
+        continue;
+      }
+      if (normalizedCity.isNotEmpty &&
+          _normalize(homepage.city) != normalizedCity) {
+        continue;
+      }
+      if (normalizedStatus.isNotEmpty) {
+        if (_normalize(homepage.status) != normalizedStatus) continue;
+      } else if (_normalize(homepage.status) != 'published') {
+        continue;
+      }
+      if (normalizedQuery.isNotEmpty &&
+          !_searchHaystack(homepage).contains(normalizedQuery)) {
+        continue;
+      }
+      final homepageType = _canonicalHomepageType(homepage.homepageType);
+      if (homepageType == null) {
+        continue;
+      }
+      items.add(
+        HomepageSearchItemView(
+          homepageId: homepage.homepageId,
+          homepageType: homepageType,
+          title: homepage.title,
+          canonicalEntityId: record.canonicalEntityId,
+          subtitle: homepage.subtitle,
+          coverUrl: homepage.coverUrl,
+          city: homepage.city,
+          address: homepage.address,
+          status: HomepageStatus.fromWire(
+            homepage.status,
+            'AlphaHomepageFacet.status',
           ),
-        )
-        .toList(growable: false);
+          averageRating: homepage.averageRating,
+          ratingCount: homepage.ratingCount,
+        ),
+      );
+      if (items.length == query.limit) break;
+    }
     cancellation?.throwIfCancelled();
     return HomepageSearchSlice(items: items);
   }
 
   @override
-  Future<HomepageDetailProjection> getHomepageDetail(String homepageId) async {
+  Future<HomepageDetailView> getHomepageDetail(String homepageId) async {
     return _require(homepageId).detail;
   }
 
   @override
-  Future<HomepageShellProjection> getHomepageShell(String homepageId) async {
+  Future<HomepageShellView> getHomepageShell(String homepageId) async {
     final detail = _require(homepageId).detail;
-    return HomepageShellProjection(
+    final summary = detail.reviewSummary;
+    return HomepageShellView(
       homepage: detail,
-      reviewSummary: detail.reviewSummary,
+      reviewSummary: summary == null
+          ? null
+          : HomepageReviewSummaryData(
+              averageRating: summary.averageRating,
+              ratingCount: summary.ratingCount,
+              highlightTags: summary.highlightTags ?? const <String>[],
+            ),
       contentPreview: detail.contentPreview,
       questionPreview: detail.questionPreview,
       relatedGroups: detail.relatedGroups,
@@ -107,100 +120,106 @@ final class AlphaHomepageFacet
   }
 
   @override
-  Future<HomepageObjectPageBundleProjection> getObjectPageBundle(
+  Future<ObjectPageBundle> getObjectPageBundle(
     HomepageObjectPageBundleQuery query,
   ) async {
-    final detail = _require(query.homepageId).detail;
-    final canonicalEntityId = detail.canonicalEntityId.trim();
+    final record = _require(query.homepageId);
+    final detail = record.detail;
+    final canonicalEntityId = record.canonicalEntityId.trim();
     if (canonicalEntityId.isEmpty) {
       throw StateError(
         'entity fixture homepage "${detail.homepageId}" lacks canonicalEntityId',
       );
     }
     final related = detail.relatedGroups;
-    return HomepageObjectPageBundleProjection(
+    return ObjectPageBundle(
       objectType: 'homepage',
       objectId: detail.homepageId,
       canonicalEntityId: canonicalEntityId,
       title: detail.title,
       subtitle: detail.subtitle,
       coverUrl: detail.coverUrl,
-      objectPageTemplate: detail.objectPageTemplate,
+      objectPageTemplate: record.objectPageTemplate,
       tagRefs: detail.categoryTags,
-      stats: CloudStructuredObject(<String, CloudStructuredValue>{
-        'ratingCount': CloudStructuredNumber(detail.ratingCount),
-        'relatedGroupCount': CloudStructuredNumber(related.length),
-        'highlightCount': CloudStructuredNumber(detail.contentPreview.length),
-      }),
+      stats: <String, Object?>{
+        'ratingCount': detail.ratingCount,
+        'relatedGroupCount': related.length,
+        'highlightCount': detail.contentPreview.length,
+      },
+      intersectionReasons: const <wire.IntersectionReason>[],
       highlightItems: detail.contentPreview,
-      contentSections: CloudStructuredObject(<String, CloudStructuredValue>{
-        'home': CloudStructuredArray(detail.contentPreview),
-        'related': CloudStructuredArray(
-          related.map(_relatedGroupToStructuredObject),
-        ),
-      }),
+      contentSections: <String, Object?>{
+        'home': detail.contentPreview.map((item) => item.toWire()).toList(),
+        'related': related.map((item) => item.toWire()).toList(),
+      },
       relatedObjects: related,
-      assistantContext: CloudStructuredObject(<String, CloudStructuredValue>{
-        'objectType': const CloudStructuredText('homepage'),
-        'objectId': CloudStructuredText(detail.homepageId),
-        'canonicalEntityId': CloudStructuredText(canonicalEntityId),
-        'tagRefs': CloudStructuredArray(
-          detail.categoryTags.map(CloudStructuredText.new),
-        ),
-        'entityRefs': CloudStructuredArray(<CloudStructuredValue>[
-          CloudStructuredText(canonicalEntityId),
-        ]),
-        'referralSource': CloudStructuredText(query.referralSource ?? ''),
-        'feedRequestId': CloudStructuredText(query.feedRequestId ?? ''),
-        'recommendationTraceId': CloudStructuredText(
-          query.recommendationTraceId ?? '',
-        ),
-        'experimentBucket': CloudStructuredText(query.experimentBucket ?? ''),
-        'rolloutCohort': CloudStructuredText(query.rolloutCohort ?? ''),
-      }),
-      rolloutContext: CloudStructuredObject(<String, CloudStructuredValue>{
-        'enabled': const CloudStructuredBoolean(true),
-        'cohort': CloudStructuredText(query.rolloutCohort ?? ''),
-        'city': CloudStructuredText(detail.city ?? ''),
-        'objectType': CloudStructuredText(detail.homepageType),
-      }),
+      relationEdges: const <ObjectRelationEdge>[],
+      assistantContext: ObjectPageContext(
+        objectType: 'homepage',
+        objectId: detail.homepageId,
+        canonicalEntityId: canonicalEntityId,
+        tagRefs: detail.categoryTags,
+        entityRefs: <String>[canonicalEntityId],
+        relationEdgeIds: const <String>[],
+        referralSource: query.referralSource ?? '',
+        feedRequestId: query.feedRequestId ?? '',
+        recommendationTraceId: query.recommendationTraceId ?? '',
+        experimentBucket: query.experimentBucket ?? '',
+        rolloutCohort: query.rolloutCohort ?? '',
+      ),
+      rolloutContext: ObjectPageRolloutContext(
+        enabled: true,
+        cohort: query.rolloutCohort ?? '',
+        region: '',
+        city: detail.city ?? '',
+        campus: '',
+        appVersion: '',
+        experimentBucket: query.experimentBucket ?? '',
+        objectType: detail.homepageType,
+        assistantProactiveEnabled: false,
+        relationEvidenceEnabled: false,
+      ),
     );
   }
 
   @override
-  Future<HomepageReviewSummaryProjection> getHomepageReviewSummary(
+  Future<HomepageReviewSummaryView> getHomepageReviewSummary(
     String homepageId,
   ) async {
     return _require(homepageId).detail.reviewSummary ??
-        HomepageReviewSummaryProjection();
+        const HomepageReviewSummaryView(
+          ratingCount: 0,
+          highlightTags: <String>[],
+        );
   }
 
   @override
-  Future<HomepageImpactSummaryProjection> getEntityImpact(
-    String homepageId,
-  ) async {
+  Future<EntityImpactSummary> getEntityImpact(String homepageId) async {
     final record = _require(homepageId);
     return record.impact ??
-        HomepageImpactSummaryProjection(homepageId: record.detail.homepageId);
+        EntityImpactSummary(
+          homepageId: record.detail.homepageId,
+          total: 0,
+          items: const <EntityImpactItem>[],
+        );
   }
 
   @override
-  Future<HomepageRelatedGroupsSlice> getHomepageRelatedGroups(
+  Future<HomepageRelatedGroupSummaryView> getHomepageRelatedGroups(
     String homepageId,
   ) async {
-    return HomepageRelatedGroupsSlice(
-      _require(homepageId).detail.relatedGroups,
+    return HomepageRelatedGroupSummaryView(
+      groups: _require(homepageId).detail.relatedGroups,
     );
   }
 
   @override
-  Future<HomepageIntroductionProjection> getHomepageIntroduction(
+  Future<HomepageIntroduction> getHomepageIntroduction(
     String homepageId, {
     CloudOperationCancellationSignal? cancellation,
   }) async {
     cancellation?.throwIfCancelled();
-    final record = _require(homepageId);
-    final raw = record.introduction;
+    final raw = _require(homepageId).introduction;
     if (raw == null) {
       throw StateError(
         'entity fixture homepage "$homepageId" lacks introduction projection',
@@ -212,66 +231,92 @@ final class AlphaHomepageFacet
   }
 
   @override
-  Future<HomepageDetailProjection> suggest(
+  Future<HomepageDetailView> suggest(
     SuggestHomepageCandidateCommand command,
   ) async {
     final now = _clock();
     final homepageId = 'alpha_homepage_candidate_${_records.length + 1}';
-    final detail = HomepageDetailProjection(
+    final detail = HomepageDetailView(
       homepageId: homepageId,
       homepageType: command.homepageType,
       title: command.title,
       subtitle: command.subtitle,
       coverUrl: command.coverUrl,
       status: 'candidate',
-      sourceType: 'user_suggested',
       claimStatus: 'unclaimed',
       categoryTags: command.categoryTags,
       address: command.address,
       city: command.city,
       location: command.location == null
           ? null
-          : _geoPointToStructuredObject(command.location!),
+          : HomepageGeoPoint(
+              latitude: command.location!.lat,
+              longitude: command.location!.lng,
+            ),
+      viewerFollow: const HomepageViewerFollowSlice(
+        viewerFollowsHomepage: false,
+        followerCount: 0,
+      ),
+      verified: false,
+      ratingCount: 0,
+      contentPreview: const <HomepageContentPreview>[],
+      questionPreview: const <HomepageQuestionPreview>[],
+      relatedGroups: const <HomepageRelatedGroupSummary>[],
+      relationEdges: const <ObjectRelationEdge>[],
+      introductionAssets: const <HomepageIntroductionAsset>[],
+      sourceUrls: const <String>[],
       createdAt: now,
       updatedAt: now,
     );
-    _records[homepageId] = _AlphaHomepageRecord(detail: detail);
+    _records[homepageId] = _AlphaHomepageRecord(
+      detail: detail,
+      canonicalEntityId: '',
+      objectPageTemplate: 'standard',
+    );
     return detail;
   }
 
   @override
-  Future<HomepageDetailProjection> updateClaimedBasics(
+  Future<HomepageDetailView> updateClaimedBasics(
     UpdateClaimedHomepageBasicsCommand command,
   ) async {
     final currentRecord = _require(command.homepageId);
     final current = currentRecord.detail;
-    final updated = HomepageDetailProjection(
+    final updated = HomepageDetailView(
       homepageId: current.homepageId,
       homepageType: current.homepageType,
       title: command.title ?? current.title,
       subtitle: command.subtitle ?? current.subtitle,
       coverUrl: command.coverUrl ?? current.coverUrl,
       status: current.status,
-      canonicalEntityId: current.canonicalEntityId,
-      objectPageTemplate: current.objectPageTemplate,
-      sourceType: current.sourceType,
       claimStatus: current.claimStatus,
       categoryTags: command.categoryTags ?? current.categoryTags,
       address: command.address ?? current.address,
       city: command.city ?? current.city,
       location: command.location == null
           ? current.location
-          : _geoPointToStructuredObject(command.location!),
+          : HomepageGeoPoint(
+              latitude: command.location!.lat,
+              longitude: command.location!.lng,
+            ),
       ownerUserId: current.ownerUserId,
       ownerPersonaId: current.ownerPersonaId,
-      viewerFollowsHomepage: current.viewerFollowsHomepage,
-      followerCount: current.followerCount,
+      viewerFollow: current.viewerFollow,
+      verified: current.verified,
+      establishedYear: current.establishedYear,
       averageRating: current.averageRating,
       ratingCount: current.ratingCount,
       reviewSummary: current.reviewSummary,
       contentPreview: current.contentPreview,
       questionPreview: current.questionPreview,
       relatedGroups: current.relatedGroups,
+      structuredFacts: current.structuredFacts,
+      relationEdges: current.relationEdges,
+      assistantContext: current.assistantContext,
+      introductionMarkdown: current.introductionMarkdown,
+      introductionAssets: current.introductionAssets,
+      primarySource: current.primarySource,
+      sourceUrls: current.sourceUrls,
       createdAt: current.createdAt,
       updatedAt: _clock(),
       publishedAt: current.publishedAt,
@@ -279,6 +324,8 @@ final class AlphaHomepageFacet
     );
     _records[updated.homepageId] = _AlphaHomepageRecord(
       detail: updated,
+      canonicalEntityId: currentRecord.canonicalEntityId,
+      objectPageTemplate: currentRecord.objectPageTemplate,
       introduction: currentRecord.introduction,
       impact: currentRecord.impact,
     );
@@ -294,8 +341,11 @@ final class AlphaHomepageFacet
       claimRequestId: 'alpha_homepage_claim_${_claimRequests.length + 1}',
       homepageId: command.homepageId,
       requesterPersonaId: 'alpha-persona',
-      claimTier: command.claimTier,
-      status: 'pending_review',
+      claimTier: HomepageClaimTier.fromWire(
+        command.claimTier,
+        'AlphaHomepageFacet.claimTier',
+      ),
+      status: HomepageClaimReviewStatus.pendingReview,
       createdAt: _clock(),
     );
     _claimRequests.add(record);
@@ -311,8 +361,11 @@ final class AlphaHomepageFacet
       reportId: 'alpha_homepage_report_${_statusReports.length + 1}',
       homepageId: command.homepageId,
       reporterPersonaId: 'alpha-persona',
-      reason: command.reason,
-      status: 'pending_review',
+      reason: HomepageStatusReportReason.fromWire(
+        command.reason,
+        'AlphaHomepageFacet.reason',
+      ),
+      status: HomepageStatusReportStatus.pendingReview,
       description: command.description,
       evidenceUrls: command.evidenceUrls,
       createdAt: _clock(),
@@ -324,13 +377,9 @@ final class AlphaHomepageFacet
   _AlphaHomepageRecord _require(String homepageId) {
     final lookup = homepageId.trim();
     final direct = _records[lookup];
-    if (direct != null) {
-      return direct;
-    }
+    if (direct != null) return direct;
     for (final record in _records.values) {
-      if (record.detail.canonicalEntityId == lookup) {
-        return record;
-      }
+      if (record.canonicalEntityId == lookup) return record;
     }
     throw HomepageQueryNotFoundException(lookup);
   }
@@ -339,13 +388,17 @@ final class AlphaHomepageFacet
 final class _AlphaHomepageRecord {
   const _AlphaHomepageRecord({
     required this.detail,
+    required this.canonicalEntityId,
+    required this.objectPageTemplate,
     this.introduction,
     this.impact,
   });
 
-  final HomepageDetailProjection detail;
+  final HomepageDetailView detail;
+  final String canonicalEntityId;
+  final String objectPageTemplate;
   final Map<String, Object?>? introduction;
-  final HomepageImpactSummaryProjection? impact;
+  final EntityImpactSummary? impact;
 }
 
 Map<String, _AlphaHomepageRecord> _recordsFromFixture(
@@ -361,6 +414,9 @@ Map<String, _AlphaHomepageRecord> _recordsFromFixture(
     final detail = _detailFromFixture(row);
     records[detail.homepageId] = _AlphaHomepageRecord(
       detail: detail,
+      canonicalEntityId: _optionalText(row['canonicalEntityId']) ?? '',
+      objectPageTemplate:
+          _optionalText(row['objectPageTemplate']) ?? 'standard',
       introduction: _optionalObject(row['introduction']),
       impact: _optionalObject(row['impactSummary']) == null
           ? null
@@ -373,54 +429,149 @@ Map<String, _AlphaHomepageRecord> _recordsFromFixture(
   return records;
 }
 
-HomepageDetailProjection _detailFromFixture(Map<String, Object?> row) {
-  return HomepageDetailProjection(
+HomepageDetailView _detailFromFixture(Map<String, Object?> row) {
+  final summary = _optionalReviewSummary(row['reviewSummary']);
+  final introduction = _optionalObject(row['introduction']);
+  return HomepageDetailView(
     homepageId: _requiredText(row['homepageId'], 'homepageId'),
     homepageType: _requiredText(row['homepageType'], 'homepageType'),
     title: _requiredText(row['title'], 'title'),
     subtitle: _optionalText(row['subtitle']),
     coverUrl: _optionalText(row['coverUrl']),
     status: _optionalText(row['status']) ?? 'published',
-    canonicalEntityId: _optionalText(row['canonicalEntityId']) ?? '',
-    objectPageTemplate: _optionalText(row['objectPageTemplate']) ?? 'standard',
-    sourceType: _optionalText(row['sourceType']),
-    claimStatus: _optionalText(row['claimStatus']),
+    claimStatus: _optionalText(row['claimStatus']) ?? 'unclaimed',
     categoryTags: _stringList(row['categoryTags'], 'categoryTags'),
     address: _optionalText(row['address']),
     city: _optionalText(row['city']),
-    location: _optionalObject(row['geo']) == null
-        ? null
-        : _structuredObject(_optionalObject(row['geo'])!),
+    location: _optionalGeoPoint(row['geo']),
     ownerUserId: _optionalText(row['ownerUserId']),
     ownerPersonaId: _optionalText(row['ownerPersonaId']),
-    viewerFollowsHomepage: row['viewerFollowsHomepage'] == true,
-    followerCount: _optionalInt(row['followerCount']) ?? 0,
+    viewerFollow: HomepageViewerFollowSlice(
+      viewerFollowsHomepage: row['viewerFollowsHomepage'] == true,
+      followerCount: _optionalInt(row['followerCount']) ?? 0,
+    ),
+    verified: row['verified'] == true,
+    establishedYear: _optionalInt(row['establishedYear']),
     averageRating: _optionalDouble(row['averageRating']),
     ratingCount: _optionalInt(row['ratingCount']) ?? 0,
-    reviewSummary: _optionalReviewSummary(row['reviewSummary']),
-    contentPreview: _structuredObjectList(
-      row['contentPreview'],
-      'contentPreview',
-    ),
-    questionPreview: _structuredObjectList(
-      row['questionPreview'],
-      'questionPreview',
-    ),
+    reviewSummary: summary,
+    contentPreview: _contentPreviews(row['contentPreview']),
+    questionPreview: _questionPreviews(row['questionPreview']),
     relatedGroups: _relatedGroups(row['relatedGroups']),
-    createdAt: _optionalDateTime(row['createdAt'], 'createdAt'),
-    updatedAt: _optionalDateTime(row['updatedAt'], 'updatedAt'),
+    relationEdges: const <ObjectRelationEdge>[],
+    introductionMarkdown: introduction == null
+        ? null
+        : _optionalText(introduction['summary']),
+    introductionAssets: const <HomepageIntroductionAsset>[],
+    sourceUrls: const <String>[],
+    createdAt: _dateTimeOrEpoch(row['createdAt'], 'createdAt'),
+    updatedAt: _dateTimeOrEpoch(row['updatedAt'], 'updatedAt'),
     publishedAt: _optionalDateTime(row['publishedAt'], 'publishedAt'),
     offlineAt: _optionalDateTime(row['offlineAt'], 'offlineAt'),
   );
 }
 
-HomepageImpactSummaryProjection _impactSummaryFromFixture(
+List<HomepageContentPreview> _contentPreviews(Object? raw) {
+  return _objectList(raw, 'contentPreview')
+      .map(
+        (row) => HomepageContentPreview(
+          postId: _requiredText(row['postId'], 'contentPreview.postId'),
+          title: _requiredText(row['title'], 'contentPreview.title'),
+          summary: _optionalText(row['summary']),
+          contentType: _optionalText(row['contentType']),
+          coverUrl: _optionalText(row['coverUrl']),
+          authorName: _optionalText(row['authorName']),
+          likeCount: _optionalInt(row['likeCount']) ?? 0,
+          intersectionReasons: _objectList(
+            row['intersectionReasons'],
+            'contentPreview.intersectionReasons',
+          ).map(_intersectionReasonFromFixture).toList(growable: false),
+        ),
+      )
+      .toList(growable: false);
+}
+
+wire.IntersectionReason _intersectionReasonFromFixture(
+  Map<String, Object?> row,
+) {
+  return wire.IntersectionReason(
+    kind: _optionalText(row['kind']) ?? '',
+    vertical: _optionalText(row['vertical']) ?? 'general',
+    dimension: _optionalText(row['dimension']) ?? '',
+    tagRefs: _stringList(row['tagRefs'], 'intersectionReason.tagRefs'),
+    relationKind: _optionalText(row['relationKind']) ?? '',
+    objectKind: _optionalText(row['objectKind']) ?? '',
+    relationObjectId: _optionalText(row['relationObjectId']) ?? '',
+    strength: _optionalDouble(row['strength']) ?? 0,
+    primaryText: _optionalText(row['primaryText']) ?? '',
+    primaryTextL10nKey: _optionalText(row['primaryTextL10nKey']) ?? '',
+    displayBinding: _optionalText(row['displayBinding']) ?? 'host_plain',
+    secondaryText: _optionalText(row['secondaryText']) ?? '',
+    weightTier: _optionalText(row['weightTier']) ?? '',
+    actionType: _optionalText(row['actionType']) ?? '',
+    actionTargetId: _optionalText(row['actionTargetId']) ?? '',
+    source: _optionalText(row['source']) ?? '',
+    intersectionId: _optionalText(row['intersectionId']) ?? '',
+    intersectionClass: _optionalText(row['intersectionClass']) ?? 'fact',
+    avatarUrl: _optionalText(row['avatarUrl']) ?? '',
+    displayName: _optionalText(row['displayName']) ?? '',
+    confidenceLabel: _optionalText(row['confidenceLabel']) ?? '',
+    modelReasonBucket: _optionalText(row['modelReasonBucket']) ?? '',
+    freshAt: _optionalText(row['freshAt']) ?? '',
+    expiresAt: _optionalText(row['expiresAt']) ?? '',
+    intersectionPoints: const <wire.IntersectionPoint>[],
+    pointSummarySnapshotId: _optionalText(row['pointSummarySnapshotId']) ?? '',
+    actorEvidenceTotalCount: _optionalInt(row['actorEvidenceTotalCount']) ?? 0,
+    actorEvidenceCompleteness:
+        _optionalText(row['actorEvidenceCompleteness']) ?? 'unknown',
+    actorEvidence: const <wire.IntersectionActorEvidence>[],
+    factPointCount: _optionalInt(row['factPointCount']) ?? 0,
+    recommendedPointCount: _optionalInt(row['recommendedPointCount']) ?? 0,
+    totalPointCount: _optionalInt(row['totalPointCount']) ?? 0,
+    dimensionPointSummary: const <wire.IntersectionDimensionTally>[],
+    pointClassLabel: _optionalText(row['pointClassLabel']) ?? '',
+    connectionSummary: _optionalText(row['connectionSummary']) ?? '',
+    lastRecommendedAt: _optionalText(row['lastRecommendedAt']) ?? '',
+    seenAt: _optionalText(row['seenAt']) ?? '',
+    rankState: _optionalText(row['rankState']) ?? 'fresh',
+    primarySpans: const <wire.IntersectionTextSpan>[],
+    sampleVisuals: const <wire.IntersectionVisual>[],
+    actionHints: const <wire.IntersectionActionHint>[],
+    lifecycleState: _optionalText(row['lifecycleState']) ?? '',
+    previousStrength: _optionalDouble(row['previousStrength']) ?? 0,
+    strengthDelta: _optionalDouble(row['strengthDelta']) ?? 0,
+    edgeWeight: _optionalDouble(row['edgeWeight']) ?? 0,
+    iconKey: _optionalText(row['iconKey']) ?? '',
+    tone: _optionalText(row['tone']) ?? '',
+    timeBucket: _optionalText(row['timeBucket']) ?? '',
+    dedupeKey: _optionalText(row['dedupeKey']) ?? '',
+    anchorUserWeight: _optionalDouble(row['anchorUserWeight']) ?? 0,
+    mutualCount: _optionalInt(row['mutualCount']) ?? 0,
+    moment: _optionalText(row['moment']) ?? 'current',
+    subjectId: _optionalText(row['subjectId']) ?? '',
+    subjectContext: _optionalText(row['subjectContext']) ?? '',
+  );
+}
+
+List<HomepageQuestionPreview> _questionPreviews(Object? raw) {
+  return _objectList(raw, 'questionPreview')
+      .map(
+        (row) => HomepageQuestionPreview(
+          postId: _requiredText(row['postId'], 'questionPreview.postId'),
+          title: _requiredText(row['title'], 'questionPreview.title'),
+          summary: _optionalText(row['summary']),
+        ),
+      )
+      .toList(growable: false);
+}
+
+EntityImpactSummary _impactSummaryFromFixture(
   Map<String, Object?> raw, {
   required String homepageId,
 }) {
   final items = _objectList(raw['items'], 'impactSummary.items')
       .map(
-        (item) => HomepageImpactItemProjection(
+        (item) => EntityImpactItem(
           helpType: _optionalText(item['helpType']) ?? '',
           action: _optionalText(item['action']) ?? '',
           intersectionDimension:
@@ -431,47 +582,24 @@ HomepageImpactSummaryProjection _impactSummaryFromFixture(
           primaryText: _optionalText(item['primaryText']) ?? '',
           subtitleText: _optionalText(item['subtitleText']) ?? '',
           impactId: _optionalText(item['impactId']) ?? '',
-          primarySpans: _structuredObjectList(
-            item['primarySpans'],
-            'impactSummary.item.primarySpans',
-          ),
-          sampleVisuals: _structuredObjectList(
-            item['sampleVisuals'],
-            'impactSummary.item.sampleVisuals',
-          ),
-          representativeActor:
-              _optionalObject(item['representativeActor']) == null
-              ? null
-              : _structuredObject(
-                  _optionalObject(item['representativeActor'])!,
-                ),
-          actionHints: _structuredObjectList(
-            item['actionHints'],
-            'impactSummary.item.actionHints',
-          ),
-          countTarget: _optionalObject(item['countTarget']) == null
-              ? null
-              : _structuredObject(_optionalObject(item['countTarget'])!),
+          primarySpans: const <wire.IntersectionTextSpan>[],
+          sampleVisuals: const <wire.IntersectionVisual>[],
+          actionHints: const <wire.IntersectionActionHint>[],
           evidenceSnapshotId: _optionalText(item['evidenceSnapshotId']) ?? '',
           countObjectKind: _optionalText(item['countObjectKind']) ?? '',
-          propagationPath: _optionalObject(item['propagationPath']) == null
-              ? null
-              : _structuredObject(_optionalObject(item['propagationPath'])!),
           iconKey: _optionalText(item['iconKey']) ?? '',
         ),
       )
       .toList(growable: false);
-  return HomepageImpactSummaryProjection(
+  return EntityImpactSummary(
     homepageId: _optionalText(raw['homepageId']) ?? homepageId,
     total: _optionalInt(raw['total']) ?? items.length,
     items: items,
   );
 }
 
-HomepageIntroductionProjection _introductionFromFixture(
-  Map<String, Object?> raw,
-) {
-  return HomepageIntroductionProjection(
+HomepageIntroduction _introductionFromFixture(Map<String, Object?> raw) {
+  return HomepageIntroduction(
     homepageId: _requiredText(raw['homepageId'], 'introduction.homepageId'),
     displayName: _requiredText(raw['displayName'], 'introduction.displayName'),
     homepageType: _requiredText(
@@ -480,45 +608,49 @@ HomepageIntroductionProjection _introductionFromFixture(
     ),
     coverUrl: _optionalText(raw['coverUrl']),
     summary: _optionalText(raw['summary']) ?? '',
-    sections: _objectList(raw['sections'], 'introduction.sections').map(
-      (section) => HomepageIntroductionSectionProjection(
-        kind: _optionalText(section['kind']) ?? '',
-        title: _optionalText(section['title']) ?? '',
-        bodyMarkdown: _optionalText(section['bodyMarkdown']) ?? '',
-        assets: _objectList(section['assets'], 'introduction.section.assets')
-            .map(
-              (asset) => HomepageIntroductionAssetProjection(
-                assetId: _optionalText(asset['assetId']) ?? '',
-                url: _optionalText(asset['url']) ?? '',
-                caption: _optionalText(asset['caption']) ?? '',
-                role: _optionalText(asset['role']) ?? '',
-                sourceUrl: _optionalText(asset['sourceUrl']) ?? '',
-                width: _optionalInt(asset['width']),
-                height: _optionalInt(asset['height']),
-              ),
-            ),
-        timelineItems:
-            _objectList(
-              section['timelineItems'],
-              'introduction.section.timelineItems',
-            ).map(
-              (item) => HomepageIntroductionTimelineProjection(
-                dateLabel: _optionalText(item['dateLabel']) ?? '',
-                text: _optionalText(item['text']) ?? '',
-              ),
-            ),
-      ),
-    ),
+    sections: _objectList(raw['sections'], 'introduction.sections')
+        .map(
+          (section) => HomepageIntroductionSection(
+            kind: _optionalText(section['kind']) ?? '',
+            title: _optionalText(section['title']) ?? '',
+            bodyMarkdown: _optionalText(section['bodyMarkdown']),
+            assets:
+                _objectList(section['assets'], 'introduction.section.assets')
+                    .map(
+                      (asset) => HomepageIntroductionAsset(
+                        assetId: _optionalText(asset['assetId']) ?? '',
+                        url: _optionalText(asset['url']) ?? '',
+                        caption: _optionalText(asset['caption']),
+                        role: _optionalText(asset['role']) ?? '',
+                      ),
+                    )
+                    .toList(growable: false),
+            timelineItems:
+                _objectList(
+                      section['timelineItems'],
+                      'introduction.section.timelineItems',
+                    )
+                    .map(
+                      (item) => HomepageIntroductionTimelineItem(
+                        dateLabel: _optionalText(item['dateLabel']) ?? '',
+                        text: _optionalText(item['text']) ?? '',
+                        assetUrl: _optionalText(item['assetUrl']),
+                      ),
+                    )
+                    .toList(growable: false),
+          ),
+        )
+        .toList(growable: false),
     relatedObjects: _relatedGroups(raw['relatedObjects']),
     sourceUrls: _stringList(raw['sourceUrls'], 'introduction.sourceUrls'),
     updatedAt: _optionalText(raw['updatedAt']) ?? '',
   );
 }
 
-HomepageReviewSummaryProjection? _optionalReviewSummary(Object? raw) {
+HomepageReviewSummaryView? _optionalReviewSummary(Object? raw) {
   final row = _optionalObject(raw);
   if (row == null) return null;
-  return HomepageReviewSummaryProjection(
+  return HomepageReviewSummaryView(
     averageRating: _optionalDouble(row['averageRating']),
     ratingCount: _optionalInt(row['ratingCount']) ?? 0,
     highlightTags: _stringList(
@@ -528,10 +660,10 @@ HomepageReviewSummaryProjection? _optionalReviewSummary(Object? raw) {
   );
 }
 
-List<HomepageRelatedGroupProjection> _relatedGroups(Object? raw) {
+List<HomepageRelatedGroupSummary> _relatedGroups(Object? raw) {
   return _objectList(raw, 'relatedGroups')
       .map(
-        (row) => HomepageRelatedGroupProjection(
+        (row) => HomepageRelatedGroupSummary(
           circleId: _requiredText(row['circleId'], 'relatedGroups.circleId'),
           name: _requiredText(row['name'], 'relatedGroups.name'),
           memberCount: _optionalInt(row['memberCount']) ?? 0,
@@ -548,63 +680,24 @@ List<HomepageRelatedGroupProjection> _relatedGroups(Object? raw) {
       .toList(growable: false);
 }
 
-CloudStructuredObject _relatedGroupToStructuredObject(
-  HomepageRelatedGroupProjection group,
-) {
-  return CloudStructuredObject(<String, CloudStructuredValue>{
-    'circleId': CloudStructuredText(group.circleId),
-    'name': CloudStructuredText(group.name),
-    'memberCount': CloudStructuredNumber(group.memberCount),
-    if (group.linkedHomepageId case final value?)
-      'linkedHomepageId': CloudStructuredText(value),
-    if (group.linkedHomepageTitle case final value?)
-      'linkedHomepageTitle': CloudStructuredText(value),
-    'ownerUserId': CloudStructuredText(group.ownerUserId),
-    'ownerDisplayNameSnapshot': CloudStructuredText(
-      group.ownerDisplayNameSnapshot,
-    ),
-    'ownerAvatarUrlSnapshot': CloudStructuredText(group.ownerAvatarUrlSnapshot),
-    'evidenceSnapshotId': CloudStructuredText(group.evidenceSnapshotId),
-  });
-}
-
-CloudStructuredObject _geoPointToStructuredObject(HomepageGeoPointInput point) {
-  return CloudStructuredObject(<String, CloudStructuredValue>{
-    'lat': CloudStructuredNumber(point.lat),
-    'lng': CloudStructuredNumber(point.lng),
-  });
-}
-
-List<CloudStructuredObject> _structuredObjectList(Object? raw, String context) {
-  return _objectList(
-    raw,
-    context,
-  ).map(_structuredObject).toList(growable: false);
-}
-
-CloudStructuredObject _structuredObject(Map<String, Object?> raw) {
-  return CloudStructuredObject(
-    raw.map((key, value) => MapEntry(key, _structuredValue(value))),
+HomepageGeoPoint? _optionalGeoPoint(Object? raw) {
+  final row = _optionalObject(raw);
+  if (row == null) return null;
+  return HomepageGeoPoint(
+    latitude: _optionalDouble(row['lat']) ?? 0,
+    longitude: _optionalDouble(row['lng']) ?? 0,
   );
 }
 
-CloudStructuredValue _structuredValue(Object? value) {
-  return switch (value) {
-    null => const CloudStructuredNull(),
-    String() => CloudStructuredText(value),
-    num() => CloudStructuredNumber(value),
-    bool() => CloudStructuredBoolean(value),
-    List<Object?>() => CloudStructuredArray(value.map(_structuredValue)),
-    Map<Object?, Object?>() => _structuredObject(
-      value.map((key, value) => MapEntry(key.toString(), value)),
-    ),
-    _ => throw FormatException(
-      'entity fixture contains unsupported structured value ${value.runtimeType}',
-    ),
-  };
+HomepageType? _canonicalHomepageType(String raw) {
+  try {
+    return HomepageType.fromWire(raw, 'AlphaHomepageFacet.homepageType');
+  } on FormatException {
+    return null;
+  }
 }
 
-String _searchHaystack(HomepageDetailProjection homepage) {
+String _searchHaystack(HomepageDetailView homepage) {
   return _normalize(
     <String>[
       homepage.title,
@@ -620,9 +713,7 @@ String _normalize(String? value) => (value ?? '').trim().toLowerCase();
 
 Map<String, Object?> _requiredObject(Object? raw, String context) {
   final value = _optionalObject(raw);
-  if (value == null) {
-    throw FormatException('$context must be an object');
-  }
+  if (value == null) throw FormatException('$context must be an object');
   return value;
 }
 
@@ -685,12 +776,15 @@ double? _optionalDouble(Object? raw) {
   return raw.toDouble();
 }
 
+DateTime _dateTimeOrEpoch(Object? raw, String context) {
+  return _optionalDateTime(raw, context) ??
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+}
+
 DateTime? _optionalDateTime(Object? raw, String context) {
   final value = _optionalText(raw);
   if (value == null) return null;
   final parsed = DateTime.tryParse(value);
-  if (parsed == null) {
-    throw FormatException('$context must be ISO-8601');
-  }
+  if (parsed == null) throw FormatException('$context must be ISO-8601');
   return parsed.toUtc();
 }

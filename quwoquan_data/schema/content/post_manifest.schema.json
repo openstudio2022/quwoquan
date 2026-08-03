@@ -55,7 +55,7 @@
         "rightsBasis": { "type": "string", "minLength": 1 },
         "commercialAuthorizationStatus": { "type": "string", "minLength": 1 },
         "publicationAdmission": {
-          "enum": ["commercial_release", "risk_accepted_attribution_only"]
+          "enum": ["research_release", "commercial_release", "risk_accepted_attribution_only"]
         },
         "authorizationProofUrl": { "type": ["string", "null"] },
         "termsUrl": { "type": ["string", "null"] },
@@ -66,7 +66,8 @@
             "licensed",
             "original_authorized",
             "replaced_with_licensed_track",
-            "no_audio"
+            "no_audio",
+            "unverified"
           ]
         },
         "modelReleaseStatus": { "type": "string", "minLength": 1 },
@@ -154,7 +155,7 @@
           "license": { "$ref": "#/$defs/sourceFact" },
           "termsUrl": { "$ref": "#/$defs/sourceFact" },
           "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-          "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+          "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
           "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
           "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
         },
@@ -167,7 +168,7 @@
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-    "rightsAuditStatus": { "enum": ["verified", "unverified"] },
+    "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "template": { "type": "string", "description": "使用的模板名称" },
     "carrier": { "type": "string", "enum": ["article", "image", "video", "review"] },
@@ -242,7 +243,7 @@
           "creator": { "$ref": "#/$defs/sourceFact" },
           "collectionPageUrl": { "$ref": "#/$defs/sourceFact" },
           "license": { "$ref": "#/$defs/sourceFact" },
-          "rightsAuditStatus": { "enum": ["verified", "unverified"] }
+          "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] }
         }
       }
     },

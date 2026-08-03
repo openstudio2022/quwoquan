@@ -216,6 +216,13 @@ tables:
       - published_at
       - claimed_at
       - occurred_at
+streams:
+  events.user.persona_relationship:
+    entity: PersonaRelationship
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: PersonaRelationship outbox 的唯一 durable transport；消费方不得回读 User 存储。
 role: authoritative
 codegen:
   enabled: true

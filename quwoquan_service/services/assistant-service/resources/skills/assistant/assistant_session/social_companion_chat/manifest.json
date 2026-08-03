@@ -19,5 +19,10 @@
   "capabilityProfileRef": "capability.web2",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.general",
-  "replayAssetRef": "assistant.replay.social_companion_chat.v1"
+  "replayAssetRef": "assistant.replay.social_companion_chat",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

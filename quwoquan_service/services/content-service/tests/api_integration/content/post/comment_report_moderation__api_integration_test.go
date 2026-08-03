@@ -6,11 +6,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	"quwoquan_service/runtime/commandmeta"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
+	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
 )
 
 func TestResolvedCommentReportHidesMongoCommentExactlyOnce(t *testing.T) {
@@ -29,7 +29,7 @@ func TestResolvedCommentReportHidesMongoCommentExactlyOnce(t *testing.T) {
 	suite := newReportPostgresSuite(t)
 	defer suite.TearDown(t)
 	suite.CleanPG(t)
-	reportStore, err := persistence.NewPGReportStore(suite.PG)
+	reportStore, err := reportpersistence.NewPGReportStore(suite.PG)
 	if err != nil {
 		t.Fatalf("initialize Report PostgreSQL store: %v", err)
 	}

@@ -44,11 +44,8 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../chat/message_contracts.dart
-      response_type: ChatSendMessageResult
-      response_decoder: decodeChatSendMessageResult
     response_body: ChatSendMessageResult
+    response_entity: ChatSendMessageResult
     response_body_kind: object
     description: '发送消息（一次提交：clientMsgId 是唯一幂等身份，Idempotency-Key header 必须等于 body clientMsgId，
 
@@ -89,7 +86,6 @@ api_routes:
         - {name: conversationId, field: conversationId}
       query:
         - {name: creatorPersonaId, field: creatorPersonaId, required: false}
-        - {name: assistantSkillId, field: assistantSkillId, required: false}
         - {name: beforeSeq, field: beforeSeq, required: false}
         - {name: limit, field: limit, required: false}
     actor: none
@@ -125,7 +121,7 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.95
-    description: 仅在 creator Persona 与指定 skill 的 assistant 都是当前成员时返回有界会话上下文。
+    description: 仅在 creator Persona 与小趣助手都是当前成员时返回有界会话上下文；Skill 路由由 Assistant Service 的共享 Placement 决定。
     response_entity: Message
     response_body: ChatMessageClient
     response_body_kind: page
@@ -149,7 +145,6 @@ api_routes:
         - {name: conversationId, field: conversationId}
       query:
         - {name: creatorPersonaId, field: creatorPersonaId, required: false}
-        - {name: assistantSkillId, field: assistantSkillId, required: false}
     actor: none
     commercial:
       status: ready
@@ -185,7 +180,7 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.95
-    description: 以会话内指定 skill 的 assistant 成员发送消息；服务端复核 creator 与 assistant 当前成员资格，clientMsgId 提供稳定幂等。
+    description: 以会话内同一位小趣助手发送消息；服务端复核 creator 与 assistant 当前成员资格，clientMsgId 提供稳定幂等。
     request_entity: ChatSendAssistantDeliveryMessageCommand
     request_body_kind: object
     response_body: ChatSendMessageResult
@@ -249,11 +244,8 @@ api_routes:
       latency_p95_ms: 800
       availability_percent: 99.9
     description: 撤回消息（2 分钟内有效；已撤回消息重复撤回为 no-op 并重放原回执）
-    response_body_kind: ack
-    client_contract:
-      dart_import: ../chat/message_contracts.dart
-      response_type: ChatCommandAck
-      response_decoder: decodeChatCommandAck
+    response_entity: MessageCommandAck
+    response_body_kind: object
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.blocked
@@ -321,13 +313,9 @@ api_routes:
       reader: MessageHistoryReader
       slice: MessagePageSlice
     description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
-    response_entity: Message
+    response_entity: MessagePageSlice
     response_body: ChatMessageClient
     response_body_kind: page
-    client_contract:
-      dart_import: ../chat/message_contracts.dart
-      response_type: ChatMessagePageSlice
-      response_decoder: decodeChatMessagePageSlice
     security:
       auth_mode: required
       principal: persona
@@ -375,11 +363,8 @@ api_routes:
       availability_percent: 99.9
     description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
     response_body: ChatMessageSyncSlice
+    response_entity: ChatMessageSyncSlice
     response_body_kind: object
-    client_contract:
-      dart_import: ../chat/message_contracts.dart
-      response_type: ChatMessageSyncSlice
-      response_decoder: decodeChatMessageSyncSlice
     error_codes:
       - CHAT.USER.unauthorized
       - CHAT.USER.conversation_not_found

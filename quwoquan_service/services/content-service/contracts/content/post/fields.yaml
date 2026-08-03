@@ -1088,7 +1088,6 @@ value_objects:
       - name: assets
         type: '[]PostArticleAssetInput'
         constraints: [NOT_NULL]
-        client_wire: toJson
   PostArticleAssetManifest:
     description: Post 文章正文所引用素材的闭包与摘要。
     fields:
@@ -1116,7 +1115,6 @@ value_objects:
       - name: assets
         type: '[]PostArticleAsset'
         constraints: [NOT_NULL]
-        client_wire: toJson
   PostArticleRenderProfile:
     description: Post 文章渲染配置；布局降级规则由强类型值对象表达。
     fields:
@@ -1138,7 +1136,6 @@ value_objects:
       - name: layoutPolicy
         type: PostArticleLayoutPolicy
         constraints: [NULLABLE]
-        client_wire: toJson
       - name: width
         type: int64
         constraints: [NULLABLE]
@@ -1447,7 +1444,6 @@ types:
       - name: limit
         type: int
         client_dart_type: int
-        client_default: GeneratedContentPostGetFeedPolicy.defaultItems
       - name: blockedKeywords
         type: '[]string'
         client_dart_type: List<String>
@@ -1531,7 +1527,6 @@ types:
         type: PostHomepageSnapshot
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: assistantUsePolicy
         type: string
         enum_ref: AssistantUsePolicy
@@ -1561,7 +1556,6 @@ types:
         type: '[]PostSemanticMention'
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: coverUrl
         type: string
         constraints:
@@ -1578,12 +1572,10 @@ types:
         type: PostArticleAssetManifestInput
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: articleRenderProfile
         type: PostArticleRenderProfile
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: primaryHomepageId
         type: string
         constraints:
@@ -1597,7 +1589,6 @@ types:
         type: PostHomepageSnapshot
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: visibility
         type: string
         enum_ref: Visibility
@@ -1633,17 +1624,13 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: contentType
-        type: string
+        type: enum
         enum_ref: ContentType
-        client_dart_type: ContentPostType
-        client_wire: canonicalEnum
       - name: contentIdentity
-        type: string
+        type: enum
         enum_ref: ContentIdentity
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostIdentity?
-        client_wire: canonicalEnum
       - name: title
         type: string
         constraints:
@@ -1663,7 +1650,6 @@ types:
         type: '[]PostSemanticMention'
         client_parameter_type: Iterable<PostSemanticMention>
         client_default: const []
-        client_wire: toJson
         client_omit_empty: true
       - name: mediaAssetIds
         type: '[]string'
@@ -1686,12 +1672,10 @@ types:
         type: PostArticleAssetManifestInput
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: articleRenderProfile
         type: PostArticleRenderProfile
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: coverStrategy
         type: string
         constraints:
@@ -1711,7 +1695,6 @@ types:
         type: GeoPoint
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: locationName
         type: string
         constraints:
@@ -1748,43 +1731,34 @@ types:
         type: PostHomepageSnapshot
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: visibility
-        type: string
+        type: enum
         enum_ref: Visibility
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostVisibility?
-        client_wire: canonicalEnum
       - name: assistantUsePolicy
-        type: string
+        type: enum
         enum_ref: AssistantUsePolicy
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostAssistantUsePolicy?
-        client_wire: canonicalEnum
       - name: sourcePostId
         type: string
         constraints:
           - NULLABLE
         client_dart_type: String?
       - name: sourceType
-        type: string
+        type: enum
         enum_ref: PostSourceType
         constraints:
           - NULLABLE
-        client_dart_type: ContentPostSourceType?
-        client_wire: canonicalEnum
       - name: deviceInfo
         type: PostDeviceInfo
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: publishLocation
         type: PostPublishLocation
         constraints:
           - NULLABLE
-        client_wire: toJson
       - name: authorDisplayNameSnapshot
         type: string
         constraints:

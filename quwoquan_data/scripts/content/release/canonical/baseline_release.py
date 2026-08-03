@@ -17,6 +17,9 @@ from content.release.canonical.object_transaction_contract import (
     assert_environment_neutral,
 )
 from content.release.canonical.release_attestation import ReleaseAttestation
+from content.release.canonical.release_admission import (
+    build_release_asset_admission,
+)
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.release_layout import (
     attestation_root,
@@ -27,6 +30,7 @@ from core.release_layout import (
 )
 from core.schema import assert_valid
 from core.source_digest import current_source_digest
+from governance.coverage.distribution import load_content_distribution_policy
 
 _EMPTY_DESIRED_REFS = {"creators": [], "entities": [], "posts": [], "tags": []}
 
@@ -45,6 +49,7 @@ def build_empty_baseline_release(
     """
     del publish_root
     release_id = _safe_id(release_id, label="releaseId")
+    distribution_policy = load_content_distribution_policy()
     source_digest = current_source_digest()
     final_root = release_root / release_id
     if final_root.exists():
@@ -54,6 +59,9 @@ def build_empty_baseline_release(
         if (
             header.get("releaseId") == release_id
             and header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE
+            and header.get("releaseClass") == distribution_policy.release_class.value
+            and header.get("productLifecycleState")
+            == distribution_policy.product_lifecycle_state.value
             and header.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and header.get("canonicalMerkle") == object_closure_digest(final_root)
             and header.get("executionIds") == []
@@ -76,12 +84,34 @@ def build_empty_baseline_release(
     staging = Path(tempfile.mkdtemp(prefix=f".{release_id}.", dir=final_root.parent))
     try:
         payload = payload_root(staging)
+        asset_admission = build_release_asset_admission(
+            release_id=release_id,
+            objects_root=payload / "objects",
+            desired=_EMPTY_DESIRED_REFS,
+            policy=distribution_policy,
+        )
+        assert_valid(
+            asset_admission,
+            "release",
+            "release_asset_admission",
+            label=f"release_asset_admission:{release_id}",
+        )
+        _write_json(payload / "asset_admission.json", asset_admission)
         canonical_merkle = object_closure_digest(staging, create=True)
         release_header = {
             "schema": RELEASE_SCHEMA,
             "releaseId": release_id,
             "sourceOwner": DataSourceOwner.QWQ_DATA,
             "releaseKind": ReleaseKind.EMPTY_BASELINE,
+            "releaseClass": distribution_policy.release_class.value,
+            "productLifecycleState": (
+                distribution_policy.product_lifecycle_state.value
+            ),
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": asset_admission["rightsStatusCounts"],
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 0,
+            "commercialAcceptedCount": 0,
             "canonicalMerkle": canonical_merkle,
             "executionIds": [],
             "sourceDigests": [source_digest.to_document()],
@@ -133,6 +163,13 @@ def build_empty_baseline_release(
             release_id=release_id,
             source_owner=DataSourceOwner.QWQ_DATA,
             release_kind=ReleaseKind.EMPTY_BASELINE,
+            release_class=distribution_policy.release_class,
+            product_lifecycle_state=distribution_policy.product_lifecycle_state,
+            contains_unverified_assets=False,
+            rights_status_counts=dict(asset_admission["rightsStatusCounts"]),
+            authorization_required_asset_ids=(),
+            research_accepted_count=0,
+            commercial_accepted_count=0,
             execution_ids=(),
             entity_count=0,
             post_count=0,

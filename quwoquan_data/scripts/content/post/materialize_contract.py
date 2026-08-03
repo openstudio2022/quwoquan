@@ -408,7 +408,12 @@ def _image_source_contract(
             str(asset.get("rightsAuditStatus") or "").strip()
             for asset in assets
         }
-        if not audit_statuses or not audit_statuses <= {"verified", "unverified"}:
+        if not audit_statuses or not audit_statuses <= {
+            "verified",
+            "unverified",
+            "restricted",
+            "unknown",
+        }:
             missing.append("rightsAuditStatus")
         else:
             resolved["rightsAuditStatus"] = (

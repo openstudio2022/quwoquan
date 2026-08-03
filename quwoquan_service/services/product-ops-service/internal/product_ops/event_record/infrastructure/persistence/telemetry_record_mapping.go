@@ -13,7 +13,7 @@ import (
 
 // eventRecordFields is the provider-neutral persisted projection for EventRecord.
 // Every log sink adapter must consume this mapping so field names, privacy and
-// batch identity cannot drift between Elasticsearch and SLS.
+// batch identity cannot drift between Elasticsearch write and repair paths.
 func eventRecordFields(record application.EventRecord) map[string]string {
 	fields := map[string]string{
 		"logType":            record.LogType,

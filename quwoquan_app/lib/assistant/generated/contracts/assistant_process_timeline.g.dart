@@ -35,6 +35,46 @@ class AssistantProcessTimelineFrameWire {
       };
 
   factory AssistantProcessTimelineFrameWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'frameId',
+      'stepId',
+      'status',
+      'order',
+      'headline',
+      'detail',
+      'references',
+      'payload',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantProcessTimelineFrameWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('frameId') || json['frameId'] == null || (json['frameId'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field frameId has an invalid wire value');
+    }
+    if (json.containsKey('stepId') && json['stepId'] != null && (json['stepId'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field stepId has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field status has an invalid wire value');
+    }
+    if (json.containsKey('order') && json['order'] != null && (json['order'] is! num)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field order has an invalid wire value');
+    }
+    if (json.containsKey('headline') && json['headline'] != null && (json['headline'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field headline has an invalid wire value');
+    }
+    if (json.containsKey('detail') && json['detail'] != null && (json['detail'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field detail has an invalid wire value');
+    }
+    if (json.containsKey('references') && json['references'] != null && (json['references'] is! List || (json['references'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field references has an invalid wire value');
+    }
+    if (json.containsKey('payload') && json['payload'] != null && (json['payload'] is! Map)) {
+      throw const FormatException('AssistantProcessTimelineFrameWire field payload has an invalid wire value');
+    }
     return AssistantProcessTimelineFrameWire(
       frameId: (json['frameId'] as String?)?.trim() ?? "",
       stepId: (json['stepId'] as String?)?.trim() ?? "",
@@ -84,6 +124,26 @@ class AssistantProcessTimelineWire {
       };
 
   factory AssistantProcessTimelineWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'frames',
+      'activeFrameId',
+      'summary',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantProcessTimelineWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('frames') && json['frames'] != null && (json['frames'] is! List || (json['frames'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantProcessTimelineWire field frames has an invalid wire value');
+    }
+    if (json.containsKey('activeFrameId') && json['activeFrameId'] != null && (json['activeFrameId'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineWire field activeFrameId has an invalid wire value');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AssistantProcessTimelineWire field summary has an invalid wire value');
+    }
     return AssistantProcessTimelineWire(
       frames: (json['frames'] as List?)?.whereType<Map>().map((item) => AssistantProcessTimelineFrameWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantProcessTimelineFrameWire>[],
       activeFrameId: (json['activeFrameId'] as String?)?.trim() ?? "",

@@ -37,6 +37,67 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
     return l10n.monthDayTemplate(local.month, local.day);
   }
 
+  Widget _buildDataControlSection({
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color blockBg,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: blockBg,
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            CupertinoIcons.lock_shield,
+            size: AppSpacing.iconSmall,
+            color: AppColors.primaryColor,
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AssistantText.assistantSkillDataControlTitle,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: AppTypography.semiBold,
+                    color: fgPrimary,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.two),
+                Text(
+                  AssistantText.assistantSkillDataControlDescription,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    color: fgSecondary,
+                    height: AppTypography.lineHeightCompact,
+                  ),
+                ),
+                CupertinoButton(
+                  key: const ValueKey<String>(
+                    'assistant_skill_data_control_action',
+                  ),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                  onPressed: () =>
+                      context.push(AppRoutePaths.assistantManagement),
+                  child: const Text(
+                    AssistantText.assistantSkillDataControlAction,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPackageSection({
     required AppLocalizations l10n,
     required List<AssistantSkillCenterItem> skills,
@@ -79,21 +140,16 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
           SizedBox(height: AppSpacing.intraGroupSm),
           ...packages.entries.map((entry) {
             final list = entry.value;
-            final subscribed = list
-                .where((skill) => skill.hasSubscription)
-                .toList(growable: false);
             final enabled =
-                subscribed.isNotEmpty &&
-                subscribed.every((skill) => skill.enabled);
+                list.isNotEmpty && list.every((skill) => skill.enabled);
             return _buildSwitchRow(
               label: entry.key,
-              desc: subscribed.isEmpty
-                  ? AssistantText.assistantSkillCenterNoSubscribedSkills
-                  : l10n.assistantSkillCenterSubscribedCount(subscribed.length),
+              desc:
+                  '${list.length} ${AssistantText.assistantSkillPackageSkillCount}',
               value: enabled,
-              onChanged: subscribed.isEmpty
+              onChanged: list.isEmpty
                   ? null
-                  : (value) => _togglePackage(subscribed, value),
+                  : (value) => _togglePackage(list, value),
               fgPrimary: fgPrimary,
               fgSecondary: fgSecondary,
             );
@@ -360,6 +416,170 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
     );
   }
 
+  Widget _buildConnectorSection({
+    required AsyncValue<AssistantConnectorCenterState> connectorsAsync,
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color blockBg,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: blockBg,
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AssistantText.assistantConnectorTitle,
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: AppTypography.semiBold,
+              color: fgPrimary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.two),
+          Text(
+            AssistantText.assistantConnectorDescription,
+            style: TextStyle(
+              fontSize: AppTypography.xs,
+              color: fgSecondary,
+              height: AppTypography.lineHeightCompact,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          connectorsAsync.when(
+            loading: AppRequestFeedback.section,
+            error: (error, _) => AppSectionErrorCard(
+              margin: EdgeInsets.zero,
+              semantic: ensureRetryUiErrorSemantic(
+                runtimeErrorSemantic(
+                  context,
+                  error: error,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                ),
+              ),
+              onAction: (action) async {
+                if (action.type == UiErrorActionType.retry ||
+                    action.type == UiErrorActionType.resubmit) {
+                  ref.invalidate(assistantConnectorCenterProvider);
+                }
+              },
+            ),
+            data: (state) {
+              if (state.definitions.isEmpty) {
+                return Text(
+                  AssistantText.assistantConnectorEmpty,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                );
+              }
+              return Column(
+                children: state.definitions
+                    .map((definition) {
+                      final connection = state.connectionFor(
+                        definition.connectorId,
+                      );
+                      final connected =
+                          connection?.status ==
+                          ConnectorConnectionStatus.active;
+                      final activity = connection == null
+                          ? null
+                          : state.latestInvocationFor(connection.connectionId);
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: AppSpacing.intraGroupSm,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              CupertinoIcons.link,
+                              size: AppSpacing.iconSmall,
+                              color: connected
+                                  ? AppColors.primaryColor
+                                  : fgSecondary,
+                            ),
+                            SizedBox(width: AppSpacing.intraGroupSm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    definition.displayName,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.sm,
+                                      color: fgPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _connectorStatusLabel(connection),
+                                    style: TextStyle(
+                                      fontSize: AppTypography.xs,
+                                      color: fgSecondary,
+                                    ),
+                                  ),
+                                  if (activity != null)
+                                    Text(
+                                      '${AssistantText.assistantConnectorRecentActivity} · '
+                                      '${activity.capability} · ${activity.status.wireName}',
+                                      style: TextStyle(
+                                        fontSize: AppTypography.xs,
+                                        color: fgSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (connected)
+                              CupertinoButton(
+                                key: ValueKey<String>(
+                                  'assistant_connector_revoke_${definition.connectorId}',
+                                ),
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size.square(
+                                  AppSpacing.minInteractiveSize,
+                                ),
+                                onPressed: _updating
+                                    ? null
+                                    : () => _revokeConnectorConnection(
+                                        connection!,
+                                      ),
+                                child: const Text(
+                                  AssistantText.assistantConnectorDisconnect,
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _connectorStatusLabel(ConnectorConnectionView? connection) {
+    if (connection == null) {
+      return '${AssistantText.assistantConnectorDisconnected} · '
+          '${AssistantText.assistantConnectorPendingNative}';
+    }
+    return switch (connection.status) {
+      ConnectorConnectionStatus.active =>
+        AssistantText.assistantConnectorConnected,
+      ConnectorConnectionStatus.revoked =>
+        AssistantText.assistantConnectorRevoked,
+      _ => connection.status.wireName,
+    };
+  }
+
   Widget _buildSkillRow({
     required AssistantSkillCenterItem skill,
     required Color fgPrimary,
@@ -374,46 +594,140 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
       ),
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.intraGroupSm),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              CupertinoIcons.cube_box,
-              size: AppSpacing.iconSmall,
-              color: skill.enabled ? AppColors.primaryColor : fgSecondary,
+            Row(
+              children: [
+                Icon(
+                  CupertinoIcons.cube_box,
+                  size: AppSpacing.iconSmall,
+                  color: skill.enabled ? AppColors.primaryColor : fgSecondary,
+                ),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        skill.catalog.displayName,
+                        style: TextStyle(
+                          fontSize: AppTypography.base,
+                          color: fgPrimary,
+                        ),
+                      ),
+                      Text(
+                        '${_skillCategoryLabel(skill)} · '
+                        '${_skillStatusLabel(skill)}',
+                        style: TextStyle(
+                          fontSize: AppTypography.xs,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                CupertinoSwitch(
+                  key: ValueKey<String>(
+                    'assistant_skill_toggle_${skill.skillId}',
+                  ),
+                  value: skill.enabled,
+                  activeTrackColor:
+                      SettingsSemanticConstants.switchActiveTrackColor,
+                  inactiveTrackColor:
+                      SettingsSemanticConstants.switchInactiveTrackColor(
+                        ref.watch(isDarkProvider),
+                      ),
+                  onChanged: (v) => _toggleSkill(skill, v),
+                ),
+              ],
             ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    skill.catalog.displayName,
+            if ((skill.catalog.description ?? '').trim().isNotEmpty) ...[
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                skill.catalog.description!.trim(),
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  color: fgSecondary,
+                  height: AppTypography.lineHeightCompact,
+                ),
+              ),
+            ],
+            if (skill.catalog.dataUseSummary.trim().isNotEmpty) ...[
+              SizedBox(height: AppSpacing.two),
+              Text(
+                skill.catalog.dataUseSummary.trim(),
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  color: fgSecondary,
+                  height: AppTypography.lineHeightCompact,
+                ),
+              ),
+            ],
+            if (skill.proactiveCapable) ...[
+              SizedBox(height: AppSpacing.intraGroupXs),
+              _buildSwitchRow(
+                label: AssistantText.assistantSkillProactiveReminder,
+                desc: skill.hasSubscription
+                    ? (skill.proactiveEnabled
+                          ? AssistantText.assistantSkillSubscribed
+                          : AssistantText.assistantSkillPaused)
+                    : AssistantText.assistantSkillProactiveNotConfigured,
+                value: skill.proactiveEnabled,
+                switchKey: ValueKey<String>(
+                  'assistant_skill_proactive_${skill.skillId}',
+                ),
+                onChanged: (value) => _toggleProactive(skill, value),
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+              ),
+            ],
+            if (skill.catalog.requiredConsentScopes.isNotEmpty) ...[
+              SizedBox(height: AppSpacing.intraGroupXs),
+              CupertinoButton(
+                key: ValueKey<String>(
+                  'assistant_skill_consent_${skill.skillId}',
+                ),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                onPressed: () => _toggleConsent(skill),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    skill.consent == null
+                        ? AssistantText.assistantSkillConsentGrant
+                        : AssistantText.assistantSkillConsentRevoke,
                     style: TextStyle(
-                      fontSize: AppTypography.base,
-                      color: fgPrimary,
+                      fontSize: AppTypography.sm,
+                      color: AppColors.primaryColor,
                     ),
                   ),
+                ),
+              ),
+            ],
+            CupertinoButton(
+              key: ValueKey<String>('assistant_skill_detail_${skill.skillId}'),
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+              onPressed: _updating ? null : () => _openSkillDetail(skill),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Text(
-                    '${_skillCategoryLabel(skill)} · '
-                    '${_skillStatusLabel(skill)}',
+                    AssistantText.assistantSkillDetailsAndSettings,
                     style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: fgSecondary,
+                      fontSize: AppTypography.sm,
+                      color: AppColors.primaryColor,
                     ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: AppSpacing.iconSmall,
+                    color: AppColors.primaryColor,
                   ),
                 ],
               ),
-            ),
-            CupertinoSwitch(
-              key: ValueKey<String>('assistant_skill_toggle_${skill.skillId}'),
-              value: skill.enabled,
-              activeTrackColor:
-                  SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor:
-                  SettingsSemanticConstants.switchInactiveTrackColor(
-                    ref.watch(isDarkProvider),
-                  ),
-              onChanged: (v) => _toggleSkill(skill, v),
             ),
           ],
         ),
@@ -425,6 +739,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
     required String label,
     required String desc,
     required bool value,
+    Key? switchKey,
     required ValueChanged<bool>? onChanged,
     required Color fgPrimary,
     required Color fgSecondary,
@@ -456,6 +771,7 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
             ),
           ),
           CupertinoSwitch(
+            key: switchKey,
             value: value,
             activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
             inactiveTrackColor:

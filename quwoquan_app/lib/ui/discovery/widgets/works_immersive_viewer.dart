@@ -8,8 +8,6 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show AssistantIntersectionEvidenceRef;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -18,12 +16,8 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     as runtime_error_display;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/source_attribution_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_item_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_media_item_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
 import 'package:quwoquan_app/application/content/media/video_preview_track_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
     show contentPostDeleteIdempotencyKey;
@@ -41,7 +35,6 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_intersect
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_action_sheet.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
@@ -54,6 +47,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/ui/discovery/models/work_browser_view_data.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentType;
@@ -182,7 +176,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final VoidCallback? onRevealSystemNav;
   final VoidCallback? onHideSystemNav;
   final bool showTopNavigation;
-  final List<PostBaseDto>? externalPosts;
+  final List<ContentPostViewData>? externalPosts;
   final List<ContentSurfaceView>? externalPostViews;
   final int initialPostIndex;
   final int initialImageIndex;
@@ -225,7 +219,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   // Dwell tracking：记录当前帖子进入时间
   DateTime? _pageEnterTime;
-  PostBaseDto? _activeTrackedPost;
+  ContentPostViewData? _activeTrackedPost;
   _WorksTrackingAttribution? _activeTrackingAttribution;
   final DateTime _viewerOpenedAt = DateTime.now();
   final Map<String, Map<int, WorksViewerOriginalImageAccess>>
@@ -243,8 +237,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   final Set<String> _failedArticleHydrationIds = <String>{};
   final Map<String, Object> _failedArticleHydrationErrorsById =
       <String, Object>{};
-  final WorksViewerLruCache<String, WorkBrowserItemDto> _workItemCache =
-      WorksViewerLruCache<String, WorkBrowserItemDto>();
+  final WorksViewerLruCache<String, WorkBrowserViewData> _workItemCache =
+      WorksViewerLruCache<String, WorkBrowserViewData>();
   late final WorksViewerPostStateWindow _postStateWindow;
   final ImmersiveGestureIntentController _gestureIntentController =
       ImmersiveGestureIntentController();
@@ -309,7 +303,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     _postStateWindow.touch(postId);
   }
 
-  void _retainPostLocalStateAround(List<PostBaseDto> posts, int visibleIndex) {
+  void _retainPostLocalStateAround(List<ContentPostViewData> posts, int visibleIndex) {
     if (posts.isEmpty) {
       return;
     }

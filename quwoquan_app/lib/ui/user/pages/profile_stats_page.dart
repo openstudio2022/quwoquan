@@ -541,7 +541,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
             .toList(growable: false);
         return CursorPage<Object>(
           items: items.cast<Object>(),
-          nextCursor: page.nextCursor,
+          nextCursor: page.cursor,
         );
       case _ProfileStatsTab.following:
         final page = await relationshipQuery.listFollowing(

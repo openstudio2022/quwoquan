@@ -371,20 +371,22 @@ verify-env-packaging:
 	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py && \
 	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
 
+OBSERVABILITY_TARGET ?= alpha-local
+
 observability-es-up:
-	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py up
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json up --target "$(OBSERVABILITY_TARGET)" --workload full --skip-app --skip-build
 
 observability-es-down:
-	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py down
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json down --target "$(OBSERVABILITY_TARGET)"
 
 observability-es-health:
-	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py health
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json product-telemetry-log-sink --target "$(OBSERVABILITY_TARGET)" --action health
 
 observability-es-bootstrap:
-	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py bootstrap
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json product-telemetry-log-sink --target "$(OBSERVABILITY_TARGET)" --action cold-start
 
 observability-es-smoke:
-	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py smoke
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json product-telemetry-log-sink --target "$(OBSERVABILITY_TARGET)" --action all
 
 verify-reliable-task-topology:
 	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_catalog.py

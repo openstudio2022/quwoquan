@@ -77,10 +77,10 @@ class _InteractionContractRepository
   }
 
   @override
-  Future<ContentProfileInteractionReadFactAck> appendReadFact(
+  Future<ProfileInteractionReadFactAck> appendReadFact(
     AppendContentProfileInteractionReadFactCommand command,
   ) async {
-    return ContentProfileInteractionReadFactAck(
+    return ProfileInteractionReadFactAck(
       factId: 'fact-${command.activityId}-${command.state.wireValue}',
       activityId: command.activityId,
       state: command.state.wireValue,

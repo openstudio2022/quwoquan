@@ -803,6 +803,8 @@ class _RecordingHomepageRepository extends MockHomepageRepository {
       title: '上下文主页',
       objectPageTemplate: 'campus',
       tagRefs: const <String>['entity/campus'],
+      stats: const <String, dynamic>{},
+      contentSections: const <String, dynamic>{},
       assistantContext: ObjectPageContext(
         objectType: 'homepage',
         objectId: homepageId,
@@ -816,8 +818,14 @@ class _RecordingHomepageRepository extends MockHomepageRepository {
       rolloutContext: ObjectPageRolloutContext(
         enabled: true,
         cohort: rolloutCohort,
+        region: '',
+        city: '',
+        campus: '',
+        appVersion: '',
         experimentBucket: experimentBucket,
         objectType: 'university',
+        assistantProactiveEnabled: false,
+        relationEvidenceEnabled: false,
       ),
     );
   }
@@ -877,6 +885,8 @@ class _TaggedHomepageRepository extends MockHomepageRepository {
       title: '打标主页',
       objectPageTemplate: 'travel_photo',
       tagRefs: tagRefs,
+      stats: const <String, dynamic>{},
+      contentSections: const <String, dynamic>{},
       assistantContext: ObjectPageContext(
         objectType: 'homepage',
         objectId: homepageId,
@@ -890,8 +900,14 @@ class _TaggedHomepageRepository extends MockHomepageRepository {
       rolloutContext: ObjectPageRolloutContext(
         enabled: true,
         cohort: rolloutCohort,
+        region: '',
+        city: '',
+        campus: '',
+        appVersion: '',
         experimentBucket: experimentBucket,
         objectType: 'sight',
+        assistantProactiveEnabled: false,
+        relationEvidenceEnabled: false,
       ),
     );
   }

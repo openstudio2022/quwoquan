@@ -1,0 +1,32 @@
+kind: aggregate_root
+description: >-
+  账号为一个官方 Connector 建立 device-native 或 OAuth2 授权的短生命周期聚合。
+  它拥有 challenge、受保护证明校验、credentialRef 与一次性 grant receipt，公开边界
+  只返回不透明 continuation/grant reference 和脱敏状态。
+identity:
+  fields: [authorizationId]
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
+- {name: connectorDefinition, kind: reference, target_object: integration.ConnectorDefinition, cardinality: 'N:1', reference_fields: [connectorId], access: named_reader, consistency: strong, on_delete: restrict}
+capabilities: [commandable, queryable, idempotent_commands, credential_protected]
+taggable: false
+vector_enabled: false
+business_rules:
+- requestedCapabilities 必须是 active ConnectorDefinition.capabilities 的非空子集，authorizationMode 必须与该 immutable definition 一致
+- device_native 只接受受信 native attestation adapter 验证后的 proofRef；oauth2 只接受受信 callback adapter 校验 state、PKCE 与 provider response 后的 callbackRef
+- public_link 不创建 ConnectorAuthorization；不得把客户端自报权限、任意 URL、authorization code、token 或 Provider 原始正文当作授权成功
+- credentialRef、proof、state、PKCE verifier 与 Provider 错误正文只能存在于受保护存储或 adapter 内，不得进入 HTTP DTO、Assistant context、日志、trace、metric label 或 evidence 正文
+- verified grant receipt 具有短 TTL，并绑定 accountId、connectorId、authorizationMode、完整 capability 集合与 proof digest；ConnectorConnection 只能消费未过期且未被其他连接使用的 receipt
+- 授权状态、幂等回执、脱敏 outbox 与受保护 grant receipt 必须原子提交；撤权后 credential refresh 和后续 invocation 在下一个安全边界 fail closed
+lifecycle:
+  state_field: status
+  states: [pending, verified, consumed, expired, revoked, failed]
+  optimistic_concurrency: revision
+  idempotency: command_receipt
+  terminal_events: [ConnectorAuthorizationConsumed, ConnectorAuthorizationExpired, ConnectorAuthorizationRevoked]

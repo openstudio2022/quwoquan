@@ -9,7 +9,7 @@ class ActiveCallState {
   final bool isInCall;
   final bool isPipMode;
   final Duration elapsed;
-  final List<CallParticipantDto> participants;
+  final List<CallParticipant> participants;
 
   const ActiveCallState({
     this.callId,
@@ -26,7 +26,7 @@ class ActiveCallState {
     bool? isInCall,
     bool? isPipMode,
     Duration? elapsed,
-    List<CallParticipantDto>? participants,
+    List<CallParticipant>? participants,
   }) {
     return ActiveCallState(
       callId: callId ?? this.callId,
@@ -73,7 +73,7 @@ class ActiveCallNotifier extends Notifier<ActiveCallState> {
   void startCall({
     required String callId,
     required String callType,
-    List<CallParticipantDto> participants = const [],
+    List<CallParticipant> participants = const [],
   }) {
     _stopTimer();
     state = ActiveCallState(
@@ -102,7 +102,7 @@ class ActiveCallNotifier extends Notifier<ActiveCallState> {
     state = state.copyWith(isPipMode: false);
   }
 
-  void updateParticipants(List<CallParticipantDto> participants) {
+  void updateParticipants(List<CallParticipant> participants) {
     if (!state.isInCall) return;
     state = state.copyWith(participants: participants);
   }

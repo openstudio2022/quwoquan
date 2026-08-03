@@ -496,6 +496,15 @@ func TestListFollowing_Pagination(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
+	if len(result) != 2 {
+		t.Fatalf("following list must return exact FollowingRelationshipPageSlice: %#v", result)
+	}
+	if _, legacy := result["cursor"]; legacy {
+		t.Fatalf("following list retains legacy cursor response key: %#v", result)
+	}
+	if _, exists := result["nextCursor"]; !exists {
+		t.Fatalf("following list missing canonical nextCursor: %#v", result)
+	}
 	items, ok := result["items"].([]any)
 	if !ok {
 		t.Fatal("missing items field")

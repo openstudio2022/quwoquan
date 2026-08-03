@@ -1,36 +1,72 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/post_read_presentation_mapper.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// [ContentReadRepository.getPost] 的强类型封装：已解析的 [PostBaseDto] + 扩展 wire 的
-/// [ContentPostDetailWireDto]；服务端原始 JSON 保留于 [_canonicalWire] 仅用于合并诊断。
-///
-/// UI 应优先使用 [post]、[detailWire] 与 [readPresentation]；文章详情/沉浸器请使用
-/// [mergedArticleWireMap]（由 DTO 序列化，而非裸 Map 业务状态）。
-class ContentPostDetailPayload {
-  ContentPostDetailPayload._(this.post, this.detailWire, this._canonicalWire);
+/// Typed App projection of the canonical `GetPost` response.
+final class ContentPostDetailPayload {
+  ContentPostDetailPayload._(this.post, this.detailWire);
 
-  /// 自网关 JSON 对象构造；[post]、[detailWire] 与 [_canonicalWire] 同源。
-  factory ContentPostDetailPayload.fromWire(Map<String, dynamic> wire) {
-    final copy = Map<String, dynamic>.from(wire);
+  factory ContentPostDetailPayload.fromWire(ContentPostDetailSlice wire) {
     return ContentPostDetailPayload._(
-      postBaseDtoFromMap(copy),
-      ContentPostDetailWireDto.fromMap(copy),
-      Map<String, dynamic>.from(wire),
+      ContentPostViewData.fromWire(
+        ContentPostProjection(
+          postId: wire.postId,
+          contentType: wire.contentType,
+          contentIdentity: wire.contentIdentity,
+          assistantUsePolicy: wire.assistantUsePolicy,
+          authorId: wire.authorId,
+          authorDisplayName: wire.authorDisplayName,
+          authorAvatarUrl: wire.authorAvatarUrl,
+          title: wire.title,
+          body: wire.body,
+          summary: wire.summary,
+          coverUrl: wire.coverUrl,
+          articleTemplate: wire.articleTemplate,
+          articleFontPreset: wire.articleFontPreset,
+          mediaUrls: wire.mediaUrls,
+          videoUrl: wire.videoUrl,
+          thumbnailUrl: wire.thumbnailUrl,
+          width: wire.width,
+          height: wire.height,
+          durationMs: wire.durationMs,
+          likeCount: wire.likeCount,
+          commentCount: wire.commentCount,
+          shareCount: wire.shareCount,
+          createdAt: wire.createdAt,
+          updatedAt: wire.updatedAt,
+          publishedAt: wire.publishedAt,
+          contentVertical: wire.contentVertical,
+        ),
+        sourceAttribution: wire.sourceAttribution,
+      ),
+      wire,
     );
   }
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
+  final ContentPostDetailSlice detailWire;
 
-  /// GET post 响应中基类之外的扩展字段（metadata: content_post_detail_wire.yaml）。
-  final ContentPostDetailWireDto detailWire;
+  /// App presentation data derived from the already-decoded canonical wire.
+  Map<String, dynamic> get mergedArticleWireMap => <String, dynamic>{
+    ...post.toPresentationMap(),
+    if (detailWire.articleMarkdown != null)
+      ArticleDetailWireKeys.articleMarkdown: detailWire.articleMarkdown,
+    if (detailWire.markdownDialect != null)
+      ArticleDetailWireKeys.markdownDialect: detailWire.markdownDialect,
+    if (detailWire.articleAssetManifest != null)
+      ArticleDetailWireKeys.articleAssetManifest: detailWire
+          .articleAssetManifest!
+          .toWire(),
+    if (detailWire.articleRenderProfile != null)
+      ArticleDetailWireKeys.articleRenderProfile: detailWire
+          .articleRenderProfile!
+          .toWire(),
+    if (detailWire.articleTemplate != null)
+      ArticleDetailWireKeys.articleTemplate: detailWire.articleTemplate,
+    if (detailWire.articleFontPreset != null)
+      ArticleDetailWireKeys.articleFontPreset: detailWire.articleFontPreset,
+  };
 
-  final Map<String, dynamic> _canonicalWire;
-
-  /// 详情页/沉浸式文章 wire。Post 详情不承载 CirclePostPlacement；文章正文真相源为
-  /// `articleMarkdown`，不回写历史 blocks/pages/cards 竞争内容源。
-  Map<String, dynamic> get mergedArticleWireMap =>
-      Map<String, dynamic>.from(_canonicalWire);
-
-  /// 只读投影（字段来自 metadata [PostReadPresentation] + 文章扩展 wire 键）。
   PostReadPresentation get readPresentation =>
-      PostReadPresentation.fromPostBase(post, wire: mergedArticleWireMap);
+      PostReadPresentationMapper.fromViewData(post, wire: mergedArticleWireMap);
 }

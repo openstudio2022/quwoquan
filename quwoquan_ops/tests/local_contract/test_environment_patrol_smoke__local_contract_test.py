@@ -54,6 +54,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "platform": "all",
             "device_id": [],
             "dry_run": False,
+            "stackctl_controlled_edge_fault": False,
             "timeout_seconds": 1200,
             "report": ".qwq_output/env/repo/runs/device-matrix/environment-smoke/report.json",
         }
@@ -141,6 +142,62 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(smoke._read_runtime_recovery_evidence(log_path), {})
+
+    def test_controlled_edge_evidence_requires_copy_and_same_install_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            log_path = Path(temporary_dir) / "patrol.log"
+            log_path.write_text(
+                "QWQ_APP_CONTENT_FAULT_EVIDENCE "
+                + json.dumps(
+                    {
+                        "environment": "gamma",
+                        "copyKey": "connectionUnavailable",
+                        "singlePrimaryAction": True,
+                        "forbiddenBrandAbsent": True,
+                        "technicalDetailsAbsent": True,
+                        "blockedRetryCount": 5,
+                        "blockingErrorRetained": True,
+                        "sameInstallRecovery": True,
+                        "recoveredVisibleCardCount": 2,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            evidence = smoke._read_controlled_edge_fault_evidence(log_path)
+            self.assertEqual(evidence["copyKey"], "connectionUnavailable")
+            self.assertEqual(evidence["recoveredVisibleCardCount"], 2)
+
+            log_path.write_text(
+                'QWQ_APP_CONTENT_FAULT_EVIDENCE '
+                '{"environment":"gamma","copyKey":"reloadLater",'
+                '"singlePrimaryAction":true,"forbiddenBrandAbsent":true,'
+                '"technicalDetailsAbsent":true,"blockedRetryCount":5,'
+                '"blockingErrorRetained":true,"sameInstallRecovery":true,'
+                '"recoveredVisibleCardCount":2}\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                smoke._read_controlled_edge_fault_evidence(log_path),
+                {},
+            )
+
+    def test_run_command_streams_restore_marker_before_process_exit(self) -> None:
+        observed: list[str] = []
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            result = smoke.run_command(
+                [
+                    sys.executable,
+                    "-c",
+                    "print('QWQ_APP_CONTENT_EDGE_RESTORE_REQUEST {}', flush=True)",
+                ],
+                cwd=Path(temporary_dir),
+                timeout_seconds=5,
+                output_line_handler=observed.append,
+            )
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(len(observed), 1)
+        self.assertIn("QWQ_APP_CONTENT_EDGE_RESTORE_REQUEST", observed[0])
 
     def test_runtime_recovery_requires_persisted_session_without_injected_identity(self) -> None:
         target = smoke.RUNTIME_RECOVERY_TARGET
@@ -933,8 +990,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
     ) -> None:
         args = self._args()
         command_env: dict[str, str] = {}
+        acquire_consumer_lease.return_value = {"leaseId": "lease-android"}
 
-        lease = smoke._acquire_android_patrol_consumer_lease(
+        lease = smoke._acquire_patrol_consumer_lease(
             args,
             {
                 "id": "emulator-5554",
@@ -952,6 +1010,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
 
         self.assertEqual(lease[0:2], ("gamma-local", "emulator-5554"))
+        self.assertEqual(lease[3], "lease-android")
         self.assertEqual(command_env["QWQ_CONSUMER_LEASE_ACQUIRED"], "1")
         self.assertEqual(command_env["QWQ_ANDROID_LOCAL_PORTS"], "19000,19100")
         acquire_consumer_lease.assert_called_once_with(
@@ -960,6 +1019,40 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             consumer=lease[2],
             package_name="com.quwoquan.quwoquan_app",
             ports=[19000, 19100],
+            platform="android",
+        )
+
+    @mock.patch.object(smoke, "acquire_consumer_lease")
+    def test_ios_simulator_patrol_acquires_consumer_lease_without_ports(
+        self,
+        acquire_consumer_lease: mock.Mock,
+    ) -> None:
+        args = self._args()
+        command_env: dict[str, str] = {}
+        acquire_consumer_lease.return_value = {"leaseId": "lease-ios"}
+
+        lease = smoke._acquire_patrol_consumer_lease(
+            args,
+            {
+                "id": "SIMULATOR-UDID",
+                "targetPlatform": "ios",
+                "emulator": True,
+            },
+            {"status": "not-required", "mappings": []},
+            command_env,
+        )
+
+        self.assertEqual(lease[0:2], ("gamma-local", "SIMULATOR-UDID"))
+        self.assertEqual(lease[3], "lease-ios")
+        self.assertEqual(command_env["QWQ_CONSUMER_LEASE_ACQUIRED"], "1")
+        self.assertNotIn("QWQ_ANDROID_LOCAL_PORTS", command_env)
+        acquire_consumer_lease.assert_called_once_with(
+            target="gamma-local",
+            device="SIMULATOR-UDID",
+            consumer=lease[2],
+            package_name="com.example.quwoquanApp",
+            ports=[],
+            platform="ios-simulator",
         )
 
     def test_flutter_proxy_returns_only_validated_android_inventory(self) -> None:

@@ -187,6 +187,12 @@ types:
     - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
     - {name: payloadJson, type: json, constraints: [NOT_NULL]}
     - {name: occurredAt, type: timestamp, constraints: [NOT_NULL]}
+  GatheringReconciliationCheckpoint:
+    description: Gathering 到 Chat 的对象本地投影 checkpoint；version 只允许单调递增。
+    fields:
+    - {name: _id, type: string, constraints: [PK, NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
 enums:
   GatheringStatus:
     values: [draft, open, full, cancelled, completed]

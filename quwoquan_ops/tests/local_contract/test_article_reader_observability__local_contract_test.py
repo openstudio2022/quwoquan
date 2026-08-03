@@ -43,22 +43,25 @@ class ArticleReaderObservabilityContractTest(unittest.TestCase):
         ):
             self.assertEqual(events[event_type]["normal_sample_rate"], 1.0)
 
-        telemetry = yaml.safe_load(
+        rollups = yaml.safe_load(
             (
                 ROOT
-                / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
             ).read_text(encoding="utf-8")
-        )["spec"]
-        jobs = {item["name"]: item for item in telemetry["scheduledSql"]["jobs"]}
-        lifecycle = jobs["app-product-telemetry-article-reader-lifecycle-hourly"]
-        self.assertEqual(lifecycle["rowKind"], "article_reader_lifecycle")
-        self.assertIn("errorCode,recoveryAction", lifecycle["sql"])
-        self.assertIn("durationHistogram", lifecycle["sql"])
-        self.assertNotIn("objectId", lifecycle["sql"])
-        self.assertIn("approx_set(sessionId)", lifecycle["sql"])
-        self.assertNotIn("sessionId", lifecycle["sql"].split("GROUP BY", 1)[1])
+        )
+        jobs = {item["row_kind"]: item for item in rollups["jobs"]}
+        lifecycle = jobs["article_reader_lifecycle"]
+        self.assertIn("errorCode", lifecycle["dimensions"])
+        self.assertIn("recoveryAction", lifecycle["dimensions"])
+        self.assertIn("durationHistogram", {item["name"] for item in lifecycle["measures"]})
+        self.assertNotIn("objectId", lifecycle["dimensions"])
+        self.assertIn("sessionHll", {item["name"] for item in lifecycle["measures"]})
+        self.assertNotIn("sessionId", lifecycle["dimensions"])
 
-        alerts = {item["name"]: item for item in telemetry["alerts"]}
+        alert_policy = yaml.safe_load(
+            (ROOT / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml").read_text(encoding="utf-8")
+        )["spec"]
+        alerts = {item["name"]: item for item in alert_policy["alerts"]}
         expected_alerts = {
             "product-article-reader-enter-p95-high": (
                 "sampleCount >= 100",

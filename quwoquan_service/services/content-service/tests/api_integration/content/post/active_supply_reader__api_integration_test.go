@@ -19,14 +19,12 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	collection := db.Collection("data_release_state")
 	posts := db.Collection("posts")
-	feed := db.Collection("rm_discovery_feed")
 	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
 		t.Fatalf("delete release state: %v", err)
 	}
 	t.Cleanup(func() {
 		_, _ = collection.DeleteMany(context.Background(), bson.M{"environment": environment})
 		_, _ = posts.DeleteMany(context.Background(), bson.M{"_id": contentID})
-		_, _ = feed.DeleteMany(context.Background(), bson.M{"postId": contentID})
 	})
 
 	reader := persistence.NewMongoActiveSupplyReader(db, environment)
@@ -80,14 +78,6 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}); err != nil {
 		t.Fatalf("seed active release post: %v", err)
 	}
-	if _, err := feed.InsertOne(ctx, bson.M{
-		"postId": contentID, "sourceOwner": "qwq_data", "releaseId": releaseID,
-		"manifestDigest":  manifestDigest,
-		"lifecycleStatus": "active", "status": "published", "visibility": "public",
-		"contentIdentity": "work", "contentType": "video",
-	}); err != nil {
-		t.Fatalf("seed active release discovery projection: %v", err)
-	}
 	snapshot, err = reader.ActiveSupplySnapshot(ctx)
 	if err != nil {
 		t.Fatalf("ActiveSupplySnapshot active: %v", err)
@@ -98,7 +88,7 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
 		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
 		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 ||
-		snapshot.DiscoveryPosts != 1 || snapshot.PlayableVideos != 1 {
+		snapshot.PlayableVideos != 1 {
 		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
 	}
 }

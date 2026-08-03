@@ -20,7 +20,7 @@ final class RemoteAssistantLearningFactAppendAdapter
   final AssistantLearningFactInvocationContextFactory invocationContext;
 
   @override
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   }) async {
     final eventId = request.eventId.trim();

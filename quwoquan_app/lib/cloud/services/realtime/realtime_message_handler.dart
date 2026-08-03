@@ -13,6 +13,8 @@ import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dar
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
+    show ChatMessageView, MessageCard, MessageStatus, MessageType;
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
@@ -61,7 +63,7 @@ class RealtimeMessageHandler {
     switch (eventType) {
       case 'MessageSent':
         if (conversationId.isEmpty) return;
-        late final MessageDto msg;
+        late final ChatMessageViewData msg;
         try {
           msg = _decodeMessageSentEvent(conversationId, payload);
         } on FormatException catch (error, stackTrace) {
@@ -357,7 +359,7 @@ class RealtimeMessageHandler {
   }
 }
 
-MessageDto _decodeMessageSentEvent(
+ChatMessageViewData _decodeMessageSentEvent(
   String conversationId,
   Map<String, dynamic> payload,
 ) {
@@ -445,25 +447,32 @@ MessageDto _decodeMessageSentEvent(
     throw const FormatException('MessageSent card type and card must match');
   }
 
-  return MessageDto.fromMap(<String, dynamic>{
-    'id': messageId,
-    'conversationId': conversationId,
-    'seq': seq,
-    'clientMsgId': clientMsgId,
-    'senderId': senderId,
-    'senderName': ?_optionalEventText(payload, 'senderDisplayNameSnapshot'),
-    'senderAvatar': ?_optionalEventText(payload, 'senderAvatarUrlSnapshot'),
-    'type': type,
-    'content': ?_optionalEventText(payload, 'content'),
-    'mediaAssetId': ?mediaAssetId,
-    'card': ?(cardRaw == null ? null : Map<String, dynamic>.from(cardRaw)),
-    'replyToMessageId': ?_optionalEventText(payload, 'replyToMessageId'),
-    'mentions': ?(mentionsRaw == null
-        ? null
-        : List<String>.unmodifiable(List<String>.from(mentionsRaw))),
-    'status': 'sent',
-    'timestamp': timestamp.toIso8601String(),
-  });
+  return ChatMessageViewData.fromWire(
+    ChatMessageView(
+      id: messageId,
+      conversationId: conversationId,
+      seq: seq,
+      clientMsgId: clientMsgId,
+      senderId: senderId,
+      senderName: _optionalEventText(payload, 'senderDisplayNameSnapshot'),
+      senderAvatar: _optionalEventText(payload, 'senderAvatarUrlSnapshot'),
+      type: MessageType.fromWire(type, 'MessageSent.type'),
+      content: _optionalEventText(payload, 'content'),
+      mediaAssetId: mediaAssetId,
+      card: cardRaw == null
+          ? null
+          : MessageCard.fromWire(
+              Map<String, Object?>.from(cardRaw),
+              'MessageSent.card',
+            ),
+      replyToMessageId: _optionalEventText(payload, 'replyToMessageId'),
+      mentions: mentionsRaw == null
+          ? null
+          : List<String>.unmodifiable(List<String>.from(mentionsRaw)),
+      status: MessageStatus.sent,
+      timestamp: timestamp,
+    ),
+  );
 }
 
 String _requiredEventText(Map<String, dynamic> payload, String field) {

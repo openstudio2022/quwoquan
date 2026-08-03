@@ -58,10 +58,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_entity: ApplyCircleGroupMembershipCommand
     request_body_kind: none
   - method: GET
@@ -93,7 +89,7 @@ api_routes:
       method: listCircleGroupMemberships
       reader: CircleGroupMembershipReader
       slice: CircleGroupMembershipPageSlice
-    response_entity: CircleGroupMembershipSlice
+    response_entity: CircleGroupMembershipPageSlice
     authorization:
       principal: persona
       ownership_policy: active_group_member
@@ -121,10 +117,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipPageSlice
-      response_decoder: decodeCircleGroupMembershipPageSlice
     request_entity: CircleGroupMembershipListQuery
     request_body_kind: none
   - method: GET
@@ -174,10 +166,6 @@ api_routes:
     slo:
       latency_p95_ms: 350
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipSlice
-      response_decoder: decodeCircleGroupMembershipSlice
     request_entity: MyCircleGroupMembershipQuery
     request_body_kind: none
   - method: DELETE
@@ -231,10 +219,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_entity: LeaveCircleGroupMembershipCommand
     request_body_kind: none
   - method: POST
@@ -291,10 +275,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_entity: DecideCircleGroupMembershipCommand
     request_body_kind: none
   - method: POST
@@ -350,10 +330,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_entity: DecideCircleGroupMembershipCommand
     request_body_kind: none
   - method: DELETE
@@ -410,10 +386,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_entity: RemoveCircleGroupMembershipCommand
     request_body_kind: none
   - method: PATCH
@@ -471,10 +443,6 @@ api_routes:
     slo:
       latency_p95_ms: 650
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_membership_contracts.dart
-      response_type: CircleGroupMembershipCommandResult
-      response_decoder: decodeCircleGroupMembershipCommandResult
     request_body_kind: object
 contract_test:
   coverage_requirements:

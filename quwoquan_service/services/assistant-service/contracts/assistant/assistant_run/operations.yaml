@@ -4,6 +4,11 @@ commercial_defaults:
   gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 description: 小趣助手执行、上下文感知、Skill 路由与学习反馈
+externalDependencies:
+- capability: integration.connector_grant.read
+  port: ConnectorCapabilityGrantReaderPort
+  operations: [resolveCapabilityGrant]
+  conformance: connector_capability_grant
 api_routes:
 
 - method: POST
@@ -46,6 +51,10 @@ api_routes:
   - ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable
   - ASSISTANT.SYSTEM.consent_unavailable
   - ASSISTANT.SYSTEM.run_policy_unavailable
+  - ASSISTANT.SYSTEM.run_skill_package_unavailable
+  - ASSISTANT.USER.run_skill_disabled
+  - ASSISTANT.SYSTEM.skill_setting_storage_unavailable
+  - ASSISTANT.SYSTEM.skill_placement_storage_unavailable
   - ASSISTANT.SYSTEM.run_storage_unavailable
   privacy:
     request_classification: SENSITIVE
@@ -75,6 +84,8 @@ api_routes:
   path: /assistant/runs/{runId}
   operation: GetAssistantRun
   actor: persona
+  request_entity: AssistantRunByIdQuery
+  request_body_kind: none
   commercial:
     status: blocked
     block_reason: AssistantRun domain model, Mongo store and HTTP adapter remain physically mixed with AssistantSession orchestration
@@ -142,6 +153,7 @@ api_routes:
     invariant_target: AssistantRun
   description: 取消运行中的助手 Run（running→cancelled CAS 并中断执行）；已终态取消幂等返回当前信封，不报错。
   request_entity: AssistantRunCommandRequest
+  request_body_kind: none
   request_bindings:
     path:
     - {name: runId, field: runId}
@@ -209,6 +221,7 @@ api_routes:
   application: {kind: command, facet: AssistantRunCommandFacade, method: resumeRun, aggregate_owner: AssistantRun, mutation_target: AssistantRun, invariant_target: AssistantRun}
   description: 从 paused 或可继续的等待状态恢复同一 Run；不会创建第二条执行主线。
   request_entity: AssistantRunCommandRequest
+  request_body_kind: none
   request_bindings:
     path: [{name: runId, field: runId}]
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
@@ -264,6 +277,8 @@ api_routes:
   path: /assistant/runs/{runId}/events
   operation: StreamAssistantRunEvents
   actor: persona
+  request_entity: AssistantRunEventStreamQuery
+  request_body_kind: none
   commercial:
     status: blocked
     block_reason: AssistantRun event journal and SSE adapter remain physically mixed with AssistantSession orchestration
@@ -274,15 +289,21 @@ api_routes:
     facet: AssistantRunEventTransport
     method: streamEvents
     reader: AssistantRunEventReader
-    slice: AssistantStreamEvent
+    slice: AssistantStreamEventWire
   description: 已启动助手 Run 的只读 SSE 事件 transport；journal 过期后的终态重放必须由 terminalSnapshot 生成，不是第二条创建或执行主线。
   request_bindings:
     path:
     - {name: runId, field: runId}
     query:
     - {name: resumeToken, field: resumeToken, required: false}
-  response_entity: AssistantStreamEvent
+  response_entity: AssistantStreamEventWire
   transport: sse
+  streaming:
+    resume_request_field: resumeToken
+    resume_response_field: eventId
+    terminal_field: eventType
+    terminal_values: [completed, failed, cancelled]
+  response_admission: {maximum_body_bytes: 1048576}
   reliability:
     timeout_ms: 190000
     cancellation: supported
@@ -323,14 +344,10 @@ api_routes:
 consumers:
 - name: app
   capabilities:
-  - search_xiaoqu_results
-  - report_page_context
-  - get_entry_personalization
-  - get_suggested_actions
-  - list_skills
-  - list_assistant_tasks
-  - list_assistant_memories
-  - manage_consent
+  - start_run
+  - read_run
+  - control_run
+  - stream_run_events
 - name: platform-ops
   capabilities:
   - read_runs
@@ -345,33 +362,6 @@ contract_test:
       mock_target: assistant-service API
       data_source: fields.yaml
       scenarios:
-      - name: page_context_report
-        route: POST /assistant/page-context
-        variants:
-        - content_detail
-        - feed
-        - chat
-        - circle
-        assertions:
-        - status_200
-        - context_cached
-      - name: suggested_actions
-        route: GET /assistant/suggested-actions
-        assertions:
-        - status_200
-        - actions_relevant_to_page
-      - name: entry_personalization
-        route: GET /assistant/personalization
-        assertions:
-        - status_200
-        - welcome_and_chips_returned
-      - name: skill_consent_flow
-        routes:
-        - POST /assistant/skills/{skillId}/consent
-        - DELETE /assistant/skills/{skillId}/consent
-        assertions:
-        - consent_granted
-        - consent_revoked
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
@@ -387,12 +377,6 @@ contract_test:
         cleanup: DeleteMany for assistant_runs, assistant_learning_facts, rm_assistant_learning_projection
         redis_cleanup: miniredis.FlushAll()
       scenarios:
-      - name: page_context_to_redis
-        command: ReportPageContext (with contextSnapshot)
-        seed: []
-        assertions:
-        - miniredis.Get('page_ctx:{userId}') → typed contextSnapshot JSON
-        - miniredis.TTL('page_ctx:{userId}') → ~300s
       - name: run_persisted_and_replayable
         command: StartAssistantRun (stable clientRequestId replayed)
         seed:
@@ -410,7 +394,5 @@ contract_test:
         - rm_assistant_learning_projection updated from canonical append sequence
         - learning_fact_outbox contains redacted AssistantLearningFactAppended payload
   coverage_requirements:
-  - all page types covered in page_context scenarios
-  - skill consent enforcement verified
   - learning feedback loop end-to-end
   - run persistence and idempotent replay covered

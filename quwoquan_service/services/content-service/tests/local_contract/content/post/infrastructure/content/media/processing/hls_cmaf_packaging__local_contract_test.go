@@ -9,7 +9,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
 	"strings"
 	"sync"
 	"testing"

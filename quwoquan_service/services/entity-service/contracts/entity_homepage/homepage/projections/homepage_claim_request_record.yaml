@@ -6,45 +6,23 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageClaimRequestRecord
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_claim_request_record.g.dart
-  fields:
-  - name: id
-    dart_type: String
-    nullable: false
-    source: id
-    default: ''''''
-  - name: homepageId
-    dart_type: String
-    nullable: false
-    source: homepageId
-    default: ''''''
-  - name: requesterPersonaId
-    dart_type: String
-    nullable: false
-    source: requesterPersonaId
-    default: ''''''
-  - name: claimTier
-    dart_type: String
-    nullable: false
-    source: claimTier
-    default: ''''''
-  - name: status
-    dart_type: String
-    nullable: false
-    source: status
-    default: ''''''
-  - name: reviewNote
-    dart_type: String
-    nullable: true
-    source: reviewNote
-  - name: createdAt
-    dart_type: DateTime
-    nullable: true
-    source: createdAt
-  - name: reviewedAt
-    dart_type: DateTime
-    nullable: true
-    source: reviewedAt
+fields:
+- name: id
+  type: string
+- name: homepageId
+  type: string
+- name: requesterPersonaId
+  type: string
+- name: claimTier
+  type: string
+- name: status
+  type: string
+- name: reviewNote
+  type: string
+  nullable: true
+- name: createdAt
+  type: timestamp
+  nullable: true
+- name: reviewedAt
+  type: timestamp
+  nullable: true

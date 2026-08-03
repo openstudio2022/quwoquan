@@ -16,9 +16,10 @@ mixin _RemoteAssistantSearchRun
     if (normalizedQuery.isEmpty) {
       throw ArgumentError.value(query, 'query', 'must not be empty');
     }
-    final session = await createAssistantSession(
+    final session = await _createAssistantSession(
       summary: normalizedQuery,
       clientRequestId: sessionClientRequestId,
+      networkSurface: true,
     );
     final run = await _startAssistantRunIntent(
       sessionId: session.sessionId,
@@ -35,12 +36,19 @@ mixin _RemoteAssistantSearchRun
       contextSnapshot: contextSnapshot,
       networkSurface: true,
     );
-    await for (final event in watchAssistantRunEvents(runId: run.runId)) {
+    await for (final event in _watchAssistantRunEvents(
+      runId: run.runId,
+      lastEventId: '',
+      networkSurface: true,
+    )) {
       if (_isAssistantTerminalStreamEvent(event)) {
         break;
       }
     }
-    final terminalRun = await getAssistantRun(runId: run.runId);
+    final terminalRun = await _core.getRun(
+      runId: run.runId,
+      networkSurface: true,
+    );
     final snapshot = terminalRun.terminalSnapshot;
     if (snapshot == null) {
       throw const FormatException(

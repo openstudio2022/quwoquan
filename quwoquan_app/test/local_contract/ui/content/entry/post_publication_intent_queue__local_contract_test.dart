@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_continuation_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
@@ -88,7 +89,7 @@ void main() {
         command: SubmitContentPostPublicationCommand(
           publishIntentId: 'intent-should-be-ignored',
           localDraftId: 'draft-1',
-          contentType: ContentPostType.micro,
+          contentType: ContentType.micro,
           body: 'changed after first click',
         ),
         authorPersonaId: 'persona-publication',
@@ -116,7 +117,7 @@ void main() {
     );
 
     await notifier.beginMediaPreparation(
-      command: _command(contentType: ContentPostType.image),
+      command: _command(contentType: ContentType.image),
       authorPersonaId: 'persona-publication',
     );
     await notifier.flushNow();
@@ -147,7 +148,7 @@ void main() {
     );
     final notifier = first.read(postPublicationIntentQueueProvider.notifier);
     await notifier.beginMediaPreparation(
-      command: _command(contentType: ContentPostType.video),
+      command: _command(contentType: ContentType.video),
       authorPersonaId: 'persona-publication',
     );
     await notifier.recordPreparedMediaAsset(
@@ -155,7 +156,7 @@ void main() {
       ContentMediaPreparationCheckpoint.forSource(
         preparationIdentity: 'draft-1',
         slot: 'video:0',
-        mediaType: ContentMediaType.video,
+        mediaType: MediaType.video,
         sha256Digest: 'sha256:video-source-digest',
       ).copyWith(
         sessionId: 'session-video-1',
@@ -180,7 +181,7 @@ void main() {
         .preparedMediaAssets
         .single;
     expect(checkpoint.slot, 'video:0');
-    expect(checkpoint.mediaType, ContentMediaType.video);
+    expect(checkpoint.mediaType, MediaType.video);
     expect(checkpoint.sha256Digest, 'sha256:video-source-digest');
     expect(checkpoint.assetId, 'video_asset_1');
     expect(checkpoint.sessionId, 'session-video-1');
@@ -204,18 +205,18 @@ void main() {
       postPublicationIntentQueueProvider.notifier,
     );
     await notifier.beginMediaPreparation(
-      command: _command(contentType: ContentPostType.video),
+      command: _command(contentType: ContentType.video),
       authorPersonaId: 'persona-publication',
     );
     final checkpoint = ContentMediaPreparationCheckpoint.forSource(
       preparationIdentity: 'draft-1',
       slot: 'video:0',
-      mediaType: ContentMediaType.video,
+      mediaType: MediaType.video,
       sha256Digest: 'sha256:$_pendingVideoDigest',
     );
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
-        mediaType: ContentMediaType.video,
+        mediaType: MediaType.video,
         mimeType: 'video/mp4',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
@@ -251,18 +252,18 @@ void main() {
       postPublicationIntentQueueProvider.notifier,
     );
     await notifier.beginMediaPreparation(
-      command: _command(contentType: ContentPostType.image),
+      command: _command(contentType: ContentType.image),
       authorPersonaId: 'persona-publication',
     );
     final checkpoint = ContentMediaPreparationCheckpoint.forSource(
       preparationIdentity: 'draft-1',
       slot: 'image:0',
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       sha256Digest: 'sha256:$_pendingVideoDigest',
     );
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
-        mediaType: ContentMediaType.image,
+        mediaType: MediaType.image,
         mimeType: 'image/jpeg',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
@@ -323,7 +324,7 @@ void main() {
     final notifier = container.read(
       postPublicationIntentQueueProvider.notifier,
     );
-    final command = _command(contentType: ContentPostType.image);
+    final command = _command(contentType: ContentType.image);
     await notifier.beginMediaPreparation(
       command: command,
       authorPersonaId: 'persona-publication',
@@ -331,12 +332,12 @@ void main() {
     final checkpoint = ContentMediaPreparationCheckpoint.forSource(
       preparationIdentity: 'draft-1',
       slot: 'image:0',
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       sha256Digest: 'sha256:$_pendingVideoDigest',
     );
     final initialized = await media.initUpload(
       InitContentMediaUploadCommand(
-        mediaType: ContentMediaType.image,
+        mediaType: MediaType.image,
         mimeType: 'image/jpeg',
         fileSize: 4,
         expectedSha256: 'sha256:$_pendingVideoDigest',
@@ -414,7 +415,7 @@ void main() {
   test('上传完成的 processing asset 在提交前入队，不依赖发布失败探测', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final media = RecordingContentMediaFacet(
-      completedAssetStatus: ContentMediaProcessingStatus.processing,
+      completedAssetStatus: MediaAssetStatus.processing,
     );
     final writer = _SuccessfulPublicationWriter();
     final container = _container(
@@ -426,7 +427,7 @@ void main() {
     final notifier = container.read(
       postPublicationIntentQueueProvider.notifier,
     );
-    final command = _command(contentType: ContentPostType.image);
+    final command = _command(contentType: ContentType.image);
     await _recordCompletedMedia(
       notifier: notifier,
       media: media,
@@ -450,7 +451,7 @@ void main() {
   test('上传完成的 rejected asset 阻断发布并保留草稿', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final media = RecordingContentMediaFacet(
-      completedAssetStatus: ContentMediaProcessingStatus.rejected,
+      completedAssetStatus: MediaAssetStatus.rejected,
     );
     final writer = _SuccessfulPublicationWriter();
     final drafts = _RecordingDraftRepository();
@@ -459,7 +460,7 @@ void main() {
     final notifier = container.read(
       postPublicationIntentQueueProvider.notifier,
     );
-    final command = _command(contentType: ContentPostType.image);
+    final command = _command(contentType: ContentType.image);
     await _recordCompletedMedia(
       notifier: notifier,
       media: media,
@@ -609,6 +610,68 @@ void main() {
     expect(restored.stage, LocalPostPublicationStage.submitting);
     expect(restored.circleIds, <String>['circle-a', 'circle-b']);
   });
+
+  test('发布后 continuation 先于草稿删除且跨进程重试保持同一来源', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final events = <String>[];
+    final drafts = _ContinuationDraftRepository(
+      draft: _continuationDraft(),
+      events: events,
+    );
+    final firstHandler = _RecordingContinuationHandler(
+      events: events,
+      fail: true,
+    );
+    final first = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: drafts,
+      continuationRegistry: PostPublicationContinuationRegistry(
+        <PostPublicationContinuationHandler>[firstHandler],
+      ),
+    );
+
+    final receipt = await first
+        .read(postPublicationIntentQueueProvider.notifier)
+        .submit(command: _command(), authorPersonaId: 'persona-publication');
+
+    expect(receipt.state, 'published');
+    expect(events, <String>['continuation']);
+    expect(drafts.deletedDraftIds, isEmpty);
+    final pending = first
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single;
+    expect(pending.publicationState, ContentPostPublicationState.published);
+    expect(pending.blocked, isFalse);
+    expect(
+      pending.publicationContinuation?.sourceEntityRef,
+      'travel.TripShareSnapshot:share-1@2',
+    );
+    first.dispose();
+
+    final recoveredHandler = _RecordingContinuationHandler(events: events);
+    final recovered = _container(
+      writer: _SuccessfulPublicationWriter(),
+      drafts: drafts,
+      continuationRegistry: PostPublicationContinuationRegistry(
+        <PostPublicationContinuationHandler>[recoveredHandler],
+      ),
+    );
+    addTearDown(recovered.dispose);
+    recovered.read(postPublicationIntentQueueProvider);
+    await _waitForHydration(recovered);
+    await recovered
+        .read(postPublicationIntentQueueProvider.notifier)
+        .retryPending('draft-1');
+
+    expect(events, <String>['continuation', 'continuation', 'delete']);
+    expect(drafts.deletedDraftIds, <String>['draft-1']);
+    expect(recovered.read(postPublicationIntentQueueProvider).intents, isEmpty);
+    expect(
+      recoveredHandler.receipts.single.committedVersion,
+      receipt.committedVersion,
+    );
+  });
 }
 
 const String _pendingVideoDigest =
@@ -619,6 +682,7 @@ ProviderContainer _container({
   required CreateDraftRepository drafts,
   ContentPostPublicationStatusReader? statusReader,
   ContentMediaFacet? media,
+  PostPublicationContinuationRegistry? continuationRegistry,
 }) {
   return ProviderContainer(
     overrides: [
@@ -640,6 +704,10 @@ ProviderContainer _container({
                 ),
           ),
       createDraftRepositoryProvider.overrideWithValue(drafts),
+      if (continuationRegistry != null)
+        postPublicationContinuationRegistryProvider.overrideWithValue(
+          continuationRegistry,
+        ),
       if (media != null)
         createContentMediaFacetProvider.overrideWithValue(media),
     ],
@@ -678,12 +746,12 @@ Future<void> _recordCompletedMedia({
   final checkpoint = ContentMediaPreparationCheckpoint.forSource(
     preparationIdentity: command.localDraftId,
     slot: 'image:0',
-    mediaType: ContentMediaType.image,
+    mediaType: MediaType.image,
     sha256Digest: 'sha256:$_pendingVideoDigest',
   );
   final initialized = await media.initUpload(
     InitContentMediaUploadCommand(
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       mimeType: 'image/jpeg',
       fileSize: 4,
       expectedSha256: 'sha256:$_pendingVideoDigest',
@@ -709,7 +777,7 @@ Future<void> _recordCompletedMedia({
 }
 
 SubmitContentPostPublicationCommand _command({
-  ContentPostType contentType = ContentPostType.micro,
+  ContentType contentType = ContentType.micro,
 }) {
   return SubmitContentPostPublicationCommand(
     publishIntentId: 'intent-1',
@@ -724,7 +792,7 @@ final class _FailingPublicationWriter implements ContentPostPublicationWriter {
       <SubmitContentPostPublicationCommand>[];
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     commands.add(command);
@@ -738,11 +806,11 @@ final class _SuccessfulPublicationWriter
       <SubmitContentPostPublicationCommand>[];
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     commands.add(command);
-    return ContentPostPublicationReceipt(
+    return PostPublicationReceipt(
       publishIntentId: command.publishIntentId,
       localDraftId: command.localDraftId,
       postId: 'post-${command.localDraftId}',
@@ -759,11 +827,11 @@ final class _PendingReviewPublicationWriter
       <SubmitContentPostPublicationCommand>[];
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     commands.add(command);
-    return ContentPostPublicationReceipt(
+    return PostPublicationReceipt(
       publishIntentId: command.publishIntentId,
       localDraftId: command.localDraftId,
       postId: 'post-${command.localDraftId}',
@@ -812,7 +880,7 @@ final class _CloudFailingPublicationWriter
       <SubmitContentPostPublicationCommand>[];
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) async {
     commands.add(command);
@@ -848,5 +916,78 @@ final class _RecordingDraftRepository implements CreateDraftRepository {
     String? currentDraftId,
   }) async {
     return const CreateDraftStoreState();
+  }
+}
+
+CreateDraft _continuationDraft() => CreateDraft(
+  id: 'draft-1',
+  updatedAtMs: 1,
+  state: CreateEditorState.initial().copyWith(draftId: 'draft-1'),
+  sourceType: 'article',
+  publicationContinuation: const CreateDraftPublicationContinuationRef(
+    operationId: 'travel.content_link.put',
+    sourceEntityRef: 'travel.TripShareSnapshot:share-1@2',
+  ),
+);
+
+final class _ContinuationDraftRepository implements CreateDraftRepository {
+  _ContinuationDraftRepository({required this.draft, required this.events});
+
+  CreateDraft? draft;
+  final List<String> events;
+  final List<String> deletedDraftIds = <String>[];
+
+  @override
+  Future<CreateDraftStoreState> deleteDraft(String draftId) async {
+    events.add('delete');
+    deletedDraftIds.add(draftId);
+    draft = null;
+    return const CreateDraftStoreState();
+  }
+
+  @override
+  Future<CreateDraftStoreState> load() async => CreateDraftStoreState(
+    drafts: draft == null ? const <CreateDraft>[] : <CreateDraft>[draft!],
+    currentDraftId: draft?.id,
+  );
+
+  @override
+  Future<CreateDraft?> loadDraft(String draftId) async =>
+      draft?.id == draftId ? draft : null;
+
+  @override
+  Future<CreateDraftStoreState> setCurrentDraftId(String? draftId) => load();
+
+  @override
+  Future<CreateDraftStoreState> upsertDraft(
+    CreateDraft draft, {
+    String? currentDraftId,
+  }) async {
+    this.draft = draft;
+    return load();
+  }
+}
+
+final class _RecordingContinuationHandler
+    implements PostPublicationContinuationHandler {
+  _RecordingContinuationHandler({required this.events, this.fail = false});
+
+  final List<String> events;
+  final bool fail;
+  final List<PostPublicationReceipt> receipts = <PostPublicationReceipt>[];
+
+  @override
+  String get operationId => 'travel.content_link.put';
+
+  @override
+  Future<void> apply({
+    required CreateDraftPublicationContinuationRef continuation,
+    required PostPublicationReceipt receipt,
+  }) async {
+    events.add('continuation');
+    receipts.add(receipt);
+    if (fail) {
+      throw StateError('temporary continuation failure');
+    }
   }
 }

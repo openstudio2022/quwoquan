@@ -1,0 +1,45 @@
+description: 个人 Skill 显式设置聚合与命令输入。
+fields:
+- {name: id, source: id, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: skillId, source: skillId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: SkillUserSettingStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: configurationData, source: configurationData, type: json, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none, role: authoritative_state, description: 仅按 configurationSchemaDigest 指向的 active package schema 解释的 canonical JSON 文档；服务拒绝非对象 JSON 和 schema 不匹配值。}
+- {name: configurationSchemaDigest, source: configurationSchemaDigest, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: memoryPolicy, source: memoryPolicy, type: enum, enum_ref: SkillMemoryPolicy, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: connectorConnectionRefs, source: connectorConnectionRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none, role: authoritative_state}
+- {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+unique_constraints:
+- columns: [accountId, skillId]
+  description: 每账号每 Skill 仅一个显式设置聚合
+types:
+  ListSkillUserSettingsQuery:
+    description: 有界读取当前账号显式 SkillUserSetting 的查询。
+    fields:
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE, POSITIVE, MAX_100], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  GetSkillUserSettingQuery:
+    description: 读取当前账号指定 Skill 显式设置的 path query。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  SkillUserSettingListSlice:
+    description: 当前账号已显式持久化的 SkillUserSetting 列表；缺项不是错误，而是 package default。
+    fields:
+    - {name: items, source: items, type: '[]SkillUserSetting', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+  PutSkillUserSettingReceipt:
+    description: SkillUserSetting CAS 命令的权威对象状态与幂等重放回执。
+    fields:
+    - {name: setting, source: setting, type: SkillUserSetting, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: changed, source: changed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  PutSkillUserSettingRequest:
+    description: 保存个人 Skill 设置；expectedRevision=0 仅允许创建。
+    fields:
+    - {name: skillId, source: path.skillId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: status, source: status, type: enum, enum_ref: SkillUserSettingStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: configurationData, source: configurationData, type: json, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none, description: 仅按 configurationSchemaDigest 指向的 active package schema 解释的 canonical JSON 文档；服务拒绝非对象 JSON 和 schema 不匹配值。}
+    - {name: configurationSchemaDigest, source: configurationSchemaDigest, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: memoryPolicy, source: memoryPolicy, type: enum, enum_ref: SkillMemoryPolicy, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+    - {name: connectorConnectionRefs, source: connectorConnectionRefs, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}

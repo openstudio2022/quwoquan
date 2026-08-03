@@ -1,4 +1,15 @@
 import 'package:quwoquan_app/cloud/remote/circle/behavior_fact/behavior_fact_remote.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/application/travel/trip_guide_assignment_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_collaboration_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_content_link_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_journey_query.dart';
+import 'package:quwoquan_app/application/travel/trip_moment_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_creation_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_directory.dart';
+import 'package:quwoquan_app/application/travel/trip_plan_revision_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_share_facet.dart';
+import 'package:quwoquan_app/application/travel/trip_template_facet.dart';
 import 'package:quwoquan_app/cloud/remote/circle/circle/circle_lifecycle_remote.dart';
 import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/circle/file/file_remote.dart';
@@ -27,6 +38,16 @@ import 'package:quwoquan_app/cloud/remote/search/recent_search_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_feedback_remote.dart';
 import 'package:quwoquan_app/cloud/remote/search/search_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/tag/tag_feedback_fact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_guide_assignment_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_collaboration_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_content_link_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_journey_query_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_moment_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_plan_creation_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_plan_directory_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_plan_revision_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_share_remote.dart';
+import 'package:quwoquan_app/cloud/remote/travel/trip_template_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/account/account_lifecycle_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/account_session/account_session_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/authentication_challenge/authentication_challenge_remote.dart';
@@ -53,6 +74,7 @@ import 'package:quwoquan_app/cloud/services/content/remote/report_command_remote
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/remote/homepage_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/integration/remote/location_query_remote.dart';
+import 'package:quwoquan_app/cloud/services/integration/remote/connector_management_remote.dart';
 import 'package:quwoquan_app/cloud/services/notification/remote/app_message_facets_remote.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -92,6 +114,7 @@ enum AppProductionAdapter {
   contentBehaviorCommand,
   contentReportCommand,
   contentReportQuery,
+  connectorManagement,
   credentialBindingCommand,
   credentialBindingQuery,
   devicePushEndpoint,
@@ -174,6 +197,108 @@ final class AppProductionFollowingSubjectFacets {
 /// every public caller has a typed port as its generic return type.
 final class AppProductionComposition {
   const AppProductionComposition._();
+
+  static TripGuideAssignmentFacet tripGuideAssignmentFacet({
+    required GeneratedCloudOperationClient client,
+    required TripGuideInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripGuideAssignmentFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripCollaborationFacet tripCollaborationFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripCollaborationFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripContentLinkFacet tripContentLinkFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripContentLinkFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripPlanDirectory tripPlanDirectory({
+    required GeneratedCloudOperationClient client,
+    required TravelInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripPlanDirectory(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripPlanCreationFacet tripPlanCreationFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripPlanCreationFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripPlanRevisionFacet tripPlanRevisionFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripPlanRevisionFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripMomentFacet tripMomentFacet({
+    required GeneratedCloudOperationClient client,
+    required TripMomentInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripMomentFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripJourneyQuery travelJourneyQuery({
+    required GeneratedCloudOperationClient client,
+    required AppUiSurface surface,
+    required TravelInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripJourneyQuery(
+      client: client,
+      surface: surface,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripShareFacet tripShareFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripShareFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
+
+  static TripTemplateFacet tripTemplateFacet({
+    required GeneratedCloudOperationClient client,
+    required TripShareInvocationContextFactory invocationContext,
+  }) {
+    return RemoteTripTemplateFacet(
+      client: client,
+      invocationContext: invocationContext,
+    );
+  }
 
   static AppProductionContentFacets contentFacets({
     required CloudHttpClient httpClient,
@@ -381,6 +506,11 @@ final class AppProductionComposition {
       ),
       AppProductionAdapter.contentReportQuery =>
         RemoteContentReportQueryAdapter(
+          client: client,
+          invocationContext: context,
+        ),
+      AppProductionAdapter.connectorManagement =>
+        RemoteConnectorManagementFacet(
           client: client,
           invocationContext: context,
         ),

@@ -81,9 +81,9 @@ errors:
     - GetMyFootprint
     - GetEntityWishlistState
     - GenerateArticleSummary
-    - GetMyIntersectionSummary
-    - ListMyIntersections
-    - GetObjectIntersections
+    - content.intersection_visit_state.GetMyIntersectionSummary
+    - content.intersection_visit_state.ListMyIntersections
+    - content.intersection_visit_state.GetObjectIntersections
     - content.comment.BindMediaAssetsToComment
     - content.comment.CreateComment
     - content.comment.DeleteComment
@@ -154,8 +154,8 @@ errors:
     - GetMyFootprint
     - GetEntityWishlistState
     - GenerateArticleSummary
-    - ListMyIntersections
-    - GetObjectIntersections
+    - content.intersection_visit_state.ListMyIntersections
+    - content.intersection_visit_state.GetObjectIntersections
     - content.comment.CreateComment
     - content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter
     - content.content_behavior_fact.ReportBehaviors
@@ -408,9 +408,9 @@ errors:
     - GetMyFootprint
     - GetEntityWishlistState
     - GetHelperRead
-    - GetMyIntersectionSummary
-    - ListMyIntersections
-    - GetObjectIntersections
+    - content.intersection_visit_state.GetMyIntersectionSummary
+    - content.intersection_visit_state.ListMyIntersections
+    - content.intersection_visit_state.GetObjectIntersections
     - content.comment.ListCommentReplies
     - content.comment.ListComments
     - content.comment.ListCommentsByAuthor
@@ -454,7 +454,7 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [GetFeed, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, GetMyIntersectionSummary, ListMyIntersections, GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+    operations: [GetFeed, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   recovery_action: surface
   dart_const: internalError
   go_const: ErrInternalError

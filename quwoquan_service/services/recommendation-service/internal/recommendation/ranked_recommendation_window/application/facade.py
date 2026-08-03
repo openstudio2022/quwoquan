@@ -10,6 +10,7 @@ from ..domain.model import (
     MAX_WINDOW_ITEMS,
     RankingResult,
     RankedRecommendationItem,
+    RecommendationObjectCard,
     RankedRecommendationWindow,
 )
 
@@ -17,7 +18,11 @@ from ..domain.model import (
 class WindowStore(Protocol):
     def create_or_get(self, window: RankedRecommendationWindow) -> RankedRecommendationWindow: ...
 
-    def get(self, window_id: str) -> RankedRecommendationWindow | None: ...
+    def get(
+        self,
+        subject_id: str,
+        window_id: str,
+    ) -> RankedRecommendationWindow | None: ...
 
     def erase_subject(self, subject_id: str) -> int: ...
 
@@ -59,6 +64,7 @@ class RankedRecommendationPage:
     items: tuple[RankedRecommendationItem, ...]
     next_ordinal: int | None
     expires_at: str
+    object_cards: tuple[RecommendationObjectCard, ...] = ()
 
 
 class Facade:
@@ -95,13 +101,16 @@ class Facade:
         normalized_subject = subject_id.strip()
         if not normalized_subject:
             raise ValueError("subjectId is required")
+        normalized_scenario = scenario.strip()
+        if not normalized_scenario:
+            raise ValueError("scenario is required")
         if self._subject_closures.exists(normalized_subject):
             raise SubjectClosedError("closed subjects cannot create recommendation windows")
         request_digest = hashlib.sha256(
             json.dumps(
                 {
                     "subjectId": normalized_subject,
-                    "scenario": scenario.strip(),
+                    "scenario": normalized_scenario,
                     "limit": limit,
                 },
                 ensure_ascii=False,
@@ -110,7 +119,7 @@ class Facade:
             ).encode("utf-8")
         ).hexdigest()
         window_id = self._window_id_factory(normalized_key)
-        existing = self._store.get(window_id)
+        existing = self._store.get(normalized_subject, window_id)
         if existing is not None:
             if existing.request_digest != request_digest:
                 raise IdempotencyConflictError(
@@ -120,14 +129,14 @@ class Facade:
 
         ranking = self._ranker.rank(
             subject_id=normalized_subject,
-            scenario=scenario,
+            scenario=normalized_scenario,
             session_id=window_id,
             limit=MAX_WINDOW_ITEMS,
         )
         window = RankedRecommendationWindow.create(
             window_id=window_id,
             subject_id=normalized_subject,
-            scenario=scenario,
+            scenario=normalized_scenario,
             request_digest=request_digest,
             ranking=ranking,
         )
@@ -141,12 +150,23 @@ class Facade:
             raise SubjectClosedError("closed subjects cannot create recommendation windows")
         return self._page(persisted, from_ordinal=0, limit=limit)
 
-    def read_page(self, *, window_id: str, from_ordinal: int, limit: int) -> RankedRecommendationPage:
-        window = self._store.get(window_id.strip())
+    def read_page(
+        self,
+        *,
+        subject_id: str,
+        window_id: str,
+        from_ordinal: int,
+        limit: int,
+    ) -> RankedRecommendationPage:
+        normalized_subject = subject_id.strip()
+        normalized_window = window_id.strip()
+        if not normalized_subject or not normalized_window:
+            raise ValueError("subjectId and windowId are required")
+        window = self._store.get(normalized_subject, normalized_window)
         if window is None:
             raise LookupError("ranked recommendation window not found or expired")
-        if self._subject_closures.exists(window.subject_id):
-            self._store.erase_subject(window.subject_id)
+        if self._subject_closures.exists(normalized_subject):
+            self._store.erase_subject(normalized_subject)
             raise SubjectClosedError("closed subjects cannot read recommendation windows")
         return self._page(window, from_ordinal=from_ordinal, limit=limit)
 
@@ -166,4 +186,5 @@ class Facade:
             items=items,
             next_ordinal=next_ordinal,
             expires_at=window.expires_at.isoformat(),
+            object_cards=window.object_cards,
         )

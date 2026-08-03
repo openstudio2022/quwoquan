@@ -1,0 +1,24 @@
+read_model: IntersectionTextSpan
+description: "交集结论句的可交互片段（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。\n一句话 = List<IntersectionTextSpan>，是\
+  \ primaryText / briefText 的「结构化富文本切分」，\n不是第二文案通道（不违反 G2）：契约不变量 join(spans.text) == primaryText / briefText，\n\
+  端契约测试强制断言。云侧同源产出，端只读渲染。\n\n片段角色：\n  role=object 承载名字（点击进对象主页），可带 visual 句内 inline 头像（§21.5.1 槽②）；\n\
+  \  role=count  承载数字（点击进维度 / sourceRef 下钻列表）；\nrole=plain  普通文本（不可点击）。`displayBinding=host_plain` 时的当前宿主名也必须使用\
+  \ plain，\n  不得用 object span 表示 self-target。\ntarget 缺省（null）表示该片段不可点击；visual 缺省（null）表示无句内视觉，\n且 visual\
+  \ 不计入 text，不破坏 join(spans.text)==primaryText/briefText 不变量。\n端侧不得因 span target 缺省而回退到 reason.actionTargetId\
+  \ 或整行点击；可见交集句必须先通过\n`IntersectionReason.displayBinding` 校验。缺 primarySpans 或 join 不成立时 fail-closed 隐藏。\n\
+  \n闭集枚举（端按字符串解析，未知 role 当作 plain）：\n  role: plain | object | count\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: text
+  type: string
+- name: role
+  type: string
+- name: target
+  type: IntersectionTarget
+  nullable: true
+- name: visual
+  type: IntersectionVisual
+  nullable: true

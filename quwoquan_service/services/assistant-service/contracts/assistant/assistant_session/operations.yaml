@@ -130,10 +130,6 @@ api_routes:
       ownership_policy: requester_self
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSessionListProjection
-      response_decoder: decodeAssistantSessionList
     security:
       anonymous_policy: deny
       auth_mode: required
@@ -187,10 +183,6 @@ api_routes:
       ownership_policy: session_owner
     commercial:
       status: ready
-    client_contract:
-      dart_import: ../assistant/assistant_contracts.dart
-      response_type: AssistantSessionProjection
-      response_decoder: decodeAssistantSession
     security:
       anonymous_policy: deny
       auth_mode: required

@@ -107,6 +107,16 @@ class MediaPlaybackFailure {
     return switch (kind) {
       MediaCandidateFailureKind.networkUnavailable =>
         AppUserRecoveryGroup.connectNetwork,
+      MediaCandidateFailureKind.certificateVerifyFailed ||
+      MediaCandidateFailureKind.handshakeTerminated ||
+      MediaCandidateFailureKind.connectionRefused ||
+      MediaCandidateFailureKind.dnsNxdomain =>
+        AppUserRecoveryGroup.connectionUnavailable,
+      MediaCandidateFailureKind.controllerSlotTimeout ||
+      MediaCandidateFailureKind.initializationTimeout =>
+        AppUserRecoveryGroup.requestTimedOut,
+      MediaCandidateFailureKind.http5xx =>
+        AppUserRecoveryGroup.serviceUnavailable,
       MediaCandidateFailureKind.http404 ||
       MediaCandidateFailureKind.http4xx ||
       MediaCandidateFailureKind.decoderInitialization ||
@@ -178,6 +188,9 @@ class MediaPlaybackFailure {
 
   bool get isRetryable =>
       userRecoveryGroup == AppUserRecoveryGroup.connectNetwork ||
+      userRecoveryGroup == AppUserRecoveryGroup.connectionUnavailable ||
+      userRecoveryGroup == AppUserRecoveryGroup.requestTimedOut ||
+      userRecoveryGroup == AppUserRecoveryGroup.serviceUnavailable ||
       userRecoveryGroup == AppUserRecoveryGroup.reloadLater;
 
   bool get shouldNegativeCache {

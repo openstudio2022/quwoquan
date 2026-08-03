@@ -73,6 +73,18 @@ def _fixture(root: Path) -> dict[str, Path]:
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {
+                "verified": 4,
+                "unverified": 0,
+                "restricted": 0,
+                "unknown": 0,
+            },
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 4,
+            "commercialAcceptedCount": 4,
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": ["20260728--travel-content--test--pilot-002"],
             "sourceDigests": [
@@ -151,12 +163,103 @@ def _fixture(root: Path) -> dict[str, Path]:
         },
     )
     write_json(
+        release / f"payload/objects/entities/{ENTITY_REF}/_entity.json",
+        {
+            "schema": "quwoquan_data.entity",
+            "entityRef": f"/entity/{ENTITY_REF}",
+            "label": "测试实体",
+        },
+    )
+    post_titles = {
+        "article": "测试文章",
+        "image": "测试图片",
+        "video": "测试视频",
+    }
+    for post_ref, _post_id, content_type in POSTS:
+        manifest = {
+            "schema": "quwoquan_data.post_object",
+            "contentIdentity": "work",
+            "contentType": content_type,
+            "publishTitle": post_titles[content_type],
+            "authorId": "author-a",
+            "tagRefs": [TAG_REF],
+        }
+        if content_type == "video":
+            manifest["sourceAttribution"] = {"attributionText": "测试视频来源"}
+        write_json(
+            release / f"payload/objects/posts/{post_ref}/manifest.json",
+            manifest,
+        )
+    write_json(
+        release / f"payload/objects/creators/{CREATOR_ID}/profile.json",
+        {
+            "schema": "quwoquan_data.creator_profile",
+            "creatorId": CREATOR_ID,
+            "authorId": "author-a",
+            "displayName": "测试创作者",
+        },
+    )
+    write_json(
+        release / f"payload/objects/tags/{TAG_REF}/_definition.json",
+        {"label": "旅行"},
+    )
+    write_json(
+        release / "payload/asset_admission.json",
+        {
+            "schema": "quwoquan_data.release_asset_admission",
+            "releaseId": RELEASE_ID,
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {
+                "verified": 4,
+                "unverified": 0,
+                "restricted": 0,
+                "unknown": 0,
+            },
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 4,
+            "commercialAcceptedCount": 4,
+            "carrierCounts": [
+                {
+                    "carrier": carrier,
+                    "objectCount": 1,
+                    "assetCount": 1,
+                    "researchAcceptedCount": 1,
+                    "commercialAcceptedCount": 1,
+                }
+                for carrier in ("homepage", "article", "image", "video")
+            ],
+            "articleMediaCoverage": {
+                "articleCount": 1,
+                "illustratedCount": 1,
+                "textOnlyCount": 0,
+                "illustratedRate": 1.0,
+                "textOnlyRate": 0.0,
+            },
+            "sourceAssetCounts": [],
+            "assets": [],
+        },
+    )
+    write_json(
         release / "attestations/release.json",
         {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "releaseKind": "content",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
+            "containsUnverifiedAssets": False,
+            "rightsStatusCounts": {
+                "verified": 4,
+                "unverified": 0,
+                "restricted": 0,
+                "unknown": 0,
+            },
+            "authorizationRequiredAssetIds": [],
+            "researchAcceptedCount": 4,
+            "commercialAcceptedCount": 4,
             "executionIds": ["20260728--travel-content--test--pilot-002"],
             "entityCount": 1,
             "postCount": 3,
@@ -466,6 +569,21 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
     assert receipt["guestLogin"]["pageId"] == "user.login.anonymous"
     premium = next(row for row in receipt["feedQueries"] if row["name"] == "premium_stream")
     assert premium["matchedPostIds"] == ["post-video-a"]
+    assert receipt["appUatEnvelope"] == {
+        "releaseId": RELEASE_ID,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "homepageId": "homepage-a",
+        "homepageTitle": "测试实体",
+        "articleWorkId": "post-article-a",
+        "articleTitle": "测试文章",
+        "imageWorkId": "post-image-a",
+        "imageTitle": "测试图片",
+        "videoWorkId": "post-video-a",
+        "creatorName": "测试创作者",
+        "tagLabel": "旅行",
+        "videoAttribution": "测试视频来源",
+    }
 
 
 def test_environment_release_readiness__consumer_excludes_commercial_premium_gate__local_contract(
@@ -496,6 +614,23 @@ def test_environment_release_readiness__consumer_excludes_commercial_premium_gat
         "typed_video",
         "homepage_recommend",
     }
+    assert "appUatEnvelope" not in receipt
+
+
+def test_environment_release_readiness__app_uat_envelope_requires_release_object_title__local_contract(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(tmp_path)
+    manifest_path = (
+        paths["release"]
+        / "payload/objects/posts/article/test-a/manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["publishTitle"] = ""
+    write_json(manifest_path, manifest)
+
+    with pytest.raises(EnvironmentReleaseReadinessError, match="release article title"):
+        _write(tmp_path)
 
 
 def test_environment_release_readiness__premium_must_bind_release_post__local_contract(

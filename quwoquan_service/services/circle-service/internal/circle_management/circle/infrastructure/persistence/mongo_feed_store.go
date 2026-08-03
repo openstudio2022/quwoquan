@@ -14,11 +14,11 @@ import (
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 )
 
-// MongoFeedStore 通过 Post 本地投影与 CirclePostPlacement 聚合读模型的
+// MongoFeedStore 通过 CircleFeedItem 本地投影与 CirclePostPlacement 聚合读模型的
 // 联合查询实现圈子动态流。Post 可同时放入多个圈子，因此 pin/feature
 // 必须以 placement 为粒度，禁止写回共享 Post 文档。
 type MongoFeedStore struct {
-	posts      *mongo.Collection
+	feedItems  *mongo.Collection
 	placements *mongo.Collection
 }
 
@@ -29,7 +29,7 @@ func NewMongoFeedStore(database *mongo.Database) *MongoFeedStore {
 		panic("circle feed store requires database")
 	}
 	return &MongoFeedStore{
-		posts:      database.Collection("posts"),
+		feedItems:  database.Collection("circle_feed_items"),
 		placements: database.Collection("circle_post_placements"),
 	}
 }
@@ -74,7 +74,7 @@ func (s *MongoFeedStore) listPostsForCircleIDs(
 			"state":    "active",
 		}}},
 		bson.D{{Key: "$lookup", Value: bson.D{
-			{Key: "from", Value: "posts"},
+			{Key: "from", Value: "circle_feed_items"},
 			{Key: "localField", Value: "postId"},
 			{Key: "foreignField", Value: "_id"},
 			{Key: "as", Value: "post"},

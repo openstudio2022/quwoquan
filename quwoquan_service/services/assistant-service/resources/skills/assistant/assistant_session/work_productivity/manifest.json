@@ -20,5 +20,10 @@
   "capabilityProfileRef": "capability.app_web3_device",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.complex_reasoning",
-  "replayAssetRef": "assistant.replay.work_productivity.v1"
+  "replayAssetRef": "assistant.replay.work_productivity",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

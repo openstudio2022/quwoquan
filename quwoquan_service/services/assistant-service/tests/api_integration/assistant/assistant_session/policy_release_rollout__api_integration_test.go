@@ -16,9 +16,8 @@ import (
 	rolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
 	rolloutpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/persistence"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
 func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
@@ -236,9 +235,7 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		t.Fatalf("activate baseline: %v", err)
 	}
 
-	service := newIntegrationAssistantService(
-		realFrozenPolicyResolver(rollouts),
-	)
+	service := newIntegrationAssistantService()
 	session, err := service.CreateSession(
 		ctx,
 		"policy-freeze-user",
@@ -250,9 +247,25 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	firstTurn := createAndExecutePolicyTurn(
+	commands := runruntime.NewCommandService(
+		integrationRunRepository,
+		runruntime.SessionAuthorizerFunc(func(
+			ctx context.Context,
+			userID string,
+			sessionID string,
+		) error {
+			_, authorizeErr := service.GetSession(ctx, userID, sessionID)
+			return authorizeErr
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		time.Now,
+		nil,
+		realRunPolicyResolver(rollouts),
+	)
+	firstTurn := createPolicyRun(
 		t,
-		service,
+		commands,
 		session.SessionID,
 		"policy-freeze-user",
 		"policy-freeze-persona",
@@ -277,9 +290,9 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	if err != nil {
 		t.Fatalf("activate candidate: %v", err)
 	}
-	secondTurn := createAndExecutePolicyTurn(
+	secondTurn := createPolicyRun(
 		t,
-		service,
+		commands,
 		session.SessionID,
 		"policy-freeze-user",
 		"policy-freeze-persona",
@@ -299,9 +312,9 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	if err != nil {
 		t.Fatalf("rollback candidate: %v", err)
 	}
-	thirdTurn := createAndExecutePolicyTurn(
+	thirdTurn := createPolicyRun(
 		t,
-		service,
+		commands,
 		session.SessionID,
 		"policy-freeze-user",
 		"policy-freeze-persona",
@@ -309,112 +322,99 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	)
 	assertSelectedPolicyDigest(t, thirdTurn, baselineDigest, rollback.Rollout.Revision)
 
-	persistedFirst, err := service.GetTurn(ctx, "policy-freeze-user", firstTurn.TurnID)
+	persistedFirst, err := integrationRunRepository.Load(ctx, firstTurn.RunID)
 	if err != nil {
 		t.Fatalf("reload frozen first turn: %v", err)
 	}
 	assertSelectedPolicyDigest(t, persistedFirst, baselineDigest, firstActivation.Rollout.Revision)
 }
 
-func realFrozenPolicyResolver(
+func realRunPolicyResolver(
 	rollouts *rolloutapplication.Service,
-) orchestration.AssistantServiceOption {
-	return orchestration.WithFrozenPolicyResolver(
-		ports.FrozenPolicyResolverFunc(func(
-			ctx context.Context,
-			policyID string,
-			personaID string,
-			skillID string,
-			domainID string,
-		) (assistant.AssistantFrozenPolicySelection, error) {
-			resolved, err := rollouts.ResolveFrozenSelection(
-				ctx,
-				policyID,
-				personaID,
-				skillID,
-				domainID,
-			)
-			if err != nil {
-				return assistant.AssistantFrozenPolicySelection{}, err
-			}
-			return assistant.AssistantFrozenPolicySelection{
-				PolicyID:        resolved.PolicyID,
-				ReleaseDigest:   resolved.ReleaseDigest,
-				Cohort:          resolved.Cohort,
-				RolloutRevision: resolved.RolloutRevision,
-				RuleID:          resolved.RuleID,
-				Template: assistant.AssistantFrozenPolicyTemplate{
-					TemplateID:      resolved.Template.TemplateID,
-					SkillID:         resolved.Template.SkillID,
-					DomainID:        resolved.Template.DomainID,
-					PromptPolicy:    resolved.Template.PromptPolicy,
-					AllowedTools:    append([]string(nil), resolved.Template.AllowedTools...),
-					SearchIntensity: resolved.Template.SearchIntensity,
-				},
-				LearningContextPolicy: assistant.AssistantFrozenLearningContextPolicy{
-					Enabled:                  resolved.LearningContextPolicy.Enabled,
-					AllowedSignals:           append([]string(nil), resolved.LearningContextPolicy.AllowedSignals...),
-					AllowedMetricIDs:         append([]string(nil), resolved.LearningContextPolicy.AllowedMetricIDs...),
-					AllowedReasonCodes:       append([]string(nil), resolved.LearningContextPolicy.AllowedReasonCodes...),
-					MinimumFeedbackSamples:   resolved.LearningContextPolicy.MinimumFeedbackSamples,
-					WindowDays:               resolved.LearningContextPolicy.WindowDays,
-					SnapshotTrainingEligible: resolved.LearningContextPolicy.SnapshotTrainingEligible,
-				},
-			}, nil
-		}),
-	)
+) runruntime.PolicyResolver {
+	return runruntime.PolicyResolverFunc(func(
+		ctx context.Context,
+		policyID string,
+		personaID string,
+		skillID string,
+		domainID string,
+	) (runruntime.FrozenPolicySelection, error) {
+		resolved, err := rollouts.ResolveFrozenSelection(
+			ctx,
+			policyID,
+			personaID,
+			skillID,
+			domainID,
+		)
+		if err != nil {
+			return runruntime.FrozenPolicySelection{}, err
+		}
+		return runruntime.FrozenPolicySelection{
+			PolicyID:        resolved.PolicyID,
+			ReleaseDigest:   resolved.ReleaseDigest,
+			Cohort:          resolved.Cohort,
+			RolloutRevision: resolved.RolloutRevision,
+			RuleID:          resolved.RuleID,
+			Template: runruntime.FrozenPolicyTemplate{
+				TemplateID:      resolved.Template.TemplateID,
+				SkillID:         resolved.Template.SkillID,
+				DomainID:        resolved.Template.DomainID,
+				PromptPolicy:    resolved.Template.PromptPolicy,
+				AllowedTools:    append([]string(nil), resolved.Template.AllowedTools...),
+				SearchIntensity: resolved.Template.SearchIntensity,
+			},
+			LearningContextPolicy: runruntime.FrozenLearningContextPolicy{
+				Enabled:                  resolved.LearningContextPolicy.Enabled,
+				AllowedSignals:           append([]string(nil), resolved.LearningContextPolicy.AllowedSignals...),
+				AllowedMetricIDs:         append([]string(nil), resolved.LearningContextPolicy.AllowedMetricIDs...),
+				AllowedReasonCodes:       append([]string(nil), resolved.LearningContextPolicy.AllowedReasonCodes...),
+				MinimumFeedbackSamples:   resolved.LearningContextPolicy.MinimumFeedbackSamples,
+				WindowDays:               resolved.LearningContextPolicy.WindowDays,
+				SnapshotTrainingEligible: resolved.LearningContextPolicy.SnapshotTrainingEligible,
+			},
+		}, nil
+	})
 }
 
-func createAndExecutePolicyTurn(
+func createPolicyRun(
 	t *testing.T,
-	service *orchestration.AssistantService,
+	commands *runruntime.CommandService,
 	sessionID string,
 	userID string,
 	personaID string,
 	clientRequestID string,
-) assistant.AssistantTurn {
+) runruntime.Run {
 	t.Helper()
-	turn, err := service.CreateTurn(
-		context.Background(),
-		userID,
-		sessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "policy snapshot"},
-			ClientRequestID: clientRequestID,
-			RequestContext: assistant.AssistantRunRequestContext{
-				PersonaID: personaID,
-			},
-		},
-	)
+	run, err := commands.Start(context.Background(), runruntime.StartCommand{
+		UserID:            userID,
+		PersonaID:         personaID,
+		SessionID:         sessionID,
+		ClientRequestID:   clientRequestID,
+		IntentKind:        "answer",
+		InputText:         "policy snapshot",
+		RequestedSkillID:  "fallback_general_search",
+		RequestedDomainID: "assistant",
+	})
 	if err != nil {
-		t.Fatalf("create policy turn: %v", err)
+		t.Fatalf("create policy run: %v", err)
 	}
-	if _, err := service.ExecuteTurn(context.Background(), userID, turn.TurnID); err != nil {
-		t.Fatalf("execute policy turn: %v", err)
-	}
-	persisted, err := service.GetTurn(context.Background(), userID, turn.TurnID)
-	if err != nil {
-		t.Fatalf("reload policy turn: %v", err)
-	}
-	return persisted
+	return run
 }
 
 func assertSelectedPolicyDigest(
 	t *testing.T,
-	turn assistant.AssistantTurn,
+	run runruntime.Run,
 	releaseDigest string,
 	revision int,
 ) {
 	t.Helper()
-	if turn.TerminalSnapshot == nil ||
-		turn.TerminalSnapshot.SelectedPolicyRef == nil ||
-		turn.TerminalSnapshot.SelectedPolicyRef.PolicyID != "assistant-default" ||
-		turn.TerminalSnapshot.SelectedPolicyRef.ReleaseDigest != releaseDigest ||
-		turn.FrozenPolicySelection.RolloutRevision != revision {
+	if run.FrozenPolicySelection.PolicyID != "assistant-default" ||
+		run.FrozenPolicySelection.ReleaseDigest != releaseDigest ||
+		run.FrozenPolicySelection.RolloutRevision != revision {
 		t.Fatalf(
-			"turn=%+v selectedPolicy=%+v want releaseDigest=%s revision=%d",
-			turn,
-			turn.TerminalSnapshot,
+			"run=%+v frozenPolicy=%+v want releaseDigest=%s revision=%d",
+			run,
+			run.FrozenPolicySelection,
 			releaseDigest,
 			revision,
 		)

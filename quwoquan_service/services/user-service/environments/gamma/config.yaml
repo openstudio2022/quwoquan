@@ -11,6 +11,16 @@ externalBindings:
   identity.sms.otp:
     state: enabled
   identity.carrier.one_tap:
-    state: not_required
+    state: enabled
+    adapter: ext.auth.carrier_one_tap_protocol_fixture
+    endpointRef: local_topology:user.protocol_fixture
+    endpointEnvs: {}
+    secretRefs: []
+    timeoutMs: 10000
   identity.social.login:
-    state: not_required
+    state: enabled
+    adapter: ext.auth.federated_identity_protocol_fixture
+    endpointRef: local_topology:user.protocol_fixture
+    endpointEnvs: {}
+    secretRefs: []
+    timeoutMs: 10000

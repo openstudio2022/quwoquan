@@ -162,6 +162,23 @@ state_machine:
         - resolved
         - dismissed
 types:
+  MyReportItemSlice:
+    description: Reporter-visible lifecycle projection for one Report.
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetType, type: enum, enum_ref: ReportTargetType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: reason, type: enum, enum_ref: ReportReason, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: description, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: mask, api_exposure: read, ops_exposure: mask}
+      - {name: status, type: enum, enum_ref: ReportStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: resolvedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  MyReportPageSlice:
+    description: Keyset page of the current reporter's own reports.
+    fields:
+      - {name: items, type: '[]MyReportItemSlice', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: redacted}
+      - {name: nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: redacted}
   ListReportsQuery:
     fields:
       - {name: limit, type: int, constraints: [NOT_NULL, DEFAULT_20, MIN_1, MAX_100], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
@@ -227,15 +244,11 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: targetType
-        type: string
+        type: enum
         enum_ref: ReportTargetType
-        client_dart_type: ContentReportTargetType
-        client_wire: canonicalEnum
       - name: reason
-        type: string
+        type: enum
         enum_ref: ReportReason
-        client_dart_type: ContentReportReason
-        client_wire: canonicalEnum
       - name: description
         type: string
         constraints:

@@ -22,6 +22,7 @@ const (
 
 type MongoPostLifecycleProjection struct {
 	views          *mongo.Collection
+	feedItems      *mongo.Collection
 	inbox          *mongo.Collection
 	failures       *mongo.Collection
 	closedSubjects *mongo.Collection
@@ -33,6 +34,7 @@ func NewMongoPostLifecycleProjection(database *mongo.Database) *MongoPostLifecyc
 	}
 	return &MongoPostLifecycleProjection{
 		views:          database.Collection(postOwnerProjectionCollection),
+		feedItems:      database.Collection("circle_feed_items"),
 		inbox:          database.Collection(contentPostInboxCollection),
 		failures:       database.Collection(contentPostFailureCollection),
 		closedSubjects: database.Collection("circle_closed_account_subjects"),
@@ -46,6 +48,16 @@ func (projection *MongoPostLifecycleProjection) EnsureIndexes(ctx context.Contex
 	}); err != nil {
 		return err
 	}
+	if _, err := projection.feedItems.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "authorId", Value: 1},
+			{Key: "status", Value: 1},
+			{Key: "updatedAt", Value: -1},
+		},
+		Options: options.Index().SetName("idx_circle_feed_item_author_state"),
+	}); err != nil {
+		return err
+	}
 	_, err := projection.failures.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "updatedAt", Value: 1}}, Options: options.Index().SetName("idx_circle_content_post_failure_updated"),
 	})
@@ -53,7 +65,7 @@ func (projection *MongoPostLifecycleProjection) EnsureIndexes(ctx context.Contex
 }
 
 func (projection *MongoPostLifecycleProjection) ApplyPostLifecycle(ctx context.Context, event placementports.PostLifecycleEvent) error {
-	if projection == nil || projection.views == nil || projection.inbox == nil {
+	if projection == nil || projection.views == nil || projection.feedItems == nil || projection.inbox == nil {
 		return fmt.Errorf("Circle Post lifecycle projection is not configured")
 	}
 	if strings.TrimSpace(event.EventID) == "" || strings.TrimSpace(event.EventType) == "" ||
@@ -75,6 +87,9 @@ func (projection *MongoPostLifecycleProjection) ApplyPostLifecycle(ctx context.C
 		if applyErr := projection.applyPostView(txCtx, event); applyErr != nil {
 			return nil, applyErr
 		}
+		if applyErr := projection.applyFeedItemView(txCtx, event); applyErr != nil {
+			return nil, applyErr
+		}
 		_, insertErr := projection.inbox.InsertOne(txCtx, bson.M{
 			"_id": event.EventID, "postId": event.PostID,
 			"postVersion": event.PostVersion, "appliedAt": time.Now().UTC(),
@@ -93,7 +108,8 @@ func (projection *MongoPostLifecycleProjection) ApplyPostLifecycle(ctx context.C
 func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Context, event placementports.PostLifecycleEvent) error {
 	switch event.EventType {
 	case "PostCreated", "PostPublished", "PostUpdated", "PostSettingsUpdated",
-		"PostPromotedToWork", "PostDeleted", "PostPrivacyRedacted", "PostPurged":
+		"PostPromotedToWork", "PostModerationRejected", "PostDeleted",
+		"PostPrivacyRedacted", "PostPurged":
 		// These facts can change the minimal Post external reference.
 	default:
 		// Other Post facts are deliberately acknowledged into the inbox but do
@@ -160,6 +176,8 @@ func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Contex
 		state = "published"
 	case "PostDeleted":
 		state = "deleted"
+	case "PostModerationRejected":
+		state = "rejected"
 	case "PostPrivacyRedacted":
 		state = "redacted"
 	}
@@ -181,6 +199,91 @@ func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Contex
 	}
 	if result.MatchedCount != 1 {
 		return fmt.Errorf("Post owner view version changed during projection")
+	}
+	return nil
+}
+
+func (projection *MongoPostLifecycleProjection) applyFeedItemView(
+	ctx context.Context,
+	event placementports.PostLifecycleEvent,
+) error {
+	var current struct {
+		PostVersion               int64     `bson:"postVersion"`
+		AccountRestricted         bool      `bson:"accountRestricted"`
+		AccountRestrictionVersion int64     `bson:"accountRestrictionVersion"`
+		AccountRestrictionUpdated time.Time `bson:"accountRestrictionUpdatedAt"`
+	}
+	err := projection.feedItems.FindOne(ctx, bson.M{"_id": event.PostID}).Decode(&current)
+	found := err == nil
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return err
+	}
+	if found && current.PostVersion >= event.PostVersion {
+		return nil
+	}
+	remove := event.EventType == "PostDeleted" ||
+		event.EventType == "PostPrivacyRedacted" ||
+		event.EventType == "PostPurged" ||
+		event.EventType == "PostModerationRejected" ||
+		!strings.EqualFold(strings.TrimSpace(event.State), "published") ||
+		!strings.EqualFold(strings.TrimSpace(event.Visibility), "public")
+	if remove {
+		if !found {
+			return nil
+		}
+		result, deleteErr := projection.feedItems.DeleteOne(
+			ctx,
+			bson.M{"_id": event.PostID, "postVersion": current.PostVersion},
+		)
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if result.DeletedCount != 1 {
+			return fmt.Errorf("CircleFeedItem version changed during removal")
+		}
+		return nil
+	}
+	if event.FeedItem == nil {
+		return fmt.Errorf("Content Post lifecycle event %q has no Circle feed snapshot", event.EventID)
+	}
+	snapshot := event.FeedItem
+	document := bson.M{
+		"_id": event.PostID, "postVersion": event.PostVersion,
+		"status": "published", "visibility": "public",
+		"moderationStatus": strings.TrimSpace(event.Moderation),
+		"contentType":      snapshot.ContentType, "contentIdentity": snapshot.ContentIdentity,
+		"assistantUsePolicy":        snapshot.AssistantUsePolicy,
+		"authorId":                  event.OwnerPersonaID,
+		"authorDisplayNameSnapshot": snapshot.AuthorDisplayName,
+		"authorAvatarUrlSnapshot":   snapshot.AuthorAvatarURL,
+		"title":                     snapshot.Title, "body": snapshot.Body, "summary": snapshot.Summary,
+		"coverUrl": snapshot.CoverURL, "mediaUrls": snapshot.MediaURLs,
+		"videoUrl": snapshot.VideoURL, "thumbnailUrl": snapshot.ThumbnailURL,
+		"width": snapshot.Width, "height": snapshot.Height, "durationMs": snapshot.DurationMs,
+		"likeCount": snapshot.LikeCount, "commentCount": snapshot.CommentCount,
+		"shareCount": snapshot.ShareCount, "contentVertical": snapshot.ContentVertical,
+		"createdAt": snapshot.CreatedAt.UTC(), "updatedAt": snapshot.UpdatedAt.UTC(),
+		"publishedAt":               snapshot.PublishedAt.UTC(),
+		"accountRestricted":         current.AccountRestricted,
+		"accountRestrictionVersion": current.AccountRestrictionVersion,
+	}
+	if !current.AccountRestrictionUpdated.IsZero() {
+		document["accountRestrictionUpdatedAt"] = current.AccountRestrictionUpdated.UTC()
+	}
+	if !found {
+		_, insertErr := projection.feedItems.InsertOne(ctx, document)
+		return insertErr
+	}
+	result, replaceErr := projection.feedItems.ReplaceOne(
+		ctx,
+		bson.M{"_id": event.PostID, "postVersion": current.PostVersion},
+		document,
+	)
+	if replaceErr != nil {
+		return replaceErr
+	}
+	if result.MatchedCount != 1 {
+		return fmt.Errorf("CircleFeedItem version changed during projection")
 	}
 	return nil
 }

@@ -27,15 +27,35 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	httpadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
+	connectorauthorizationhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/adapters/inbound/http"
+	connectorauthorizationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/application"
+	connectorgrantreceipt "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/grantreceipt"
+	connectorauthorizationpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/persistence"
+	connectorauthorizationproof "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/proof"
+	connectorauthorizationreference "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/reference"
+	connectorconnectionhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/adapters/inbound/http"
+	connectorconnectionapp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/application"
+	connectorconnectionpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/infrastructure/persistence"
+	connectordefinitionhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/adapters/inbound/http"
+	connectordefinitionapp "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/application"
+	connectordefinitionpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/infrastructure/persistence"
+	connectorinvocationhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/adapters/inbound/http"
+	connectorinvocationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/application"
+	connectorinvocationpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/infrastructure/persistence"
+	externalhttp "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
 	streamadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/stream"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 	interactionpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/persistence"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/providerbinding"
+	externalprovider "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/resultrelay"
+	attemptadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/adapters/inbound/runtime"
 	attemptpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/infrastructure/persistence"
+	deadletteradapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/adapters/inbound/runtime"
+	deadletterpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/infrastructure/persistence"
+	locationhttp "quwoquan_service/services/integration-service/internal/external_integration/location/adapters/inbound/http"
 	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
+	locationprovider "quwoquan_service/services/integration-service/internal/external_integration/location/infrastructure/provider"
+	locationproviderbinding "quwoquan_service/services/integration-service/internal/external_integration/location/infrastructure/providerbinding"
 )
 
 func main() {
@@ -105,13 +125,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
-	locationBinding, locationBindingErr := providerbinding.ResolveLocationLookup(
+	locationBinding, locationBindingErr := locationproviderbinding.ResolveLocationLookup(
 		cfg.Environment,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	locationCapabilityBlocked := errors.Is(
 		locationBindingErr,
-		providerbinding.ErrLocationLookupCapabilityBlocked,
+		locationproviderbinding.ErrLocationLookupCapabilityBlocked,
 	)
 	if locationBindingErr != nil && !locationCapabilityBlocked {
 		return fmt.Errorf("location provider binding invalid: %w", locationBindingErr)
@@ -179,7 +199,7 @@ func run() error {
 	locationTimeout := int64(0)
 	if locationCapabilityBlocked {
 		locationService, err = locationapplication.NewService(
-			provider.NewUnavailableLocationProvider(locationBindingErr.Error()),
+			locationprovider.NewUnavailableLocationProvider(locationBindingErr.Error()),
 		)
 	} else {
 		factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
@@ -206,7 +226,7 @@ func run() error {
 		)
 		mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
 		cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
-		locationProvider, providerErr := provider.NewLocationProvider(locationBinding, cbClient)
+		locationProvider, providerErr := locationprovider.NewLocationProvider(locationBinding, cbClient)
 		if providerErr != nil {
 			return fmt.Errorf("location provider initialization failed: %w", providerErr)
 		}
@@ -235,13 +255,107 @@ func run() error {
 			log.Printf("integration-service MongoDB disconnect failed: %v", err)
 		}
 	}()
+	connectorDefinitionStore := connectordefinitionpersistence.NewMongoStore(
+		mongoClient.Database(cfg.MongoDB.Database),
+	)
+	connectorDefinitionIndexCtx, cancelConnectorDefinitionIndexes := context.WithTimeout(ctx, 30*time.Second)
+	if err := connectorDefinitionStore.EnsureIndexes(connectorDefinitionIndexCtx); err != nil {
+		cancelConnectorDefinitionIndexes()
+		return fmt.Errorf("connector definition indexes failed: %w", err)
+	}
+	cancelConnectorDefinitionIndexes()
+	connectorDefinitionCommands := connectordefinitionapp.NewCommandFacade(
+		connectorDefinitionStore,
+		nil,
+	)
+	connectorDefinitionQueries := connectordefinitionapp.NewQueryFacade(
+		connectorDefinitionStore,
+	)
+	connectorAuthorizationStore := connectorauthorizationpersistence.NewMongoStore(
+		mongoClient.Database(cfg.MongoDB.Database),
+	)
+	connectorAuthorizationIndexCtx, cancelConnectorAuthorizationIndexes := context.WithTimeout(ctx, 30*time.Second)
+	if err := connectorAuthorizationStore.EnsureIndexes(connectorAuthorizationIndexCtx); err != nil {
+		cancelConnectorAuthorizationIndexes()
+		return fmt.Errorf("connector authorization indexes failed: %w", err)
+	}
+	cancelConnectorAuthorizationIndexes()
+	connectorAuthorizationCommands := connectorauthorizationapp.NewCommandFacade(
+		connectorAuthorizationStore,
+		connectorDefinitionStore,
+		connectorauthorizationreference.NewIssuer(nil),
+		connectorauthorizationproof.NewUnavailableVerifier(),
+		nil,
+		nil,
+	)
+	connectorAuthorizationQueries := connectorauthorizationapp.NewQueryFacade(
+		connectorAuthorizationStore,
+	)
+	connectorConnectionStore := connectorconnectionpersistence.NewMongoStore(
+		mongoClient.Database(cfg.MongoDB.Database),
+		connectorAuthorizationStore,
+	)
+	connectorGrantVerifier := connectorgrantreceipt.NewMongoVerifier(
+		mongoClient.Database(cfg.MongoDB.Database),
+		nil,
+	)
+	connectorConnectionIndexCtx, cancelConnectorConnectionIndexes := context.WithTimeout(ctx, 30*time.Second)
+	if err := connectorConnectionStore.EnsureIndexes(connectorConnectionIndexCtx); err != nil {
+		cancelConnectorConnectionIndexes()
+		return fmt.Errorf("connector connection indexes failed: %w", err)
+	}
+	cancelConnectorConnectionIndexes()
+	connectorConnectionCommands := connectorconnectionapp.NewCommandFacade(
+		connectorConnectionStore,
+		connectorDefinitionStore,
+		connectorGrantVerifier,
+		nil,
+	)
+	connectorConnectionQueries := connectorconnectionapp.NewCapabilityQueryFacade(
+		connectorConnectionStore,
+		connectorDefinitionStore,
+		nil,
+	)
+	connectorInvocationStore := connectorinvocationpersistence.NewMongoStore(
+		mongoClient.Database(cfg.MongoDB.Database),
+	)
+	connectorInvocationIndexCtx, cancelConnectorInvocationIndexes := context.WithTimeout(ctx, 30*time.Second)
+	if err := connectorInvocationStore.EnsureIndexes(connectorInvocationIndexCtx); err != nil {
+		cancelConnectorInvocationIndexes()
+		return fmt.Errorf("connector invocation indexes failed: %w", err)
+	}
+	cancelConnectorInvocationIndexes()
+	connectorInvocationCommands := connectorinvocationapp.NewCommandFacade(
+		connectorInvocationStore,
+		connectorConnectionStore,
+		connectorDefinitionStore,
+		nil,
+		nil,
+	)
+	connectorInvocationQueries := connectorinvocationapp.NewQueryFacade(
+		connectorInvocationStore,
+	)
 	reliableStore := reliabletaskmongo.NewExternalInteraction(mongoClient.Database(cfg.MongoDB.Database))
-	otpCodeReferenceStore := provider.NewMongoOTPCodeReferenceStore(mongoClient.Database(cfg.MongoDB.Database))
+	attemptRuntimeStore := attemptadapter.NewRuntimeStore(reliableStore)
+	deadLetterRepository := deadletterpersistence.NewMongoRepository(
+		mongoClient.Database(cfg.MongoDB.Database),
+	)
+	externalRuntimeStore := deadletteradapter.NewRuntimeStore(
+		attemptRuntimeStore,
+		deadLetterRepository,
+	)
+	otpCodeReferenceStore := externalprovider.NewMongoOTPCodeReferenceStore(mongoClient.Database(cfg.MongoDB.Database))
 	indexCtx, cancelIndexes := context.WithTimeout(ctx, 30*time.Second)
 	indexErr := reliableStore.EnsureIndexes(indexCtx)
 	cancelIndexes()
 	if indexErr != nil {
 		return fmt.Errorf("reliable-task EnsureIndexes failed: %w", indexErr)
+	}
+	deadLetterIndexCtx, cancelDeadLetterIndexes := context.WithTimeout(ctx, 30*time.Second)
+	indexErr = deadLetterRepository.EnsureIndexes(deadLetterIndexCtx)
+	cancelDeadLetterIndexes()
+	if indexErr != nil {
+		return fmt.Errorf("external interaction dead-letter indexes failed: %w", indexErr)
 	}
 	attemptClosure, err := attemptpersistence.NewMongoSubjectClosure(
 		mongoClient.Database(cfg.MongoDB.Database),
@@ -311,12 +425,15 @@ func run() error {
 	}
 	_ = prometheus.Register(reliabletask.NewMetricsCollector(reliableStore))
 
-	externalObservedClient := newExternalObservedHTTPClient(
+	externalObservedClient, err := newExternalObservedHTTPClient(
 		cfg,
 		ioLogger,
 		processLogger,
 		exceptionLogger,
 	)
+	if err != nil {
+		return fmt.Errorf("external Provider HTTP client invalid: %w", err)
+	}
 	var otpCodeSealer *otpseal.Sealer
 	if cfg.Integration.ExternalInteraction.SMS.Enabled {
 		otpCodeSealer, err = otpseal.LoadFromEnvironment()
@@ -338,7 +455,7 @@ func run() error {
 	externalLoopDone := make(chan struct{})
 	if len(policies) > 0 {
 		externalService, err = application.NewExternalInteractionService(
-			reliableStore,
+			externalRuntimeStore,
 			externalProviders,
 			policies,
 			otpCodeReferenceStore,
@@ -353,15 +470,47 @@ func run() error {
 	} else {
 		close(externalLoopDone)
 	}
-	handler := httpadapter.NewHandler(
+	operationMux := http.NewServeMux()
+	connectorauthorizationhttp.NewHandler(
+		connectorAuthorizationCommands,
+		connectorAuthorizationQueries,
+	).RegisterRoutes(operationMux)
+	connectordefinitionhttp.NewHandler(
+		connectorDefinitionCommands,
+		connectorDefinitionQueries,
+	).RegisterRoutes(operationMux)
+	connectorconnectionhttp.NewHandler(
+		connectorConnectionCommands,
+		connectorConnectionQueries,
+	).RegisterRoutes(operationMux)
+	connectorinvocationhttp.NewHandler(
+		connectorInvocationCommands,
+		connectorInvocationQueries,
+	).RegisterRoutes(operationMux)
+	locationhttp.NewHandler(
 		locationService,
 		cfg.Integration.Location.NearbyDefaultRadiusMeters,
 		cfg.Integration.Location.NearbyDefaultLimit,
 		cfg.Integration.Location.SearchDefaultLimit,
 		cfg.Integration.Location.DefaultLatitude,
 		cfg.Integration.Location.DefaultLongitude,
-		externalService,
-	).Routes()
+	).RegisterRoutes(operationMux)
+	externalhttp.NewHandler(externalService).RegisterRoutes(operationMux)
+	handler := http.Handler(operationMux)
+
+	providerSubstitute, err := startNonprodProviderSubstitute(cfg.Environment)
+	if err != nil {
+		return fmt.Errorf("nonprod provider substitute init failed: %w", err)
+	}
+	if providerSubstitute != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := providerSubstitute.close(shutdownCtx); err != nil {
+				log.Printf("nonprod provider substitute shutdown failed: %v", err)
+			}
+		}()
+	}
 
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
@@ -377,6 +526,12 @@ func run() error {
 			return accountClosureConsumer.Healthy(10 * time.Second)
 		},
 	)
+	if providerSubstitute != nil {
+		healthChecker.Register(
+			"nonprod_provider_substitute",
+			providerSubstitute.health,
+		)
+	}
 	healthChecker.Register(
 		"external_interaction_result_relay",
 		func(hctx context.Context) error {

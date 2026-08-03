@@ -1,0 +1,91 @@
+{
+  "catalogProfiles": [
+    {
+      "profileId": "catalog.general",
+      "iconToken": "sparkles",
+      "targetUsers": [
+        "all_users"
+      ],
+      "valueDescription": "通用官方 Skill 能力",
+      "dataUseSummary": "按 Skill 声明和用户授权使用最小必要数据",
+      "assetDigest": "sha256:7946cb1738915abf1b869347d31bc820892d5a4cf6e9bd3a7abe8a51e16e987e"
+    },
+    {
+      "profileId": "catalog.travel_companion",
+      "iconToken": "airplane",
+      "coverMediaRef": "assistant.skill.travel_companion.cover",
+      "targetUsers": [
+        "small_group_trip_organizer",
+        "travel_group_owner",
+        "trip_participant",
+        "tour_leader",
+        "licensed_guide",
+        "travel_creator"
+      ],
+      "valueDescription": "把群聊里的需求、吃玩住行计划、现场变化和随拍串成一条共同旅行时间线",
+      "exampleRefs": [
+        "assistant.skill.travel_companion.example.seven_day_plan",
+        "assistant.skill.travel_companion.example.live_revision",
+        "assistant.skill.travel_companion.example.trip_story"
+      ],
+      "dataUseSummary": "仅在当前个人或共享场景授权范围内读取行程、消息、内容与公开网页；私人记忆和个人 Connector 不进入共享回答",
+      "assetDigest": "sha256:083e83ac3d11e7aa61c35abff3b6e80e720144f6733623ef2e30317ead1669b5"
+    }
+  ],
+  "activationProfiles": [
+    {
+      "profileId": "activation.reactive",
+      "mode": "reactive",
+      "assetDigest": "sha256:7c1b0c55b64776c019302c54d67fcf0d95bb4db7d95d0b97a15dc2107b851de2"
+    },
+    {
+      "profileId": "activation.proactive",
+      "mode": "proactive",
+      "assetDigest": "sha256:c78eedb54bf7f550a8467e1eca1c2585378884c6f3b223d5f201b9d7a9e8367d"
+    },
+    {
+      "profileId": "activation.reactive.shared",
+      "mode": "reactive",
+      "allowedSurfaceKinds": [
+        "personal",
+        "conversation",
+        "circle"
+      ],
+      "assetDigest": "sha256:a0089c883b0b1884f1ef4fdf9d7847e80b3803fe41df472ad81063f1a8c21524"
+    },
+    {
+      "profileId": "activation.proactive.shared",
+      "mode": "proactive",
+      "allowedSurfaceKinds": [
+        "personal",
+        "conversation",
+        "circle"
+      ],
+      "assetDigest": "sha256:ea04a2c6bd686febe095fa6d6fa5a11bd41f91ae0091493def66954ed4add1e4"
+    },
+    {
+      "profileId": "activation.hybrid.shared",
+      "mode": "hybrid",
+      "allowedSurfaceKinds": [
+        "personal",
+        "conversation",
+        "circle"
+      ],
+      "assetDigest": "sha256:73c3bf04545217ab4872a02441458765bb03c3c7e6f0a0fcd098338937f96d0c"
+    }
+  ],
+  "inputProfiles": [
+    {
+      "profileId": "input.none",
+      "configurationSchemaRef": "assistant.skill.input.none",
+      "setupTemplateRef": "assistant.skill.setup.none",
+      "assetDigest": "sha256:452dacf2cf7b43722e6063230a70390d1925e8b2ca615e5b64c542923a6088dc"
+    },
+    {
+      "profileId": "input.travel_companion",
+      "configurationSchemaRef": "assistant.skill.input.travel_companion",
+      "setupTemplateRef": "assistant.skill.setup.travel_companion",
+      "assetDigest": "sha256:b93debc7f1530be6d0856d0b6a1d5806be41b82b657c84fe6548642f38638c53"
+    }
+  ]
+}

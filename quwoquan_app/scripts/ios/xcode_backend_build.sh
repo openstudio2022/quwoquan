@@ -9,7 +9,7 @@ prepared_exports="$(bash "$PREPARE_SCRIPT")"
 status=$?
 set -e
 if [[ "$status" -ne 0 ]]; then
-  echo "[ios-build] GATE_BLOCK: runtime package preparation failed; use quwoquan_app/run.sh -d <simulator>." >&2
+  echo "[ios-build] GATE_BLOCK: runtime package preparation failed; resolve the first typed blocker reported above, then retry the same Flutter command." >&2
   exit "$status"
 fi
 

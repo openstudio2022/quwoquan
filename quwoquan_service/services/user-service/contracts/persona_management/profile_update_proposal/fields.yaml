@@ -286,15 +286,29 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: source
-        type: string
+        type: enum
         enum_ref: ProposalSource
-        client_dart_type: ProfileUpdateProposalSource
-        client_wire: canonicalEnum
-      - name: changes
-        type: object
-        client_dart_type: ProfileChangeSet
-        client_wire: toWire
-        client_spread_body: true
+      - name: displayName
+        type: string
+        constraints: [NULLABLE, MAX_LENGTH_64]
+      - name: bio
+        type: string
+        constraints: [NULLABLE, MAX_LENGTH_500]
+      - name: avatarMediaAssetId
+        type: string
+        constraints: [NULLABLE]
+      - name: backgroundMediaAssetId
+        type: string
+        constraints: [NULLABLE]
+      - name: isPrivate
+        type: bool
+        constraints: [NULLABLE]
+      - name: isolationLevel
+        type: string
+        constraints: [NULLABLE]
+      - name: purposeHint
+        type: string
+        constraints: [NULLABLE, MAX_LENGTH_120]
       - name: reason
         type: string
         constraints:

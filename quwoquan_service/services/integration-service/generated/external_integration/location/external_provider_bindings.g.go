@@ -19,47 +19,35 @@ type ExternalProviderBinding struct {
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"integration.location.lookup": {
-			State:       "enabled",
-			AdapterID:   "ext.map.baidu",
-			EndpointRef: "environment_binding:integration.location",
-			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
-			},
-			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_BAIDU_AK",
-			},
-			TimeoutMilliseconds: 1200,
-			RequiredRedisScenes: []string{},
+			State:                   "enabled",
+			AdapterID:               "ext.map.protocol_fixture",
+			EndpointRef:             "local_topology:integration.protocol_fixture",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     1200,
+			RequiredRedisScenes:     []string{},
 		},
 	},
 	"beta": {
 		"integration.location.lookup": {
-			State:       "enabled",
-			AdapterID:   "ext.map.baidu",
-			EndpointRef: "environment_binding:integration.location",
-			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
-			},
-			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_BAIDU_AK",
-			},
-			TimeoutMilliseconds: 1200,
-			RequiredRedisScenes: []string{},
+			State:                   "enabled",
+			AdapterID:               "ext.map.protocol_fixture",
+			EndpointRef:             "local_topology:integration.protocol_fixture",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     1200,
+			RequiredRedisScenes:     []string{},
 		},
 	},
 	"gamma": {
 		"integration.location.lookup": {
-			State:       "enabled",
-			AdapterID:   "ext.map.baidu",
-			EndpointRef: "environment_binding:integration.location",
-			EndpointEnvironmentKeys: map[string]string{
-				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
-			},
-			SecretEnvironmentKeys: []string{
-				"INTEGRATION_LOCATION_BAIDU_AK",
-			},
-			TimeoutMilliseconds: 1200,
-			RequiredRedisScenes: []string{},
+			State:                   "enabled",
+			AdapterID:               "ext.map.protocol_fixture",
+			EndpointRef:             "local_topology:integration.protocol_fixture",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     1200,
+			RequiredRedisScenes:     []string{},
 		},
 	},
 	"prod": {

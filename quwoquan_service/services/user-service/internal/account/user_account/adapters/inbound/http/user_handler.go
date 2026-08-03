@@ -1,40 +1,36 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
-	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
 	accountlifecycleapp "quwoquan_service/services/user-service/internal/account/user_account/application"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
-	usersettingsapp "quwoquan_service/services/user-service/internal/account/user_settings/application"
-	followingapp "quwoquan_service/services/user-service/internal/profile_projection/following_subject/application"
-	visitapp "quwoquan_service/services/user-service/internal/relationship/followed_subject_visit_state/application"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 	relationshipapp "quwoquan_service/services/user-service/internal/relationship/persona_relationship/application"
-	subjectfollowapp "quwoquan_service/services/user-service/internal/relationship/subject_follow/application"
 )
+
+type objectRouteRegistrar interface{ RegisterRoutes(*http.ServeMux) }
 
 // UserHandler composes the UserAccount HTTP surface. Concrete HTTP resources
 // keep their operations in focused files in this inbound adapter package.
 type UserHandler struct {
 	profile                    *application.ProfileService
 	search                     *application.SearchService
-	relationship               *relationshipapp.PersonaRelationshipService
+	relationship               relationshipapp.Facade
 	greeting                   *greetingapp.GreetingService
-	settingsCommands           *usersettingsapp.UserSettingsCommandFacade
-	settingsQueries            *usersettingsapp.UserSettingsQueryFacade
+	settingsRoutes             objectRouteRegistrar
 	auth                       *application.AuthService
 	credentialQueries          *credentialapp.CredentialQueryFacade
-	deviceRegistrationCommands *registrationapp.CommandFacade
-	deviceRegistrationQueries  *registrationapp.QueryFacade
+	deviceRegistrationRoutes   objectRouteRegistrar
 	persona                    *application.PersonaService
 	interestProfile            *application.InterestProfileService
-	subjectFollow              *subjectfollowapp.SubjectFollowService
-	followedSubjectVisit       *visitapp.VisitService
-	followingSubjects          *followingapp.QueryService
+	subjectFollowRoutes        objectRouteRegistrar
+	followedSubjectVisitRoutes objectRouteRegistrar
+	followingSubjectRoutes     objectRouteRegistrar
 	accountLifecycle           *accountlifecycleapp.CloseAccountFacade
 	accountEnforcement         *accountlifecycleapp.AccountEnforcementCommandFacade
 	accountSecurity            accountports.AccountSecurityReader
@@ -96,47 +92,59 @@ const (
 func NewUserHandler(
 	profile *application.ProfileService,
 	search *application.SearchService,
-	relationship *relationshipapp.PersonaRelationshipService,
+	relationship relationshipapp.Facade,
 	greeting *greetingapp.GreetingService,
-	settingsCommands *usersettingsapp.UserSettingsCommandFacade,
-	settingsQueries *usersettingsapp.UserSettingsQueryFacade,
 	auth *application.AuthService,
 	credentialQueries *credentialapp.CredentialQueryFacade,
-	deviceRegistrationCommands *registrationapp.CommandFacade,
-	deviceRegistrationQueries *registrationapp.QueryFacade,
 	persona *application.PersonaService,
 	interestProfile *application.InterestProfileService,
-	subjectFollow *subjectfollowapp.SubjectFollowService,
-	followedSubjectVisit *visitapp.VisitService,
-	followingSubjects *followingapp.QueryService,
 ) (*UserHandler, error) {
-	if settingsCommands == nil || settingsQueries == nil {
-		return nil, errors.New("UserSettings facades are required")
-	}
 	if credentialQueries == nil {
 		return nil, errors.New("CredentialBinding query facade is required")
 	}
-	if deviceRegistrationCommands == nil || deviceRegistrationQueries == nil {
-		return nil, errors.New("DeviceRegistration facades are required")
-	}
 	handler := &UserHandler{
-		profile:                    profile,
-		search:                     search,
-		relationship:               relationship,
-		greeting:                   greeting,
-		settingsCommands:           settingsCommands,
-		settingsQueries:            settingsQueries,
-		auth:                       auth,
-		credentialQueries:          credentialQueries,
-		deviceRegistrationCommands: deviceRegistrationCommands,
-		deviceRegistrationQueries:  deviceRegistrationQueries,
-		persona:                    persona,
-		interestProfile:            interestProfile,
-		subjectFollow:              subjectFollow,
-		followedSubjectVisit:       followedSubjectVisit,
-		followingSubjects:          followingSubjects,
+		profile:           profile,
+		search:            search,
+		relationship:      relationship,
+		greeting:          greeting,
+		auth:              auth,
+		credentialQueries: credentialQueries,
+		persona:           persona,
+		interestProfile:   interestProfile,
 	}
 	return handler, nil
+}
+
+func (h *UserHandler) WithDeviceRegistrationRoutes(routes objectRouteRegistrar) *UserHandler {
+	h.deviceRegistrationRoutes = routes
+	return h
+}
+
+func (h *UserHandler) WithUserSettingsRoutes(routes objectRouteRegistrar) *UserHandler {
+	h.settingsRoutes = routes
+	return h
+}
+
+func (h *UserHandler) WithSubjectObjectRoutes(
+	subjectFollow objectRouteRegistrar,
+	followedSubjectVisit objectRouteRegistrar,
+	followingSubject objectRouteRegistrar,
+) *UserHandler {
+	h.subjectFollowRoutes = subjectFollow
+	h.followedSubjectVisitRoutes = followedSubjectVisit
+	h.followingSubjectRoutes = followingSubject
+	return h
+}
+
+// ResolveActorPersonaID is the composition port used by relationship object
+// adapters. Identity selection remains owned by UserAccount; object adapters do
+// not trust headers or request bodies on their own.
+func (h *UserHandler) ResolveActorPersonaID(
+	ctx context.Context,
+	r *http.Request,
+	explicitActorID string,
+) (string, error) {
+	return h.resolveActorPersonaID(ctx, r, explicitActorID)
 }
 
 func (h *UserHandler) Routes() http.Handler {
@@ -174,9 +182,18 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /user/personas/{targetPersonaId}/block", h.handleUnblock)
 	mux.HandleFunc("GET /user/blocked", h.handleListBlocked)
 
-	h.registerSubjectFollowRoutes(mux)
+	for _, registrar := range []objectRouteRegistrar{
+		h.settingsRoutes,
+		h.deviceRegistrationRoutes,
+		h.subjectFollowRoutes,
+		h.followedSubjectVisitRoutes,
+		h.followingSubjectRoutes,
+	} {
+		if registrar != nil {
+			registrar.RegisterRoutes(mux)
+		}
+	}
 	h.registerAccountLifecycleRoutes(mux)
-	h.registerDeviceRegistrationRoutes(mux)
 
 	mux.HandleFunc("GET /user/personas", h.handleListPersonas)
 	mux.HandleFunc("GET /user/personas/summary", h.handleGetPersonaManagementSummary)
@@ -190,18 +207,6 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /users/{userId}/interest-profile", h.handleGetUserInterestProfile)
 
-	mux.HandleFunc("GET /user/settings/notifications", h.handleGetNotificationSettings)
-	mux.HandleFunc("PATCH /user/settings/notifications", h.handleUpdateNotificationSettings)
-	mux.HandleFunc("GET /user/settings/privacy", h.handleGetPrivacySettings)
-	mux.HandleFunc("PATCH /user/settings/privacy", h.handleUpdatePrivacySettings)
-	mux.HandleFunc(
-		"GET /internal/user/accounts/{userId}/assistant-delivery-policy",
-		h.handleResolveAssistantDeliveryPolicy,
-	)
-	mux.HandleFunc("GET /user/settings/calls", h.handleGetCallSettings)
-	mux.HandleFunc("PATCH /user/settings/calls", h.handleUpdateCallSettings)
-	mux.HandleFunc("GET /user/settings/appearance", h.handleGetAppearanceSettings)
-	mux.HandleFunc("PATCH /user/settings/appearance", h.handleUpdateAppearanceSettings)
 	// Auth & Credentials
 	mux.HandleFunc("POST /auth/otp/send", h.handleSendOtp)
 	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)

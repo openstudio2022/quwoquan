@@ -1,0 +1,20 @@
+description: ObjectTagIndexView 只由 taxonomy release 与对象标签 typed 事件投影。
+api_routes: []
+runtime_entrypoints:
+- name: ProjectObjectTagIndex
+  kind: projector
+  phase: event_projection
+  source_events:
+  - tag.TagTaxonomyReleaseActivated
+  - tag.ObjectTagsAssigned
+  - tag.ObjectTagsRemoved
+  - tag.TaggedObjectDeleted
+  checkpoint: taxonomy_release_and_object_event_sequence
+  rebuild: load_active_taxonomy_then_replay_object_tag_events
+  tombstone: delete_object_tag_bindings_keep_checkpoint
+  idempotency: aggregate_version
+  application:
+    kind: command
+    facet: ObjectTagIndexViewProjector
+    method: apply
+    object_owner: ObjectTagIndexView

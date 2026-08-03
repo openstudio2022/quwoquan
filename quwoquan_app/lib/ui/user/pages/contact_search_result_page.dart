@@ -118,7 +118,7 @@ class _ContactSearchResultPageState
     }
   }
 
-  ContactCandidateVm _toCandidate(SocialRelationSearchItemView item) {
+  ContactCandidateVm _toCandidate(SocialRelationSearchItemViewData item) {
     final cap = item.relationshipCapability;
     return ContactCandidateVm(
       personaId: item.personaId,

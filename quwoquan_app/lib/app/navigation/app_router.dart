@@ -84,6 +84,11 @@ import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
+import 'package:quwoquan_app/ui/travel/pages/trip_journey_page.dart';
+import 'package:quwoquan_app/ui/travel/pages/trip_map_page.dart';
+import 'package:quwoquan_app/ui/travel/pages/trip_plans_page.dart';
+import 'package:quwoquan_app/ui/travel/pages/trip_share_page.dart';
+import 'package:quwoquan_app/ui/travel/pages/trip_templates_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
@@ -100,6 +105,7 @@ part 'app_router_legal_routes.dart';
 part 'app_router_profile_routes.dart';
 part 'app_router_recovery_page.dart';
 part 'app_router_rtc_routes.dart';
+part 'app_router_travel_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -878,6 +884,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             appRoutePage<void>(state: state, child: const GreetingInboxPage()),
       ),
       ..._chatRoutes(ref),
+      ..._travelRoutes(),
       ..._rtcRoutes(),
     ],
   );

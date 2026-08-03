@@ -72,19 +72,21 @@ func ValidateTemplate(template Template) error {
 			}
 		}
 		if node.Action != nil {
-			if !allowedActions[node.Action.Operation] || !identifierPattern.MatchString(node.Action.IntentID) ||
-				!identifierPattern.MatchString(node.Action.Operation) || unsafeActionPayload(node.Action.Payload) {
-				return ErrInvalidTemplate
-			}
-			raw, err := json.Marshal(node.Action.Payload)
-			if err != nil || len(raw) > maxPayloadBytes {
-				return ErrInvalidTemplate
+			if err := validateActionIntent(*node.Action, allowedActions); err != nil {
+				return err
 			}
 		}
 		if node.Kind == generated.AssistantPresentationNodeKindIcon {
 			icon, _ := node.Data["iconToken"].(string)
 			if !allowedIconTokens[icon] {
 				return fmt.Errorf("%w: unknown icon token", ErrInvalidTemplate)
+			}
+		}
+		if node.Kind == generated.AssistantPresentationNodeKindRouteMap {
+			if _, bound := node.Binding["data"]; !bound {
+				if err := validateRouteMapData(node.Data); err != nil {
+					return fmt.Errorf("%w: %v", ErrInvalidTemplate, err)
+				}
 			}
 		}
 		nodes[node.NodeID] = node
@@ -141,13 +143,28 @@ func validateStyle(style Style) error {
 func validateBinding(binding map[string]string) error {
 	for field, path := range binding {
 		switch field {
-		case "title", "body", "data", "visible":
+		case "title", "body", "data", "visible", "action":
 		default:
 			return ErrInvalidTemplate
 		}
 		if !bindingPattern.MatchString(path) {
 			return ErrInvalidTemplate
 		}
+	}
+	return nil
+}
+
+func validateActionIntent(action ActionIntent, allowed map[string]bool) error {
+	if !allowed[action.Operation] || !identifierPattern.MatchString(action.IntentID) ||
+		!identifierPattern.MatchString(action.Operation) ||
+		!identifierPattern.MatchString(action.ObjectTypeRef) ||
+		!identifierPattern.MatchString(action.ObjectID) ||
+		unsafeActionPayload(action.Payload) {
+		return ErrInvalidTemplate
+	}
+	raw, err := json.Marshal(action.Payload)
+	if err != nil || len(raw) > maxPayloadBytes {
+		return ErrInvalidTemplate
 	}
 	return nil
 }

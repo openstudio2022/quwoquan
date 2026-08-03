@@ -98,6 +98,22 @@
   - 交付给下游的结果：维护内容、媒体、评论、互动和发现读模型，并交付可阅读、可发布或可恢复的内容终态，形成该场景中本领域负责的终态。
   - 不负责：不拥有账号关系、圈子成员、主页身份或推荐模型版本。
 
+- [`JNY-013 / SCN-030`](../spec.md#scn-030)
+  - 本领域负责：提供可见 Post/Media/收藏内容 Reader，供计划引用真实内容事实。
+  - 进入条件：viewer 权限和对象可见性有效。
+  - 交付给下游的结果：typed content/media reference 与来源事实。
+  - 不负责：不拥有 Trip 或复制计划。
+- [`JNY-013 / SCN-032`](../spec.md#scn-032)
+  - 本领域负责：保持 Post/MediaAsset 真相并接受 Trip link 的采用归因读取，不由 Travel 修改内容正文。
+  - 进入条件：引用对象存在且可见。
+  - 交付给下游的结果：可解析引用、媒体状态与采用反馈。
+  - 不负责：不决定 Moment 归属。
+- [`JNY-013 / SCN-033`](../spec.md#scn-033)
+  - 本领域负责：接收经确认的 LocalPostDraft/发布 command，并承载旅行分享内容。
+  - 进入条件：用户确认、来源快照与媒体引用有效。
+  - 交付给下游的结果：草稿或已发布 Post receipt。
+  - 不负责：不自动发布，不保存 Trip 快照正文副本。
+
 ## 4. 业务能力
 
 - [`content-display-consistency`](./content-display-consistency/spec.md)：统一文章、圈子流、沉浸式浏览器与作者主页之间的展示和状态交接

@@ -33,6 +33,8 @@ services:
       AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
       AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
     depends_on:
+      livekit-sfu:
+        condition: service_started
       mongodb:
         condition: service_healthy
       mongo-init:

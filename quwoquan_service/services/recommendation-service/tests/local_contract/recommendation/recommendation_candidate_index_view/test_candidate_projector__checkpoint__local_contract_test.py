@@ -7,6 +7,7 @@ from internal.recommendation.recommendation_candidate_index_view.application.pro
     CandidateLifecycleSnapshot,
     PremiumAdmissionSnapshot,
     Projector,
+    RecommendationObjectCardCandidate,
 )
 
 
@@ -65,6 +66,30 @@ def test_candidate_projector_rejects_stale_sequence() -> None:
 def test_candidate_projector_rejects_duplicate_entity_tags() -> None:
     with pytest.raises(ValueError):
         Projector(_Store()).project_lifecycle(_lifecycle(1, ("Topic/旅行", "Topic/旅行")))
+
+
+def test_candidate_projector_rejects_incomplete_or_duplicate_object_card_snapshot() -> None:
+    snapshot = replace(
+        _lifecycle(1),
+        object_card=RecommendationObjectCardCandidate(
+            homepage_id="homepage-001",
+            canonical_entity_id="entity-001",
+            title="对象页",
+            subtitle=None,
+            cover_url=None,
+            tag_refs=("旅行", "旅行"),
+        ),
+    )
+    with pytest.raises(ValueError, match="tags must be unique"):
+        Projector(_Store()).project_lifecycle(snapshot)
+
+    with pytest.raises(ValueError, match="candidate is incomplete"):
+        Projector(_Store()).project_lifecycle(
+            replace(
+                snapshot,
+                object_card=replace(snapshot.object_card, canonical_entity_id=""),
+            )
+        )
 
 
 def test_candidate_projector_stale_delete_cannot_remove_newer_projection() -> None:

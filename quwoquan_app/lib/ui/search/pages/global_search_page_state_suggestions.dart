@@ -202,13 +202,13 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           messageAnchorId: record.messageAnchorId,
         );
       case SearchSuggestionEntryKind.circle:
-        final circle = entry.cast<CircleSearchItemView>();
+        final circle = entry.cast<CircleSearchHitViewData>();
         _openCircle(circle.circleId);
       case SearchSuggestionEntryKind.location:
-        final location = entry.cast<LocationPoiDto>();
+        final location = entry.cast<SearchLocationSuggestionViewData>();
         _openNetworkResults(location.name, initialTabId: 'all');
       case SearchSuggestionEntryKind.followedPerson:
-        final person = entry.cast<SocialRelationSearchItemView>();
+        final person = entry.cast<SocialRelationSearchItemViewData>();
         _openUserProfile(person.userHandle);
       case SearchSuggestionEntryKind.network:
         final network = entry.cast<NetworkSearchSuggestion>();
@@ -275,7 +275,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           ),
         );
       case SearchSuggestionEntryKind.circle:
-        final circle = item.cast<CircleSearchItemView>();
+        final circle = item.cast<CircleSearchHitViewData>();
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: circle.coverUrl,
@@ -307,7 +307,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           onTap: () => _openCircle(circle.circleId),
         );
       case SearchSuggestionEntryKind.location:
-        final location = item.cast<LocationPoiDto>();
+        final location = item.cast<SearchLocationSuggestionViewData>();
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: null,
@@ -337,7 +337,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           onTap: () => _openNetworkResults(location.name, initialTabId: 'all'),
         );
       case SearchSuggestionEntryKind.followedPerson:
-        final person = item.cast<SocialRelationSearchItemView>();
+        final person = item.cast<SocialRelationSearchItemViewData>();
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: person.avatarUrl,

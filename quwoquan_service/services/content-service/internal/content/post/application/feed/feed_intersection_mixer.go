@@ -5,7 +5,7 @@ import (
 	"hash/fnv"
 	"strings"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 )
 
 // feedIntersectionProvider 提供 viewer 的交集理由池（已含 primaryText/weightTier 等显示语言）。

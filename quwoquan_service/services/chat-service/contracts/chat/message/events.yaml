@@ -44,7 +44,7 @@ events:
   - messageId
   - seq
   - senderId
+  - senderAccountId
   - content
   - assistantMemberId
-  - assistantSkillId
   - triggerClientMsgId

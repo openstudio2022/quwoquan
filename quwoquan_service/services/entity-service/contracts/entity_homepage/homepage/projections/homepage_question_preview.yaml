@@ -6,22 +6,11 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageQuestionPreview
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_question_preview.g.dart
-  fields:
-  - name: postId
-    dart_type: String
-    nullable: false
-    source: postId
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: summary
-    dart_type: String
-    nullable: true
-    source: summary
+fields:
+- name: postId
+  type: string
+- name: title
+  type: string
+- name: summary
+  type: string
+  nullable: true

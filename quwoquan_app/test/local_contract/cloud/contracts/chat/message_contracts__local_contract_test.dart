@@ -66,16 +66,16 @@ void main() {
           type: 'card',
           content: '查看分享',
           clientMsgId: 'client-card-1',
-          card: ChatMessageCardCommand(
+          card: MessageCard(
             kind: 'content_post',
             title: '城市漫步',
-            objectRef: ChatMessageCardObjectRef(
+            objectRef: MessageCardObjectRef(
               objectTypeRef: 'post',
               objectId: 'post_001',
               routeId: 'contentDetail',
             ),
-            attributes: <ChatMessageCardAttribute>[
-              ChatMessageCardAttribute(name: 'postId', value: 'post_001'),
+            attributes: <MessageCardAttribute>[
+              MessageCardAttribute(name: 'postId', value: 'post_001'),
             ],
           ),
         ),
@@ -100,12 +100,12 @@ void main() {
           type: 'text',
           content: 'removed',
           clientMsgId: 'client-card-removed',
-          card: ChatMessageCardCommand(kind: 'content_post', title: 'removed'),
+          card: MessageCard(kind: 'content_post', title: 'removed'),
         ),
         throwsArgumentError,
       );
       expect(
-        () => ChatMessageCardCommand(
+        () => MessageCard(
           kind: 'content_post',
           title: 'missing object ref',
         ),

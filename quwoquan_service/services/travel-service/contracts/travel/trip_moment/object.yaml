@@ -1,0 +1,25 @@
+kind: aggregate_root
+description: Trip 中经成员确认归属的照片、视频、语音、文字、签到或 Post 引用；不复制媒体和内容事实。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- {name: trip_plan, kind: reference, cardinality: 'N:1', consistency: strong, access: named_reader, on_delete: retain, reference_fields: [tripId], target_object: travel.TripPlan}
+- {name: attributed_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [attributionPersonaId], target_object: user.Persona}
+local_identity_reasons:
+  itemId: TripPlanRevision 内的 owned item 稳定键，只能与 tripId/revisionNumber 联合解释，不是独立 aggregate identity
+capabilities: [commandable, queryable, idempotent_commands]
+business_rules:
+- Moment 只保存 canonical object reference 或内联文字，不复制 Post 正文或 MediaAsset 字节
+- suggested 归属不得直接进入共享时间线；只有成员确认后才能写入 confirmed day/item
+- 重新归属和删除必须使用 expectedVersion CAS，并与幂等回执和 outbox 原子提交
+- coarsePlaceRef 只允许粗粒度 Place reference，不保存连续轨迹或实时精确坐标
+lifecycle:
+  state_field: status
+  states: [active, deleted]
+  optimistic_concurrency: version
+  idempotency: command_receipt

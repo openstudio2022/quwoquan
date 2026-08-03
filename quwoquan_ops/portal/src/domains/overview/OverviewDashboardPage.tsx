@@ -395,7 +395,7 @@ export function OverviewDashboardPage() {
           </table>
         </SectionCard>
 
-        <SectionCard title="产品事件下钻" subtitle="最近 15 分钟 SLS raw 样本；sessionId 默认掩码">
+        <SectionCard title="产品事件下钻" subtitle="最近 15 分钟 Elasticsearch raw 样本；sessionId 默认掩码">
           <div className="stack-list">
             {drilldownItems.map((item) => (
               <div className="timeline-item" key={item.rowKey}>

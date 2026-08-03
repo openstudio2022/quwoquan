@@ -2,8 +2,6 @@ package orchestration
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,25 +12,21 @@ import (
 	"quwoquan_service/runtime/streaming"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	presentationpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 )
 
 // DurableRunExecutor adapts the production AgentLoop to the canonical
 // AssistantRun worker. The execution-shaped AssistantTurn below is ephemeral:
-// it is never written to SessionRunStore and its internal execution ID is not
+// it is never written as an aggregate and its internal execution ID is not
 // the public Run ID. All durable output is projected into typed RunItems by the
 // worker callback.
 type DurableRunExecutor struct {
-	loop           *AgentLoop
-	policyResolver DurableExecutionPolicyResolver
+	loop *AgentLoop
 }
-
-type DurableExecutionPolicyResolver func(
-	context.Context,
-	runruntime.ExecutionRequest,
-) (assistant.AssistantFrozenPolicySelection, error)
 
 func NewDurableRunExecutor(loop *AgentLoop) *DurableRunExecutor {
 	if loop == nil {
@@ -41,30 +35,31 @@ func NewDurableRunExecutor(loop *AgentLoop) *DurableRunExecutor {
 	return &DurableRunExecutor{loop: loop}
 }
 
-func NewDurableRunExecutorWithPolicyResolver(
-	loop *AgentLoop,
-	resolver DurableExecutionPolicyResolver,
-) *DurableRunExecutor {
-	executor := NewDurableRunExecutor(loop)
-	if resolver == nil {
-		panic("assistant durable execution policy resolver is required")
-	}
-	executor.policyResolver = resolver
-	return executor
-}
-
 func (e *DurableRunExecutor) Execute(
 	ctx context.Context,
 	request runruntime.ExecutionRequest,
 	emit func(runruntime.ExecutionItemUpdate) error,
 ) (runruntime.ExecutionResult, error) {
 	if e == nil || e.loop == nil || strings.TrimSpace(request.RunID) == "" ||
-		strings.TrimSpace(request.Goal) == "" || emit == nil {
+		strings.TrimSpace(request.Goal) == "" ||
+		strings.TrimSpace(request.SkillPackageID) == "" ||
+		strings.TrimSpace(request.SkillPackageReleaseDigest) == "" ||
+		emit == nil {
 		return runruntime.ExecutionResult{}, runruntime.ErrInvalidRun
 	}
-	if completedDeviceActionRef := executionCompletedDeviceActionRef(request.Checkpoint); completedDeviceActionRef != "" {
-		answer := "设备上的系统日程已创建。"
-		presentation, err := buildExecutionPresentation(request, answer, nil, nil)
+	ctx = skillpkg.WithPackageRelease(ctx, skillpkg.PackageReleaseIdentity{
+		PackageID:     request.SkillPackageID,
+		ReleaseDigest: request.SkillPackageReleaseDigest,
+	})
+	if receipt, completed := executionCompletedDeviceAction(request.Checkpoint); completed {
+		answer := "设备操作已完成。"
+		if provider, ok := e.loop.React.Tools.(ToolMetadataProvider); ok {
+			if metadata, found := provider.ToolMetadata(receipt.ActionKind); found &&
+				strings.TrimSpace(metadata.Confirmation.CompletionSummary) != "" {
+				answer = strings.TrimSpace(metadata.Confirmation.CompletionSummary)
+			}
+		}
+		presentation, err := e.buildExecutionPresentation(ctx, request, answer, nil, nil)
 		if err != nil {
 			return runruntime.ExecutionResult{}, err
 		}
@@ -72,17 +67,10 @@ func (e *DurableRunExecutor) Execute(
 			AnswerText:          answer,
 			Presentation:        presentation,
 			Verified:            true,
-			VerificationSummary: "device action completed after explicit confirmation",
+			VerificationSummary: "device action completed after explicit confirmation and native receipt",
 		}, nil
 	}
 	turn := executionTurn(request)
-	if e.policyResolver != nil {
-		selection, err := e.policyResolver(ctx, request)
-		if err != nil {
-			return runruntime.ExecutionResult{}, err
-		}
-		turn.FrozenPolicySelection = selection
-	}
 	answer := strings.Builder{}
 	processes := make(map[string]map[string]any)
 	processOrder := make([]string, 0)
@@ -149,10 +137,12 @@ func (e *DurableRunExecutor) Execute(
 		return runruntime.ExecutionResult{}, err
 	}
 	if failure != nil {
-		return runruntime.ExecutionResult{}, fmt.Errorf(
-			"agent loop failed: %s",
-			failure.Code,
-		)
+		return runruntime.ExecutionResult{}, &runruntime.ExecutionFailure{
+			Code:   failure.Code,
+			Origin: string(failure.Origin),
+			Kind:   string(failure.Kind),
+			Nature: string(failure.Nature),
+		}
 	}
 	if waitingState == "" && !completed {
 		waitingState = generated.AssistantRunStateWaitingUser
@@ -170,7 +160,8 @@ func (e *DurableRunExecutor) Execute(
 		visibleProcesses,
 		evidenceRefs,
 	)
-	presentationDocument, presentationErr := buildExecutionPresentation(
+	presentationDocument, presentationErr := e.buildExecutionPresentation(
+		ctx,
 		request,
 		finalAnswer,
 		visibleProcesses,
@@ -192,134 +183,103 @@ func (e *DurableRunExecutor) Execute(
 	}, nil
 }
 
-func executionCompletedDeviceActionRef(
+func executionCompletedDeviceAction(
 	checkpoint *runruntime.Checkpoint,
-) string {
+) (runruntime.DeviceActionExecutionReceipt, bool) {
 	if checkpoint == nil {
-		return ""
+		return runruntime.DeviceActionExecutionReceipt{}, false
 	}
 	const prefix = "device_action_completed:"
+	completedRefs := map[string]struct{}{}
 	for _, summary := range checkpoint.DecisionSummary {
 		if strings.HasPrefix(summary, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(summary, prefix))
+			completedRefs[strings.TrimSpace(strings.TrimPrefix(summary, prefix))] = struct{}{}
 		}
 	}
-	return ""
-}
-
-func buildExecutionPresentation(
-	request runruntime.ExecutionRequest,
-	answer string,
-	processes []map[string]any,
-	pendingApproval map[string]any,
-) (map[string]any, error) {
-	if len(request.SurfaceCapabilities) == 0 ||
-		(strings.TrimSpace(answer) == "" && len(pendingApproval) == 0) {
-		return nil, nil
-	}
-	skillID := strings.TrimSpace(request.RequestedSkillID)
-	if skillID == "" {
-		skillID = executionStringFromProcesses(processes, "skillId")
-	}
-	if skillID == "" {
-		return nil, nil
-	}
-	manifest, found, err := assistantDomainSkillManifest(skillID)
-	if err != nil {
-		return nil, fmt.Errorf("load adaptive presentation skill: %w", err)
-	}
-	if !found || !stringSliceContains(
-		manifest.Presentation.TemplateRefs,
-		"assistant.answer.default",
-	) {
-		return nil, nil
-	}
-	templateDigest := sha256Digest(
-		"assistant.answer.default:" + manifest.Presentation.AssetDigest,
-	)
-	dataDigest := sha256Digest(answer)
-	nodes := []map[string]any{}
-	if len(pendingApproval) > 0 &&
-		supportsPresentationNode(request.SurfaceCapabilities, "confirmation_card") &&
-		supportsPresentationNode(request.SurfaceCapabilities, "action_group") {
-		approvalNodes, err := buildDeviceActionApprovalNodes(pendingApproval)
-		if err != nil {
-			return nil, err
+	for index := len(checkpoint.DeviceActionReceipts) - 1; index >= 0; index-- {
+		receipt := checkpoint.DeviceActionReceipts[index]
+		if _, completed := completedRefs[strings.TrimSpace(receipt.IdempotencyKey)]; completed && strings.TrimSpace(receipt.Outcome) == "completed" &&
+			strings.TrimSpace(receipt.ActionKind) != "" {
+			return receipt, true
 		}
-		nodes = append(nodes, approvalNodes...)
-		answer = deviceActionFallbackMarkdown(pendingApproval)
-		dataDigest = sha256Digest(answer)
-	} else if supportsPresentationNode(request.SurfaceCapabilities, "markdown") {
-		nodes = append(nodes, map[string]any{
-			"nodeId":       "root",
-			"parentNodeId": "",
-			"order":        0,
-			"kind":         "markdown",
-			"title":        "",
-			"body":         answer,
-			"data":         map[string]any{},
-			"binding":      map[string]any{},
-			"style": map[string]any{
-				"tone":           "neutral",
-				"density":        "standard",
-				"emphasis":       "normal",
-				"variant":        "standard",
-				"alignment":      "start",
-				"spacingRole":    "related",
-				"aspectRatio":    0,
-				"responsiveSpan": 1,
-			},
-			"accessibility": map[string]any{
-				"semanticLabel":        "",
-				"semanticHint":         "",
-				"excludeFromSemantics": false,
-			},
-		})
 	}
-	return map[string]any{
-		"templateRef":       "assistant.answer.default@" + templateDigest,
-		"templateDigest":    templateDigest,
-		"revision":          int64(1),
-		"rootNodeId":        "root",
-		"nodes":             nodes,
-		"dataDigest":        dataDigest,
-		"selectedVariant":   presentationVariant(request.SurfaceCapabilities),
-		"fallbackMarkdown":  answer,
-		"fallbackPlainText": answer,
-		"committedAt":       "",
-	}, nil
+	return runruntime.DeviceActionExecutionReceipt{}, false
 }
 
-func buildDeviceActionApprovalNodes(
-	pendingApproval map[string]any,
-) ([]map[string]any, error) {
-	toolUseID := executionString(pendingApproval, "toolUseId")
-	continuationToken := executionString(pendingApproval, "continuationToken")
-	proposal := objectMap(pendingApproval["proposal"])
+func selectTemplateInput(
+	schema map[string]any,
+	sources []map[string]any,
+) (map[string]any, bool) {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	selected := make(map[string]any, len(properties))
+	for name := range properties {
+		for _, source := range sources {
+			if value, found := source[name]; found {
+				selected[name] = value
+				break
+			}
+		}
+	}
+	for _, name := range stringList(schema["required"]) {
+		if _, found := selected[name]; !found {
+			return nil, false
+		}
+	}
+	return selected, true
+}
+
+func toolConfirmationPresentation(
+	pending map[string]any,
+) (map[string]any, string, string, presentationpkg.ActionPolicy, error) {
+	toolUseID := executionString(pending, "toolUseId")
+	continuationToken := executionString(pending, "continuationToken")
+	proposal := objectMap(pending["proposal"])
 	input := objectMap(proposal["input"])
+	confirmation := objectMap(proposal["confirmation"])
 	toolName := executionString(proposal, "toolName")
-	title := executionString(input, "title")
-	startsAt := executionString(input, "startsAt")
-	if toolUseID == "" || continuationToken == "" ||
-		toolName != "calendar_create_reminder" ||
-		title == "" || startsAt == "" {
-		return nil, fmt.Errorf("invalid calendar device action proposal")
+	templateRef := executionString(confirmation, "templateRef")
+	title := executionString(confirmation, "title")
+	body := executionString(confirmation, "description")
+	if toolUseID == "" || continuationToken == "" || toolName == "" ||
+		templateRef == "" || title == "" || body == "" || len(input) == 0 {
+		return nil, "", "", nil, fmt.Errorf("invalid typed tool confirmation proposal")
 	}
-	actionPayload := map[string]any{
-		"decision":          "approved",
-		"continuationToken": continuationToken,
-		"deviceAction": map[string]any{
-			"kind":           toolName,
-			"idempotencyKey": toolUseID,
-			"input":          cloneObject(input),
-		},
+	rows := make([]any, 0)
+	fallbackLines := []string{title, "", body}
+	for _, raw := range anyList(confirmation["displayFields"]) {
+		field := objectMap(raw)
+		key := executionString(field, "inputKey")
+		label := executionString(field, "label")
+		value, found := input[key]
+		if key == "" || label == "" || !found || emptyPresentationValue(value) {
+			continue
+		}
+		text := presentationValueText(value)
+		if text == "" {
+			return nil, "", "", nil, fmt.Errorf("invalid confirmation display value")
+		}
+		rows = append(rows, map[string]any{"项目": label, "内容": text})
+		fallbackLines = append(fallbackLines, "- "+label+"："+text)
+	}
+	if len(rows) == 0 {
+		return nil, "", "", nil, fmt.Errorf("typed tool confirmation has no displayable fields")
 	}
 	approved := map[string]any{
-		"intentId":             "approve_" + toolUseID,
-		"operation":            "ContinueAssistantToolUse",
-		"objectTypeRef":        "assistant_tool_use",
-		"objectId":             toolUseID,
-		"payload":              actionPayload,
+		"intentId":      "approve_" + toolUseID,
+		"operation":     "ContinueAssistantToolUse",
+		"objectTypeRef": "assistant_tool_use",
+		"objectId":      toolUseID,
+		"payload": map[string]any{
+			"decision":          "approved",
+			"continuationToken": continuationToken,
+			"deviceAction": map[string]any{
+				"kind": toolName, "idempotencyKey": toolUseID,
+				"input": cloneObject(input),
+			},
+		},
 		"requiresConfirmation": true,
 	}
 	rejected := map[string]any{
@@ -328,95 +288,161 @@ func buildDeviceActionApprovalNodes(
 		"objectTypeRef": "assistant_tool_use",
 		"objectId":      toolUseID,
 		"payload": map[string]any{
-			"decision":          "rejected",
-			"continuationToken": continuationToken,
+			"decision": "rejected", "continuationToken": continuationToken,
 		},
 		"requiresConfirmation": true,
 	}
-	return []map[string]any{
-		{
-			"nodeId":       "root",
-			"parentNodeId": "",
-			"order":        0,
-			"kind":         "confirmation_card",
-			"title":        "确认创建系统日程",
-			"body":         deviceActionFallbackMarkdown(pendingApproval),
-			"action":       approved,
-			"accessibility": map[string]any{
-				"semanticLabel": "确认创建系统日程提醒",
+	return map[string]any{
+			"title": title,
+			"body":  body,
+			"details": map[string]any{
+				"columns": []any{"项目", "内容"},
+				"rows":    rows,
 			},
-		},
-		{
-			"nodeId":       "reject_action",
-			"parentNodeId": "root",
-			"order":        0,
-			"kind":         "action_group",
-			"title":        "拒绝",
-			"body":         "不创建",
-			"action":       rejected,
-			"accessibility": map[string]any{
-				"semanticLabel": "拒绝创建系统日程提醒",
-			},
-		},
-	}, nil
+			"approveAction": approved,
+			"rejectAction":  rejected,
+		}, strings.Join(fallbackLines, "\n"), templateRef, continuationActionPolicy{
+			ToolUseID: toolUseID, ContinuationToken: continuationToken,
+		}, nil
 }
 
-func deviceActionFallbackMarkdown(pendingApproval map[string]any) string {
-	proposal := objectMap(pendingApproval["proposal"])
-	input := objectMap(proposal["input"])
-	title := executionString(input, "title")
-	startsAt := executionString(input, "startsAt")
-	if title == "" || startsAt == "" {
-		return "需要确认后才能执行设备操作。"
+type continuationActionPolicy struct {
+	ToolUseID         string
+	ContinuationToken string
+}
+
+func (policy continuationActionPolicy) ValidateAction(
+	_ context.Context,
+	_ string,
+	action presentationpkg.ActionIntent,
+) error {
+	if action.Operation != "ContinueAssistantToolUse" ||
+		action.ObjectTypeRef != "assistant_tool_use" ||
+		action.ObjectID != policy.ToolUseID || !action.RequiresConfirmation {
+		return presentationpkg.ErrActionRejected
 	}
-	return fmt.Sprintf("将在系统日历创建“%s”，开始时间：%s。", title, startsAt)
+	decision := executionString(action.Payload, "decision")
+	token := executionString(action.Payload, "continuationToken")
+	if token != policy.ContinuationToken ||
+		(decision != "approved" && decision != "rejected") {
+		return presentationpkg.ErrActionRejected
+	}
+	return nil
 }
 
-func supportsPresentationNode(capabilities map[string]any, kind string) bool {
-	switch values := capabilities["supportedNodeKinds"].(type) {
+func presentationDocumentMap(document presentationpkg.Document) (map[string]any, error) {
+	raw, err := json.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func stringList(value any) []string {
+	switch values := value.(type) {
 	case []string:
-		for _, value := range values {
-			if strings.TrimSpace(value) == kind {
-				return true
-			}
-		}
+		return append([]string(nil), values...)
 	case []any:
+		result := make([]string, 0, len(values))
 		for _, value := range values {
-			if strings.TrimSpace(stringValue(value)) == kind {
-				return true
+			if text, ok := value.(string); ok {
+				result = append(result, text)
 			}
 		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func anyList(value any) []any {
+	switch values := value.(type) {
+	case []any:
+		return values
+	case []map[string]any:
+		result := make([]any, 0, len(values))
+		for _, item := range values {
+			result = append(result, item)
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func emptyPresentationValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text) == ""
 	}
 	return false
 }
 
-func presentationVariant(capabilities map[string]any) string {
-	viewportClass := strings.TrimSpace(executionString(capabilities, "viewportClass"))
-	density := strings.TrimSpace(executionString(capabilities, "density"))
-	switch {
-	case viewportClass != "" && density != "":
-		return viewportClass + "_" + density
-	case viewportClass != "":
-		return viewportClass
-	case density != "":
-		return density
+func presentationValueText(value any) string {
+	var text string
+	switch typed := value.(type) {
+	case string:
+		text = strings.TrimSpace(typed)
+	case json.Number:
+		text = typed.String()
+	case int:
+		text = fmt.Sprintf("%d", typed)
+	case int32:
+		text = fmt.Sprintf("%d", typed)
+	case int64:
+		text = fmt.Sprintf("%d", typed)
+	case float64:
+		text = fmt.Sprintf("%v", typed)
+	case bool:
+		text = fmt.Sprintf("%t", typed)
 	default:
-		return "standard"
+		return ""
 	}
+	if len([]rune(text)) > 2000 || strings.ContainsAny(text, "<>\x00") {
+		return ""
+	}
+	return text
 }
 
-func stringSliceContains(values []string, target string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == target {
-			return true
+func presentationSurfaceCapabilities(values map[string]any) presentationpkg.SurfaceCapabilities {
+	supported := make(map[generated.AssistantPresentationNodeKind]bool)
+	appendKind := func(raw any) {
+		kind, err := generated.ParseAssistantPresentationNodeKind(
+			strings.TrimSpace(stringValue(raw)),
+		)
+		if err == nil && kind != generated.AssistantPresentationNodeKindUnknown {
+			supported[kind] = true
 		}
 	}
-	return false
-}
-
-func sha256Digest(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return "sha256:" + hex.EncodeToString(digest[:])
+	switch raw := values["supportedNodeKinds"].(type) {
+	case []any:
+		for _, value := range raw {
+			appendKind(value)
+		}
+	case []string:
+		for _, value := range raw {
+			appendKind(value)
+		}
+	}
+	density := generated.AssistantPresentationDensityStandard
+	if raw := strings.TrimSpace(executionString(values, "density")); raw != "" {
+		if parsed, err := generated.ParseAssistantPresentationDensity(raw); err == nil {
+			density = parsed
+		}
+	}
+	viewport := strings.TrimSpace(executionString(values, "viewportClass"))
+	if viewport == "" {
+		viewport = "standard"
+	}
+	return presentationpkg.SurfaceCapabilities{
+		SupportedNodeKinds: supported, ViewportClass: viewport, Density: density,
+	}
 }
 
 func collectExecutionEvidenceRefs(processes []map[string]any) []string {
@@ -514,11 +540,27 @@ func executionStringFromProcesses(
 
 func executionTurn(request runruntime.ExecutionRequest) assistant.AssistantTurn {
 	pageContext := decodeExecutionPageContext(request.ContextSnapshot)
-	surfaceID := executionString(request.SurfaceCapabilities, "surfaceId")
+	intersectionEvidence := decodeAuthorizedIntersectionEvidence(
+		request.ContextSnapshot["authorizedIntersectionEvidence"],
+	)
 	trigger := decodeExecutionTrigger(request.Trigger)
 	turnType := "user"
 	if trigger.Type != "user_message" {
 		turnType = "proactive"
+	}
+	sessionPreferenceFacts := append(
+		[]preferencemodel.Snapshot(nil),
+		request.SessionPreferenceFacts...,
+	)
+	longTermPreferenceFacts := append(
+		[]preferencemodel.Snapshot(nil),
+		request.LongTermPreferenceFacts...,
+	)
+	if sharedAssistantSurface(request.RequestContext.SurfaceKind) {
+		// 群聊/圈子只可使用 surface 内共享事实。个人偏好与长期记忆即使
+		// 被旧 checkpoint 携带，也必须在构造执行 turn 时物理退出。
+		sessionPreferenceFacts = nil
+		longTermPreferenceFacts = nil
 	}
 	return assistant.AssistantTurn{
 		TurnID:         "execution:" + request.RunID,
@@ -532,25 +574,88 @@ func executionTurn(request runruntime.ExecutionRequest) assistant.AssistantTurn 
 		Input: assistant.AssistantTurnInput{
 			Text: request.Goal,
 		},
-		PageContext:     pageContext,
-		Trigger:         trigger,
-		ClientRequestID: request.IdempotencyPrefix,
+		PageContext:          pageContext,
+		IntersectionEvidence: intersectionEvidence,
+		Trigger:              trigger,
+		ClientRequestID:      request.IdempotencyPrefix,
 		RequestContext: assistant.AssistantRunRequestContext{
-			SurfaceID: surfaceID,
-			PersonaID: request.UserID,
-			TraceID:   request.RunID,
+			ClientSessionID: request.RequestContext.ClientSessionID,
+			PageID:          request.RequestContext.PageID,
+			SurfaceKind:     request.RequestContext.SurfaceKind,
+			SurfaceID:       request.RequestContext.SurfaceID,
+			RouteID:         request.RequestContext.RouteID,
+			OperationID:     request.RequestContext.OperationID,
+			PersonaID:       request.RequestContext.PersonaID,
+			TraceID:         request.RequestContext.TraceID,
 		},
-		SessionPreferenceFacts: append(
-			[]preferencemodel.Snapshot(nil),
-			request.SessionPreferenceFacts...,
-		),
-		LongTermPreferenceFacts: append(
-			[]preferencemodel.Snapshot(nil),
-			request.LongTermPreferenceFacts...,
-		),
-		TraceID:   request.RunID,
-		CreatedAt: executionStartTime(request.CreatedAt),
+		SessionPreferenceFacts:  sessionPreferenceFacts,
+		LongTermPreferenceFacts: longTermPreferenceFacts,
+		TraceID:                 request.RunID,
+		CreatedAt:               executionStartTime(request.CreatedAt),
+		FrozenPolicySelection: assistant.AssistantFrozenPolicySelection{
+			PolicyID:        request.FrozenPolicySelection.PolicyID,
+			ReleaseDigest:   request.FrozenPolicySelection.ReleaseDigest,
+			Cohort:          request.FrozenPolicySelection.Cohort,
+			RolloutRevision: request.FrozenPolicySelection.RolloutRevision,
+			RuleID:          request.FrozenPolicySelection.RuleID,
+			Template: assistant.AssistantFrozenPolicyTemplate{
+				TemplateID:   request.FrozenPolicySelection.Template.TemplateID,
+				SkillID:      request.FrozenPolicySelection.Template.SkillID,
+				DomainID:     request.FrozenPolicySelection.Template.DomainID,
+				PromptPolicy: request.FrozenPolicySelection.Template.PromptPolicy,
+				AllowedTools: append(
+					[]string(nil),
+					request.FrozenPolicySelection.Template.AllowedTools...,
+				),
+				SearchIntensity: request.FrozenPolicySelection.Template.SearchIntensity,
+			},
+			LearningContextPolicy: assistant.AssistantFrozenLearningContextPolicy{
+				Enabled: request.FrozenPolicySelection.LearningContextPolicy.Enabled,
+				AllowedSignals: append(
+					[]string(nil),
+					request.FrozenPolicySelection.LearningContextPolicy.AllowedSignals...,
+				),
+				AllowedMetricIDs: append(
+					[]string(nil),
+					request.FrozenPolicySelection.LearningContextPolicy.AllowedMetricIDs...,
+				),
+				AllowedReasonCodes: append(
+					[]string(nil),
+					request.FrozenPolicySelection.LearningContextPolicy.AllowedReasonCodes...,
+				),
+				MinimumFeedbackSamples: request.FrozenPolicySelection.LearningContextPolicy.MinimumFeedbackSamples,
+				WindowDays:             request.FrozenPolicySelection.LearningContextPolicy.WindowDays,
+				SnapshotTrainingEligible: request.FrozenPolicySelection.
+					LearningContextPolicy.SnapshotTrainingEligible,
+			},
+		},
 	}
+}
+
+func sharedAssistantSurface(surfaceKind string) bool {
+	switch strings.TrimSpace(surfaceKind) {
+	case "conversation", "circle":
+		return true
+	default:
+		return false
+	}
+}
+
+func decodeAuthorizedIntersectionEvidence(
+	value any,
+) []assistant.AuthorizedIntersectionEvidence {
+	if value == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var evidence []assistant.AuthorizedIntersectionEvidence
+	if err := json.Unmarshal(encoded, &evidence); err != nil {
+		return nil
+	}
+	return evidence
 }
 
 func executionStartTime(createdAt time.Time) time.Time {

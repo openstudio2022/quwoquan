@@ -60,7 +60,7 @@
 
 ## 4. 契约引用
 
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 - canonical：`content/content/post/projections/author_impact_item.yaml`
 - canonical：`circle/circle_management/circle/ui_config.yaml`
 - canonical：`circle/circle_management/circle/fields.yaml`

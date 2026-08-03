@@ -1,13 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "releaseId", "sourceOwner", "releaseKind", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
+  "required": ["schema", "releaseId", "sourceOwner", "releaseKind", "releaseClass", "productLifecycleState", "containsUnverifiedAssets", "rightsStatusCounts", "authorizationRequiredAssetIds", "researchAcceptedCount", "commercialAcceptedCount", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "quwoquan_data.release_attestation"},
     "releaseId": {"type": "string", "minLength": 1},
     "sourceOwner": {"const": "qwq_data"},
     "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "releaseClass": {"enum": ["research", "commercial"]},
+    "productLifecycleState": {"enum": ["research", "commercial"]},
+    "containsUnverifiedAssets": {"type": "boolean"},
+    "rightsStatusCounts": {"type": "object", "required": ["verified", "unverified", "restricted", "unknown"], "additionalProperties": false, "properties": {"verified": {"type": "integer", "minimum": 0}, "unverified": {"type": "integer", "minimum": 0}, "restricted": {"type": "integer", "minimum": 0}, "unknown": {"type": "integer", "minimum": 0}}},
+    "authorizationRequiredAssetIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "researchAcceptedCount": {"type": "integer", "minimum": 0},
+    "commercialAcceptedCount": {"type": "integer", "minimum": 0},
     "executionIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "entityCount": {"type": "integer", "minimum": 0},
     "postCount": {"type": "integer", "minimum": 0},
@@ -20,6 +27,7 @@
   },
   "allOf": [
     {"if": {"properties": {"releaseKind": {"const": "content"}}}, "then": {"properties": {"executionIds": {"minItems": 1}}, "anyOf": [{"properties": {"entityCount": {"minimum": 1}}}, {"properties": {"postCount": {"minimum": 1}}}]}},
-    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}}}}
+    {"if": {"properties": {"releaseKind": {"const": "empty_baseline"}}}, "then": {"properties": {"executionIds": {"maxItems": 0}, "entityCount": {"const": 0}, "postCount": {"const": 0}, "creatorCount": {"const": 0}, "tagCount": {"const": 0}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}, "researchAcceptedCount": {"const": 0}, "commercialAcceptedCount": {"const": 0}}}},
+    {"if": {"properties": {"releaseClass": {"const": "commercial"}}}, "then": {"properties": {"productLifecycleState": {"const": "commercial"}, "containsUnverifiedAssets": {"const": false}, "authorizationRequiredAssetIds": {"maxItems": 0}}}, "else": {"properties": {"productLifecycleState": {"const": "research"}}}}
   ]
 }

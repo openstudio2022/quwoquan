@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_content_preview.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge.g.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart'
+    hide ObjectRelationEdgeType;
 
 enum ObjectIdentityKind { user, circle, entity }
 
@@ -720,13 +720,7 @@ class ObjectRelationRibbon extends StatelessWidget {
     // 未登记的 edgeType 说明服务端词表已漂移；宁可整条边不展示，也不给用户一句
     // 错的关系描述。
     final usable = edges
-        .map(
-          (edge) => (
-            edge: edge,
-            type: ObjectRelationEdgeType.tryParse(edge.edgeType),
-          ),
-        )
-        .where((entry) => entry.type != null)
+        .map((edge) => (edge: edge, type: edge.edgeType))
         .take(maxVisible)
         .toList(growable: false);
     if (usable.isEmpty) {
@@ -783,7 +777,7 @@ class ObjectRelationRibbon extends StatelessWidget {
                   SizedBox(width: AppSpacing.intraGroupSm),
                   Expanded(
                     child: Text(
-                      _edgeLabel(entry.edge, entry.type!),
+                      _edgeLabel(entry.edge, entry.type),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

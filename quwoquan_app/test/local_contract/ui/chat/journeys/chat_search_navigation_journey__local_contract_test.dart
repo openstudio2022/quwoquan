@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
@@ -37,6 +38,12 @@ Widget _buildApp() {
   );
   return ProviderScope(
     overrides: [
+      cloudRuntimeEnvironmentProvider.overrideWithValue(
+        CloudRuntimeEnvironment(
+          environment: CloudEnvironment.alpha,
+          gatewayBaseUri: Uri.parse('https://api.alpha.quwoquan.com'),
+        ),
+      ),
       authSessionControllerProvider.overrideWith(
         TestAuthenticatedSessionController.new,
       ),
@@ -61,8 +68,8 @@ Widget _buildApp() {
       ),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
-      assistantXiaoquSearchFacetProvider.overrideWithValue(
-        _NoopAssistantXiaoquSearchFacet(),
+      assistantSearchRunFacetProvider.overrideWithValue(
+        _NoopAssistantSearchRunFacet(),
       ),
       voiceQueuedSenderProvider.overrideWithValue(
         (_, _) async => VoiceSendStatus.completed,
@@ -186,7 +193,7 @@ void main() {
     await tester.ensureVisible(firstConversation);
     await tester.pumpAndSettle();
     await tester.tap(firstConversation);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     await _pumpUntil(
       tester,
       condition: () =>
@@ -205,7 +212,7 @@ void main() {
 
     final detailContext = tester.element(find.byType(ChatConversationPage));
     Navigator.of(detailContext).pop();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     await _pumpUntil(
       tester,
       condition: () =>
@@ -236,7 +243,7 @@ void main() {
     await tester.ensureVisible(inboxRow);
     await tester.pumpAndSettle();
     await tester.tap(inboxRow);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     await _pumpUntil(
       tester,
       condition: () =>
@@ -315,7 +322,7 @@ class _FakeSearchRepository implements SearchRepository {
   }
 }
 
-class _NoopAssistantXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
+class _NoopAssistantSearchRunFacet implements AssistantSearchRunFacet {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

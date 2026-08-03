@@ -9,6 +9,13 @@ import (
 )
 
 func newServerMux(service *platformService) *http.ServeMux {
+	if service.configInstanceReports == nil {
+		handler, err := composeConfigInstanceReportHandler(service)
+		if err != nil {
+			panic(err)
+		}
+		service.configInstanceReports = handler
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if service.health == nil || service.health(r.Context()) != nil {
@@ -87,18 +94,10 @@ func newServerMux(service *platformService) *http.ServeMux {
 		service.configLayers.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs/instances", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleListConfigInstanceReports(w, r)
+		service.configInstanceReports.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/configs/instances/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":report") {
-			writeRuntimeNotFound(w, r)
-			return
-		}
-		service.handleReportConfigInstance(w, r)
+		service.configInstanceReports.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/control-plane/platform/alerts/ingest", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

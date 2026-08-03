@@ -4,66 +4,98 @@ output_path: quwoquan_app/lib/cloud/runtime/generated/content/post_read_presenta
 source_entities: [Post]
 fields:
 - name: postId
+  type: string
+  nullable: false
   source: postId
   dart_type: String
   post_base: id
 - name: contentType
+  type: string
+  nullable: false
   source: contentType
   dart_type: String
   post_base: type
 - name: contentIdentity
+  type: string
+  nullable: false
   source: contentIdentity
   dart_type: String
   post_base: identity
 - name: displayName
+  type: string
+  nullable: false
   source: displayName
   dart_type: String
   post_base: displayName
 - name: avatarUrl
+  type: string
+  nullable: false
   source: avatarUrl
   dart_type: String
   post_base: avatarUrl
 - name: title
+  type: string
+  nullable: false
   source: title
   dart_type: String
   post_base: normalizedTitle
 - name: body
+  type: string
+  nullable: false
   source: body
   dart_type: String
   post_base: normalizedBody
 - name: coverUrl
+  type: string
+  nullable: false
   source: coverUrl
   dart_type: String
   post_base: mediaCoverUrl
 - name: likeCount
+  type: int
+  nullable: false
   source: likeCount
   dart_type: int
   post_base: likeCount
 - name: commentCount
+  type: int
+  nullable: false
   source: commentCount
   dart_type: int
   post_base: commentCount
 - name: shareCount
+  type: int
+  nullable: false
   source: shareCount
   dart_type: int
   post_base: shareCount
 - name: createdAt
+  type: timestamp
+  nullable: false
   source: createdAt
   dart_type: DateTime
   post_base: createdAt
 - name: updatedAt
+  type: timestamp
+  nullable: true
   source: updatedAt
   dart_type: DateTime?
   post_base: updatedAt
 - name: publishedAt
+  type: timestamp
+  nullable: true
   source: publishedAt
   dart_type: DateTime?
   post_base: publishedAt
 - name: articleTemplate
+  type: string
+  nullable: false
   source: articleTemplate
   dart_type: String
   wire_key: articleTemplate
 - name: articleFontPreset
+  type: string
+  nullable: false
   source: articleFontPreset
   dart_type: String
   wire_key: articleFontPreset

@@ -418,7 +418,7 @@ final class _NoopPostInteractionStateNotifier
   PostInteractionState build() => const PostInteractionState();
 
   @override
-  void applyConfirmedPosts(Iterable<PostBaseDto> posts) {}
+  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {}
 }
 
 final class _PagedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
@@ -551,7 +551,7 @@ final class _ChannelPolicyDiscoveryFeedQuery
     final channel = channelId ?? category;
     final isRecommend = channel == 'recommend';
     return DiscoveryFeedPage(
-      items: <PostBaseDto>[_post(isRecommend ? 10 : 20, 0)],
+      items: <ContentPostViewData>[_post(isRecommend ? 10 : 20, 0)],
       feedRequestId: 'frq_$channel',
       policyDigest: isRecommend ? _policyA : _policyB,
     );

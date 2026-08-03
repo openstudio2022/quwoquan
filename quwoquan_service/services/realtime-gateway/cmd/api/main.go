@@ -32,6 +32,10 @@ import (
 	wsadapter "quwoquan_service/services/realtime-gateway/internal/realtime/connection/adapters/inbound/ws"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/infrastructure/redisstore"
+	presenceconnection "quwoquan_service/services/realtime-gateway/internal/realtime/presence_view/adapters/inbound/connection"
+	presencehttp "quwoquan_service/services/realtime-gateway/internal/realtime/presence_view/adapters/inbound/http"
+	presenceapp "quwoquan_service/services/realtime-gateway/internal/realtime/presence_view/application"
+	presenceredis "quwoquan_service/services/realtime-gateway/internal/realtime/presence_view/infrastructure/redisstore"
 )
 
 func main() {
@@ -144,13 +148,38 @@ func run() error {
 
 	ticketStore := redisstore.NewTicketStore(realtimeClient)
 	leaseStore := redisstore.NewLeaseStore(realtimeClient)
-	presenceStore := redisstore.NewPresenceStore(realtimeClient)
+	presenceStore, err := presenceredis.NewStore(realtimeClient)
+	if err != nil {
+		return err
+	}
+	presenceProjector, err := presenceapp.NewProjector(presenceStore)
+	if err != nil {
+		return err
+	}
+	presenceQueries, err := presenceapp.NewQueryFacade(presenceStore)
+	if err != nil {
+		return err
+	}
+	presenceRevoker, err := presenceapp.NewRevoker(presenceStore)
+	if err != nil {
+		return err
+	}
+	presenceConnection, err := presenceconnection.NewProjector(
+		presenceProjector,
+		presenceRevoker,
+	)
+	if err != nil {
+		return err
+	}
 	eventSource := redisstore.NewEventSource(messageTransport)
 	resumeReader, err := redisstore.NewResumableEventReader(messageTransport)
 	if err != nil {
 		return fmt.Errorf("realtime resumable event reader init failed: %w", err)
 	}
-	accountSecurityStore := redisstore.NewAccountSecurityStateStore(realtimeClient)
+	accountSecurityStore := redisstore.NewAccountSecurityStateStore(
+		realtimeClient,
+		presenceConnection,
+	)
 	accountSecurityRelay := redisstore.NewAccountSecurityRelay(realtimeClient)
 
 	tickets, err := application.NewTicketService(
@@ -163,7 +192,7 @@ func run() error {
 	}
 	hub, err := application.NewHub(
 		leaseStore,
-		presenceStore,
+		presenceConnection,
 		eventSource,
 		accountSecurityAuthority,
 		accountSecurityStore,
@@ -214,7 +243,6 @@ func run() error {
 		tickets,
 		hub,
 		resumeReader,
-		presenceStore,
 		httpadapter.DefaultTransportConfig(),
 	)
 	if err != nil {
@@ -227,6 +255,7 @@ func run() error {
 
 	guarded := http.NewServeMux()
 	handler.Routes(guarded)
+	presencehttp.NewHandler(presenceQueries).Routes(guarded)
 	guardedHandler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
 		guarded,
 		runtimemessaging.DeadLetterRecoveryRouteConfig{

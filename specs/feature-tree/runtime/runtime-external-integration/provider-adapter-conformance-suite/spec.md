@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为开发、测试或运维角色，我希望对所有 Provider Adapter 执行同一公共场景和能力专项场景，并生成可防伪、可聚合的 Alpha/Beta/Gamma sandbox/nonprod 九格 matrix，以及独立的 Prod hosted Remote release receipt，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+作为开发、测试或运维角色，我希望对所有 Provider Adapter 执行同一公共场景和能力专项场景，并分别生成不可提升的 Alpha/Beta/Gamma Debug-local protocol substitute matrix、managed non-prod Remote receipt 与 Prod hosted Remote release receipt，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
 ## 2. 范围与非目标
 
@@ -36,9 +36,12 @@
 - local_contract 对对应环境 Adapter 类运行离线 harness
 - api_integration 使用真实协议
 - user_acceptance 验证真实用户或运营结果。
-- Alpha/Beta/Gamma required 验收选择受管 sandbox/nonprod Provider；缺 endpoint/credential 直接阻断启动和证据生成。
-- Gamma 运行完整第一方拓扑、production Remote composition、黑盒 API 与真机 Journey；禁止 UI Mock、Provider override、进程内 Provider fake 和生产租户凭据。
-- Alpha/Beta/Gamma nonprod 结果不得提升 Prod 正式 Adapter readiness；Gamma nonprod receipt 不得替代 Prod hosted rollout receipt。
+- Alpha/Beta/Gamma Debug-local 开发验收选择受管 `protocol_fixture/local_*` Port 对等 Adapter；缺内部协议端点、LiveKit 材料或 health 直接阻断启动和证据生成，全部结果标记 `nonPromotable=true`。
+- Gamma Debug-local 运行完整第一方拓扑、production Remote composition、独立协议 workload、真实本地 LiveKit 与黑盒 API/模拟器 Journey；禁止 UI Mock、Integration Service 内嵌 listener、运行时跨环境 fallback 和生产租户凭据。
+- Alpha/Beta/Gamma 商业 readiness 必须另有各自 managed non-prod Provider Remote receipt；Debug-local matrix 不得提升 managed non-prod 或 Prod 正式 Adapter readiness，Gamma nonprod receipt 不得替代 Prod hosted rollout receipt。
+- `identity.sms.otp` 的 Debug-local 协议替代实现必须是 Ops 所有的独立 HTTPS workload，不得以内嵌 Integration Service listener 或固定码实现代替；三目标各自隔离端口、凭据、捕获密钥和存储 namespace，并在 readiness/readback 标记 `nonPromotable=true`。
+- SMS substitute harness 必须覆盖认证、E.164/template/trace、幂等冲突、TTL/一次性读取、rate-limit/failure/timeout、跨环境拒绝与脱敏；公开 SendOtp/LoginWithPhone response、日志、指标和报告均不得出现 OTP。
+- 人工 OTP 读取只允许由 `stackctl provider-debug otp-read` 在当前 TTY 展示；自动 UAT 只调用受保护的进程内读取接口并立即输入 App，禁止解析 CLI 输出或把 OTP 写入 argv、receipt 与长期 artifact。
 - Prod 仅接受 `user_acceptance` Remote receipt：它必须绑定 Prod selected Adapter、Prod config、不可变候选 image、真实用户/运营结果及 health/switch/callback-drain/last-good/rollback receipt。
 - runtime.message.transport 的 user_acceptance 只接受受控 endpoint/auth/seed 下的原生设备 chat @ assistant Remote journey；缺该 harness 时 prerequisite 必须 fail-closed， memory Redis、fixture consumer、UI mock 和 Provider override 不得产生 passed cell。
 - 每个实际 harness 直接声明其 `spec_ref`、Capability、Adapter、测试层、typed Port、契约来源、断言集合、命令目标和网络边界，并由执行进程写出可校验 CaseResult；不得由聚合器补写成功、断言、数据、清理或观测。
@@ -85,7 +88,9 @@
 - WHEN 对同一 Capability 执行 local_contract、api_integration 和 user_acceptance。
 - THEN 聚合报告恰含九个 required cell，且每格 Provider、网络边界、数据和环境语义匹配。
 - AND 每格由该环境 Binding 选中的 Adapter 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言与测试 artifact digest。
-- AND Alpha/Beta/Gamma cell 均绑定各自环境受管 sandbox/nonprod Provider；Gamma cell 额外执行完整第一方拓扑的黑盒 API 与真机 Journey，缺 endpoint/credential、观测或清理回执时 fail-closed。
+- AND Alpha/Beta/Gamma Debug-local cell 均绑定各自目标的 Port 对等替代 Adapter并标记 `nonPromotable=true`；Gamma cell 额外执行完整第一方拓扑的黑盒 API 与模拟器 Journey，缺 endpoint/health、观测或清理回执时 fail-closed。
+- WHEN 对 Alpha/Beta/Gamma 执行商业 Provider readiness。
+- THEN 每个环境另有绑定 managed non-prod selected Adapter、不可变候选和真实 Remote 结果的 receipt，且不接受 Debug-local matrix 作为替代。
 - WHEN 执行生产商用准出。
 - THEN 每个 required Capability 另有一个绑定 Prod selected Adapter 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
 

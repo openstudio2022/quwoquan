@@ -10,108 +10,25 @@ source_entities:
 - CredentialBinding
 consumers:
 - app
-client_projection:
-  dart_class: ProfileEditSnapshotWireDto
-  base_class: ''
-  output_path: cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart
-  fields:
-  - name: ownerUserId
-    dart_type: String
-    nullable: false
-    source: ownerUserId
-    default: ''''''
-  - name: personaId
-    dart_type: String
-    nullable: false
-    source: personaId
-    default: ''''''
-  - name: avatarUrl
-    dart_type: String
-    nullable: false
-    source: avatarUrl
-    default: ''''''
-  - name: avatarAssetId
-    dart_type: String
-    nullable: false
-    source: avatarAssetId
-    default: ''''''
-  - name: avatarVersion
-    dart_type: int
-    nullable: false
-    source: avatarVersion
-    default: '0'
-  - name: backgroundUrl
-    dart_type: String
-    nullable: false
-    source: backgroundUrl
-    default: ''''''
-  - name: backgroundAssetId
-    dart_type: String
-    nullable: false
-    source: backgroundAssetId
-    default: ''''''
-  - name: nickname
-    dart_type: String
-    nullable: false
-    source: nickname
-    default: ''''''
-  - name: displayName
-    dart_type: String
-    nullable: false
-    source: displayName
-    default: ''''''
-  - name: gender
-    dart_type: String
-    nullable: false
-    source: gender
-    default: '''unspecified'''
-  - name: birthDate
-    dart_type: String
-    nullable: false
-    source: birthDate
-    default: ''''''
-  - name: region
-    dart_type: String
-    nullable: false
-    source: region
-    default: ''''''
-  - name: regionTagRef
-    dart_type: String
-    nullable: false
-    source: regionTagRef
-    default: ''''''
-  - name: userHandle
-    dart_type: String
-    nullable: false
-    source: userHandle
-    default: ''''''
-  - name: bio
-    dart_type: String
-    nullable: false
-    source: bio
-    default: ''''''
-  - name: identityTags
-    dart_type: List<String>
-    nullable: false
-    source: identityTags
-  - name: occupationTagRef
-    dart_type: String
-    nullable: false
-    source: occupationTagRef
-    default: ''''''
-  - name: interestTagRefs
-    dart_type: List<String>
-    nullable: false
-    source: interestTagRefs
-  - name: phoneCredential
-    dart_type: Map<String, dynamic>
-    nullable: true
-    source: phoneCredential
-  - name: qrCard
-    dart_type: Map<String, dynamic>
-    nullable: true
-    source: qrCard
-  - name: updatedAt
-    dart_type: DateTime
-    nullable: true
-    source: updatedAt
+fields:
+- {name: ownerUserId, type: string, nullable: false}
+- {name: personaId, type: string, nullable: false}
+- {name: avatarUrl, type: string, nullable: true}
+- {name: avatarAssetId, type: string, nullable: true}
+- {name: avatarVersion, type: int, nullable: false}
+- {name: backgroundUrl, type: string, nullable: true}
+- {name: backgroundAssetId, type: string, nullable: true}
+- {name: nickname, type: string, nullable: false}
+- {name: displayName, type: string, nullable: false}
+- {name: gender, type: enum, enum_ref: Gender, nullable: true}
+- {name: birthDate, type: date, nullable: true}
+- {name: region, type: string, nullable: true}
+- {name: regionTagRef, type: tag_ref, nullable: true}
+- {name: userHandle, type: string, nullable: false}
+- {name: bio, type: string, nullable: true}
+- {name: identityTags, type: '[]string', nullable: true}
+- {name: occupationTagRef, type: tag_ref, nullable: true}
+- {name: interestTagRefs, type: '[]tag_ref', nullable: true}
+- {name: phoneCredential, type: ProfileCredentialSummaryWire, nullable: true}
+- {name: qrCard, type: ProfileQrCardWire, nullable: true}
+- {name: updatedAt, type: timestamp, nullable: false}

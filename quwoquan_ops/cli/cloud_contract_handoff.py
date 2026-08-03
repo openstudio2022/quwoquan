@@ -311,6 +311,8 @@ def operation_snapshots(
                 "requestBodyKind": str(
                     operation.get("requestBodyKind", "")
                 ),
+                "transport": str(operation.get("transport", "json")),
+                "streaming": operation.get("streaming"),
                 "requestBindings": operation.get("requestBindings"),
                 "requestConstants": operation.get("requestConstants"),
                 "responseEntity": str(operation.get("responseEntity", "")),
@@ -369,6 +371,8 @@ def compare_operations(
         "clientContract",
         "requestEntity",
         "requestBodyKind",
+        "transport",
+        "streaming",
         "requestBindings",
         "requestConstants",
         "responseEntity",
@@ -379,14 +383,19 @@ def compare_operations(
         before = previous_by_id[operation_id]
         after = current_by_id[operation_id]
         for field in compared_fields:
-            if before.get(field) == after.get(field):
+            before_value = before.get(field)
+            after_value = after.get(field)
+            if field == "transport":
+                before_value = before_value or "json"
+                after_value = after_value or "json"
+            if before_value == after_value:
                 continue
             change = {
                 "kind": "changed",
                 "canonicalOperationId": operation_id,
                 "field": field,
-                "before": before.get(field),
-                "after": after.get(field),
+                "before": before_value,
+                "after": after_value,
             }
             changes.append(change)
             breaking.append(change)

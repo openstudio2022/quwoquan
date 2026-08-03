@@ -3,9 +3,9 @@ import 'package:quwoquan_app/cloud/services/integration/location_query_contracts
 
 final class FakeLocationQueryAdapter
     implements NearbyLocationReader, LocationSearchReader {
-  FakeLocationQueryAdapter({this.items = const <LocationPoiDto>[], this.error});
+  FakeLocationQueryAdapter({this.items = const <LocationPoi>[], this.error});
 
-  final List<LocationPoiDto> items;
+  final List<LocationPoi> items;
   final Object? error;
 
   @override
@@ -14,7 +14,7 @@ final class FakeLocationQueryAdapter
   ) async {
     _throwIfConfigured();
     return LocationPoiListSlice(
-      items.take(query.limit).toList(growable: false),
+      items: items.take(query.limit).toList(growable: false),
     );
   }
 
@@ -25,7 +25,7 @@ final class FakeLocationQueryAdapter
     _throwIfConfigured();
     final normalized = query.query.trim().toLowerCase();
     return LocationPoiListSlice(
-      items
+      items: items
           .where(
             (item) =>
                 normalized.isEmpty ||

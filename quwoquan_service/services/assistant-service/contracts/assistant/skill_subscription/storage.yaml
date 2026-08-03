@@ -3,7 +3,7 @@ collections:
   skill_subscriptions:
     entity: SkillSubscription
     role: authoritative
-    description: 订阅聚合真相源；一次创建幂等由 ownerId+clientRequestId 唯一约束承载。
+    description: 订阅聚合真相源；所有外部 command 通过 version CAS、独立 receipt 与 outbox 单事务提交。
     indexes:
     - name: idx_skill_subscriptions_owner_status
       keys:
@@ -24,16 +24,32 @@ collections:
         deliveryState.nextAttemptAt: 1
         updatedAt: 1
         _id: 1
-    - name: uq_skill_subscriptions_client_request
+  skill_subscription_command_receipts:
+    entity: SkillSubscriptionCommandReceipt
+    role: authoritative
+    description: 外部创建与状态命令的不可变幂等回执；同一 owner/commandId 只允许一个 canonical command digest。
+    indexes:
+    - name: uq_skill_subscription_command_receipt
       keys:
-        owner.ownerId: 1
-        clientRequestId: 1
+        ownerId: 1
+        commandId: 1
       unique: true
-      sparse: true
-status_transition_note: 'UpdateSkillSubscriptionStatus 是收敛的 set 语义：目标状态已满足时服务端 no-op 返回存量（不推进 updatedAt、不产生伪事件）。set
-  操作重放与用户再次设置同构且 无害，故不建独立 receipt 集合；一次创建的幂等由 uq_skill_subscriptions_client_request 唯一约束承载（聚合自身即 receipt）。
-
-  '
+  skill_subscription_outbox:
+    entity: SkillSubscriptionOutboxEvent
+    role: authoritative
+    description: 与聚合版本和 command receipt 同事务提交的生命周期事件；禁止同步发布替代 outbox。
+    indexes:
+    - name: uq_skill_subscription_outbox_version
+      keys:
+        subscriptionId: 1
+        aggregateVersion: 1
+        eventType: 1
+      unique: true
+    - name: idx_skill_subscription_outbox_pending
+      keys:
+        publishedAt: 1
+        occurredAt: 1
+status_transition_note: UpdateSkillSubscriptionStatus 使用内部 version CAS；目标状态已满足时只提交 command receipt，聚合版本、updatedAt 和 outbox 均保持不变。
 redis_cache:
 - key: assistant:subscription:lease:{subscriptionId}:{deliveryId}
   ttl_seconds: 300

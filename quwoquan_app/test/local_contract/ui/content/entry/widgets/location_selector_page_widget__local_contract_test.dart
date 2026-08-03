@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/services/integration/location_query_contracts
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
@@ -37,7 +38,7 @@ final class _PendingLocationQuery
   Future<LocationPoiListSlice> searchLocations(
     LocationSearchQueryParams query,
   ) async {
-    return LocationPoiListSlice(const []);
+    return const LocationPoiListSlice(items: []);
   }
 }
 
@@ -89,8 +90,8 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final query = FakeLocationQueryAdapter(
-        items: <LocationPoiDto>[
-          LocationPoiDto(
+        items: <LocationPoi>[
+          LocationPoi(
             id: 'fixture_poi',
             name: '杭州西湖',
             latitude: 30.2431,
@@ -197,16 +198,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(SearchText.recoveryReloadLaterTitle),
-      findsOneWidget,
-      reason: '云端超时应展示统一页态标题',
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byType(AppPageErrorState),
     );
-    expect(
-      find.text(SearchText.recoveryReloadLaterMessage),
-      findsOneWidget,
-      reason: 'pageLoad 类别 timeout 走统一页态说明文案',
-    );
+    expect(errorState.semantic.title.trim(), isNotEmpty);
+    expect(errorState.semantic.message.trim(), isNotEmpty);
+    expect(errorState.semantic.primaryAction?.label, SearchText.reload);
     expect(
       find.widgetWithText(CupertinoButton, SearchText.reload),
       findsOneWidget,

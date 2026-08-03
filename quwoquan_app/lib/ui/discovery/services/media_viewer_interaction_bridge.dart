@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
-  required Iterable<PostBaseDto> posts,
+  required Iterable<ContentPostViewData> posts,
   required DiscoveryUiState discoveryState,
   required UserRelationshipState relationshipState,
   required PostInteractionState postInteractionState,
@@ -77,7 +77,7 @@ void primeMediaViewerInteractionSnapshot(
       .applyMediaViewerResult(MediaViewerResult.fromSnapshot(snapshot));
 }
 
-void applyConfirmedInteractionPost(WidgetRef ref, PostBaseDto post) {
+void applyConfirmedInteractionPost(WidgetRef ref, ContentPostViewData post) {
   core_bridge.applyConfirmedInteractionPost(ref, post);
   ref
       .read(discoveryStateProvider.notifier)
@@ -86,7 +86,7 @@ void applyConfirmedInteractionPost(WidgetRef ref, PostBaseDto post) {
 
 void applyConfirmedInteractionPosts(
   WidgetRef ref,
-  Iterable<PostBaseDto> posts,
+  Iterable<ContentPostViewData> posts,
 ) {
   core_bridge.applyConfirmedInteractionPosts(ref, posts);
   final discoveryNotifier = ref.read(discoveryStateProvider.notifier);

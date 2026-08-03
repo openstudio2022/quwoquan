@@ -41,7 +41,7 @@
 ### REQ-003 video release and capacity conclusions use immutable receipts
 
 - 容量与预算结论只读取真实 receipt，未执行不冒充完成。
-- travel/video M1000 只接受已批准的 travel/video M100 promotion receipt；receipt 必须与当前 named branch/commit、source digest、entity catalog digest、Grok Fast readiness、对象级 review closure 与 canonical publish receipt 一致，任何缺失、partial 或漂移均 fail-closed。
+- travel/video M1000 只接受已批准的 travel/video M100 promotion receipt；receipt 必须与当前 named branch/commit、source digest、entity catalog digest、冻结 Cursor SDK model binding/readiness、对象级 review closure 与 canonical publish receipt 一致，任何缺失、partial 或漂移均 fail-closed。
 
 ## 4. 契约引用
 

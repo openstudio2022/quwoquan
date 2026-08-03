@@ -238,7 +238,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     );
   }
 
-  Widget _buildParticipantAvatars(List<CallParticipant> participants) {
+  Widget _buildParticipantAvatars(List<CallParticipantViewData> participants) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final mutedFg = AppColorsFunctional.getColor(
       isDark,

@@ -10,7 +10,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	intersectionvisitpersistence "quwoquan_service/services/content-service/internal/content/intersection_visit_state/infrastructure/persistence"
 )
 
 func TestIntersectionWatermarkStore_RoundTripAndMonotonic(t *testing.T) {
@@ -20,7 +20,7 @@ func TestIntersectionWatermarkStore_RoundTripAndMonotonic(t *testing.T) {
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^wm_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^wm_"}}) })
 
-	store := recinfra.NewMongoWatermarkStore(db, slog.Default())
+	store := intersectionvisitpersistence.NewMongoWatermarkStore(db, slog.Default())
 
 	// 空记录读 → 空 map。
 	if got, err := store.LoadWatermarks(ctx, "wm_viewer"); err != nil || len(got) != 0 {

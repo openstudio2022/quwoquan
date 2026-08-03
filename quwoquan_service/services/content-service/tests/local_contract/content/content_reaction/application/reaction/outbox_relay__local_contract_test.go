@@ -9,7 +9,7 @@ import (
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

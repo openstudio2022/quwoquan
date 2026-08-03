@@ -335,6 +335,11 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.assistantManagement) {
     return AuthGateReason.settingsAccount;
   }
+  if (loc == AppRoutePaths.travelTrips ||
+      loc == AppRoutePaths.travelTemplates ||
+      loc.startsWith('${AppRoutePaths.travelTrips}/')) {
+    return AuthGateReason.settingsAccount;
+  }
   if (loc == AppRoutePaths.myReports) {
     return AuthGateReason.report;
   }

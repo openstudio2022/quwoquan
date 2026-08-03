@@ -6,6 +6,7 @@ import codecs
 import concurrent.futures
 import contextlib
 import fcntl
+import getpass
 import hashlib
 import http.client
 import json
@@ -23,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 import urllib.parse
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,13 +71,25 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.experiment_policy_activation import (
+    ExperimentPolicyActivationError,
+    activate_search_experiment_policy,
+)
 from quwoquan_ops.cli.lib.local_environment_auth import (
     LocalAcceptanceSession,
     LocalEnvironmentHTTPError,
     mint_local_filter_catalog_service_token,
+    mint_local_product_ops_operator_token,
     open_reference_acceptance_session,
     prepare_local_environment_auth,
     request_local_environment_json,
+)
+from quwoquan_ops.cli.lib.premium_pool_release import (
+    PremiumPoolReleaseError,
+    execute_premium_pool_readback,
+    execute_premium_pool_upsert,
+    load_premium_pool_candidate_binding,
+    open_premium_pool_operator_session,
 )
 from quwoquan_ops.cli.lib.local_gamma_object_storage import (
     prepare_local_gamma_object_storage,
@@ -90,6 +104,7 @@ from quwoquan_ops.cli.lib.public_domain_tls import (
     PublicDomainTlsError,
     issue_certificate,
     load_policy as load_public_domain_policy,
+    root_certificate_path,
     tls_profile,
     verify_certificate,
 )
@@ -106,9 +121,13 @@ from quwoquan_ops.cli.lib.local_device_trust import (
     verify_device_trust,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import (
-    load_protected_provider_environment,
+    load_nonprod_provider_environment,
     provider_environment_reference_names,
 )
+from quwoquan_ops.cli.lib.local_sms_provider_substitute import (
+    prepare_local_sms_provider_substitute,
+)
+from quwoquan_ops.cli.lib.local_sms_provider_debug import read_latest_debug_otp
 from quwoquan_ops.cli.lib.video_playback_evidence import (
     read_native_video_playback_evidence,
 )
@@ -124,10 +143,16 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
     VerificationProfile,
     load_content_release_readiness_policy,
 )
+from quwoquan_ops.cli.lib.research_content_isolation import (
+    verify_research_content_isolation,
+)
 from quwoquan_ops.cli.lib.data_execution_fleet import (
+    FLEET_ACTIONS,
+    manage_data_execution_fleet,
     resolve_data_execution_fleet_endpoint,
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
+    acquire_local_runtime_use_lock,
     assert_local_runtime_available,
     local_runtime_operation_lock_path,
 )
@@ -270,6 +295,38 @@ RELEASE_HOMEPAGE_UAT_TEST_TARGET = (
     "release_homepage__consumer_render__functional__user_acceptance_test.dart"
 )
 VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET = "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart"
+DISCOVERY_FEED_UAT_TEST_TARGET = (
+    "test/user_acceptance/patrol/discovery/"
+    "feed_load__user_acceptance_test.dart"
+)
+CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET = (
+    "test/user_acceptance/patrol/discovery/"
+    "feed_controlled_edge_recovery__user_acceptance_test.dart"
+)
+APP_CORE_READBACK_UAT_TEST_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "app_core_readback__user_acceptance_test.dart"
+)
+IOS_DIRECT_FLUTTER_RUN_UAT = (
+    ROOT / "quwoquan_app/scripts/device/verify_ios_hot_restart.py"
+)
+STARTUP_FIRST_FRAME_UAT = (
+    ROOT / "quwoquan_app/scripts/device/verify_startup_first_frame.py"
+)
+APP_CONTENT_UAT_ENVELOPE_ARGUMENTS = (
+    ("releaseId", "--data-release-id"),
+    ("releaseClass", "--data-release-class"),
+    ("productLifecycleState", "--product-lifecycle-state"),
+    ("homepageId", "--data-release-homepage-id"),
+    ("homepageTitle", "--data-release-homepage-title"),
+    ("articleWorkId", "--data-release-article-work-id"),
+    ("articleTitle", "--data-release-article-title"),
+    ("imageWorkId", "--data-release-image-work-id"),
+    ("imageTitle", "--data-release-image-title"),
+    ("creatorName", "--data-release-creator-name"),
+    ("tagLabel", "--data-release-tag-label"),
+    ("videoAttribution", "--data-release-video-attribution"),
+)
 RUNTIME_RECOVERY_UAT_TEST_TARGET = (
     "test/user_acceptance/patrol/environment/"
     "runtime_recovery_journey__user_acceptance_test.dart"
@@ -751,22 +808,6 @@ def _bind_gamma_external_provider_environment(
     environment: dict[str, str],
 ) -> str | None:
     """Materialize Gamma-local Port-equivalent provider substitutes."""
-    for key in (
-        "PRODUCT_OPS_SLS_REGION",
-        "PRODUCT_OPS_SLS_ENDPOINT",
-        "PRODUCT_OPS_SLS_PROJECT",
-        "PRODUCT_OPS_SLS_RAW_LOGSTORE",
-        "PRODUCT_OPS_SLS_STARTUP_DIAGNOSTIC_LOGSTORE",
-        "PRODUCT_OPS_SLS_RUNTIME_LOGSTORE",
-        "PRODUCT_OPS_SLS_AGGREGATE_LOGSTORE",
-        "PRODUCT_OPS_SLS_TIMEOUT_MS",
-        "PRODUCT_OPS_LOCAL_LOG_SINK_ENDPOINT",
-        "PRODUCT_OPS_LOCAL_LOG_SINK_ACCESS_KEY",
-        "ALIBABA_CLOUD_ACCESS_KEY_ID",
-        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
-        "ALIBABA_CLOUD_SECURITY_TOKEN",
-    ):
-        environment[key] = ""
     storage_error = _bind_gamma_object_storage_environment(environment)
     if storage_error is not None:
         return storage_error
@@ -827,6 +868,7 @@ def _bind_formal_local_release_provider_environment(
     environment_name: str,
     target_name: str,
     workload: str = "full",
+    debug_sms_substitute: bool = False,
 ) -> str | None:
     """Bind target-isolated infrastructure and protected nonprod Providers."""
 
@@ -847,6 +889,9 @@ def _bind_formal_local_release_provider_environment(
         return f"{target_name} infrastructure materialization failed: {exc}"
     environment.update(auth.environment)
     environment.update(storage.environment)
+    environment["QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED"] = (
+        "true" if debug_sms_substitute else "false"
+    )
     public_bases = get_target(load_environment_topology(), target_name).get(
         "publicBases"
     ) or {}
@@ -863,18 +908,37 @@ def _bind_formal_local_release_provider_environment(
         "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL", str(public_bases["mediaUpload"])
     )
     _sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
-    if workload == "content-release":
-        # content-release is the release import/public-read slice. External
+    if workload in {"content-release", "content-commercial"}:
+        # Bounded content workloads own release import/public read and the
+        # optional Product Ops premium command. External
         # login, embedding, assistant, integration and RTC capabilities are
         # not started by this workload; validating their protected material
-        # here would incorrectly turn an unrelated full-workload prerequisite
-        # into a content activation blocker.
+        # here would incorrectly turn unrelated full-workload prerequisites
+        # into a content activation or premium-command blocker.
         return None
+    if debug_sms_substitute:
+        try:
+            sms_substitute = prepare_local_sms_provider_substitute(
+                environment_name,
+                target_name,
+                port=profile_ports(
+                    load_port_manifest(),
+                    str(
+                        get_target(load_environment_topology(), target_name)[
+                            "portProfile"
+                        ]
+                    ),
+                )["sms-provider-substitute"],
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return f"{target_name} SMS substitute materialization failed: {exc}"
+        environment.update(sms_substitute.environment)
     return _bind_local_external_provider_environment(
         environment,
         environment_name=environment_name,
         target_name=target_name,
         storage_prefix="LOCAL_GAMMA",
+        debug_local=debug_sms_substitute,
     )
 
 
@@ -910,6 +974,8 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             "OTP_CODE_REF_KEYS_JSON": '{"down-not-used":"down-not-used"}',
             "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": "down-not-used",
             "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": "down-not-used",
+            "RTC_MEDIA_API_KEY": "down-not-used",
+            "RTC_MEDIA_API_SECRET": "down-not-used",
             "INTEGRATION_SERVICE_MTLS_CA_FILE": "/tmp/down-not-used",
             "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE": "/tmp/down-not-used",
             "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE": "/tmp/down-not-used",
@@ -936,9 +1002,20 @@ def _load_gamma_runtime_image_composition(
         raise ValueError(f"runtime image composition receipt is unreadable: {exc}") from exc
     if not isinstance(receipt, dict):
         raise ValueError("runtime image composition receipt is not an object")
-    if is_transactional_receipt:
-        if receipt.get("status") == "stopped":
+    if is_transactional_receipt and receipt.get("status") == "stopped":
+        receipt_path = target_process_dir(target_name) / "stack_status.json"
+        if not receipt_path.is_file():
             return None
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"runtime image composition receipt is unreadable: {exc}"
+            ) from exc
+        if not isinstance(receipt, dict):
+            raise ValueError("runtime image composition receipt is not an object")
+        is_transactional_receipt = False
+    if is_transactional_receipt:
         if receipt.get("status") not in {"partial", "running"}:
             raise ValueError("runtime startup attempt has no resources to tear down")
     elif receipt.get("status") != "passed":
@@ -952,6 +1029,15 @@ def _load_gamma_runtime_image_composition(
     compose_project = str(receipt.get("composeProject") or "").strip()
     if not compose_project:
         raise ValueError("runtime image composition receipt has no Compose project")
+    expected_project_prefix = f"quwoquan_{expected_environment}_release"
+    if (
+        re.fullmatch(
+            re.escape(expected_project_prefix) + r"(?:_[a-zA-Z0-9_-]+)?",
+            compose_project,
+        )
+        is None
+    ):
+        raise ValueError("runtime image composition receipt Compose project mismatch")
     composition = receipt.get("imageComposition")
     if not isinstance(composition, dict):
         raise ValueError("runtime image composition receipt has no image composition")
@@ -997,13 +1083,16 @@ def _bind_local_external_provider_environment(
     environment_name: str,
     target_name: str,
     storage_prefix: str,
+    debug_local: bool = True,
 ) -> str | None:
-    """Validate and bind protected non-production Provider material."""
+    """Bind the canonical non-production Provider substitute topology."""
 
     try:
-        values = load_protected_provider_environment(
+        values = load_nonprod_provider_environment(
             environment=environment_name,
             target_name=target_name,
+            source=environment,
+            debug_local=debug_local,
         )
     except (RuntimeError, ValueError) as exc:
         return f"{target_name} external Provider preflight failed: {exc}"
@@ -1114,6 +1203,9 @@ def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
     sources = (
         ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "module_catalog.yaml",
         ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "retention_policy.yaml",
+        ROOT / "quwoquan_ops" / "environments" / "compose" / "object-storage-lifecycle.json",
+        ROOT / "quwoquan_ops" / "external" / "livekit" / "base" / "livekit.yaml",
+        ROOT / "quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile",
     )
     files: dict[str, dict[str, str]] = {}
     for source in sources:
@@ -1465,11 +1557,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--nonprod-data-evidence",
         action="append",
         metavar="TARGET=PATH",
+        required=True,
         help=(
-            "保留给独立 full commercial integration gate；"
-            "content-consumer 本地矩阵不消费 Provider/share/reliability evidence"
+            "full integration 必须消费的 Provider/share/reliability evidence；"
+            "Alpha/Beta/Gamma 各显式传入一次"
         ),
     )
+    matrix_parser.add_argument("--ios-simulator-device", required=True)
+    matrix_parser.add_argument("--android-emulator-device", required=True)
+    matrix_parser.add_argument("--android-physical-device", required=True)
 
     tls_parser = subparsers.add_parser(
         "tls",
@@ -1513,6 +1609,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     device_trust_parser.add_argument("--device", default="")
     device_trust_parser.add_argument("--lease-id", default="")
+    device_trust_parser.add_argument(
+        "--defer-endpoint-probe",
+        action="store_true",
+        help=(
+            "仅安装 Simulator 系统根证书，不探测受管端点；"
+            "只允许 App 启动入口，环境/UAT verify 仍须端点成功"
+        ),
+    )
+    device_trust_parser.add_argument(
+        "--allow-unprovisioned-system-trust",
+        action="store_true",
+        help=(
+            "只允许 Android 直接 App 启动在不可写系统 CA 的 Emulator 上进入降级 Shell；"
+            "不会产生 system-trust/UAT 通过证据"
+        ),
+    )
     device_trust_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
 
     provider_conformance_parser = subparsers.add_parser(
@@ -1533,6 +1645,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("", *PROVIDER_CONFORMANCE_LAYERS),
     )
     provider_conformance_parser.add_argument("--matrix", action="store_true")
+    provider_conformance_parser.add_argument(
+        "--environment-matrix",
+        action="store_true",
+        help=(
+            "按 generated ContractGraph/Binding 动态执行指定环境全部 capability "
+            "的 local_contract/api_integration/user_acceptance 三层单元"
+        ),
+    )
     provider_conformance_parser.add_argument("--execute", action="store_true")
     provider_conformance_parser.add_argument("--image-digest", default="")
     provider_conformance_parser.add_argument("--data-digest", default="")
@@ -1605,7 +1725,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     up_parser.add_argument(
         "--workload",
-        choices=["content-release", "full"],
+        choices=["content-release", "content-commercial", "full"],
         default="full",
     )
     up_parser.add_argument(
@@ -1620,12 +1740,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     log_sink_control_parser = subparsers.add_parser(
         "product-telemetry-log-sink",
-        help="在 beta/gamma 本地目标受控执行产品遥测日志端口验证。",
+        help="在 alpha/beta/gamma 本地目标受控执行 Elasticsearch 产品遥测日志端口验证。",
     )
     log_sink_control_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     log_sink_control_parser.add_argument(
         "--target",
-        choices=("beta-local", "gamma-local"),
+        choices=("alpha-local", "beta-local", "gamma-local"),
         required=True,
     )
     log_sink_control_parser.add_argument(
@@ -1647,6 +1767,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Canonical ReleaseEvidenceManifest required by formal teardown.",
     )
+    down_parser.add_argument(
+        "--purge-rebuildable-state",
+        action="store_true",
+        help=(
+            "Delete only the runtime-receipt-bound Alpha/Beta/Gamma Compose "
+            "volumes and target cache after stopping the target."
+        ),
+    )
 
     consumer_lease_parser = subparsers.add_parser(
         "consumer-lease",
@@ -1664,9 +1792,15 @@ def build_parser() -> argparse.ArgumentParser:
     consumer_lease_parser.add_argument("--device", default="")
     consumer_lease_parser.add_argument("--consumer", default="flutter-run")
     consumer_lease_parser.add_argument(
+        "--platform",
+        choices=("android", "ios-simulator"),
+        default="android",
+    )
+    consumer_lease_parser.add_argument(
         "--package-name",
         default="com.quwoquan.quwoquan_app",
     )
+    consumer_lease_parser.add_argument("--bundle-id", default="")
     consumer_lease_parser.add_argument(
         "--ports",
         default="17000,17010,17100",
@@ -1677,6 +1811,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_BUILD_GRACE_SECONDS,
     )
+    consumer_lease_parser.add_argument("--handoff-digest", default="")
+    consumer_lease_parser.add_argument("--release-id", default="")
+    consumer_lease_parser.add_argument("--manifest-digest", default="")
+    consumer_lease_parser.add_argument("--readiness-receipt-digest", default="")
 
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -1687,7 +1825,15 @@ def build_parser() -> argparse.ArgumentParser:
     health_parser.add_argument("--target", choices=TARGETS, required=True)
     health_parser.add_argument(
         "--scope",
-        choices=["edge", "media", "service", "content-import", "content-consumer", "full"],
+        choices=[
+            "edge",
+            "media",
+            "service",
+            "content-import",
+            "content-consumer",
+            "content-commercial",
+            "full",
+        ],
         # 缺省跟随最近一次 up 的 workload（content-release → content-consumer /
         # content-import）；显式 --scope full 仍可做完整探针。
         default=argparse.SUPPRESS,
@@ -1776,9 +1922,67 @@ def build_parser() -> argparse.ArgumentParser:
         help="commercial phase 必需的 canonical rollback/replay lifecycle Exit ref",
     )
 
-    subparsers.add_parser(
+    app_content_preflight_parser = subparsers.add_parser(
+        "app-content-preflight",
+        help="在本地 Flutter 安装前验证 active candidate、商业内容回执与 live readback",
+    )
+    app_content_preflight_parser.add_argument(
+        "--report-dir", default=argparse.SUPPRESS
+    )
+    app_content_preflight_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    app_debug_preflight_parser = subparsers.add_parser(
+        "app-debug-preflight",
+        help="在 Flutter Debug 启动前只读验证目标 runtime、TLS 与 SMS substitute",
+    )
+    app_debug_preflight_parser.add_argument(
+        "--report-dir", default=argparse.SUPPRESS
+    )
+    app_debug_preflight_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    provider_debug_parser = subparsers.add_parser(
+        "provider-debug",
+        help="受保护的 Debug-local Provider 控制面；不会写入 OTP 报告",
+    )
+    provider_debug_parser.add_argument("action", choices=("otp-read",))
+    provider_debug_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    app_content_uat_parser = subparsers.add_parser(
+        "app-content-uat",
+        help="顺序执行 Alpha/Beta/Gamma release-bound App 内容自动验收",
+    )
+    app_content_uat_parser.add_argument(
+        "--report-dir", default=argparse.SUPPRESS
+    )
+    app_content_uat_parser.add_argument(
+        "--targets",
+        default="alpha-local,beta-local,gamma-local",
+    )
+    app_content_uat_parser.add_argument(
+        "--platform",
+        choices=("ios-simulator", "android"),
+        default="ios-simulator",
+    )
+    app_content_uat_parser.add_argument("--device-id", required=True)
+    app_content_uat_parser.add_argument("--dry-run", action="store_true")
+
+    data_fleet_parser = subparsers.add_parser(
         "data-execution-fleet",
-        help="解析 Data ReliableTask 唯一的本地 Mongo+Redis 运行端点。",
+        help="解析或管理 Data ReliableTask 专属的本地 Mongo+Redis fleet。",
+    )
+    data_fleet_parser.add_argument(
+        "--action",
+        choices=FLEET_ACTIONS,
+        default="resolve",
     )
 
     content_uat_parser = subparsers.add_parser(
@@ -1890,6 +2094,31 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="仅在 prod gray 已获人工审批后允许 activate",
     )
+
+    premium_pool_parser = subparsers.add_parser(
+        "premium-pool",
+        help="以候选绑定 operator command/event 验证非生产精品池闭环",
+    )
+    premium_pool_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    premium_pool_parser.add_argument(
+        "--action",
+        choices=("upsert-and-verify", "verify-readback"),
+        default="upsert-and-verify",
+    )
+    premium_pool_parser.add_argument("--readiness-receipt", required=True)
+    premium_pool_parser.add_argument("--content-id", required=True)
+    premium_pool_parser.add_argument("--quality-score", type=float)
+    premium_pool_parser.add_argument("--expires-at")
+    premium_pool_parser.add_argument(
+        "--projection-deadline-seconds",
+        type=float,
+        default=30.0,
+    )
+    premium_pool_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
 
     repair_parser = subparsers.add_parser("repair")
     repair_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -3068,7 +3297,8 @@ def _selected_profile_commands(
     )
     if (
         report_feedback_command is not None
-        and _current_runtime_health_scope(target_name) != "content-consumer"
+        and _current_runtime_health_scope(target_name)
+        not in {"content-consumer", "content-commercial"}
     ):
         # content-release 不启 notification/product-ops；举报回流依赖
         # /app-messages，只能在 full workload 上证明。
@@ -3089,7 +3319,8 @@ def _selected_profile_commands(
     )
     if (
         chat_group_lifecycle_command is not None
-        and _current_runtime_health_scope(target_name) != "content-consumer"
+        and _current_runtime_health_scope(target_name)
+        not in {"content-consumer", "content-commercial"}
     ):
         # content-release 不启 chat-service；建群到 inbox 旅程仅 full workload 证明。
         commands.append(chat_group_lifecycle_command)
@@ -4208,6 +4439,7 @@ def fetch_url(
     retry_attempts: int = 2,
     retry_sleep_seconds: float = 2.0,
     headers: dict[str, str] | None = None,
+    ca_file: str = "",
 ) -> tuple[bool, int | None, str, str]:
     retry_markers = (
         "timed out",
@@ -4230,9 +4462,15 @@ def fetch_url(
                     headers=headers,
                 )
             request = urllib.request.Request(url, headers=headers or {})
+            context = (
+                ssl.create_default_context(cafile=ca_file)
+                if parsed.scheme == "https" and ca_file
+                else None
+            )
             response = urllib.request.urlopen(
                 request,
                 timeout=timeout,
+                context=context,
             )
             with response:
                 body = response.read().decode("utf-8", errors="replace")
@@ -4487,7 +4725,16 @@ def _run_environment_integration_probe(
             ]
         )
     token = _resolve_test_auth_token(env_name)
-    if env_name in {"beta", "gamma"} and not token:
+    public_release_checks = {
+        "content_feed",
+        "video_book_feed",
+        "premium_feed",
+        "media_sample",
+    }
+    requires_reference_identity = not only_checks or any(
+        check_name not in public_release_checks for check_name in only_checks
+    )
+    if env_name in {"beta", "gamma"} and not token and requires_reference_identity:
         try:
             token = open_reference_acceptance_session(
                 str(public_bases["api"]),
@@ -5256,6 +5503,31 @@ def socket_probe(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _wait_for_network_ports_released(
+    target_name: str,
+    *,
+    timeout_seconds: float = 45.0,
+    poll_interval_seconds: float = 0.5,
+) -> list[dict[str, Any]]:
+    """Wait for target-owned host forwards to converge after compose down.
+
+    Docker Desktop/Colima can remove containers before its host forwarding
+    process closes the corresponding listening sockets. A single immediate
+    probe therefore creates a false cleanup failure. The bounded wait keeps
+    the fail-closed resource-release contract without restarting or otherwise
+    mutating the shared container runtime.
+    """
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        occupied = [
+            item for item in _network_report(target_name)["ports"] if item["open"]
+        ]
+        if not occupied or time.monotonic() >= deadline:
+            return occupied
+        time.sleep(poll_interval_seconds)
+
+
 def print_result(args: argparse.Namespace, payload: dict[str, Any]) -> int:
     if args.output_format == "json":
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
@@ -5885,6 +6157,17 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 "activeCandidateRef": str(pointer),
                 "reportDir": str(reused_fingerprint.get("reportRef") or ""),
                 "packageFingerprint": str(reused_fingerprint_path),
+                "packageDigest": reused_manifest["packageDigest"],
+                "buildInputDigest": reused_manifest["buildInputDigest"],
+                "imageDigest": reused_manifest["imageDigest"],
+                "runtimeConfigDigest": reused_manifest["runtimeConfigDigest"],
+                "environmentRuntimeDigest": reused_manifest[
+                    "environmentRuntimeDigest"
+                ],
+                "runtimeSchemaVersion": reused_manifest["runtimeSchemaVersion"],
+                "observabilityLogSink": reused_manifest[
+                    "observabilityLogSink"
+                ],
             }
 
         candidate_parent = candidate_dir.parent
@@ -5948,6 +6231,22 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                         )
         payload["candidateDir"] = str(candidate_dir)
         payload["activeCandidateRef"] = str(pointer)
+        candidate_manifest = load_candidate_manifest(
+            env_name,
+            target_name,
+            baseline_id,
+            require_full=True,
+        )
+        for field in (
+            "packageDigest",
+            "buildInputDigest",
+            "imageDigest",
+            "runtimeConfigDigest",
+            "environmentRuntimeDigest",
+            "runtimeSchemaVersion",
+            "observabilityLogSink",
+        ):
+            payload[field] = candidate_manifest[field]
         return payload
 
 
@@ -7295,7 +7594,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         and target_name in NONPROD_TARGETS
     ):
         runtime_workload = _current_runtime_workload(target_name)
-        if runtime_workload == "content-release":
+        if runtime_workload in {"content-release", "content-commercial"}:
             # content-release proves import/API/media via data-release bindings;
             # Provider/share/fault nonprod mutations require the full commercial
             # plane and must not block this workload.
@@ -7306,7 +7605,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                     "exitCode": 0,
                     "reportPath": "",
                     "details": [
-                        "skipped: active workload=content-release; "
+                        f"skipped: active workload={runtime_workload}; "
                         "data-release ship verify is the content-plane evidence"
                     ],
                     "caseResult": {
@@ -7435,6 +7734,7 @@ def _optional_product_telemetry_environment(
 
 def _log_sink_gate_block_receipt() -> dict[str, str]:
     return {
+        "adapterId": "ext.obs.elasticsearch",
         "source": "unavailable",
         "status": "gate_block",
         "redactedDigest": "",
@@ -7504,6 +7804,7 @@ def _write_product_telemetry_log_sink_control_report(
     receipt: dict[str, str],
     action_statuses: list[dict[str, str]],
     gate_blocked: bool,
+    failure_reason: str = "",
     timing: dict[str, Any],
 ) -> dict[str, Any]:
     """Persist only redacted log-sink binding evidence and outcome names."""
@@ -7515,7 +7816,8 @@ def _write_product_telemetry_log_sink_control_report(
     )
     details = (
         [
-            "commercial full workload requires product telemetry log-sink binding",
+            failure_reason
+            or "commercial full workload requires product telemetry log-sink binding",
         ]
         if gate_blocked
         else [f"{item['action']}: {item['status']}" for item in action_statuses]
@@ -7529,6 +7831,9 @@ def _write_product_telemetry_log_sink_control_report(
         "status": status,
         "logSink": receipt,
         "actions": action_statuses,
+        "executed": len(action_statuses),
+        "skipped": 0,
+        "failureReason": failure_reason if gate_blocked else "",
         **timing,
     }
     write_json(report_dir / "report.json", payload)
@@ -7559,14 +7864,54 @@ def _write_product_telemetry_log_sink_control_report(
         "commercialClaim": True,
         "logSink": receipt,
         "actions": action_statuses,
+        "executed": len(action_statuses),
+        "skipped": 0,
         **timing,
     }
+
+
+def _product_telemetry_log_sink_failure_reason(
+    action: str,
+    error: Exception,
+) -> str:
+    """Expose only operator-actionable, credential-free failure context."""
+
+    if isinstance(error, LocalEnvironmentHTTPError):
+        return f"{action}: product-ops request failed with HTTP {error.status}"
+    message = str(error).strip()
+    safe_messages = {
+        "GATE_BLOCK: exactly one active candidate-bound identity receipt is required",
+        "product telemetry query authorization is unavailable",
+        "product-ops public base is unavailable",
+        "cold-start failed",
+        "health failed",
+        "permission probe returned unexpected status",
+        "permission probe unexpectedly succeeded",
+    }
+    if message in safe_messages:
+        return message
+    return f"{action}: failed; inspect redacted stackctl evidence"
 
 
 def _log_sink_control_actions(action: str) -> tuple[str, ...]:
     if action == "all":
         return ("cold-start", "health", "send-query", "permission-failure")
     return (action,)
+
+
+@contextlib.contextmanager
+def _local_managed_ca_environment(target_name: str):
+    """Scope canonical local CA trust to one in-process control action."""
+
+    previous = os.environ.get("SSL_CERT_FILE")
+    os.environ["SSL_CERT_FILE"] = str(root_certificate_path(target_name))
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("SSL_CERT_FILE", None)
+        else:
+            os.environ["SSL_CERT_FILE"] = previous
 
 
 def _log_sink_control_query_session(
@@ -7576,6 +7921,13 @@ def _log_sink_control_query_session(
     target_name: str,
 ) -> LocalAcceptanceSession:
     """Resolve a query session without serializing a bearer token into evidence."""
+    if environment in {"alpha", "beta", "gamma"}:
+        token = mint_local_product_ops_operator_token(environment, target_name)
+        return LocalAcceptanceSession(
+            owner_id=f"operator:content-commercial:{environment}",
+            persona_id="",
+            access_token=token,
+        )
     query_token = os.environ.get("PRODUCT_TELEMETRY_QUERY_TOKEN", "").strip()
     if query_token:
         return LocalAcceptanceSession(
@@ -7726,27 +8078,32 @@ def command_product_telemetry_log_sink(args: argparse.Namespace) -> dict[str, An
         )
 
     action_statuses: list[dict[str, str]] = []
-    for action in actions:
-        try:
-            _run_product_telemetry_log_sink_control_action(
-                action=action,
-                target_name=args.target,
-                environment=environment,
-                report_dir=report_dir,
-            )
-        except (RuntimeError, ValueError, LocalEnvironmentHTTPError):
-            action_statuses.append({"action": action, "status": "failed"})
-            timing = _finish_timing(started_monotonic, started_at)
-            return _write_product_telemetry_log_sink_control_report(
-                report_dir=report_dir,
-                target_name=args.target,
-                action=args.action,
-                receipt=receipt,
-                action_statuses=action_statuses,
-                gate_blocked=True,
-                timing=timing,
-            )
-        action_statuses.append({"action": action, "status": "passed"})
+    with _local_managed_ca_environment(args.target):
+        for action in actions:
+            try:
+                _run_product_telemetry_log_sink_control_action(
+                    action=action,
+                    target_name=args.target,
+                    environment=environment,
+                    report_dir=report_dir,
+                )
+            except (RuntimeError, ValueError, LocalEnvironmentHTTPError) as exc:
+                action_statuses.append({"action": action, "status": "failed"})
+                timing = _finish_timing(started_monotonic, started_at)
+                return _write_product_telemetry_log_sink_control_report(
+                    report_dir=report_dir,
+                    target_name=args.target,
+                    action=args.action,
+                    receipt=receipt,
+                    action_statuses=action_statuses,
+                    gate_blocked=True,
+                    failure_reason=_product_telemetry_log_sink_failure_reason(
+                        action,
+                        exc,
+                    ),
+                    timing=timing,
+                )
+            action_statuses.append({"action": action, "status": "passed"})
 
     timing = _finish_timing(started_monotonic, started_at)
     return _write_product_telemetry_log_sink_control_report(
@@ -7903,7 +8260,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             }
     # A content release starts only the import/consumer data plane. Device
     # selection belongs to a separate App UAT command, never to server startup.
-    if args.workload == "content-release":
+    if args.workload in {"content-release", "content-commercial"}:
         args.skip_app = True
     commercial_claim = args.workload == "full"
     log_sink_receipt = {
@@ -8211,6 +8568,10 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 )
             )
             env.update(telemetry_env)
+        elif args.workload == "content-commercial":
+            # Product Ops is required by this bounded command/event slice, but
+            # full commercial observability remains a separate workload gate.
+            env["QWQ_PRODUCT_TELEMETRY_AVAILABLE"] = "0"
         else:
             env["QWQ_PRODUCT_TELEMETRY_AVAILABLE"] = "0"
         cmd = _gamma_start_command(args)
@@ -8227,6 +8588,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 environment_name=env_name,
                 target_name=requested_target,
                 workload=args.workload,
+                debug_sms_substitute=True,
             )
         steps.append(
             {
@@ -8479,6 +8841,53 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             **timing,
         }
 
+    if (
+        result.returncode == 0
+        and requested_target in {"alpha-local", "beta-local", "gamma-local"}
+        and args.workload in {"full", "content-commercial"}
+    ):
+        product_ops_base_url = str(
+            (get_target(topology, requested_target).get("publicBases") or {}).get(
+                "productOps"
+            )
+            or ""
+        ).strip()
+        try:
+            if not product_ops_base_url:
+                raise ExperimentPolicyActivationError(
+                    "target topology lacks Product Ops public base"
+                )
+            policy_receipt = activate_search_experiment_policy(
+                environment=env_name,
+                target=requested_target,
+                product_ops_base_url=product_ops_base_url,
+            )
+            policy_receipt_path = report_dir / "experiment-policy-activation.json"
+            write_json(policy_receipt_path, policy_receipt)
+            steps.append(
+                {
+                    "name": "package-bound-experiment-policy-activation",
+                    "exitCode": 0,
+                    "stdout": relpath(policy_receipt_path),
+                    "stderr": "",
+                }
+            )
+        except (ExperimentPolicyActivationError, OSError, RuntimeError, ValueError) as exc:
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout=str(result.stdout or ""),
+                stderr=str(exc),
+            )
+            steps.append(
+                {
+                    "name": "package-bound-experiment-policy-activation",
+                    "exitCode": 2,
+                    "stdout": "",
+                    "stderr": str(exc),
+                }
+            )
+
     if log_sink_redaction_values:
         steps = _redact_controlled_payload(steps, log_sink_redaction_values)
         result = subprocess.CompletedProcess(
@@ -8637,11 +9046,12 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
     target = str(args.target)
     device = str(getattr(args, "device", "") or "").strip()
     consumer = str(getattr(args, "consumer", "flutter-run") or "flutter-run").strip()
+    platform = str(getattr(args, "platform", "android") or "android").strip()
     if action in {"acquire", "release"} and not device:
         return {
             "exitCode": 2,
             "summary": f"consumer-lease {action} requires --device",
-            "details": ["select one connected Android device explicitly"],
+            "details": ["select one connected Android device or booted iOS Simulator"],
         }
     try:
         if action == "acquire":
@@ -8651,12 +9061,26 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 if value.strip()
             ]
             with _local_stack_operation_lock(target):
+                application_id = str(args.package_name)
+                if platform == "ios-simulator":
+                    application_id = str(getattr(args, "bundle_id", "") or "").strip()
+                    if not application_id:
+                        raise ValueError("--bundle-id is required for ios-simulator")
                 lease = acquire_consumer_lease(
                     target=target,
                     device=device,
                     consumer=consumer,
-                    package_name=str(args.package_name),
+                    package_name=application_id,
                     ports=ports,
+                    platform=platform,
+                    handoff_digest=str(getattr(args, "handoff_digest", "") or ""),
+                    release_id=str(getattr(args, "release_id", "") or ""),
+                    manifest_digest=str(
+                        getattr(args, "manifest_digest", "") or ""
+                    ),
+                    readiness_receipt_digest=str(
+                        getattr(args, "readiness_receipt_digest", "") or ""
+                    ),
                     build_grace_seconds=int(args.build_grace_seconds),
                 )
             return {
@@ -8664,8 +9088,9 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 "summary": f"consumer lease acquired for {target}",
                 "details": [
                     f"device={device}",
+                    f"platform={platform}",
                     f"consumer={consumer}",
-                    f"ports={','.join(str(port) for port in ports)}",
+                    f"ports={','.join(str(port) for port in ports) or 'none'}",
                     f"leaseId={lease['leaseId']}",
                     f"lease={relpath(Path(str(lease['path'])))}",
                 ],
@@ -8694,6 +9119,7 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
             "details": [
                 (
                     f"device={lease.get('device')} consumer={lease.get('consumer')} "
+                    f"platform={lease.get('platform', 'android')} "
                     f"state={lease.get('state')} detail={lease.get('detail')}"
                 )
                 for lease in leases
@@ -8805,8 +9231,24 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
     formal_release = bool(getattr(args, "formal_release", False))
+    purge_rebuildable_state = bool(
+        getattr(args, "purge_rebuildable_state", False)
+    )
     release_composition: dict[str, Any] = {}
     runtime_composition_source = ""
+    runtime_compose_project = ""
+
+    if purge_rebuildable_state and (
+        formal_release
+        or args.target not in {"alpha-local", "beta-local", "gamma-local"}
+    ):
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+            "details": [
+                "rebuildable-state purge is only available for non-formal Alpha/Beta/Gamma local teardown"
+            ],
+        }
 
     if formal_release:
         manifest_value = str(getattr(args, "release_manifest", "") or "").strip()
@@ -8850,6 +9292,10 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         try:
             runtime_receipt = _load_gamma_runtime_image_composition(args.target)
             if runtime_receipt is None:
+                if purge_rebuildable_state:
+                    raise ValueError(
+                        "rebuildable-state purge requires an exact runtime receipt"
+                    )
                 release_composition = _bind_gamma_packaged_service_image_refs(
                     env_name,
                     env,
@@ -8857,13 +9303,8 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                 runtime_composition_source = "service-package-provenance"
             else:
                 release_composition, compose_project = runtime_receipt
-                expected_project = str(
-                    env.get("LOCAL_GAMMA_COMPOSE_PROJECT_NAME") or ""
-                )
-                if compose_project != expected_project:
-                    raise ValueError(
-                        "runtime image composition receipt Compose project mismatch"
-                    )
+                runtime_compose_project = compose_project
+                env["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"] = compose_project
                 _apply_gamma_image_composition(release_composition, env)
                 runtime_composition_source = "runtime-receipt"
         except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -8876,7 +9317,11 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                 ],
             }
         _bind_gamma_down_parse_environment(env)
+        if purge_rebuildable_state:
+            cmd.append("--purge-rebuildable-state")
         runtime_result = run(cmd, env=env)
+        if runtime_result.returncode == 0 and purge_rebuildable_state:
+            shutil.rmtree(target_cache_dir(args.target), ignore_errors=True)
         app_cmd = [
             "bash",
             "quwoquan_app/scripts/device/stop_app_instance.sh",
@@ -8916,9 +9361,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     resource_release_issues: list[str] = []
     startup_receipt: dict[str, Any] | None = None
     if result.returncode == 0:
-        occupied = [
-            item for item in _network_report(args.target)["ports"] if item["open"]
-        ]
+        occupied = _wait_for_network_ports_released(args.target)
         resource_release_issues = [
             f"canonical port remains occupied after down: {item['name']}:{item['port']}"
             for item in occupied
@@ -8974,8 +9417,17 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                 "immutable-local" if release_composition else ""
             ),
             "runtimeCompositionSource": runtime_composition_source,
-            "destructiveRepairPerformed": False,
-            "destructiveActions": [],
+            "destructiveRepairPerformed": (
+                purge_rebuildable_state and result.returncode == 0
+            ),
+            "destructiveActions": (
+                [
+                    f"purge-compose-volumes:{runtime_compose_project}",
+                    f"purge-target-cache:{args.target}",
+                ]
+                if purge_rebuildable_state and result.returncode == 0
+                else []
+            ),
             "resourceReleaseIssues": resource_release_issues,
             "startupAttempt": startup_receipt,
         },
@@ -8999,9 +9451,9 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
 def _current_runtime_health_scope(target_name: str) -> str:
     """Return the health scope promised by the most recent local runtime start.
 
-    A content-release stack intentionally does not start the commercial Ops and
-    assistant planes.  Its runtime receipt is the authority for status; a
-    missing or malformed receipt remains fail-closed to the full scope.
+    Bounded content stacks intentionally do not start the full Assistant and
+    external Provider planes. Their runtime receipt is the authority for
+    status; a missing or malformed receipt remains fail-closed to full scope.
     """
     if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
         return "full"
@@ -9014,6 +9466,8 @@ def _current_runtime_health_scope(target_name: str) -> str:
         workload = str(startup_attempt.get("workload") or "").strip()
         if workload == "content-release":
             return "content-consumer"
+        if workload == "content-commercial":
+            return "content-commercial"
         if workload == "full":
             return "full"
 
@@ -9026,6 +9480,8 @@ def _current_runtime_health_scope(target_name: str) -> str:
                 workload = value.strip().strip("'\"")
                 if workload == "content-release":
                     return "content-consumer"
+                if workload == "content-commercial":
+                    return "content-commercial"
                 if workload == "full":
                     return "full"
     except OSError:
@@ -9039,6 +9495,8 @@ def _current_runtime_health_scope(target_name: str) -> str:
             workload = str(gamma_status.get("workload") or "").strip()
             if workload == "content-release":
                 return "content-consumer"
+            if workload == "content-commercial":
+                return "content-commercial"
             if workload == "full":
                 return "full"
     except (OSError, TypeError, json.JSONDecodeError):
@@ -9061,22 +9519,60 @@ def _current_runtime_health_scope(target_name: str) -> str:
         receipt = json.loads((run_root / "report.json").read_text(encoding="utf-8"))
     except (KeyError, OSError, TypeError, json.JSONDecodeError):
         return "full"
-    if (
-        receipt.get("command") == "up"
-        and receipt.get("resolvedTarget") == target_name
-        and receipt.get("workload") == "content-release"
-    ):
-        return "content-consumer"
+    if receipt.get("command") == "up" and receipt.get("resolvedTarget") == target_name:
+        workload = str(receipt.get("workload") or "").strip()
+        if workload == "content-release":
+            return "content-consumer"
+        if workload == "content-commercial":
+            return "content-commercial"
     return "full"
 
 
-def command_data_execution_fleet(_args: argparse.Namespace) -> dict[str, Any]:
+def command_data_execution_fleet(args: argparse.Namespace) -> dict[str, Any]:
     endpoint = resolve_data_execution_fleet_endpoint()
+    action = str(getattr(args, "action", "resolve") or "resolve")
+    if action == "resolve":
+        return {
+            "exitCode": 0,
+            "summary": "stackctl data execution fleet resolved",
+            "details": [f"target={endpoint.target}"],
+            "fleet": endpoint.document(),
+        }
+    report_dir = artifact_run_dir(
+        "repo",
+        f"data-execution-fleet-{action}",
+        target=endpoint.target,
+    )
+    try:
+        runtime = manage_data_execution_fleet(action, endpoint)
+        exit_code = 0 if action == "down" or runtime.ready else 1
+        evidence = runtime.document()
+        details = list(runtime.details)
+        if not details:
+            details = [
+                f"mongo={runtime.mongo} redis={runtime.redis} owned={runtime.owned}"
+            ]
+    except (OSError, RuntimeError, ValueError) as exc:
+        exit_code = 2
+        evidence = {"action": action, "target": endpoint.target, "ready": False}
+        details = [str(exc)]
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "data-execution-fleet",
+            "status": "passed" if exit_code == 0 else "gate_block",
+            "fleet": endpoint.document(),
+            "evidence": evidence,
+            "details": details,
+        },
+    )
     return {
-        "exitCode": 0,
-        "summary": "stackctl data execution fleet resolved",
-        "details": [f"target={endpoint.target}"],
+        "exitCode": exit_code,
+        "summary": f"stackctl data execution fleet {action}",
+        "details": details,
         "fleet": endpoint.document(),
+        "evidence": evidence,
+        "reportDir": relpath(report_dir),
     }
 
 
@@ -9177,6 +9673,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 retry_attempts=retry_attempts,
                 retry_sleep_seconds=retry_sleep_seconds,
                 headers=item.get("headers"),
+                ca_file=str(item.get("caFile") or ""),
             )
         expected_status = item.get("expectedStatus")
         if ok and expected_status is not None and status_code != int(expected_status):
@@ -9483,7 +9980,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     findings: list[str] = []
     advisories: list[str] = []
     deployment_prerequisite_failed = False
-    if args.target in {"beta-local", "gamma-local"}:
+    if args.target in {"alpha-local", "beta-local", "gamma-local"}:
         try:
             load_product_telemetry_log_sink(env_name, args.target)
         except (RuntimeError, ValueError) as exc:
@@ -9737,6 +10234,113 @@ def command_filter_catalog(args: argparse.Namespace) -> dict[str, Any]:
             if exit_code == 0
             else "stackctl filter-catalog failed"
         ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def command_premium_pool(args: argparse.Namespace) -> dict[str, Any]:
+    topology = load_environment_topology()
+    target = get_target(topology, args.target)
+    environment = str(target["env"])
+    public_bases = target.get("publicBases") or {}
+    api_base_url = str(public_bases.get("api") or "").strip()
+    product_ops_base_url = str(public_bases.get("productOps") or "").strip()
+    report_dir = resolve_report_dir(args, environment, args.target)
+    started_monotonic, started_at = _start_timing()
+    receipt: dict[str, Any] = {}
+    try:
+        if not api_base_url:
+            raise PremiumPoolReleaseError("target topology lacks API public base")
+        binding = load_premium_pool_candidate_binding(
+            environment=environment,
+            target=args.target,
+            readiness_receipt=args.readiness_receipt,
+            content_id=args.content_id,
+        )
+        from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
+
+        ssl_cafile = str(root_certificate_path(args.target))
+        if str(args.action) == "verify-readback":
+            receipt = execute_premium_pool_readback(
+                binding=binding,
+                api_base_url=api_base_url,
+                ssl_cafile=ssl_cafile,
+                projection_deadline_seconds=float(
+                    args.projection_deadline_seconds
+                ),
+            )
+        elif str(args.action) == "upsert-and-verify":
+            if not product_ops_base_url:
+                raise PremiumPoolReleaseError(
+                    "target topology lacks Product Ops public base"
+                )
+            if args.quality_score is None or not str(args.expires_at or "").strip():
+                raise PremiumPoolReleaseError(
+                    "upsert-and-verify requires qualityScore and expiresAt"
+                )
+            session, operator_kind = open_premium_pool_operator_session(
+                environment=environment,
+                target=args.target,
+            )
+            receipt = execute_premium_pool_upsert(
+                binding=binding,
+                product_ops_base_url=product_ops_base_url,
+                api_base_url=api_base_url,
+                session=session,
+                operator_kind=operator_kind,
+                quality_score=float(args.quality_score),
+                expires_at=str(args.expires_at),
+                ssl_cafile=ssl_cafile,
+                projection_deadline_seconds=float(
+                    args.projection_deadline_seconds
+                ),
+            )
+        else:
+            raise PremiumPoolReleaseError("unsupported premium pool action")
+        status = "ok"
+        exit_code = 0
+        details = [
+            f"release={binding.release_id}",
+            f"importRunId={binding.import_run_id}",
+            f"contentId={binding.content_id}",
+            f"baselineId={binding.baseline_id}",
+        ]
+    except (OSError, ValueError, PremiumPoolReleaseError) as exc:
+        status = "gate_block"
+        exit_code = 2
+        details = [str(exc)]
+    timing = _finish_timing(started_monotonic, started_at)
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "premium-pool",
+            "target": args.target,
+            "action": args.action,
+            "status": status,
+            "receipt": receipt,
+            "details": details,
+            **timing,
+        },
+    )
+    summary = (
+        f"stackctl premium-pool passed for {args.target}"
+        if exit_code == 0
+        else f"stackctl premium-pool is GATE_BLOCK for {args.target}"
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="premium-pool",
+        target=args.target,
+        status=status,
+        summary=summary,
+        details=details,
+        timing=timing,
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": summary,
         "details": details,
         "reportDir": relpath(report_dir),
         **timing,
@@ -10009,6 +10613,42 @@ def _load_data_release_readiness(
             issues.append(
                 f"Data readiness {key}={receipt.get(key)!r}, expected {expected!r}"
             )
+    expected_release_class = (
+        readiness_phase.value
+        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
+        else str(receipt.get("releaseClass") or "")
+    )
+    if (
+        receipt.get("releaseClass") != expected_release_class
+        or receipt.get("productLifecycleState") != expected_release_class
+    ):
+        issues.append(
+            "Data readiness releaseClass/productLifecycleState drift from phase"
+        )
+    authorization_required_ids = receipt.get("authorizationRequiredAssetIds")
+    contains_unverified = receipt.get("containsUnverifiedAssets")
+    if (
+        not isinstance(authorization_required_ids, list)
+        or any(not str(item).strip() for item in authorization_required_ids)
+        or len(authorization_required_ids) != len(set(authorization_required_ids))
+        or not isinstance(contains_unverified, bool)
+        or contains_unverified != bool(authorization_required_ids)
+    ):
+        issues.append("Data readiness authorization-required asset summary is invalid")
+    rights_status_counts = receipt.get("rightsStatusCounts")
+    if (
+        not isinstance(rights_status_counts, dict)
+        or set(rights_status_counts) != {"verified", "unverified", "restricted", "unknown"}
+        or any(
+            not isinstance(value, int) or isinstance(value, bool) or value < 0
+            for value in rights_status_counts.values()
+        )
+    ):
+        issues.append("Data readiness rightsStatusCounts is invalid")
+    if readiness_phase is ReadinessPhase.COMMERCIAL and (
+        contains_unverified is not False or authorization_required_ids != []
+    ):
+        issues.append("commercial readiness contains authorization-required assets")
     for digest_key in ("manifestDigest", "mediaManifestDigest"):
         if _DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:
             issues.append(f"Data readiness {digest_key} is not a canonical digest")
@@ -10141,7 +10781,7 @@ def _load_data_release_readiness(
                 observed_trace_ids.add(trace_id)
     expected_query_names = (
         _DATA_COMMERCIAL_READINESS_QUERY_NAMES
-        if readiness_phase is ReadinessPhase.COMMERCIAL
+        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
         else _DATA_CONSUMER_READINESS_QUERY_NAMES
     )
     if set(queries_by_name) != expected_query_names:
@@ -10155,7 +10795,7 @@ def _load_data_release_readiness(
             r"^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"
         ),
     }
-    if readiness_phase is ReadinessPhase.COMMERCIAL:
+    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
         expected_query_patterns["premium_stream"] = (
             r"^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"
         )
@@ -10175,7 +10815,7 @@ def _load_data_release_readiness(
         issues.append("Data readiness discovery exact query is empty")
     if not video_ids:
         issues.append("Data readiness video-book exact query is empty")
-    if readiness_phase is ReadinessPhase.COMMERCIAL and not premium_video_ids:
+    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL} and not premium_video_ids:
         issues.append("Data readiness premium_stream has no release-bound playable video")
     for count_name, expected_count in (("discoveryPosts", len(discovery_ids)),):
         value = counts.get(count_name)
@@ -10194,7 +10834,7 @@ def _load_data_release_readiness(
         or isinstance(premium_count, bool)
         or premium_count != len(premium_video_ids)
         or (
-            readiness_phase is ReadinessPhase.COMMERCIAL
+            readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
             and premium_count < 1
         )
     ):
@@ -10612,7 +11252,7 @@ def _release_feed_post_expectations(
         "content_feed": discovery_ids,
         "video_book_feed": video_ids,
     }
-    if readiness_phase is ReadinessPhase.COMMERCIAL:
+    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
         expectations["premium_feed"] = premium_video_ids
     empty = sorted(name for name, post_ids in expectations.items() if not post_ids)
     if empty:
@@ -10651,7 +11291,7 @@ def _run_release_feed_readback_probe(
                     "video_book_feed",
                     *(
                         ("premium_feed",)
-                        if readiness_phase is ReadinessPhase.COMMERCIAL
+                        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
                         else ()
                     ),
                     "media_sample",
@@ -10666,6 +11306,923 @@ def _run_release_feed_readback_probe(
         details = findings or ["release-bound feed readback did not pass"]
         raise ValueError("; ".join(str(item) for item in details))
     return report, report_file
+
+
+def _resolve_active_app_content_evidence(
+    target: str,
+) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
+    """Resolve one active candidate to its newest fully valid commercial evidence."""
+
+    topology = load_environment_topology()
+    environment = str(get_target(topology, target)["env"])
+    active = active_deployment_candidate(target)
+    if active is None:
+        raise ValueError("active immutable runtime candidate is missing")
+    manifest_path = Path(str(active["candidateDir"])) / "manifest.json"
+    manifest = _read_json_object(str(manifest_path))
+    release = manifest.get("release") if isinstance(manifest, dict) else None
+    candidate = release.get("candidate") if isinstance(release, dict) else None
+    if not isinstance(candidate, dict):
+        raise ValueError("active candidate does not bind a Data candidate release")
+    release_id = str(candidate.get("releaseId") or "").strip()
+    manifest_digest = str(candidate.get("releaseDigest") or "").strip()
+    attestation_ref = str(candidate.get("attestationRef") or "").strip()
+    attestation_digest = str(candidate.get("attestationDigest") or "").strip()
+    if not release_id or _DATA_READINESS_DIGEST_RE.fullmatch(manifest_digest) is None:
+        raise ValueError("active candidate Data release identity is incomplete")
+    if not attestation_ref or _DATA_READINESS_DIGEST_RE.fullmatch(attestation_digest) is None:
+        raise ValueError("active candidate Data release attestation identity is incomplete")
+    attestation_path = Path(attestation_ref).expanduser().resolve()
+    if not attestation_path.is_file():
+        raise ValueError("active candidate Data release attestation is missing")
+    actual_attestation_digest = "sha256:" + hashlib.sha256(
+        attestation_path.read_bytes()
+    ).hexdigest()
+    if actual_attestation_digest != attestation_digest:
+        raise ValueError("active candidate Data release attestation digest drifted")
+
+    readiness_root = env_runs_root(environment) / "data-release" / release_id
+    readiness_errors: list[str] = []
+    selected_readiness: dict[str, Any] | None = None
+    selected_readiness_path: Path | None = None
+    for readiness_path in sorted(
+        readiness_root.glob("*/release-readiness.json"), reverse=True
+    ):
+        try:
+            receipt, canonical_path = _load_data_release_readiness(
+                environment=environment,
+                release_id=release_id,
+                verify_run_id=readiness_path.parent.name,
+                manifest_digest=manifest_digest,
+                readiness_phase=ReadinessPhase.COMMERCIAL,
+            )
+        except ValueError as exc:
+            readiness_errors.append(str(exc))
+            continue
+        selected_readiness = receipt
+        selected_readiness_path = canonical_path
+        break
+    if selected_readiness is None or selected_readiness_path is None:
+        detail = readiness_errors[0] if readiness_errors else "no receipt exists"
+        raise ValueError(
+            "active release has no valid commercial readiness receipt: " + detail
+        )
+
+    lifecycle_root = (
+        env_runs_root(environment)
+        / "release-lifecycle-exit"
+        / release_id
+    )
+    lifecycle_errors: list[str] = []
+    lifecycle_ref = ""
+    for lifecycle_path in sorted(
+        lifecycle_root.glob("*/lifecycle-exit.json"), reverse=True
+    ):
+        try:
+            candidate_ref = lifecycle_path.resolve().relative_to(
+                output_root().expanduser().resolve()
+            ).as_posix()
+        except ValueError:
+            lifecycle_errors.append("lifecycle receipt escapes QWQ_OUTPUT_ROOT")
+            continue
+        try:
+            _load_data_release_lifecycle_exit(
+                environment=environment,
+                release_id=release_id,
+                manifest_digest=manifest_digest,
+                readiness=selected_readiness,
+                lifecycle_exit_ref=candidate_ref,
+            )
+        except ValueError as exc:
+            lifecycle_errors.append(str(exc))
+            continue
+        lifecycle_ref = candidate_ref
+        break
+    if not lifecycle_ref:
+        detail = lifecycle_errors[0] if lifecycle_errors else "no receipt exists"
+        raise ValueError(
+            "active release has no valid rollback/replay lifecycle receipt: " + detail
+        )
+    return manifest, selected_readiness, selected_readiness_path, lifecycle_ref
+
+
+def _app_content_uat_envelope(readiness: dict[str, Any]) -> dict[str, str]:
+    raw = readiness.get("appUatEnvelope")
+    if not isinstance(raw, dict):
+        raise ValueError("release readiness is missing canonical appUatEnvelope")
+    required_fields = {
+        key for key, _argument in APP_CONTENT_UAT_ENVELOPE_ARGUMENTS
+    } | {"videoWorkId"}
+    envelope = {key: str(raw.get(key) or "").strip() for key in required_fields}
+    missing = sorted(key for key, value in envelope.items() if not value)
+    if missing:
+        raise ValueError(
+            "release readiness appUatEnvelope is incomplete: "
+            + ", ".join(missing)
+        )
+    if envelope["releaseId"] != str(readiness.get("releaseId") or "").strip():
+        raise ValueError("release readiness appUatEnvelope releaseId mismatch")
+    for key in ("releaseClass", "productLifecycleState"):
+        if envelope[key] != str(readiness.get(key) or "").strip():
+            raise ValueError(f"release readiness appUatEnvelope {key} mismatch")
+
+    query_matches: dict[str, set[str]] = {}
+    for query in readiness.get("feedQueries") or []:
+        if not isinstance(query, dict):
+            continue
+        name = str(query.get("name") or "").strip()
+        matches = query.get("matchedPostIds")
+        if name and isinstance(matches, list):
+            query_matches[name] = {
+                str(item).strip() for item in matches if str(item).strip()
+            }
+    expected_queries = {
+        "typed_article": envelope["articleWorkId"],
+        "typed_image": envelope["imageWorkId"],
+        "typed_video": envelope["videoWorkId"],
+    }
+    for query_name, work_id in expected_queries.items():
+        if work_id not in query_matches.get(query_name, set()):
+            raise ValueError(
+                f"release readiness appUatEnvelope {query_name} is not exact-query bound"
+            )
+    if not query_matches.get("homepage_recommend"):
+        raise ValueError("release readiness homepage recommendation is empty")
+    if envelope["videoWorkId"] not in query_matches.get("premium_stream", set()):
+        raise ValueError(
+            "release readiness appUatEnvelope video is not Premium-query bound"
+        )
+    return envelope
+
+
+def _app_content_readback_summary(readiness: dict[str, Any]) -> dict[str, Any]:
+    queries: list[dict[str, Any]] = []
+    for query in readiness.get("feedQueries") or []:
+        if not isinstance(query, dict):
+            continue
+        requests = []
+        for request in query.get("requests") or []:
+            if not isinstance(request, dict):
+                continue
+            requests.append(
+                {
+                    key: request.get(key)
+                    for key in (
+                        "requestId",
+                        "traceId",
+                        "status",
+                        "durationMs",
+                    )
+                }
+            )
+        queries.append(
+            {
+                "name": str(query.get("name") or ""),
+                "status": query.get("status"),
+                "matchedPostIds": list(query.get("matchedPostIds") or []),
+                "requests": requests,
+            }
+        )
+    return {
+        "counts": readiness.get("counts", {}),
+        "postIds": list(readiness.get("postIds") or []),
+        "creatorIds": list(readiness.get("creatorIds") or []),
+        "feedQueries": queries,
+    }
+
+
+def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    target = str(args.target)
+    environment = str(get_target(load_environment_topology(), target)["env"])
+    report_dir = (
+        Path(args.report_dir)
+        if getattr(args, "report_dir", "")
+        else repo_run_dir("app-content-preflight", target=target)
+    )
+    try:
+        candidate, readiness, readiness_path, lifecycle_ref = (
+            _resolve_active_app_content_evidence(target)
+        )
+        app_uat_envelope = _app_content_uat_envelope(readiness)
+    except (OSError, ValueError) as exc:
+        details = [str(exc)]
+        payload = {
+            "schema": "quwoquan_ops.app_content_preflight",
+            "target": target,
+            "environment": environment,
+            "status": "gate_block",
+            "details": details,
+        }
+        write_json(report_dir / "report.json", payload)
+        write_json(report_dir / "findings.json", {"issues": details})
+        return {
+            **payload,
+            "exitCode": 2,
+            "summary": f"App content preflight is GATE_BLOCK for {target}",
+            "reportDir": relpath(report_dir),
+        }
+
+    readiness_result = command_content_readiness(
+        argparse.Namespace(
+            command="content-readiness",
+            phase=ReadinessPhase.COMMERCIAL.value,
+            env=environment,
+            release_id=str(readiness["releaseId"]),
+            verify_run_id=str(readiness["verifyRunId"]),
+            manifest_digest=str(readiness["manifestDigest"]),
+            lifecycle_exit_ref=lifecycle_ref,
+            output_format="json",
+            report_dir=str(report_dir / "content-readiness"),
+        )
+    )
+    passed = int(readiness_result.get("exitCode", 2)) == 0
+    receipt_digest = _canonical_document_checksum(readiness)
+    payload = {
+        "schema": "quwoquan_ops.app_content_preflight",
+        "target": target,
+        "environment": environment,
+        "status": "passed" if passed else "gate_block",
+        "packageBaseline": candidate.get("baselineId", ""),
+        "sourceRevision": candidate.get("sourceRevision", ""),
+        "releaseId": readiness["releaseId"],
+        "manifestDigest": readiness["manifestDigest"],
+        "readinessReceiptRef": relpath(readiness_path),
+        "readinessReceiptDigest": receipt_digest,
+        "lifecycleExitRef": lifecycle_ref,
+        "appUatEnvelope": app_uat_envelope,
+        "contentReadback": _app_content_readback_summary(readiness),
+        "contentReadinessReportRef": relpath(
+            report_dir / "content-readiness" / "report.json"
+        ),
+        "details": list(readiness_result.get("details", [])),
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(
+        report_dir / "findings.json",
+        {"issues": [] if passed else payload["details"]},
+    )
+    return {
+        **payload,
+        "exitCode": 0 if passed else 2,
+        "summary": (
+            f"App content preflight passed for {target}"
+            if passed
+            else f"App content preflight is GATE_BLOCK for {target}"
+        ),
+        "reportDir": relpath(report_dir),
+    }
+
+
+def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
+    report_path = Path(report_ref)
+    if not report_path.is_absolute():
+        report_path = ROOT / report_path
+    report = _read_json_object(str(report_path))
+    report_runs = report.get("runs")
+    if not isinstance(report_runs, list):
+        report_runs = []
+    selected = next(
+        (
+            item
+            for item in report_runs
+            if isinstance(item, dict) and int(item.get("exitCode", 1)) == 0
+        ),
+        {},
+    )
+    evidence = selected.get("evidence") if isinstance(selected, dict) else {}
+    evidence = evidence if isinstance(evidence, dict) else {}
+    screenshot = evidence.get("afterScreenshot")
+    screenshot = screenshot if isinstance(screenshot, dict) else {}
+    screenshot_ref = str(screenshot.get("path") or "").strip()
+    screenshot_path = Path(screenshot_ref)
+    if screenshot_ref and not screenshot_path.is_absolute():
+        screenshot_path = ROOT / screenshot_path
+    screenshot_digest = (
+        "sha256:" + hashlib.sha256(screenshot_path.read_bytes()).hexdigest()
+        if screenshot_ref and screenshot_path.is_file()
+        else ""
+    )
+    return {
+        "status": str(report.get("status") or ""),
+        "device": selected.get("device", {}) if isinstance(selected, dict) else {},
+        "testExecution": (
+            selected.get("testExecution", {}) if isinstance(selected, dict) else {}
+        ),
+        "consumerLease": evidence.get("consumerLease", {}),
+        "feedContent": evidence.get("feedContent", {}),
+        "controlledEdgeFault": evidence.get("controlledEdgeFault", {}),
+        "controlledEdgeFaultReceipt": evidence.get(
+            "controlledEdgeFaultReceipt", {}
+        ),
+        "screenshotRef": screenshot_ref,
+        "screenshotDigest": screenshot_digest,
+        "remoteApi": report.get("remoteApiEvidence", {}),
+    }
+
+
+def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    """Fail closed before Debug launch without mutating environment lifecycle."""
+
+    target_name = str(args.target)
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    environment = str(target["env"])
+    report_dir = (
+        Path(args.report_dir)
+        if getattr(args, "report_dir", "")
+        else repo_run_dir("app-debug-preflight", target=target_name)
+    )
+    details: list[str] = []
+    startup: dict[str, Any] = {}
+    try:
+        startup = load_startup_attempt(target_name) or {}
+    except (OSError, ValueError) as exc:
+        details.append(f"startup receipt unreadable: {exc}")
+    if not startup:
+        details.append("target has no startup receipt")
+    else:
+        if startup.get("status") != "running":
+            details.append(
+                "target startup status is not running: "
+                + str(startup.get("status") or "missing")
+            )
+        if startup.get("env") != environment or startup.get("target") != target_name:
+            details.append("startup receipt target/environment mismatch")
+        if startup.get("workload") != "full":
+            details.append("Debug login requires a full workload runtime")
+        if re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            str(startup.get("configurationDigest") or ""),
+        ) is None:
+            details.append("startup receipt has no canonical configuration digest")
+
+    try:
+        tls_evidence = verify_certificate(target_name)
+    except (OSError, PublicDomainTlsError, ValueError) as exc:
+        tls_evidence = {"status": "gate_block"}
+        details.append(f"target TLS is not ready: {exc}")
+
+    profile_name = str(target.get("portProfile") or "")
+    ports = profile_ports(load_port_manifest(), profile_name) if profile_name else {}
+    public_bases = target.get("publicBases") or {}
+    checks = [
+        ("api-edge", f"{str(public_bases.get('api') or '').rstrip('/')}/healthz", ""),
+        ("user-service", f"http://127.0.0.1:{ports.get('user-service', 0)}/healthz", ""),
+        ("integration-service", f"http://127.0.0.1:{ports.get('integration-service', 0)}/healthz", ""),
+        (
+            "sms-provider-substitute",
+            f"https://127.0.0.1:{ports.get('sms-provider-substitute', 0)}/healthz",
+            str(root_certificate_path(target_name, require_ready=False)),
+        ),
+    ]
+    provider_readback: dict[str, Any] = {}
+    check_receipts: list[dict[str, Any]] = []
+    for name, url, ca_file in checks:
+        if url.endswith(":0/healthz") or url == "/healthz":
+            details.append(f"{name} topology is incomplete")
+            continue
+        ok, status_code, body, _ = fetch_url(
+            url,
+            timeout=2.0,
+            retry_attempts=1,
+            retry_sleep_seconds=0,
+            ca_file=ca_file,
+        )
+        check_receipts.append(
+            {"name": name, "ready": ok, "statusCode": status_code}
+        )
+        if not ok:
+            details.append(f"{name} is not ready: {status_code or 'network_error'}")
+            continue
+        if name == "sms-provider-substitute":
+            try:
+                decoded = json.loads(body)
+            except json.JSONDecodeError:
+                details.append("SMS substitute health readback is not JSON")
+                continue
+            if not isinstance(decoded, dict):
+                details.append("SMS substitute health readback is invalid")
+                continue
+            provider_readback = {
+                "adapterId": str(decoded.get("adapterId") or ""),
+                "environment": str(decoded.get("environment") or ""),
+                "configurationDigest": str(
+                    decoded.get("configurationDigest") or ""
+                ),
+                "profile": str(decoded.get("profile") or ""),
+                "nonPromotable": decoded.get("nonPromotable") is True,
+                "ready": decoded.get("status") == "ready",
+            }
+            if provider_readback != {
+                "adapterId": "ext.sms.local_capture",
+                "environment": environment,
+                "configurationDigest": str(
+                    startup.get("configurationDigest") or ""
+                ),
+                "profile": provider_readback["profile"],
+                "nonPromotable": True,
+                "ready": True,
+            } or provider_readback["profile"] not in {
+                "success",
+                "rate_limit",
+                "failure",
+                "timeout",
+            }:
+                details.append("SMS substitute adapter/environment/readiness mismatch")
+
+    content_result = command_app_content_preflight(
+        argparse.Namespace(
+            target=target_name,
+            report_dir=str(report_dir / "content"),
+        )
+    )
+    if int(content_result.get("exitCode", 2)) != 0:
+        details.append(
+            "content preflight failed: "
+            + str((content_result.get("details") or ["unknown"])[0])
+        )
+
+    passed = not details
+    payload = {
+        "schema": "quwoquan_ops.app_debug_preflight",
+        "target": target_name,
+        "environment": environment,
+        "status": "passed" if passed else "gate_block",
+        "configurationDigest": str(startup.get("configurationDigest") or ""),
+        "runtimeChecks": check_receipts,
+        "tls": {
+            "profile": str(tls_evidence.get("profile") or ""),
+            "status": str(tls_evidence.get("status") or ""),
+        },
+        "provider": provider_readback,
+        "details": details,
+        "packageBaseline": content_result.get("packageBaseline", ""),
+        "sourceRevision": content_result.get("sourceRevision", ""),
+        "releaseId": content_result.get("releaseId", ""),
+        "manifestDigest": content_result.get("manifestDigest", ""),
+        "readinessReceiptRef": content_result.get("readinessReceiptRef", ""),
+        "readinessReceiptDigest": content_result.get(
+            "readinessReceiptDigest", ""
+        ),
+        "lifecycleExitRef": content_result.get("lifecycleExitRef", ""),
+        "appUatEnvelope": content_result.get("appUatEnvelope", {}),
+        "contentReadback": content_result.get("contentReadback", {}),
+        "contentReadinessReportRef": content_result.get(
+            "contentReadinessReportRef", ""
+        ),
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(report_dir / "findings.json", {"issues": details})
+    return {
+        **payload,
+        "exitCode": 0 if passed else 2,
+        "summary": (
+            f"App Debug preflight passed for {target_name}"
+            if passed
+            else f"App Debug preflight is GATE_BLOCK for {target_name}"
+        ),
+        "reportDir": relpath(report_dir),
+    }
+
+
+def command_provider_debug(args: argparse.Namespace) -> dict[str, Any]:
+    """Read one random OTP through the protected local control plane."""
+
+    target_name = str(args.target)
+    target = get_target(load_environment_topology(), target_name)
+    environment = str(target["env"])
+    if args.action != "otp-read":
+        return {
+            "exitCode": 2,
+            "summary": "provider-debug is GATE_BLOCK",
+            "details": ["unsupported provider-debug action"],
+        }
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return {
+            "exitCode": 2,
+            "summary": "provider-debug otp-read is GATE_BLOCK",
+            "details": ["otp-read requires an interactive TTY"],
+        }
+    try:
+        phone = _normalize_debug_phone(
+            getpass.getpass("Phone (input is hidden): ")
+        )
+        protected_otp = read_latest_debug_otp(
+            environment=environment,
+            target_name=target_name,
+            recipient=phone,
+        )
+        with open("/dev/tty", "w", encoding="utf-8") as tty:
+            tty.write(f"OTP: {protected_otp.code}\n")
+            tty.flush()
+        protected_otp = None
+    except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+        return {
+            "exitCode": 2,
+            "summary": "provider-debug otp-read is GATE_BLOCK",
+            "details": [str(exc)],
+        }
+    return {
+        "exitCode": 0,
+        "summary": "protected OTP was displayed on the current TTY",
+        "details": [
+            f"target={target_name}",
+            "OTP was not written to argv, reports, logs, or command output",
+        ],
+        "provider": {
+            "adapterId": "ext.sms.local_capture",
+            "environment": environment,
+            "nonPromotable": True,
+        },
+    }
+
+
+def _normalize_debug_phone(raw: str) -> str:
+    normalized = re.sub(r"[\s\-()]", "", str(raw or "").strip())
+    if re.fullmatch(r"1[0-9]{10}", normalized):
+        normalized = "+86" + normalized
+    if re.fullmatch(r"\+[1-9][0-9]{7,14}", normalized) is None:
+        raise ValueError("phone must be an E.164 number or an 11-digit mainland number")
+    return normalized
+
+
+def _command_app_content_uat(
+    args: argparse.Namespace,
+    *,
+    initial_issues: Sequence[str] = (),
+) -> dict[str, Any]:
+    allowed_targets = {"alpha-local", "beta-local", "gamma-local"}
+    targets = [
+        item.strip()
+        for item in str(getattr(args, "targets", "")).split(",")
+        if item.strip()
+    ]
+    report_dir = (
+        Path(args.report_dir)
+        if getattr(args, "report_dir", "")
+        else repo_run_dir("app-content-uat", target="nonprod-local")
+    )
+    issues = list(initial_issues)
+    if not targets or len(targets) != len(set(targets)):
+        issues.append("--targets must contain unique non-empty targets")
+    unsupported = sorted(set(targets) - allowed_targets)
+    if unsupported:
+        issues.append("unsupported App content UAT targets: " + ", ".join(unsupported))
+    device_id = str(getattr(args, "device_id", "") or "").strip()
+    if not device_id:
+        issues.append("--device-id is required")
+
+    preflights: list[dict[str, Any]] = []
+    if not issues:
+        for target in targets:
+            result = command_app_debug_preflight(
+                argparse.Namespace(
+                    target=target,
+                    report_dir=str(report_dir / target / "preflight"),
+                )
+            )
+            preflights.append(result)
+            if int(result.get("exitCode", 2)) != 0:
+                issues.append(
+                    f"{target}: "
+                    + str((result.get("details") or [result.get("summary")])[0])
+                )
+                break
+    if not issues and preflights:
+        baselines = {str(item.get("packageBaseline") or "") for item in preflights}
+        releases = {str(item.get("releaseId") or "") for item in preflights}
+        digests = {str(item.get("manifestDigest") or "") for item in preflights}
+        app_uat_envelopes = {
+            json.dumps(
+                item.get("appUatEnvelope") or {},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            for item in preflights
+        }
+        if len(baselines) != 1 or "" in baselines:
+            issues.append("Alpha/Beta/Gamma package baseline is not identical")
+        elif len(releases) != 1 or "" in releases:
+            issues.append("Alpha/Beta/Gamma active releaseId is not identical")
+        elif len(digests) != 1 or "" in digests:
+            issues.append("Alpha/Beta/Gamma manifest digest is not identical")
+        elif len(app_uat_envelopes) != 1 or "{}" in app_uat_envelopes:
+            issues.append("Alpha/Beta/Gamma appUatEnvelope is not identical")
+
+    runs: list[dict[str, Any]] = []
+    if not issues:
+        for preflight in preflights:
+            target = str(preflight["target"])
+            environment = str(preflight["environment"])
+            readiness_path = ROOT / str(preflight["readinessReceiptRef"])
+            if args.platform == "ios-simulator":
+                direct_command = [
+                    sys.executable,
+                    str(IOS_DIRECT_FLUTTER_RUN_UAT),
+                    "--env",
+                    environment,
+                    "--device-id",
+                    device_id,
+                    "--launch-surface",
+                    "direct_flutter_run",
+                    "--output-dir",
+                    str(report_dir / target / "direct-flutter-run"),
+                ]
+                if bool(getattr(args, "dry_run", False)):
+                    direct_command.append("--preflight-only")
+                direct_result = run(direct_command, cwd=ROOT / "quwoquan_app")
+                try:
+                    direct_evidence = json.loads(direct_result.stdout)
+                except json.JSONDecodeError:
+                    direct_evidence = {}
+                direct_passed = (
+                    direct_result.returncode == 0
+                    and isinstance(direct_evidence, dict)
+                    and direct_evidence.get("status") == "passed"
+                    and direct_evidence.get("launchMode") == "direct_flutter_run"
+                    and _DATA_READINESS_DIGEST_RE.fullmatch(
+                        str(direct_evidence.get("consumerLeaseId") or "")
+                    )
+                    is not None
+                )
+                runs.append(
+                    {
+                        "target": target,
+                        "suite": "direct-flutter-run",
+                        "exitCode": direct_result.returncode,
+                        "reportRef": str(direct_evidence.get("reportPath") or ""),
+                        "launchMode": direct_evidence.get("launchMode"),
+                        "consumerLeaseId": direct_evidence.get("consumerLeaseId"),
+                        "attempts": direct_evidence.get("attempts", []),
+                    }
+                )
+                if not direct_passed:
+                    detail = (direct_result.stderr or direct_result.stdout).strip()
+                    issues.append(
+                        f"{target}: literal flutter run failed: "
+                        + (detail[:800] if detail else "typed report is incomplete")
+                    )
+                    break
+            for suite_name, patrol_target, bind_release in (
+                ("homepage-feed", DISCOVERY_FEED_UAT_TEST_TARGET, False),
+                ("app-core-readback", APP_CORE_READBACK_UAT_TEST_TARGET, True),
+                ("video-playback", VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET, True),
+                (
+                    "controlled-edge-recovery",
+                    CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
+                    False,
+                ),
+            ):
+                command = _environment_page_smoke_profile_command(
+                    environment,
+                    target,
+                    report_dir / target,
+                    suite_name=f"app-content-{suite_name}",
+                    patrol_target=patrol_target,
+                    data_readiness_path=(readiness_path if bind_release else None),
+                )
+                if command is None:
+                    issues.append(f"{target}: {suite_name} topology is incomplete")
+                    break
+                argv = list(command["argv"])
+                if patrol_target == APP_CORE_READBACK_UAT_TEST_TARGET:
+                    envelope = preflight.get("appUatEnvelope")
+                    if not isinstance(envelope, dict):
+                        issues.append(
+                            f"{target}: app-core-readback has no canonical App UAT envelope"
+                        )
+                        break
+                    for field, flag in APP_CONTENT_UAT_ENVELOPE_ARGUMENTS:
+                        argv.extend((flag, str(envelope.get(field) or "")))
+                if patrol_target == CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET:
+                    argv.append("--stackctl-controlled-edge-fault")
+                argv.extend(
+                    [
+                        "--platform",
+                        "ios" if args.platform == "ios-simulator" else "android",
+                        "--device-id",
+                        device_id,
+                    ]
+                )
+                if bool(getattr(args, "dry_run", False)):
+                    argv.append("--dry-run")
+                result = run(argv, cwd=command["cwd"], env=command.get("env"))
+                run_payload = {
+                    "target": target,
+                    "suite": suite_name,
+                    "exitCode": result.returncode,
+                    "reportRef": str(command["reportPath"]),
+                    "evidence": _app_content_patrol_evidence(
+                        str(command["reportPath"])
+                    ),
+                }
+                runs.append(run_payload)
+                if result.returncode != 0:
+                    detail = (result.stderr or result.stdout).strip()
+                    issues.append(
+                        f"{target}: {suite_name} failed: "
+                        + (detail[:800] if detail else f"exit={result.returncode}")
+                    )
+                    break
+            if not issues and args.platform == "android":
+                startup_command = [
+                    sys.executable,
+                    str(STARTUP_FIRST_FRAME_UAT),
+                    "--android-device",
+                    device_id,
+                    "--runtime-env",
+                    environment,
+                    "--runtime-target",
+                    target,
+                    "--matrix-evidence-root",
+                    str(report_dir / target / "startup-runtime"),
+                    "--output-dir",
+                    str(report_dir / target / "startup-first-frame"),
+                    "--require-startup-sequence-events",
+                    "--require-branded-visible",
+                    "--require-no-native-recovery",
+                    "--require-telemetry-ack",
+                ]
+                if bool(getattr(args, "dry_run", False)):
+                    issues.append(
+                        f"{target}: Android startup evidence cannot be dry-run"
+                    )
+                    break
+                startup_result = run(startup_command, cwd=ROOT)
+                try:
+                    startup_evidence = json.loads(startup_result.stdout)
+                except json.JSONDecodeError:
+                    startup_evidence = {}
+                startup_passed = (
+                    startup_result.returncode == 0
+                    and isinstance(startup_evidence, dict)
+                    and startup_evidence.get("passed") is True
+                    and any(
+                        isinstance(item, dict)
+                        and str(item.get("attemptId") or "").strip()
+                        not in {"", "unknown"}
+                        and item.get("telemetryAcknowledged") is True
+                        and str(
+                            item.get("effectiveLaunchManifestDigest") or ""
+                        ).startswith("sha256:")
+                        for item in startup_evidence.get("results") or []
+                    )
+                )
+                runs.append(
+                    {
+                        "target": target,
+                        "suite": "startup-first-frame",
+                        "exitCode": startup_result.returncode,
+                        "reportRef": str(
+                            startup_evidence.get("outputDir") or ""
+                        ),
+                        "evidence": startup_evidence,
+                    }
+                )
+                if not startup_passed:
+                    detail = (
+                        startup_result.stderr or startup_result.stdout
+                    ).strip()
+                    issues.append(
+                        f"{target}: Android startup evidence failed: "
+                        + (detail[:800] if detail else "typed report is incomplete")
+                    )
+            if issues:
+                break
+
+    dry_run = bool(getattr(args, "dry_run", False))
+    status = "gate_block" if issues else ("planned" if dry_run else "passed")
+    payload = {
+        "schema": "quwoquan_ops.app_content_uat_receipt",
+        "status": status,
+        "targets": targets,
+        "platform": str(args.platform),
+        "deviceId": device_id,
+        "packageBaseline": (
+            str(preflights[0].get("packageBaseline") or "")
+            if preflights
+            else ""
+        ),
+        "releaseId": (
+            str(preflights[0].get("releaseId") or "") if preflights else ""
+        ),
+        "manifestDigest": (
+            str(preflights[0].get("manifestDigest") or "") if preflights else ""
+        ),
+        "appUatEnvelope": (
+            preflights[0].get("appUatEnvelope", {}) if preflights else {}
+        ),
+        "appUatEnvelopeDigest": (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    preflights[0].get("appUatEnvelope") or {},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            if preflights and preflights[0].get("appUatEnvelope")
+            else ""
+        ),
+        "configurationDigests": sorted(
+            {
+                str(item.get("configurationDigest") or "")
+                for item in preflights
+                if str(item.get("configurationDigest") or "")
+            }
+        ),
+        "readinessReceiptDigests": sorted(
+            {
+                str(item.get("readinessReceiptDigest") or "")
+                for item in preflights
+                if str(item.get("readinessReceiptDigest") or "")
+            }
+        ),
+        "consumerLeaseIds": sorted(
+            {
+                str(item.get("consumerLeaseId") or "")
+                for item in runs
+                if str(item.get("consumerLeaseId") or "")
+            }
+        ),
+        "screenshotDigests": sorted(
+            {
+                str((item.get("evidence") or {}).get("screenshotDigest") or "")
+                for item in runs
+                if isinstance(item.get("evidence"), dict)
+                and str((item.get("evidence") or {}).get("screenshotDigest") or "")
+            }
+        ),
+        "visibleCardCounts": {
+            str(item.get("target") or ""): int(
+                ((item.get("evidence") or {}).get("feedContent") or {}).get(
+                    "visibleCardCount", 0
+                )
+            )
+            for item in runs
+            if item.get("suite") == "homepage-feed"
+            and isinstance(item.get("evidence"), dict)
+        },
+        "controlledEdgeRecoveries": {
+            str(item.get("target") or ""): (
+                (item.get("evidence") or {}).get("controlledEdgeFault") or {}
+            )
+            for item in runs
+            if item.get("suite") == "controlled-edge-recovery"
+            and isinstance(item.get("evidence"), dict)
+        },
+        "preflights": preflights,
+        "runs": runs,
+        "executed": 0 if dry_run else len(runs),
+        "skipped": 0,
+        "details": issues
+        or [
+            (
+                "dry-run planned all App content UAT suites; no runtime evidence was claimed"
+                if dry_run
+                else "all requested App content UAT suites passed"
+            )
+        ],
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(report_dir / "findings.json", {"issues": issues})
+    return {
+        **payload,
+        "exitCode": 0 if not issues else 2,
+        "summary": (
+            "App content UAT dry-run planned"
+            if not issues and dry_run
+            else "App content UAT passed"
+            if not issues
+            else "App content UAT is GATE_BLOCK"
+        ),
+        "reportDir": relpath(report_dir),
+    }
+
+
+def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
+    targets = [
+        item.strip()
+        for item in str(getattr(args, "targets", "")).split(",")
+        if item.strip()
+    ]
+    device_id = str(getattr(args, "device_id", "") or "").strip()
+    dry_run = bool(getattr(args, "dry_run", False))
+    if dry_run or not targets or not device_id:
+        return _command_app_content_uat(args)
+    try:
+        runtime_use_lock = acquire_local_runtime_use_lock(
+            target=",".join(targets),
+            purpose=f"app-content-uat:{args.platform}:{device_id}",
+        )
+    except RuntimeError as error:
+        return _command_app_content_uat(args, initial_issues=(str(error),))
+    try:
+        return _command_app_content_uat(args)
+    finally:
+        runtime_use_lock.close()
 
 
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
@@ -10693,7 +12250,10 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             require_non_empty_content_feed=phase in {
                 ReadinessPhase.CONSUMER,
                 ReadinessPhase.COMMERCIAL,
-            },
+            } or (
+                phase is ReadinessPhase.RESEARCH
+                and bool(str(getattr(args, "verify_run_id", "") or "").strip())
+            ),
             output_format="json",
             report_dir=str(report_dir / "health"),
         )
@@ -10714,7 +12274,12 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     video_delivery_path: Path | None = None
     lifecycle_exit_receipt: dict[str, Any] | None = None
     lifecycle_exit_path: Path | None = None
-    if phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL}:
+    research_isolation: dict[str, Any] | None = None
+    has_research_verify_receipt = (
+        phase is ReadinessPhase.RESEARCH
+        and bool(str(getattr(args, "verify_run_id", "") or "").strip())
+    )
+    if phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL} or has_research_verify_receipt:
         try:
             data_readiness_receipt, data_readiness_path = _load_data_release_readiness(
                 environment=args.env,
@@ -10758,7 +12323,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 probes.append("release-bound-feed-readback")
             except ValueError as exc:
                 details.append(f"release-bound feed readback failed: {exc}")
-            if phase is ReadinessPhase.COMMERCIAL:
+            if phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
                 try:
                     video_delivery_evidence, video_delivery_path = (
                         _run_release_video_delivery_probe(
@@ -10777,6 +12342,12 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 f"capability {capability.value} declares probe scope "
                 f"{binding.health_scope} but no probe executed for {requirement.target}"
             )
+        if binding.source is ProbeSource.RESEARCH_ISOLATION:
+            try:
+                research_isolation = verify_research_content_isolation(args.env)
+                probes.append("governed-research-content-isolation")
+            except ValueError as exc:
+                details.append(str(exc))
         if binding.source is ProbeSource.LOG_SINK_CONTROL:
             action = binding.control_action
             if not action:
@@ -10855,6 +12426,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "videoDelivery": video_delivery_evidence,
         },
+        "researchContentIsolation": research_isolation,
         **timing,
     }
     write_json(report_dir / "report.json", payload)
@@ -11746,7 +13318,7 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
         # Restart is destructive for local state. Validate every external
         # deployment prerequisite before stopping a currently running stack;
         # otherwise a failed `up` would turn a partial outage into a full one.
-        if args.target in {"beta-local", "gamma-local"}:
+        if args.target in {"alpha-local", "beta-local", "gamma-local"}:
             try:
                 load_product_telemetry_log_sink(env_name, args.target)
             except (RuntimeError, ValueError) as exc:
@@ -14325,6 +15897,9 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_ENTITY_PORT": str(ports["entity-service"]),
         "LOCAL_GAMMA_CIRCLE_PORT": str(ports["circle-service"]),
         "LOCAL_GAMMA_INTEGRATION_PORT": str(ports["integration-service"]),
+        "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT": str(
+            ports["sms-provider-substitute"]
+        ),
         "LOCAL_GAMMA_NOTIFICATION_PORT": str(ports["notification-service"]),
         "LOCAL_GAMMA_REALTIME_PORT": str(ports["realtime-gateway"]),
         "LOCAL_GAMMA_RTC_PORT": str(ports["rtc-service"]),
@@ -14336,7 +15911,7 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_MONGO_PORT": str(ports["mongodb"]),
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
-        "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
+        "QWQ_COMPOSE_ELASTICSEARCH_PORT": str(ports["elasticsearch"]),
         "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
         "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": str(ports["media-origin"]),
         "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": str(ports["livekit-http"]),
@@ -14373,11 +15948,14 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
 def _current_runtime_workload(target_name: str) -> str:
     """Map the active local runtime slice to an expected-role workload."""
 
-    if _current_runtime_health_scope(target_name) in {
+    scope = _current_runtime_health_scope(target_name)
+    if scope in {
         "content-import",
         "content-consumer",
     }:
         return "content-release"
+    if scope == "content-commercial":
+        return "content-commercial"
     return "full"
 
 
@@ -14399,7 +15977,13 @@ def _health_checks_for_target(
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
     checks: list[dict[str, Any]] = []
-    if scope in {"edge", "full", "content-import", "content-consumer"}:
+    if scope in {
+        "edge",
+        "full",
+        "content-import",
+        "content-consumer",
+        "content-commercial",
+    }:
         checks.append(
             {
                 "name": "api-health",
@@ -14407,7 +15991,7 @@ def _health_checks_for_target(
                 "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
             }
         )
-    if scope in {"edge", "full"}:
+    if scope in {"edge", "full", "content-commercial"}:
         checks.append(
             {
                 "name": "product-ops-health",
@@ -14415,7 +15999,13 @@ def _health_checks_for_target(
                 "url": f"{str(public_bases['productOps']).rstrip('/')}/healthz",
             }
         )
-    if scope in {"media", "full", "content-import", "content-consumer"} and "mediaImage" in public_bases:
+    if scope in {
+        "media",
+        "full",
+        "content-import",
+        "content-consumer",
+        "content-commercial",
+    } and "mediaImage" in public_bases:
         checks.append(
             {
                 "name": "media-edge-health",
@@ -14425,7 +16015,7 @@ def _health_checks_for_target(
         )
     if scope in {"service", "full"}:
         checks.extend(_service_health_checks_for_target(target_name))
-    if scope in {"content-import", "content-consumer", "full"}:
+    if scope in {"content-import", "content-consumer", "content-commercial", "full"}:
         plane_workload = (
             "full"
             if scope == "full"
@@ -14437,8 +16027,10 @@ def _health_checks_for_target(
                 workload=plane_workload,
             )
         )
-    if scope in {"content-consumer", "full"}:
+    if scope in {"content-consumer", "content-commercial", "full"}:
         checks.extend(_content_consumer_health_checks(target_name, public_bases))
+    if scope == "content-commercial":
+        checks.extend(_content_commercial_health_checks(target_name))
     if scope == "full":
         checks.extend(_full_scope_health_checks(target_name, public_bases, env_cfg))
     return checks
@@ -14513,6 +16105,23 @@ def _content_consumer_health_checks(
     ]
 
 
+def _content_commercial_health_checks(target_name: str) -> list[dict[str, Any]]:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+        return []
+    target = get_target(load_environment_topology(), target_name)
+    profile_name = str(target.get("portProfile") or "")
+    if not profile_name:
+        return []
+    port = canonical_port(load_port_manifest(), profile_name, "product-ops-service")
+    return [
+        {
+            "name": "product-ops-service",
+            "scope": "content-commercial",
+            "url": f"http://127.0.0.1:{port}/healthz",
+        }
+    ]
+
+
 def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
     topology = load_environment_topology()
     target = get_target(topology, target_name)
@@ -14537,6 +16146,7 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         "realtime-gateway": "/healthz",
         "livekit-http": "/",
         "livekit-metrics": "/metrics",
+        "sms-provider-substitute": "/healthz",
     }
     for role_name in _expected_local_roles(target_name):
         if not role_name.endswith("-service") and role_name not in non_service_paths:
@@ -14545,13 +16155,18 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         path = non_service_paths.get(role_name, "/healthz")
         if role_name == "recommendation-service":
             path = "/health"
-        checks.append(
-            {
-                "name": role_name,
-                "scope": "service",
-                "url": f"http://127.0.0.1:{port}{path}",
-            }
-        )
+        check = {
+            "name": role_name,
+            "scope": "service",
+            "url": f"http://127.0.0.1:{port}{path}",
+        }
+        if role_name == "sms-provider-substitute":
+            check["url"] = f"https://127.0.0.1:{port}{path}"
+            try:
+                check["caFile"] = str(root_certificate_path(target_name))
+            except PublicDomainTlsError:
+                check["caFile"] = ""
+        checks.append(check)
     return checks
 
 
@@ -14678,7 +16293,7 @@ def _expected_local_roles(
     *,
     workload: str = "full",
 ) -> list[str]:
-    if workload == "content-release" and target_name in {
+    if workload in {"content-release", "content-commercial"} and target_name in {
         "alpha-local",
         "beta-local",
         "gamma-local",
@@ -14686,7 +16301,7 @@ def _expected_local_roles(
         # content-release 启动的就是这条 consumer data plane；不能要求
         # assistant/chat/Ops 等 full workload 才会启动的端口，否则集成验证
         # 会错误重启已经健康的发布环境。
-        return [
+        roles = [
             "api-edge",
             "media-edge",
             "media-origin",
@@ -14694,6 +16309,15 @@ def _expected_local_roles(
             "user-service",
             "entity-service",
         ]
+        if workload == "content-commercial":
+            roles.extend(
+                [
+                    "product-ops-edge",
+                    "product-ops-service",
+                    "recommendation-service",
+                ]
+            )
+        return roles
     # Alpha/Beta/Gamma share one packaged Remote composition.  A target must
     # never look healthy merely because its historical, smaller role subset is
     # listening; the full gate is identical across all three physical stacks.
@@ -15137,6 +16761,135 @@ def _command_details(result: Any) -> list[str]:
 
 
 def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
+    environment_matrix = bool(getattr(args, "environment_matrix", False))
+    if bool(args.matrix) and environment_matrix:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl provider-conformance is GATE_BLOCK",
+            "details": ["--matrix and --environment-matrix are mutually exclusive"],
+        }
+    if environment_matrix:
+        environment = str(args.env or "").strip()
+        target_name = DEFAULT_TARGET_BY_ENV.get(environment, "")
+        report_dir = resolve_report_dir(args, environment or "repo", target_name or "repo")
+        governance = _external_provider_governance()
+        conformance = _provider_conformance()
+        issues: list[str] = []
+        cells: list[dict[str, Any]] = []
+        try:
+            if environment not in {"alpha", "beta", "gamma"}:
+                raise ValueError(
+                    "--environment-matrix requires --env alpha, beta, or gamma"
+                )
+            if not bool(args.execute):
+                raise ValueError(
+                    "--environment-matrix requires --execute; dry-run is not evidence"
+                )
+            if any(
+                str(value or "").strip()
+                for value in (args.adapter_id, args.capability_id, args.layer)
+            ):
+                raise ValueError(
+                    "environment matrix derives adapter/capability/layer from generated Bindings"
+                )
+            compiled, governance_issues = governance.load_and_compile()
+            if governance_issues:
+                raise ValueError(
+                    "; ".join(issue.render() for issue in governance_issues)
+                )
+            selected = (compiled.get("selectedBindings") or {}).get(environment)
+            if not isinstance(selected, dict) or not selected:
+                raise ValueError(
+                    f"generated Binding has no capabilities for {environment}"
+                )
+            for capability_id, binding in sorted(selected.items()):
+                adapter_id = (
+                    str(binding.get("adapter_id") or "")
+                    if isinstance(binding, dict)
+                    else ""
+                )
+                if not adapter_id or binding.get("state") != "enabled":
+                    raise ValueError(
+                        f"{environment}/{capability_id} has no enabled selected adapter"
+                    )
+                for layer in PROVIDER_CONFORMANCE_LAYERS:
+                    runner_args = [
+                        "--adapter-id",
+                        adapter_id,
+                        "--capability-id",
+                        capability_id,
+                        "--environment",
+                        environment,
+                        "--layer",
+                        layer,
+                        "--execute",
+                    ]
+                    exit_code = _provider_conformance_runner().main(runner_args)
+                    cells.append(
+                        {
+                            "capabilityId": capability_id,
+                            "adapterId": adapter_id,
+                            "layer": layer,
+                            "exitCode": exit_code,
+                        }
+                    )
+                    if exit_code != 0:
+                        raise ValueError(
+                            f"{environment}/{capability_id}/{layer} failed"
+                        )
+            readiness, readiness_load_issues = conformance.load_validate_and_derive()
+            readiness_issues = conformance.readiness_issues(
+                readiness,
+                environment=environment,
+            )
+            issues.extend(str(item) for item in readiness_load_issues)
+            issues.extend(str(item) for item in readiness_issues)
+        except (OSError, RuntimeError, ValueError) as exc:
+            issues.append(str(exc))
+        capability_count = len(
+            {
+                str(cell.get("capabilityId") or "")
+                for cell in cells
+                if str(cell.get("capabilityId") or "")
+            }
+        )
+        expected_cells = capability_count * len(PROVIDER_CONFORMANCE_LAYERS)
+        passed = (
+            not issues
+            and capability_count > 0
+            and len(cells) == expected_cells
+            and all(int(cell.get("exitCode") or 0) == 0 for cell in cells)
+        )
+        payload = {
+            "schema": "stackctl-provider-conformance-environment-matrix",
+            "status": "passed" if passed else "gate_block",
+            "environment": environment,
+            "target": target_name,
+            "capabilityCount": capability_count,
+            "expectedCells": expected_cells,
+            "executed": len(cells),
+            "skipped": 0,
+            "cells": cells,
+            "issues": issues,
+        }
+        write_json(report_dir / "report.json", payload)
+        write_json(report_dir / "findings.json", {"issues": issues})
+        return {
+            **payload,
+            "exitCode": 0 if passed else 2,
+            "summary": (
+                f"stackctl provider-conformance passed {len(cells)} cells for {environment}"
+                if passed
+                else f"stackctl provider-conformance is GATE_BLOCK for {environment}"
+            ),
+            "details": issues or [
+                f"capabilities={capability_count}",
+                f"executed={len(cells)}",
+                "skipped=0",
+            ],
+            "reportDir": relpath(report_dir),
+        }
+
     runner_args: list[str] = []
     if args.matrix:
         runner_args.extend(("--matrix", "--capability-id", args.capability_id))
@@ -15387,6 +17140,10 @@ def command_device_trust(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(get_target(load_environment_topology(), args.target)["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _start_timing()
+    defer_endpoint_probe = bool(getattr(args, "defer_endpoint_probe", False))
+    allow_unprovisioned_system_trust = bool(
+        getattr(args, "allow_unprovisioned_system_trust", False)
+    )
     try:
         if args.action == "install":
             evidence = install_device_trust(
@@ -15394,8 +17151,14 @@ def command_device_trust(args: argparse.Namespace) -> dict[str, Any]:
                 platform_name=args.platform,
                 device=args.device,
                 lease_id=args.lease_id,
+                endpoint_probe=not defer_endpoint_probe,
+                allow_unprovisioned_system_trust=allow_unprovisioned_system_trust,
             )
         elif args.action == "verify":
+            if defer_endpoint_probe or allow_unprovisioned_system_trust:
+                raise LocalDeviceTrustError(
+                    "startup-only trust flags are valid only for device-trust install"
+                )
             if not str(args.device or "").strip():
                 raise LocalDeviceTrustError("device-trust verify requires --device")
             evidence = verify_device_trust(
@@ -15404,6 +17167,10 @@ def command_device_trust(args: argparse.Namespace) -> dict[str, Any]:
                 device=args.device,
             )
         else:
+            if defer_endpoint_probe or allow_unprovisioned_system_trust:
+                raise LocalDeviceTrustError(
+                    "startup-only trust flags are valid only for device-trust install"
+                )
             if not str(args.device or "").strip() or not str(args.lease_id or "").strip():
                 raise LocalDeviceTrustError(
                     "device-trust release requires --device and --lease-id"
@@ -15425,7 +17192,13 @@ def command_device_trust(args: argparse.Namespace) -> dict[str, Any]:
         exit_code = 2
         details = [str(exc)]
     timing = _finish_timing(started_monotonic, started_at)
-    status = "passed" if exit_code == 0 else "gate_block"
+    status = (
+        "launch_degraded"
+        if exit_code == 0 and evidence.get("systemTrustStore") is False
+        else "passed"
+        if exit_code == 0
+        else "gate_block"
+    )
     write_json(
         report_dir / "report.json",
         {
@@ -15491,6 +17264,9 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
         health_fn=command_health,
         verify_fn=command_verify,
         down_fn=command_down,
+        telemetry_fn=command_product_telemetry_log_sink,
+        provider_fn=command_provider_conformance,
+        app_uat_fn=command_app_content_uat,
         filter_catalog_fn=command_filter_catalog,
         targets=targets,
         include_l0=not bool(getattr(args, "skip_l0", False)),
@@ -15501,6 +17277,15 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
             getattr(args, "rollback_release_attestation", "") or ""
         ),
         nonprod_data_evidence=evidence_by_target,
+        ios_simulator_device=str(
+            getattr(args, "ios_simulator_device", "") or ""
+        ),
+        android_emulator_device=str(
+            getattr(args, "android_emulator_device", "") or ""
+        ),
+        android_physical_device=str(
+            getattr(args, "android_physical_device", "") or ""
+        ),
     )
 
 
@@ -15524,10 +17309,15 @@ def main() -> int:
         "inspect": command_inspect,
         "doctor": command_doctor,
         "content-readiness": command_content_readiness,
+        "app-content-preflight": command_app_content_preflight,
+        "app-debug-preflight": command_app_debug_preflight,
+        "provider-debug": command_provider_debug,
+        "app-content-uat": command_app_content_uat,
         "data-execution-fleet": command_data_execution_fleet,
         "content-uat": command_content_uat,
         "account-enforcement-uat": command_account_enforcement_uat,
         "filter-catalog": command_filter_catalog,
+        "premium-pool": command_premium_pool,
         "repair": command_repair,
         "roll": command_roll,
         "deploy": command_deploy,

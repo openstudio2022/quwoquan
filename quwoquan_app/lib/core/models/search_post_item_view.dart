@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Canonical Search 的 content.post 强类型展示切片。
@@ -42,7 +41,7 @@ final class PostSearchItemView {
   final String? matchedField;
   final DateTime? publishedAt;
   final String connectionState;
-  final IntersectionReason? intersectionReason;
+  final CanonicalSearchIntersectionReason? intersectionReason;
 
   factory PostSearchItemView.fromCanonical(
     CanonicalSearchContentHit hit, {
@@ -69,16 +68,7 @@ final class PostSearchItemView {
       matchedField: matchedField,
       publishedAt: hit.publishedAt,
       connectionState: connectionState ?? 'unconnected',
-      intersectionReason: reason == null
-          ? null
-          : IntersectionReason(
-              kind: reason.intersectionClass ?? '',
-              primaryText: reason.primaryText ?? '',
-              dimension: reason.dimension ?? '',
-              source: reason.sourceRef ?? '',
-              intersectionId: reason.intersectionId ?? '',
-              intersectionClass: reason.intersectionClass ?? '',
-            ),
+      intersectionReason: reason,
     );
   }
 }

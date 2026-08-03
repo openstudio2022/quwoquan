@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AggregationExpansionPlanDto {
   const AggregationExpansionPlanDto({
@@ -22,6 +22,26 @@ class AggregationExpansionPlanDto {
       };
 
   factory AggregationExpansionPlanDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'targetSkills',
+      'policy',
+      'reasonCode',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AggregationExpansionPlanDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('targetSkills') && json['targetSkills'] != null && (json['targetSkills'] is! List || (json['targetSkills'] as List).any((item) => item is! String))) {
+      throw const FormatException('AggregationExpansionPlanDto field targetSkills has an invalid wire value');
+    }
+    if (json.containsKey('policy') && json['policy'] != null && (json['policy'] is! String)) {
+      throw const FormatException('AggregationExpansionPlanDto field policy has an invalid wire value');
+    }
+    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
+      throw const FormatException('AggregationExpansionPlanDto field reasonCode has an invalid wire value');
+    }
     return AggregationExpansionPlanDto(
       targetSkills: _assistantStringList(json['targetSkills']),
       policy: parseContextScopeExpansionPolicyStrict((json['policy'] as String?)?.trim() ?? "expand_scope_and_requery"),
@@ -58,6 +78,22 @@ class AggregationBlockingSkillStateDto {
       };
 
   factory AggregationBlockingSkillStateDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'stopReason',
+      'answerReady',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AggregationBlockingSkillStateDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('stopReason') && json['stopReason'] != null && (json['stopReason'] is! String)) {
+      throw const FormatException('AggregationBlockingSkillStateDto field stopReason has an invalid wire value');
+    }
+    if (json.containsKey('answerReady') && json['answerReady'] != null && (json['answerReady'] is! bool)) {
+      throw const FormatException('AggregationBlockingSkillStateDto field answerReady has an invalid wire value');
+    }
     return AggregationBlockingSkillStateDto(
       stopReason: parseFinalAnswerModeStrict((json['stopReason'] as String?)?.trim() ?? "blocked"),
       answerReady: json['answerReady'] == true,
@@ -82,6 +118,18 @@ class AggregationDependencyChainDto {
       };
 
   factory AggregationDependencyChainDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'runIds',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AggregationDependencyChainDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('runIds') && json['runIds'] != null && (json['runIds'] is! List || (json['runIds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AggregationDependencyChainDto field runIds has an invalid wire value');
+    }
     return AggregationDependencyChainDto(
       runIds: _assistantStringList(json['runIds']),
     );
@@ -148,6 +196,62 @@ class AggregationStateDto {
       };
 
   factory AggregationStateDto.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'allSkillsReady',
+      'blockingSkills',
+      'blockedBy',
+      'canGivePartialAnswer',
+      'needExpansion',
+      'expansionPlan',
+      'finalAnswerReady',
+      'finalAnswerMode',
+      'clarificationNeeded',
+      'answerOwner',
+      'clarificationSource',
+      'dependencies',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AggregationStateDto response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('allSkillsReady') && json['allSkillsReady'] != null && (json['allSkillsReady'] is! bool)) {
+      throw const FormatException('AggregationStateDto field allSkillsReady has an invalid wire value');
+    }
+    if (json.containsKey('blockingSkills') && json['blockingSkills'] != null && (json['blockingSkills'] is! List || (json['blockingSkills'] as List).any((item) => item is! String))) {
+      throw const FormatException('AggregationStateDto field blockingSkills has an invalid wire value');
+    }
+    if (json.containsKey('blockedBy') && json['blockedBy'] != null && (json['blockedBy'] is! Map)) {
+      throw const FormatException('AggregationStateDto field blockedBy has an invalid wire value');
+    }
+    if (json.containsKey('canGivePartialAnswer') && json['canGivePartialAnswer'] != null && (json['canGivePartialAnswer'] is! bool)) {
+      throw const FormatException('AggregationStateDto field canGivePartialAnswer has an invalid wire value');
+    }
+    if (json.containsKey('needExpansion') && json['needExpansion'] != null && (json['needExpansion'] is! bool)) {
+      throw const FormatException('AggregationStateDto field needExpansion has an invalid wire value');
+    }
+    if (json.containsKey('expansionPlan') && json['expansionPlan'] != null && (json['expansionPlan'] is! Map)) {
+      throw const FormatException('AggregationStateDto field expansionPlan has an invalid wire value');
+    }
+    if (json.containsKey('finalAnswerReady') && json['finalAnswerReady'] != null && (json['finalAnswerReady'] is! bool)) {
+      throw const FormatException('AggregationStateDto field finalAnswerReady has an invalid wire value');
+    }
+    if (json.containsKey('finalAnswerMode') && json['finalAnswerMode'] != null && (json['finalAnswerMode'] is! String)) {
+      throw const FormatException('AggregationStateDto field finalAnswerMode has an invalid wire value');
+    }
+    if (json.containsKey('clarificationNeeded') && json['clarificationNeeded'] != null && (json['clarificationNeeded'] is! bool)) {
+      throw const FormatException('AggregationStateDto field clarificationNeeded has an invalid wire value');
+    }
+    if (json.containsKey('answerOwner') && json['answerOwner'] != null && (json['answerOwner'] is! String)) {
+      throw const FormatException('AggregationStateDto field answerOwner has an invalid wire value');
+    }
+    if (json.containsKey('clarificationSource') && json['clarificationSource'] != null && (json['clarificationSource'] is! String)) {
+      throw const FormatException('AggregationStateDto field clarificationSource has an invalid wire value');
+    }
+    if (json.containsKey('dependencies') && json['dependencies'] != null && (json['dependencies'] is! Map)) {
+      throw const FormatException('AggregationStateDto field dependencies has an invalid wire value');
+    }
     return AggregationStateDto(
       allSkillsReady: json['allSkillsReady'] == true,
       blockingSkills: _assistantStringList(json['blockingSkills']),

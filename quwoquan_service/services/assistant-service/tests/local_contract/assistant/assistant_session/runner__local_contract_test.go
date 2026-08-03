@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/streaming"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 func TestRunner_RunReplayCases(t *testing.T) {
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("load production skill catalog: %v", err)
 	}

@@ -1,0 +1,106 @@
+domain: TRAVEL
+aggregate: TripPlan
+description: TripPlan 对象专属错误码。
+errors:
+- code: TRAVEL.USER.invalid_argument
+  kind: USER
+  reason: invalid_argument
+  emitted_by: [{surface: http, operations: [CreateTripPlan, CreateTripPlanFromTemplate, GetTripPlan, ListTripPlans, ReviseTripPlan, TransitionTripPlan]}]
+  http_status: 400
+  recovery_action: surface
+  dart_const: invalidArgument
+  go_const: ErrInvalidArgument
+  user_message: {zh: 行程请求无效, en: Trip request is invalid}
+- code: TRAVEL.USER.trip_not_found
+  kind: USER
+  reason: trip_not_found
+  emitted_by: [{surface: http, operations: [GetTripPlan, ReviseTripPlan, TransitionTripPlan, travel.trip_membership.PutTripMembership, travel.trip_membership.ListTripMemberships, travel.trip_plan_placement.PutTripPlanPlacement, travel.trip_plan_placement.ListTripPlanPlacements, travel.trip_moment.CreateTripMoment, travel.trip_moment.ListTripMoments, travel.trip_plan_content_link.PutTripPlanContentLink, travel.trip_plan_content_link.ListTripPlanContentLinks, travel.trip_timeline_view.GetTripTimeline, travel.trip_map_view.GetTripMap, travel.trip_share_snapshot.CreateTripShareSnapshot]}]
+  http_status: 404
+  recovery_action: refresh
+  dart_const: tripNotFound
+  go_const: ErrTripNotFound
+  user_message: {zh: 行程不存在, en: Trip not found}
+- code: TRAVEL.USER.trip_template_not_found
+  kind: USER
+  reason: trip_template_not_found
+  emitted_by: [{surface: http, operations: [CreateTripPlanFromTemplate]}]
+  http_status: 404
+  recovery_action: refresh
+  dart_const: tripTemplateNotFound
+  go_const: ErrTripTemplateNotFound
+  user_message: {zh: 行程模板不存在, en: Trip template not found}
+- code: TRAVEL.USER.trip_template_permission_denied
+  kind: USER
+  reason: trip_template_permission_denied
+  emitted_by: [{surface: http, operations: [CreateTripPlanFromTemplate]}]
+  http_status: 403
+  recovery_action: surface
+  dart_const: tripTemplatePermissionDenied
+  go_const: ErrTripTemplatePermissionDenied
+  user_message: {zh: 你无权使用这个行程模板, en: You cannot use this trip template}
+- code: TRAVEL.USER.trip_permission_denied
+  kind: USER
+  reason: trip_permission_denied
+  emitted_by: [{surface: http, operations: [GetTripPlan, ListTripPlans, ReviseTripPlan, TransitionTripPlan, travel.trip_membership.PutTripMembership, travel.trip_membership.DepartTripMembership, travel.trip_membership.ListTripMemberships, travel.trip_plan_placement.PutTripPlanPlacement, travel.trip_plan_placement.RemoveTripPlanPlacement, travel.trip_plan_placement.ListTripPlanPlacements, travel.trip_plan_placement.ListSurfaceTripPlacements, travel.trip_moment.CreateTripMoment, travel.trip_moment.AssignTripMoment, travel.trip_moment.DeleteTripMoment, travel.trip_moment.ListTripMoments, travel.trip_plan_content_link.PutTripPlanContentLink, travel.trip_plan_content_link.RemoveTripPlanContentLink, travel.trip_plan_content_link.ListTripPlanContentLinks, travel.trip_timeline_view.GetTripTimeline, travel.trip_map_view.GetTripMap, travel.trip_share_snapshot.CreateTripShareSnapshot, travel.trip_share_snapshot.GetTripShareSnapshot]}]
+  http_status: 403
+  recovery_action: surface
+  dart_const: tripPermissionDenied
+  go_const: ErrTripPermissionDenied
+  user_message: {zh: 你无权操作这个行程, en: Trip action is not permitted}
+- code: TRAVEL.USER.trip_revision_conflict
+  kind: USER
+  reason: trip_revision_conflict
+  emitted_by: [{surface: http, operations: [ReviseTripPlan, TransitionTripPlan]}]
+  http_status: 409
+  recovery_action: refresh
+  dart_const: tripRevisionConflict
+  go_const: ErrTripRevisionConflict
+  user_message: {zh: 行程已变化，请刷新后重试, en: Trip changed, refresh and retry}
+- code: TRAVEL.USER.trip_state_invalid
+  kind: USER
+  reason: trip_state_invalid
+  emitted_by: [{surface: http, operations: [TransitionTripPlan]}]
+  http_status: 409
+  recovery_action: refresh
+  dart_const: tripStateInvalid
+  go_const: ErrTripStateInvalid
+  user_message: {zh: 当前行程状态不能这样变更, en: Trip state transition is invalid}
+- code: TRAVEL.USER.trip_idempotency_conflict
+  kind: USER
+  reason: trip_idempotency_conflict
+  emitted_by: [{surface: http, operations: [CreateTripPlan, CreateTripPlanFromTemplate, ReviseTripPlan, TransitionTripPlan]}]
+  http_status: 409
+  recovery_action: refresh
+  dart_const: tripIdempotencyConflict
+  go_const: ErrTripIdempotencyConflict
+  user_message: {zh: 重复请求与原行程操作不一致, en: Idempotency key was reused for another trip action}
+- code: TRAVEL.DEPENDENCY.trip_reference_unavailable
+  kind: DEPENDENCY
+  reason: trip_reference_unavailable
+  emitted_by: [{surface: http, operations: [CreateTripPlan, ReviseTripPlan]}]
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: tripReferenceUnavailable
+  go_const: ErrTripReferenceUnavailable
+  user_message: {zh: 行程引用暂时无法核验，请重试, en: Trip references cannot be verified right now}
+- code: TRAVEL.DEPENDENCY.trip_template_unavailable
+  kind: DEPENDENCY
+  reason: trip_template_unavailable
+  emitted_by: [{surface: http, operations: [CreateTripPlanFromTemplate]}]
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: tripTemplateUnavailable
+  go_const: ErrTripTemplateUnavailable
+  user_message: {zh: 行程模板暂时无法读取，请稍后重试, en: The trip template is temporarily unavailable}
+- code: TRAVEL.SYSTEM.trip_storage_failed
+  kind: SYSTEM
+  reason: trip_storage_failed
+  emitted_by: [{surface: http, operations: [CreateTripPlan, CreateTripPlanFromTemplate, GetTripPlan, ListTripPlans, ReviseTripPlan, TransitionTripPlan]}]
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: tripStorageFailed
+  go_const: ErrTripStorageFailed
+  user_message: {zh: 行程操作失败，请稍后重试, en: Trip operation failed, retry later}

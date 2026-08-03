@@ -5,10 +5,10 @@ import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/speaker_highlight_layout.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_tile.dart';
 
-List<CallParticipant> _makeParticipants(int count) {
+List<CallParticipantViewData> _makeParticipants(int count) {
   return List.generate(
     count,
-    (i) => CallParticipant(
+    (i) => CallParticipantViewData(
       userId: 'user_${i.toString().padLeft(3, '0')}',
       displayName: 'User $i',
       role: i == 0 ? ParticipantRole.initiator : ParticipantRole.invitee,
@@ -20,7 +20,7 @@ List<CallParticipant> _makeParticipants(int count) {
 
 Widget _buildLayout({
   int participantCount = 4,
-  CallParticipant? activeSpeaker,
+  CallParticipantViewData? activeSpeaker,
   String? lockedSpeakerId,
   ValueChanged<String>? onTapThumbnail,
 }) {

@@ -73,7 +73,7 @@
 
 ## 4. 契约引用
 
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 - canonical：`entity/entity_homepage/homepage/fields.yaml`
 - canonical：`entity/entity_homepage/homepage/ui_config.yaml`
 - canonical：`entity/entity_homepage/homepage/projections/homepage_related_group_summary.yaml`

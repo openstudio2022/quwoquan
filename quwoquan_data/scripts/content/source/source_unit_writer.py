@@ -71,8 +71,6 @@ _RAW_SNAPSHOT_SECRET_KEY_SUFFIXES = (
     "signature",
     "token",
 )
-
-
 def _redact_embedded_snapshot_secrets(value: str) -> str:
     redacted = _RAW_SNAPSHOT_BEARER.sub("Bearer <redacted>", value)
     redacted = _RAW_SNAPSHOT_SECRET_ASSIGNMENT.sub(
@@ -105,8 +103,6 @@ def _redact_snapshot_json(value: object) -> object:
     if isinstance(value, str):
         return _redact_embedded_snapshot_secrets(value)
     return value
-
-
 def redact_raw_source_snapshot(raw: bytes, *, raw_format: str = "") -> bytes:
     """Remove credential-like values before an untrusted source snapshot persists."""
     text = raw.decode("utf-8", errors="replace")
@@ -123,8 +119,6 @@ def redact_raw_source_snapshot(raw: bytes, *, raw_format: str = "") -> bytes:
                 sort_keys=True,
             ).encode("utf-8")
     return _redact_embedded_snapshot_secrets(text).encode("utf-8")
-
-
 def _is_representative_visual(
     execution_id: str,
     image: Mapping[str, Any],

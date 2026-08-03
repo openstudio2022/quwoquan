@@ -393,7 +393,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     applyConfirmedCounters(postId, commentCount: commentCount);
   }
 
-  void applyConfirmedPosts(Iterable<PostBaseDto> posts) {
+  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );

@@ -9,6 +9,13 @@ import (
 
 var canonicalDigest = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
+var (
+	ErrInvalidIdentity   = errors.New("config instance report identity is invalid")
+	ErrCandidateConflict = errors.New("config instance report candidate conflicts")
+	ErrDesiredConflict   = errors.New("config instance report desired hash conflicts")
+	ErrInvalidReport     = errors.New("config instance report is invalid")
+)
+
 type Report struct {
 	InstanceID            string    `json:"instanceId"`
 	Environment           string    `json:"environment"`
@@ -30,22 +37,22 @@ func New(report Report, trustedService, trustedEnvironment, candidateDigest, des
 	report.Service = strings.TrimSpace(report.Service)
 	report.Environment = strings.TrimSpace(report.Environment)
 	if report.InstanceID == "" || report.Service != strings.TrimSpace(trustedService) || report.Environment != strings.TrimSpace(trustedEnvironment) {
-		return Report{}, errors.New("config instance report identity differs from its trusted principal")
+		return Report{}, ErrInvalidIdentity
 	}
 	if !strings.HasPrefix(report.InstanceID, report.Service+"-") {
-		return Report{}, errors.New("config instance id is outside the service namespace")
+		return Report{}, ErrInvalidIdentity
 	}
 	if !canonicalDigest.MatchString(candidateDigest) || report.ReleaseManifestDigest != candidateDigest {
-		return Report{}, errors.New("release manifest digest differs from the current candidate")
+		return Report{}, ErrCandidateConflict
 	}
 	if strings.TrimSpace(desiredHash) == "" || strings.TrimSpace(report.EffectiveHash) == "" {
-		return Report{}, errors.New("desiredHash and effectiveHash are required")
+		return Report{}, ErrInvalidReport
 	}
 	if report.DesiredHash != "" && report.DesiredHash != desiredHash {
-		return Report{}, errors.New("reported desiredHash differs from ConfigSnapshot")
+		return Report{}, ErrDesiredConflict
 	}
 	if report.Environment == "prod" && (report.Source != "config-center" || strings.TrimSpace(report.ConfigVersion) == "") {
-		return Report{}, errors.New("prod report requires config-center source and configVersion")
+		return Report{}, ErrInvalidReport
 	}
 	report.ReleaseManifestDigest = candidateDigest
 	report.DesiredHash = desiredHash

@@ -17,6 +17,7 @@ import (
 	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
 const DependencyProbeTimeout = 10 * time.Second
@@ -74,6 +75,12 @@ func ValidateRuntimeDependenciesConfig(cfg runtimeconfig.Config) error {
 	if strings.TrimSpace(cfg.ContentService.BaseURL) == "" {
 		return NewDependencyError("content-service", "configuration", errors.New("content_service.base_url is required"))
 	}
+	if strings.TrimSpace(cfg.TravelService.BaseURL) == "" {
+		return NewDependencyError("travel-service", "configuration", errors.New("travel_service.base_url is required"))
+	}
+	if strings.TrimSpace(cfg.IntegrationService.BaseURL) == "" {
+		return NewDependencyError("integration-service", "configuration", errors.New("integration_service.base_url is required"))
+	}
 	if err := validateRedisSceneConfig("general", cfg.Redis.General); err != nil {
 		return err
 	}
@@ -107,8 +114,8 @@ func BuildRedisRouter(cfg runtimeconfig.Config) (*rtredis.Router, error) {
 }
 
 type PersistentDependencies struct {
-	SubscriptionStore sessionports.SkillSubscriptionStore
-	SessionRunStore   sessionports.SessionRunStore
+	SubscriptionStore subscriptionports.Store
+	SessionStore      sessionports.SessionStore
 	PreferenceStore   preferenceports.Store
 	PreferenceReader  preferenceports.Reader
 	MongoClient       *mongo.Client
@@ -119,11 +126,19 @@ type PreferenceStoreFactory func(
 	db *mongo.Database,
 ) (preferenceports.Store, preferenceports.Reader, error)
 
+type SubscriptionStoreFactory func(
+	db *mongo.Database,
+) (subscriptionports.Store, error)
+
 func OpenPersistentDependencies(
 	ctx context.Context,
 	cfg runtimeconfig.Config,
+	subscriptionFactory SubscriptionStoreFactory,
 	preferenceFactory PreferenceStoreFactory,
 ) (deps *PersistentDependencies, err error) {
+	if subscriptionFactory == nil {
+		return nil, NewDependencyError("mongodb.skill_subscriptions", "composition", errors.New("subscription store factory is required"))
+	}
 	if preferenceFactory == nil {
 		return nil, NewDependencyError("mongodb.assistant_preferences", "composition", errors.New("preference store factory is required"))
 	}
@@ -150,17 +165,17 @@ func OpenPersistentDependencies(
 	deps.MongoClient = mongoClient
 	db := mongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
 
-	mongoSubscriptions := persistence.NewMongoSkillSubscriptionStore(db)
-	if err := mongoSubscriptions.EnsureIndexes(ctx); err != nil {
+	mongoSubscriptions, err := subscriptionFactory(db)
+	if err != nil {
 		return nil, NewDependencyError("mongodb.skill_subscriptions", "indexes", err)
 	}
 	deps.SubscriptionStore = mongoSubscriptions
 
-	mongoSessionRuns := persistence.NewMongoSessionRunStore(db)
-	if err := mongoSessionRuns.EnsureIndexes(ctx); err != nil {
-		return nil, NewDependencyError("mongodb.assistant_runs", "indexes", err)
+	mongoSessions := persistence.NewMongoSessionStore(db)
+	if err := mongoSessions.EnsureIndexes(ctx); err != nil {
+		return nil, NewDependencyError("mongodb.assistant_sessions", "indexes", err)
 	}
-	deps.SessionRunStore = mongoSessionRuns
+	deps.SessionStore = mongoSessions
 
 	preferenceStore, preferenceReader, err := preferenceFactory(db)
 	if err != nil {

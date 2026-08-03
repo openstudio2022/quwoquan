@@ -14,7 +14,7 @@ sealed class _HomeFeedEntry {
 final class _HomeFeedPostEntry extends _HomeFeedEntry {
   const _HomeFeedPostEntry(this.post, this.postIndex);
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
 
   @override
   String get stableIdentity => homeFeedPostEntryIdentity(post.id);
@@ -27,7 +27,7 @@ final class _HomeFeedPostEntry extends _HomeFeedEntry {
 final class _HomeFeedObjectCardEntry extends _HomeFeedEntry {
   const _HomeFeedObjectCardEntry(this.card);
 
-  final FeedObjectCardDto card;
+  final FeedObjectCard card;
 
   @override
   String get stableIdentity => homeFeedObjectCardEntryIdentity(
@@ -39,15 +39,15 @@ final class _HomeFeedObjectCardEntry extends _HomeFeedEntry {
 
 /// 把对象卡按 anchorIndex 编织进内容序列（anchor 越界/非法的卡丢弃）。
 List<_HomeFeedEntry> _weaveObjectCards(
-  List<PostBaseDto> posts,
-  List<FeedObjectCardDto> cards,
+  List<ContentPostViewData> posts,
+  List<FeedObjectCard> cards,
 ) {
   if (cards.isEmpty) {
     return <_HomeFeedEntry>[
       for (var i = 0; i < posts.length; i++) _HomeFeedPostEntry(posts[i], i),
     ];
   }
-  final byAnchor = <int, List<FeedObjectCardDto>>{};
+  final byAnchor = <int, List<FeedObjectCard>>{};
   for (final card in cards) {
     if (card.objectId.trim().isEmpty || card.title.trim().isEmpty) {
       continue;
@@ -56,7 +56,7 @@ List<_HomeFeedEntry> _weaveObjectCards(
       continue;
     }
     byAnchor
-        .putIfAbsent(card.anchorIndex, () => <FeedObjectCardDto>[])
+        .putIfAbsent(card.anchorIndex, () => <FeedObjectCard>[])
         .add(card);
   }
   final entries = <_HomeFeedEntry>[];
@@ -85,7 +85,7 @@ class _HomeEntityObjectCard extends ConsumerWidget {
     required this.policyDigest,
   });
 
-  final FeedObjectCardDto card;
+  final FeedObjectCard card;
   final bool isDark;
   final String channelId;
   final String? feedRequestId;

@@ -1,5 +1,5 @@
-import 'media_contracts.dart';
 import '../operation_cancellation.dart';
+import 'content_operation_contracts.g.dart';
 
 /// Stable command identity for one durable media-upload session transition.
 ///
@@ -18,30 +18,30 @@ final class ContentMediaUploadCommandContext {
 }
 
 abstract interface class ContentMediaUploadCommandWriter {
-  Future<ContentMediaUploadSessionCommandResult> initUpload(
+  Future<MediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   );
 
-  Future<ContentMediaUploadSessionCommandResult> completeUpload(
+  Future<MediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   );
 
-  Future<ContentMediaUploadSessionCommandResult> abortUpload(
+  Future<MediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   );
 }
 
 abstract interface class ContentMediaUploadQuery {
-  Future<ContentMediaUploadSessionSlice> getUploadSession(
+  Future<MediaUploadSessionSlice> getUploadSession(
     GetContentMediaUploadSessionQuery query,
   );
 }
 
 abstract interface class ContentMediaAssetQuery {
-  Future<ContentMediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query);
+  Future<MediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query);
 }
 
 final class ContentMediaAssetCommandContext {
@@ -51,26 +51,26 @@ final class ContentMediaAssetCommandContext {
 }
 
 abstract interface class ContentMediaAssetCommandWriter {
-  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+  Future<MediaAssetDiscardResult> discardMediaAsset(
     DiscardContentMediaAssetCommand command,
     ContentMediaAssetCommandContext context,
   );
 }
 
 abstract interface class ContentMediaCoverCommandWriter {
-  Future<ContentMediaCoverSelectionResult> selectAutoCover(
+  Future<MediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   );
 
-  Future<ContentMediaCoverSelectionResult> selectManualCover(
+  Future<MediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   );
 }
 
 abstract interface class ContentMediaOriginalAccessWriter {
-  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   );
 }

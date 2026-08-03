@@ -276,7 +276,7 @@ class CachedContentRepository
   }
 
   @override
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -339,7 +339,7 @@ class CachedContentRepository
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -369,7 +369,7 @@ class CachedContentRepository
       if (cached != null) {
         _recordCacheHit(key: key, result: cached);
         final cachedPage = cached.value.toCursorPage();
-        return CursorPage<PostBaseDto>(
+        return CursorPage<ContentPostViewData>(
           items: cachedPage.items,
           nextCursor: cachedPage.nextCursor,
           totalCount: cachedPage.totalCount,
@@ -414,7 +414,7 @@ class CachedContentRepository
     );
   }
 
-  void _storeCursorPage(String key, CursorPage<PostBaseDto> page) {
+  void _storeCursorPage(String key, CursorPage<ContentPostViewData> page) {
     _storePostProjections(page.items);
     _querySnapshotStore.put(
       key: key,
@@ -428,7 +428,7 @@ class CachedContentRepository
     _registerAuthorSnapshot(payload.post);
   }
 
-  void _storePostProjections(Iterable<PostBaseDto> posts) {
+  void _storePostProjections(Iterable<ContentPostViewData> posts) {
     final materialized = posts.toList(growable: false);
     _postCache.putProjections(materialized);
     for (final post in materialized) {
@@ -436,7 +436,7 @@ class CachedContentRepository
     }
   }
 
-  void _registerAuthorSnapshot(PostBaseDto post) {
+  void _registerAuthorSnapshot(ContentPostViewData post) {
     final avatarUrl = post.avatarUrl.trim();
     _userProfileCache?.putAuthorSnapshot(
       userId: post.personaId.trim().isNotEmpty ? post.personaId : post.authorId,

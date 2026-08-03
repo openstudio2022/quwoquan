@@ -64,6 +64,7 @@ class SelectionRequest:
     persist_qualified_source: bool = True
     target_names: tuple[str, ...] = ()
     inherit_frozen_targets: bool = False
+    inherited_targets: tuple[dict[str, Any], ...] = ()
 
 
 def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
@@ -148,6 +149,7 @@ def select_targets(
     target_names: tuple[str, ...] = (),
     category: str | None = None,
     inherit_frozen_targets: bool = False,
+    inherited_targets: tuple[dict[str, Any], ...] = (),
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
     """Select up to ``limit`` candidates and require at least ``quota`` of them.
 
@@ -165,12 +167,10 @@ def select_targets(
             f"approved quota {quota} exceeds the candidate pool {limit}"
         )
     partitions = load_partitions(discovery_path)
+    all_by_name = partition_targets(partitions, target_selector=target_selector)
     by_name = {
         name: row
-        for name, row in partition_targets(
-            partitions,
-            target_selector=target_selector,
-        ).items()
+        for name, row in all_by_name.items()
         if _matches_category(row, category)
     }
     selected: list[dict[str, str]] = []
@@ -179,7 +179,8 @@ def select_targets(
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY and source_qualifier is None:
         raise ValueError("source-ready-priority requires source_qualifier")
     if target_names:
-        missing = [name for name in target_names if name not in by_name]
+        target_catalog = all_by_name if inherit_frozen_targets else by_name
+        missing = [name for name in target_names if name not in target_catalog]
         if missing:
             raise ValueError(
                 "requested targets are absent from the region reference: "
@@ -195,7 +196,18 @@ def select_targets(
                 # the immutable retry set; download admission re-verifies rights.
                 if source_qualifier is None:
                     raise ValueError("source-ready-priority requires source_qualifier")
-            selected = [by_name[name] for name in target_names]
+            if inherited_targets:
+                inherited_names = tuple(
+                    str(row.get("name") or "").strip()
+                    for row in inherited_targets
+                )
+                if inherited_names != target_names:
+                    raise ValueError(
+                        "inherited target rows must match the frozen target order exactly"
+                    )
+                selected = [dict(row) for row in inherited_targets]
+            else:
+                selected = [by_name[name] for name in target_names]
             report = {
                 "schema": "quwoquan_data.target_selection",
                 "strategy": (
@@ -525,6 +537,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         target_names=request.target_names,
         category=request.category,
         inherit_frozen_targets=bool(request.inherit_frozen_targets),
+        inherited_targets=request.inherited_targets,
     )
     spec = build_execution_spec(
         execution_id=execution_id,

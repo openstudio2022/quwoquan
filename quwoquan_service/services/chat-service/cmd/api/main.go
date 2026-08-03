@@ -27,13 +27,25 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
+	inboxhttp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/adapters/inbound/http"
+	inboxapp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/application"
+	inboxpersistence "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/infrastructure/persistence"
 	httpadapter "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	chatcache "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
 	chatconfig "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/runtimeconfig"
+	membershiphttp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/adapters/inbound/http"
+	membershipapp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/application"
+	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
+	userstatehttp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/adapters/inbound/http"
+	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
+	messagehttp "quwoquan_service/services/chat-service/internal/chat/message/adapters/inbound/http"
 	messageexternal "quwoquan_service/services/chat-service/internal/chat/message/infrastructure/external"
+	receipthttp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/adapters/inbound/http"
+	receiptapp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/application"
+	receiptpersistence "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/infrastructure/persistence"
 )
 
 type redisSceneCfg struct {
@@ -235,6 +247,23 @@ func main() {
 	if err := chatStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("chat-service aggregate indexes unavailable: %v", err)
 	}
+	membershipStore := membershippersistence.NewMongoStore(mongoDB)
+	if err := membershipStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service ConversationMembership indexes unavailable: %v", err)
+	}
+	userStateStore := userstatepersistence.NewMongoStore(mongoDB)
+	if err := userStateStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service ConversationUserState indexes unavailable: %v", err)
+	}
+	inboxViewStore := inboxpersistence.NewMongoStore(mongoDB)
+	if err := inboxViewStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service ChatInboxView indexes unavailable: %v", err)
+	}
+	receiptStore := receiptpersistence.NewMongoStore(mongoDB)
+	if err := receiptStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service MessageReceiptFact indexes unavailable: %v", err)
+	}
+	receiptFacts := receiptapp.NewAppender(receiptStore)
 	conversationCommands := persistence.NewMongoAggregateCommandStore(
 		mongoDB, "conversations_command_receipts", "conversations_outbox",
 	)
@@ -292,11 +321,13 @@ func main() {
 		Transactions:                      chatStore,
 		Conversations:                     chatStore,
 		CircleGroupConversations:          chatStore,
+		GatheringConversations:            chatStore,
 		Messages:                          chatStore,
 		MessageProjection:                 chatStore,
-		Members:                           chatStore,
-		UserStates:                        chatStore,
-		ReceiptFacts:                      chatStore,
+		Members:                           membershipStore,
+		RosterProjection:                  chatStore,
+		UserStates:                        userStateStore,
+		ReceiptFacts:                      receiptFacts,
 		ConversationCommands:              conversationCommands,
 		MembershipCommands:                membershipCommands,
 		UserStateCommands:                 userStateCommands,
@@ -312,7 +343,7 @@ func main() {
 			ids := make([]string, 0, fanoutPageSize)
 			cursor := ""
 			for {
-				members, err := chatStore.ListMembers(
+				members, err := membershipStore.ListMembers(
 					ctx,
 					conversationID,
 					application.ListMembersQuery{
@@ -398,13 +429,24 @@ func main() {
 			logger.Error("chat CircleGroup binding outbox relay stopped", "err", err)
 		}
 	}()
-	// ChatInbox 未读/排序投影：独立 checkpoint 消费 Message outbox。
-	inboxProjector := application.NewInboxProjector(
-		chatStore, projectionCheckpoints, chatStore, chatStore,
+	// ChatInboxView 是唯一收件箱读模型：以四个对象 outbox 各自的
+	// checkpoint 驱动，先单调推进 ConversationUserState，再原子刷新物化行。
+	inboxViewProjector := inboxapp.NewProjector(
+		inboxViewStore,
+		inboxViewStore,
+		chatInboxSnapshotSource{conversations: chatStore, states: userStateStore},
+		chatInboxMembershipReader{store: membershipStore},
+		chatInboxStateAdvancer{store: userStateStore},
+		map[string]inboxapp.EventSource{
+			"message":      chatInboxMessageEventSource{source: chatStore},
+			"conversation": chatInboxAggregateEventSource{source: conversationCommands},
+			"membership":   chatInboxAggregateEventSource{source: membershipCommands},
+			"user_state":   chatInboxAggregateEventSource{source: userStateCommands},
+		},
 	)
 	go func() {
-		if err := inboxProjector.Run(ctx, 200*time.Millisecond); err != nil {
-			logger.Error("chat inbox projector stopped", "err", err)
+		if err := inboxViewProjector.Run(ctx, 200*time.Millisecond); err != nil {
+			logger.Error("ChatInboxView projector stopped", "err", err)
 		}
 	}()
 	localMediaRoot := strings.TrimSpace(cfg.Runtime.Media.GroupAvatarLocalMediaRoot)
@@ -595,6 +637,16 @@ func main() {
 		application.WithCircleListResolver(circleListResolver),
 		application.WithContactIntersectionResolver(contactIntersectionResolver),
 	)
+	gatheringMembershipProjection := membershipapp.NewGatheringProjectionFacade(
+		chatStore,
+		gatheringBindingReader{reader: chatStore},
+		membershipStore,
+		gatheringUserStateWriter{states: userStateStore},
+		gatheringRosterWriter{roster: chatStore},
+		gatheringProfileReader{profiles: profileResolver},
+		membershipStore,
+		gatheringProjectionOutbox{members: membershipCommands, conversations: conversationCommands},
+	)
 	circleGroupChatSyncService := application.NewCircleGroupChatSyncService(
 		conversationSvc,
 		memberSvc,
@@ -629,7 +681,9 @@ func main() {
 			log.Fatalf("chat CircleGroup sync consumer group unavailable: %v", err)
 		}
 	}
-	inboxSvc := application.NewInboxService(chatStorage)
+	inboxSvc := application.NewInboxService(chatInboxConversationReader{
+		reader: inboxapp.NewReader(inboxViewStore),
+	})
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
 		router.Scene("general"),
 		chatStorage,
@@ -695,7 +749,7 @@ func main() {
 		return circleGroupBindingOutboxRelay.Healthy(30 * time.Second)
 	})
 	healthChecker.Register("inbox_projection", func(context.Context) error {
-		return inboxProjector.Healthy(5 * time.Second)
+		return inboxViewProjector.Healthy(5 * time.Second)
 	})
 	healthChecker.Register("user_account_closed_consumer", func(context.Context) error {
 		return userAccountClosedConsumer.Healthy(15 * time.Second)
@@ -714,7 +768,19 @@ func main() {
 		inboxSvc,
 		userSyncService,
 	)
-	chatRoutes := chatHandler.Routes()
+	chatObjectRoutes := http.NewServeMux()
+	inboxhttp.NewHandler(inboxViewStore).Register(chatObjectRoutes)
+	membershiphttp.NewHandler(memberSvc).Register(chatObjectRoutes)
+	membershiphttp.NewGatheringProjectionHandler(gatheringMembershipProjection).Register(chatObjectRoutes)
+	userstatehttp.NewHandler(messageSvc, conversationSvc).Register(chatObjectRoutes)
+	messagehttp.NewHandler(messageSvc).Register(chatObjectRoutes)
+	messageReceiptHandler := receipthttp.NewHandler(messageSvc)
+	chatObjectRoutes.HandleFunc(
+		"GET /chat/conversations/{conversationId}/messages/{messageId}/receipts",
+		messageReceiptHandler.GetReceipts,
+	)
+	chatHandler.RegisterRoutes(chatObjectRoutes)
+	var chatRoutes http.Handler = chatObjectRoutes
 	internalChatRoutes := chatHandler.InternalRoutes()
 	chatRoutes, err = runtimemessaging.WithDeadLetterRecoveryRoute(
 		chatRoutes,

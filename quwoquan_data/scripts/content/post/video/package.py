@@ -22,6 +22,10 @@ from governance.content_supply_policy import (
     load_content_supply_policy,
 )
 from governance.coverage.license import RightsAuditStatus, rights_proof_required
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 from content.execution.identity import parse_execution_id
 
 
@@ -93,6 +97,7 @@ def _validate_request(
         if frame.source_use_mode not in {
             "licensed_adaptation",
             "factual_reference_only",
+            "rights_audit_only",
         }:
             raise ValueError(
                 f"video source frame sourceUseMode is invalid: {frame.path}"
@@ -102,7 +107,7 @@ def _validate_request(
                 f"video source frame rightsAuditStatus is invalid: {frame.path}"
             )
         if (
-            frame.rights_audit_status is RightsAuditStatus.UNVERIFIED
+            frame.rights_audit_status is not RightsAuditStatus.VERIFIED
             and not frame.rights_audit_issues
         ):
             raise ValueError(
@@ -405,6 +410,12 @@ def _image_sequence_source_attribution(
     attribution_text = " — ".join(
         part for part in (creator, license_name, source_url) if part
     )
+    lifecycle = load_content_distribution_policy().product_lifecycle_state
+    verified = all(
+        frame.rights_audit_status is RightsAuditStatus.VERIFIED
+        and not frame.rights_audit_issues
+        for frame in frames
+    )
     return {
         "isOriginal": False,
         "originalCreatorId": None,
@@ -415,8 +426,12 @@ def _image_sequence_source_attribution(
         "originalAssetUrl": source_url,
         "attributionText": attribution_text,
         "rightsBasis": license_name,
-        "commercialAuthorizationStatus": "verified",
-        "publicationAdmission": "commercial_release",
+        "commercialAuthorizationStatus": "verified" if verified else "not_verified",
+        "publicationAdmission": (
+            "research_release"
+            if lifecycle is ProductLifecycleState.RESEARCH
+            else "commercial_release"
+        ),
         "authorizationProofUrl": source_url,
         "termsUrl": "",
         "riskAcceptanceId": None,
@@ -472,7 +487,7 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
         if status not in {item.value for item in RightsAuditStatus}:
             issues.append("video asset rightsAuditStatus is invalid")
         elif (
-            status == RightsAuditStatus.UNVERIFIED.value
+            status != RightsAuditStatus.VERIFIED.value
             and not media_asset.get("rightsAuditIssues")
         ):
             issues.append("unverified video asset must record rightsAuditIssues")

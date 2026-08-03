@@ -5,6 +5,7 @@ package event
 const (
 	ConversationCreated                = "ConversationCreated"
 	CircleGroupConversationProvisioned = "CircleGroupConversationProvisioned"
+	GatheringConversationProvisioned   = "GatheringConversationProvisioned"
 	ConversationRosterUpdated          = "ConversationRosterUpdated"
 	ConversationAvatarUpdated          = "ConversationAvatarUpdated"
 	ConversationDissolved              = "ConversationDissolved"

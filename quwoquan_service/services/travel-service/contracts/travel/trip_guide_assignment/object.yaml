@@ -1,0 +1,26 @@
+kind: aggregate_root
+description: Trip 内领队、助理导游、持证导游与本地专家的独立任务归属；只引用公开 Persona/资质声明，不复制或认证资质。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: trip_plan, kind: reference, cardinality: 'N:1', consistency: strong, access: named_reader, on_delete: tombstone, reference_fields: [tripId], target_object: travel.TripPlan}
+- {name: assignee_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [assigneePersonaId], target_object: user.Persona}
+- {name: attribution_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [attributionPersonaId], target_object: user.Persona}
+- {name: public_qualification_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [publicQualificationPersonaId], target_object: user.Persona}
+- {name: created_by_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [createdByPersonaId], target_object: user.Persona}
+capabilities: [commandable, queryable, idempotent_commands]
+business_rules:
+- 任务必须绑定 Trip、taskKey、负责人 Persona、声明角色、任务类型与 sourceRevisionNumber
+- licensed_guide 只代表当前任务中的角色声明；资质展示必须由 User 公开 Persona Reader 返回，Travel 不复制或认证证照
+- AI 通用讲解不得写入 professional_commentary 署名；专业讲解 attributionPersonaId 必须等于真实作者 Persona
+- 状态按 assigned、accepted、in_progress、completed、cancelled 单向推进，变更使用 expectedVersion CAS
+lifecycle:
+  state_field: status
+  states: [assigned, accepted, in_progress, completed, cancelled]
+  optimistic_concurrency: version
+  idempotency: command_receipt

@@ -2,8 +2,6 @@ package infrastructure
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -21,6 +19,7 @@ const runJournalRetention = 7 * 24 * time.Hour
 type runDocument struct {
 	ID              string         `bson:"_id"`
 	UserID          string         `bson:"userId"`
+	PersonaID       string         `bson:"personaId,omitempty"`
 	SessionID       string         `bson:"sessionId"`
 	ClientRequestID string         `bson:"clientRequestId"`
 	Revision        int64          `bson:"runRevision"`
@@ -72,15 +71,30 @@ type workDocument struct {
 	UpdatedAt    time.Time `bson:"updatedAt"`
 }
 
+type terminalOutboxDocument struct {
+	ID          string     `bson:"_id"`
+	RunID       string     `bson:"runId"`
+	UserID      string     `bson:"userId"`
+	PersonaID   string     `bson:"personaId"`
+	SessionID   string     `bson:"sessionId"`
+	DomainID    string     `bson:"domainId"`
+	Outcome     string     `bson:"outcome"`
+	OccurredAt  time.Time  `bson:"occurredAt"`
+	ClaimOwner  string     `bson:"claimOwner,omitempty"`
+	ClaimUntil  *time.Time `bson:"claimUntil,omitempty"`
+	ProcessedAt *time.Time `bson:"processedAt,omitempty"`
+}
+
 // MongoRunRepository is the authoritative AssistantRun snapshot, ordered
 // journal, and worker-lease store. Snapshot and journal changes commit in one
 // Mongo transaction so a reconnect never observes a state without its events.
 type MongoRunRepository struct {
-	runs     *mongo.Collection
-	events   *mongo.Collection
-	receipts *mongo.Collection
-	leases   *mongo.Collection
-	work     *mongo.Collection
+	runs           *mongo.Collection
+	events         *mongo.Collection
+	receipts       *mongo.Collection
+	leases         *mongo.Collection
+	work           *mongo.Collection
+	terminalOutbox *mongo.Collection
 }
 
 func NewMongoRunRepository(database *mongo.Database) *MongoRunRepository {
@@ -88,11 +102,12 @@ func NewMongoRunRepository(database *mongo.Database) *MongoRunRepository {
 		panic("assistant run database is required")
 	}
 	return &MongoRunRepository{
-		runs:     database.Collection("assistant_runs"),
-		events:   database.Collection("assistant_run_events"),
-		receipts: database.Collection("assistant_run_command_receipts"),
-		leases:   database.Collection("assistant_run_worker_leases"),
-		work:     database.Collection("assistant_run_work_queue"),
+		runs:           database.Collection("assistant_runs"),
+		events:         database.Collection("assistant_run_events"),
+		receipts:       database.Collection("assistant_run_command_receipts"),
+		leases:         database.Collection("assistant_run_worker_leases"),
+		work:           database.Collection("assistant_run_work_queue"),
+		terminalOutbox: database.Collection("assistant_run_terminal_outbox"),
 	}
 }
 
@@ -165,6 +180,16 @@ func (r *MongoRunRepository) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("create assistant run work queue indexes: %w", err)
 	}
+	if _, err := r.terminalOutbox.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "processedAt", Value: 1},
+			{Key: "claimUntil", Value: 1},
+			{Key: "occurredAt", Value: 1},
+		},
+		Options: options.Index().SetName("idx_run_terminal_outbox_pending"),
+	}); err != nil {
+		return fmt.Errorf("create assistant run terminal outbox index: %w", err)
+	}
 	return nil
 }
 
@@ -186,6 +211,56 @@ func (r *MongoRunRepository) LoadByRequest(
 		"sessionId":       strings.TrimSpace(sessionID),
 		"clientRequestId": strings.TrimSpace(clientRequestID),
 	})
+}
+
+// ListTerminalRunsAfter exposes committed terminal runs through the
+// AssistantRun application boundary. Projection objects must consume this
+// typed source instead of opening assistant_runs themselves.
+func (r *MongoRunRepository) ListTerminalRunsAfter(
+	ctx context.Context,
+	afterUpdatedAt time.Time,
+	afterRunID string,
+	limit int,
+) ([]runruntime.TerminalRunRecord, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	filter := bson.M{"status": bson.M{"$in": bson.A{
+		"completed", "failed", "cancelled",
+	}}}
+	if !afterUpdatedAt.IsZero() {
+		filter["$or"] = bson.A{
+			bson.M{"updatedAt": bson.M{"$gt": afterUpdatedAt.UTC()}},
+			bson.M{
+				"updatedAt": afterUpdatedAt.UTC(),
+				"_id":       bson.M{"$gt": strings.TrimSpace(afterRunID)},
+			},
+		}
+	}
+	cursor, err := r.runs.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetSort(bson.D{{Key: "updatedAt", Value: 1}, {Key: "_id", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list terminal assistant runs: %w", err)
+	}
+	defer cursor.Close(ctx)
+	documents := []runDocument{}
+	if err := cursor.All(ctx, &documents); err != nil {
+		return nil, fmt.Errorf("decode terminal assistant runs: %w", err)
+	}
+	records := make([]runruntime.TerminalRunRecord, 0, len(documents))
+	for _, document := range documents {
+		records = append(records, runruntime.TerminalRunRecord{
+			Run:             document.Snapshot,
+			SourceUpdatedAt: document.UpdatedAt.UTC(),
+			SourceRunID:     document.ID,
+		})
+	}
+	return records, nil
 }
 
 func (r *MongoRunRepository) LoadCommandReceipt(
@@ -312,6 +387,14 @@ func (r *MongoRunRepository) Commit(
 				return nil, insertErr
 			}
 		}
+		if terminal := terminalOutboxFromRun(run); terminal != nil {
+			if _, outboxErr := r.terminalOutbox.InsertOne(txCtx, *terminal); outboxErr != nil {
+				if mongo.IsDuplicateKeyError(outboxErr) {
+					return nil, runruntime.ErrRevisionConflict
+				}
+				return nil, outboxErr
+			}
+		}
 		if queueRunnable(run.State.WireName()) {
 			if _, queueErr := r.work.UpdateOne(
 				txCtx,
@@ -345,6 +428,35 @@ func (r *MongoRunRepository) Commit(
 	return nil
 }
 
+func terminalOutboxFromRun(run runruntime.Run) *terminalOutboxDocument {
+	if run.CompletedAt == nil {
+		return nil
+	}
+	outcome := strings.TrimSpace(run.State.WireName())
+	switch outcome {
+	case "completed", "failed", "cancelled":
+	default:
+		return nil
+	}
+	domainID := strings.TrimSpace(run.RequestedDomainID)
+	if domainID == "" {
+		domainID = strings.TrimSpace(run.FrozenPolicySelection.Template.DomainID)
+	}
+	if domainID == "" {
+		domainID = "assistant"
+	}
+	return &terminalOutboxDocument{
+		ID:         strings.TrimSpace(run.RunID) + ":terminal",
+		RunID:      strings.TrimSpace(run.RunID),
+		UserID:     strings.TrimSpace(run.UserID),
+		PersonaID:  strings.TrimSpace(run.PersonaID),
+		SessionID:  strings.TrimSpace(run.SessionID),
+		DomainID:   domainID,
+		Outcome:    outcome,
+		OccurredAt: run.CompletedAt.UTC(),
+	}
+}
+
 func normalizeCommit(
 	expectedRevision int64,
 	run runruntime.Run,
@@ -362,6 +474,7 @@ func normalizeCommit(
 	document := runDocument{
 		ID:              runID,
 		UserID:          run.UserID,
+		PersonaID:       run.PersonaID,
 		SessionID:       run.SessionID,
 		ClientRequestID: run.ClientRequestID,
 		Revision:        run.Revision,
@@ -483,6 +596,9 @@ func (r *MongoRunRepository) EventsAfter(
 	}
 	if run.JournalSequence > afterSequence {
 		if len(result) == 0 || result[0].Sequence != afterSequence+1 {
+			if terminal, ok := runruntime.TerminalReplayEvent(run); ok {
+				return []runruntime.JournalEvent{terminal}, nil
+			}
 			return nil, runruntime.ErrJournalGap
 		}
 	}
@@ -625,6 +741,121 @@ func (r *MongoRunRepository) CompleteClaim(
 	return nil
 }
 
+func (r *MongoRunRepository) ClaimPendingTerminalEvents(
+	ctx context.Context,
+	ownerID string,
+	lease time.Duration,
+	limit int,
+) ([]runruntime.TerminalEvent, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" || lease <= 0 {
+		return nil, runruntime.ErrInvalidRun
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 128
+	}
+	now := time.Now().UTC()
+	events := make([]runruntime.TerminalEvent, 0, limit)
+	for len(events) < limit {
+		claimUntil := now.Add(lease)
+		var document terminalOutboxDocument
+		err := r.terminalOutbox.FindOneAndUpdate(
+			ctx,
+			bson.M{
+				"processedAt": bson.M{"$exists": false},
+				"$or": []bson.M{
+					{"claimUntil": bson.M{"$exists": false}},
+					{"claimUntil": bson.M{"$lte": now}},
+				},
+			},
+			bson.M{"$set": bson.M{
+				"claimOwner": ownerID,
+				"claimUntil": claimUntil,
+			}},
+			options.FindOneAndUpdate().
+				SetSort(bson.D{{Key: "occurredAt", Value: 1}, {Key: "_id", Value: 1}}).
+				SetReturnDocument(options.After),
+		).Decode(&document)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("claim assistant run terminal outbox: %w", err)
+		}
+		events = append(events, runruntime.TerminalEvent{
+			EventID:    document.ID,
+			RunID:      document.RunID,
+			UserID:     document.UserID,
+			PersonaID:  document.PersonaID,
+			SessionID:  document.SessionID,
+			DomainID:   document.DomainID,
+			Outcome:    document.Outcome,
+			OccurredAt: document.OccurredAt,
+		})
+	}
+	return events, nil
+}
+
+func (r *MongoRunRepository) MarkTerminalEventProcessed(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+	processedAt time.Time,
+) error {
+	if strings.TrimSpace(eventID) == "" || strings.TrimSpace(ownerID) == "" ||
+		processedAt.IsZero() {
+		return runruntime.ErrInvalidRun
+	}
+	result, err := r.terminalOutbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"processedAt": bson.M{"$exists": false},
+		},
+		bson.M{
+			"$set": bson.M{"processedAt": processedAt.UTC()},
+			"$unset": bson.M{
+				"claimOwner": "",
+				"claimUntil": "",
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("mark assistant run terminal outbox processed: %w", err)
+	}
+	if result.MatchedCount != 1 {
+		return runruntime.ErrTerminalEventClaimLost
+	}
+	return nil
+}
+
+func (r *MongoRunRepository) ReleaseTerminalEventClaim(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+) error {
+	if strings.TrimSpace(eventID) == "" || strings.TrimSpace(ownerID) == "" {
+		return runruntime.ErrInvalidRun
+	}
+	_, err := r.terminalOutbox.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         strings.TrimSpace(eventID),
+			"claimOwner":  strings.TrimSpace(ownerID),
+			"processedAt": bson.M{"$exists": false},
+		},
+		bson.M{"$unset": bson.M{
+			"claimOwner": "",
+			"claimUntil": "",
+		}},
+	)
+	if err != nil {
+		return fmt.Errorf("release assistant run terminal outbox claim: %w", err)
+	}
+	return nil
+}
+
 func workClaimFilter(claim runruntime.WorkClaim, now time.Time) bson.M {
 	return bson.M{
 		"_id":          strings.TrimSpace(claim.RunID),
@@ -653,123 +884,6 @@ func queueRunnable(state string) bool {
 	default:
 		return true
 	}
-}
-
-func (r *MongoRunRepository) Acquire(
-	ctx context.Context,
-	runID string,
-	workerID string,
-	ttl time.Duration,
-) (runruntime.WorkerLease, error) {
-	runID = strings.TrimSpace(runID)
-	workerID = strings.TrimSpace(workerID)
-	if runID == "" || workerID == "" || ttl <= 0 {
-		return runruntime.WorkerLease{}, runruntime.ErrInvalidRun
-	}
-	now := time.Now().UTC()
-	leaseID, err := randomLeaseID()
-	if err != nil {
-		return runruntime.WorkerLease{}, err
-	}
-	var document leaseDocument
-	err = r.leases.FindOneAndUpdate(
-		ctx,
-		bson.M{
-			"_id": runID,
-			"$or": []bson.M{
-				{"expiresAt": bson.M{"$lte": now}},
-				{"workerId": workerID},
-			},
-		},
-		bson.M{
-			"$set": bson.M{
-				"leaseId":     leaseID,
-				"workerId":    workerID,
-				"acquiredAt":  now,
-				"heartbeatAt": now,
-				"expiresAt":   now.Add(ttl),
-			},
-			"$inc": bson.M{"fencingToken": 1},
-		},
-		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
-	).Decode(&document)
-	if err != nil {
-		if mongo.IsDuplicateKeyError(err) || errors.Is(err, mongo.ErrNoDocuments) {
-			return runruntime.WorkerLease{}, runruntime.ErrLeaseConflict
-		}
-		return runruntime.WorkerLease{}, fmt.Errorf("acquire assistant run lease: %w", err)
-	}
-	return projectLease(document), nil
-}
-
-func (r *MongoRunRepository) Heartbeat(
-	ctx context.Context,
-	lease runruntime.WorkerLease,
-	ttl time.Duration,
-) (runruntime.WorkerLease, error) {
-	if ttl <= 0 {
-		return runruntime.WorkerLease{}, runruntime.ErrInvalidRun
-	}
-	now := time.Now().UTC()
-	var document leaseDocument
-	err := r.leases.FindOneAndUpdate(
-		ctx,
-		bson.M{
-			"_id":          strings.TrimSpace(lease.RunID),
-			"leaseId":      strings.TrimSpace(lease.LeaseID),
-			"workerId":     strings.TrimSpace(lease.WorkerID),
-			"fencingToken": lease.FencingToken,
-			"expiresAt":    bson.M{"$gt": now},
-		},
-		bson.M{"$set": bson.M{"heartbeatAt": now, "expiresAt": now.Add(ttl)}},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&document)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return runruntime.WorkerLease{}, runruntime.ErrLeaseConflict
-		}
-		return runruntime.WorkerLease{}, fmt.Errorf("heartbeat assistant run lease: %w", err)
-	}
-	return projectLease(document), nil
-}
-
-func (r *MongoRunRepository) Release(
-	ctx context.Context,
-	lease runruntime.WorkerLease,
-) error {
-	result, err := r.leases.DeleteOne(ctx, bson.M{
-		"_id":          strings.TrimSpace(lease.RunID),
-		"leaseId":      strings.TrimSpace(lease.LeaseID),
-		"workerId":     strings.TrimSpace(lease.WorkerID),
-		"fencingToken": lease.FencingToken,
-	})
-	if err != nil {
-		return fmt.Errorf("release assistant run lease: %w", err)
-	}
-	if result.DeletedCount != 1 {
-		return runruntime.ErrLeaseConflict
-	}
-	return nil
-}
-
-func projectLease(document leaseDocument) runruntime.WorkerLease {
-	return runruntime.WorkerLease{
-		LeaseID:      document.LeaseID,
-		RunID:        document.ID,
-		WorkerID:     document.WorkerID,
-		FencingToken: document.FencingToken,
-		AcquiredAt:   document.AcquiredAt,
-		HeartbeatAt:  document.HeartbeatAt,
-		ExpiresAt:    document.ExpiresAt,
-	}
-}
-
-func randomLeaseID() (string, error) {
-	buffer := make([]byte, 16)
-	if _, err := rand.Read(buffer); err != nil {
-		return "", fmt.Errorf("create assistant run lease id: %w", err)
-	}
-	return "arl_" + hex.EncodeToString(buffer), nil
 }
 
 func clonePayload(value map[string]any) map[string]any {

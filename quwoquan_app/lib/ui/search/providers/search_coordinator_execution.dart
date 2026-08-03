@@ -61,7 +61,7 @@ extension SearchCoordinatorExecution on SearchCoordinator {
           .take(6)
           .map(
             (item) => SearchInspirationCardView(
-              id: item.circleId,
+              id: item.id,
               title: item.name,
               subtitle: UITextConstants.searchCircleInspirationSubtitle(
                 _positiveCount(item.memberCount, item.weeklyActiveCount),

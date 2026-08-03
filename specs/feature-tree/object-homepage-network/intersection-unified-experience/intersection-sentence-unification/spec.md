@@ -75,10 +75,10 @@
 
 ## 4. 契约引用
 
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 - canonical：`content/test_fixtures/scenarios/content_scenarios.json`
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_actor_evidence.yaml`
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_target.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_actor_evidence.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_target.yaml`
 - canonical：`recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
 
 ## 5. 验收场景

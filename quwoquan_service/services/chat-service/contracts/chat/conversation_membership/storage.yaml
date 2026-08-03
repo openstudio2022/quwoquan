@@ -41,4 +41,18 @@ collections:
       keys:
         conversationId: 1
         sourceVersion: -1
+  gathering_membership_projection_states:
+    entity: ConversationMember
+    role: projection
+    description: Gathering participant 到 Chat 名册的 source-version 水位；与 member/UserState/outbox 同事务提交。
+    indexes:
+    - name: uq_gathering_membership_projection_identity
+      keys:
+        gatheringId: 1
+        userId: 1
+      unique: true
+    - name: idx_gathering_membership_projection_conversation
+      keys:
+        conversationId: 1
+        sourceVersion: -1
 role: authoritative

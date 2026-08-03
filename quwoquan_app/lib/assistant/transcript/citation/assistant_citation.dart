@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CitationDestination, CitationDestinationKind;
 
 /// 引用卡片的单轨 destination。URL 仅能作为 external destination 的字段存在。
 class AssistantCitation {

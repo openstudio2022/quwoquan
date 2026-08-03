@@ -30,6 +30,7 @@ type inboxDocument struct {
 	DeletedQueries          int64     `bson:"deletedQueries"`
 	DeletedFeedbackEvents   int64     `bson:"deletedFeedbackEvents"`
 	DeletedFeedbackReceipts int64     `bson:"deletedFeedbackReceipts"`
+	DeletedFeedbackDelivery int64     `bson:"deletedFeedbackDeliveries"`
 	InvalidatedHeatTerms    int64     `bson:"invalidatedHeatTerms"`
 	AppliedAt               time.Time `bson:"appliedAt"`
 }
@@ -45,20 +46,19 @@ type cleanupResult struct {
 	deletedQueries          int64
 	deletedFeedbackEvents   int64
 	deletedFeedbackReceipts int64
+	deletedFeedbackDelivery int64
 	invalidatedHeatTerms    int64
 }
 
 type MongoProjection struct {
-	db               *mongo.Database
-	recentStates     *mongo.Collection
-	recentReceipts   *mongo.Collection
-	queries          *mongo.Collection
-	feedback         *mongo.Collection
-	feedbackReceipts *mongo.Collection
-	heat             *mongo.Collection
-	inbox            *mongo.Collection
-	failures         *mongo.Collection
-	restrictions     indexapplication.SubjectClosureProjection
+	db              *mongo.Database
+	queries         *mongo.Collection
+	heat            *mongo.Collection
+	inbox           *mongo.Collection
+	failures        *mongo.Collection
+	restrictions    indexapplication.SubjectClosureProjection
+	recentCleanup   application.RecentSearchClosureCleaner
+	feedbackCleanup application.SearchFeedbackClosureCleaner
 }
 
 var _ application.UserAccountClosedProjection = (*MongoProjection)(nil)
@@ -66,23 +66,23 @@ var _ application.UserAccountClosedProjection = (*MongoProjection)(nil)
 func NewMongoProjection(
 	db *mongo.Database,
 	restrictions indexapplication.SubjectClosureProjection,
+	recentCleanup application.RecentSearchClosureCleaner,
+	feedbackCleanup application.SearchFeedbackClosureCleaner,
 ) (*MongoProjection, error) {
-	if db == nil || restrictions == nil {
+	if db == nil || restrictions == nil || recentCleanup == nil || feedbackCleanup == nil {
 		return nil, errors.New(
 			"search UserAccountClosed projection requires MongoDB and restriction closure projection",
 		)
 	}
 	return &MongoProjection{
-		db:               db,
-		recentStates:     db.Collection("recent_search_states"),
-		recentReceipts:   db.Collection("recent_search_receipts"),
-		queries:          db.Collection("search_queries"),
-		feedback:         db.Collection("search_feedback_events"),
-		feedbackReceipts: db.Collection("search_feedback_command_receipts"),
-		heat:             db.Collection("rm_search_term_heat"),
-		inbox:            db.Collection(InboxCollection),
-		failures:         db.Collection(FailureCollection),
-		restrictions:     restrictions,
+		db:              db,
+		queries:         db.Collection("search_queries"),
+		heat:            db.Collection("rm_search_term_heat"),
+		inbox:           db.Collection(InboxCollection),
+		failures:        db.Collection(FailureCollection),
+		restrictions:    restrictions,
+		recentCleanup:   recentCleanup,
+		feedbackCleanup: feedbackCleanup,
 	}, nil
 }
 
@@ -130,49 +130,6 @@ func (projection *MongoProjection) EnsureIndexes(ctx context.Context) error {
 		},
 	); err != nil {
 		return fmt.Errorf("ensure search query account cleanup index: %w", err)
-	}
-	if _, err := projection.feedback.Indexes().CreateOne(
-		ctx,
-		mongo.IndexModel{
-			Keys: bson.D{
-				{Key: "viewerId", Value: 1},
-				{Key: "createdAt", Value: -1},
-			},
-			Options: options.Index().
-				SetName("idx_search_feedback_viewer_created"),
-		},
-	); err != nil {
-		return fmt.Errorf("ensure search feedback account cleanup index: %w", err)
-	}
-	if _, err := projection.feedbackReceipts.Indexes().CreateMany(
-		ctx,
-		[]mongo.IndexModel{
-			{
-				Keys: bson.D{
-					{Key: "viewerId", Value: 1},
-					{Key: "createdAt", Value: -1},
-				},
-				Options: options.Index().
-					SetName("idx_search_feedback_receipt_viewer_created"),
-			},
-			{
-				Keys: bson.D{{Key: "searchRequestId", Value: 1}},
-				Options: options.Index().
-					SetName("idx_search_feedback_receipt_request"),
-			},
-		},
-	); err != nil {
-		return fmt.Errorf("ensure search feedback receipt cleanup indexes: %w", err)
-	}
-	if _, err := projection.recentReceipts.Indexes().CreateOne(
-		ctx,
-		mongo.IndexModel{
-			Keys: bson.D{{Key: "personaId", Value: 1}},
-			Options: options.Index().
-				SetName("idx_recent_search_receipts_persona"),
-		},
-	); err != nil {
-		return fmt.Errorf("ensure recent search receipt cleanup index: %w", err)
 	}
 	return nil
 }
@@ -234,6 +191,7 @@ func (projection *MongoProjection) ApplyUserAccountClosed(
 					DeletedQueries:          cleanup.deletedQueries,
 					DeletedFeedbackEvents:   cleanup.deletedFeedbackEvents,
 					DeletedFeedbackReceipts: cleanup.deletedFeedbackReceipts,
+					DeletedFeedbackDelivery: cleanup.deletedFeedbackDelivery,
 					InvalidatedHeatTerms:    cleanup.invalidatedHeatTerms,
 					AppliedAt:               time.Now().UTC(),
 				},
@@ -277,34 +235,10 @@ func (projection *MongoProjection) cleanupClosedSubjects(
 	); err != nil {
 		return cleanupResult{}, err
 	}
-	feedbackClauses := bson.A{
-		bson.M{"viewerId": bson.M{"$in": subjects}},
-	}
-	if len(requestIDs) > 0 {
-		feedbackClauses = append(
-			feedbackClauses,
-			bson.M{"searchRequestId": bson.M{"$in": requestIDs}},
-		)
-	}
-	feedbackReceiptResult, err := projection.feedbackReceipts.DeleteMany(
-		ctx,
-		bson.M{"$or": feedbackClauses},
-	)
+	feedbackDeleted, feedbackReceiptsDeleted, feedbackDeliveriesDeleted, err :=
+		projection.feedbackCleanup.DeleteClosedSubjects(ctx, subjects, requestIDs)
 	if err != nil {
-		return cleanupResult{}, fmt.Errorf(
-			"delete closed-account search feedback receipts: %w",
-			err,
-		)
-	}
-	feedbackResult, err := projection.feedback.DeleteMany(
-		ctx,
-		bson.M{"$or": feedbackClauses},
-	)
-	if err != nil {
-		return cleanupResult{}, fmt.Errorf(
-			"delete closed-account search feedback: %w",
-			err,
-		)
+		return cleanupResult{}, err
 	}
 	queryResult, err := projection.queries.DeleteMany(
 		ctx,
@@ -316,25 +250,10 @@ func (projection *MongoProjection) cleanupClosedSubjects(
 			err,
 		)
 	}
-	stateResult, err := projection.recentStates.DeleteMany(
-		ctx,
-		bson.M{"personaId": bson.M{"$in": subjects}},
-	)
+	statesDeleted, recentReceiptsDeleted, err :=
+		projection.recentCleanup.DeleteClosedSubjects(ctx, subjects)
 	if err != nil {
-		return cleanupResult{}, fmt.Errorf(
-			"delete closed-account recent search states: %w",
-			err,
-		)
-	}
-	receiptResult, err := projection.recentReceipts.DeleteMany(
-		ctx,
-		bson.M{"personaId": bson.M{"$in": subjects}},
-	)
-	if err != nil {
-		return cleanupResult{}, fmt.Errorf(
-			"delete closed-account recent search receipts: %w",
-			err,
-		)
+		return cleanupResult{}, err
 	}
 	var heatDeleted int64
 	if len(terms) > 0 {
@@ -351,11 +270,12 @@ func (projection *MongoProjection) cleanupClosedSubjects(
 		heatDeleted = heatResult.DeletedCount
 	}
 	return cleanupResult{
-		deletedRecentStates:     stateResult.DeletedCount,
-		deletedRecentReceipts:   receiptResult.DeletedCount,
+		deletedRecentStates:     statesDeleted,
+		deletedRecentReceipts:   recentReceiptsDeleted,
 		deletedQueries:          queryResult.DeletedCount,
-		deletedFeedbackEvents:   feedbackResult.DeletedCount,
-		deletedFeedbackReceipts: feedbackReceiptResult.DeletedCount,
+		deletedFeedbackEvents:   feedbackDeleted,
+		deletedFeedbackReceipts: feedbackReceiptsDeleted,
+		deletedFeedbackDelivery: feedbackDeliveriesDeleted,
 		invalidatedHeatTerms:    heatDeleted,
 	}, nil
 }

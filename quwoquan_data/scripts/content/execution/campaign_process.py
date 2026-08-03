@@ -17,6 +17,7 @@ from content.execution.campaign_workspace import (
 
 CAMPAIGN_CARRIERS = ("homepage", "article", "image", "video")
 LaneRunner = Callable[[list[str], Path, dict[str, str], Path, float], int]
+PhaseResultCallback = Callable[[str, tuple[int, str | None]], None]
 
 
 def _lane_argv(submission: dict[str, Any], *, stage: str) -> list[str]:
@@ -124,6 +125,7 @@ def run_phase(
     worker_count: int,
     lane_runner: LaneRunner | None = None,
     carriers: tuple[str, ...] | None = None,
+    on_result: PhaseResultCallback | None = None,
 ) -> dict[str, tuple[int, str | None]]:
     runner = lane_runner or _default_lane_runner
     selected = carriers or CAMPAIGN_CARRIERS
@@ -148,12 +150,17 @@ def run_phase(
             for carrier in selected
         }
         for future in as_completed(futures):
-            results[futures[future]] = future.result()
+            carrier = futures[future]
+            result = future.result()
+            results[carrier] = result
+            if on_result is not None:
+                on_result(carrier, result)
     return results
 
 
 __all__ = [
     "CAMPAIGN_CARRIERS",
     "LaneRunner",
+    "PhaseResultCallback",
     "run_phase",
 ]

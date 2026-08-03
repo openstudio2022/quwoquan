@@ -317,7 +317,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final pendingGreetings = greetingInbox.maybeWhen(
       data: (items) =>
           items.where((greeting) => greeting.isPending).toList(growable: false),
-      orElse: () => const <GreetingRequestDto>[],
+      orElse: () => const <GreetingRequestViewData>[],
     );
     final shouldShowGreetingInbox =
         _subTabIndex == 0 && pendingGreetings.isNotEmpty;
@@ -541,39 +541,40 @@ class _ChatPageState extends ConsumerState<ChatPage>
       subtitle = ChatText.noReminderHint;
     }
 
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              CupertinoIcons.chat_bubble_2,
-              size: AppSpacing.iconButtonMinSizeMd,
-              color: fgSecondary.withValues(alpha: 0.72),
+    return AppTerminalViewport(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.containerMd,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.chat_bubble_2,
+            size: AppSpacing.iconButtonMinSizeMd,
+            color: fgSecondary.withValues(alpha: 0.72),
+          ),
+          SizedBox(height: AppSpacing.md),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosTitle3,
+              fontWeight: AppTypography.semiBold,
+              color: fgSecondary,
             ),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-                color: fgSecondary,
-              ),
+          ),
+          SizedBox(height: AppSpacing.xs),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: fgSecondary.withValues(alpha: 0.82),
+              height: AppTypography.lineHeightCompact,
             ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: fgSecondary.withValues(alpha: 0.82),
-                height: AppTypography.lineHeightCompact,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -601,9 +602,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     return asyncRows.when(
       data: (list) {
         if (list.isEmpty) {
-          return Center(
+          return AppTerminalViewport(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.containerMd,
+            ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   CupertinoIcons.person_2,

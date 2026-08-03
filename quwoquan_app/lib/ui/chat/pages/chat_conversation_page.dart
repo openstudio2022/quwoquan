@@ -118,6 +118,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
 
   Future<void> _bootstrapConversation(String conversationId) async {
     final notifier = ref.read(chatMessageProvider(conversationId).notifier);
+    final telemetryTracker = ref.read(chatInteractionTelemetryTrackerProvider);
     await notifier.loadMessages();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
@@ -125,19 +126,17 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     });
     final marked = await notifier.markConversationRead();
     unawaited(
-      ref
-          .read(chatInteractionTelemetryTrackerProvider)
-          .track(
-            action: ChatInteractionAction.readWatermark,
-            outcome: marked
-                ? ChatInteractionOutcome.succeeded
-                : ChatInteractionOutcome.failed,
-            watermarkResult: marked
-                ? ChatWatermarkResult.advanced
-                : ChatWatermarkResult.failed,
-            pageName: PageNames.chatDetail,
-            surfaceId: AppUiSurfaces.chatDetail.id,
-          ),
+      telemetryTracker.track(
+        action: ChatInteractionAction.readWatermark,
+        outcome: marked
+            ? ChatInteractionOutcome.succeeded
+            : ChatInteractionOutcome.failed,
+        watermarkResult: marked
+            ? ChatWatermarkResult.advanced
+            : ChatWatermarkResult.failed,
+        pageName: PageNames.chatDetail,
+        surfaceId: AppUiSurfaces.chatDetail.id,
+      ),
     );
     if (!marked || !mounted) {
       return;

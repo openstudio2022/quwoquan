@@ -44,7 +44,7 @@ final class RemotePersonaRelationshipFacet
   }
 
   @override
-  Future<RelationshipCapabilityResult> getRelationshipCapability(
+  Future<RelationshipCapabilityView> getRelationshipCapability(
     GetRelationshipCapabilityQuery query,
   ) {
     return client.userPersonaRelationshipGetRelationshipCapability(

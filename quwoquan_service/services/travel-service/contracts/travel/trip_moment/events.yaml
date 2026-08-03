@@ -1,0 +1,8 @@
+description: TripMoment 归属和生命周期变化事件。
+events:
+- name: TripMomentChanged
+  producer: travel-service
+  consumers: [trip-timeline-projector, trip-map-projector]
+  channel: transactional_outbox
+  payload_entity: TripMoment
+  payload_fields: [_id, tripId, version, revisionNumber, dayIndex, itemId, assignmentStatus, status, sourceVersion, updatedAt]

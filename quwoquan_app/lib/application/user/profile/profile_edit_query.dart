@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 当前账号的资料编辑快照与二维码读面。
 abstract interface class ProfileEditQuery {
@@ -7,7 +7,7 @@ abstract interface class ProfileEditQuery {
 
   Future<ProfileQrCardData> getProfileQrCard();
 
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   });

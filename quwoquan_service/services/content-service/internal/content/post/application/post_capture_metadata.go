@@ -9,7 +9,7 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 const capturePhotographyTagRoot = "Topic/摄影"

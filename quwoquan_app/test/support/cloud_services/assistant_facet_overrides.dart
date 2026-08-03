@@ -13,7 +13,9 @@ List<Override> alphaAssistantFacetOverrides(AlphaAssistantFacets facets) {
   return <Override>[
     assistantSessionRunFacetProvider.overrideWithValue(facets),
     assistantRunControlFacetProvider.overrideWithValue(facets),
+    assistantSkillCatalogFacetProvider.overrideWithValue(facets),
     assistantSkillSubscriptionFacetProvider.overrideWithValue(facets),
+    assistantSkillUserSettingFacetProvider.overrideWithValue(facets),
     assistantSkillConsentFacetProvider.overrideWithValue(facets),
     assistantLearningFactAppendFacetProvider.overrideWithValue(facets),
     assistantPersonalizationFacetProvider.overrideWithValue(facets),

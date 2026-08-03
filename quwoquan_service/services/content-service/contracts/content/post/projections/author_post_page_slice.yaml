@@ -1,0 +1,9 @@
+read_model: AuthorPostPageSlice
+description: Public author Post cards returned by an owner-scoped keyset reader.
+source_entities: [Post, MediaAsset]
+source_projections: [ContentPostProjection]
+consumers: [app]
+fields:
+  - {name: items, type: '[]ContentPostProjection', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: hasMore, type: bool, nullable: false}

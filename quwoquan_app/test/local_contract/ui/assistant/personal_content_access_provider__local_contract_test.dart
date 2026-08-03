@@ -4,28 +4,27 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 class _FakeAssistantConsentFacet implements AssistantSkillConsentFacet {
-  _FakeAssistantConsentFacet({List<AssistantSkillConsent>? initial})
-    : _items = <AssistantSkillConsent>[...?initial];
+  _FakeAssistantConsentFacet({List<SkillConsent>? initial})
+    : _items = <SkillConsent>[...?initial];
 
-  final List<AssistantSkillConsent> _items;
+  final List<SkillConsent> _items;
 
   @override
-  Future<List<AssistantSkillConsent>> listConsents() async {
-    return List<AssistantSkillConsent>.from(_items);
+  Future<List<SkillConsent>> listConsents() async {
+    return List<SkillConsent>.from(_items);
   }
 
   @override
-  Future<AssistantSkillConsent> grantSkillConsent({
+  Future<SkillConsent> grantSkillConsent({
     required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
+    required List<String> grantedScopes,
     required String clientRequestId,
   }) async {
     _items.removeWhere((item) => item.skillId == skillId);
-    final next = AssistantSkillConsent(
+    final next = _consent(
       skillId: skillId,
-      grantedScope: grantedScope,
-      granted: true,
-      updatedAt: DateTime.utc(2026, 3, 12, 10, 0),
+      grantedScopes: grantedScopes,
+      grantedAt: DateTime.utc(2026, 3, 12, 10, 0),
     );
     _items.add(next);
     return next;
@@ -40,18 +39,33 @@ class _FakeAssistantConsentFacet implements AssistantSkillConsentFacet {
   }
 }
 
+SkillConsent _consent({
+  required String skillId,
+  required List<String> grantedScopes,
+  required DateTime grantedAt,
+}) {
+  return SkillConsent(
+    id: 'consent:$skillId',
+    accountId: 'account-1',
+    skillId: skillId,
+    grantedScopes: grantedScopes,
+    grantedAt: grantedAt.toUtc().toIso8601String(),
+    revokedAt: null,
+    granted: true,
+  );
+}
+
 void main() {
   test('hydrate existing personal_content_access consent', () async {
     final container = ProviderContainer(
       overrides: [
         assistantSkillConsentFacetProvider.overrideWithValue(
           _FakeAssistantConsentFacet(
-            initial: <AssistantSkillConsent>[
-              AssistantSkillConsent(
+            initial: <SkillConsent>[
+              _consent(
                 skillId: kPersonalContentAccessSkillId,
-                grantedScope: kPersonalContentAccessSkillId,
-                granted: true,
-                updatedAt: DateTime.utc(2026, 3, 12, 9, 0),
+                grantedScopes: const <String>[kPersonalContentAccessScope],
+                grantedAt: DateTime.utc(2026, 3, 12, 9, 0),
               ),
             ],
           ),

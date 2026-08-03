@@ -68,8 +68,17 @@ func TestMain(m *testing.M) {
 	notificationMongoDB = notificationMongoClient.Database(
 		fmt.Sprintf("notification_service_api_integration_%d", time.Now().UnixNano()),
 	)
+	notificationDeliveryLifecycle := deliverypersistence.NewMongoAccountLifecycle(
+		notificationMongoDB,
+	)
+	if err := notificationDeliveryLifecycle.EnsureIndexes(startupCtx); err != nil {
+		panic("ensure notification-service delivery lifecycle indexes: " + err.Error())
+	}
 	notificationRestriction, err =
-		persistence.NewMongoUserAccountRestrictionProjection(notificationMongoDB)
+		persistence.NewMongoUserAccountRestrictionProjection(
+			notificationMongoDB,
+			notificationDeliveryLifecycle,
+		)
 	if err != nil {
 		panic("create notification-service account-restriction projection: " + err.Error())
 	}
@@ -88,7 +97,10 @@ func TestMain(m *testing.M) {
 		panic("ensure notification-service app-message indexes: " + err.Error())
 	}
 	notificationAccountClosure, err =
-		persistence.NewMongoUserAccountClosedProjection(notificationMongoDB)
+		persistence.NewMongoUserAccountClosedProjection(
+			notificationMongoDB,
+			notificationDeliveryLifecycle,
+		)
 	if err != nil {
 		panic("create notification-service account-closure projection: " + err.Error())
 	}

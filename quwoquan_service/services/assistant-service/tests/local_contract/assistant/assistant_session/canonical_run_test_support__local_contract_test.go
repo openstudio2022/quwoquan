@@ -7,7 +7,6 @@ import (
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
@@ -15,6 +14,15 @@ func canonicalRunTestOption(
 	t *testing.T,
 	loop *orchestration.AgentLoop,
 ) orchestration.AssistantServiceOption {
+	t.Helper()
+	option, _ := canonicalRunTestRuntime(t, loop)
+	return option
+}
+
+func canonicalRunTestRuntime(
+	t *testing.T,
+	loop *orchestration.AgentLoop,
+) (orchestration.AssistantServiceOption, *assistantruntest.MemoryRuntime) {
 	t.Helper()
 
 	runtime := assistantruntest.NewMemoryRuntime()
@@ -27,30 +35,21 @@ func canonicalRunTestOption(
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		testRunPolicyResolver(),
 	)
 	worker := runruntime.NewDurableWorker(
 		runtime,
 		runtime,
-		orchestration.NewDurableRunExecutorWithPolicyResolver(
-			loop,
-			func(
-				_ context.Context,
-				request runruntime.ExecutionRequest,
-			) (assistant.AssistantFrozenPolicySelection, error) {
-				return testFrozenPolicySelection(
-					"assistant-default",
-					request.RequestedSkillID,
-					request.RequestedDomainID,
-				), nil
-			},
-		),
+		orchestration.NewDurableRunExecutor(loop),
 		"local-contract-canonical-run-worker",
 	)
 	workerContext, cancelWorker := context.WithCancel(context.Background())
 	t.Cleanup(cancelWorker)
 	go worker.Run(workerContext)
 
-	return orchestration.WithRunCommandService(commands)
+	return orchestration.WithRunCommandService(commands), runtime
 }

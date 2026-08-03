@@ -1,0 +1,17 @@
+read_model: ChatMessageReceipt
+description: MessageReceiptFact exposed only to an eligible Conversation member.
+storage_backend: mongodb
+collection: message_receipts
+source_entities:
+- MessageReceiptFact
+fields:
+- name: id
+  type: string
+- name: messageId
+  type: string
+- name: conversationId
+  type: string
+- name: userId
+  type: string
+- name: readAt
+  type: timestamp

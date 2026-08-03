@@ -9,10 +9,12 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
+	postmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	reportmessaging "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/messaging"
+	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
 )
 
 // buildReportRuntime 装配举报事实的 PostgreSQL 存储、独立 outbox 消费者与健康检查。
@@ -20,13 +22,13 @@ func buildReportRuntime(
 	ctx context.Context,
 	cfg config,
 	router *rtredis.Router,
-	eventPub *messaging.RedisEventPublisher,
+	eventPub *postmessaging.RedisEventPublisher,
 	healthChecker *rthealth.Checker,
 	logger *slog.Logger,
 	moderationFacades *moderationapp.Facades,
 	postQueryReader *persistence.MongoPostQueryReader,
 	authoritativeSignalSink *recinfra.AuthoritativeSignalSink,
-) (*persistence.PGReportStore, func()) {
+) (*reportpersistence.PGReportStore, func()) {
 	reportDSN := resolveReportDSN(cfg)
 	if reportDSN == "" {
 		return nil, nil
@@ -39,7 +41,7 @@ func buildReportRuntime(
 	db.SetMaxIdleConns(3)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	reportStore, err := persistence.NewPGReportStore(db)
+	reportStore, err := reportpersistence.NewPGReportStore(db)
 	if err != nil {
 		log.Fatalf("content-service report postgres init failed: %v", err)
 	}
@@ -47,10 +49,10 @@ func buildReportRuntime(
 		return db.PingContext(hctx)
 	})
 	startReportOutboxRelay(ctx, reportStore, reportStore,
-		messaging.NewReportOutboxPublisher(eventPub),
+		reportmessaging.NewReportOutboxPublisher(eventPub),
 		"content-report-runtime-events", "report_outbox_events", healthChecker, logger)
 	startReportOutboxRelay(ctx, reportStore, reportStore,
-		messaging.NewReportNotificationStreamPublisher(router.Scene("general")),
+		reportmessaging.NewReportNotificationStreamPublisher(router.Scene("general")),
 		"content-report-notification-stream", "report_notification_stream",
 		healthChecker, logger)
 
@@ -80,7 +82,7 @@ func buildReportRuntime(
 // 为已核实的 comment 举报启动独立 checkpoint；与 Post moderation case 投影互不共享进度。
 func startCommentReportModerationProjection(
 	ctx context.Context,
-	reportStore *persistence.PGReportStore,
+	reportStore *reportpersistence.PGReportStore,
 	comments moderationapp.CommentModerationCommandFacet,
 	healthChecker *rthealth.Checker,
 	logger *slog.Logger,

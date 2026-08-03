@@ -1,0 +1,22 @@
+read_model: IntersectionInboxSummary
+description: "我的主页「我的交集」聚合入口摘要（B1 契约）。\n云侧据 viewer_object_intersections 读模型 + per-dimension 已读水位预生成：\n\
+  总交集数 + 各维度计数与\"自上次查看新增\"未读数。端只读展示，禁止本地统计。\n\n展示规则（端侧消费）：\n  - 我的主页最多展示 3 个维度 tally；超过 3 个收起，点击\"展开更多\"\
+  再展示其余。\n  - 红色数字仅用于未读 newCount；newCount=0 时不展示红点。\n  - 打开某维度列表后调用 visit 推进水位，对应 tally 的 newCount 清零。\n\
+  \n维度闭集与 IntersectionReason.dimension 对齐：identity | location | content | interest | relationship。\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: totalCount
+  type: int
+- name: totalNewCount
+  type: int
+- name: dimensions
+  type: '[]IntersectionDimensionTally'
+- name: generatedAt
+  type: string
+- name: totalStrengthenedCount
+  type: int
+- name: totalReactivatedCount
+  type: int

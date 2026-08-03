@@ -9,7 +9,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	rtrec "quwoquan_service/runtime/recommendation"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 )
 
@@ -41,16 +40,8 @@ func TestFeedGlobalQuotaConfigMatchesCanonicalRuntimePolicies(t *testing.T) {
 		entries[entry.Key] = entry
 	}
 
-	ranked := rtrec.DefaultRankedFeedWindowQuotaPolicy()
 	delivery := deliveryredis.DefaultQuotaPolicy()
 	want := map[string]int64{
-		"sys.content-service.feed.ranked_window_quota_shard_count": int64(
-			ranked.ShardCount,
-		),
-		"sys.content-service.feed.ranked_window_maximum_live_records_per_shard": int64(
-			ranked.MaximumLiveRecordsPerShard,
-		),
-		"sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard": ranked.MaximumLiveBytesPerShard,
 		"sys.content-service.feed.delivery_page_quota_shard_count": int64(
 			delivery.ShardCount,
 		),
@@ -77,9 +68,14 @@ func TestFeedGlobalQuotaConfigMatchesCanonicalRuntimePolicies(t *testing.T) {
 			)
 		}
 	}
-	if ranked.MaximumLiveRecords() != 32768 ||
-		ranked.MaximumLiveBytes() != 32*1024*1024*1024 {
-		t.Fatalf("ranked global bound drifted: %+v", ranked)
+	for _, retired := range []string{
+		"sys.content-service.feed.ranked_window_quota_shard_count",
+		"sys.content-service.feed.ranked_window_maximum_live_records_per_shard",
+		"sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard",
+	} {
+		if _, exists := entries[retired]; exists {
+			t.Fatalf("Recommendation-owned ranked window config leaked into Content: %s", retired)
+		}
 	}
 	if delivery.MaximumLiveRecords() != 131072 ||
 		delivery.MaximumLiveBytes() != 8*1024*1024*1024 {

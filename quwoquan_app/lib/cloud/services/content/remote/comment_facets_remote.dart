@@ -21,11 +21,11 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   final ContentCommentInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentCommentPageSlice> listComments({
+  Future<CommentPageSlice> listComments({
     required String postId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
-    ContentCommentSort sort = ContentCommentSort.hot,
+    CommentSort sort = CommentSort.hot,
   }) => client.contentCommentListComments(
     ListContentCommentsQuery(
       postId: postId,
@@ -40,7 +40,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentReplyPageSlice> listReplies({
+  Future<ReplyPageSlice> listReplies({
     required String postId,
     required String commentId,
     String? cursor,
@@ -59,7 +59,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentAuthorCommentPageSlice> listByAuthor({
+  Future<AuthorCommentPageSlice> listByAuthor({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) => client.contentCommentListCommentsByAuthor(
@@ -71,7 +71,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentReceivedCommentPageSlice> listReceived({
+  Future<ReceivedCommentPageSlice> listReceived({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) => client.contentCommentListCommentsForPostAuthor(
@@ -83,7 +83,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentCommandResult> createComment(
+  Future<CommentCommandResult> createComment(
     CreateContentCommentCommand command,
   ) => client.contentCommentCreateComment(
     command,
@@ -94,7 +94,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentCommandResult> deleteComment(
+  Future<CommentCommandResult> deleteComment(
     DeleteContentCommentCommand command,
   ) => client.contentCommentDeleteComment(
     command,
@@ -105,7 +105,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentCommandResult> pinComment(
+  Future<CommentCommandResult> pinComment(
     ChangeContentCommentPinCommand command,
   ) => client.contentCommentPinComment(
     command,
@@ -113,7 +113,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentCommandResult> unpinComment(
+  Future<CommentCommandResult> unpinComment(
     ChangeContentCommentPinCommand command,
   ) => client.contentCommentUnpinComment(
     command,
@@ -124,7 +124,7 @@ final class RemoteContentCommentFacet implements ContentCommentFacet {
   );
 
   @override
-  Future<ContentCommentCommandResult> bindAttachments(
+  Future<CommentCommandResult> bindAttachments(
     BindContentCommentAttachmentsCommand command,
   ) => client.contentCommentBindMediaAssetsToComment(
     command,

@@ -170,27 +170,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: 1
-- key: sys.content-service.feed.ranked_window_quota_shard_count
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 256
-- key: sys.content-service.feed.ranked_window_maximum_live_records_per_shard
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 128
-- key: sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 134217728
 - key: sys.content-service.feed.delivery_page_quota_shard_count
   type: int
   scope: workload

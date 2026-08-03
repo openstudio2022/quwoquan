@@ -11,4 +11,4 @@ runtime_entrypoints:
     kind: session
     facet: RateLimitAdmissionFacade
     method: admit
-    session_owner: RateLimitBucket
+    object_owner: RateLimitBucket

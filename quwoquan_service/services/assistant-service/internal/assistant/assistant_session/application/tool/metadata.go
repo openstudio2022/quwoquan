@@ -19,21 +19,46 @@ const (
 // Metadata 与 contracts/_shared/assistant_tool_metadata 同形。输入输出约束只以 JSON
 // Schema 表达一次，模型工具声明与运行时校验都读同一份，避免第二套必填键清单。
 type Metadata struct {
-	ToolName             string           `json:"toolName"`
-	DisplayName          string           `json:"displayName,omitempty"`
-	Description          string           `json:"description,omitempty"`
-	Namespace            string           `json:"namespace"`
-	Placement            string           `json:"placement"`
-	InputSchema          map[string]any   `json:"inputSchema"`
-	OutputSchema         map[string]any   `json:"outputSchema"`
-	RequiresConfirmation bool             `json:"requiresConfirmation"`
-	Idempotency          string           `json:"idempotency"`
-	Sensitivity          string           `json:"sensitivity"`
-	EnvironmentScopes    []string         `json:"environmentScopes"`
-	ServerInjectedInputs []string         `json:"serverInjectedInputs"`
-	ReadOnly             bool             `json:"readOnly"`
-	Resilience           ResiliencePolicy `json:"resilience"`
-	Recovery             RecoveryPolicy   `json:"recovery"`
+	ToolName             string             `json:"toolName"`
+	DisplayName          string             `json:"displayName,omitempty"`
+	Description          string             `json:"description,omitempty"`
+	Namespace            string             `json:"namespace"`
+	Placement            string             `json:"placement"`
+	InputSchema          map[string]any     `json:"inputSchema"`
+	OutputSchema         map[string]any     `json:"outputSchema"`
+	RequiresConfirmation bool               `json:"requiresConfirmation"`
+	Idempotency          string             `json:"idempotency"`
+	Sensitivity          string             `json:"sensitivity"`
+	EnvironmentScopes    []string           `json:"environmentScopes"`
+	ServerInjectedInputs []string           `json:"serverInjectedInputs"`
+	ReadOnly             bool               `json:"readOnly"`
+	Capability           CapabilityPolicy   `json:"capability"`
+	Confirmation         ConfirmationPolicy `json:"confirmation"`
+	Resilience           ResiliencePolicy   `json:"resilience"`
+	Recovery             RecoveryPolicy     `json:"recovery"`
+}
+
+// CapabilityPolicy 是 Tool Fabric 在每个安全边界重新求交的厂商无关能力合同。
+// connectionRef、Consent 与 surface 的当前值由运行时读取，不冻结进工具目录。
+type CapabilityPolicy struct {
+	CapabilityKey        string   `json:"capabilityKey"`
+	ConnectorRequirement string   `json:"connectorRequirement"`
+	ConsentScopes        []string `json:"consentScopes"`
+	AllowedSurfaceKinds  []string `json:"allowedSurfaceKinds"`
+	RecheckAtExecution   bool     `json:"recheckAtExecution"`
+}
+
+type ConfirmationPolicy struct {
+	TemplateRef       string                     `json:"templateRef"`
+	Title             string                     `json:"title"`
+	Description       string                     `json:"description"`
+	CompletionSummary string                     `json:"completionSummary"`
+	DisplayFields     []ConfirmationDisplayField `json:"displayFields"`
+}
+
+type ConfirmationDisplayField struct {
+	InputKey string `json:"inputKey"`
+	Label    string `json:"label"`
 }
 
 type ResiliencePolicy struct {

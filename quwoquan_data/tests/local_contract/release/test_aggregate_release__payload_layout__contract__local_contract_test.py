@@ -32,16 +32,23 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _write_cas(publish_root: Path, payload: bytes) -> tuple[str, dict[str, object]]:
+def _write_cas(
+    publish_root: Path,
+    payload: bytes,
+    *,
+    suffix: str = ".jpg",
+    kind: str = "image",
+    mime_type: str = "image/jpeg",
+) -> tuple[str, dict[str, object]]:
     digest = hashlib.sha256(payload).hexdigest()
-    object_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.jpg"
+    object_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}{suffix}"
     path = publish_root / object_key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
     return object_key, {
         "assetId": f"asset-{digest[:16]}",
-        "kind": "image",
-        "mimeType": "image/jpeg",
+        "kind": kind,
+        "mimeType": mime_type,
         "objectKey": object_key,
         "sha256": f"sha256:{digest}",
     }
@@ -380,14 +387,43 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     for content_type, suffix in (("article", "guide"), ("image", "gallery"), ("video", "short")):
         post_ref = f"{content_type}/测试实体甲/{suffix}"
         post_root = publish_root / "posts" / post_ref
-        object_key, asset = _write_cas(
-            publish_root,
-            f"{content_type}-asset".encode("utf-8"),
-        )
+        object_keys: list[str] = []
+        if content_type == "article":
+            cover_key, cover = _write_cas(publish_root, b"article-cover")
+            body_key, body = _write_cas(publish_root, b"article-body")
+            cover.update(
+                role="cover",
+                sourceUnitRef="sources/article-source-unit/source.md",
+            )
+            body.update(
+                role="embedded",
+                sourceUnitRef="sources/article-source-unit/source.md",
+            )
+            assets = [cover, body]
+            object_keys.extend((cover_key, body_key))
+        elif content_type == "video":
+            video_key, video = _write_cas(
+                publish_root,
+                b"video-asset",
+                suffix=".mp4",
+                kind="video",
+                mime_type="video/mp4",
+            )
+            poster_key, poster = _write_cas(publish_root, b"video-poster")
+            poster["role"] = "cover"
+            video["posterAssetId"] = poster["assetId"]
+            assets = [video, poster]
+            object_keys.extend((video_key, poster_key))
+        else:
+            image_key, image = _write_cas(publish_root, b"image-asset")
+            image["role"] = "cover"
+            assets = [image]
+            object_keys.append(image_key)
         _write_json(
             post_root / "manifest.json",
             {
                 "schema": "quwoquan_data.post_manifest",
+                "contentIdentity": "work",
                 "vertical": "travel",
                 "contentType": content_type,
                 "creatorProfileId": creator_ref,
@@ -397,6 +433,17 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 "creatorRefsRef": "creator.refs.json",
                 "tagRefsRef": "tag.refs.json",
                 "assetRefsRef": "asset.refs.json",
+                "assets": assets,
+                **(
+                    {
+                        "publishMediaMode": "same_source_illustrated",
+                        "imageBindings": [
+                            {"assetId": str(asset["assetId"])} for asset in assets
+                        ],
+                    }
+                    if content_type == "article"
+                    else {}
+                ),
             },
         )
         (post_root / "content.md").write_text(f"# {content_type}\n", encoding="utf-8")
@@ -404,8 +451,9 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         _write_json(post_root / "rights.json", {"assets": []})
         _write_json(post_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
         _write_json(post_root / "tag.refs.json", {"tagRefs": []})
-        _write_json(post_root / "asset.refs.json", {"assets": [asset]})
-        _write_rights_snapshot(post_root, asset)
+        _write_json(post_root / "asset.refs.json", {"assets": assets})
+        for asset in assets:
+            _write_rights_snapshot(post_root, asset)
         add_execution(
             f"20260718--travel-{content_type}-supply--test-region-a--scale-90{len(executions) + 1}",
             entities=[],
@@ -414,7 +462,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 alternate_source_digest if content_type == "article" else None
             ),
         )
-        assert (publish_root / object_key).is_file()
+        assert all((publish_root / object_key).is_file() for object_key in object_keys)
 
     result = build_aggregate_release(
         publish_root=publish_root,

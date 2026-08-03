@@ -9,8 +9,10 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
@@ -39,10 +41,18 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		nil,
 	)
 	loop.PromptAssets = promptassets.MustResolver(t)
+	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+		SkillID:     "fallback_general_search",
+		DomainID:    "fallback_general_search",
+		DisplayName: "通用搜索助手",
+		ToolPolicy: skillpkg.ToolPolicy{
+			AllowedTools: []string{"web_search"},
+			MaxToolCalls: 2,
+		},
+	}}}
 	handler := assistanthttp.NewHandler(
 		newIntegrationAssistantService(
 			orchestration.WithAgentLoop(loop),
-			weatherFrozenPolicyOption(),
 		),
 	).Routes()
 	create := assistantAPIRequest(
@@ -69,22 +79,34 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		"/assistant/sessions/"+session.SessionID+"/runs",
 		"provider-error-user",
 		map[string]any{
-			"input":           map[string]string{"text": "杭州明天天气"},
+			"intent": map[string]any{
+				"kind": "answer", "answer": map[string]any{"text": "杭州明天天气"},
+			},
 			"clientRequestId": "provider-error-run",
 		},
 	)
 	if start.Code != http.StatusCreated {
 		t.Fatalf("start status=%d body=%s", start.Code, start.Body.String())
 	}
-	var run assistant.AssistantTurn
+	var run assistantRunEnvelope
 	if err := json.Unmarshal(start.Body.Bytes(), &run); err != nil {
 		t.Fatalf("decode run: %v", err)
+	}
+	worker := runruntime.NewDurableWorker(
+		integrationRunRepository,
+		integrationRunRepository,
+		orchestration.NewDurableRunExecutor(loop),
+		"external-provider-failure-worker",
+	)
+	worked, err := worker.ProcessNext(t.Context())
+	if err != nil || !worked {
+		t.Fatalf("process provider failure run: worked=%t err=%v", worked, err)
 	}
 	stream := assistantAPIRequest(
 		t,
 		handler,
 		http.MethodGet,
-		"/assistant/runs/"+run.TurnID+"/events",
+		"/assistant/runs/"+run.RunID+"/events",
 		"provider-error-user",
 		nil,
 	)
@@ -103,7 +125,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		t,
 		handler,
 		http.MethodGet,
-		"/assistant/runs/"+run.TurnID,
+		"/assistant/runs/"+run.RunID,
 		"provider-error-user",
 		nil,
 	)
@@ -114,7 +136,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	if err := json.Unmarshal(runResponse.Body.Bytes(), &failedEnvelope); err != nil {
 		t.Fatalf("decode failed run envelope: %v", err)
 	}
-	assertAssistantTurnEnvelopePublicKeys(t, failedEnvelope)
+	assertAssistantRunEnvelopePublicKeys(t, failedEnvelope)
 	terminalSnapshot := assertAssistantTerminalSnapshotPublicShape(
 		t,
 		failedEnvelope["terminalSnapshot"],
@@ -129,21 +151,20 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 
 	if _, err := integrationMongoDB.Collection("assistant_run_events").DeleteMany(
 		context.Background(),
-		bson.M{"runId": run.TurnID},
+		bson.M{"runId": run.RunID},
 	); err != nil {
 		t.Fatalf("expire failed run journal: %v", err)
 	}
 	restarted := assistanthttp.NewHandler(
 		newIntegrationAssistantService(
 			orchestration.WithAgentLoop(loop),
-			weatherFrozenPolicyOption(),
 		),
 	).Routes()
 	replayedFailure := assistantAPIRequest(
 		t,
 		restarted,
 		http.MethodGet,
-		"/assistant/runs/"+run.TurnID+"/events",
+		"/assistant/runs/"+run.RunID+"/events",
 		"provider-error-user",
 		nil,
 	)
@@ -159,36 +180,6 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 		)
 	}
 	assertNoExternalProviderMaterial(t, replayedFailure.Body.String())
-}
-
-func weatherFrozenPolicyOption() orchestration.AssistantServiceOption {
-	return orchestration.WithFrozenPolicyResolver(
-		ports.FrozenPolicyResolverFunc(
-			func(
-				_ context.Context,
-				policyID string,
-				_ string,
-				_ string,
-				_ string,
-			) (assistant.AssistantFrozenPolicySelection, error) {
-				return assistant.AssistantFrozenPolicySelection{
-					PolicyID:        policyID,
-					ReleaseDigest:   integrationPolicyReleaseDigest,
-					Cohort:          "control",
-					RolloutRevision: 1,
-					RuleID:          "test-weather",
-					Template: assistant.AssistantFrozenPolicyTemplate{
-						TemplateID:      "test-weather-template",
-						SkillID:         "weather",
-						DomainID:        "weather",
-						PromptPolicy:    "weather provider failure test",
-						AllowedTools:    []string{"web_search"},
-						SearchIntensity: "medium",
-					},
-				}, nil
-			},
-		),
-	)
 }
 
 func assertNoExternalProviderMaterial(t *testing.T, payload string) {
@@ -216,8 +207,8 @@ func (apiWeatherSkillRuntime) SelectSkill(
 	assistant.AssistantTurn,
 ) (orchestration.SkillSelection, error) {
 	return orchestration.SkillSelection{
-		SkillID:    "weather",
-		DomainID:   "weather",
+		SkillID:    "fallback_general_search",
+		DomainID:   "fallback_general_search",
 		ToolPolicy: []string{"web_search"},
 	}, nil
 }

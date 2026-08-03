@@ -3,7 +3,7 @@ collections:
   user_account_closed_inbox:
     entity: ContentAccountClosureWorkflow
     role: append_only
-    description: Content（含 recommendation-engine）按 eventId+digest 幂等清理的 durable inbox。
+    description: Content 按 eventId+digest 幂等清理自有对象的 durable inbox；不得作为 Recommendation、User 或 Search 的清理入口。
     indexes:
     - name: idx_user_account_closed_completed
       keys:
@@ -61,12 +61,31 @@ collections:
   closed_account_subject_tombstones:
     entity: ClosedAccountSubjectTombstone
     role: append_only
-    description: '按独立密钥 HMAC-SHA256(subjectId) 标识的永久防复活栅栏；不得保存原始 userId/personaId，不设 TTL。所有推荐状态写入、训练和
-      replay 冻结必须先检查。
+    description: '按独立密钥 HMAC-SHA256(subjectId) 标识的 Content 永久防复活栅栏；不得保存原始 userId/personaId，不设 TTL。所有 Content
+      聚合、事实与投影写入必须先检查；其他服务维护各自的关闭事实。
 
       '
     indexes:
     - name: idx_closed_account_subject_closed_at
       keys:
         closedAt: -1
+  content_user_account_restrictions:
+    entity: ContentAccountClosureWorkflow
+    role: projection
+    description: Content 自有对象的可逆账号限制状态，不读取 User 数据库。
+  content_user_account_restriction_inbox:
+    entity: ContentAccountClosureWorkflow
+    role: projection
+    description: UserSuspended/UserRestored typed event 的幂等 inbox。
+  content_user_account_restriction_watermarks:
+    entity: ContentAccountClosureWorkflow
+    role: projection
+    description: 账号限制单调水位；UserAccountClosed 后写入不可逆 terminal marker。
 role: authoritative
+streams:
+  events.user.account.content-service.dlq:
+    entity: ContentAccountClosureWorkflow
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Content 账号生命周期 consumer 的脱敏失败记录；原 payload 只留在 source PEL。

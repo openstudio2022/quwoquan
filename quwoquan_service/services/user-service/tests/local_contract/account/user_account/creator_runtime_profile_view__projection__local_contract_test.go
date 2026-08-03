@@ -6,29 +6,27 @@ import (
 	"testing"
 
 	application "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
-	model "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
 func TestCreatorRuntimeProfilePublicViewExposesOnlyDeliveryReference(t *testing.T) {
-	view := application.BuildCreatorRuntimeProfileView(&model.CreatorRuntimeProfile{
-		CreatorID:            "creator-a",
-		PersonaID:            "author-a",
-		AvatarURL:            "https://avatar.example.com/media/avatar/s/asset/avatar-a/v1/source.jpg",
-		AvatarAssetID:        "avatar-a",
-		AvatarVersion:        1,
-		AvatarPublicSliceKey: "media/avatar/s/asset/avatar-a/v1/source.jpg",
-		AvatarSHA256:         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	view := application.BuildCreatorRuntimeProfileView(&userports.CreatorRuntimeProfileView{
+		CreatorID:     "creator-a",
+		PersonaID:     "author-a",
+		AvatarURL:     "https://avatar.example.com/media/avatar/s/asset/avatar-a/v1/source.jpg",
+		AvatarVersion: 1,
 	})
 	raw, err := json.Marshal(view)
 	if err != nil {
 		t.Fatal(err)
 	}
 	payload := string(raw)
-	if view["avatarVersion"] != int64(1) ||
-		!strings.Contains(payload, "https://avatar.example.com/media/avatar/s/asset/") {
+	if !strings.Contains(payload, "https://avatar.example.com/media/avatar/s/asset/") {
 		t.Fatalf("public avatar delivery reference missing: %s", payload)
 	}
 	for _, forbidden := range []string{
+		"avatarVersion",
+		"userId",
 		"avatarAssetId",
 		"avatarPublicSliceKey",
 		"avatarSha256",

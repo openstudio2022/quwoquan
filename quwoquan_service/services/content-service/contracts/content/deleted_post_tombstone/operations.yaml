@@ -9,6 +9,13 @@ description: 'DeletedPostTombstone 无独立 transport；GetPost 的具名 Reade
 
   '
 api_routes: []
+runtime_entrypoints:
+- name: AppendDeletedPostTombstone
+  kind: internal_port
+  phase: transactional_append
+  source_objects: [content.Post]
+  idempotency: transaction_identity
+  application: {kind: command, facet: DeletedPostTombstoneAppender, method: append, object_owner: DeletedPostTombstone}
 consumers:
 - name: content-service
   capabilities:

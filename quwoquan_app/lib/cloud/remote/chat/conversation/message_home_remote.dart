@@ -14,9 +14,7 @@ final class RemoteChatMessageHomeQuery implements ChatMessageHomeQuery {
   final ChatMessageHomeInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatMessageHomePageSlice> listMessageHome(
-    ChatListMessageHomeQuery query,
-  ) {
+  Future<MessageHomePageSlice> listMessageHome(ChatListMessageHomeQuery query) {
     return client.chatConversationListMessageHome(
       query,
       context: invocationContext(ChatRequestPageIds.listMessageHome),

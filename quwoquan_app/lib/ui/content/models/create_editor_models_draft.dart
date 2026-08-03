@@ -7,12 +7,14 @@ class CreateDraft {
     required this.updatedAtMs,
     required this.state,
     this.sourceType,
+    this.publicationContinuation,
   });
 
   final String id;
   final int updatedAtMs;
   final CreateEditorState state;
   final String? sourceType;
+  final CreateDraftPublicationContinuationRef? publicationContinuation;
 
   factory CreateDraft.fromStorageMap(Map<String, dynamic> map) {
     final editorKind = (map['editorKind']?.toString() ?? 'text') == 'media'
@@ -62,6 +64,11 @@ class CreateDraft {
         : articleDocument.nodes.first.id;
     final storedCover = (map['articleCoverImagePath'] ?? '').toString().trim();
     final draftType = (map['type'] ?? editorKind.name).toString().trim();
+    final publicationContinuation = map['publicationContinuation'] is Map
+        ? CreateDraftPublicationContinuationRef.fromStorageMap(
+            Map<String, dynamic>.from(map['publicationContinuation'] as Map),
+          )
+        : null;
     final draftFlowKind = _draftFlowKindFromStorage(
       rawDraftFlowKind: map['draftFlowKind']?.toString(),
       sourceType: draftType,
@@ -134,6 +141,7 @@ class CreateDraft {
         draftId: (map['id'] ?? '').toString(),
       ),
       sourceType: draftType,
+      publicationContinuation: publicationContinuation,
     );
   }
 
@@ -181,6 +189,8 @@ class CreateDraft {
       'titlePresentation': state.titlePresentation.name,
       'titleHintDismissed': state.titleHintDismissed,
       'settings': state.settings.toMap(),
+      if (publicationContinuation != null)
+        'publicationContinuation': publicationContinuation!.toStorageMap(),
       'data': data,
     };
   }

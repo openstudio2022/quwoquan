@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -14,9 +17,11 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
+	externalprovider "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
+	pushruntime "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/adapters/inbound/runtime"
+	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
+	pushprovider "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/infrastructure/provider"
 )
 
 func newExternalObservedHTTPClient(
@@ -24,7 +29,7 @@ func newExternalObservedHTTPClient(
 	ioLogger *robs.IOAccessLogger,
 	processLogger *robs.ProcessTraceLogger,
 	exceptionLogger *robs.ExceptionLogger,
-) *http.Client {
+) (*http.Client, error) {
 	timeout := 2 * time.Second
 	for _, providerCfg := range []externalProviderConfig{
 		cfg.Integration.ExternalInteraction.SMS,
@@ -54,8 +59,25 @@ func newExternalObservedHTTPClient(
 	}
 	baseTransport := http.DefaultTransport.(*http.Transport).Clone()
 	baseTransport.ForceAttemptHTTP2 = true
+	if caFile := strings.TrimSpace(os.Getenv("INTEGRATION_SMS_SUBSTITUTE_CA_FILE")); caFile != "" {
+		caPEM, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("SMS Debug substitute CA is unreadable: %w", err)
+		}
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(caPEM) {
+			return nil, fmt.Errorf("SMS Debug substitute CA has no certificate")
+		}
+		baseTransport.TLSClientConfig = &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			RootCAs:    roots,
+		}
+	}
 	client := rthttp.NewObservedHTTPClient(
-		provider.RedactingRoundTripper{Base: baseTransport},
+		pushprovider.RedactingRoundTripper{Base: baseTransport},
 		factoryCfg,
 		logCfg,
 		ioLogger,
@@ -68,11 +90,11 @@ func newExternalObservedHTTPClient(
 	) error {
 		return http.ErrUseLastResponse
 	}
-	return client
+	return client, nil
 }
 
 func externalProviderLogEndpoint(request *http.Request) string {
-	return provider.ObservedEndpoint(request)
+	return externalprovider.ObservedEndpoint(request)
 }
 
 func buildExternalProviders(
@@ -99,40 +121,38 @@ func buildExternalProviders(
 	smsCfg := cfg.Integration.ExternalInteraction.SMS
 	if smsCfg.Enabled {
 		timeout := time.Duration(smsCfg.TimeoutMs) * time.Millisecond
-		if strings.TrimSpace(smsCfg.Provider) == "ext.sms.local_capture" {
-			providers[smsCfg.Provider] = application.LocalCaptureSMSProvider{}
-		} else {
-			canonicalProviderName := ""
-			switch strings.TrimSpace(smsCfg.Provider) {
-			case "ext.sms.aliyun":
-				canonicalProviderName = "aliyun_sms"
-			default:
-				return nil, nil, fmt.Errorf(
-					"SMS adapter %s has no canonical provider mapping",
-					smsCfg.Provider,
-				)
-			}
-			smsProvider, err := provider.NewHTTPExternalProvider(
-				provider.HTTPExternalProviderConfig{
-					Name:              canonicalProviderName,
-					Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
-					Endpoint:          smsCfg.Endpoint,
-					BearerToken:       smsCfg.Token,
-					Timeout:           timeout,
-					OTPCodeSealer:     otpCodeSealer,
-					OTPCodeReferences: otpCodeReferences,
-				},
-				client,
+		canonicalProviderName := ""
+		switch strings.TrimSpace(smsCfg.Provider) {
+		case "ext.sms.aliyun":
+			canonicalProviderName = "aliyun_sms"
+		case "ext.sms.local_capture":
+			canonicalProviderName = "local_capture_sms"
+		default:
+			return nil, nil, fmt.Errorf(
+				"SMS adapter %s has no canonical provider mapping",
+				smsCfg.Provider,
 			)
-			if err != nil {
-				return nil, nil, fmt.Errorf(
-					"external provider init failed for %s: %w",
-					reliabletask.ExternalInteractionOperationSmsOTP,
-					err,
-				)
-			}
-			providers[smsCfg.Provider] = smsProvider
 		}
+		smsProvider, err := externalprovider.NewHTTPExternalProvider(
+			externalprovider.HTTPExternalProviderConfig{
+				Name:              canonicalProviderName,
+				Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
+				Endpoint:          smsCfg.Endpoint,
+				BearerToken:       smsCfg.Token,
+				Timeout:           timeout,
+				OTPCodeSealer:     otpCodeSealer,
+				OTPCodeReferences: otpCodeReferences,
+			},
+			client,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf(
+				"external provider init failed for %s: %w",
+				reliabletask.ExternalInteractionOperationSmsOTP,
+				err,
+			)
+		}
+		providers[smsCfg.Provider] = smsProvider
 		policies[reliabletask.ExternalInteractionOperationSmsOTP] = reliabletask.ProviderPolicy{
 			Providers:   []string{smsCfg.Provider},
 			Timeout:     timeout,
@@ -147,7 +167,11 @@ func buildExternalProviders(
 	pushTimeout := time.Duration(pushCfg.TimeoutMs) * time.Millisecond
 	const pushDispatchProviderName = "push_dispatch"
 	if mode := strings.TrimSpace(pushCfg.Mode); mode == "local_recorder" {
-		providers[pushDispatchProviderName] = application.LocalRecorderPushProvider{}
+		pushProvider, err := pushruntime.NewProvider(pushapp.LocalRecorderPushProvider{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("local push delivery adapter init failed: %w", err)
+		}
+		providers[pushDispatchProviderName] = pushProvider
 		policies[reliabletask.ExternalInteractionOperationPush] = reliabletask.ProviderPolicy{
 			Providers:   []string{pushDispatchProviderName},
 			Timeout:     pushTimeout,
@@ -167,8 +191,8 @@ func buildExternalProviders(
 	if err != nil {
 		return nil, nil, fmt.Errorf("user push endpoint credentials invalid: %w", err)
 	}
-	endpointClient, err := provider.NewUserPushEndpointClient(
-		provider.UserPushEndpointClientConfig{
+	endpointClient, err := pushprovider.NewUserPushEndpointClient(
+		pushprovider.UserPushEndpointClientConfig{
 			BaseURL:     pushCfg.UserServiceBaseURL,
 			Credentials: userCredentials,
 			Timeout:     pushTimeout,
@@ -178,8 +202,8 @@ func buildExternalProviders(
 	if err != nil {
 		return nil, nil, fmt.Errorf("user push endpoint client init failed: %w", err)
 	}
-	apnsProvider, err := provider.NewAPNsVoIPProvider(
-		provider.APNsVoIPConfig{
+	apnsProvider, err := pushprovider.NewAPNsVoIPProvider(
+		pushprovider.APNsVoIPConfig{
 			Environment: pushCfg.APNs.Environment,
 			KeyFile:     pushCfg.APNs.KeyFile,
 			KeyID:       pushCfg.APNs.KeyID,
@@ -192,8 +216,8 @@ func buildExternalProviders(
 	if err != nil {
 		return nil, nil, fmt.Errorf("APNs VoIP provider init failed: %w", err)
 	}
-	fcmProvider, err := provider.NewFCMProvider(
-		provider.FCMConfig{
+	fcmProvider, err := pushprovider.NewFCMProvider(
+		pushprovider.FCMConfig{
 			ServiceAccountFile: pushCfg.FCM.ServiceAccountFile,
 			ProjectID:          pushCfg.FCM.ProjectID,
 			Timeout:            pushTimeout,
@@ -203,7 +227,7 @@ func buildExternalProviders(
 	if err != nil {
 		return nil, nil, fmt.Errorf("FCM provider init failed: %w", err)
 	}
-	pushProvider, err := application.NewPushDispatchProvider(
+	pushProvider, err := pushapp.NewPushDispatchProvider(
 		endpointClient,
 		endpointClient,
 		apnsProvider,
@@ -213,7 +237,11 @@ func buildExternalProviders(
 	if err != nil {
 		return nil, nil, fmt.Errorf("push dispatch provider init failed: %w", err)
 	}
-	providers[pushDispatchProviderName] = pushProvider
+	runtimePushProvider, err := pushruntime.NewProvider(pushProvider)
+	if err != nil {
+		return nil, nil, fmt.Errorf("push delivery adapter init failed: %w", err)
+	}
+	providers[pushDispatchProviderName] = runtimePushProvider
 	policies[reliabletask.ExternalInteractionOperationPush] = reliabletask.ProviderPolicy{
 		Providers:   []string{pushDispatchProviderName},
 		Timeout:     pushTimeout,

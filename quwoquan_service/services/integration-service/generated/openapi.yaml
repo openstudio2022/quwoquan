@@ -43,7 +43,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/LocationPoi'
+                                $ref: '#/components/schemas/LocationPoiListSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -97,7 +97,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/LocationPoi'
+                                $ref: '#/components/schemas/LocationPoiListSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -107,6 +107,341 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
+    /integrations/connections:
+        get:
+            operationId: ListConnectorConnections
+            x-contract-operation-id: integration.connector_connection.ListConnectorConnections
+            x-object-id: integration.connector_connection
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorConnectionQueryFacade
+                method: listConnections
+                reader: ConnectorConnectionReader
+                slice: ConnectorConnectionListSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorConnectionListSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        post:
+            operationId: CreateConnectorConnection
+            x-contract-operation-id: integration.connector_connection.CreateConnectorConnection
+            x-object-id: integration.connector_connection
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConnectorConnectionCommandFacade
+                method: createConnection
+                aggregateOwner: ConnectorConnection
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateConnectorConnectionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorConnectionMutationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connections/{connectionId}:
+        get:
+            operationId: GetConnectorConnection
+            x-contract-operation-id: integration.connector_connection.GetConnectorConnection
+            x-object-id: integration.connector_connection
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorConnectionQueryFacade
+                method: getConnection
+                reader: ConnectorConnectionReader
+                slice: ConnectorConnection
+            parameters:
+                - name: connectionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorConnectionView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connections/{connectionId}/revoke:
+        post:
+            operationId: RevokeConnectorConnection
+            x-contract-operation-id: integration.connector_connection.RevokeConnectorConnection
+            x-object-id: integration.connector_connection
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConnectorConnectionCommandFacade
+                method: revokeConnection
+                aggregateOwner: ConnectorConnection
+            parameters:
+                - name: connectionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeConnectorConnectionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorConnectionMutationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connector-authorizations:
+        post:
+            operationId: StartConnectorAuthorization
+            x-contract-operation-id: integration.connector_authorization.StartConnectorAuthorization
+            x-object-id: integration.connector_authorization
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConnectorAuthorizationCommandFacade
+                method: startAuthorization
+                aggregateOwner: ConnectorAuthorization
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StartConnectorAuthorizationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorAuthorizationIntent'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connector-authorizations/{authorizationId}:
+        get:
+            operationId: GetConnectorAuthorization
+            x-contract-operation-id: integration.connector_authorization.GetConnectorAuthorization
+            x-object-id: integration.connector_authorization
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorAuthorizationQueryFacade
+                method: getAuthorization
+                reader: ConnectorAuthorizationReader
+                slice: ConnectorAuthorization
+            parameters:
+                - name: authorizationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorAuthorizationView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connector-authorizations/{authorizationId}/complete-native:
+        post:
+            operationId: CompleteNativeConnectorAuthorization
+            x-contract-operation-id: integration.connector_authorization.CompleteNativeConnectorAuthorization
+            x-object-id: integration.connector_authorization
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConnectorAuthorizationCommandFacade
+                method: completeNativeAuthorization
+                aggregateOwner: ConnectorAuthorization
+            parameters:
+                - name: authorizationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CompleteNativeConnectorAuthorizationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorAuthorizationGrantReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connectors:
+        get:
+            operationId: ListConnectorDefinitions
+            x-contract-operation-id: integration.connector_definition.ListConnectorDefinitions
+            x-object-id: integration.connector_definition
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorDefinitionQueryFacade
+                method: listDefinitions
+                reader: ConnectorDefinitionReader
+                slice: ConnectorDefinitionListSlice
+            parameters:
+                - name: capability
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorDefinitionListSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/connectors/{connectorId}:
+        get:
+            operationId: GetConnectorDefinition
+            x-contract-operation-id: integration.connector_definition.GetConnectorDefinition
+            x-object-id: integration.connector_definition
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorDefinitionQueryFacade
+                method: getDefinition
+                reader: ConnectorDefinitionReader
+                slice: ConnectorDefinition
+            parameters:
+                - name: connectorId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorDefinition'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /integrations/external-requests:
         post:
             operationId: SubmitExternalInteractionRequest
@@ -311,11 +646,366 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /integrations/invocations:
+        get:
+            operationId: ListConnectorInvocations
+            x-contract-operation-id: integration.connector_invocation.ListConnectorInvocations
+            x-object-id: integration.connector_invocation
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorInvocationQueryFacade
+                method: listInvocations
+                reader: ConnectorInvocationReader
+                slice: ConnectorInvocationListSlice
+            parameters:
+                - name: connectionId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorInvocationListSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /integrations/invocations/{invocationId}:
+        get:
+            operationId: GetConnectorInvocation
+            x-contract-operation-id: integration.connector_invocation.GetConnectorInvocation
+            x-object-id: integration.connector_invocation
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConnectorInvocationQueryFacade
+                method: getInvocation
+                reader: ConnectorInvocationReader
+                slice: ConnectorInvocation
+            parameters:
+                - name: invocationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorInvocationView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/integrations/connector-authorizations/{authorizationId}/complete-oauth:
+        post:
+            operationId: CompleteOAuthConnectorAuthorization
+            x-contract-operation-id: integration.connector_authorization.CompleteOAuthConnectorAuthorization
+            x-object-id: integration.connector_authorization
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ConnectorAuthorizationCommandFacade
+                method: completeOAuthAuthorization
+                aggregateOwner: ConnectorAuthorization
+            parameters:
+                - name: authorizationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CompleteOAuthConnectorAuthorizationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorAuthorizationGrantReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/integrations/connector-capability-grants:resolve:
+        post:
+            operationId: ResolveConnectorCapabilityGrant
+            x-contract-operation-id: integration.connector_connection.ResolveConnectorCapabilityGrant
+            x-object-id: integration.connector_connection
+            x-actor: none
+            x-application:
+                kind: query
+                facet: ConnectorConnectionQueryFacade
+                method: resolveCapabilityGrant
+                reader: ConnectorConnectionReader
+                slice: ConnectorCapabilityGrantDecision
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ResolveConnectorCapabilityGrantRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorCapabilityGrantDecision'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/integrations/connectors/{connectorId}:
+        put:
+            operationId: PublishConnectorDefinition
+            x-contract-operation-id: integration.connector_definition.PublishConnectorDefinition
+            x-object-id: integration.connector_definition
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ConnectorDefinitionCommandFacade
+                method: publishDefinition
+                aggregateOwner: ConnectorDefinition
+            parameters:
+                - name: connectorId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PublishConnectorDefinitionRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PublishConnectorDefinitionReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/integrations/invocations:
+        post:
+            operationId: InvokeConnectorCapability
+            x-contract-operation-id: integration.connector_invocation.InvokeConnectorCapability
+            x-object-id: integration.connector_invocation
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ConnectorInvocationCommandFacade
+                method: invokeCapability
+                aggregateOwner: ConnectorInvocation
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/InvokeConnectorCapabilityRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorInvocationMutationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/integrations/invocations/{invocationId}/continue:
+        post:
+            operationId: ContinueConnectorInvocation
+            x-contract-operation-id: integration.connector_invocation.ContinueConnectorInvocation
+            x-object-id: integration.connector_invocation
+            x-actor: none
+            x-application:
+                kind: command
+                facet: ConnectorInvocationCommandFacade
+                method: continueInvocation
+                aggregateOwner: ConnectorInvocation
+            parameters:
+                - name: invocationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ContinueConnectorInvocationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConnectorInvocationMutationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
 components:
     securitySchemes:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        CompleteNativeConnectorAuthorizationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CompleteNativeConnectorAuthorizationRequest
+            x-contract-placeholder: true
+        CompleteOAuthConnectorAuthorizationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CompleteOAuthConnectorAuthorizationRequest
+            x-contract-placeholder: true
+        ConnectorAuthorizationGrantReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorAuthorizationGrantReceipt
+            x-contract-placeholder: true
+        ConnectorAuthorizationIntent:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorAuthorizationIntent
+            x-contract-placeholder: true
+        ConnectorAuthorizationView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorAuthorizationView
+            x-contract-placeholder: true
+        ConnectorCapabilityGrantDecision:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorCapabilityGrantDecision
+            x-contract-placeholder: true
+        ConnectorConnectionListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorConnectionListSlice
+            x-contract-placeholder: true
+        ConnectorConnectionMutationReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorConnectionMutationReceipt
+            x-contract-placeholder: true
+        ConnectorConnectionView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorConnectionView
+            x-contract-placeholder: true
+        ConnectorDefinition:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorDefinition
+            x-contract-placeholder: true
+        ConnectorDefinitionListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorDefinitionListSlice
+            x-contract-placeholder: true
+        ConnectorInvocationListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorInvocationListSlice
+            x-contract-placeholder: true
+        ConnectorInvocationMutationReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorInvocationMutationReceipt
+            x-contract-placeholder: true
+        ConnectorInvocationView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConnectorInvocationView
+            x-contract-placeholder: true
+        ContinueConnectorInvocationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContinueConnectorInvocationRequest
+            x-contract-placeholder: true
+        CreateConnectorConnectionRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateConnectorConnectionRequest
+            x-contract-placeholder: true
         ExternalInteractionAccepted:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -351,8 +1041,38 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ExternalInteractionRequest
             x-contract-placeholder: true
-        LocationPoi:
+        InvokeConnectorCapabilityRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: LocationPoi
+            x-contract-entity: InvokeConnectorCapabilityRequest
+            x-contract-placeholder: true
+        LocationPoiListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: LocationPoiListSlice
+            x-contract-placeholder: true
+        PublishConnectorDefinitionReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PublishConnectorDefinitionReceipt
+            x-contract-placeholder: true
+        PublishConnectorDefinitionRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PublishConnectorDefinitionRequest
+            x-contract-placeholder: true
+        ResolveConnectorCapabilityGrantRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ResolveConnectorCapabilityGrantRequest
+            x-contract-placeholder: true
+        RevokeConnectorConnectionRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RevokeConnectorConnectionRequest
+            x-contract-placeholder: true
+        StartConnectorAuthorizationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: StartConnectorAuthorizationRequest
             x-contract-placeholder: true

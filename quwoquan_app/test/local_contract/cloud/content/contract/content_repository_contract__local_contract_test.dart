@@ -36,7 +36,7 @@ void main() {
           .first;
 
       expect(source.keys.toSet().intersection(retiredClientAliases), isEmpty);
-      final post = contentPostDtoFromReadModelMap(source);
+      final post = contentPostViewDataFromReadModelMap(source);
       expect(post.id, source['postId']);
       expect(post.type, source['contentType']);
       expect(post.identity, source['contentIdentity']);
@@ -119,7 +119,7 @@ void main() {
       expect(moment.map((post) => post.id).toList(), expectedIds);
       expect(recommend.length, expectedIds.length);
 
-      PostBaseDto byId(String id) =>
+      ContentPostViewData byId(String id) =>
           recommend.firstWhere((post) => post.id == id);
 
       expect(byId('alpha_moment_grid_1').mediaImageUrls, hasLength(1));

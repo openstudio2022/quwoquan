@@ -27,12 +27,11 @@ void main() {
       expect(dto.avatarUrl, equals('https://i.pravatar.cc/150?u=wang'));
       expect(dto.memberType, equals('user'));
       expect(dto.role, equals('owner'));
-      expect(dto.assistantSkillId, isNull);
       expect(dto.invitedBy, equals('user_000'));
       expect(dto.joinedAt.year, equals(2026));
     });
 
-    test('fromMap 解析 assistant 类型成员含 assistantSkillId', () {
+    test('assistant 类型成员不绑定单一 Skill', () {
       final raw = <String, dynamic>{
         'id': 'cm_ast',
         'conversationId': 'conv_002',
@@ -47,7 +46,7 @@ void main() {
 
       expect(dto.memberType, equals('assistant'));
       expect(dto.role, equals('member'));
-      expect(dto.assistantSkillId, equals('weather_skill'));
+      expect(dto.toMap().containsKey('assistantSkillId'), isFalse);
     });
 
     test('toMap round-trip 保持字段完整', () {
@@ -59,7 +58,6 @@ void main() {
         'avatarUrl': 'https://example.com/av.jpg',
         'memberType': 'user',
         'role': 'admin',
-        'assistantSkillId': 'skill_1',
         'invitedBy': 'u0',
         'joinedAt': '2026-01-01T00:00:00.000Z',
       };
@@ -69,7 +67,6 @@ void main() {
       expect(map['id'], equals('cm_rt'));
       expect(map['memberType'], equals('user'));
       expect(map['role'], equals('admin'));
-      expect(map['assistantSkillId'], equals('skill_1'));
       expect(map['invitedBy'], equals('u0'));
     });
   });
@@ -155,7 +152,6 @@ void main() {
       expect(dto.role, equals('member'));
       expect(dto.displayName, isNull);
       expect(dto.avatarUrl, isNull);
-      expect(dto.assistantSkillId, isNull);
       expect(dto.invitedBy, isNull);
     });
 
@@ -168,7 +164,6 @@ void main() {
         'avatarUrl': null,
         'memberType': null,
         'role': null,
-        'assistantSkillId': null,
         'invitedBy': null,
         'joinedAt': null,
       };
@@ -178,7 +173,6 @@ void main() {
       expect(dto.memberType, equals('user'));
       expect(dto.role, equals('member'));
       expect(dto.displayName, isNull);
-      expect(dto.assistantSkillId, isNull);
     });
 
     test('仅有 id 字段时其余均为默认值', () {

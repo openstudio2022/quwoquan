@@ -7,6 +7,7 @@ import (
 
 	application "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
 type creatorPublicIdentityPersonaStore struct{}
@@ -40,13 +41,13 @@ func (creatorPublicIdentityPersonaStore) Update(context.Context, *usermodel.Pers
 }
 
 type creatorPublicIdentityReader struct {
-	profile *usermodel.CreatorRuntimeProfile
+	profile *userports.CreatorRuntimeProfileView
 }
 
 func (r creatorPublicIdentityReader) FindActiveByPublicIdentity(
 	_ context.Context,
 	identity string,
-) (*usermodel.CreatorRuntimeProfile, bool, error) {
+) (*userports.CreatorRuntimeProfileView, bool, error) {
 	if r.profile != nil &&
 		(identity == r.profile.PersonaID || identity == r.profile.CreatorID) {
 		return r.profile, true, nil
@@ -57,22 +58,21 @@ func (r creatorPublicIdentityReader) FindActiveByPublicIdentity(
 func (r creatorPublicIdentityReader) ListActiveWorks(
 	ctx context.Context,
 	identity string,
-) ([]usermodel.CreatorWorkRef, bool, error) {
+) ([]userports.CreatorWorkView, bool, error) {
 	profile, found, err := r.FindActiveByPublicIdentity(ctx, identity)
 	if err != nil || !found {
 		return nil, found, err
 	}
-	return append([]usermodel.CreatorWorkRef(nil), profile.Works...), true, nil
+	return append([]userports.CreatorWorkView(nil), profile.Works...), true, nil
 }
 
 func TestCreatorReleasePublicIdentityContract(t *testing.T) {
 	now := time.Now().UTC()
-	profile := &usermodel.CreatorRuntimeProfile{
+	profile := &userports.CreatorRuntimeProfileView{
 		CreatorID:   "qwq_creator_highland_travel_blogger_001",
 		PersonaID:   "builtin_highland_travel_blogger",
 		Handle:      "highland_slow_travel",
 		DisplayName: "高原慢旅笔记",
-		Status:      "active",
 		UpdatedAt:   now,
 	}
 	service := application.NewPersonaService(
@@ -92,9 +92,12 @@ func TestCreatorReleasePublicIdentityContract(t *testing.T) {
 			t.Fatalf("read creator by %q: %v", identity, err)
 		}
 		if view["personaId"] != profile.PersonaID ||
-			view["userId"] != profile.CreatorID ||
+			view["userHandle"] != profile.Handle ||
 			view["displayName"] != profile.DisplayName {
 			t.Fatalf("creator identity %q resolved unexpected view: %#v", identity, view)
+		}
+		if _, leaked := view["userId"]; leaked {
+			t.Fatalf("creator identity %q leaked owner mapping: %#v", identity, view)
 		}
 	}
 

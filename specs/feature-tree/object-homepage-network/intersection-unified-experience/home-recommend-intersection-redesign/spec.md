@@ -42,7 +42,7 @@
 ## 4. 契约引用
 
 - canonical：`content/content/post/projections/discovery_feed.yaml`
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 
 ## 5. 验收场景
 

@@ -382,6 +382,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "default": "http://circle-service:18082",
+      "key": "sys.assistant-service.circle_service.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 3000,
+      "key": "sys.assistant-service.circle_service.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": "http://content-service:18080",
       "key": "sys.assistant-service.content_service.base_url",
       "reload": "restart",
@@ -761,6 +779,41 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "default": "/app/resources/skills/packages/official",
+      "key": "sys.assistant-service.skill_package.asset_root",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.assistant-service.skill_package.trusted_public_keys_json",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": "http://travel-service:18093",
+      "key": "sys.assistant-service.travel_service.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 3000,
+      "key": "sys.assistant-service.travel_service.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "default": "",
@@ -3064,6 +3117,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": "redis:6379",
+      "key": "sys.platform-ops-service.redis.general.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": ":18088",
       "key": "sys.platform-ops-service.service.http.addr",
       "reload": "restart",
@@ -3293,6 +3355,14 @@ _PLATFORM_CONFIG_JSON = r'''{
       "rollout": "progressive",
       "scope": "workload",
       "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.product-ops-service.elasticsearch.api_key",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
       "type": "string"
     },
     {
@@ -3569,78 +3639,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
-    },
-    {
-      "default": "app-product-telemetry-hourly",
-      "key": "sys.product-ops-service.sls.aggregate_logstore",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "${PRODUCT_OPS_SLS_ENDPOINT}",
-      "key": "sys.product-ops-service.sls.endpoint",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "${PRODUCT_OPS_SLS_PROJECT}",
-      "key": "sys.product-ops-service.sls.project",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "app-product-telemetry-raw",
-      "key": "sys.product-ops-service.sls.raw_logstore",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "${PRODUCT_OPS_SLS_REGION}",
-      "key": "sys.product-ops-service.sls.region",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "runtime-diagnostics-raw",
-      "key": "sys.product-ops-service.sls.runtime_logstore",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "app-startup-diagnostic-raw",
-      "key": "sys.product-ops-service.sls.startup_diagnostic_logstore",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": 1200,
-      "key": "sys.product-ops-service.sls.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "default": "redis:6379",
@@ -4135,33 +4133,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 50,
-      "key": "sys.search-service.ranking.experiment.controlWeightPct",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": true,
-      "key": "sys.search-service.ranking.experiment.enabled",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
-      "default": 50,
-      "key": "sys.search-service.ranking.experiment.termHeatWeightPct",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
       "default": 1.5,
       "key": "sys.search-service.ranking.termHeatBoost",
       "reload": "restart",
@@ -4596,6 +4567,214 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "key": "sys.travel-service.accountSecurityAuthority.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 800,
+      "key": "sys.travel-service.accountSecurityAuthority.timeoutMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.travel-service.chatSourceAuthority.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 800,
+      "key": "sys.travel-service.chatSourceAuthority.timeoutMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.travel-service.circleSourceAuthority.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 800,
+      "key": "sys.travel-service.circleSourceAuthority.timeoutMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.travel-service.contentPublicAuthority.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 800,
+      "key": "sys.travel-service.contentPublicAuthority.timeoutMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.travel-service.entityPublicAuthority.baseUrl",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 800,
+      "key": "sys.travel-service.entityPublicAuthority.timeoutMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "quwoquan_travel",
+      "key": "sys.travel-service.mongo.database",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.travel-service.mongo.uri",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "key": "sys.travel-service.redis.general.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": [],
+      "key": "sys.travel-service.redis.general.addrs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "list"
+    },
+    {
+      "default": 0,
+      "key": "sys.travel-service.redis.general.db",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "standalone",
+      "key": "sys.travel-service.redis.general.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.travel-service.redis.general.password",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": 500,
+      "key": "sys.travel-service.redis.general.pool.dial_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 0,
+      "key": "sys.travel-service.redis.general.pool.min_idle",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 200,
+      "key": "sys.travel-service.redis.general.pool.read_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 0,
+      "key": "sys.travel-service.redis.general.pool.size",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 200,
+      "key": "sys.travel-service.redis.general.pool.write_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": false,
+      "key": "sys.travel-service.redis.general.tls",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": ":18093",
+      "key": "sys.travel-service.service.http.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": 0,

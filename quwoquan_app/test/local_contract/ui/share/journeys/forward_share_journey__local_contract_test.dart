@@ -287,7 +287,7 @@ class _ForwardJourneyChatRepository extends MockChatRepository {
   String? get lastConversationId => writer.lastCommand?.conversationId;
   String? get lastType => writer.lastCommand?.type;
   String? get lastContent => writer.lastCommand?.content;
-  ChatMessageCardCommand? get lastCard => writer.lastCommand?.card;
+  MessageCard? get lastCard => writer.lastCommand?.card;
 
   @override
   Future<List<ChatInboxDto>> listConversations({

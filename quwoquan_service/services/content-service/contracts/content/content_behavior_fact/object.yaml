@@ -38,6 +38,7 @@ capabilities:
 business_rules:
 - personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
 - 同一主体与 clientEventId 只能追加一条语义一致的事实；不同语义重用幂等键必须冲突。
+- impactHelpType 只可由服务端在权威 Post author 校验后按唯一注册表派生，公共行为 payload 不得提供或覆盖。
 - Post 删除不删除历史行为事实；读取和训练侧必须按当前内容可用性独立过滤。
 - 事实不可更新；推荐、分析与足迹读模型只能由 checkpoint 重放物化。
 lifecycle:

@@ -1,19 +1,11 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 // ignore_for_file: prefer_initializing_formals
 
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
@@ -84,7 +76,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 会话 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<List<ChatInboxDto>> listInbox({
+  Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -95,7 +87,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<MessageHomeRowDto>> listMessageHome({
+  Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -103,11 +95,11 @@ class RemoteChatRepository implements ChatRepository {
     final page = await _messageHomeQuery.listMessageHome(
       ChatListMessageHomeQuery(filter: filter, cursor: cursor, limit: limit),
     );
-    return page.items.map(_mapper.toMessageHome).toList(growable: false);
+    return page.items;
   }
 
   @override
-  Future<List<ChatInboxDto>> listConversations({
+  Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -118,7 +110,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<ChatConversationCreatedDto> createConversation({
+  Future<ChatConversationCreatedViewData> createConversation({
     required String type,
     String? title,
     int? maxGroupSize,
@@ -139,7 +131,7 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<ConversationDto> getConversation(String conversationId) async {
+  Future<ConversationViewData> getConversation(String conversationId) async {
     final conversation = await _conversationQuery.getConversation(
       ChatGetConversationQuery(conversationId: conversationId),
     );
@@ -163,7 +155,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 消息 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<List<ChatMessageDto>> listMessages({
+  Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
     String? before,
     int limit = CloudApiDefaults.pageLimit,
@@ -182,7 +174,7 @@ class RemoteChatRepository implements ChatRepository {
         limit: limit,
       ),
     );
-    return page.items.map(_mapper.toMessage).toList(growable: false);
+    return page.items.map(ChatMessageViewData.fromWire).toList(growable: false);
   }
 
   @override
@@ -248,7 +240,7 @@ class RemoteChatRepository implements ChatRepository {
   // ── 成员管理 ──────────────────────────────────────────────────────────────
 
   @override
-  Future<List<ChatConversationMemberDto>> listMembers({
+  Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -264,11 +256,11 @@ class RemoteChatRepository implements ChatRepository {
         sort: sort ?? 'joined_asc',
       ),
     );
-    return page.items.map(_mapper.toMember).toList(growable: false);
+    return page.items;
   }
 
   @override
-  Future<List<ChatConversationMemberDto>> searchMembers({
+  Future<List<ConversationMemberListRow>> searchMembers({
     required String conversationId,
     required String query,
     int limit = CloudApiDefaults.chatMemberSearchLimit,
@@ -281,7 +273,7 @@ class RemoteChatRepository implements ChatRepository {
         sort: 'display_name_asc',
       ),
     );
-    return page.items.map(_mapper.toMember).toList(growable: false);
+    return page.items;
   }
 
   @override
@@ -323,15 +315,9 @@ class RemoteChatRepository implements ChatRepository {
   // ── 助手 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<void> inviteAssistant({
-    required String conversationId,
-    String? skillId,
-  }) async {
+  Future<void> inviteAssistant({required String conversationId}) async {
     await _membershipCommandWriter.inviteAssistant(
-      ChatInviteConversationAssistantCommand(
-        conversationId: conversationId,
-        skillId: skillId,
-      ),
+      ChatInviteConversationAssistantCommand(conversationId: conversationId),
       idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
@@ -365,21 +351,21 @@ class RemoteChatRepository implements ChatRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final page = await _contactQuery.listContacts(
       ChatListContactsQuery(cursor: cursor, limit: limit),
     );
-    return CursorPage<ChatContactRowDto>(
+    return CursorPage<ChatContactRowViewData>(
       items: page.items.map(_mapper.toContact).toList(growable: false),
       nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<List<ContactHomeRowDto>> listContactHome({
+  Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -394,11 +380,11 @@ class RemoteChatRepository implements ChatRepository {
     final page = await _contactQuery.listContactHome(
       ChatListContactHomeQuery(filter: filter, limit: limit),
     );
-    return page.items.map(_mapper.toContactHome).toList(growable: false);
+    return page.items;
   }
 
   @override
-  Future<List<ChatContactRowDto>> listGroupCandidates({
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -408,13 +394,15 @@ class RemoteChatRepository implements ChatRepository {
         limit: limit,
       ),
     );
-    return page.items.map(_mapper.toContact).toList(growable: false);
+    return page.items
+        .map(_mapper.groupCandidateToContact)
+        .toList(growable: false);
   }
 
   // ── 从群聊/圈子中选择联系人 ─────────────────────────────────────────────────
 
   @override
-  Future<CursorPage<SelectableGroupConversationRowDto>>
+  Future<CursorPage<SelectableGroupConversationRow>>
   listSelectableGroupConversations({
     String? query,
     ChatSelectableGroupSource source = ChatSelectableGroupSource.all,
@@ -429,14 +417,14 @@ class RemoteChatRepository implements ChatRepository {
         limit: limit,
       ),
     );
-    return CursorPage<SelectableGroupConversationRowDto>(
-      items: page.items.map(_mapper.toSelectableGroup).toList(growable: false),
+    return CursorPage<SelectableGroupConversationRow>(
+      items: page.items,
       nextCursor: page.nextCursor,
     );
   }
 
   @override
-  Future<CursorPage<ChatContactRowDto>> listSelectableGroupContactMembers({
+  Future<CursorPage<ChatContactRowViewData>> listSelectableGroupContactMembers({
     required String conversationId,
     String? query,
     String? cursor,
@@ -450,8 +438,10 @@ class RemoteChatRepository implements ChatRepository {
         limit: limit,
       ),
     );
-    return CursorPage<ChatContactRowDto>(
-      items: page.items.map(_mapper.toContact).toList(growable: false),
+    return CursorPage<ChatContactRowViewData>(
+      items: page.items
+          .map(_mapper.selectableContactToContact)
+          .toList(growable: false),
       nextCursor: page.nextCursor,
     );
   }
@@ -479,7 +469,9 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
+  Future<List<ConversationViewData>> batchGetConversations(
+    List<String> ids,
+  ) async {
     final page = await _conversationQuery.batchGetConversations(
       ChatBatchGetConversationsQuery(conversationIds: ids),
     );
@@ -489,7 +481,9 @@ class RemoteChatRepository implements ChatRepository {
   // ── 群管理 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async {
     final conversation = await _settingsConversationQuery.getConversation(
       ChatGetConversationQuery(conversationId: conversationId),
     );
@@ -497,17 +491,17 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
-  Future<GroupHomeDto> getGroupHome(String conversationId) async {
+  Future<GroupHome> getGroupHome(String conversationId) async {
     final home = await _conversationQuery.getGroupHome(
       ChatGetGroupHomeQuery(conversationId: conversationId),
     );
-    return _mapper.toGroupHome(home);
+    return home;
   }
 
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsDto settings,
+    ChatGroupSettingsViewData settings,
   ) async {
     await _conversationCommandWriter.updateGroupGovernanceSettings(
       ChatUpdateGroupGovernanceSettingsCommand(

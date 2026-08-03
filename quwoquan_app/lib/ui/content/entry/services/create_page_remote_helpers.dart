@@ -443,7 +443,7 @@ buildPostPublicationPayloadWithRemoteMedia({
             final resolved = await _resolveMediaReference(
               media: media,
               localOrRemotePath: source,
-              mediaType: ContentMediaType.image,
+              mediaType: MediaType.image,
               sourceReader: sourceReader,
               uploadStream: uploadStream,
               telemetry: telemetry,
@@ -503,7 +503,7 @@ buildPostPublicationPayloadWithRemoteMedia({
     final resolved = await _resolveMediaReference(
       media: media,
       localOrRemotePath: path,
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       captureMetadata: index == 0
           ? _contentMediaCaptureMetadata(state.settings)
           : null,
@@ -554,7 +554,7 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
   final video = await _resolveMediaReference(
     media: media,
     localOrRemotePath: state.videoPath,
-    mediaType: ContentMediaType.video,
+    mediaType: MediaType.video,
     sourceReader: sourceReader,
     uploadStream: uploadStream,
     telemetry: telemetry,
@@ -644,8 +644,8 @@ class _ResolvedVideoCoverReference {
 Future<_ResolvedMediaReference> _resolveMediaReference({
   required ContentMediaFacet media,
   required String localOrRemotePath,
-  required ContentMediaType mediaType,
-  ContentMediaCaptureMetadata? captureMetadata,
+  required MediaType mediaType,
+  MediaCaptureMetadata? captureMetadata,
   required ContentMediaSourceReader sourceReader,
   required ContentMediaStreamObjectUpload uploadStream,
   AppTelemetryRecorder? telemetry,
@@ -714,7 +714,7 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
     uploadStream: uploadStream,
     onProgress: onProgress,
     cancellationSignal: cancellationSignal,
-    accessPolicy: ContentMediaAccessPolicy.referencedPost,
+    accessPolicy: MediaAssetAccessPolicy.referencedPost,
     captureMetadata: captureMetadata,
     checkpoint: durableCheckpoint,
     onCheckpoint: (updated) async {
@@ -736,12 +736,10 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
   return _ResolvedMediaReference(assetId: assetId);
 }
 
-ContentMediaCaptureMetadata? _contentMediaCaptureMetadata(
-  PublishSettings settings,
-) {
+MediaCaptureMetadata? _contentMediaCaptureMetadata(PublishSettings settings) {
   final value = settings.disclosedCaptureMetadata;
   if (value.isEmpty) return null;
-  return ContentMediaCaptureMetadata(
+  return MediaCaptureMetadata(
     cameraMake: value.cameraMake,
     cameraModel: value.cameraModel,
     lensModel: value.lensModel,
@@ -774,7 +772,7 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
     final cover = await _resolveMediaReference(
       media: media,
       localOrRemotePath: coverPath,
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       sourceReader: sourceReader,
       uploadStream: uploadStream,
       telemetry: telemetry,
@@ -840,22 +838,28 @@ submitContentPostPublicationCommandFromPreparedPayload(
   String? authorAvatarUrlSnapshot,
   int? personaContextVersion,
 }) => SubmitContentPostPublicationCommand(
-  publishIntentId: postPublicationIntentIdForLocalDraft(localDraftId),
+  publishIntentId: _postPublicationIntentIdForLocalDraft(localDraftId),
   localDraftId: localDraftId,
   contentType: _requiredPostType(payload['contentType']),
   contentIdentity: _optionalPostIdentity(payload['contentIdentity']),
   title: _optionalPayloadText(payload['title']),
   body: _optionalPayloadText(payload['body']),
   summary: _optionalPayloadText(payload['summary']),
-  semanticMentions: decodePostSemanticMentionList(payload['semanticMentions']),
+  semanticMentions: _postSemanticMentionsFromPayload(
+    payload['semanticMentions'],
+  ),
   mediaAssetIds: mediaAssetIds,
   articleMarkdown: _optionalPayloadText(payload['articleMarkdown']),
   markdownDialect: _optionalPayloadText(payload['markdownDialect']),
-  articleAssetManifest: decodeOptionalPostArticleAssetManifestInput(
+  articleAssetManifest: _optionalGeneratedWireValue(
     payload['articleAssetManifest'],
+    'articleAssetManifest',
+    PostArticleAssetManifestInput.fromWire,
   ),
-  articleRenderProfile: decodeOptionalPostArticleRenderProfile(
+  articleRenderProfile: _optionalGeneratedWireValue(
     payload['articleRenderProfile'],
+    'articleRenderProfile',
+    PostArticleRenderProfile.fromWire,
   ),
   coverStrategy: _optionalPayloadText(payload['coverStrategy']),
   coverFrameTimeMs: _optionalPayloadInt(
@@ -863,15 +867,21 @@ submitContentPostPublicationCommandFromPreparedPayload(
     'coverFrameTimeMs',
   ),
   illustrationAssetId: _optionalPayloadText(payload['illustrationAssetId']),
-  location: decodeOptionalGeoPoint(payload['location']),
+  location: _optionalGeneratedWireValue(
+    payload['location'],
+    'location',
+    GeoPoint.fromWire,
+  ),
   locationName: _optionalPayloadText(payload['locationName']),
   geoTagRef: _optionalPayloadText(payload['geoTagRef']),
   visitedAt: _optionalPayloadTimestamp(payload['visitedAt'], 'visitedAt'),
   captureDisclosure: _payloadStringList(payload['captureDisclosure']),
   primaryHomepageId: _optionalPayloadText(payload['primaryHomepageId']),
   primaryHomepageType: _optionalPayloadText(payload['primaryHomepageType']),
-  primaryHomepageSnapshot: decodeOptionalPostHomepageSnapshot(
+  primaryHomepageSnapshot: _optionalGeneratedWireValue(
     payload['primaryHomepageSnapshot'],
+    'primaryHomepageSnapshot',
+    PostHomepageSnapshot.fromWire,
   ),
   visibility: _optionalPostVisibility(payload['visibility']),
   assistantUsePolicy: _optionalAssistantUsePolicy(
@@ -879,14 +889,67 @@ submitContentPostPublicationCommandFromPreparedPayload(
   ),
   sourcePostId: _optionalPayloadText(payload['sourcePostId']),
   sourceType: _optionalPostSourceType(payload['sourceType']),
-  deviceInfo: decodeOptionalPostDeviceInfo(payload['deviceInfo']),
-  publishLocation: decodeOptionalPostPublishLocation(
+  deviceInfo: _optionalGeneratedWireValue(
+    payload['deviceInfo'],
+    'deviceInfo',
+    PostDeviceInfo.fromWire,
+  ),
+  publishLocation: _optionalGeneratedWireValue(
     payload['publishLocation'],
+    'publishLocation',
+    PostPublishLocation.fromWire,
   ),
   authorDisplayNameSnapshot: _optionalPayloadText(authorDisplayNameSnapshot),
   authorAvatarUrlSnapshot: _optionalPayloadText(authorAvatarUrlSnapshot),
   personaContextVersion: personaContextVersion,
 );
+
+String _postPublicationIntentIdForLocalDraft(String localDraftId) {
+  final canonicalDraftId = localDraftId.trim();
+  if (canonicalDraftId.isEmpty) {
+    throw ArgumentError.value(
+      localDraftId,
+      'localDraftId',
+      'must not be blank',
+    );
+  }
+  return 'post-publication:$canonicalDraftId';
+}
+
+List<PostSemanticMention> _postSemanticMentionsFromPayload(Object? raw) {
+  if (raw == null) return const <PostSemanticMention>[];
+  if (raw is! Iterable) {
+    throw const FormatException('semanticMentions must be a list');
+  }
+  return List<PostSemanticMention>.unmodifiable(
+    raw.indexed.map((entry) {
+      final value = entry.$2;
+      if (value is PostSemanticMention) return value;
+      final path = 'semanticMentions[${entry.$1}]';
+      return PostSemanticMention.fromWire(
+        _requiredWireObject(value, path),
+        path,
+      );
+    }),
+  );
+}
+
+T? _optionalGeneratedWireValue<T>(
+  Object? raw,
+  String path,
+  T Function(Map<String, Object?> map, String path) fromWire,
+) {
+  if (raw == null) return null;
+  if (raw is T) return raw as T;
+  return fromWire(_requiredWireObject(raw, path), path);
+}
+
+Map<String, Object?> _requiredWireObject(Object? raw, String path) {
+  if (raw is! Map) {
+    throw FormatException('$path must be an object');
+  }
+  return Map<String, Object?>.from(raw);
+}
 
 // ─── 创作页埋点 extras（避免在 UI 散写 Map 字面量）────────────────────────────
 
@@ -922,19 +985,19 @@ Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
   Map<String, Object?> payload,
 ) => <String, Object?>{'contentType': payload['contentType']};
 
-ContentPostType _requiredPostType(Object? raw) => switch ('$raw'.trim()) {
-  'image' => ContentPostType.image,
-  'video' => ContentPostType.video,
-  'micro' => ContentPostType.micro,
-  'article' => ContentPostType.article,
+ContentType _requiredPostType(Object? raw) => switch ('$raw'.trim()) {
+  'image' => ContentType.image,
+  'video' => ContentType.video,
+  'micro' => ContentType.micro,
+  'article' => ContentType.article,
   final value => throw ArgumentError.value(value, 'contentType', 'unsupported'),
 };
 
-ContentPostIdentity? _optionalPostIdentity(Object? raw) =>
+ContentIdentity? _optionalPostIdentity(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
-      'moment' => ContentPostIdentity.moment,
-      'work' => ContentPostIdentity.work,
+      'moment' => ContentIdentity.moment,
+      'work' => ContentIdentity.work,
       final value => throw ArgumentError.value(
         value,
         'contentIdentity',
@@ -942,11 +1005,11 @@ ContentPostIdentity? _optionalPostIdentity(Object? raw) =>
       ),
     };
 
-ContentPostVisibility? _optionalPostVisibility(Object? raw) =>
+Visibility? _optionalPostVisibility(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
-      'public' => ContentPostVisibility.public,
-      'private' => ContentPostVisibility.private,
+      'public' => Visibility.public,
+      'private' => Visibility.private,
       final value => throw ArgumentError.value(
         value,
         'visibility',
@@ -954,11 +1017,11 @@ ContentPostVisibility? _optionalPostVisibility(Object? raw) =>
       ),
     };
 
-ContentPostAssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
+AssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
-      'inherit' => ContentPostAssistantUsePolicy.inherit,
-      'exclude' => ContentPostAssistantUsePolicy.exclude,
+      'inherit' => AssistantUsePolicy.inherit,
+      'exclude' => AssistantUsePolicy.exclude,
       final value => throw ArgumentError.value(
         value,
         'assistantUsePolicy',
@@ -966,12 +1029,12 @@ ContentPostAssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
       ),
     };
 
-ContentPostSourceType? _optionalPostSourceType(Object? raw) =>
+PostSourceType? _optionalPostSourceType(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
-      'original' => ContentPostSourceType.original,
-      'repost' => ContentPostSourceType.repost,
-      'quote' => ContentPostSourceType.quote,
+      'original' => PostSourceType.original,
+      'repost' => PostSourceType.repost,
+      'quote' => PostSourceType.quote,
       final value => throw ArgumentError.value(
         value,
         'sourceType',

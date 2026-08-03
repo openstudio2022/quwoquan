@@ -1,137 +1,13 @@
 package http
 
 import (
-	"bytes"
-	"compress/gzip"
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 )
-
-func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Request) {
-	raw, err := readBehaviorRequestBody(r)
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体读取失败", err.Error()))
-		return
-	}
-	var batch struct {
-		UserID        string                           `json:"userId"`
-		SessionID     string                           `json:"sessionId"`
-		FeedSessionID string                           `json:"feedSessionId"`
-		Events        []behaviorapp.BehaviorEventInput `json:"events"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&batch); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
-		return
-	}
-	if err := requireJSONEOF(decoder); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	if len(batch.Events) == 0 {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "events 不能为空", "empty events"))
-		return
-	}
-	// A verified principal is authoritative. Body/header actor fields are only
-	// retained for non-production direct contract fixtures that bypass the guard.
-	if actorID, ok := VerifiedOperationActorID(r); ok {
-		batch.UserID = actorID
-		for i := range batch.Events {
-			batch.Events[i].UserID = actorID
-		}
-	} else if strings.TrimSpace(batch.UserID) == "" {
-		batch.UserID = ResolveUserID(r)
-	}
-	if strings.TrimSpace(batch.SessionID) == "" {
-		batch.SessionID = resolveSessionID(r)
-	}
-	personaID := ResolvePersonaID(r)
-	for i := range batch.Events {
-		// persona 只来自已验证主体（或隔离 transport fixture 的 header 回退），
-		// 不从客户端行为 body 读取。
-		batch.Events[i].PersonaID = personaID
-		if strings.TrimSpace(batch.Events[i].UserID) == "" {
-			batch.Events[i].UserID = batch.UserID
-		}
-		if strings.TrimSpace(batch.Events[i].SessionID) == "" {
-			batch.Events[i].SessionID = batch.SessionID
-		}
-		if strings.TrimSpace(batch.Events[i].FeedSessionID) == "" {
-			batch.Events[i].FeedSessionID = strings.TrimSpace(batch.FeedSessionID)
-		}
-		// N0-3：like/comment/report 是服务端权威信号（对象命令 outbox 事实注入），
-		// 通用行为端点拒收端侧补报，防止双计与伪造。
-		switch strings.ToLower(strings.TrimSpace(batch.Events[i].Action)) {
-		case "like", "comment", "report":
-			writeHTTPError(
-				w,
-				r,
-				rterr.NewInvalidArgument(
-					rterr.ModuleContent,
-					"该行为由服务端权威采集，需走专属命令路由",
-					"like/comment/report are server-authoritative; use the dedicated command route",
-				),
-			)
-			return
-		}
-	}
-	if err := h.behaviorService.ProcessBatch(r.Context(), batch.Events); err != nil {
-		writeHTTPError(w, r, mapBehaviorCommandError(err))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func mapBehaviorCommandError(err error) error {
-	var appError *rterr.AppError
-	if errors.As(err, &appError) {
-		return err
-	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return contentgenerated.AppErrorFromUpstreamTimeout(
-			"report behaviors dependency timed out: " + err.Error(),
-		)
-	}
-	return contentgenerated.AppErrorFromStorageWriteFailed(
-		"persist report behaviors batch: " + err.Error(),
-	)
-}
-
-const maxBehaviorRequestBytes = 128 * 1024
-
-func readBehaviorRequestBody(r *http.Request) ([]byte, error) {
-	var reader io.Reader = r.Body
-	var compressed *gzip.Reader
-	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
-		var err error
-		compressed, err = gzip.NewReader(r.Body)
-		if err != nil {
-			return nil, fmt.Errorf("invalid gzip body: %w", err)
-		}
-		defer compressed.Close()
-		reader = compressed
-	}
-	raw, err := io.ReadAll(io.LimitReader(reader, maxBehaviorRequestBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("read behavior body: %w", err)
-	}
-	if len(raw) > maxBehaviorRequestBytes {
-		return nil, fmt.Errorf("behavior body exceeds %d bytes", maxBehaviorRequestBytes)
-	}
-	return raw, nil
-}
 
 // handleGetMyFootprint 我的足迹只读列表：仅本人可见，复用既有行为边，
 // 不产生交集与影响事实。type 枚举与展示语义由云侧统一定义，端侧仅透传与展示。

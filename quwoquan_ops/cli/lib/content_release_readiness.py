@@ -30,6 +30,7 @@ POLICY_SCHEMA = "content-release-readiness"
 
 class ReadinessPhase(StrEnum):
     IMPORT = "import"
+    RESEARCH = "research"
     CONSUMER = "consumer"
     COMMERCIAL = "commercial"
 
@@ -64,6 +65,7 @@ class ReadinessCapability(StrEnum):
     TRACE_QUERY = "trace_query"
     SLO_QUERY = "slo_query"
     LEGAL_APPROVAL = "legal_approval"
+    RESEARCH_ACCESS_ISOLATION = "research_access_isolation"
 
 
 class ProbeOutcome(StrEnum):
@@ -78,6 +80,7 @@ class ProbeSource(StrEnum):
     HEALTH_SCOPE = "healthScope"
     COMMERCIAL_DOCTOR = "doctor"
     LOG_SINK_CONTROL = "logSinkControl"
+    RESEARCH_ISOLATION = "researchIsolation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +171,7 @@ def _parse_probe_bindings(
         health_scope = binding.get("healthScope")
         doctor = binding.get("doctor")
         control_action = binding.get("logSinkControl")
+        research_isolation = binding.get("researchIsolation")
         if isinstance(health_scope, str) and health_scope.strip() and doctor is None:
             bindings[capability] = CapabilityProbeBinding(
                 capability=capability,
@@ -194,10 +198,20 @@ def _parse_probe_bindings(
                 health_scope=None,
                 control_action=control_action,
             )
+        elif research_isolation is True and all(
+            value is None for value in (health_scope, doctor, control_action)
+        ):
+            bindings[capability] = CapabilityProbeBinding(
+                capability=capability,
+                source=ProbeSource.RESEARCH_ISOLATION,
+                health_scope=None,
+                control_action=None,
+            )
         else:
             raise ValueError(
                 f"capabilityProbes.{capability.value} must declare exactly one of "
-                "healthScope: <scope>, doctor: true or logSinkControl: <action>"
+                "healthScope: <scope>, doctor: true, logSinkControl: <action> "
+                "or researchIsolation: true"
             )
     missing = [capability.value for capability in ReadinessCapability if capability not in bindings]
     if missing:
@@ -249,6 +263,14 @@ def load_content_release_readiness_policy(
                     raise ValueError(
                         f"{phase.value}/{environment} requires {capability.value}, "
                         "but commercial control capabilities are commercial-only"
+                    )
+                if (
+                    binding.source is ProbeSource.RESEARCH_ISOLATION
+                    and phase is not ReadinessPhase.RESEARCH
+                ):
+                    raise ValueError(
+                        f"{phase.value}/{environment} requires {capability.value}, "
+                        "but research isolation is research-only"
                     )
             key = (phase, environment)
             if key in seen:

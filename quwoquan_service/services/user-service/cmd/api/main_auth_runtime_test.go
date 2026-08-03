@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestContentSliceDisablesUnrelatedExternalAuth(t *testing.T) {
+	for _, workload := range []string{"content-release", "content-commercial", "CONTENT-COMMERCIAL"} {
+		t.Run(workload, func(t *testing.T) {
+			t.Setenv("QWQ_WORKLOAD", workload)
+			if !contentSliceExternalAuthDisabled() {
+				t.Fatalf("workload %q must not require unrelated external auth Providers", workload)
+			}
+		})
+	}
+	t.Setenv("QWQ_WORKLOAD", "full")
+	if contentSliceExternalAuthDisabled() {
+		t.Fatal("full workload must keep external auth enabled")
+	}
+}
+
 func TestOptionalAuthBindingsReportUnavailableWhenProtectedMaterialIsMissing(t *testing.T) {
 	t.Setenv("APP_ENV", "prod")
 	t.Setenv("QWQ_WORKLOAD", "")

@@ -147,13 +147,11 @@ types:
     - {name: packageId, type: string, constraints: [NOT_NULL]}
     - {name: releaseDigest, type: string, constraints: [NOT_NULL]}
     - {name: expectedRevision, type: int, constraints: [NOT_NULL]}
-    - {name: activatedBy, type: string, constraints: [NOT_NULL]}
   RollbackSkillPackageCommand:
     description: 以 expectedRevision 将 active 指针精确切回 previousReleaseDigest。
     fields:
     - {name: packageId, type: string, constraints: [NOT_NULL]}
     - {name: expectedRevision, type: int, constraints: [NOT_NULL]}
-    - {name: activatedBy, type: string, constraints: [NOT_NULL]}
   SkillPackageReleaseStagedEventPayload:
     description: 不含资产正文与签名值的发布审计载荷。
     fields:
@@ -172,4 +170,4 @@ enums:
   SkillPackageReleaseStatus:
     values: [staged, active, retired]
   SkillPackageAssetKind:
-    values: [manifest, prompt, activation, context, capability, presentation, evaluation, replay]
+    values: [manifest, catalog, activation, input, context, capability, orchestration, trigger, memory, presentation, evaluation, prompt, replay]

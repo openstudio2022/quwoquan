@@ -34,6 +34,18 @@ events:
   - circleGroupId
   - creatorId
   - createdAt
+- name: GatheringConversationProvisioned
+  description: chat-service 已为 Gathering 原子持久化唯一 Conversation 与 owner membership；circle-service 以 sourceEventId 幂等确认绑定。
+  producer: chat-service
+  consumers:
+  - circle-gathering-conversation-binding
+  channel: transactional_outbox
+  payload_entity: Conversation
+  payload_fields:
+  - conversationId
+  - gatheringId
+  - creatorId
+  - createdAt
 - name: ConversationRosterUpdated
   description: '会话成员或群资料变更后的合并刷新信号。客户端以
 

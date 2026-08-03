@@ -250,22 +250,6 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 	if storedHash != hex.EncodeToString(digest[:]) {
 		t.Fatalf("refresh token must be stored as SHA-256 hash only")
 	}
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE user_profiles
-		    SET nickname = $1,
-		        owner_display_name = $1,
-		        nickname_customized = true,
-		        avatar_url = $2,
-		        avatar_version = 1
-		  WHERE user_id = $3`,
-		"刷新后的昵称",
-		"https://cdn.example.com/avatar-refresh.png",
-		ownerID,
-	); err != nil {
-		t.Fatalf("update refresh account hint fixture: %v", err)
-	}
-
 	refresh := doRequest(
 		t,
 		http.MethodPost,
@@ -277,61 +261,57 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 		t.Fatalf("refresh: expected 200, got %d: %s", refresh.Code, refresh.Body.String())
 	}
 	refreshBody := parseJSON(t, refresh)
+	if len(refreshBody) != 3 {
+		t.Fatalf("refresh must return only TokenRefreshGrant fields: %#v", refreshBody)
+	}
+	for _, field := range []string{"accessToken", "refreshToken", "sessionRememberTtlSeconds"} {
+		if _, exists := refreshBody[field]; !exists {
+			t.Fatalf("refresh missing %s: %#v", field, refreshBody)
+		}
+	}
 	rotatedToken, _ := refreshBody["refreshToken"].(string)
 	if rotatedToken == "" || rotatedToken == refreshToken {
 		t.Fatalf("expected rotated refresh token, got %q", rotatedToken)
 	}
-	refreshedHint, ok := refreshBody["accountHint"].(map[string]any)
-	if !ok {
-		t.Fatalf("refresh missing accountHint: %#v", refreshBody)
-	}
-	if refreshedHint["displayName"] != "刷新后的昵称" || refreshedHint["nicknameCustomized"] != true {
-		t.Fatalf("refresh accountHint nickname mismatch: %#v", refreshedHint)
-	}
-	if avatarURL, _ := refreshedHint["avatarUrl"].(string); !strings.Contains(avatarURL, "avatar-refresh.png") {
-		t.Fatalf("refresh accountHint avatar mismatch: %#v", refreshedHint)
-	}
-
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE user_profiles SET avatar_url = '', avatar_version = 2 WHERE user_id = $1`,
-		ownerID,
-	); err != nil {
-		t.Fatalf("delete refresh account hint avatar fixture: %v", err)
-	}
-	refreshAfterAvatarDelete := doRequest(
+	secondRefresh := doRequest(
 		t,
 		http.MethodPost,
 		"/auth/token/refresh",
 		`{"refreshToken":"`+rotatedToken+`"}`,
 		nil,
 	)
-	if refreshAfterAvatarDelete.Code != http.StatusOK {
-		t.Fatalf("refresh after avatar delete: expected 200, got %d: %s", refreshAfterAvatarDelete.Code, refreshAfterAvatarDelete.Body.String())
+	if secondRefresh.Code != http.StatusOK {
+		t.Fatalf("second refresh: expected 200, got %d: %s", secondRefresh.Code, secondRefresh.Body.String())
 	}
-	refreshAfterDeleteBody := parseJSON(t, refreshAfterAvatarDelete)
-	rotatedAfterDelete, _ := refreshAfterDeleteBody["refreshToken"].(string)
-	deletedAvatarHint, ok := refreshAfterDeleteBody["accountHint"].(map[string]any)
-	if !ok || deletedAvatarHint["avatarUrl"] != "" || deletedAvatarHint["nicknameCustomized"] != true {
-		t.Fatalf("refresh must clear deleted avatar and preserve nickname marker: %#v", refreshAfterDeleteBody)
+	secondRefreshBody := parseJSON(t, secondRefresh)
+	if len(secondRefreshBody) != 3 {
+		t.Fatalf("subsequent refresh must keep the exact TokenRefreshGrant shape: %#v", secondRefreshBody)
+	}
+	secondRotatedToken, _ := secondRefreshBody["refreshToken"].(string)
+	if secondRotatedToken == "" || secondRotatedToken == rotatedToken {
+		t.Fatalf("subsequent refresh must rotate the token again: %#v", secondRefreshBody)
 	}
 
 	logout := doRequest(
 		t,
 		http.MethodPost,
 		"/auth/logout",
-		`{"refreshToken":"`+rotatedAfterDelete+`","deviceId":"ios-1"}`,
+		`{"refreshToken":"`+secondRotatedToken+`","deviceId":"ios-1"}`,
 		authHeaders(ownerID),
 	)
 	if logout.Code != http.StatusOK {
 		t.Fatalf("logout: expected 200, got %d: %s", logout.Code, logout.Body.String())
+	}
+	logoutBody := parseJSON(t, logout)
+	if len(logoutBody) != 1 || logoutBody["revoked"] != true {
+		t.Fatalf("logout must return the exact LogoutAck shape: %#v", logoutBody)
 	}
 
 	reuse := doRequest(
 		t,
 		http.MethodPost,
 		"/auth/token/refresh",
-		`{"refreshToken":"`+rotatedAfterDelete+`"}`,
+		`{"refreshToken":"`+secondRotatedToken+`"}`,
 		nil,
 	)
 	if reuse.Code == http.StatusOK {

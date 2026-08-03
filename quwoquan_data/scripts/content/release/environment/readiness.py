@@ -20,6 +20,7 @@ _RECEIPT_SCHEMA = "quwoquan_ops.ship_readiness_receipt"
 
 class ShipReadinessPhase(StrEnum):
     IMPORT = "import"
+    RESEARCH = "research"
     CONSUMER = "consumer"
     COMMERCIAL = "commercial"
 
@@ -35,16 +36,6 @@ class ShipReadinessReceipt:
     @property
     def passed(self) -> bool:
         return self.outcome == "PASS"
-
-
-def phase_for_environment(
-    environment: DeploymentEnvironment,
-    *,
-    consumer: bool,
-) -> ShipReadinessPhase | None:
-    if consumer:
-        return ShipReadinessPhase.CONSUMER
-    return ShipReadinessPhase.IMPORT
 
 
 def _decode_receipt(value: object) -> ShipReadinessReceipt:
@@ -65,19 +56,16 @@ def _decode_receipt(value: object) -> ShipReadinessReceipt:
 def require_environment_readiness(
     *,
     environment: DeploymentEnvironment,
-    consumer: bool,
+    phase: ShipReadinessPhase,
     run: Path,
     release_id: str = "",
     verify_run_id: str = "",
     manifest_digest: str = "",
 ) -> ShipReadinessReceipt | None:
-    phase = phase_for_environment(environment, consumer=consumer)
-    if phase is None:
-        return None
     release_id = str(release_id or "").strip()
     verify_run_id = str(verify_run_id or "").strip()
     manifest_digest = str(manifest_digest or "").strip()
-    if phase is ShipReadinessPhase.CONSUMER and (
+    if phase in {ShipReadinessPhase.CONSUMER, ShipReadinessPhase.COMMERCIAL} and (
         not release_id or not verify_run_id or not manifest_digest
     ):
         raise SystemExit(
@@ -97,17 +85,28 @@ def require_environment_readiness(
         "--report-dir",
         str(run / "ops-readiness"),
     ]
-    if phase is ShipReadinessPhase.CONSUMER:
+    if phase is ShipReadinessPhase.RESEARCH and (
+        not release_id or not manifest_digest
+    ):
+        raise SystemExit(
+            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
+            "releaseId and manifestDigest are required"
+        )
+    if phase in {
+        ShipReadinessPhase.RESEARCH,
+        ShipReadinessPhase.CONSUMER,
+        ShipReadinessPhase.COMMERCIAL,
+    }:
         command.extend(
             [
                 "--release-id",
                 release_id,
-                "--verify-run-id",
-                verify_run_id,
                 "--manifest-digest",
                 manifest_digest,
             ]
         )
+        if verify_run_id:
+            command.extend(["--verify-run-id", verify_run_id])
     completed = subprocess.run(
         command,
         cwd=REPO_ROOT,
@@ -139,4 +138,4 @@ def require_environment_readiness(
     return receipt
 
 
-__all__ = ["ShipReadinessPhase", "ShipReadinessReceipt", "phase_for_environment", "require_environment_readiness"]
+__all__ = ["ShipReadinessPhase", "ShipReadinessReceipt", "require_environment_readiness"]

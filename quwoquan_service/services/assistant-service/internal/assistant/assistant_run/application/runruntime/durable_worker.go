@@ -13,23 +13,27 @@ import (
 )
 
 type ExecutionRequest struct {
-	RunID                   string
-	UserID                  string
-	SessionID               string
-	Goal                    string
-	RequestedSkillID        string
-	RequestedDomainID       string
-	Trigger                 map[string]any
-	ReasoningProfile        generated.AssistantReasoningProfile
-	DefinitionOfDone        DefinitionOfDone
-	GoalHistory             []GoalRevision
-	Checkpoint              *Checkpoint
-	ContextSnapshot         map[string]any
-	SurfaceCapabilities     map[string]any
-	SessionPreferenceFacts  []preferencemodel.Snapshot
-	LongTermPreferenceFacts []preferencemodel.Snapshot
-	IdempotencyPrefix       string
-	CreatedAt               time.Time
+	RunID                     string
+	UserID                    string
+	SessionID                 string
+	Goal                      string
+	RequestedSkillID          string
+	RequestedDomainID         string
+	SkillPackageID            string
+	SkillPackageReleaseDigest string
+	FrozenPolicySelection     FrozenPolicySelection
+	RequestContext            RequestContext
+	Trigger                   map[string]any
+	ReasoningProfile          generated.AssistantReasoningProfile
+	DefinitionOfDone          DefinitionOfDone
+	GoalHistory               []GoalRevision
+	Checkpoint                *Checkpoint
+	ContextSnapshot           map[string]any
+	SurfaceCapabilities       map[string]any
+	SessionPreferenceFacts    []preferencemodel.Snapshot
+	LongTermPreferenceFacts   []preferencemodel.Snapshot
+	IdempotencyPrefix         string
+	CreatedAt                 time.Time
 }
 
 type ExecutionItemUpdate struct {
@@ -53,6 +57,23 @@ type ExecutionResult struct {
 	WaitingState        generated.AssistantRunState
 	WaitReason          string
 	PendingApprovalRef  string
+}
+
+// ExecutionFailure preserves the public, metadata-derived runtime failure
+// across the AgentLoop -> durable AssistantRun boundary without persisting
+// provider-specific diagnostics or credentials.
+type ExecutionFailure struct {
+	Code   string
+	Origin string
+	Kind   string
+	Nature string
+}
+
+func (failure *ExecutionFailure) Error() string {
+	if failure == nil || strings.TrimSpace(failure.Code) == "" {
+		return "assistant run execution failed"
+	}
+	return strings.TrimSpace(failure.Code)
 }
 
 type RunExecutor interface {
@@ -664,8 +685,12 @@ func (w *DurableWorker) completeRun(
 			"answerText": strings.TrimSpace(result.AnswerText),
 			"processes":  result.Processes,
 		}
-		if len(run.PresentationDocument) > 0 {
-			snapshot["presentationDocument"] = cloneMap(run.PresentationDocument)
+		if run.FrozenPolicySelection.PolicyID != "" {
+			snapshot["selectedPolicyRef"] = map[string]any{
+				"policyId":      run.FrozenPolicySelection.PolicyID,
+				"releaseDigest": run.FrozenPolicySelection.ReleaseDigest,
+				"cohort":        run.FrozenPolicySelection.Cohort,
+			}
 		}
 		return run.SetTerminalSnapshot(snapshot, now)
 	})
@@ -678,6 +703,27 @@ func (w *DurableWorker) failRun(
 	reason string,
 	cause error,
 ) error {
+	failurePayload := map[string]any{
+		"code":   "ASSISTANT.SYSTEM.run_execution_failed",
+		"origin": "system",
+		"kind":   "internal",
+		"nature": "transient",
+	}
+	var executionFailure *ExecutionFailure
+	if errors.As(cause, &executionFailure) {
+		if value := strings.TrimSpace(executionFailure.Code); value != "" {
+			failurePayload["code"] = value
+		}
+		if value := strings.TrimSpace(executionFailure.Origin); value != "" {
+			failurePayload["origin"] = value
+		}
+		if value := strings.TrimSpace(executionFailure.Kind); value != "" {
+			failurePayload["kind"] = value
+		}
+		if value := strings.TrimSpace(executionFailure.Nature); value != "" {
+			failurePayload["nature"] = value
+		}
+	}
 	_, err := w.commitMutation(ctx, current.RunID, "failed", func(
 		run *Run,
 		now time.Time,
@@ -696,12 +742,7 @@ func (w *DurableWorker) failRun(
 		return run.SetTerminalSnapshot(map[string]any{
 			"answerText": "",
 			"processes":  []map[string]any{},
-			"failure": map[string]any{
-				"code":   "ASSISTANT.SYSTEM.run_execution_failed",
-				"origin": "system",
-				"kind":   "internal",
-				"nature": "transient",
-			},
+			"failure":    failurePayload,
 		}, now)
 	})
 	if err != nil {
@@ -763,19 +804,23 @@ func executionRequest(run Run) ExecutionRequest {
 		checkpoint = &cloned
 	}
 	return ExecutionRequest{
-		RunID:               run.RunID,
-		UserID:              run.UserID,
-		SessionID:           run.SessionID,
-		Goal:                run.InputText,
-		RequestedSkillID:    run.RequestedSkillID,
-		RequestedDomainID:   run.RequestedDomainID,
-		Trigger:             cloneMap(run.Trigger),
-		ReasoningProfile:    run.ReasoningProfile,
-		DefinitionOfDone:    cloneDefinition(run.DefinitionOfDone),
-		GoalHistory:         append([]GoalRevision(nil), run.GoalHistory...),
-		Checkpoint:          checkpoint,
-		ContextSnapshot:     cloneMap(run.ContextSnapshot),
-		SurfaceCapabilities: cloneMap(run.SurfaceCapabilities),
+		RunID:                     run.RunID,
+		UserID:                    run.UserID,
+		SessionID:                 run.SessionID,
+		Goal:                      run.InputText,
+		RequestedSkillID:          run.RequestedSkillID,
+		RequestedDomainID:         run.RequestedDomainID,
+		SkillPackageID:            run.SkillPackageID,
+		SkillPackageReleaseDigest: run.SkillPackageReleaseDigest,
+		FrozenPolicySelection:     clonePolicySelection(run.FrozenPolicySelection),
+		RequestContext:            normalizeRequestContext(run.RequestContext),
+		Trigger:                   cloneMap(run.Trigger),
+		ReasoningProfile:          run.ReasoningProfile,
+		DefinitionOfDone:          cloneDefinition(run.DefinitionOfDone),
+		GoalHistory:               append([]GoalRevision(nil), run.GoalHistory...),
+		Checkpoint:                checkpoint,
+		ContextSnapshot:           cloneMap(run.ContextSnapshot),
+		SurfaceCapabilities:       cloneMap(run.SurfaceCapabilities),
 		SessionPreferenceFacts: append(
 			[]preferencemodel.Snapshot(nil),
 			run.SessionPreferenceFacts...,
@@ -790,6 +835,9 @@ func executionRequest(run Run) ExecutionRequest {
 }
 
 func mutationPayload(run Run, eventKind string) map[string]any {
+	if eventKind == "completed" || eventKind == "failed" || eventKind == "cancelled" {
+		return terminalMutationPayload(run, eventKind)
+	}
 	payload := map[string]any{
 		"status":       run.State.WireName(),
 		"runRevision":  run.Revision,
@@ -816,16 +864,43 @@ func mutationPayload(run Run, eventKind string) map[string]any {
 		revision, _ := presentationRevision(run.PresentationDocument["revision"])
 		payload["baseRevision"] = revision - 1
 		payload["revision"] = revision
-	case "completed", "failed":
-		payload["finalAnswer"] = run.TerminalSnapshot["answerText"]
-		if len(run.PresentationDocument) > 0 {
-			payload["presentationDocument"] = cloneMap(run.PresentationDocument)
-		}
-		if eventKind == "failed" {
-			payload["runtimeFailure"] = run.TerminalSnapshot["failure"]
-		}
 	}
 	return payload
+}
+
+func terminalMutationPayload(run Run, eventKind string) map[string]any {
+	processes := any([]map[string]any{})
+	if value, found := run.TerminalSnapshot["processes"]; found && value != nil {
+		processes = value
+	}
+	payload := map[string]any{
+		"status":      run.State.WireName(),
+		"finalAnswer": run.TerminalSnapshot["answerText"],
+		"processes":   processes,
+	}
+	if eventKind == "failed" {
+		payload["runtimeFailure"] = run.TerminalSnapshot["failure"]
+	}
+	return payload
+}
+
+// TerminalReplayEvent projects the no-TTL terminal snapshot into the one
+// terminal SSE event required after the bounded journal has expired.
+func TerminalReplayEvent(run Run) (JournalEvent, bool) {
+	if run.CompletedAt == nil || len(run.TerminalSnapshot) == 0 ||
+		!terminalRunState(run.State) || run.JournalSequence <= 0 {
+		return JournalEvent{}, false
+	}
+	kind := run.State.WireName()
+	return JournalEvent{
+		EventID:   run.RunID + ":terminal-replay",
+		RunID:     run.RunID,
+		Sequence:  run.JournalSequence,
+		Revision:  run.Revision,
+		Kind:      kind,
+		Payload:   mutationPayload(run, kind),
+		CreatedAt: run.CompletedAt.UTC(),
+	}, true
 }
 
 func latestVisibleProcess(run Run) map[string]any {

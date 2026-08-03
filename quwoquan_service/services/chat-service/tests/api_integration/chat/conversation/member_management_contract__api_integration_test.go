@@ -200,7 +200,7 @@ func TestRemoveAssistant(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	convId := "fixture_remove_assistant_conv"
-	seedConversationWithAssistantMember(t, convId, "user_test_001", "rm assistant test", "general")
+	seedConversationWithAssistantMember(t, convId, "user_test_001", "rm assistant test")
 
 	code, _ := doDelete(t, "/chat/conversations/"+convId+"/assistant", "user_test_001")
 	if code != 200 {
@@ -228,7 +228,7 @@ func TestCircleGroupBoundConversationRejectsAssistantMutations(t *testing.T) {
 		"user_test_001",
 		409,
 	)
-	if invite["code"] != "CHAT.USER.circle_group_managed_by_circle" {
+	if invite["code"] != "CHAT.USER.source_managed_conversation" {
 		t.Fatalf("invite must be delegated to CircleGroup, got %#v", invite)
 	}
 	removeCode, remove := doDelete(
@@ -236,7 +236,7 @@ func TestCircleGroupBoundConversationRejectsAssistantMutations(t *testing.T) {
 		"/chat/conversations/"+convID+"/assistant",
 		"user_test_001",
 	)
-	if removeCode != 409 || remove["code"] != "CHAT.USER.circle_group_managed_by_circle" {
+	if removeCode != 409 || remove["code"] != "CHAT.USER.source_managed_conversation" {
 		t.Fatalf("remove must be delegated to CircleGroup: status=%d body=%#v", removeCode, remove)
 	}
 }

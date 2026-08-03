@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -49,7 +50,6 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                     os.environ,
                     {
                         "QWQ_NONPROD_ACCEPTANCE_IDENTITY_POOL": str(pool),
-                        "QWQ_NONPROD_ACCEPTANCE_OTP_CODE": "654321",
                     },
                     clear=False,
                 ),
@@ -68,6 +68,10 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
                     "request_local_environment_json",
                     return_value={"ownerId": "owner-1"},
                 ) as authenticated_request,
+                mock.patch(
+                    "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
+                    return_value=SimpleNamespace(code="654321"),
+                ) as capture_read,
             ):
                 actor = local_environment_auth.open_local_phone_acceptance_session(
                     "https://api.alpha.quwoquan.local:17000",
@@ -90,6 +94,12 @@ class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
         self.assertEqual(login_body["agreementVersion"], "2026-06")
         self.assertNotIn(otp_body["phone"], repr(actor))
         self.assertNotIn("secret-token", repr(actor))
+        capture_read.assert_called_once_with(
+            environment="alpha",
+            target_name="alpha-local",
+            recipient="+8613800000001",
+            timeout_seconds=30.0,
+        )
         authenticated_request.assert_called_once()
 
     def test_prod_is_fail_closed_before_transport(self) -> None:

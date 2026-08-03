@@ -79,18 +79,15 @@ func (planner ModelSubagentPlanner) PlanSubagents(
 	}
 	loader := planner.Loader
 	if loader == nil {
-		loader = assistantDomainSkillCatalogLoader{}
+		loader = skillpkg.StaticLoader{}
 	}
-	catalog, err := loader.Load()
+	catalog, err := loader.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	policyTools, err := canonicalToolPolicy(turn.FrozenPolicySelection.Template.AllowedTools)
-	if err != nil {
-		return nil, err
-	}
-	candidates := subagentCandidates(reactiveSkillCatalog(catalog), policyTools)
+	rootTools := append([]string(nil), primary.ToolPolicy...)
+	candidates := subagentCandidates(reactiveSkillCatalog(catalog), rootTools)
 	if len(candidates) < 2 {
 		return nil, nil
 	}
@@ -113,7 +110,7 @@ func (planner ModelSubagentPlanner) PlanSubagents(
 		log.Printf("assistant agent subagent_plan_failed turnId=%s err=%v", turn.TurnID, err)
 		return nil, nil
 	}
-	shape, plans := subagentPlansFromModel(response, candidates, policyTools)
+	shape, plans := subagentPlansFromModel(response, candidates, rootTools)
 	if shape != assistantgenerated.ProblemShapeMultiSkill || len(plans) < 2 {
 		return nil, nil
 	}
@@ -125,7 +122,7 @@ func (planner ModelSubagentPlanner) PlanSubagents(
 	return plans, nil
 }
 
-// subagentCandidates 只保留在冻结策略工具集合内还能做事的技能。
+// subagentCandidates 只保留在根 Skill 冻结能力边界内还能做事的技能。
 func subagentCandidates(
 	catalog []skillpkg.Manifest,
 	policyTools []string,
@@ -140,18 +137,15 @@ func subagentCandidates(
 	return candidates
 }
 
-// subagentToolWhitelist 是清单工具与策略允许工具的交集：清单决定该技能会用什么，策略
-// 决定这一轮允许什么，两者都不能被子代理绕过。
+// subagentToolWhitelist 是子 Skill 与根 Skill 能力的交集。平台策略、surface、consent
+// 与 connector grant 仍由 Tool Executor 在调用边界继续收紧。
 func subagentToolWhitelist(
 	manifest skillpkg.Manifest,
 	policyTools []string,
 ) []string {
-	manifestTools := manifest.ToolPolicy.PreferredTools
-	if len(manifestTools) == 0 {
-		manifestTools = manifest.ToolPolicy.AllowedTools
-	}
+	manifestTools := manifest.ToolPolicy.AllowedTools
 	if len(policyTools) == 0 {
-		// 策略不开放工具时子代理也不得自带工具。
+		// 根 Skill 不开放工具时子代理也不得自带工具。
 		return nil
 	}
 	allowed := map[string]bool{}

@@ -15,8 +15,8 @@ import (
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
 )
 
-// TestAssistantSessionStoreFailClosed 锁定：session/run store 未装配时
-// 全部读写 fail-closed 返回 session_storage_unavailable，禁止回退进程内 map。
+// TestAssistantSessionStoreFailClosed 锁定：Session store 未装配时全部读写
+// fail-closed，禁止回退进程内 map。Run storage 由 AssistantRun 对象测试证明。
 func TestAssistantSessionStoreFailClosed(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -40,23 +40,14 @@ func TestAssistantSessionStoreFailClosed(t *testing.T) {
 	assertStorageUnavailable("CreateSession", err)
 	_, err = service.GetSession(ctx, "user-a", "conv-1")
 	assertStorageUnavailable("GetSession", err)
-	_, err = service.CreateTurn(ctx, "user-a", "conv-1", assistant.CreateTurnInput{
-		Input:           assistant.AssistantTurnInput{Text: "hello"},
-		ClientRequestID: "storage-failure-turn",
-	})
-	assertStorageUnavailable("CreateTurn", err)
-	_, err = service.GetTurn(ctx, "user-a", "turn-1")
-	assertStorageUnavailable("GetTurn", err)
-	_, err = service.ExecuteTurn(ctx, "user-a", "turn-1")
-	assertStorageUnavailable("ExecuteTurn", err)
 }
 
-func TestAssistantSessionAndRunRequireStableClientRequestID(t *testing.T) {
+func TestAssistantSessionRequiresStableClientRequestID(t *testing.T) {
 	t.Parallel()
 	service := NewAssistantService(
 		skillconsenttest.NewMemoryStore(),
 		rtredis.NewMemoryClient(),
-		WithSessionRunStore(persistence.NewMemorySessionRunStore()),
+		WithSessionStore(persistence.NewMemorySessionStore()),
 	)
 	ctx := context.Background()
 
@@ -69,23 +60,4 @@ func TestAssistantSessionAndRunRequireStableClientRequestID(t *testing.T) {
 		t.Fatalf("empty session clientRequestId error = %v", err)
 	}
 
-	session, err := service.CreateSession(
-		ctx,
-		"user-a",
-		assistant.CreateSessionInput{ClientRequestID: "session-intent"},
-	)
-	if err != nil {
-		t.Fatalf("create session with request identity: %v", err)
-	}
-	_, err = service.CreateTurn(
-		ctx,
-		"user-a",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			Input: assistant.AssistantTurnInput{Text: "hello"},
-		},
-	)
-	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.run_invalid_argument") {
-		t.Fatalf("empty run clientRequestId error = %v", err)
-	}
 }

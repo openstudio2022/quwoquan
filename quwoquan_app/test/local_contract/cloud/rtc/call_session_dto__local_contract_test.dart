@@ -13,9 +13,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 void main() {
   // ──────────────────────────────────────────────────────────────────
-  // CallSessionDto — 常规契约
+  // CallSession — 常规契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallSessionDto — 常规契约', () {
+  group('CallSession — 常规契约', () {
     test('fromMap 解析全字段', () {
       final raw = <String, dynamic>{
         'callId': 'call_001',
@@ -54,7 +54,7 @@ void main() {
         'createdAt': '2026-03-07T09:59:50Z',
         'updatedAt': '2026-03-07T10:00:10Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
 
       expect(dto.callId, equals('call_001'));
       expect(dto.callType, CallType.video);
@@ -95,7 +95,7 @@ void main() {
         'updatedAt': '2026-01-01T00:00:00Z',
         'participants': <Object>[nested],
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.participants, hasLength(1));
       expect(dto.participants.single.userId, equals('user_001'));
     });
@@ -110,7 +110,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.callId, equals('call_alias'));
     });
 
@@ -139,7 +139,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
         'updatedAt': '2026-01-01T00:00:00.000Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       final map = dto.toMap();
 
       expect(map['callId'], equals('call_rt'));
@@ -149,7 +149,7 @@ void main() {
       expect((map['participants'] as List).length, equals(1));
     });
 
-    test('participants 正确解析嵌套 CallParticipantDto', () {
+    test('participants 正确解析嵌套 CallParticipant', () {
       final raw = <String, dynamic>{
         'callId': 'call_nested',
         'callType': 'video',
@@ -175,7 +175,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.participants.length, equals(2));
       expect(dto.participants[0].userId, equals('u1'));
       expect(dto.participants[0].role, ParticipantRole.initiator);
@@ -198,7 +198,7 @@ void main() {
         'createdAt': '2026-03-07T07:59:55Z',
         'updatedAt': '2026-03-07T08:15:30Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.endReason, EndReason.normal);
       expect(dto.durationMs, equals(930000));
       expect(dto.endedAt, isNotNull);
@@ -207,12 +207,12 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // CallSessionDto — 单轨契约
+  // CallSession — 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallSessionDto — 单轨契约', () {
+  group('CallSession — 单轨契约', () {
     test('拒绝 _id 和 id alias，只认 callId', () {
       expect(
-        () => CallSessionDto.fromMap(<String, dynamic>{
+        () => CallSession.fromMap(<String, dynamic>{
           '_id': 'call_compat',
           'initiatorId': 'u1',
           'roomId': 'r1',
@@ -222,7 +222,7 @@ void main() {
         throwsFormatException,
       );
       expect(
-        () => CallSessionDto.fromMap(<String, dynamic>{
+        () => CallSession.fromMap(<String, dynamic>{
           'id': 'call_generic',
           'initiatorId': 'u1',
           'roomId': 'r1',
@@ -231,7 +231,7 @@ void main() {
         }),
         throwsFormatException,
       );
-      final canonical = CallSessionDto.fromMap(<String, dynamic>{
+      final canonical = CallSession.fromMap(<String, dynamic>{
         'callId': 'call_canonical',
         'callType': 'audio',
         'status': 'in_call',
@@ -252,7 +252,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.callType, CallType.audio);
     });
 
@@ -266,7 +266,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.maxParticipants, equals(32));
     });
 
@@ -285,9 +285,9 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
         'updatedAt': '2026-01-01T00:00:00.000Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       final map = dto.toMap();
-      final dto2 = CallSessionDto.fromMap(map);
+      final dto2 = CallSession.fromMap(map);
       expect(dto2.participants.length, equals(3));
       expect(dto2.participants[0].userId, equals('u1'));
       expect(dto2.participants[2].userId, equals('u3'));
@@ -303,7 +303,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       final updated = dto.copyWith(status: CallStatus.ended);
       expect(updated.status, CallStatus.ended);
       expect(updated.callId, equals('call_copy'));
@@ -312,12 +312,12 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // CallSessionDto — 异常/边界契约
+  // CallSession — 异常/边界契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallSessionDto — 异常/边界契约', () {
+  group('CallSession — 异常/边界契约', () {
     test('空 map 缺少必填字段时 fail-closed', () {
       expect(
-        () => CallSessionDto.fromMap(const <String, dynamic>{}),
+        () => CallSession.fromMap(const <String, dynamic>{}),
         throwsFormatException,
       );
     });
@@ -343,7 +343,7 @@ void main() {
         'createdAt': null,
         'updatedAt': null,
       };
-      expect(() => CallSessionDto.fromMap(raw), throwsFormatException);
+      expect(() => CallSession.fromMap(raw), throwsFormatException);
     });
 
     test('participants 非 List 类型不崩溃', () {
@@ -357,8 +357,8 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      expect(() => CallSessionDto.fromMap(raw), returnsNormally);
-      final dto = CallSessionDto.fromMap(raw);
+      expect(() => CallSession.fromMap(raw), returnsNormally);
+      final dto = CallSession.fromMap(raw);
       expect(dto.participants, isEmpty);
     });
 
@@ -377,8 +377,8 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      expect(() => CallSessionDto.fromMap(raw), returnsNormally);
-      final dto = CallSessionDto.fromMap(raw);
+      expect(() => CallSession.fromMap(raw), returnsNormally);
+      final dto = CallSession.fromMap(raw);
       expect(dto.participants.length, equals(1));
     });
 
@@ -392,7 +392,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00Z',
         'updatedAt': '2026-01-01T00:00:00Z',
       };
-      final dto = CallSessionDto.fromMap(raw);
+      final dto = CallSession.fromMap(raw);
       expect(dto.callId, equals('call_minimal'));
       expect(dto.conversationId, isNull);
       expect(dto.circleId, isNull);
@@ -405,9 +405,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // CallParticipantDto — 常规契约
+  // CallParticipant — 常规契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallParticipantDto — 常规契约', () {
+  group('CallParticipant — 常规契约', () {
     test('fromMap 解析全字段', () {
       final raw = <String, dynamic>{
         'userId': 'user_001',
@@ -418,7 +418,7 @@ void main() {
         'joinedAt': '2026-03-07T10:00:00Z',
         'leftAt': '2026-03-07T10:30:00Z',
       };
-      final dto = CallParticipantDto.fromMap(raw);
+      final dto = CallParticipant.fromMap(raw);
       expect(dto.userId, equals('user_001'));
       expect(dto.role, ParticipantRole.initiator);
       expect(dto.status, ParticipantStatus.connected);
@@ -439,9 +439,9 @@ void main() {
         'isCameraOn': true,
         'joinedAt': '2026-01-01T00:00:00.000Z',
       };
-      final dto = CallParticipantDto.fromMap(raw);
+      final dto = CallParticipant.fromMap(raw);
       final map = dto.toMap();
-      final dto2 = CallParticipantDto.fromMap(map);
+      final dto2 = CallParticipant.fromMap(map);
       expect(dto2.userId, equals(dto.userId));
       expect(dto2.role, equals(dto.role));
       expect(dto2.isMuted, equals(dto.isMuted));
@@ -449,12 +449,12 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // CallParticipantDto — 单轨契约
+  // CallParticipant — 单轨契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallParticipantDto — 单轨契约', () {
+  group('CallParticipant — 单轨契约', () {
     test('缺少 role 默认 invitee', () {
       final raw = <String, dynamic>{'userId': 'u1', 'status': 'connected'};
-      final dto = CallParticipantDto.fromMap(raw);
+      final dto = CallParticipant.fromMap(raw);
       expect(dto.role, ParticipantRole.invitee);
     });
 
@@ -464,7 +464,7 @@ void main() {
         'role': 'invitee',
         'status': 'connected',
       };
-      final dto = CallParticipantDto.fromMap(raw);
+      final dto = CallParticipant.fromMap(raw);
       expect(dto.isCameraOn, isTrue);
     });
 
@@ -474,18 +474,18 @@ void main() {
         'role': 'invitee',
         'status': 'connected',
       };
-      final dto = CallParticipantDto.fromMap(raw);
+      final dto = CallParticipant.fromMap(raw);
       expect(dto.isMuted, isFalse);
     });
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // CallParticipantDto — 异常/边界契约
+  // CallParticipant — 异常/边界契约
   // ──────────────────────────────────────────────────────────────────
-  group('CallParticipantDto — 异常/边界契约', () {
+  group('CallParticipant — 异常/边界契约', () {
     test('空 map 缺少 userId 时 fail-closed', () {
       expect(
-        () => CallParticipantDto.fromMap(const <String, dynamic>{}),
+        () => CallParticipant.fromMap(const <String, dynamic>{}),
         throwsFormatException,
       );
     });
@@ -500,7 +500,7 @@ void main() {
         'joinedAt': null,
         'leftAt': null,
       };
-      expect(() => CallParticipantDto.fromMap(raw), throwsFormatException);
+      expect(() => CallParticipant.fromMap(raw), throwsFormatException);
     });
   });
 
@@ -554,7 +554,7 @@ void main() {
 
     test('DTO decoder 遇到未知 enum wire 值直接拒绝', () {
       expect(
-        () => CallSessionDto.fromMap(<String, Object?>{
+        () => CallSession.fromMap(<String, Object?>{
           'callId': 'call_bad_enum',
           'callType': 'voice',
           'status': 'ringing',
@@ -566,7 +566,7 @@ void main() {
         throwsFormatException,
       );
       expect(
-        () => CallParticipantDto.fromMap(<String, Object?>{
+        () => CallParticipant.fromMap(<String, Object?>{
           'userId': 'u1',
           'role': 'caller',
           'status': 'connected',
@@ -577,9 +577,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // RtcJoinCredentialsDto 媒体访问凭据
+  // RtcJoinCredentials 媒体访问凭据
   // ──────────────────────────────────────────────────────────────────
-  group('RtcJoinCredentialsDto — 常规契约', () {
+  group('RtcJoinCredentials — 常规契约', () {
     test('fromMap 解析全字段', () {
       final raw = <String, dynamic>{
         'mediaAccess': <String, dynamic>{
@@ -617,7 +617,7 @@ void main() {
     });
   });
 
-  group('RtcJoinCredentialsDto — 单轨契约', () {
+  group('RtcJoinCredentials — 单轨契约', () {
     test('缺少 session 时 fail-closed', () {
       expect(
         () => decodeRtcJoinCallResult(const <String, dynamic>{}),
@@ -626,7 +626,7 @@ void main() {
     });
   });
 
-  group('RtcJoinCredentialsDto — 异常/边界契约', () {
+  group('RtcJoinCredentials — 异常/边界契约', () {
     test('null 值字段安全', () {
       final raw = <String, dynamic>{'session': null, 'mediaAccess': null};
       expect(() => decodeRtcJoinCallResult(raw), throwsFormatException);
@@ -634,7 +634,7 @@ void main() {
   });
 
   group('Rtc 结果 DTO — rtc-service 信封', () {
-    test('RtcInitiateCallResultDto 嵌套 session', () {
+    test('RtcInitiateCallResult 嵌套 session', () {
       final raw = <String, dynamic>{
         'mediaAccess': <String, dynamic>{'accessToken': 'tok_i'},
         'session': <String, dynamic>{
@@ -655,7 +655,7 @@ void main() {
       expect(dto.session.roomId, equals('r1'));
     });
 
-    test('RtcAnswerCallResultDto 嵌套 session', () {
+    test('RtcAnswerCallResult 嵌套 session', () {
       final raw = <String, dynamic>{
         'mediaAccess': <String, dynamic>{'accessToken': 'tok_a'},
         'session': <String, dynamic>{

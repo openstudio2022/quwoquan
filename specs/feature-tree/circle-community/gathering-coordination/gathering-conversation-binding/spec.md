@@ -92,10 +92,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 会话绑定端口尚未接入真实 durable transport
+### OPEN-001 App 会话承接与完整实时旅程尚未验收
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺 Chat durable consumer、反向绑定事件和生产群会话/名单同步事实；Gathering 已有 idempotent ConversationPort、draft/bound/failed 语义和失败重试本地契约。
+- 影响或价值：尚缺 App 从 Gathering 进入绑定会话并发起群通话的完整旅程及同一候选验收；Circle→Chat 受信任 typed port、Chat 唯一会话/成员投影、事务 outbox、反向事件、durable checkpoint/retry 与真实 Mongo rollback/replay 证据已经落地。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

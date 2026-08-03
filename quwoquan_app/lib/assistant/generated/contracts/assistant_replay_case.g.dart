@@ -2,10 +2,9 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_response.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_trace_event.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantReplayExpectationsWire {
   const AssistantReplayExpectationsWire({
@@ -34,6 +33,38 @@ class AssistantReplayExpectationsWire {
       };
 
   factory AssistantReplayExpectationsWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'selectedSkillId',
+      'selectedDomainId',
+      'expectedToolNames',
+      'expectedClarificationSlotIds',
+      'expectedReferenceUrls',
+      'finalAnswerMode',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantReplayExpectationsWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('selectedSkillId') || json['selectedSkillId'] == null || (json['selectedSkillId'] is! String)) {
+      throw const FormatException('AssistantReplayExpectationsWire field selectedSkillId has an invalid wire value');
+    }
+    if (!json.containsKey('selectedDomainId') || json['selectedDomainId'] == null || (json['selectedDomainId'] is! String)) {
+      throw const FormatException('AssistantReplayExpectationsWire field selectedDomainId has an invalid wire value');
+    }
+    if (json.containsKey('expectedToolNames') && json['expectedToolNames'] != null && (json['expectedToolNames'] is! List || (json['expectedToolNames'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantReplayExpectationsWire field expectedToolNames has an invalid wire value');
+    }
+    if (json.containsKey('expectedClarificationSlotIds') && json['expectedClarificationSlotIds'] != null && (json['expectedClarificationSlotIds'] is! List || (json['expectedClarificationSlotIds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantReplayExpectationsWire field expectedClarificationSlotIds has an invalid wire value');
+    }
+    if (json.containsKey('expectedReferenceUrls') && json['expectedReferenceUrls'] != null && (json['expectedReferenceUrls'] is! List || (json['expectedReferenceUrls'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantReplayExpectationsWire field expectedReferenceUrls has an invalid wire value');
+    }
+    if (!json.containsKey('finalAnswerMode') || json['finalAnswerMode'] == null || (json['finalAnswerMode'] is! String)) {
+      throw const FormatException('AssistantReplayExpectationsWire field finalAnswerMode has an invalid wire value');
+    }
     return AssistantReplayExpectationsWire(
       selectedSkillId: (json['selectedSkillId'] as String?)?.trim() ?? "",
       selectedDomainId: (json['selectedDomainId'] as String?)?.trim() ?? "",
@@ -85,6 +116,34 @@ class AssistantReplayModelStepWire {
       };
 
   factory AssistantReplayModelStepWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'stage',
+      'text',
+      'structuredDelta',
+      'usage',
+      'finishReason',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantReplayModelStepWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('stage') || json['stage'] == null || (json['stage'] is! String)) {
+      throw const FormatException('AssistantReplayModelStepWire field stage has an invalid wire value');
+    }
+    if (json.containsKey('text') && json['text'] != null && (json['text'] is! String)) {
+      throw const FormatException('AssistantReplayModelStepWire field text has an invalid wire value');
+    }
+    if (json.containsKey('structuredDelta') && json['structuredDelta'] != null && (json['structuredDelta'] is! Map)) {
+      throw const FormatException('AssistantReplayModelStepWire field structuredDelta has an invalid wire value');
+    }
+    if (json.containsKey('usage') && json['usage'] != null && (json['usage'] is! Map)) {
+      throw const FormatException('AssistantReplayModelStepWire field usage has an invalid wire value');
+    }
+    if (json.containsKey('finishReason') && json['finishReason'] != null && (json['finishReason'] is! String)) {
+      throw const FormatException('AssistantReplayModelStepWire field finishReason has an invalid wire value');
+    }
     return AssistantReplayModelStepWire(
       stage: (json['stage'] as String?)?.trim() ?? "",
       text: (json['text'] as String?)?.trim() ?? "",
@@ -133,6 +192,42 @@ class AssistantReplayRequestWire {
       };
 
   factory AssistantReplayRequestWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'sessionId',
+      'turnId',
+      'userId',
+      'inputText',
+      'skillId',
+      'domainId',
+      'clientContext',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantReplayRequestWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('sessionId') || json['sessionId'] == null || (json['sessionId'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field sessionId has an invalid wire value');
+    }
+    if (!json.containsKey('turnId') || json['turnId'] == null || (json['turnId'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field turnId has an invalid wire value');
+    }
+    if (json.containsKey('userId') && json['userId'] != null && (json['userId'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field userId has an invalid wire value');
+    }
+    if (json.containsKey('inputText') && json['inputText'] != null && (json['inputText'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field inputText has an invalid wire value');
+    }
+    if (!json.containsKey('skillId') || json['skillId'] == null || (json['skillId'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field skillId has an invalid wire value');
+    }
+    if (!json.containsKey('domainId') || json['domainId'] == null || (json['domainId'] is! String)) {
+      throw const FormatException('AssistantReplayRequestWire field domainId has an invalid wire value');
+    }
+    if (json.containsKey('clientContext') && json['clientContext'] != null && (json['clientContext'] is! Map)) {
+      throw const FormatException('AssistantReplayRequestWire field clientContext has an invalid wire value');
+    }
     return AssistantReplayRequestWire(
       sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
@@ -176,6 +271,30 @@ class AssistantReplayToolStepWire {
       };
 
   factory AssistantReplayToolStepWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'toolName',
+      'input',
+      'result',
+      'failure',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantReplayToolStepWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('toolName') || json['toolName'] == null || (json['toolName'] is! String)) {
+      throw const FormatException('AssistantReplayToolStepWire field toolName has an invalid wire value');
+    }
+    if (json.containsKey('input') && json['input'] != null && (json['input'] is! Map)) {
+      throw const FormatException('AssistantReplayToolStepWire field input has an invalid wire value');
+    }
+    if (json.containsKey('result') && json['result'] != null && (json['result'] is! Map)) {
+      throw const FormatException('AssistantReplayToolStepWire field result has an invalid wire value');
+    }
+    if (json.containsKey('failure') && json['failure'] != null && (json['failure'] is! Map)) {
+      throw const FormatException('AssistantReplayToolStepWire field failure has an invalid wire value');
+    }
     return AssistantReplayToolStepWire(
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       input: (json['input'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
@@ -231,6 +350,54 @@ class AssistantReplayCaseWire {
       };
 
   factory AssistantReplayCaseWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'replayCaseId',
+      'title',
+      'request',
+      'fakeModelScript',
+      'fakeToolScript',
+      'fakeDeviceContext',
+      'expectedStreamEvents',
+      'expectedTraceEvents',
+      'expectations',
+      'expectedRunResponse',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantReplayCaseWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('replayCaseId') || json['replayCaseId'] == null || (json['replayCaseId'] is! String)) {
+      throw const FormatException('AssistantReplayCaseWire field replayCaseId has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantReplayCaseWire field title has an invalid wire value');
+    }
+    if (json.containsKey('request') && json['request'] != null && (json['request'] is! Map)) {
+      throw const FormatException('AssistantReplayCaseWire field request has an invalid wire value');
+    }
+    if (json.containsKey('fakeModelScript') && json['fakeModelScript'] != null && (json['fakeModelScript'] is! List || (json['fakeModelScript'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantReplayCaseWire field fakeModelScript has an invalid wire value');
+    }
+    if (json.containsKey('fakeToolScript') && json['fakeToolScript'] != null && (json['fakeToolScript'] is! List || (json['fakeToolScript'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantReplayCaseWire field fakeToolScript has an invalid wire value');
+    }
+    if (json.containsKey('fakeDeviceContext') && json['fakeDeviceContext'] != null && (json['fakeDeviceContext'] is! Map)) {
+      throw const FormatException('AssistantReplayCaseWire field fakeDeviceContext has an invalid wire value');
+    }
+    if (json.containsKey('expectedStreamEvents') && json['expectedStreamEvents'] != null && (json['expectedStreamEvents'] is! List || (json['expectedStreamEvents'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantReplayCaseWire field expectedStreamEvents has an invalid wire value');
+    }
+    if (json.containsKey('expectedTraceEvents') && json['expectedTraceEvents'] != null && (json['expectedTraceEvents'] is! List || (json['expectedTraceEvents'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantReplayCaseWire field expectedTraceEvents has an invalid wire value');
+    }
+    if (json.containsKey('expectations') && json['expectations'] != null && (json['expectations'] is! Map)) {
+      throw const FormatException('AssistantReplayCaseWire field expectations has an invalid wire value');
+    }
+    if (json.containsKey('expectedRunResponse') && json['expectedRunResponse'] != null && (json['expectedRunResponse'] is! Map)) {
+      throw const FormatException('AssistantReplayCaseWire field expectedRunResponse has an invalid wire value');
+    }
     return AssistantReplayCaseWire(
       replayCaseId: (json['replayCaseId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",

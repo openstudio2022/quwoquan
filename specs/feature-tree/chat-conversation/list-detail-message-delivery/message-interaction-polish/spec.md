@@ -71,7 +71,7 @@
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/message/fields.yaml#mentions`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/message/events.yaml#MessageSent`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_user_state/fields.yaml#mentionUnreadCount`
-- canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_message_client.yaml`
+- canonical：`quwoquan_service/services/chat-service/contracts/chat/message/projections/chat_message_view.yaml#ChatMessageView`
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#userProfile`
 
 ## 5. 验收场景

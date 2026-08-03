@@ -338,9 +338,9 @@ type RecallFusionConfig struct {
 	SourceBoost    map[string]float64 `yaml:"sourceBoost" json:"sourceBoost"`
 }
 
-// ObjectCardConfig 是首页混合对象卡（实体主页/用户/圈子卡）的注入策略（S0 插卡
-// 模式）：对象卡由独立召回器产出、按固定间隔混排进内容流，不进入内容候选池。
-// Enabled=false 或 EveryN<=0 即零成本关闭（运营可配可回滚）。
+// ObjectCardConfig 是首页混合对象卡的 Content 页面布局策略。对象卡候选、公开
+// 快照、理由和召回路径由 Recommendation 在同一 RankedRecommendationWindow
+// 冻结；Content 只按固定间隔和上限计算锚点，不执行第二召回。
 type ObjectCardConfig struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// EveryN 每 N 条内容后注入 1 张对象卡（anchorIndex = N, 2N, ...）。

@@ -16,6 +16,7 @@ from quwoquan_ops.cli.lib.output_paths import repo_local_dir, safe_segment
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 DEFAULT_BUILD_GRACE_SECONDS = 20 * 60
 MAX_LEASE_AGE_SECONDS = 12 * 60 * 60
+SUPPORTED_PLATFORMS = frozenset({"android", "ios-simulator"})
 
 
 def consumer_lease_dir() -> Path:
@@ -40,22 +41,36 @@ def acquire_consumer_lease(
     consumer: str,
     package_name: str,
     ports: Sequence[int],
+    platform: str = "android",
+    handoff_digest: str = "",
+    release_id: str = "",
+    manifest_digest: str = "",
+    readiness_receipt_digest: str = "",
     build_grace_seconds: int = DEFAULT_BUILD_GRACE_SECONDS,
 ) -> dict[str, Any]:
+    normalized_platform = platform.strip().lower()
     normalized_ports = sorted({int(port) for port in ports if int(port) > 0})
     if not target.strip() or not device.strip() or not consumer.strip():
         raise ValueError("target, device and consumer are required")
     if not package_name.strip():
         raise ValueError("package_name is required")
-    if not normalized_ports:
-        raise ValueError("at least one positive port is required")
+    if normalized_platform not in SUPPORTED_PLATFORMS:
+        raise ValueError(
+            "platform must be one of " + ", ".join(sorted(SUPPORTED_PLATFORMS))
+        )
+    if normalized_platform == "android" and not normalized_ports:
+        raise ValueError("at least one positive port is required for Android")
     path = _lease_path(target=target, device=device, consumer=consumer)
     lease_id = "sha256:" + hashlib.sha256(
-        f"{target.strip()}\0{device.strip()}\0{consumer.strip()}".encode("utf-8")
+        (
+            f"{normalized_platform}\0{target.strip()}\0{device.strip()}\0"
+            f"{consumer.strip()}"
+        ).encode("utf-8")
     ).hexdigest()
     payload: dict[str, Any] = {
         "schema": "qwq.local_runtime_consumer_lease",
         "leaseId": lease_id,
+        "platform": normalized_platform,
         "target": target.strip(),
         "device": device.strip(),
         "consumer": consumer.strip(),
@@ -64,6 +79,16 @@ def acquire_consumer_lease(
         "startedAt": utc_now(),
         "buildGraceSeconds": max(0, int(build_grace_seconds)),
     }
+    if normalized_platform == "ios-simulator":
+        payload["bundleId"] = package_name.strip()
+    for key, value in (
+        ("handoffDigest", handoff_digest),
+        ("releaseId", release_id),
+        ("manifestDigest", manifest_digest),
+        ("readinessReceiptDigest", readiness_receipt_digest),
+    ):
+        if value.strip():
+            payload[key] = value.strip()
     write_json(path, payload)
     return {**payload, "path": str(path)}
 
@@ -100,6 +125,7 @@ def active_consumer_leases(
     runner: CommandRunner | None = None,
     now: datetime | None = None,
     adb_path: str | None = None,
+    xcrun_path: str | None = None,
 ) -> list[dict[str, Any]]:
     current = now or datetime.now(timezone.utc)
     command_runner = runner or _run_command
@@ -110,9 +136,9 @@ def active_consumer_leases(
             runner=command_runner,
             now=current,
             adb_path=adb_path,
+            xcrun_path=xcrun_path,
         )
         if state == "stale":
-            Path(str(lease["path"])).unlink(missing_ok=True)
             continue
         active.append({**lease, "state": state, "detail": detail})
     return active
@@ -124,20 +150,38 @@ def _inspect_lease(
     runner: CommandRunner,
     now: datetime,
     adb_path: str | None,
+    xcrun_path: str | None,
 ) -> tuple[str, str]:
     started_at = _parse_time(str(lease.get("startedAt") or ""))
     if started_at is None:
         return "stale", "invalid startedAt"
     age_seconds = max(0, int((now - started_at).total_seconds()))
-    if age_seconds > MAX_LEASE_AGE_SECONDS:
-        return "stale", "maximum lease age exceeded"
     grace = max(0, int(lease.get("buildGraceSeconds") or 0))
-    if age_seconds <= grace:
+    if age_seconds <= grace and age_seconds <= MAX_LEASE_AGE_SECONDS:
         return "build_grace", f"build grace active ({age_seconds}s/{grace}s)"
+
+    platform = str(lease.get("platform") or "android").strip().lower()
+    if platform == "ios-simulator":
+        state, detail = _inspect_ios_simulator_lease(
+            lease,
+            runner=runner,
+            xcrun_path=xcrun_path,
+        )
+        return _apply_unverified_age_limit(
+            state,
+            detail,
+            age_seconds=age_seconds,
+        )
+    if platform != "android":
+        return "stale", f"unsupported platform {platform!r}"
 
     executable = adb_path or shutil.which("adb")
     if not executable:
-        return "active_unverified", "adb unavailable; lease retained safely"
+        return _apply_unverified_age_limit(
+            "active_unverified",
+            "adb unavailable; lease retained safely",
+            age_seconds=age_seconds,
+        )
     device = str(lease.get("device") or "").strip()
     package_name = str(lease.get("packageName") or "").strip()
     if not device or not package_name:
@@ -161,6 +205,88 @@ def _inspect_lease(
     if missing:
         return "stale", f"adb reverse missing ports {missing}"
     return "active", "application process and adb reverse are active"
+
+
+def _apply_unverified_age_limit(
+    state: str,
+    detail: str,
+    *,
+    age_seconds: int,
+) -> tuple[str, str]:
+    if state == "active_unverified" and age_seconds > MAX_LEASE_AGE_SECONDS:
+        return "stale", "unverified provisional lease exceeded maximum age"
+    return state, detail
+
+
+def _inspect_ios_simulator_lease(
+    lease: dict[str, Any],
+    *,
+    runner: CommandRunner,
+    xcrun_path: str | None,
+) -> tuple[str, str]:
+    executable = xcrun_path or shutil.which("xcrun")
+    if not executable:
+        return "active_unverified", "xcrun unavailable; lease retained safely"
+    device = str(lease.get("device") or "").strip()
+    bundle_id = str(
+        lease.get("bundleId") or lease.get("packageName") or ""
+    ).strip()
+    if not device or not bundle_id:
+        return "stale", "device or bundleId missing"
+
+    booted = runner([executable, "simctl", "list", "devices", "booted", "--json"])
+    if booted.returncode != 0:
+        return "active_unverified", "Simulator liveness is unreadable"
+    try:
+        payload = json.loads(booted.stdout)
+    except json.JSONDecodeError:
+        return "active_unverified", "Simulator liveness response is malformed"
+    devices = payload.get("devices") if isinstance(payload, dict) else None
+    is_booted = any(
+        isinstance(candidate, dict)
+        and str(candidate.get("udid") or "") == device
+        and str(candidate.get("state") or "") == "Booted"
+        for runtime_devices in (devices or {}).values()
+        if isinstance(runtime_devices, list)
+        for candidate in runtime_devices
+    )
+    if not is_booted:
+        return "stale", "Simulator is not booted"
+
+    uid = runner([executable, "simctl", "spawn", device, "id", "-u"])
+    simulator_uid = uid.stdout.strip()
+    if uid.returncode != 0 or not simulator_uid.isdigit():
+        return "active_unverified", "Simulator user launchd domain is unreadable"
+
+    app_container = runner(
+        [executable, "simctl", "get_app_container", device, bundle_id, "app"]
+    )
+    installed_app_path = app_container.stdout.strip()
+    if app_container.returncode != 0 or not installed_app_path:
+        return "stale", "application is not installed"
+
+    services = runner(
+        [
+            executable,
+            "simctl",
+            "spawn",
+            device,
+            "launchctl",
+            "print",
+            f"user/{simulator_uid}",
+        ]
+    )
+    if services.returncode != 0:
+        return "active_unverified", "Simulator is booted but app liveness is unreadable"
+    service_label = f"UIKitApplication:{bundle_id}["
+    if service_label not in services.stdout:
+        return "stale", "application process is not running"
+    if installed_app_path not in services.stdout:
+        return (
+            "active_unverified",
+            "application service exists but executable path is not confirmed",
+        )
+    return "active", "Simulator application service and executable are active"
 
 
 def _parse_time(raw: str) -> datetime | None:

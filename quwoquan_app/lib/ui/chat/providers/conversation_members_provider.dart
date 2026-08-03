@@ -1,6 +1,6 @@
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
@@ -8,20 +8,20 @@ import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 /// 会话成员及设置的共享状态
 class ConversationMembersState {
-  final List<ChatConversationMemberDto> members;
-  final ChatGroupSettingsDto groupSettings;
+  final List<ConversationMemberListRow> members;
+  final ChatGroupSettingsViewData groupSettings;
   final bool isLoading;
   final String? error;
 
-  static final ChatGroupSettingsDto _defaultGroupSettings =
-      ChatGroupSettingsDto(
+  static final ChatGroupSettingsViewData _defaultGroupSettings =
+      ChatGroupSettingsViewData(
         nameEditableByAdminOnly: false,
         conversationType: 'group',
       );
 
   ConversationMembersState({
     this.members = const [],
-    ChatGroupSettingsDto? groupSettings,
+    ChatGroupSettingsViewData? groupSettings,
     this.isLoading = false,
     this.error,
   }) : groupSettings = groupSettings ?? _defaultGroupSettings;
@@ -42,8 +42,8 @@ class ConversationMembersState {
   bool get isOwner => currentUserRole == 'owner';
 
   ConversationMembersState copyWith({
-    List<ChatConversationMemberDto>? members,
-    ChatGroupSettingsDto? groupSettings,
+    List<ConversationMemberListRow>? members,
+    ChatGroupSettingsViewData? groupSettings,
     bool? isLoading,
     String? error,
   }) {
@@ -94,10 +94,11 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
       ]);
       // 若有乐观写操作进行中，跳过覆盖，避免竞态
       if (_pendingWrites > 0) return;
-      final raw = results[0] as List<ChatConversationMemberDto>;
+      final raw = results[0] as List<ConversationMemberListRow>;
       final members = raw
           .map(
-            (member) => member.copyWith(
+            (member) => _copyMember(
+              member,
               avatarUrl: resolveAvatarImageUrl(member.avatarUrl),
               isCurrentUser: member.userId == _currentUserId,
             ),
@@ -105,7 +106,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
           .toList(growable: false);
       state = state.copyWith(
         members: members,
-        groupSettings: results[1] as ChatGroupSettingsDto,
+        groupSettings: results[1] as ChatGroupSettingsViewData,
         isLoading: false,
       );
     } catch (e) {
@@ -154,7 +155,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   }
 
   /// 乐观更新群组设置；失败时回滚
-  Future<void> updateGroupSettings(ChatGroupSettingsDto next) async {
+  Future<void> updateGroupSettings(ChatGroupSettingsViewData next) async {
     final previous = state;
     state = state.copyWith(groupSettings: next);
     try {
@@ -193,30 +194,51 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     await _adminRepo.updateAnnouncement(_conversationId, announcement);
   }
 
-  static List<ChatConversationMemberDto> _applyAdminChange(
-    List<ChatConversationMemberDto> members,
+  static List<ConversationMemberListRow> _applyAdminChange(
+    List<ConversationMemberListRow> members,
     List<String> adminIds,
   ) {
     return members.map((m) {
       if (m.role == 'owner') return m;
-      return m.copyWith(role: adminIds.contains(m.userId) ? 'admin' : 'member');
+      return _copyMember(
+        m,
+        role: adminIds.contains(m.userId) ? 'admin' : 'member',
+      );
     }).toList();
   }
 
-  static List<ChatConversationMemberDto> _applyOwnerTransfer(
-    List<ChatConversationMemberDto> members,
+  static List<ConversationMemberListRow> _applyOwnerTransfer(
+    List<ConversationMemberListRow> members,
     String newOwnerId,
   ) {
     return members.map((m) {
       if (m.isCurrentUser) {
-        return m.copyWith(role: 'member');
+        return _copyMember(m, role: 'member');
       }
       if (m.userId == newOwnerId) {
-        return m.copyWith(role: 'owner');
+        return _copyMember(m, role: 'owner');
       }
       return m;
     }).toList();
   }
+}
+
+ConversationMemberListRow _copyMember(
+  ConversationMemberListRow source, {
+  String? avatarUrl,
+  String? role,
+  bool? isCurrentUser,
+}) {
+  return ConversationMemberListRow(
+    userId: source.userId,
+    userHandle: source.userHandle,
+    displayName: source.displayName,
+    avatarUrl: avatarUrl ?? source.avatarUrl,
+    role: role ?? source.role,
+    memberType: source.memberType,
+    joinedAt: source.joinedAt,
+    isCurrentUser: isCurrentUser ?? source.isCurrentUser,
+  );
 }
 
 /// 会话成员与设置的全局共享 Provider（family by conversationId）

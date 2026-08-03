@@ -10,7 +10,7 @@ events:
   - id
   - accountId
   - skillId
-  - grantedScope
+  - grantedScopes
 - name: SkillConsentRevoked
   description: Skill 授权撤销
   producer: assistant-service

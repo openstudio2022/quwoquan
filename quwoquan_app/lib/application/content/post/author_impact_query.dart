@@ -1,5 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 
 /// Content/Post 对象的作者影响力查询面。

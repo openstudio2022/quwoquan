@@ -68,6 +68,17 @@
   - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `recommendation-platform` 继续处理。
   - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
 
+- [`JNY-009 / SCN-034`](../spec.md#scn-034)
+  - 本领域负责：提供 Circle 管理员与共享场景事实供 Assistant Placement 授权。
+  - 进入条件：Circle 可见且主体拥有相应治理权限。
+  - 交付给下游的结果：typed circle/admin reference。
+  - 不负责：不保存 Skill policy。
+- [`JNY-013 / SCN-033`](../spec.md#scn-033)
+  - 本领域负责：承载旅行分享与旅行后持续 Circle/Gathering 关系。
+  - 进入条件：分享和参与者可见范围有效。
+  - 交付给下游的结果：Circle/Gathering 公开 command receipt。
+  - 不负责：不拥有 Trip/ShareSnapshot 或 Follow。
+
 ## 4. 业务能力
 
 - [`activity-member-governance`](./activity-member-governance/spec.md)：让圈子 owner 管理圈子生命周期与成员角色，并让成员以稳定分页读取圈内动态。

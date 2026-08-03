@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
-    show ContentCommentListItem;
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -14,6 +12,7 @@ import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.d
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
+import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
 
 enum CommentDetailSurfaceMode {
   cardModal('card_modal', AppUiSurfaces.homeFeed),
@@ -120,7 +119,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     return null;
   }
 
-  Future<void> _openInput({ContentCommentListItem? replyTo}) async {
+  Future<void> _openInput({CommentViewData? replyTo}) async {
     final submitted = await CommentInputOverlay.show(
       context,
       postId: widget.postId,
@@ -136,8 +135,8 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     }
   }
 
-  ContentCommentListItem? _resolveReplyTarget(
-    List<ContentCommentListItem> comments,
+  CommentViewData? _resolveReplyTarget(
+    List<CommentViewData> comments,
     String commentId,
   ) {
     for (final comment in comments) {
@@ -165,7 +164,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
 
     final parentCommentId = widget.commentContext.targetParentCommentId?.trim();
     if (parentCommentId != null && parentCommentId.isNotEmpty) {
-      ContentCommentListItem? parent;
+      CommentViewData? parent;
       for (final comment in commentState.comments) {
         if (comment.id == parentCommentId) {
           parent = comment;

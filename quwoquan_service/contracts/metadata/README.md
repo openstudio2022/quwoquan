@@ -39,10 +39,12 @@ quwoquan_service/services/<service>/contracts/
 声明 `operations.yaml.api_routes` 的对象必须拥有同路径源码根；HTTP adapter、用例、领域规则和
 持久化实现不得借住同服务的“主对象”目录。没有公开 route 的投影、内部事实或 external
 reference 可以只保留契约/生成物，其数量与 kind 分布均由扫描派生，不用空目录占位。
-没有独立 HTTP route、但在服务请求流水线中拥有真实调用边界的 `runtime_session`，只允许在
-对象 `operations.yaml.runtime_entrypoints` 声明一个 middleware entrypoint；它必须绑定
-对象自己的 typed Facade/session owner，且不得与 `api_routes` 并存。该入口进入
-ContractGraph 与 readiness，但不得进入 OpenAPI、App client 或生成的业务 HTTP route。
+没有独立 HTTP route 的对象必须在 `operations.yaml.runtime_entrypoints` 声明一个真实 typed
+非 HTTP 入口：`runtime_session` 使用 middleware，projection 使用 projector，append-only fact
+使用 subscription 或同事务 internal port，external reference 使用 outbound external port。
+入口必须绑定对象自己的 Facade/Projector/Appender/Port 与 object owner，且不得与
+`api_routes` 并存。该入口进入 ContractGraph 与 readiness，但不得进入 OpenAPI、App client
+或生成的业务 HTTP route；禁止用空 HTTP operation 给对象凑入口。
 对象的 adapters/infrastructure 是私有实现，兄弟对象只能依赖其 domain/application port
 或事件；多对象 adapter 在 cmd 组合。测试文件同样使用自身 context/object 路径，共享测试
 启动支持只进入 tests/support。

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

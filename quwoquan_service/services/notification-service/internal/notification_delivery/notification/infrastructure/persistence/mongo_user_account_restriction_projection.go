@@ -15,6 +15,7 @@ import (
 
 	"quwoquan_service/runtime/accountrestriction"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
+	jobapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 const (
@@ -41,35 +42,34 @@ type notificationAccountRestrictionWatermarkDocument struct {
 }
 
 type MongoUserAccountRestrictionProjection struct {
-	db           *mongo.Database
-	states       *mongo.Collection
-	inbox        *mongo.Collection
-	watermarks   *mongo.Collection
-	appMessages  *mongo.Collection
-	deliveryJobs *mongo.Collection
-	recipients   *mongo.Collection
-	now          func() time.Time
+	db                *mongo.Database
+	states            *mongo.Collection
+	inbox             *mongo.Collection
+	watermarks        *mongo.Collection
+	appMessages       *mongo.Collection
+	deliveryLifecycle jobapplication.AccountLifecycle
+	now               func() time.Time
 }
 
 var _ application.UserAccountRestrictionProjection = (*MongoUserAccountRestrictionProjection)(nil)
 
 func NewMongoUserAccountRestrictionProjection(
 	db *mongo.Database,
+	deliveryLifecycle jobapplication.AccountLifecycle,
 ) (*MongoUserAccountRestrictionProjection, error) {
-	if db == nil {
+	if db == nil || deliveryLifecycle == nil {
 		return nil, errors.New(
 			"notification account restriction projection requires MongoDB",
 		)
 	}
 	return &MongoUserAccountRestrictionProjection{
-		db:           db,
-		states:       db.Collection(notificationAccountRestrictionStateCollection),
-		inbox:        db.Collection(notificationAccountRestrictionInboxCollection),
-		watermarks:   db.Collection(notificationAccountRestrictionWatermarkCollection),
-		appMessages:  db.Collection("app_messages"),
-		deliveryJobs: db.Collection("notification_delivery_jobs"),
-		recipients:   db.Collection("notification_delivery_job_recipients"),
-		now:          time.Now,
+		db:                db,
+		states:            db.Collection(notificationAccountRestrictionStateCollection),
+		inbox:             db.Collection(notificationAccountRestrictionInboxCollection),
+		watermarks:        db.Collection(notificationAccountRestrictionWatermarkCollection),
+		appMessages:       db.Collection("app_messages"),
+		deliveryLifecycle: deliveryLifecycle,
+		now:               time.Now,
 	}, nil
 }
 
@@ -320,36 +320,11 @@ func (projection *MongoUserAccountRestrictionProjection) applyOwnedMutations(
 	if err != nil {
 		return 0, fmt.Errorf("project notification restriction to app messages: %w", err)
 	}
-	jobSet := bson.M{}
-	for key, value := range baseSet {
-		jobSet[key] = value
-	}
-	if event.Restricted() {
-		// Restore deliberately does not requeue or unsuppress jobs that reached a
-		// terminal cancellation while the account was suspended.
-		jobSet["restrictionSuppressed"] = true
-	}
-	jobResult, err := projection.deliveryJobs.UpdateMany(
-		ctx,
-		bson.M{"$or": bson.A{
-			bson.M{"recipientIds": bson.M{"$in": event.SubjectIDs()}},
-			bson.M{"targetPersonaId": bson.M{"$in": event.SubjectIDs()}},
-		}},
-		bson.M{"$set": jobSet},
-	)
+	deliveryAffected, err := projection.deliveryLifecycle.ApplyRestriction(ctx, event)
 	if err != nil {
-		return 0, fmt.Errorf("project notification restriction to delivery jobs: %w", err)
+		return 0, err
 	}
-	recipientResult, err := projection.recipients.UpdateMany(
-		ctx,
-		bson.M{"recipientId": bson.M{"$in": event.SubjectIDs()}},
-		bson.M{"$set": baseSet},
-	)
-	if err != nil {
-		return 0, fmt.Errorf("project notification restriction to recipients: %w", err)
-	}
-	return messageResult.ModifiedCount + jobResult.ModifiedCount +
-		recipientResult.ModifiedCount, nil
+	return messageResult.ModifiedCount + deliveryAffected, nil
 }
 
 func (projection *MongoUserAccountRestrictionProjection) loadWatermark(

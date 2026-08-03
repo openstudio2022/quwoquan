@@ -78,6 +78,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile boolean currentDartAttemptIsHotRestart;
   private volatile String currentDartAttemptId = "";
   private volatile String currentLaunchMode = "unknown";
+  private volatile long currentDartAttemptStartedElapsedMs;
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
 
@@ -320,6 +321,25 @@ public class MainActivity extends FlutterFragmentActivity {
               } catch (Exception ignored) {
                 // Dart 侧会把空配置收敛为既有 runtime configuration failure。
               }
+              if (!BuildConfig.QWQ_CONTENT_RELEASE_ID.isEmpty()) {
+                values.put("contentReleaseId", BuildConfig.QWQ_CONTENT_RELEASE_ID);
+              }
+              if (!BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST.isEmpty()) {
+                values.put("contentManifestDigest", BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST);
+              }
+              if (!BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST.isEmpty()) {
+                values.put(
+                    "contentReadinessReceiptDigest",
+                    BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST);
+              }
+              if (!BuildConfig.QWQ_LAUNCH_TARGET.isEmpty()) {
+                values.put("launchTarget", BuildConfig.QWQ_LAUNCH_TARGET);
+              }
+              if (!BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST.isEmpty()) {
+                values.put(
+                    "effectiveLaunchManifestDigest",
+                    BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
+              }
               result.success(values);
             });
   }
@@ -495,7 +515,25 @@ public class MainActivity extends FlutterFragmentActivity {
             "quwoquan/startup/timings")
         .setMethodCallHandler(
             (MethodCall call, MethodChannel.Result result) -> {
-              if ("readProcessSegments".equals(call.method)) {
+              if ("beginStartupAttempt".equals(call.method)) {
+                String attemptId = "";
+                if (call.arguments instanceof Map) {
+                  Object rawAttemptId = ((Map<?, ?>) call.arguments).get("attemptId");
+                  if (rawAttemptId != null) {
+                    attemptId = safeStartupIdentifier(rawAttemptId.toString());
+                  }
+                }
+                if (attemptId.isEmpty() || "unknown".equals(attemptId)) {
+                  result.error("invalid_startup_attempt", "attemptId is required", null);
+                  return;
+                }
+                boolean hotRestart = dartStartupAttemptStarted;
+                long nowElapsedMs = SystemClock.elapsedRealtime();
+                dartStartupAttemptStarted = true;
+                currentDartAttemptId = attemptId;
+                currentDartAttemptIsHotRestart = hotRestart;
+                currentDartAttemptStartedElapsedMs =
+                    hotRestart ? nowElapsedMs : StartupProcessClock.processStartElapsedMs();
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("androidActivityOnCreateMs", activityOnCreateElapsedMs);
                 payload.put(
@@ -503,10 +541,12 @@ public class MainActivity extends FlutterFragmentActivity {
                 payload.put(
                     "elapsedSinceProcessStartMs",
                     StartupProcessClock.elapsedSinceProcessStartMs());
-                payload.put("deadlineOrigin", "android_process");
-                if (startupTelemetryJournal != null) {
-                  payload.put("startupAttemptId", startupTelemetryJournal.attemptId());
-                }
+                payload.put(
+                    "elapsedSinceAttemptStartMs",
+                    Math.max(0L, nowElapsedMs - currentDartAttemptStartedElapsedMs));
+                payload.put("attemptKind", hotRestart ? "hotRestart" : "cold");
+                payload.put("deadlineOrigin", hotRestart ? "dartHotRestart" : "nativeProcess");
+                payload.put("startupAttemptId", attemptId);
                 result.success(payload);
                 return;
               }
@@ -617,16 +657,13 @@ public class MainActivity extends FlutterFragmentActivity {
     if ("startup_attempt_started".equals(eventName)) {
       try {
         JSONObject payload = new JSONObject(event);
-        currentDartAttemptId =
+        String reportedAttemptId =
             safeStartupIdentifier(payload.optString("attemptId", ""));
-        if ("unknown".equals(currentDartAttemptId) && startupTelemetryJournal != null) {
-          currentDartAttemptId =
-              safeStartupIdentifier(startupTelemetryJournal.attemptId());
+        if (!reportedAttemptId.equals(currentDartAttemptId)) {
+          Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid reason=attempt_mismatch");
+          return;
         }
         currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
-        boolean hotRestart = dartStartupAttemptStarted;
-        dartStartupAttemptStarted = true;
-        currentDartAttemptIsHotRestart = hotRestart;
         String configurationState =
             safeStartupIdentifier(payload.optString("configurationState", "unknown"));
         String missingDefineKeys =
@@ -638,7 +675,7 @@ public class MainActivity extends FlutterFragmentActivity {
                 + " launchMode="
                 + currentLaunchMode
                 + " hotRestart="
-                + hotRestart
+                + currentDartAttemptIsHotRestart
                 + " configurationState="
                 + configurationState
                 + " effectiveLaunchManifestDigest="

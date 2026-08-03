@@ -215,6 +215,32 @@ func (c *instrumentedClient) HSet(ctx context.Context, key, field, value string)
 	return err
 }
 
+func (c *instrumentedClient) CompareAndSwapHashField(
+	ctx context.Context,
+	key string,
+	field string,
+	expected *string,
+	replacement *string,
+	ttl time.Duration,
+) (bool, error) {
+	t := time.Now()
+	inner, ok := c.inner.(HashFieldCompareAndSwapClient)
+	if !ok {
+		c.record(t, ErrAtomicHashFieldCompareAndSwapUnavailable)
+		return false, ErrAtomicHashFieldCompareAndSwapUnavailable
+	}
+	swapped, err := inner.CompareAndSwapHashField(
+		ctx,
+		key,
+		field,
+		expected,
+		replacement,
+		ttl,
+	)
+	c.record(t, err)
+	return swapped, err
+}
+
 func (c *instrumentedClient) HGet(ctx context.Context, key, field string) (string, error) {
 	t := time.Now()
 	v, err := c.inner.HGet(ctx, key, field)

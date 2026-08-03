@@ -7,31 +7,34 @@ import (
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
 	runtimecontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
-type skillContextRunReaderStub struct{ turn assistant.AssistantTurn }
+type skillContextRunReaderStub struct{ run runruntime.Run }
 
-func (s skillContextRunReaderStub) GetTurn(
+func (s skillContextRunReaderStub) Load(
 	context.Context,
 	string,
-) (assistant.AssistantTurn, bool, error) {
-	return s.turn, true, nil
+) (runruntime.Run, error) {
+	return s.run, nil
 }
 
 type skillContextSubscriptionStub struct {
-	ports.SkillSubscriptionStore
-	subscription assistant.SkillSubscription
+	subscriptionports.Store
+	subscription skillmodel.SkillSubscription
 }
 
 func (s skillContextSubscriptionStub) GetSkillSubscription(
 	context.Context,
 	string,
 	string,
-) (assistant.SkillSubscription, error) {
+) (skillmodel.SkillSubscription, error) {
 	return s.subscription, nil
 }
 
@@ -49,32 +52,37 @@ func (skillContextInterestStub) GetInterestProfile(
 
 func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *testing.T) {
 	now := time.Now().UTC()
-	turn := assistant.AssistantTurn{
-		TurnID:    "run_context_1",
+	run := runruntime.Run{
+		RunID:     "run_context_1",
 		UserID:    "user_1",
 		CreatedAt: now.Add(-time.Minute),
-		Trigger: assistant.AssistantTurnTrigger{Envelope: &assistant.AssistantTriggerEnvelope{
-			Kind:              "schedule",
-			TriggerID:         "trigger_1",
-			OccurredAt:        now.Add(-time.Minute),
-			SubscriptionRef:   "subscription_1",
-			Reason:            "subscription_due",
-			DedupeKey:         "delivery_1",
-			DeliveryPolicyRef: "inherit_user_setting",
+		InputText: "安排杭州行程",
+		Trigger: map[string]any{
+			"kind":              "schedule",
+			"triggerId":         "trigger_1",
+			"occurredAt":        now.Add(-time.Minute).Format(time.RFC3339Nano),
+			"subscriptionRef":   "subscription_1",
+			"reason":            "subscription_due",
+			"dedupeKey":         "delivery_1",
+			"deliveryPolicyRef": "inherit_user_setting",
+		},
+		SessionPreferenceFacts: []preferencemodel.Snapshot{{
+			Kind:  preferencemodel.KindLanguage,
+			Value: "zh-CN",
 		}},
 	}
-	subscription := assistant.SkillSubscription{
+	subscription := skillmodel.SkillSubscription{
 		SubscriptionID: "subscription_1",
-		SkillID:        "travel_journey_manager",
+		SkillID:        "travel_companion",
 		DomainID:       "travel",
-		SearchQueryPlan: assistant.SkillSubscriptionSearchQueryPlan{
+		SearchQueryPlan: skillmodel.SkillSubscriptionSearchQueryPlan{
 			Queries: []string{"杭州天气", "西湖拥堵"},
 		},
-		Destination: assistant.SkillSubscriptionDestination{DestinationType: "user"},
+		Destination: skillmodel.SkillSubscriptionDestination{DestinationType: "user"},
 		CreatedAt:   now.Add(-time.Hour),
 	}
 	registry, err := runtimecontext.NewRuntimeRegistry(
-		skillContextRunReaderStub{turn: turn},
+		skillContextRunReaderStub{run: run},
 		skillContextSubscriptionStub{subscription: subscription},
 		skillContextInterestStub{},
 	)
@@ -109,7 +117,7 @@ func TestProductionSkillContextResolversAssembleTrustedProactiveSnapshot(t *test
 		context.Background(),
 		profile,
 		application.AssembleRequest{
-			RunID: "run_context_1", SkillID: "travel_journey_manager",
+			RunID: "run_context_1", SkillID: "travel_companion",
 			Visibility:         application.DeliveryPersonal,
 			AllowedSensitivity: generated.AssistantContextSensitivityPrivate,
 		},

@@ -1,0 +1,50 @@
+description: 全局精选池条目聚合、命令和具名结果。
+fields:
+- {name: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: drop, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: scope, type: enum, enum_ref: PremiumPoolScope, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: status, type: enum, enum_ref: PremiumPoolEntryStatus, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: qualityScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: qualityAdmission, type: enum, enum_ref: PremiumPoolQualityAdmission, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: supplySource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: sourceTaskId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: rollbackToken, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: featuredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: revision, type: int, constraints: [NOT_NULL, POSITIVE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+- {name: takedownEjected, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: projection, description: 只由 status == takedown_ejected 派生的 wire 字段，不单独持久化}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read, role: authoritative_state}
+types:
+  UpsertPremiumPoolEntryRequest:
+    description: 受信 operator 提交全局精选池准入所需的最小质量证据；聚合身份从 contentId 派生。
+    fields:
+    - {name: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: drop, ops_exposure: write}
+    - {name: scope, type: enum, enum_ref: PremiumPoolScope, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write, description: 省略时由服务端归一为 global}
+    - {name: qualityScore, type: decimal, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: qualityAdmission, type: enum, enum_ref: PremiumPoolQualityAdmission, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: supplySource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: write}
+    - {name: sourceTaskId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: write}
+    - {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: write}
+    - {name: rollbackToken, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: write}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+  PremiumPoolEntrySlice:
+    description: 运营控制面按更新时间倒序返回的具名条目集合。
+    fields:
+    - {name: items, type: '[]PremiumPoolEntry', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+  PremiumPoolEntryTakedownResult:
+    description: 双签下架的当前批准状态；仅在 pending=false 时携带已提交的命令回执。
+    fields:
+    - {name: entry, type: PremiumPoolEntry, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+    - {name: approvalCount, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: approvalState, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: pending, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: payloadDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read}
+    - {name: approverActors, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read}
+    - {name: receipt, type: object, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+enums:
+  PremiumPoolScope:
+    values: [global]
+  PremiumPoolEntryStatus:
+    values: [active, rolled_back, takedown_ejected]
+  PremiumPoolQualityAdmission:
+    values: [approved]

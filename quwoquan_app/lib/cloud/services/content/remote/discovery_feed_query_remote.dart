@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
@@ -114,39 +113,13 @@ final class RemoteContentDiscoveryFeedQuery
       items: response.items.map(projectionMapper.toDto).toList(growable: false),
       outcome: response.outcome,
       emptyReason: response.emptyReason,
-      objectCards: response.objectCards
-          .map(_objectCardFromContract)
-          .toList(growable: false),
+      objectCards: response.objectCards,
       nextCursor: response.nextCursor,
       previousCursor: response.previousCursor,
       paginationExpiresAt: response.paginationExpiresAt,
       feedRequestId: response.feedRequestId,
       policyDigest: response.policyDigest,
     );
-  }
-
-  FeedObjectCardDto _objectCardFromContract(
-    contracts.ContentPostStructuredObject object,
-  ) {
-    return FeedObjectCardDto.fromMap(
-      object.fields.map(
-        (key, value) => MapEntry(key, _structuredValueToWire(value)),
-      ),
-    );
-  }
-
-  Object? _structuredValueToWire(contracts.ContentPostStructuredValue value) {
-    return switch (value) {
-      contracts.ContentPostStructuredObject() => value.fields.map(
-        (key, child) => MapEntry(key, _structuredValueToWire(child)),
-      ),
-      contracts.ContentPostStructuredArray() =>
-        value.values.map(_structuredValueToWire).toList(growable: false),
-      contracts.ContentPostStructuredText() => value.value,
-      contracts.ContentPostStructuredNumber() => value.value,
-      contracts.ContentPostStructuredBoolean() => value.value,
-      contracts.ContentPostStructuredNull() => null,
-    };
   }
 
   String? _mapCategoryToIdentity(String category) {

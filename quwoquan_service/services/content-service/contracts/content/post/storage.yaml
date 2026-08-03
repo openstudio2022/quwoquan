@@ -168,6 +168,10 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
+  content_outbox_sequences:
+    entity: Post
+    role: authoritative
+    description: Post 事务 outbox 的单调全序分配器；仅与聚合状态和 outbox 在同一事务中推进。
   projection_checkpoints:
     entity: Post
     description: Feed/Search/Recommendation/Homepage/Circle replay/rebuild checkpoint
@@ -176,6 +180,49 @@ collections:
       keys:
         _id: 1
       unique: true
+  data_release_state:
+    entity: Post
+    role: projection
+    description: canonical immutable content release 的当前激活投影；只由 release import facade 原子推进。
+  post_import_task_outbox:
+    entity: Post
+    role: authoritative
+    description: 不可变 Data release 中单个 Post import job 的宣告 outbox；与 Integration reliable-task 物理隔离。
+    indexes:
+    - name: uq_post_import_task_outbox_idempotency
+      keys: {idempotencyKey: 1}
+      unique: true
+      partial_filter:
+        idempotencyKey: {type: string}
+    - name: uq_post_import_task_outbox_pending_dedupe
+      keys: {dedupeKey: 1, status: 1}
+      unique: true
+      partial_filter:
+        status: pending
+    - name: idx_post_import_task_outbox_execution
+      keys: {payload.executionId: 1, payload.stage: 1, status: 1, startAt: 1}
+  post_import_task:
+    entity: Post
+    role: authoritative
+    description: Post import job 的租约、重试与终态；仅 data-content-worker 的 typed store 可读写。
+    indexes:
+    - name: uq_post_import_task_active_dedupe
+      keys: {dedupeKey: 1, status: 1}
+      unique: true
+      partial_filter:
+        status: {in: [ready, processing, retry_wait]}
+    - name: idx_post_import_task_execution
+      keys: {payload.executionId: 1, payload.jobId: 1}
+  post_import_task_recovery_receipt:
+    entity: Post
+    role: authoritative
+    description: 已审计 dead Post import task 的幂等恢复回执。
+    indexes:
+    - name: idx_post_import_task_recovery_task
+      keys: {taskId: 1}
+    - name: idx_post_import_task_recovery_expiry
+      keys: {expiresAt: 1}
+      expireAfterSeconds: 0
   rm_search_intent:
     entity: SearchIntentProjection
     role: projection
@@ -185,6 +232,54 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
+  content_persona_access_projection:
+    entity: Post
+    role: projection
+    description: Content 为 Post/Comment/Feed 服务端可见性维护的 Persona 拉黑访问投影；只保存 block/unblock，不复制 User follow 状态。
+    indexes:
+    - name: uq_content_persona_access_direction
+      keys:
+        sourcePersonaId: 1
+        targetPersonaId: 1
+      unique: true
+    - name: idx_content_persona_access_source
+      keys:
+        sourcePersonaId: 1
+        blocked: 1
+        targetPersonaId: 1
+    - name: idx_content_persona_access_target
+      keys:
+        targetPersonaId: 1
+        blocked: 1
+        sourcePersonaId: 1
+  content_persona_access_projection_inbox:
+    entity: Post
+    role: inbox
+    description: Persona relationship durable stream 的 Content 访问投影幂等 checkpoint；账号关闭时按 source/target Persona 删除。
+    indexes:
+    - name: uq_content_persona_access_event
+      keys:
+        eventId: 1
+      unique: true
+streams:
+  events.content.post_lifecycle:
+    entity: Post
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Post outbox 的唯一 durable 生命周期 transport；Circle、Recommendation 等只消费 typed event。
+  events.search.recommendation_signals.dlq:
+    entity: Post
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Content 旧推荐 signal consumer 的脱敏失败记录；该 consumer 随推荐逻辑迁出一并删除。
+  events.user.persona_access.dlq:
+    entity: Post
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Content Persona 访问控制投影无法解码或应用 User typed relationship event 时的脱敏失败记录。
 redis_cache:
 - key: cache:post:{postId}
   ttl_seconds: 300

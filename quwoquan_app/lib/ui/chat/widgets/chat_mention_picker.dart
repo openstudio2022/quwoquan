@@ -1,8 +1,8 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/input/chat_mention_text_editing_controller.dart';
@@ -19,14 +19,14 @@ class ChatMentionPicker extends StatefulWidget {
 
   final String currentUserId;
   final bool allowMentionAll;
-  final Future<List<ChatConversationMemberDto>> Function(String query)
+  final Future<List<ConversationMemberListRow>> Function(String query)
   searchMembers;
 
   static Future<ChatInputMentionCandidate?> show(
     BuildContext context, {
     required String currentUserId,
     required bool allowMentionAll,
-    required Future<List<ChatConversationMemberDto>> Function(String query)
+    required Future<List<ConversationMemberListRow>> Function(String query)
     searchMembers,
   }) {
     return showCupertinoModalPopup<ChatInputMentionCandidate>(
@@ -46,8 +46,8 @@ class ChatMentionPicker extends StatefulWidget {
 class _ChatMentionPickerState extends State<ChatMentionPicker> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
-  List<ChatConversationMemberDto> _members =
-      const <ChatConversationMemberDto>[];
+  List<ConversationMemberListRow> _members =
+      const <ConversationMemberListRow>[];
   bool _isLoading = true;
   Object? _error;
   int _requestSerial = 0;

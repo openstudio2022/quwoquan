@@ -4,7 +4,7 @@ import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 /// 摄影标签在标签树中的根路径。
 const String kPhotographyTagRoot = 'Topic/摄影';
 
-/// 把 [MediaCaptureMetadata] 派生成 `Topic/摄影/**` tagRef。
+/// 把 [ExtractedMediaCaptureMetadata] 派生成 `Topic/摄影/**` tagRef。
 ///
 /// 这是 EXIF 通道的消费端：taxonomy 侧
 /// `bootstrap_tags_topic_photography.py` 在每个标签的 description 里写明了绑定字段与
@@ -14,7 +14,7 @@ const String kPhotographyTagRoot = 'Topic/摄影';
 /// 派生结果只覆盖 EXIF 能证明的事实。中间地带刻意不打标：如果每张照片都能拿到某个
 /// 参数标签，这一维度在召回里就没有区分度了。
 ///
-/// 隐私：输入必须是已经过 [MediaCaptureMetadata.discloseOnly] 裁剪的对象。创作者关闭
+/// 隐私：输入必须是已经过 [ExtractedMediaCaptureMetadata.discloseOnly] 裁剪的对象。创作者关闭
 /// 某组后该组字段为 null，本推导自然不产出对应标签，这就是「关闭后已派生 tagRef 同步
 /// 撤回」的端侧一半。标签树的子树与披露分组一一对应，所以撤回是「整棵子树消失」而不是
 /// 逐条比对：`器材/**` ↔ gear，`拍摄参数/**` ↔ parameters，`光线条件/**` ↔ time+place。
@@ -22,7 +22,7 @@ final class CapturePhotographyTagDeriver {
   const CapturePhotographyTagDeriver();
 
   /// 按标签树路径顺序返回去重后的 tagRef。
-  List<String> derive(MediaCaptureMetadata metadata) {
+  List<String> derive(ExtractedMediaCaptureMetadata metadata) {
     final refs = <String>{
       ..._gearRefs(metadata),
       ..._parameterRefs(metadata),
@@ -32,7 +32,7 @@ final class CapturePhotographyTagDeriver {
     return sorted;
   }
 
-  Iterable<String> _gearRefs(MediaCaptureMetadata m) {
+  Iterable<String> _gearRefs(ExtractedMediaCaptureMetadata m) {
     final refs = <String>[];
     final body = _bodyType(m);
     if (body != null) refs.add('$kPhotographyTagRoot/器材/机身类型/$body');
@@ -43,7 +43,7 @@ final class CapturePhotographyTagDeriver {
     return refs;
   }
 
-  Iterable<String> _parameterRefs(MediaCaptureMetadata m) {
+  Iterable<String> _parameterRefs(ExtractedMediaCaptureMetadata m) {
     final refs = <String>[];
 
     final focal = _focalRange(m.focalLengthMm);
@@ -84,7 +84,7 @@ final class CapturePhotographyTagDeriver {
   ///
   /// 创作者关掉 `place` 或 `time` 任一组就整组不产出——只有本地时间无法区分「北欧夏季
   /// 的午夜白昼」与「赤道的午夜黑夜」，按钟点粗判会打出错误标签。
-  Iterable<String> _lightRefs(MediaCaptureMetadata m) {
+  Iterable<String> _lightRefs(ExtractedMediaCaptureMetadata m) {
     final capturedAt = m.capturedAt;
     final latitude = m.gpsLatitude;
     final longitude = m.gpsLongitude;
@@ -126,7 +126,7 @@ final class CapturePhotographyTagDeriver {
   ///
   /// 具体型号是实体而非标签：型号每年新增，做成标签会让标签树被机型无限撑大。
   /// `sameGearUsed` 交集直接比对 `cameraModel` 字符串，不需要经过标签。
-  String? _bodyType(MediaCaptureMetadata m) {
+  String? _bodyType(ExtractedMediaCaptureMetadata m) {
     final make = (m.cameraMake ?? '').toUpperCase();
     final model = (m.cameraModel ?? '').toUpperCase();
     if (make.isEmpty && model.isEmpty) return null;

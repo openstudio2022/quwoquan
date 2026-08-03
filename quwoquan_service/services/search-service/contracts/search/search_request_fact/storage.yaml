@@ -46,18 +46,14 @@ collections:
       keys:
         expireAt: 1
       expireAfterSeconds: 0
-external_read_index:
-  backend: elasticsearch
-  index: quwoquan_objects
-  note: 派生检索读库，由 search-service indexer 从各业务域 change-stream 灌入；可重建/回放。
-derived_read_models:
   rm_search_term_heat:
     backend: mongodb
     entity: SearchTermHeatView
-    description: 搜索词热力/相关性聚合（词频 + 时间衰减 + CTR 加权 + query→点击对象相关性）
+    role: projection
+    description: 搜索词热力/相关性聚合；仅由 SearchRequestFact 与 SearchFeedbackFact typed reader 重建，不直接读取兄弟集合。
     write_source:
     - search_queries
-    - search_feedback_events
+    - SearchFeedbackFact.HeatReader
     indexes:
     - name: idx_search_term_heat_term
       keys:
@@ -72,4 +68,8 @@ derived_read_models:
     ttl:
       field: updatedAt
       seconds: 86400
+external_read_index:
+  backend: elasticsearch
+  index: quwoquan_objects
+  note: 派生检索读库，由 search-service indexer 从各业务域 change-stream 灌入；可重建/回放。
 role: append_only

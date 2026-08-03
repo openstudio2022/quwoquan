@@ -5,11 +5,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
-	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
 )
 
 type countingFrozenPolicyResolver struct {
@@ -23,125 +22,87 @@ func (resolver *countingFrozenPolicyResolver) ResolveFrozenPolicy(
 	_ string,
 	skillID string,
 	domainID string,
-) (assistant.AssistantFrozenPolicySelection, error) {
+) (runruntime.FrozenPolicySelection, error) {
 	resolver.calls++
 	if resolver.err != nil {
-		return assistant.AssistantFrozenPolicySelection{}, resolver.err
+		return runruntime.FrozenPolicySelection{}, resolver.err
 	}
-	selection := testFrozenPolicySelection(policyID, skillID, domainID)
-	selection.ReleaseDigest = testPolicyReleaseDigest
-	return selection, nil
+	return testRunPolicyResolver().ResolveFrozenPolicy(
+		context.Background(),
+		policyID,
+		"persona-1",
+		skillID,
+		domainID,
+	)
 }
 
 func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) {
-	t.Parallel()
-	store := persistence.NewMemorySessionRunStore()
+	runtime := assistantruntest.NewMemoryRuntime()
 	resolver := &countingFrozenPolicyResolver{}
-	service := orchestration.NewAssistantService(
+	commands := runruntime.NewCommandService(
+		runtime,
+		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		time.Now,
 		nil,
-		nil,
-		orchestration.WithSessionRunStore(store),
-		orchestration.WithFrozenPolicyResolver(resolver),
-		orchestration.WithAgentLoop(orchestration.NewAgentLoop(
-			nil,
-			orchestration.ReactRuntime{
-				Model: modeldouble.DeterministicModelProvider{},
-			},
-			nil,
-		)),
+		resolver,
 	)
-	session, err := service.CreateSession(
-		t.Context(),
-		"account-1",
-		assistant.CreateSessionInput{ClientRequestID: "session-1"},
-	)
+	command := runruntime.StartCommand{
+		UserID:            "account-1",
+		PersonaID:         "persona-1",
+		SessionID:         "session-1",
+		ClientRequestID:   "run-1",
+		IntentKind:        "answer",
+		InputText:         "测试冻结策略",
+		RequestedSkillID:  "general_qa",
+		RequestedDomainID: "assistant",
+	}
+	first, err := commands.Start(t.Context(), command)
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := assistant.CreateTurnInput{
-		SkillID:         "general_qa",
-		DomainID:        "assistant",
-		Input:           assistant.AssistantTurnInput{Text: "测试冻结策略"},
-		ClientRequestID: "run-1",
-		RequestContext:  testRunRequestContext("persona-1"),
-	}
-	first, err := service.CreateTurn(
-		t.Context(),
-		"account-1",
-		session.SessionID,
-		input,
-	)
+	replay, err := commands.Start(t.Context(), command)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replay, err := service.CreateTurn(
-		t.Context(),
-		"account-1",
-		session.SessionID,
-		input,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resolver.calls != 1 ||
-		first.TurnID != replay.TurnID ||
+	if resolver.calls != 1 || first.RunID != replay.RunID ||
 		first.FrozenPolicySelection.ReleaseDigest != testPolicyReleaseDigest ||
-		replay.FrozenPolicySelection.ReleaseDigest != testPolicyReleaseDigest {
+		replay.FrozenPolicySelection.ReleaseDigest != first.FrozenPolicySelection.ReleaseDigest ||
+		replay.FrozenPolicySelection.RolloutRevision != first.FrozenPolicySelection.RolloutRevision {
 		t.Fatalf("calls=%d first=%+v replay=%+v", resolver.calls, first, replay)
 	}
 
-	if _, err := service.ExecuteTurn(t.Context(), "account-1", first.TurnID); err != nil {
-		t.Fatal(err)
-	}
-	completed, err := service.GetTurn(t.Context(), "account-1", first.TurnID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if completed.TerminalSnapshot == nil ||
-		completed.TerminalSnapshot.SelectedPolicyRef == nil ||
-		completed.TerminalSnapshot.SelectedPolicyRef.ReleaseDigest != testPolicyReleaseDigest {
-		t.Fatalf("terminal policy ref=%+v", completed.TerminalSnapshot)
-	}
 }
 
 func TestPolicyResolverFailureDoesNotWriteRun(t *testing.T) {
-	t.Parallel()
-	store := persistence.NewMemorySessionRunStore()
-	service := orchestration.NewAssistantService(
+	runtime := assistantruntest.NewMemoryRuntime()
+	commands := runruntime.NewCommandService(
+		runtime,
+		runruntime.SessionAuthorizerFunc(func(context.Context, string, string) error { return nil }),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		time.Now,
 		nil,
-		nil,
-		orchestration.WithSessionRunStore(store),
-		orchestration.WithFrozenPolicyResolver(&countingFrozenPolicyResolver{
-			err: errors.New("rollout storage unavailable"),
-		}),
+		&countingFrozenPolicyResolver{err: errors.New("rollout storage unavailable")},
 	)
-	session, err := service.CreateSession(
-		t.Context(),
-		"account-2",
-		assistant.CreateSessionInput{ClientRequestID: "session-2"},
-	)
-	if err != nil {
-		t.Fatal(err)
+	_, err := commands.Start(t.Context(), runruntime.StartCommand{
+		UserID:          "account-2",
+		PersonaID:       "persona-2",
+		SessionID:       "session-2",
+		ClientRequestID: "run-failed-policy",
+		IntentKind:      "answer",
+		InputText:       "must fail",
+	})
+	if !errors.Is(err, runruntime.ErrPolicyUnavailable) {
+		t.Fatalf("policy resolver failure=%v", err)
 	}
-	_, err = service.CreateTurn(
+	if _, readErr := runtime.LoadByRequest(
 		t.Context(),
 		"account-2",
-		session.SessionID,
-		assistant.CreateTurnInput{
-			Input:           assistant.AssistantTurnInput{Text: "must fail"},
-			ClientRequestID: "run-failed-policy",
-			RequestContext:  testRunRequestContext("persona-2"),
-		},
-	)
-	if err == nil {
-		t.Fatal("policy resolver failure must reject StartRun")
-	}
-	if _, found, readErr := store.GetTurnByClientRequest(
-		t.Context(),
-		"account-2",
-		session.SessionID,
+		"session-2",
 		"run-failed-policy",
-	); readErr != nil || found {
-		t.Fatalf("failed policy selection persisted run: found=%v err=%v", found, readErr)
+	); !errors.Is(readErr, runruntime.ErrRunNotFound) {
+		t.Fatalf("failed policy selection persisted run: %v", readErr)
 	}
 }

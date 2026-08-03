@@ -118,7 +118,7 @@ runtime_entrypoints:
       kind: session
       facet: RateLimitAdmissionFacade
       method: admit
-      session_owner: RateLimitBucket
+      object_owner: RateLimitBucket
 		`,
 	)
 	writeFile(
@@ -173,6 +173,7 @@ func TestRuntimeEntrypointCannotCreateAnHTTPDualTrack(t *testing.T) {
 		Operations: []ast.Operation{{
 			ID:       "gateway.rate_limit_bucket.FakeAdmission",
 			ObjectID: "gateway.rate_limit_bucket",
+			Kind:     ast.OperationKindCommand,
 		}},
 		RuntimeEntrypoints: []ast.RuntimeEntrypoint{{
 			ID:      "gateway.rate_limit_bucket.SharedAdmission",
@@ -180,12 +181,38 @@ func TestRuntimeEntrypointCannotCreateAnHTTPDualTrack(t *testing.T) {
 			RuntimeKind: "middleware", Phase: "post_authorization_pre_owner_proxy",
 			ApplicationKind: ast.OperationKindSession,
 			Facet:           "RateLimitAdmissionFacade", FacadeMethod: "admit",
-			SessionOwner: "RateLimitBucket",
+			ObjectOwner: "RateLimitBucket",
 		}},
 	}
 	issues := validate.Run(contractGraph, validate.ProfileCommercial)
 	if !hasIssueCode(issues, "CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK") {
 		t.Fatalf("HTTP/runtime dual track accepted: %+v", issues)
+	}
+}
+
+func TestRuntimeProjectorMayShareObjectWithHTTPQuery(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "realtime.presence_view", Domain: "realtime", Name: "PresenceView",
+			Kind: ast.ObjectKindProjection, KindExplicit: true,
+		}},
+		Operations: []ast.Operation{{
+			ID:       "realtime.presence_view.GetPersonaPresence",
+			ObjectID: "realtime.presence_view",
+			Kind:     ast.OperationKindQuery,
+		}},
+		RuntimeEntrypoints: []ast.RuntimeEntrypoint{{
+			ID:      "realtime.presence_view.ProjectPresence",
+			LocalID: "ProjectPresence", ObjectID: "realtime.presence_view",
+			RuntimeKind: "projector", Phase: "event_projection",
+			ApplicationKind: ast.OperationKindCommand,
+			Facet:           "PresenceViewProjector", FacadeMethod: "apply",
+			ObjectOwner: "PresenceView",
+		}},
+	}
+	issues := validate.Run(contractGraph, validate.ProfileCommercial)
+	if hasIssueCode(issues, "CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK") {
+		t.Fatalf("query plus canonical runtime projector rejected: %+v", issues)
 	}
 }
 

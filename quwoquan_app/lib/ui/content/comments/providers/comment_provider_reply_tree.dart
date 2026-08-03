@@ -2,8 +2,8 @@ part of 'comment_provider.dart';
 
 // CommentNotifier 的纯函数辅助：删除回复、置顶前移和反应计数。
 
-List<ContentCommentListItem> _removeReplyFromParent(
-  List<ContentCommentListItem> comments, {
+List<CommentViewData> _removeReplyFromParent(
+  List<CommentViewData> comments, {
   required String parentCommentId,
   required String replyId,
 }) {
@@ -25,17 +25,15 @@ List<ContentCommentListItem> _removeReplyFromParent(
 }
 
 /// 把置顶的一级评论移到列表最前（保持其余评论相对顺序），与云侧排序一致。
-List<ContentCommentListItem> _withPinnedFirst(
-  List<ContentCommentListItem> comments,
-) {
+List<CommentViewData> _withPinnedFirst(List<CommentViewData> comments) {
   final pinned = comments.where((c) => c.isPinned).toList(growable: false);
   final rest = comments.where((c) => !c.isPinned).toList(growable: false);
-  return <ContentCommentListItem>[...pinned, ...rest];
+  return <CommentViewData>[...pinned, ...rest];
 }
 
-List<ContentCommentListItem> _replaceCommentInTree(
-  List<ContentCommentListItem> comments,
-  ContentCommentListItem updated,
+List<CommentViewData> _replaceCommentInTree(
+  List<CommentViewData> comments,
+  CommentViewData updated,
 ) {
   return comments
       .map((comment) {
@@ -48,20 +46,20 @@ List<ContentCommentListItem> _replaceCommentInTree(
       .toList(growable: false);
 }
 
-ContentCommentListItem _applyReaction(
-  ContentCommentListItem comment,
-  ContentCommentReactionValue reaction,
+CommentViewData _applyReaction(
+  CommentViewData comment,
+  CommentReactionType reaction,
 ) {
   var likeCount = comment.likeCount;
   var dislikeCount = comment.dislikeCount;
-  if (comment.viewerReaction == ContentCommentReactionValue.like) {
+  if (comment.viewerReaction == CommentReactionType.like) {
     likeCount = (likeCount - 1).clamp(0, 1 << 31).toInt();
   }
-  if (comment.viewerReaction == ContentCommentReactionValue.dislike) {
+  if (comment.viewerReaction == CommentReactionType.dislike) {
     dislikeCount = (dislikeCount - 1).clamp(0, 1 << 31).toInt();
   }
-  if (reaction == ContentCommentReactionValue.like) likeCount++;
-  if (reaction == ContentCommentReactionValue.dislike) dislikeCount++;
+  if (reaction == CommentReactionType.like) likeCount++;
+  if (reaction == CommentReactionType.dislike) dislikeCount++;
   return comment.copyWith(
     likeCount: likeCount,
     dislikeCount: dislikeCount,

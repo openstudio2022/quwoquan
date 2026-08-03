@@ -16,13 +16,12 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ReadbackStatus:  "passed",
 		Posts:           3,
-		DiscoveryPosts:  3,
 		PlayableVideos:  1,
 	}
 	if !ready.Ready() {
 		t.Fatalf("complete active supply must be ready: %+v", ready)
 	}
-	if !ready.ReleaseBoundReadbackReady() || !ready.DiscoveryReady() || !ready.PlayableVideoReady() {
+	if !ready.ReleaseBoundReadbackReady() || !ready.ContentReady() || !ready.PlayableVideoReady() {
 		t.Fatalf("complete snapshot must satisfy every release-bound view: %+v", ready)
 	}
 	if !(postports.ActiveSupplySnapshot{}).IsEmpty() {
@@ -34,7 +33,6 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 		"invalid digest":      func(value *postports.ActiveSupplySnapshot) { value.ManifestDigest = "bad" },
 		"readback pending":    func(value *postports.ActiveSupplySnapshot) { value.ReadbackStatus = "pending" },
 		"zero posts":          func(value *postports.ActiveSupplySnapshot) { value.Posts = 0 },
-		"zero discovery":      func(value *postports.ActiveSupplySnapshot) { value.DiscoveryPosts = 0 },
 		"zero playable video": func(value *postports.ActiveSupplySnapshot) { value.PlayableVideos = 0 },
 	}
 	for name, mutate := range cases {
@@ -49,9 +47,8 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 
 	zeroSupply := ready
 	zeroSupply.Posts = 0
-	zeroSupply.DiscoveryPosts = 0
 	zeroSupply.PlayableVideos = 0
-	if !zeroSupply.ReleaseBoundReadbackReady() || zeroSupply.IsEmpty() || zeroSupply.DiscoveryReady() {
+	if !zeroSupply.ReleaseBoundReadbackReady() || zeroSupply.IsEmpty() || zeroSupply.ContentReady() {
 		t.Fatalf("healthy zero-supply release must remain bound but not ready: %+v", zeroSupply)
 	}
 }

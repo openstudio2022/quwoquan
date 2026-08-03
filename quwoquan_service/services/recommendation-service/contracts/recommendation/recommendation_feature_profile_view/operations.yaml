@@ -1,5 +1,108 @@
-description: RecommendationFeatureProfileView 仅通过对象 Reader 供排序与训练快照读取。
-api_routes: []
+description: RecommendationFeatureProfileView 通过对象 Reader 供排序、训练快照与 Content 作者影响 hydration 读取。
+api_routes:
+- method: GET
+  path: /internal/recommendation/subjects/{subjectId}/intersections
+  operation: ListRecommendationSubjectIntersections
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: listSubjectIntersections, reader: RecommendationIntersectionReader, slice: RecommendationIntersectionReasonSlice}
+  request_entity: ListRecommendationSubjectIntersectionsQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: subjectId, field: subjectId}]
+    query: [{name: intersectionClass, field: intersectionClass}, {name: channel, field: channel, required: false}]
+  response_entity: RecommendationIntersectionReasonSlice
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.USER.feature_profile_subject_closed, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: recommendation_intersection_reason_read, trace: true, attributes: [outcome, intersection_class, channel]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/subjects/{subjectId}/objects/{objectType}/{objectId}/intersections
+  operation: ListRecommendationObjectIntersections
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: listObjectIntersections, reader: RecommendationIntersectionReader, slice: RecommendationObjectIntersectionReasonSlice}
+  request_entity: ListRecommendationObjectIntersectionsQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: subjectId, field: subjectId}, {name: objectType, field: objectType}, {name: objectId, field: objectId}]
+  response_entity: RecommendationObjectIntersectionReasonSlice
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.USER.feature_profile_subject_closed, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: recommendation_object_intersection_reason_read, trace: true, attributes: [outcome, object_type]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/intersection-supply/{supplyKey}
+  operation: GetRecommendationIntersectionSupply
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: getIntersectionSupply, reader: RecommendationIntersectionReader, slice: RecommendationIntersectionSupply}
+  request_entity: GetRecommendationIntersectionSupplyQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: supplyKey, field: supplyKey}]
+  response_entity: RecommendationIntersectionSupply
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_intersection_supply_read, trace: true, attributes: [outcome, supply_key]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/authors/{authorId}/impact
+  operation: GetRecommendationAuthorImpact
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: getAuthorImpact, reader: RecommendationAuthorImpactReader, slice: RecommendationAuthorImpactSummary}
+  request_entity: GetRecommendationAuthorImpactQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: authorId, field: authorId}]
+    query: [{name: limit, field: limit, required: false}]
+  response_entity: RecommendationAuthorImpactSummary
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_author_impact_read, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/authors/{authorId}/impact/{impactId}/evidence
+  operation: ListRecommendationAuthorImpactEvidence
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: listAuthorImpactEvidence, reader: RecommendationAuthorImpactReader, slice: RecommendationAuthorImpactEvidencePage}
+  request_entity: ListRecommendationAuthorImpactEvidenceQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: authorId, field: authorId}, {name: impactId, field: impactId}]
+    query: [{name: cursor, field: cursor, required: false}, {name: limit, field: limit, required: false}]
+  response_entity: RecommendationAuthorImpactEvidencePage
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_author_impact_evidence_read, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+runtime_entrypoints:
+- name: ProjectRecommendationFeatureProfile
+  kind: projector
+  phase: event_projection
+  source_events: [recommendation.RecommendationExposureRecorded, recommendation.RecommendationFeedbackRecorded, tag.TagFeedbackRecorded, content.ContentBehaviorRecorded, user.PersonaFollowStateChanged, user.PersonaBlocked, user.PersonaUnblocked, circle.CircleMembershipRequested, circle.CircleMembershipJoined, circle.CircleMembershipApproved, circle.CircleMembershipLeft, circle.CircleMembershipRoleChanged, circle.CircleMembershipRejected, content.PostPublished, content.PostUpdated, content.PostSettingsUpdated, content.PostPromotedToWork, content.PostDeleted, content.PostPrivacyRedacted, content.PostPurged, recommendation.RecommendationSubjectClosed]
+  checkpoint: per_subject_applied_event_revision_with_source_event_receipt
+  rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
+  tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint
+  idempotency: event_id
+  application: {kind: command, facet: RecommendationFeatureProfileViewProjector, method: apply, object_owner: RecommendationFeatureProfileView}
 consumers:
 - {name: recommendation-ranking, capabilities: [read_subject_features, read_candidate_features, read_intersection_features]}
 - {name: recommendation-model-training, capabilities: [read_training_feature_snapshots]}

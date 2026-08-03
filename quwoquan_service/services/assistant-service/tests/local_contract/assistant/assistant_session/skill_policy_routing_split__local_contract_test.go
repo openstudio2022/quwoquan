@@ -3,6 +3,7 @@ package local_contract
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,33 +15,28 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
-// 用户一句话必须真实分流到垂类技能与对应模板，而不是全部落到通用兜底。
-func TestPublishedPolicyRoutesVerticalsToDistinctTemplates(t *testing.T) {
-	service, candidates := publishedPolicyRolloutService(t)
-	if len(candidates) < 5 {
-		t.Fatalf("published policy must serve the vertical skills, got %v", candidates)
-	}
+// 用户一句话必须由 active Skill package 分流；旅行规划和交通问题收敛到同一个
+// travel_companion 用户入口，而不是继续保留 Policy 中的两个旧 Skill 身份。
+func TestActiveSkillPackageOwnsVerticalRouting(t *testing.T) {
 	runtime := orchestration.ManifestSkillRuntime{Loader: publishedSkillLoader{}}
 
 	cases := []struct {
-		text       string
-		skillID    string
-		templateID string
+		text    string
+		skillID string
 	}{
-		{"帮我安排下周去杭州的行程", "travel_planning", "travel-planning"},
-		{"从西湖到机场坐地铁怎么走", "travel_transport", "travel-transport"},
-		{"杭州明天天气怎么样", "weather", "weather-realtime"},
-		{"附近有什么适合家庭聚餐的餐厅", "local_life", "local-life"},
-		{"石墨烯的导电原理是什么", "knowledge_general", "knowledge-general"},
+		{"帮我安排下周去杭州的行程", "travel_companion"},
+		{"从西湖到机场坐地铁怎么走", "travel_companion"},
+		{"杭州明天天气怎么样", "weather"},
+		{"附近有什么适合家庭聚餐的餐厅", "local_life"},
+		{"石墨烯的导电原理是什么", "knowledge_general"},
 	}
-	seenTemplates := map[string]bool{}
 	for _, testCase := range cases {
-		selection, err := runtime.SelectSkillWithin(
+		selection, err := runtime.SelectSkill(
 			t.Context(),
 			assistant.AssistantTurn{Input: assistant.AssistantTurnInput{Text: testCase.text}},
-			candidates,
 		)
 		if err != nil {
 			t.Fatalf("select skill for %q: %v", testCase.text, err)
@@ -48,42 +44,12 @@ func TestPublishedPolicyRoutesVerticalsToDistinctTemplates(t *testing.T) {
 		if selection.SkillID != testCase.skillID {
 			t.Fatalf("%q routed to skill %q, want %q", testCase.text, selection.SkillID, testCase.skillID)
 		}
-		frozen, err := service.ResolveFrozenSelection(
-			t.Context(),
-			"assistant-default",
-			"persona-routing",
-			selection.SkillID,
-			selection.DomainID,
-		)
-		if err != nil {
-			t.Fatalf("resolve frozen selection for %q: %v", testCase.skillID, err)
-		}
-		if frozen.Template.TemplateID != testCase.templateID {
-			t.Fatalf(
-				"skill %q froze template %q, want %q",
-				testCase.skillID,
-				frozen.Template.TemplateID,
-				testCase.templateID,
-			)
-		}
-		if frozen.Template.SkillID != testCase.skillID {
-			t.Fatalf(
-				"template %q serves skill %q, want %q",
-				frozen.Template.TemplateID,
-				frozen.Template.SkillID,
-				testCase.skillID,
-			)
-		}
-		seenTemplates[frozen.Template.TemplateID] = true
-	}
-	if len(seenTemplates) != len(cases) {
-		t.Fatalf("verticals must not collapse into one template, got %v", seenTemplates)
 	}
 }
 
 // 策略未覆盖的技能不得被选中：否则冻结时会静默回落到默认模板并丢掉用户意图。
-func TestSkillSelectionStaysWithinPolicyCandidates(t *testing.T) {
-	_, candidates := publishedPolicyRolloutService(t)
+func TestScopedSkillSelectionStaysWithinCallerCandidates(t *testing.T) {
+	candidates := []string{"travel_companion", "weather", "local_life", "knowledge_general", "fallback_general_search"}
 	runtime := orchestration.ManifestSkillRuntime{Loader: publishedSkillLoader{}}
 	allowed := map[string]bool{}
 	for _, skillID := range candidates {
@@ -108,10 +74,24 @@ func TestSkillSelectionStaysWithinPolicyCandidates(t *testing.T) {
 	}
 }
 
+func TestScopedSkillSelectionFailsClosedWhenNoCandidateIsEligible(t *testing.T) {
+	runtime := orchestration.ManifestSkillRuntime{Loader: publishedSkillLoader{}}
+	for _, candidates := range [][]string{{}, {"missing_skill"}} {
+		selection, err := runtime.SelectSkillWithin(
+			t.Context(),
+			assistant.AssistantTurn{Input: assistant.AssistantTurnInput{Text: "安排杭州行程"}},
+			candidates,
+		)
+		if !errors.Is(err, orchestration.ErrNoEligibleSkill) {
+			t.Fatalf("candidates=%v selection=%+v error=%v", candidates, selection, err)
+		}
+	}
+}
+
 type publishedSkillLoader struct{}
 
-func (publishedSkillLoader) Load() ([]skillpkg.Manifest, error) {
-	return orchestration.LoadAssistantDomainSkillCatalog()
+func (publishedSkillLoader) Load(context.Context) ([]skillpkg.Manifest, error) {
+	return skillfixture.Load()
 }
 
 // publishedPolicyRolloutService 用四环境正在引用的发布物驱动 rollout 服务，保证测试断言的是

@@ -11,10 +11,9 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestRecord
-      response_decoder: decodeGreetingRequestRecord
+    response_entity: GreetingRequestRecord
+    response_body: GreetingRequestRecord
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: actor_self
@@ -81,10 +80,9 @@ api_routes:
       reader: ListGreetingInboxReader
       slice: ListGreetingInboxSlice
     description: 收件箱（我收到的待处理请求）
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestSlice
-      response_decoder: decodeGreetingRequestSlice
+    response_entity: GreetingRequestSlice
+    response_body: GreetingRequestSlice
+    response_body_kind: page
     authorization:
       principal: persona
       ownership_policy: self
@@ -147,10 +145,9 @@ api_routes:
       reader: ListGreetingOutboxReader
       slice: ListGreetingOutboxSlice
     description: 发件箱（我发出的请求）
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestSlice
-      response_decoder: decodeGreetingRequestSlice
+    response_entity: GreetingRequestSlice
+    response_body: GreetingRequestSlice
+    response_body_kind: page
     authorization:
       principal: persona
       ownership_policy: self
@@ -208,10 +205,9 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestRecord
-      response_decoder: decodeGreetingRequestRecord
+    response_entity: GreetingRequestRecord
+    response_body: GreetingRequestRecord
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: greeting_target_only
@@ -271,10 +267,9 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 忽略打招呼
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestRecord
-      response_decoder: decodeGreetingRequestRecord
+    response_entity: GreetingRequestRecord
+    response_body: GreetingRequestRecord
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: greeting_target_only
@@ -334,10 +329,9 @@ api_routes:
       mutation_target: GreetingRequest
       invariant_target: GreetingRequest
     description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
-    client_contract:
-      dart_import: ../user/greeting_request_contracts.dart
-      response_type: GreetingRequestRecord
-      response_decoder: decodeGreetingRequestRecord
+    response_entity: GreetingRequestRecord
+    response_body: GreetingRequestRecord
+    response_body_kind: object
     authorization:
       principal: persona
       ownership_policy: greeting_requester_only

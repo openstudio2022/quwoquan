@@ -2,6 +2,21 @@
   "schema": "environment-runtime",
   "environment": "gamma",
   "dataReleaseTarget": "gamma-local",
+  "productLifecycleState": "research",
+  "researchContentIsolation": {
+    "identityWhitelistRequired": true,
+    "anonymousContentAccess": false,
+    "anonymousMediaAccess": false,
+    "publicContentDistribution": false,
+    "sharingDisabled": true,
+    "exportDisabled": true,
+    "searchIndexingDisabled": true,
+    "internalAppSignatureRequired": true,
+    "researchBadgeRequired": true,
+    "shortLivedSignedMediaUrlsRequired": true,
+    "signedMediaUrlMaxTtlSeconds": 900,
+    "mediaAccessAuditLogRequired": true
+  },
   "urlRoles": {
     "api": {"scheme": "https", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},
     "realtime": {"scheme": "wss", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "local-managed"},

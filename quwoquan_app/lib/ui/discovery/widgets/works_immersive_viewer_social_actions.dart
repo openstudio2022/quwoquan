@@ -1,7 +1,7 @@
 part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerSocialActions on _WorksImmersiveViewerState {
-  void _onLike(PostBaseDto post) {
+  void _onLike(ContentPostViewData post) {
     runWhenLoggedIn(ref, context, AuthGateReason.like, () {
       final isLiked = effectivePostLiked(ref, post.id);
       final currentCount = effectivePostLikeCount(
@@ -23,7 +23,7 @@ extension _WorksImmersiveViewerSocialActions on _WorksImmersiveViewerState {
     });
   }
 
-  void _onFollow(PostBaseDto post) {
+  void _onFollow(ContentPostViewData post) {
     runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
       final subjectId = post.personaId;
       final wasFollowing = effectiveProfileFollowing(ref, subjectId);

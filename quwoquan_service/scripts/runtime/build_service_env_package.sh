@@ -61,6 +61,7 @@ if [[ "$service" == "assistant-service" && "$env_name" != "alpha" ]]; then
   (
     cd quwoquan_service
     go test ./services/assistant-service/cmd/policy-publish
+    go test ./services/assistant-service/cmd/skill-package-publish
   ) >/dev/null
 fi
 
@@ -83,6 +84,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 import yaml
+
+from quwoquan_service.scripts.runtime.service_image_build_input import (
+    service_image_build_input_digest,
+)
 
 service, environment, owner_value, package_value = sys.argv[1:5]
 root = Path.cwd()
@@ -183,7 +188,10 @@ if service == "chat-service":
             }
         )
 
-source_digest, source_count = tree_digest(owner)
+source_digest, source_count, image_build_inputs = service_image_build_input_digest(
+    root,
+    owner_value,
+)
 resource_digest, resource_count = tree_digest(package / "resources")
 config_path = package / "config/config.yaml"
 manifest_path = package / "manifests/all.yaml"
@@ -452,6 +460,7 @@ provenance = {
     "counts": {"sourceFiles": source_count, "resourceFiles": resource_count},
     "sources": {
         "serviceRoot": owner_value,
+        "imageBuildInputs": list(image_build_inputs),
         "configSchema": f"{owner_value}/config/schema.yaml",
         "environment": f"{owner_value}/environments/{environment}",
     },

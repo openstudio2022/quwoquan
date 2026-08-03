@@ -73,10 +73,10 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	eventInputs := []application.EventRecordInput{
 		integrationElasticsearchPageEvent(now, "page_open", "session-a"),
 		integrationElasticsearchPageEvent(now.Add(time.Second), "page_return", "session-a"),
-		postgresRtcMediaQoeEvent(now.Add(2*time.Second), "completed", true, 100, 1),
-		postgresRtcMediaQoeEvent(now.Add(3*time.Second), "connection_lost", true, 200, 2),
-		postgresRtcMediaQoeEvent(now.Add(4*time.Second), "connect_failed", false, 0, 3),
-		postgresRtcMediaQoeEvent(now.Add(5*time.Second), "abandoned", true, 9999, 99),
+		integrationRtcMediaQoeEvent(now.Add(2*time.Second), "completed", true, 100, 1),
+		integrationRtcMediaQoeEvent(now.Add(3*time.Second), "connection_lost", true, 200, 2),
+		integrationRtcMediaQoeEvent(now.Add(4*time.Second), "connect_failed", false, 0, 3),
+		integrationRtcMediaQoeEvent(now.Add(5*time.Second), "abandoned", true, 9999, 99),
 	}
 	records := make([]application.EventRecord, len(eventInputs))
 	eventBatchKey := strings.Repeat("a", 64)
@@ -437,6 +437,42 @@ func integrationElasticsearchPageEvent(
 		input.DurationMS = &durationMS
 	}
 	return input
+}
+
+func integrationRtcMediaQoeEvent(
+	occurredAt time.Time,
+	result string,
+	mediaConnected bool,
+	connectTimeMS int,
+	reconnectCount int,
+) application.EventRecordInput {
+	callType := "video"
+	participantCount := 2
+	networkQuality := "good"
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          "rtc_media_qoe",
+		SessionID:          "s.cXRjLW1lZGlhLXFvZQ." + fmt.Sprint(occurredAt.UnixMilli()),
+		PageName:           "rtc_video",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+		CallType:           &callType,
+		Result:             &result,
+		ConnectTimeMS:      &connectTimeMS,
+		MediaConnected:     &mediaConnected,
+		ReconnectCount:     &reconnectCount,
+		ParticipantCount:   &participantCount,
+		NetworkQuality:     &networkQuality,
+	}
+	if result == "connection_lost" {
+		disconnectReason := "unexpected_disconnect"
+		event.DisconnectReason = &disconnectReason
+	}
+	return event
 }
 
 func assertElasticsearchLifecycleBinding(

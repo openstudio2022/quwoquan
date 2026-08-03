@@ -1,0 +1,15 @@
+description: RecommendationSignalFact 只由 Search 请求与反馈事实的本地终态归并追加。
+api_routes: []
+runtime_entrypoints:
+- name: AppendRecommendationSignal
+  kind: internal_port
+  phase: transactional_append
+  source_objects:
+  - search.SearchRequestFact
+  - search.SearchFeedbackFact
+  idempotency: identity_payload_digest
+  application:
+    kind: command
+    facet: RecommendationSignalFactAppender
+    method: append
+    object_owner: RecommendationSignalFact

@@ -76,4 +76,8 @@ collections:
         reviewerId: 1
         occurredAt: -1
       sparse: true
+  post_moderation_case_projection_checkpoints:
+    entity: PostModerationCase
+    role: checkpoint
+    description: PostModerationCase 事件投影的可重放消费水位；不得承载审核权威状态。
 role: authoritative

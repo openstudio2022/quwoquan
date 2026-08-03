@@ -1,0 +1,9 @@
+events:
+- name: ConnectorInvocationChanged
+  description: Connector 调用进入等待确认、执行或脱敏终态。
+  producer: integration-service
+  consumers: [assistant-service]
+  channel: integration.connector_invocation
+  payload_entity: ConnectorInvocation
+  payload_fields: [invocationId, accountId, connectionId, assistantRunId, capability, status, continuationRef, normalizedFailureCode, recoveryAction, revision, updatedAt, completedAt]
+

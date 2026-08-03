@@ -28,7 +28,8 @@ type QueryRecord struct {
 }
 
 // FeedbackRecord is one logged interaction already joined to its query term
-// (write source: search_feedback_events ⨝ search_queries on searchRequestId).
+// (write source: SearchFeedbackFact.HeatReader joined with SearchRequestFact on
+// searchRequestId; no sibling collection access).
 // EventType uses the metadata vocabulary: impression|click|dwell|zero_result|…
 type FeedbackRecord struct {
 	NormalizedTerm string

@@ -156,6 +156,42 @@
           "request_body_kind": {
             "enum": ["object", "none"]
           },
+          "transport": {
+            "enum": ["json", "sse"]
+          },
+          "streaming": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "resume_request_field",
+              "resume_response_field",
+              "terminal_field",
+              "terminal_values"
+            ],
+            "properties": {
+              "resume_request_field": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$"
+              },
+              "resume_response_field": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$"
+              },
+              "terminal_field": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$"
+              },
+              "terminal_values": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
           "request_bindings": {
             "type": "object",
             "additionalProperties": false,
@@ -673,10 +709,60 @@
             "pattern": "^[A-Z][A-Za-z0-9]+$"
           },
           "kind": {
-            "const": "middleware"
+            "enum": [
+              "middleware",
+              "projector",
+              "subscription",
+              "internal_port",
+              "external_port"
+            ]
           },
           "phase": {
-            "const": "post_authorization_pre_owner_proxy"
+            "enum": [
+              "post_authorization_pre_owner_proxy",
+              "event_projection",
+              "event_ingest",
+              "transactional_append",
+              "outbound_invocation"
+            ]
+          },
+          "source_events": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]+$"
+            }
+          },
+          "source_objects": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]+$"
+            }
+          },
+          "checkpoint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rebuild": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tombstone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "idempotency": {
+            "enum": [
+              "event_id",
+              "aggregate_version",
+              "identity_payload_digest",
+              "transaction_identity"
+            ]
           },
           "application": {
             "type": "object",
@@ -685,27 +771,95 @@
               "kind",
               "facet",
               "method",
-              "session_owner"
+              "object_owner"
             ],
             "properties": {
               "kind": {
-                "const": "session"
+                "enum": ["command", "query", "session"]
               },
               "facet": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Za-z0-9]*Facade$"
+                "pattern": "^[A-Z][A-Za-z0-9]*(Facade|Projector|Appender|Port)$"
               },
               "method": {
                 "type": "string",
                 "pattern": "^[a-z][A-Za-z0-9]*$"
               },
-              "session_owner": {
+              "object_owner": {
                 "type": "string",
                 "pattern": "^[A-Z][A-Za-z0-9]*$"
               }
             }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "middleware" } } },
+            "then": {
+              "properties": {
+                "phase": { "const": "post_authorization_pre_owner_proxy" },
+                "application": {
+                  "properties": { "kind": { "const": "session" } }
+                }
+              },
+              "not": {
+                "anyOf": [
+                  { "required": ["source_events"] },
+                  { "required": ["source_objects"] },
+                  { "required": ["checkpoint"] },
+                  { "required": ["rebuild"] },
+                  { "required": ["tombstone"] },
+                  { "required": ["idempotency"] }
+                ]
+              }
+            }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "projector" } } },
+            "then": {
+              "required": ["source_events", "checkpoint", "rebuild", "tombstone", "idempotency"],
+              "properties": {
+                "phase": { "const": "event_projection" },
+                "application": {
+                  "properties": { "kind": { "const": "command" } }
+                }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "subscription" } } },
+            "then": {
+              "required": ["source_events", "idempotency"],
+              "properties": {
+                "phase": { "const": "event_ingest" },
+                "application": {
+                  "properties": { "kind": { "const": "command" } }
+                }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "internal_port" } } },
+            "then": {
+              "required": ["source_objects", "idempotency"],
+              "properties": {
+                "phase": { "const": "transactional_append" },
+                "application": {
+                  "properties": { "kind": { "const": "command" } }
+                }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "external_port" } } },
+            "then": {
+              "required": ["source_objects", "idempotency"],
+              "properties": {
+                "phase": { "const": "outbound_invocation" }
+              }
+            }
+          }
+        ]
       }
     },
     "consumers": {

@@ -47,7 +47,7 @@ void main() {
                           post: recommendPost,
                           mediaIndex: 0,
                           channelId: 'recommend',
-                          feedPosts: <PostBaseDto>[recommendPost],
+                          feedPosts: <ContentPostViewData>[recommendPost],
                         ),
                       ),
                       child: const Text('recommend'),
@@ -61,7 +61,7 @@ void main() {
                           post: campusPost,
                           mediaIndex: 0,
                           channelId: 'campus',
-                          feedPosts: <PostBaseDto>[campusPost],
+                          feedPosts: <ContentPostViewData>[campusPost],
                         ),
                       ),
                       child: const Text('campus'),
@@ -93,14 +93,14 @@ void main() {
               () => _SeededFeedMap(<String, AsyncValue<DiscoveryFeedState>>{
                 'recommend': AsyncData(
                   DiscoveryFeedState(
-                    items: <PostBaseDto>[recommendPost],
+                    items: <ContentPostViewData>[recommendPost],
                     feedRequestId: 'frq_recommend',
                     policyDigest: _policyA,
                   ),
                 ),
                 'campus': AsyncData(
                   DiscoveryFeedState(
-                    items: <PostBaseDto>[campusPost],
+                    items: <ContentPostViewData>[campusPost],
                     feedRequestId: 'frq_campus',
                     policyDigest: _policyB,
                   ),

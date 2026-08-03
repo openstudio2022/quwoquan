@@ -16,8 +16,8 @@ tables:
       type: VARCHAR(64)
       constraints:
       - NOT_NULL
-    - name: granted_scope
-      type: TEXT
+    - name: granted_scopes
+      type: JSONB
       constraints:
       - NOT_NULL
     - name: granted_at

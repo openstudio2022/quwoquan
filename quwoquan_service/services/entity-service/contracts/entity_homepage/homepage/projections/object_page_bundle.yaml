@@ -12,92 +12,40 @@ consumers:
 - app
 - assistant
 - recommendation
-client_projection:
-  dart_class: ObjectPageBundle
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/object_page_bundle.g.dart
-  dart_imports:
-  - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
-  - entity_homepage/homepage_content_preview.g.dart
-  - entity_homepage/homepage_related_group_summary.g.dart
-  - object_relation_edge.g.dart
-  - object_page_context.g.dart
-  - object_page_rollout_context.g.dart
-  fields:
-  - name: objectType
-    dart_type: String
-    nullable: false
-    source: objectType
-    default: ''''''
-  - name: objectId
-    dart_type: String
-    nullable: false
-    source: objectId
-    default: ''''''
-  - name: canonicalEntityId
-    dart_type: String
-    nullable: false
-    source: canonicalEntityId
-    default: ''''''
-  - name: title
-    dart_type: String
-    nullable: false
-    source: title
-    default: ''''''
-  - name: subtitle
-    dart_type: String
-    nullable: true
-    source: subtitle
-  - name: coverUrl
-    dart_type: String
-    nullable: true
-    source: coverUrl
-  - name: objectPageTemplate
-    dart_type: String
-    nullable: false
-    source: objectPageTemplate
-    default: '''standard'''
-  - name: tagRefs
-    dart_type: List<String>
-    nullable: false
-    source: tagRefs
-  - name: stats
-    dart_type: Map<String, dynamic>
-    nullable: false
-    source: stats
-    default: <String, dynamic>{}
-  - name: intersectionReasons
-    dart_type: List<IntersectionReason>
-    nullable: false
-    source: intersectionReasons
-    list_element_dart_class: IntersectionReason
-  - name: highlightItems
-    dart_type: List<HomepageContentPreview>
-    nullable: false
-    source: highlightItems
-    list_element_dart_class: HomepageContentPreview
-  - name: contentSections
-    dart_type: Map<String, dynamic>
-    nullable: false
-    source: contentSections
-    default: <String, dynamic>{}
-  - name: relatedObjects
-    dart_type: List<HomepageRelatedGroupSummary>
-    nullable: false
-    source: relatedObjects
-    list_element_dart_class: HomepageRelatedGroupSummary
-  - name: relationEdges
-    dart_type: List<ObjectRelationEdge>
-    nullable: false
-    source: relationEdges
-    list_element_dart_class: ObjectRelationEdge
-  - name: assistantContext
-    dart_type: ObjectPageContext?
-    nullable: true
-    source: assistantContext
-    map_from_string_key_class: ObjectPageContext
-  - name: rolloutContext
-    dart_type: ObjectPageRolloutContext?
-    nullable: true
-    source: rolloutContext
-    map_from_string_key_class: ObjectPageRolloutContext
+fields:
+- name: objectType
+  type: string
+- name: objectId
+  type: string
+- name: canonicalEntityId
+  type: string
+- name: title
+  type: string
+- name: subtitle
+  type: string
+  nullable: true
+- name: coverUrl
+  type: string
+  nullable: true
+- name: objectPageTemplate
+  type: string
+- name: tagRefs
+  type: '[]string'
+- name: stats
+  type: object
+- name: intersectionReasons
+  type: '[]IntersectionReason'
+- name: highlightItems
+  type: '[]HomepageContentPreview'
+- name: contentSections
+  type: object
+- name: relatedObjects
+  type: '[]HomepageRelatedGroupSummary'
+- name: relationEdges
+  type: '[]ObjectRelationEdge'
+- name: assistantContext
+  type: ObjectPageContext
+  nullable: true
+- name: rolloutContext
+  type: ObjectPageRolloutContext
+  nullable: true

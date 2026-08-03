@@ -239,9 +239,7 @@ class _CreatePublishConfirmSheetState
       _settings = _settings.copyWith(
         locationName: option.name,
         clearLocationPoi: option == CreateLocationOption.hidden,
-        locationPoi: option == CreateLocationOption.hidden
-            ? null
-            : option.toLocationPoiDto(),
+        locationPoi: option == CreateLocationOption.hidden ? null : option,
       );
     });
   }
@@ -277,7 +275,7 @@ class _CreatePublishConfirmSheetState
 
   Future<void> _pickCaptureDisclosure() async {
     final selected =
-        await showCupertinoModalPopup<Set<MediaCaptureDisclosureGroup>>(
+        await showCupertinoModalPopup<Set<CaptureMetadataDisclosureGroup>>(
           context: context,
           builder: (sheetContext) => _CaptureDisclosureSheet(
             available: _settings.captureMetadata.availableGroups,
@@ -437,8 +435,8 @@ class _CaptureDisclosureSheet extends StatefulWidget {
     required this.selected,
   });
 
-  final Set<MediaCaptureDisclosureGroup> available;
-  final Set<MediaCaptureDisclosureGroup> selected;
+  final Set<CaptureMetadataDisclosureGroup> available;
+  final Set<CaptureMetadataDisclosureGroup> selected;
 
   @override
   State<_CaptureDisclosureSheet> createState() =>
@@ -446,7 +444,7 @@ class _CaptureDisclosureSheet extends StatefulWidget {
 }
 
 class _CaptureDisclosureSheetState extends State<_CaptureDisclosureSheet> {
-  late final Set<MediaCaptureDisclosureGroup> _selected = widget.selected
+  late final Set<CaptureMetadataDisclosureGroup> _selected = widget.selected
       .intersection(widget.available);
 
   @override
@@ -456,7 +454,7 @@ class _CaptureDisclosureSheetState extends State<_CaptureDisclosureSheet> {
       title: const Text(CreationText.captureDisclosureSheetTitle),
       message: const Text(CreationText.captureDisclosureSheetHint),
       actions: <Widget>[
-        for (final group in MediaCaptureDisclosureGroup.values)
+        for (final group in CaptureMetadataDisclosureGroup.values)
           if (widget.available.contains(group))
             CupertinoActionSheetAction(
               key: ValueKey<String>('capture-disclosure-${group.wire}'),
@@ -488,11 +486,11 @@ class _CaptureDisclosureSheetState extends State<_CaptureDisclosureSheet> {
   }
 }
 
-String _captureDisclosureGroupLabel(MediaCaptureDisclosureGroup group) =>
+String _captureDisclosureGroupLabel(CaptureMetadataDisclosureGroup group) =>
     switch (group) {
-      MediaCaptureDisclosureGroup.gear => CreationText.captureDisclosureGear,
-      MediaCaptureDisclosureGroup.parameters =>
+      CaptureMetadataDisclosureGroup.gear => CreationText.captureDisclosureGear,
+      CaptureMetadataDisclosureGroup.parameters =>
         CreationText.captureDisclosureParameters,
-      MediaCaptureDisclosureGroup.place => CreationText.captureDisclosurePlace,
-      MediaCaptureDisclosureGroup.time => CreationText.captureDisclosureTime,
+      CaptureMetadataDisclosureGroup.place => CreationText.captureDisclosurePlace,
+      CaptureMetadataDisclosureGroup.time => CreationText.captureDisclosureTime,
     };

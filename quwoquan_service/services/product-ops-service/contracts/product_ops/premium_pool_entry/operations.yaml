@@ -1,0 +1,79 @@
+commercial_defaults:
+  status: blocked
+  block_reason: 新增 PremiumPoolEntry operation 必须先证明原子事务、鉴权、错误、审计和 typed outbox 契约，才可逐项启用
+  gap_id: OPS_PREMIUM_POOL_OPERATION_ADMISSION
+  target_story: product-control-plane-contract
+externalDependencies:
+- role: use
+  capability: runtime.message.transport
+  port: MessageTransportPort
+  operations: [appendDurable]
+  scenes: [general]
+api_routes:
+- method: GET
+  path: /control-plane/product/recommendation/premium-pool
+  operation: ListPremiumPoolEntries
+  actor: account
+  security: {auth_mode: required}
+  response_entity: PremiumPoolEntrySlice
+  authorization: {principal: operator, scopes: [ops.reco.read], ownership_policy: operator_scope}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.premium_pool_entry_storage_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_premium_pool_entry_query, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 800, availability_percent: 99.9}
+  application: {kind: query, facet: PremiumPoolEntryQueryFacade, method: listEntries, reader: PremiumPoolEntryReader, slice: PremiumPoolEntrySlice}
+  description: 读取 Product Ops 自有的全局精选池聚合，不读取 Recommendation 投影。
+- method: POST
+  path: /control-plane/product/recommendation/premium-pool
+  operation: UpsertPremiumPoolEntry
+  actor: account
+  security: {auth_mode: required}
+  request_entity: UpsertPremiumPoolEntryRequest
+  request_body_kind: object
+  response_entity: PremiumPoolEntry
+  authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: operator_scope}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_premium_pool_entry_command, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: PremiumPoolEntryCommandFacade, method: upsertEntry, aggregate_owner: PremiumPoolEntry, mutation_target: PremiumPoolEntry, invariant_target: PremiumPoolEntry}
+  description: 原子提交精选池准入、workflow、audit、幂等回执与 Upsert event。
+- method: POST
+  path: /control-plane/product/recommendation/premium-pool/{contentId}:rollback
+  operation: RollbackPremiumPoolEntry
+  actor: account
+  security: {auth_mode: required}
+  request_bindings: {path: [{name: contentId, field: contentId}]}
+  response_entity: PremiumPoolEntry
+  authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: operator_scope}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_not_found, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_premium_pool_entry_command, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: PremiumPoolEntryCommandFacade, method: rollbackEntry, aggregate_owner: PremiumPoolEntry, mutation_target: PremiumPoolEntry, invariant_target: PremiumPoolEntry}
+  description: 原子回滚 active 条目并发布唯一 Rollback event。
+- method: POST
+  path: /control-plane/product/recommendation/premium-pool/{contentId}:takedown
+  operation: TakedownPremiumPoolEntry
+  actor: account
+  security: {auth_mode: required}
+  request_bindings: {path: [{name: contentId, field: contentId}]}
+  response_entity: PremiumPoolEntryTakedownResult
+  authorization: {principal: operator, scopes: [ops.reco.write], ownership_policy: distinct_dual_operator_approval}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.premium_pool_entry_invalid_argument, OPS.USER.premium_pool_entry_not_found, OPS.USER.premium_pool_entry_idempotency_conflict, OPS.USER.premium_pool_entry_revision_conflict, OPS.USER.premium_pool_entry_dual_approval_required, OPS.SYSTEM.premium_pool_entry_storage_read_failed, OPS.SYSTEM.premium_pool_entry_storage_write_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_premium_pool_entry_command, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1000, availability_percent: 99.9}
+  application: {kind: command, facet: PremiumPoolEntryCommandFacade, method: takedownEntry, aggregate_owner: PremiumPoolEntry, mutation_target: PremiumPoolEntry, invariant_target: PremiumPoolEntry}
+  description: 两名不同 operator 对同一 revision 双签后原子下架并发布唯一 Takedown event。
+consumers:
+- name: ops-portal
+  capabilities: [list_premium_pool_entries, upsert_premium_pool_entry, rollback_premium_pool_entry, takedown_premium_pool_entry]

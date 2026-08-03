@@ -14,11 +14,11 @@ selection:
 contract:
   requireActiveStatus: true
 execution:
-  model: grok-4.5
-  modelFamily: grok
+  model: auto
+  modelFamily: auto
   modelParameters: []
-  reviewModel: composer-2.5
-  reviewModelFamily: composer
+  reviewModel: auto
+  reviewModelFamily: auto
   reviewModelParameters: []
 readiness:
   minPassRate: 1.0

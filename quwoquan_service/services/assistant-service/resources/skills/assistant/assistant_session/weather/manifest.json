@@ -23,9 +23,14 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.weather",
   "evaluationProfileRef": "evaluation.realtime_info",
-  "replayAssetRef": "assistant.replay.weather.v1",
+  "replayAssetRef": "assistant.replay.weather",
   "promptAssets": [
     "weather.reactive",
     "assistant.evidence_discipline"
-  ]
+  ],
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

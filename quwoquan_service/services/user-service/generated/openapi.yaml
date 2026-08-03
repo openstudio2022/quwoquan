@@ -89,8 +89,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateAlipayAuthorizationRequestCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AlipayAuthorizationGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -115,8 +119,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LoginWithAlipayCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FederatedLoginOutcome'
                 default:
                     description: Runtime failure
                     content:
@@ -153,7 +161,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthLoginResult'
+                                $ref: '#/components/schemas/AuthSessionGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -178,8 +186,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LoginOneTapCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthSessionGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -204,8 +216,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ResolveOneTapLoginHintCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OneTapLoginHint'
                 default:
                     description: Runtime failure
                     content:
@@ -230,8 +246,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LoginWithPhoneCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthSessionGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -256,8 +276,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LoginWithQqCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FederatedLoginOutcome'
                 default:
                     description: Runtime failure
                     content:
@@ -282,8 +306,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CompleteFederatedPhoneBindingCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthSessionGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -308,8 +336,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LoginWithWechatCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FederatedLoginOutcome'
                 default:
                     description: Runtime failure
                     content:
@@ -334,8 +366,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/LogoutCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LogoutAck'
                 default:
                     description: Runtime failure
                     content:
@@ -362,8 +398,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SendOtpCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OtpChallengeIssueResult'
                 default:
                     description: Runtime failure
                     content:
@@ -388,8 +428,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RefreshTokenCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TokenRefreshGrant'
                 default:
                     description: Runtime failure
                     content:
@@ -891,8 +935,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/InitiateContactDiscoveryCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContactDiscoveryResult'
                 default:
                     description: Runtime failure
                     content:
@@ -925,8 +973,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContactDiscoveryDismissResult'
                 default:
                     description: Runtime failure
                     content:
@@ -953,7 +1005,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ContactDiscoveryRecord'
+                                $ref: '#/components/schemas/ContactDiscoveryResult'
                 default:
                     description: Runtime failure
                     content:
@@ -980,7 +1032,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CredentialBinding'
+                                $ref: '#/components/schemas/ListCredentialsSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1278,7 +1330,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/BlockedListItemView'
+                                $ref: '#/components/schemas/BlockedUserSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1449,7 +1501,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FollowingSubjectItemView'
+                                $ref: '#/components/schemas/FollowingSubjectSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1483,8 +1535,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SendGreetingCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GreetingRequestRecord'
                 default:
                     description: Runtime failure
                     content:
@@ -1517,8 +1573,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GreetingRequestRecord'
                 default:
                     description: Runtime failure
                     content:
@@ -1551,8 +1611,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GreetingRequestRecord'
                 default:
                     description: Runtime failure
                     content:
@@ -1585,8 +1649,12 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GreetingRequestRecord'
                 default:
                     description: Runtime failure
                     content:
@@ -1629,7 +1697,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListGreetingInboxResponse'
+                                $ref: '#/components/schemas/GreetingRequestSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1672,7 +1740,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListGreetingOutboxResponse'
+                                $ref: '#/components/schemas/GreetingRequestSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -1785,7 +1853,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PersonaManagementItemView'
+                                $ref: '#/components/schemas/ListPersonasResult'
                 default:
                     description: Runtime failure
                     content:
@@ -1953,7 +2021,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FollowerListItemView'
+                                $ref: '#/components/schemas/FollowerRelationshipPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2002,7 +2070,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FollowingListItemView'
+                                $ref: '#/components/schemas/FollowingRelationshipPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2113,7 +2181,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListProfileUpdateProposalsPage'
+                                $ref: '#/components/schemas/ProfileUpdateProposalSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -2195,8 +2263,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ApplyPersonaProfileSyncCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PersonaProfileSyncResult'
                 default:
                     description: Runtime failure
                     content:
@@ -2518,7 +2590,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PersonaManagementQuotaView'
+                                $ref: '#/components/schemas/PersonaManagementSummaryView'
                 default:
                     description: Runtime failure
                     content:
@@ -2552,8 +2624,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UpdateUserProfileCommand'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProfileUpdateSnapshot'
                 default:
                     description: Runtime failure
                     content:
@@ -2868,7 +2944,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SocialRelationSearchItemView'
+                                $ref: '#/components/schemas/SearchSocialRelationsResult'
                 default:
                     description: Runtime failure
                     content:
@@ -3253,6 +3329,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ActivePersonaContextView
             x-contract-placeholder: true
+        AlipayAuthorizationGrant:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AlipayAuthorizationGrant
+            x-contract-placeholder: true
         AppearanceSettingsView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3268,10 +3349,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantDeliveryPolicyView
             x-contract-placeholder: true
-        AuthLoginResult:
+        AuthSessionGrant:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AuthLoginResult
+            x-contract-entity: AuthSessionGrant
             x-contract-placeholder: true
         BindCarrierPhoneCredentialCommand:
             type: object
@@ -3288,10 +3369,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BlockCommandResult
             x-contract-placeholder: true
-        BlockedListItemView:
+        BlockedUserSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: BlockedListItemView
+            x-contract-entity: BlockedUserSlice
             x-contract-placeholder: true
         CallSettingsView:
             type: object
@@ -3318,10 +3399,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CompleteFederatedPhoneBindingCommand
             x-contract-placeholder: true
-        ContactDiscoveryRecord:
+        ContactDiscoveryDismissResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ContactDiscoveryRecord
+            x-contract-entity: ContactDiscoveryDismissResult
+            x-contract-placeholder: true
+        ContactDiscoveryResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContactDiscoveryResult
             x-contract-placeholder: true
         CreateAlipayAuthorizationRequestCommand:
             type: object
@@ -3338,11 +3424,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateProfileUpdateProposalCommand
             x-contract-placeholder: true
-        CredentialBinding:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CredentialBinding
-            x-contract-placeholder: true
         CredentialBindingCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3357,6 +3438,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: DevicePushEndpointUpsertCommand
+            x-contract-placeholder: true
+        FederatedLoginOutcome:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FederatedLoginOutcome
             x-contract-placeholder: true
         FollowCommandResult:
             type: object
@@ -3378,20 +3464,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FollowedSubjectVisitResult
             x-contract-placeholder: true
-        FollowerListItemView:
+        FollowerRelationshipPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: FollowerListItemView
+            x-contract-entity: FollowerRelationshipPageSlice
             x-contract-placeholder: true
-        FollowingListItemView:
+        FollowingRelationshipPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: FollowingListItemView
+            x-contract-entity: FollowingRelationshipPageSlice
             x-contract-placeholder: true
-        FollowingSubjectItemView:
+        FollowingSubjectSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: FollowingSubjectItemView
+            x-contract-entity: FollowingSubjectSlice
             x-contract-placeholder: true
         GenerateInvitationCommand:
             type: object
@@ -3402,6 +3488,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetUserInterestProfileResponse
+            x-contract-placeholder: true
+        GreetingRequestRecord:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GreetingRequestRecord
+            x-contract-placeholder: true
+        GreetingRequestSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GreetingRequestSlice
             x-contract-placeholder: true
         IncomingCallPushDestinationSlice:
             type: object
@@ -3428,29 +3524,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IssueAccountAppealCredentialCommand
             x-contract-placeholder: true
-        ListGreetingInboxResponse:
+        ListCredentialsSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ListGreetingInboxResponse
+            x-contract-entity: ListCredentialsSlice
             x-contract-placeholder: true
-        ListGreetingOutboxResponse:
+        ListPersonasResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ListGreetingOutboxResponse
+            x-contract-entity: ListPersonasResult
             x-contract-placeholder: true
-        ListProfileUpdateProposalsPage:
-            type: object
-            required:
-                - items
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ProfileUpdateProposalView'
-                nextCursor:
-                    type: string
-                    nullable: true
-            x-contract-entity: ProfileUpdateProposalView
         LoginAnonymousCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3481,6 +3564,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: LoginWithWechatCommand
             x-contract-placeholder: true
+        LogoutAck:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: LogoutAck
+            x-contract-placeholder: true
         LogoutCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3496,6 +3584,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: NotificationSettingsView
             x-contract-placeholder: true
+        OneTapLoginHint:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OneTapLoginHint
+            x-contract-placeholder: true
+        OtpChallengeIssueResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OtpChallengeIssueResult
+            x-contract-placeholder: true
         PersonaLifecycleGuardView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3506,10 +3604,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PersonaManagementItemView
             x-contract-placeholder: true
-        PersonaManagementQuotaView:
+        PersonaManagementSummaryView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PersonaManagementQuotaView
+            x-contract-entity: PersonaManagementSummaryView
+            x-contract-placeholder: true
+        PersonaProfileSyncResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PersonaProfileSyncResult
             x-contract-placeholder: true
         PersonaProfileView:
             type: object
@@ -3541,10 +3644,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ProfileUpdateProposalCommandResult
             x-contract-placeholder: true
+        ProfileUpdateProposalSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ProfileUpdateProposalSlice
+            x-contract-placeholder: true
         ProfileUpdateProposalView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ProfileUpdateProposalView
+            x-contract-placeholder: true
+        ProfileUpdateSnapshot:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ProfileUpdateSnapshot
             x-contract-placeholder: true
         PullUserSyncResponse:
             type: object
@@ -3576,6 +3689,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ResolveOneTapLoginHintCommand
             x-contract-placeholder: true
+        SearchSocialRelationsResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SearchSocialRelationsResult
+            x-contract-placeholder: true
         SendGreetingCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3586,11 +3704,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SendOtpCommand
             x-contract-placeholder: true
-        SocialRelationSearchItemView:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SocialRelationSearchItemView
-            x-contract-placeholder: true
         SubjectFollowCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3600,6 +3713,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SubmitAccountAppealIntakeCommand
+            x-contract-placeholder: true
+        TokenRefreshGrant:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: TokenRefreshGrant
             x-contract-placeholder: true
         UnfollowUserCommand:
             type: object

@@ -1,0 +1,25 @@
+kind: projection
+description: 从当前 Trip Revision、已确认共享 Moment 与 active ContentLink 重建的共同时间线；不拥有源事实。
+identity:
+  fields: [tripId]
+  version_source: checkpoint
+access:
+  commands: none
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- {name: trip_plan, kind: projection_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [tripId], target_object: travel.TripPlan}
+- {name: current_revision, kind: projection_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: retain, reference_fields: [currentRevisionId], target_object: travel.TripPlanRevision}
+- {name: moments, kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [sourceMomentIds], target_object: travel.TripMoment}
+- {name: content_links, kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone, reference_fields: [sourceContentLinkIds], target_object: travel.TripPlanContentLink}
+local_identity_reasons:
+  sourceEventId: projector 幂等检查点事件键，不是业务对象身份
+business_rules:
+- 只投影当前不可变 Revision、confirmed 且非 personal Moment、active ContentLink；建议归属不得泄漏到共同时间线
+- Media/Post/Place 只保留 canonical reference，详情按需从 owner Reader 读取
+- projection miss 或 source digest 不完整必须返回可恢复失败，不得冒充合法空行程
+lifecycle:
+  source_events: [TripPlanCreated, TripPlanRevised, TripPlanLifecycleChanged, TripPlanRevisionAppended, TripMomentChanged, TripPlanContentLinkChanged]
+  checkpoint: per_trip_source_event_receipt_and_source_digest
+  rebuild: load_current_trip_revision_and_active_shared_references
+  tombstone: delete_view_keep_projection_checkpoint

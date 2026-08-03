@@ -28,8 +28,13 @@ def creator_commercial_closure_issues(
     publish_root: Path,
     *,
     creator_refs: list[str] | tuple[str, ...] | None = None,
+    require_commercial_rights: bool = True,
 ) -> list[dict[str, str]]:
-    """Require every selected public creator to bind one traceable avatar."""
+    """Require every selected creator to bind one traceable avatar.
+
+    Research releases retain non-verified rights gaps, while commercial
+    releases keep the existing proof-complete closure.
+    """
 
     creators_root = publish_root / "creators"
     selected = (
@@ -105,14 +110,32 @@ def creator_commercial_closure_issues(
                 {"code": "creator_avatar_rights_missing", "ref": creator_ref}
             )
             continue
-        rights_issue = creator_avatar_rights_issue(
-            rights_matches[0],
-            asset_id=asset_id,
-            sha256=digest,
-            object_key=object_key,
-            byte_count=byte_count,
-            mime_type=mime_type,
-        )
+        if require_commercial_rights:
+            rights_issue = creator_avatar_rights_issue(
+                rights_matches[0],
+                asset_id=asset_id,
+                sha256=digest,
+                object_key=object_key,
+                byte_count=byte_count,
+                mime_type=mime_type,
+            )
+        else:
+            rights = rights_matches[0].get("commercialRights")
+            rights_status = (
+                str(rights.get("rightsAuditStatus") or "")
+                if isinstance(rights, Mapping)
+                else ""
+            )
+            rights_issues = (
+                rights.get("rightsAuditIssues") if isinstance(rights, Mapping) else None
+            )
+            rights_issue = None
+            if rights_status not in {"verified", "unverified", "unknown"}:
+                rights_issue = "creator_avatar_rights_blocked"
+            elif rights_status != "verified" and (
+                not isinstance(rights_issues, list) or not rights_issues
+            ):
+                rights_issue = "creator_avatar_rights_gap_missing"
         if rights_issue:
             issues.append({"code": rights_issue, "ref": creator_ref})
     return issues

@@ -22,7 +22,7 @@ class PipCallOverlay extends ConsumerStatefulWidget {
 
   final VoidCallback onReturnToCall;
   final VoidCallback onHangup;
-  final CallParticipant? activeSpeaker;
+  final CallParticipantViewData? activeSpeaker;
 
   @override
   ConsumerState<PipCallOverlay> createState() => _PipCallOverlayState();

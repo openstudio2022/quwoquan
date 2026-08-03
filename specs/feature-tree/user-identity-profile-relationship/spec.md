@@ -88,6 +88,17 @@
   - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `discovery-content` 继续处理。
   - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
 
+- [`JNY-009 / SCN-034`](../spec.md#scn-034)
+  - 本领域负责：提供 account/persona authority、个人隐私与公开资质声明供 Skill 设置和共享执行校验。
+  - 进入条件：主体已认证且目标 Persona 可用。
+  - 交付给下游的结果：最小主体/权限/可披露事实。
+  - 不负责：不保存 Skill setting、Connector credential 或共享 Placement。
+- [`JNY-013 / SCN-033`](../spec.md#scn-033)
+  - 本领域负责：在用户确认后通过既有 Follow/Conversation/Circle 机制延续旅行关系，并提供公开署名/资质引用。
+  - 进入条件：目标主体与关系动作允许。
+  - 交付给下游的结果：关系 command receipt 或明确拒绝。
+  - 不负责：不创造额外关系等级或 Trip 成员事实。
+
 ## 4. 业务能力
 
 - [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、OwnerAccount/Persona 快照与凭证管理的能力级 SIT 验收。

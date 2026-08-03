@@ -13,8 +13,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
+	groupmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/messaging"
 	grouppersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
 )
 
@@ -118,16 +118,16 @@ func TestCircleGroupRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) 
 
 	store := grouppersistence.NewMongoAggregateStore(mongoDB)
 	streamRelay := groupapp.NewOutboxRelay(
-		store, store, messaging.NewCircleGroupStreamPublisher(circleMessageTransport), "circle-group-stream-test",
+		store, store, groupmessaging.NewCircleGroupStreamPublisher(circleMessageTransport), "circle-group-stream-test",
 	)
 	if count, err := streamRelay.Drain(context.Background(), 10); err != nil || count != 2 {
 		t.Fatalf("CircleGroup stream drain count=%d err=%v", count, err)
 	}
 	const consumerGroup = "circle-group-api-test"
-	if err := redisRouter.Scene("general").XGroupCreateMkStream(context.Background(), messaging.CircleGroupStream, consumerGroup, "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(context.Background(), groupmessaging.CircleGroupStream, consumerGroup, "0"); err != nil {
 		t.Fatal(err)
 	}
-	messages, err := redisRouter.Scene("general").XReadGroup(context.Background(), consumerGroup, "reader", map[string]string{messaging.CircleGroupStream: ">"}, 10, 0)
+	messages, err := redisRouter.Scene("general").XReadGroup(context.Background(), consumerGroup, "reader", map[string]string{groupmessaging.CircleGroupStream: ">"}, 10, 0)
 	if err != nil || len(messages) != 2 || messages[0].Values["aggregateType"] != "CircleGroup" {
 		t.Fatalf("CircleGroup stream envelope drift: messages=%#v err=%v", messages, err)
 	}

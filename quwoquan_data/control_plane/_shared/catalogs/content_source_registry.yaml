@@ -245,22 +245,29 @@ lanePolicies:
       attributionRequired: true
       audioRightsEvidenceRequired: true
     commercialAdmissionMatrix:
-      - { sourceId: wikimedia_commons_video, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
-      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
-      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: wikimedia_commons_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: douyin, sourceKind: douyin, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: tiktok, sourceKind: tiktok, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: weibo, sourceKind: weibo, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: toutiao_video, sourceKind: toutiao, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: pexels_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: pixabay_videos, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: pond5, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
+      - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
     rankingSignals:
       - visual_relevance
+      - play_count
+      - like_count
+      - comment_count
+      - share_count
+      - favorite_count
+      - observed_at
+      - same_platform_topic_time_bucket_percentile
       - officiality
       - audio_rights_clarity
       - asset_rights_clarity
@@ -465,7 +472,7 @@ common:
       fetchMode: attribution_manifest
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
-      promptFacts: [视觉发现和单源图片作品候选, 不因平台名直接排除检索, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt，是否阻断由垂类权利策略决定]
+      promptFacts: [视觉发现和单源图片作品候选, research 可通过公开直链、平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须补齐逐图授权, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
     - sourceId: five_hundred_px
       platform: 500px
       sourceClass: photography_community
@@ -600,7 +607,7 @@ common:
       fetchMode: search
       rightsPolicy: creator_authorization_required
       rateLimit: conservative
-      promptFacts: [图虫社区用于发现和授权洽谈, 图虫创意需授权后发布]
+      promptFacts: [图虫社区作为 research 补充发现源, 可通过公开直链、平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须取得作者或图虫创意授权]
     - sourceId: tuchong_stock_authorized
       platform: 图虫创意
       sourceClass: domestic_stock

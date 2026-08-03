@@ -318,6 +318,62 @@ value_objects:
         constraints:
           - NULLABLE
 types:
+  CommentCommandResult:
+    description: Idempotent Comment aggregate mutation result.
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: CommentStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentAttachmentSlice:
+    description: Policy-filtered MediaAsset attachment projection embedded in a Comment list item.
+    fields:
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: mediaType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: url, type: url, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: width, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: height, type: int, constraints: [NULLABLE, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: available, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentListItem:
+    description: Comment list projection with bounded reply preview, interaction facts, and viewer capabilities.
+    fields:
+      - {name: id, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorDisplayNameSnapshot, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorAvatarUrlSnapshot, type: url, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: personaContextVersion, type: int, constraints: [NULLABLE, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: content, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: redacted, api_exposure: read, ops_exposure: read}
+      - {name: replyToCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyToUserId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: parentCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: attachmentMediaIds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: attachments, type: '[]CommentAttachmentSlice', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: mentions, type: '[]CommentMention', constraints: [NOT_NULL], classification: PUBLIC, log_policy: redacted, api_exposure: read, ops_exposure: read}
+      - {name: assistantMentioned, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: assistantReplySource, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: assistantCorrectionStatus, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorIpLocation, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, type: enum, enum_ref: CommentStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: isPinned, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: pinnedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: deletedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyPreview, type: '[]CommentListItem', constraints: [NOT_NULL, MAX_ITEMS_1], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: replyNextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: redacted}
+      - {name: likeCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: dislikeCount, type: int, constraints: [NOT_NULL, MIN_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: viewerReaction, type: enum, enum_ref: CommentReactionType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorLiked, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: viewerRelation, type: enum, enum_ref: CommentViewerRelation, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: isAuthor, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: canDelete, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: canReply, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: canReport, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: canPin, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   ModerateContentCommentCommand:
     fields:
       - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
@@ -426,11 +482,9 @@ types:
         client_default: const <String>[]
         client_normalization: trim
       - name: mentions
-        type: '[]object'
-        client_dart_type: List<ContentCommentMention>
-        client_parameter_type: Iterable<ContentCommentMention>
-        client_default: const <ContentCommentMention>[]
-        client_wire: toMap
+        type: '[]CommentMention'
+        client_parameter_type: Iterable<CommentMention>
+        client_default: const <CommentMention>[]
       - name: authorDisplayNameSnapshot
         type: string
         constraints:
@@ -521,9 +575,7 @@ types:
         client_default: "20"
       - name: sort
         type: enum
-        client_dart_type: ContentCommentSort
-        client_default: ContentCommentSort.hot
-        client_wire: canonicalEnum
+        client_default: CommentSort.hot
         enum_ref: CommentSort
 enums:
   CommentStatus:

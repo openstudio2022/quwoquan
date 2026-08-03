@@ -51,6 +51,7 @@ streams:
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
+    writers: [recommendation-service, search-service]
     description: Recommendation 与 Search 发布的确定性分桶观察事实；Product Ops 按精确 Experiment revision 校验后投影。
   events.ops.experiment_assignment_observed.product_ops.dlq:
     entity: ExperimentAssignmentFact

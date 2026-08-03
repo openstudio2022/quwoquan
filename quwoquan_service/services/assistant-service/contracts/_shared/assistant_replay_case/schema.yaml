@@ -5,7 +5,7 @@ contract: assistant_replay_case
 kind: test_fixture_contract
 imports:
   - package:quwoquan_app/assistant/generated/contracts/assistant_run_response.g.dart
-  - package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
   - package:quwoquan_app/assistant/generated/contracts/assistant_trace_event.g.dart
 fields:
   - { name: replayCaseId, type: string, required: true }

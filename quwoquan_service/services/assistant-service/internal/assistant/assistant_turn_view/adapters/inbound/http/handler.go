@@ -60,15 +60,15 @@ func (handler *Handler) handleListSessionTurns(
 
 func requireIdentifiedUser(request *http.Request) (string, error) {
 	if principal, ok := rtauth.PrincipalFromContext(request.Context()); ok {
+		if accountID := strings.TrimSpace(principal.Actor.AccountID); accountID != "" {
+			return accountID, nil
+		}
 		if subject := strings.TrimSpace(principal.Subject); subject != "" {
 			return subject, nil
 		}
 	}
-	if userID := strings.TrimSpace(request.Header.Get("X-Client-User-Id")); userID != "" {
-		return userID, nil
-	}
 	return "", turnviewerrors.AppErrorFromTurnViewUnauthorized(
-		"assistant turn view requires an identified persona",
+		"assistant turn view requires a trusted account principal",
 	)
 }
 

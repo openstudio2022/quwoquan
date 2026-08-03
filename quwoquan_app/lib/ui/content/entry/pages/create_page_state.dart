@@ -17,6 +17,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   ContentMediaUploadCancellationSignal? _publicationCancellationSignal;
   bool _isHydratingDraft = false;
   bool _authContinuationResumeScheduled = false;
+  CreateDraftPublicationContinuationRef? _publicationContinuation;
   double _heroCollapseProgress = 0;
   String? _pressedMediaPath;
   ModalRoute<dynamic>? _observedRoute;

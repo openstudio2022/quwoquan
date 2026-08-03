@@ -8,16 +8,13 @@ source_entities:
 - Report
 consumers:
 - app
-client_projection:
-  dart_class: ContentMyReportItem
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/report_queries.dart
 fields:
-- id
-- targetType
-- targetId
-- reason
-- description
-- status
-- createdAt
-- updatedAt
-- resolvedAt
+- {name: id, type: string, nullable: false}
+- {name: targetType, type: enum, enum_ref: ReportTargetType, nullable: false}
+- {name: targetId, type: string, nullable: false}
+- {name: reason, type: enum, enum_ref: ReportReason, nullable: false}
+- {name: description, type: string, nullable: true}
+- {name: status, type: enum, enum_ref: ReportStatus, nullable: false}
+- {name: createdAt, type: timestamp, nullable: false}
+- {name: updatedAt, type: timestamp, nullable: false}
+- {name: resolvedAt, type: timestamp, nullable: true}

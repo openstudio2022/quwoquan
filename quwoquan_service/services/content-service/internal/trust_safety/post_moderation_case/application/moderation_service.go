@@ -14,7 +14,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	moderationerrors "quwoquan_service/services/content-service/generated/trust_safety/post_moderation_case"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
 	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
 )

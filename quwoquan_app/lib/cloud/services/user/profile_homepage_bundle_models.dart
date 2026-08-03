@@ -17,8 +17,8 @@ class UserHomepageTabCountsViewData {
   final int circlesCount;
   final int collectionsCount;
 
-  factory UserHomepageTabCountsViewData.fromUserHomepageTabCountsWire(
-    UserHomepageTabCountsWireDto w,
+  factory UserHomepageTabCountsViewData.fromWire(
+    UserHomepageTabCountsWire w,
   ) {
     return UserHomepageTabCountsViewData(
       worksCount: w.worksCount,
@@ -77,14 +77,14 @@ class UserHomepageViewerContextViewData {
   bool get isStranger =>
       !isOwner && !isGuest && relationToTarget == 'not_following';
 
-  factory UserHomepageViewerContextViewData.fromUserHomepageViewerContextWire(
-    UserHomepageViewerContextWireDto w,
+  factory UserHomepageViewerContextViewData.fromWire(
+    UserHomepageViewerContextWire w,
   ) {
     return UserHomepageViewerContextViewData(
       viewerPersonaId: w.viewerPersonaId,
       isOwner: w.isOwner,
       isGuest: w.isGuest,
-      relationToTarget: w.relationToTarget,
+      relationToTarget: w.relationToTarget.wireName,
       canViewFullProfile: w.canViewFullProfile,
     );
   }
@@ -120,57 +120,11 @@ class UserHomepageBundleViewData {
   /// 首屏 header 直接展示用：profile 已合并 stats 计数（同源）。
   PersonaProfileViewData get profileWithStats => profile.mergeStats(stats);
 
-  factory UserHomepageBundleViewData.fromUserHomepageBundleWire(
-    UserHomepageBundleWireDto w,
+  factory UserHomepageBundleViewData.fromWire(
+    UserHomepageBundleWire projection,
   ) {
-    final profileWire = w.profile;
-    if (profileWire == null) {
-      throw const FormatException('homepage-bundle 响应缺少 profile');
-    }
-    final profile = PersonaProfileViewData.fromPersonaProfileWire(profileWire);
-    final stats = w.stats != null
-        ? UserProfileStatsViewData.fromUserProfileStatsWire(w.stats!)
-        : UserProfileStatsViewData.fromProfile(profile);
-    final tabCounts = w.tabCounts != null
-        ? UserHomepageTabCountsViewData.fromUserHomepageTabCountsWire(
-            w.tabCounts!,
-          )
-        : UserHomepageTabCountsViewData.fromStats(stats);
-    final viewerContext = w.viewerContext != null
-        ? UserHomepageViewerContextViewData.fromUserHomepageViewerContextWire(
-            w.viewerContext!,
-          )
-        : const UserHomepageViewerContextViewData.guest();
-    final capability = w.relationshipCapability == null
-        ? null
-        : RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-            w.relationshipCapability!,
-          );
-    return UserHomepageBundleViewData(
-      profile: profile,
-      stats: stats,
-      relationshipCapability: capability,
-      tabCounts: tabCounts,
-      viewerContext: viewerContext,
-      cacheVersion: w.cacheVersion,
-    );
-  }
-
-  factory UserHomepageBundleViewData.fromUserHomepageBundleProjection(
-    UserHomepageBundleProjection projection,
-  ) {
-    final profileProjection = projection.profile;
-    if (profileProjection == null) {
-      throw const FormatException('homepage-bundle 响应缺少 profile');
-    }
-    final profile = PersonaProfileViewData.fromPersonaProfileProjection(
-      profileProjection,
-    );
-    final stats = projection.stats == null
-        ? UserProfileStatsViewData.fromProfile(profile)
-        : UserProfileStatsViewData.fromUserProfileStatsProjection(
-            projection.stats!,
-          );
+    final profile = PersonaProfileViewData.fromWire(projection.profile);
+    final stats = UserProfileStatsViewData.fromWire(projection.stats);
     final counts = projection.tabCounts;
     final viewer = projection.viewerContext;
     final capability = projection.relationshipCapability;
@@ -179,22 +133,18 @@ class UserHomepageBundleViewData {
       stats: stats,
       relationshipCapability: capability == null
           ? null
-          : RelationshipCapabilityDto.fromContract(capability),
-      tabCounts: counts == null
-          ? UserHomepageTabCountsViewData.fromStats(stats)
-          : UserHomepageTabCountsViewData(
+          : RelationshipCapabilityDto.fromWire(capability),
+      tabCounts: UserHomepageTabCountsViewData(
               worksCount: counts.worksCount,
               likesCount: counts.likesCount,
               circlesCount: counts.circlesCount,
               collectionsCount: counts.collectionsCount,
             ),
-      viewerContext: viewer == null
-          ? const UserHomepageViewerContextViewData.guest()
-          : UserHomepageViewerContextViewData(
+      viewerContext: UserHomepageViewerContextViewData(
               viewerPersonaId: viewer.viewerPersonaId,
               isOwner: viewer.isOwner,
               isGuest: viewer.isGuest,
-              relationToTarget: viewer.relationToTarget,
+              relationToTarget: viewer.relationToTarget.wireName,
               canViewFullProfile: viewer.canViewFullProfile,
             ),
       cacheVersion: projection.cacheVersion,

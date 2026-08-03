@@ -4,7 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
@@ -339,7 +339,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   CreationSubTab _creationSubTabForId(String id) => creationSubTabFromId(id);
 
-  bool _matchesCreationFilter(PostBaseDto post, CreationSubTab tab) {
+  bool _matchesCreationFilter(ContentPostViewData post, CreationSubTab tab) {
     switch (tab) {
       case CreationSubTab.image:
         return post.displayFormat == 'image';
@@ -387,7 +387,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     }
   }
 
-  Future<void> _onPostTap(BuildContext context, PostBaseDto post) async {
+  Future<void> _onPostTap(BuildContext context, ContentPostViewData post) async {
     final state = ref.read(profileNotifierProvider(widget.userId));
     final filtered = state.creations
         .where((p) => _matchesCreationFilter(p, state.activeSubTab))
@@ -397,7 +397,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
     final postViews = filtered
-        .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
+        .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toPresentationMap()))
         .toList();
     final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
@@ -447,7 +447,7 @@ class _WorksPostCard extends ConsumerWidget {
     this.onHorizontalDragEnd,
   });
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final bool isDark;
   final VoidCallback onTap;
   final GestureDragEndCallback? onHorizontalDragEnd;

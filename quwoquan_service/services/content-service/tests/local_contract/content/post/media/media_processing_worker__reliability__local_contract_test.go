@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
-	mediaports "quwoquan_service/services/content-service/internal/content/post/domain/media/ports"
+	"quwoquan_service/runtime/commandmeta"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 )
 
 func TestMediaProcessingWorkerRecordsReadyAndAdvancesCheckpoint(t *testing.T) {

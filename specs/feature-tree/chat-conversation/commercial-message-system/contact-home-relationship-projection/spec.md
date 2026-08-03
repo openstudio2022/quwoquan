@@ -38,7 +38,7 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
-- canonical：`quwoquan_app/lib/cloud/runtime/generated/recommendation/intersection_reason.g.dart`
+- canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 
 ## 5. 验收场景
 

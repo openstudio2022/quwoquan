@@ -42,7 +42,7 @@ abstract interface class ContentDiscoveryFeedQuery {
 
 abstract interface class ContentReadRepository
     implements ContentDiscoveryFeedQuery {
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -58,7 +58,7 @@ abstract interface class ContentReadRepository
     DateTime? deadlineAt,
   });
 
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,
@@ -86,7 +86,7 @@ abstract interface class ContentEntityWishlistStateReader {
 
 /// 作者作品分页读取独立于发现流，供用户主页创作 Tab 使用。
 abstract interface class ContentAuthorPostsReader {
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,

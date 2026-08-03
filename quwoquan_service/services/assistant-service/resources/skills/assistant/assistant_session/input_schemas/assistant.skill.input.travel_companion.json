@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:quwoquan:assistant:skill-input:travel-companion",
+  "title": "旅行偏好",
+  "description": "这些设置只用于更贴合你的吃玩住行节奏，可随时修改。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "homeCity": {"type": "string", "title": "常住城市", "description": "用于估算常见出发方式，不会公开给同行成员。", "minLength": 1, "maxLength": 80},
+    "travelPace": {"type": "string", "title": "旅行节奏", "description": "轻松、均衡或紧凑。", "enum": ["relaxed", "balanced", "intensive"], "x-enum-labels": {"relaxed": "轻松", "balanced": "均衡", "intensive": "紧凑"}},
+    "budgetBand": {"type": "string", "title": "预算偏好", "description": "用于组合住宿、餐饮和活动建议。", "enum": ["economy", "comfortable", "premium"], "x-enum-labels": {"economy": "经济", "comfortable": "舒适", "premium": "品质"}},
+    "mobilityNeeds": {
+      "type": "array",
+      "title": "行动与无障碍需要",
+      "description": "可填写婴儿车、轮椅、少走路等，多项用逗号分隔。",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "maxLength": 80}
+    },
+    "foodConstraints": {
+      "type": "array",
+      "title": "饮食限制",
+      "description": "可填写过敏、忌口或饮食习惯，多项用逗号分隔。",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {"type": "string", "maxLength": 80}
+    },
+    "reminderLeadMinutes": {"type": "integer", "title": "默认提前提醒", "description": "填写 5–1440 分钟；只有创建主动规则后才会发送提醒。", "minimum": 5, "maximum": 1440}
+  }
+}

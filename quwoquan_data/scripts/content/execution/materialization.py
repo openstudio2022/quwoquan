@@ -121,6 +121,7 @@ def ensure_execution_spec(
     content_type: str,
     target_names: tuple[str, ...],
     inherit_frozen_targets: bool = False,
+    inherited_targets: tuple[dict[str, Any], ...] = (),
 ) -> str:
     if not selection:
         raise SystemExit("[task execute] recipe.selection is required for an execution work package")
@@ -173,6 +174,7 @@ def ensure_execution_spec(
             persist_qualified_source=persist_qualified_source,
             target_names=target_names,
             inherit_frozen_targets=bool(inherit_frozen_targets),
+            inherited_targets=inherited_targets,
         )
     )
     return execution_id

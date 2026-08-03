@@ -1,0 +1,39 @@
+description: TripShareSnapshot 创建与隐私边界读取。
+commercial_defaults:
+  status: blocked
+  block_reason: 缺 Content LocalPostDraft continuation、App 分享面与双端真机 UAT
+  gap_id: TRAVEL_TRIP_SHARE_SNAPSHOT_COMMERCIAL_CLOSURE
+  target_story: trip-shared-timeline
+api_routes:
+- method: POST
+  path: /travel/trips/{tripId}/share-snapshots
+  operation: CreateTripShareSnapshot
+  actor: persona
+  request_bindings: {path: [{name: tripId, field: tripId}]}
+  security: {auth_mode: required}
+  application: {kind: command, facet: TripShareSnapshotCommandFacet, method: createTripShareSnapshot, aggregate_owner: TripShareSnapshot, mutation_target: TripShareSnapshot, invariant_target: TripShareSnapshot}
+  request_entity: CreateTripShareSnapshotRequest
+  response_entity: TripShareSnapshot
+  authorization: {principal: persona, ownership_policy: active_trip_member}
+  reliability: {timeout_ms: 2500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [TRAVEL.USER.trip_share_snapshot_invalid_argument, TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.USER.trip_share_snapshot_source_conflict, TRAVEL.USER.trip_share_snapshot_idempotency_conflict, TRAVEL.SYSTEM.trip_share_snapshot_storage_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_share_snapshot_create, trace: true, attributes: [outcome, scope, visibility]}
+  slo: {latency_p95_ms: 900, availability_percent: 99.9}
+  request_body_kind: object
+- method: GET
+  path: /travel/share-snapshots/{snapshotId}
+  operation: GetTripShareSnapshot
+  actor: account
+  request_bindings: {path: [{name: snapshotId, field: snapshotId}]}
+  request_entity: GetTripShareSnapshotQuery
+  security: {auth_mode: optional}
+  application: {kind: query, facet: TripShareSnapshotQueryFacet, method: getTripShareSnapshot, reader: TripShareSnapshotReader, slice: TripShareSnapshot}
+  response_entity: TripShareSnapshot
+  authorization: {principal: account, ownership_policy: public_or_active_trip_member}
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.trip_share_snapshot_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.SYSTEM.trip_share_snapshot_storage_failed]
+  privacy: {request_classification: PUBLIC, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_share_snapshot_get, trace: true, attributes: [outcome, visibility]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  request_body_kind: none

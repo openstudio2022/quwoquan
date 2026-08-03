@@ -133,6 +133,9 @@ func validateTools(tools []map[string]any) error {
 					name,
 				)
 			}
+			if err := validateMutatingCapabilityPolicy(name, tool); err != nil {
+				return err
+			}
 		}
 		if err := validateServerInjectedInputs(name, tool); err != nil {
 			return err
@@ -142,6 +145,36 @@ func validateTools(tools []map[string]any) error {
 		if count >= 10 {
 			return fmt.Errorf("tool namespace %q has %d tools; limit is 9", namespace, count)
 		}
+	}
+	return nil
+}
+
+func validateMutatingCapabilityPolicy(name string, tool map[string]any) error {
+	policy, ok := tool["capability"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("mutating tool %q requires capability policy", name)
+	}
+	capabilityKey := stringValue(policy, "capabilityKey")
+	connectorRequirement := stringValue(policy, "connectorRequirement")
+	if capabilityKey == "" || !strings.Contains(capabilityKey, ".") {
+		return fmt.Errorf("mutating tool %q requires canonical capabilityKey", name)
+	}
+	if connectorRequirement != "required" && connectorRequirement != "none" {
+		return fmt.Errorf(
+			"mutating tool %q has unsupported connectorRequirement %q",
+			name,
+			connectorRequirement,
+		)
+	}
+	consentScopes, consentOK := policy["consentScopes"].([]any)
+	surfaces, surfacesOK := policy["allowedSurfaceKinds"].([]any)
+	recheck, recheckOK := policy["recheckAtExecution"].(bool)
+	if !consentOK || len(consentScopes) == 0 || !surfacesOK || len(surfaces) == 0 ||
+		!recheckOK || !recheck {
+		return fmt.Errorf(
+			"mutating tool %q requires consent scopes, surface policy and execution recheck",
+			name,
+		)
 	}
 	return nil
 }

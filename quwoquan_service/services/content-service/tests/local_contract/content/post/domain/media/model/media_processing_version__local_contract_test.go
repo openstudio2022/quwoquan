@@ -2,7 +2,7 @@ package model_test
 
 import (
 	"errors"
-	. "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	"strconv"
 	"testing"
 	"time"

@@ -28,8 +28,9 @@ cleanup_active_child() {
     fi
     if declare -p compose_cmd >/dev/null 2>&1; then
       "${compose_cmd[@]}" ps -a >&2 || true
+      "${compose_cmd[@]}" logs --tail 80 integration-service >&2 || true
       "${compose_cmd[@]}" logs --tail 120 \
-        user-service recommendation-service content-service entity-service \
+        user-service recommendation-service content-service entity-service product-ops-service \
         api-edge gamma-proxy >&2 || true
       "${compose_cmd[@]}" down --remove-orphans || cleanup_status=$?
     else
@@ -69,12 +70,14 @@ if [[ "$QWQ_LOCAL_RELEASE_TARGET" != "${QWQ_LOCAL_RELEASE_ENV}-local" ]]; then
 fi
 export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
+PRODUCT_OPS_REQUIRED=1
 WORKLOAD="${QWQ_WORKLOAD:-full}"
 case "$WORKLOAD" in
   content-release)
     # Content import/API/media are intentionally independent from commercial
     # telemetry.  The release profile validates telemetry separately.
     PRODUCT_TELEMETRY_AVAILABLE=0
+    PRODUCT_OPS_REQUIRED=0
     filtered_profiles_csv=""
     requested_profiles_csv="${COMPOSE_PROFILES:-}"
     while IFS= read -r profile; do
@@ -88,15 +91,28 @@ case "$WORKLOAD" in
     COMPOSE_PROFILES="$filtered_profiles_csv"
     export COMPOSE_PROFILES
     ;;
+  content-commercial)
+    # This is the bounded content consumer + Product Ops premium command/event
+    # plane. It must not silently enable Assistant, RTC or other full-workload
+    # profiles, and it does not claim the full telemetry/trace/SLO gate.
+    PRODUCT_TELEMETRY_AVAILABLE=0
+    PRODUCT_OPS_REQUIRED=1
+    COMPOSE_PROFILES="commercial-observability"
+    export COMPOSE_PROFILES
+    ;;
   full)
     if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
       echo "[local-gamma] GATE_BLOCK: full workload requires product telemetry" >&2
       exit 2
     fi
-    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media"
+    debug_sms_profile=""
+    if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
+      debug_sms_profile=",debug-sms-substitute"
+    fi
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media${debug_sms_profile}"
     ;;
   *)
-    echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release or full" >&2
+    echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release, content-commercial or full" >&2
     exit 2
     ;;
 esac
@@ -129,28 +145,31 @@ write_startup_attempt() {
 }
 COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
 COMPOSE_FILES=("$COMPOSE_FILE")
-if [[ "$WORKLOAD" == "content-release" ]]; then
+if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
   # Compose interpolates every loaded file before it applies the selected
   # service list. Loading full-workload service files here would therefore
   # require unrelated Provider secrets (for example integration-service mTLS)
   # even though those services are not started. Keep this slice structural:
   # only load the canonical content consumer plane and its environment overlay.
-  content_release_services=(
+  content_slice_services=(
     api-edge
     recommendation-service
     content-service
     user-service
     entity-service
   )
-  for content_release_service in "${content_release_services[@]}"; do
-    service_compose_file="$ROOT/quwoquan_service/services/${content_release_service}/deploy/compose.yaml"
+  if [[ "$WORKLOAD" == "content-commercial" ]]; then
+    content_slice_services+=(product-ops-service)
+  fi
+  for content_slice_service in "${content_slice_services[@]}"; do
+    service_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/deploy/compose.yaml"
     if [[ ! -f "$service_compose_file" ]]; then
-      echo "[local-release] GATE_BLOCK: missing content-release compose file $service_compose_file" >&2
+      echo "[local-release] GATE_BLOCK: missing bounded content compose file $service_compose_file" >&2
       exit 2
     fi
     COMPOSE_FILES+=("$service_compose_file")
 
-    service_environment_compose_file="$ROOT/quwoquan_service/services/${content_release_service}/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml"
+    service_environment_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml"
     if [[ -f "$service_environment_compose_file" ]]; then
       COMPOSE_FILES+=("$service_environment_compose_file")
     fi
@@ -163,6 +182,12 @@ else
     COMPOSE_FILES+=("$service_environment_compose_file")
   done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort)
   COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
+  if [[ "${QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED:-false}" == "true" ]]; then
+    COMPOSE_FILES+=("$ROOT/quwoquan_ops/external/sms-provider-substitute/deploy/compose.yaml")
+  fi
+fi
+if [[ "$WORKLOAD" == "full" || "$WORKLOAD" == "content-commercial" ]]; then
+  COMPOSE_FILES+=("$ROOT/quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml")
 fi
 COMPOSE_FILE_ARGS=()
 for service_compose_file in "${COMPOSE_FILES[@]}"; do
@@ -197,6 +222,7 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_ENTITY_PORT:-}" \
    || -z "${LOCAL_GAMMA_CIRCLE_PORT:-}" \
    || -z "${LOCAL_GAMMA_INTEGRATION_PORT:-}" \
+   || -z "${LOCAL_GAMMA_SMS_SUBSTITUTE_PORT:-}" \
    || -z "${LOCAL_GAMMA_NOTIFICATION_PORT:-}" \
    || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
@@ -223,6 +249,7 @@ export \
   LOCAL_GAMMA_ENTITY_PORT \
   LOCAL_GAMMA_CIRCLE_PORT \
   LOCAL_GAMMA_INTEGRATION_PORT \
+  LOCAL_GAMMA_SMS_SUBSTITUTE_PORT \
   LOCAL_GAMMA_NOTIFICATION_PORT \
   LOCAL_GAMMA_POSTGRES_PORT \
   LOCAL_GAMMA_MONGO_PORT \
@@ -315,8 +342,6 @@ GAMMA_RUN_ROOT="${QWQ_RUN_ROOT}"
 # 渲染配置是部署过程临时输入，真相源始终在 Ops/服务的 deploy 与 configs 目录。
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/config-root"
 LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/media"
-# Ops owns the immutable local-gamma route table. Runtime output never carries static routing config.
-LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"
 LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"
 LOCAL_GAMMA_CADDY_CONFIG_VOLUME="${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}"
 tls_exports="$(
@@ -363,6 +388,19 @@ case "$STAGE" in
     exit 2
     ;;
 esac
+# Ops owns these immutable runtime files. stackctl package projects their exact
+# bytes into runtime-shared; up must never bind-mount the mutable source tree.
+LOCAL_GAMMA_RUNTIME_SHARED_ROOT="$(
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
+import sys
+from quwoquan_ops.cli.lib.output_paths import deployment_package_root
+
+print(deployment_package_root(sys.argv[1]) / "runtime-shared")
+PY
+)"
+LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/Caddyfile"
+LOCAL_GAMMA_LIVEKIT_CONFIG_FILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/livekit.yaml"
+LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/object-storage-lifecycle.json"
 LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
@@ -416,7 +454,7 @@ export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy
 export LOCAL_GAMMA_MINIO_IMAGE="${LOCAL_GAMMA_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
 export LOCAL_GAMMA_MINIO_MC_IMAGE="${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
 # ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
-export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
+export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0}"
 case "$(uname -m)" in
   arm64|aarch64)
     # Apple Silicon 的 Colima/VZ 会向 bundled JDK 报告 guest 无法执行的
@@ -474,6 +512,7 @@ build_only=0
 build_services_csv=""
 formal_release=0
 formal_release_teardown=0
+purge_rebuildable_state=0
 print_env=0
 down=0
 tunnel_pid_file="${LOCAL_GAMMA_PROCESS_ROOT}/colima-tunnels.pids"
@@ -525,34 +564,6 @@ stop_colima_tunnels() {
     fi
   done < "$tunnel_pid_file"
   rm -f "$tunnel_pid_file"
-}
-
-restart_colima_for_stale_target_ports() {
-  local port_variable=""
-  local port=""
-  local listener_pid=""
-  local listener_command=""
-  local stale_mux=0
-  command -v colima >/dev/null 2>&1 || return 0
-  while IFS= read -r port_variable; do
-    [[ "$port_variable" == LOCAL_GAMMA_*_PORT ]] || continue
-    port="${!port_variable:-}"
-    [[ -n "$port" ]] || continue
-    while IFS= read -r listener_pid; do
-      [[ -n "$listener_pid" ]] || continue
-      listener_command="$(ps -p "$listener_pid" -o command= 2>/dev/null || true)"
-      case "$listener_command" in
-        *".colima/_lima/colima/ssh.sock [mux]"*)
-          stale_mux=1
-          ;;
-      esac
-    done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
-  done < <(compgen -A variable LOCAL_GAMMA_ | sort)
-  if [[ "$stale_mux" == "1" ]]; then
-    echo "[local-gamma] restarting Colima to release stale target port forwards"
-    colima stop
-    colima start
-  fi
 }
 
 LOCAL_GAMMA_MANAGED_CONTAINER_BASE_NAMES=(
@@ -719,6 +730,8 @@ Options:
                  Reuse exact prebuilt candidate images and preserve the running data plane.
   --formal-release-teardown
                  Stop only the candidate-scoped Compose project; never repair or wipe.
+  --purge-rebuildable-state
+                 With --down, delete only this receipt-bound Compose project's volumes.
   --print-env    Print Flutter dart-defines for the local gamma mirror.
   --down         Stop the local gamma mirror.
   --help         Show this help.
@@ -740,6 +753,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --formal-release) formal_release=1; shift ;;
     --formal-release-teardown) formal_release_teardown=1; shift ;;
+    --purge-rebuildable-state) purge_rebuildable_state=1; shift ;;
     --print-env) print_env=1; shift ;;
     --down) down=1; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -749,6 +763,14 @@ done
 
 if [[ "$formal_release_teardown" == "1" && "$down" != "1" ]]; then
   echo "[local-release] GATE_BLOCK: --formal-release-teardown requires --down" >&2
+  exit 2
+fi
+if [[ "$purge_rebuildable_state" == "1" && "$down" != "1" ]]; then
+  echo "[local-release] GATE_BLOCK: --purge-rebuildable-state requires --down" >&2
+  exit 2
+fi
+if [[ "$purge_rebuildable_state" == "1" && "$formal_release_teardown" == "1" ]]; then
+  echo "[local-release] GATE_BLOCK: formal teardown cannot purge rebuildable state" >&2
   exit 2
 fi
 
@@ -853,7 +875,11 @@ PY
     copy_service_package_config "$service"
   done < <(first_party_image_owners)
 
-  if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" || ! -f "$package_root/runtime-shared/retention_policy.yaml" ]]; then
+  if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" \
+     || ! -f "$package_root/runtime-shared/retention_policy.yaml" \
+     || ! -f "$package_root/runtime-shared/object-storage-lifecycle.json" \
+     || ! -f "$package_root/runtime-shared/livekit.yaml" \
+     || ! -f "$package_root/runtime-shared/Caddyfile" ]]; then
     echo "[local-gamma] FAIL: missing runtime shared package: $package_root/runtime-shared" >&2
     return 1
   fi
@@ -1062,7 +1088,6 @@ PY
     echo "[local-gamma]   docker builder prune -af" >&2
     echo "[local-gamma]   docker image prune -af" >&2
     echo "[local-gamma]   docker volume prune -f" >&2
-    echo "[local-gamma]   colima stop && colima start --disk 100" >&2
   fi
   echo "[local-gamma] FAIL: image build failed; startup aborted. Build log: $build_log" >&2
   return 1
@@ -1166,11 +1191,14 @@ fi
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   prepare_down_compose_environment
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" down
+  down_args=(down)
+  if [[ "$purge_rebuildable_state" == "1" ]]; then
+    down_args+=(--volumes --remove-orphans)
+  fi
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" "${down_args[@]}"
   if [[ "$formal_release_teardown" != "1" ]]; then
     cleanup_stale_named_gamma_containers
   fi
-  restart_colima_for_stale_target_ports
   exit 0
 fi
 
@@ -1216,24 +1244,26 @@ fi
 podman_compose=0
 export_service_compose_environment
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
-  podman_compose=1
-  compose_cmd=(podman-compose "${COMPOSE_FILE_ARGS[@]}" --podman-build-args=--pull=never --podman-run-args=--pull=never)
-  compose_up_args=(up -d --no-build)
-else
-  compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
-  compose_up_args=(up -d --remove-orphans)
-  if [[ "$skip_build" == "1" ]]; then
-    compose_up_args+=(--no-build)
-  fi
+  echo "[local-release] GATE_BLOCK: the retired manual Podman compatibility runtime is forbidden; use canonical Docker Compose through stackctl" >&2
+  exit 2
+fi
+compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
+compose_up_args=(up -d --remove-orphans)
+if [[ "$skip_build" == "1" ]]; then
+  compose_up_args+=(--no-build)
 fi
 if [[ "$formal_release" == "1" && "$podman_compose" == "1" ]]; then
   echo "[local-gamma] GATE_BLOCK: formal release forbids the destructive podman compatibility path" >&2
   exit 2
 fi
+if [[ "$podman_compose" == "1" && "$WORKLOAD" != "full" ]]; then
+  echo "[local-gamma] GATE_BLOCK: bounded content workloads require canonical Docker Compose service slicing" >&2
+  exit 2
+fi
 if [[ "$formal_release" == "1" ]]; then
   compose_up_args=(up -d --no-build)
 fi
-if [[ "$WORKLOAD" == "content-release" ]]; then
+if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
   # Start only the canonical import/public-read role set. Compose adds the
   # declared Mongo, Redis, Postgres, object-storage and Elasticsearch
   # dependencies; unrelated full-workload services and their Providers remain
@@ -1243,9 +1273,11 @@ if [[ "$WORKLOAD" == "content-release" ]]; then
     content-service
     user-service
     entity-service
-    api-edge
-    gamma-proxy
   )
+  if [[ "$WORKLOAD" == "content-commercial" ]]; then
+    compose_up_args+=(product-ops-service)
+  fi
+  compose_up_args+=(api-edge gamma-proxy)
 fi
 
 prepare_local_gamma_mongosh() {
@@ -1313,14 +1345,14 @@ compose_build_services=(
   integration-service
   notification-service
 )
-if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+if [[ "$PRODUCT_OPS_REQUIRED" != "1" ]]; then
   filtered_build_services=()
   for service_name in "${compose_build_services[@]}"; do
     [[ "$service_name" == "product-ops-service" ]] || filtered_build_services+=("$service_name")
   done
   compose_build_services=("${filtered_build_services[@]}")
 fi
-if [[ "$WORKLOAD" == "content-release" ]]; then
+if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
   filtered_build_services=()
   for service_name in "${compose_build_services[@]}"; do
     [[ "$service_name" == "assistant-service" ]] || filtered_build_services+=("$service_name")
@@ -1567,7 +1599,7 @@ if [[ "$podman_compose" == "1" ]]; then
     "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_recommendation-service_1
 
-  if [[ "$PRODUCT_TELEMETRY_AVAILABLE" == "1" ]]; then
+  if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
     podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
       --net "$network_name" --network-alias product-ops-service \
       -e SERVICE_NAME=product-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
@@ -1592,7 +1624,7 @@ if [[ "$podman_compose" == "1" ]]; then
       "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" >/dev/null
     wait_healthy quwoquan_service_product-ops-service_1
   else
-    echo "[local-gamma] product telemetry unavailable; skipping product-ops without blocking App startup."
+    echo "[local-gamma] workload does not require product-ops; skipping it."
   fi
 
   podman run --pull=never --name quwoquan_service_platform-ops-service_1 -d \
@@ -2063,7 +2095,7 @@ gamma_canonical_video_range_mime_ready() {
 }
 
 gamma_product_ops_ready() {
-  if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
+  if [[ "$PRODUCT_OPS_REQUIRED" != "1" ]]; then
     return 0
   fi
   curl -fsS "${PRODUCT_OPS_BASE_URL%/}/healthz" >/dev/null 2>&1
@@ -2073,14 +2105,14 @@ gamma_platform_ops_ready() {
   # platform-ops belongs to the full operational control-plane. The
   # content-release slice deliberately has no operator OIDC material and its
   # acceptance scope does not include that service.
-  if [[ "$WORKLOAD" == "content-release" ]]; then
+  if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     return 0
   fi
   curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" >/dev/null 2>&1
 }
 
 gamma_full_workload_dependencies_ready() {
-  if [[ "$WORKLOAD" == "content-release" ]]; then
+  if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     return 0
   fi
   curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_INTEGRATION_PORT:-19310}/healthz" >/dev/null 2>&1 \
@@ -2114,7 +2146,7 @@ wait_local_gamma_host_ready() {
       && gamma_product_ops_ready \
       && curl -fsS "https://${media_host}:${media_edge_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "https://${video_host}:${media_edge_port}/healthz" >/dev/null 2>&1 \
-      && { [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
+      && { [[ "$PRODUCT_OPS_REQUIRED" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && gamma_platform_ops_ready \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && gamma_full_workload_dependencies_ready

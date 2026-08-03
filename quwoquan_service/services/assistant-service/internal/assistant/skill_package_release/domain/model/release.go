@@ -13,24 +13,35 @@ import (
 )
 
 const (
+	RuntimeAPIVersion = "assistant-skill/v1"
+	RuntimeVersion    = "1.0.0"
+
 	StatusStaged  = "staged"
 	StatusActive  = "active"
 	StatusRetired = "retired"
 
-	AssetManifest     = "manifest"
-	AssetPrompt       = "prompt"
-	AssetActivation   = "activation"
-	AssetContext      = "context"
-	AssetCapability   = "capability"
-	AssetPresentation = "presentation"
-	AssetEvaluation   = "evaluation"
-	AssetReplay       = "replay"
+	AssetManifest             = "manifest"
+	AssetCatalog              = "catalog"
+	AssetActivation           = "activation"
+	AssetInput                = "input"
+	AssetInputSchema          = "input_schema"
+	AssetContext              = "context"
+	AssetCapability           = "capability"
+	AssetOrchestration        = "orchestration"
+	AssetTrigger              = "trigger"
+	AssetMemory               = "memory"
+	AssetPresentation         = "presentation"
+	AssetPresentationTemplate = "presentation_template"
+	AssetEvaluation           = "evaluation"
+	AssetPrompt               = "prompt"
+	AssetReplay               = "replay"
 )
 
 var (
 	ErrInvalidRelease   = errors.New("assistant skill package release is invalid")
 	ErrDigestMismatch   = errors.New("assistant skill package digest mismatch")
 	ErrAssetMismatch    = errors.New("assistant skill package asset digest mismatch")
+	ErrAssetUnavailable = errors.New("assistant skill package asset is unavailable")
 	ErrRuntimeMismatch  = errors.New("assistant skill package runtime is incompatible")
 	ErrSignatureInvalid = errors.New("assistant skill package signature is invalid")
 	ErrCapabilityDenied = errors.New("assistant skill package capability is not granted")
@@ -146,9 +157,12 @@ func Normalize(input Release) (Release, error) {
 	}
 
 	requiredKinds := map[string]bool{
-		AssetManifest: false, AssetPrompt: false, AssetActivation: false,
-		AssetContext: false, AssetCapability: false, AssetPresentation: false,
-		AssetEvaluation: false, AssetReplay: false,
+		AssetManifest: false, AssetCatalog: false, AssetActivation: false,
+		AssetInput: false, AssetInputSchema: false, AssetContext: false, AssetCapability: false,
+		AssetOrchestration: false, AssetTrigger: false, AssetMemory: false,
+		AssetPresentation: false, AssetPresentationTemplate: false,
+		AssetEvaluation: false, AssetPrompt: false,
+		AssetReplay: false,
 	}
 	assetIDs := make(map[string]struct{}, len(input.Assets))
 	assets := append([]Asset(nil), input.Assets...)

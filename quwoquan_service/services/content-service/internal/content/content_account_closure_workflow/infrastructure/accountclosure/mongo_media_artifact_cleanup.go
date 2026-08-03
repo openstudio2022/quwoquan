@@ -11,8 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 // MediaArtifactClosureRow is the projected media_assets row used to stage

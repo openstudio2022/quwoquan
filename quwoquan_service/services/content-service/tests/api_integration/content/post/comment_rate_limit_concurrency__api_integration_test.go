@@ -10,12 +10,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/commandmeta"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/comment"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
-	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
 )
 
 type apiIntegrationCommentAttachmentReader struct{}
@@ -46,14 +45,16 @@ func TestCommentMongoRateLimitIsAtomicAndDeletionCannotRestoreQuota(
 		concurrency = 8
 	)
 	postID := createCommentTestPost(t, "comment-mongo-rate-post-owner")
-	store := persistence.NewMongoCommentDataAdapter(requireMongoDB(t))
+	store := newMongoCommentDataAdapter(t, requireMongoDB(t))
+	viewerRelationships :=
+		commentpersistence.NewCommentViewerRelationshipMongoProjection(requireMongoDB(t))
 	service := commentapp.NewCommentService(
 		commentapp.BindDataPorts(
 			store,
 			apiIntegrationCommentAttachmentReader{},
 			testReactionStore,
-			persistence.NewCommentViewerRelationMongoReader(requireMongoDB(t)),
-			recinfra.NewPersonaBlockReader(requireMongoDB(t)),
+			viewerRelationships,
+			viewerRelationships,
 		),
 		commentapp.WithRateLimitConfig(commentapp.RateLimitConfig{
 			BurstWindow: time.Hour,

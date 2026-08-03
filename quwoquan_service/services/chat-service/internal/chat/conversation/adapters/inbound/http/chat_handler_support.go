@@ -52,23 +52,10 @@ func (h *ChatHandler) flattenConversations(ctx context.Context, convs []model.Co
 	return items
 }
 
-func (h *ChatHandler) flattenInboxItems(ctx context.Context, items []application.InboxItem) []map[string]any {
-	out := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		out = append(out, h.inboxItemToWire(ctx, item))
-	}
-	return out
-}
-
 func conversationMemberToWire(
 	member model.ConversationMember,
 	currentUserID string,
 ) map[string]any {
-	assistantSkillID := strings.TrimSpace(member.AssistantSkillId)
-	var assistantSkill any
-	if assistantSkillID != "" {
-		assistantSkill = assistantSkillID
-	}
 	return map[string]any{
 		"userId":           member.UserId,
 		"userHandle":       strings.TrimSpace(member.UserHandle),
@@ -76,7 +63,6 @@ func conversationMemberToWire(
 		"avatarUrl":        member.AvatarUrl,
 		"role":             member.Role,
 		"memberType":       member.MemberType,
-		"assistantSkillId": assistantSkill,
 		"joinedAt":         formatOptionalTime(member.JoinedAt),
 		"isCurrentUser":    member.UserId == currentUserID,
 	}
@@ -201,7 +187,7 @@ func (h *ChatHandler) groupHomeToWire(ctx context.Context, conv model.Conversati
 		}
 	}
 	canManage := role == "owner" || role == "admin"
-	canDissolve := role == "owner" && !application.IsCircleBoundConversation(conv)
+	canDissolve := role == "owner" && !application.IsManagedConversation(conv)
 	return map[string]any{
 		"conversationId":     conv.ID,
 		"title":              conv.Title,

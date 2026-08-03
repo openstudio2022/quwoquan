@@ -106,11 +106,11 @@ func (projection *MongoUserAccountClosedProjection) removeClosedAccountPostState
 			return err
 		}
 	}
-	if _, err := projection.db.Collection("posts").DeleteMany(
+	if _, err := projection.db.Collection("circle_feed_items").DeleteMany(
 		ctx,
 		bson.M{"authorId": bson.M{"$in": subjects}},
 	); err != nil {
-		return fmt.Errorf("delete closed Circle Post read models: %w", err)
+		return fmt.Errorf("delete closed Circle feed item projections: %w", err)
 	}
 	if _, err := projection.db.Collection(
 		"circle_post_owner_views",

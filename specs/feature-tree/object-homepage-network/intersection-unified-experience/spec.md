@@ -266,7 +266,7 @@
 - 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-006"></a>
-### OPEN-006 v3 可行动交集与商用主轴 SIT
+### OPEN-006 可行动交集与商用主轴 SIT
 
 - 类型：`capability_gap`
 - 优先级：`P1`

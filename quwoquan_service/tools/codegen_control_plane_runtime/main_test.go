@@ -28,3 +28,33 @@ func TestControlPlaneArtifactsExcludeManualDomainOnboarding(t *testing.T) {
 		t.Fatal("platform control-plane artifact is missing")
 	}
 }
+
+func TestControlPlaneOperationSecurityUsesCanonicalOperationReferences(t *testing.T) {
+	metadataDir := contractsview.Build(t)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
+	if err != nil {
+		t.Fatalf("compile metadata: %v", err)
+	}
+	operations := collectOperationSecurity(collectArtifacts(source))
+	if len(operations) == 0 {
+		t.Fatal("control-plane operation references must generate security selections")
+	}
+	foundPlatform := false
+	foundProductCrossDomain := false
+	for _, operation := range operations {
+		if operation.contractOperationID == "" {
+			t.Fatal("generated security selection must retain canonical operation id")
+		}
+		if operation.domain == "platform" {
+			foundPlatform = true
+		}
+		if operation.domain == "product" &&
+			(operation.contractOperationID == "content.report.ListReports" ||
+				operation.contractOperationID == "entity.homepage.ListHomepageCandidates") {
+			foundProductCrossDomain = true
+		}
+	}
+	if !foundPlatform || !foundProductCrossDomain {
+		t.Fatalf("expected platform and cross-domain product references, got %#v", operations)
+	}
+}

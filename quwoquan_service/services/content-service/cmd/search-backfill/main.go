@@ -28,9 +28,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	tombstonepost "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/adapters/inbound/post"
+	tombstonepersistence "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
+	"quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/mediareferencefence"
 )
 
 func main() {
@@ -78,7 +81,16 @@ func main() {
 		_ = client.Disconnect(shutdownCtx)
 	}()
 
-	store := persistence.NewMongoPostStore(client.Database(*postsDB).Collection(*postsColl))
+	database := client.Database(*postsDB)
+	mediaReferenceFence, err := mediareferencefence.New(database)
+	if err != nil {
+		log.Fatalf("[search-backfill] MediaAsset reference fence: %v", err)
+	}
+	store := persistence.NewMongoPostStore(
+		database.Collection(*postsColl),
+		tombstonepost.NewStorePort(tombstonepersistence.NewMongoStore(database)),
+		mediaReferenceFence,
+	)
 
 	built, err := searchindex.Build(esCfg, store)
 	if err != nil {

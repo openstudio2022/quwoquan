@@ -4,7 +4,7 @@ output_path: assistant/generated/contracts/assistant_run_envelope.g.dart
 contract: assistant_run_envelope
 kind: entity_wire_contract
 imports:
-  - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
 fields:
   - { name: runId, type: string, required: true }
   - { name: sessionId, type: string, required: true }

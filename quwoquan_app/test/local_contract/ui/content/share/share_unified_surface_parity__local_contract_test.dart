@@ -5,7 +5,7 @@ import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
 void main() {
   group('分享模板：统一 model 单路径产出 (D1b/T2)', () {
-    void expectSurfaceTemplate(PostBaseDto dto, {Map<String, dynamic>? wire}) {
+    void expectSurfaceTemplate(ContentPostViewData dto, {Map<String, dynamic>? wire}) {
       final template = ContentShareTemplateBuilder.build(
         surfaceView: ContentSurfaceViewMapper.fromDto(dto, wire: wire),
         enableIdentityTemplate: true,

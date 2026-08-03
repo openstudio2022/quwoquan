@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show PersonaIsolationLevel;
+    show IsolationLevel;
 
 class PersonaFormResult {
   const PersonaFormResult({this.createdPersona});
@@ -38,7 +38,7 @@ class PersonaFormPage extends ConsumerStatefulWidget {
 class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
   late final TextEditingController _displayNameController;
   late final TextEditingController _purposeController;
-  late PersonaIsolationLevel _isolationLevel;
+  late IsolationLevel _isolationLevel;
   bool _saving = false;
 
   @override
@@ -50,8 +50,11 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
     )..addListener(() => setState(() {}));
     _purposeController = TextEditingController();
     _isolationLevel = persona == null
-        ? PersonaIsolationLevel.open
-        : PersonaIsolationLevel.fromWire(persona.isolationLevel);
+        ? IsolationLevel.open
+        : IsolationLevel.fromWire(
+            persona.isolationLevel,
+            'PersonaManagementItemViewData.isolationLevel',
+          );
   }
 
   @override
@@ -76,7 +79,7 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
         final purposeHint = _purposeController.text.trim();
         final created = await widget.notifier.createPersona(
           displayName: displayName,
-          isolationLevel: _isolationLevel.wireValue,
+          isolationLevel: _isolationLevel.wireName,
           purposeHint: purposeHint.isEmpty ? null : purposeHint,
         );
         if (!mounted) return;
@@ -85,7 +88,7 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
         await widget.notifier.updatePersona(
           widget.persona!.personaId,
           displayName: displayName,
-          isolationLevel: _isolationLevel.wireValue,
+          isolationLevel: _isolationLevel.wireName,
         );
         if (!mounted) return;
         Navigator.of(context).pop(const PersonaFormResult());
@@ -182,7 +185,7 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
 
   Widget _isolationOptionRow({
     required bool isDark,
-    required PersonaIsolationLevel level,
+    required IsolationLevel level,
     required String description,
   }) {
     final selected = _isolationLevel == level;
@@ -310,19 +313,19 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
               children: <Widget>[
                 _isolationOptionRow(
                   isDark: isDark,
-                  level: PersonaIsolationLevel.open,
+                  level: IsolationLevel.open,
                   description: ProfileText.profilePersonaOpenDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
-                  level: PersonaIsolationLevel.semi,
+                  level: IsolationLevel.semi,
                   description: ProfileText.profilePersonaSemiDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
-                  level: PersonaIsolationLevel.strict,
+                  level: IsolationLevel.strict,
                   description: ProfileText.profilePersonaStrictDescription,
                 ),
               ],

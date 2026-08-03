@@ -74,8 +74,8 @@
 
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/projections/persona_management_item_wire.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/projections/active_persona_context_wire.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml#PersonaManagementItemView`
+- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml#ActivePersonaContextView`
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`
 

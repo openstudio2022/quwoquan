@@ -4,9 +4,8 @@
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class RunArtifactsAnswerDecisionCore {
   const RunArtifactsAnswerDecisionCore({
@@ -41,6 +40,46 @@ class RunArtifactsAnswerDecisionCore {
       };
 
   factory RunArtifactsAnswerDecisionCore.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'nextAction',
+      'answerEligibility',
+      'finalAnswerReady',
+      'evidenceSummary',
+      'confidence',
+      'reasoning',
+      'synthesisReady',
+      'synthesisReason',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsAnswerDecisionCore response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('nextAction') && json['nextAction'] != null && (json['nextAction'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field nextAction has an invalid wire value');
+    }
+    if (json.containsKey('answerEligibility') && json['answerEligibility'] != null && (json['answerEligibility'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field answerEligibility has an invalid wire value');
+    }
+    if (json.containsKey('finalAnswerReady') && json['finalAnswerReady'] != null && (json['finalAnswerReady'] is! bool)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field finalAnswerReady has an invalid wire value');
+    }
+    if (json.containsKey('evidenceSummary') && json['evidenceSummary'] != null && (json['evidenceSummary'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field evidenceSummary has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field confidence has an invalid wire value');
+    }
+    if (json.containsKey('reasoning') && json['reasoning'] != null && (json['reasoning'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field reasoning has an invalid wire value');
+    }
+    if (json.containsKey('synthesisReady') && json['synthesisReady'] != null && (json['synthesisReady'] is! bool)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field synthesisReady has an invalid wire value');
+    }
+    if (json.containsKey('synthesisReason') && json['synthesisReason'] != null && (json['synthesisReason'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerDecisionCore field synthesisReason has an invalid wire value');
+    }
     return RunArtifactsAnswerDecisionCore(
       nextAction: (json['nextAction'] as String?)?.trim() ?? "",
       answerEligibility: (json['answerEligibility'] as String?)?.trim() ?? "",
@@ -92,6 +131,38 @@ class AssistantAnswerDisplayBlock {
       };
 
   factory AssistantAnswerDisplayBlock.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'blockId',
+      'kind',
+      'listStyle',
+      'title',
+      'body',
+      'items',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantAnswerDisplayBlock response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('blockId') || json['blockId'] == null || (json['blockId'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayBlock field blockId has an invalid wire value');
+    }
+    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayBlock field kind has an invalid wire value');
+    }
+    if (json.containsKey('listStyle') && json['listStyle'] != null && (json['listStyle'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayBlock field listStyle has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayBlock field title has an invalid wire value');
+    }
+    if (json.containsKey('body') && json['body'] != null && (json['body'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayBlock field body has an invalid wire value');
+    }
+    if (json.containsKey('items') && json['items'] != null && (json['items'] is! List || (json['items'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantAnswerDisplayBlock field items has an invalid wire value');
+    }
     return AssistantAnswerDisplayBlock(
       blockId: (json['blockId'] as String?)?.trim() ?? "",
       kind: parseDisplayBlockKindStrict((json['kind'] as String?)?.trim() ?? ""),
@@ -127,6 +198,22 @@ class AssistantAnswerDisplayState {
       };
 
   factory AssistantAnswerDisplayState.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'summary',
+      'blocks',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantAnswerDisplayState response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AssistantAnswerDisplayState field summary has an invalid wire value');
+    }
+    if (json.containsKey('blocks') && json['blocks'] != null && (json['blocks'] is! List || (json['blocks'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantAnswerDisplayState field blocks has an invalid wire value');
+    }
     return AssistantAnswerDisplayState(
       summary: (json['summary'] as String?)?.trim() ?? "",
       blocks: (json['blocks'] as List?)?.whereType<Map>().map((item) => AssistantAnswerDisplayBlock.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantAnswerDisplayBlock>[],
@@ -172,6 +259,46 @@ class AnswerEvidenceBinding {
       };
 
   factory AnswerEvidenceBinding.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'bindingId',
+      'label',
+      'claim',
+      'evidenceId',
+      'destination',
+      'title',
+      'source',
+      'snippet',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AnswerEvidenceBinding response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('bindingId') || json['bindingId'] == null || (json['bindingId'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field bindingId has an invalid wire value');
+    }
+    if (json.containsKey('label') && json['label'] != null && (json['label'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field label has an invalid wire value');
+    }
+    if (json.containsKey('claim') && json['claim'] != null && (json['claim'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field claim has an invalid wire value');
+    }
+    if (json.containsKey('evidenceId') && json['evidenceId'] != null && (json['evidenceId'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field evidenceId has an invalid wire value');
+    }
+    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
+      throw const FormatException('AnswerEvidenceBinding field destination has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field title has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field source has an invalid wire value');
+    }
+    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
+      throw const FormatException('AnswerEvidenceBinding field snippet has an invalid wire value');
+    }
     return AnswerEvidenceBinding(
       bindingId: (json['bindingId'] as String?)?.trim() ?? "",
       label: (json['label'] as String?)?.trim() ?? "",
@@ -218,6 +345,30 @@ class RunArtifactsAnswerProcessing {
       };
 
   factory RunArtifactsAnswerProcessing.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'readinessSummary',
+      'keyFacts',
+      'missingDimensions',
+      'retrieveMoreReason',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsAnswerProcessing response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('readinessSummary') && json['readinessSummary'] != null && (json['readinessSummary'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerProcessing field readinessSummary has an invalid wire value');
+    }
+    if (json.containsKey('keyFacts') && json['keyFacts'] != null && (json['keyFacts'] is! List || (json['keyFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsAnswerProcessing field keyFacts has an invalid wire value');
+    }
+    if (json.containsKey('missingDimensions') && json['missingDimensions'] != null && (json['missingDimensions'] is! List || (json['missingDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsAnswerProcessing field missingDimensions has an invalid wire value');
+    }
+    if (json.containsKey('retrieveMoreReason') && json['retrieveMoreReason'] != null && (json['retrieveMoreReason'] is! String)) {
+      throw const FormatException('RunArtifactsAnswerProcessing field retrieveMoreReason has an invalid wire value');
+    }
     return RunArtifactsAnswerProcessing(
       readinessSummary: (json['readinessSummary'] as String?)?.trim() ?? "",
       keyFacts: _assistantStringList(json['keyFacts']),
@@ -292,6 +443,70 @@ class RunArtifactsDiagnosticsCore {
       };
 
   factory RunArtifactsDiagnosticsCore.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'domainId',
+      'renderMode',
+      'renderFallback',
+      'answerEligibility',
+      'qualityGates',
+      'evidenceEvaluation',
+      'answerBoundaryPolicy',
+      'evidenceSummary',
+      'evidencePassed',
+      'finalAnswerMode',
+      'synthesisReady',
+      'synthesisReason',
+      'heuristicFallbackUsed',
+      'emergedTags',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsDiagnosticsCore response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field domainId has an invalid wire value');
+    }
+    if (json.containsKey('renderMode') && json['renderMode'] != null && (json['renderMode'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field renderMode has an invalid wire value');
+    }
+    if (json.containsKey('renderFallback') && json['renderFallback'] != null && (json['renderFallback'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field renderFallback has an invalid wire value');
+    }
+    if (json.containsKey('answerEligibility') && json['answerEligibility'] != null && (json['answerEligibility'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field answerEligibility has an invalid wire value');
+    }
+    if (json.containsKey('qualityGates') && json['qualityGates'] != null && (json['qualityGates'] is! Map)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field qualityGates has an invalid wire value');
+    }
+    if (json.containsKey('evidenceEvaluation') && json['evidenceEvaluation'] != null && (json['evidenceEvaluation'] is! Map)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field evidenceEvaluation has an invalid wire value');
+    }
+    if (json.containsKey('answerBoundaryPolicy') && json['answerBoundaryPolicy'] != null && (json['answerBoundaryPolicy'] is! Map)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field answerBoundaryPolicy has an invalid wire value');
+    }
+    if (json.containsKey('evidenceSummary') && json['evidenceSummary'] != null && (json['evidenceSummary'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field evidenceSummary has an invalid wire value');
+    }
+    if (json.containsKey('evidencePassed') && json['evidencePassed'] != null && (json['evidencePassed'] is! bool)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field evidencePassed has an invalid wire value');
+    }
+    if (json.containsKey('finalAnswerMode') && json['finalAnswerMode'] != null && (json['finalAnswerMode'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field finalAnswerMode has an invalid wire value');
+    }
+    if (json.containsKey('synthesisReady') && json['synthesisReady'] != null && (json['synthesisReady'] is! bool)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field synthesisReady has an invalid wire value');
+    }
+    if (json.containsKey('synthesisReason') && json['synthesisReason'] != null && (json['synthesisReason'] is! String)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field synthesisReason has an invalid wire value');
+    }
+    if (json.containsKey('heuristicFallbackUsed') && json['heuristicFallbackUsed'] != null && (json['heuristicFallbackUsed'] is! bool)) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field heuristicFallbackUsed has an invalid wire value');
+    }
+    if (json.containsKey('emergedTags') && json['emergedTags'] != null && (json['emergedTags'] is! List || (json['emergedTags'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsDiagnosticsCore field emergedTags has an invalid wire value');
+    }
     return RunArtifactsDiagnosticsCore(
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       renderMode: (json['renderMode'] as String?)?.trim() ?? "",
@@ -356,6 +571,30 @@ class AssistantDisplayItem {
       };
 
   factory AssistantDisplayItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'itemId',
+      'title',
+      'body',
+      'referenceIds',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantDisplayItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('itemId') || json['itemId'] == null || (json['itemId'] is! String)) {
+      throw const FormatException('AssistantDisplayItem field itemId has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantDisplayItem field title has an invalid wire value');
+    }
+    if (json.containsKey('body') && json['body'] != null && (json['body'] is! String)) {
+      throw const FormatException('AssistantDisplayItem field body has an invalid wire value');
+    }
+    if (json.containsKey('referenceIds') && json['referenceIds'] != null && (json['referenceIds'] is! List || (json['referenceIds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantDisplayItem field referenceIds has an invalid wire value');
+    }
     return AssistantDisplayItem(
       itemId: (json['itemId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
@@ -394,6 +633,22 @@ class AssistantDisplayState {
       };
 
   factory AssistantDisplayState.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'process',
+      'answer',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantDisplayState response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('process') && json['process'] != null && (json['process'] is! Map)) {
+      throw const FormatException('AssistantDisplayState field process has an invalid wire value');
+    }
+    if (json.containsKey('answer') && json['answer'] != null && (json['answer'] is! Map)) {
+      throw const FormatException('AssistantDisplayState field answer has an invalid wire value');
+    }
     return AssistantDisplayState(
       process: json['process'] is Map ? AssistantProcessDisplayState.fromJson((json['process'] as Map).cast<String, dynamic>()) : const AssistantProcessDisplayState(),
       answer: json['answer'] is Map ? AssistantAnswerDisplayState.fromJson((json['answer'] as Map).cast<String, dynamic>()) : const AssistantAnswerDisplayState(),
@@ -464,6 +719,78 @@ class EvidenceLedgerEntry {
       };
 
   factory EvidenceLedgerEntry.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'evidenceId',
+      'domainId',
+      'dimension',
+      'dimensionLabel',
+      'searchPlanId',
+      'title',
+      'destination',
+      'source',
+      'sourceHost',
+      'sourceTier',
+      'freshnessHours',
+      'authorityScore',
+      'relevanceScore',
+      'slotContributions',
+      'snippet',
+      'retrievedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('EvidenceLedgerEntry response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('evidenceId') || json['evidenceId'] == null || (json['evidenceId'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field evidenceId has an invalid wire value');
+    }
+    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field domainId has an invalid wire value');
+    }
+    if (json.containsKey('dimension') && json['dimension'] != null && (json['dimension'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field dimension has an invalid wire value');
+    }
+    if (json.containsKey('dimensionLabel') && json['dimensionLabel'] != null && (json['dimensionLabel'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field dimensionLabel has an invalid wire value');
+    }
+    if (json.containsKey('searchPlanId') && json['searchPlanId'] != null && (json['searchPlanId'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field searchPlanId has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field title has an invalid wire value');
+    }
+    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
+      throw const FormatException('EvidenceLedgerEntry field destination has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field source has an invalid wire value');
+    }
+    if (json.containsKey('sourceHost') && json['sourceHost'] != null && (json['sourceHost'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field sourceHost has an invalid wire value');
+    }
+    if (json.containsKey('sourceTier') && json['sourceTier'] != null && (json['sourceTier'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field sourceTier has an invalid wire value');
+    }
+    if (json.containsKey('freshnessHours') && json['freshnessHours'] != null && (json['freshnessHours'] is! num)) {
+      throw const FormatException('EvidenceLedgerEntry field freshnessHours has an invalid wire value');
+    }
+    if (json.containsKey('authorityScore') && json['authorityScore'] != null && (json['authorityScore'] is! num)) {
+      throw const FormatException('EvidenceLedgerEntry field authorityScore has an invalid wire value');
+    }
+    if (json.containsKey('relevanceScore') && json['relevanceScore'] != null && (json['relevanceScore'] is! num)) {
+      throw const FormatException('EvidenceLedgerEntry field relevanceScore has an invalid wire value');
+    }
+    if (json.containsKey('slotContributions') && json['slotContributions'] != null && (json['slotContributions'] is! Map)) {
+      throw const FormatException('EvidenceLedgerEntry field slotContributions has an invalid wire value');
+    }
+    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field snippet has an invalid wire value');
+    }
+    if (json.containsKey('retrievedAt') && json['retrievedAt'] != null && (json['retrievedAt'] is! String)) {
+      throw const FormatException('EvidenceLedgerEntry field retrievedAt has an invalid wire value');
+    }
     return EvidenceLedgerEntry(
       evidenceId: (json['evidenceId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
@@ -529,6 +856,34 @@ class RunArtifactsHistoricalThinkingSnapshot {
       };
 
   factory RunArtifactsHistoricalThinkingSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'continuityMode',
+      'mismatchSignal',
+      'carryForwardFacts',
+      'needsRecheckFacts',
+      'discardedAssumptions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsHistoricalThinkingSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('continuityMode') && json['continuityMode'] != null && (json['continuityMode'] is! String)) {
+      throw const FormatException('RunArtifactsHistoricalThinkingSnapshot field continuityMode has an invalid wire value');
+    }
+    if (json.containsKey('mismatchSignal') && json['mismatchSignal'] != null && (json['mismatchSignal'] is! String)) {
+      throw const FormatException('RunArtifactsHistoricalThinkingSnapshot field mismatchSignal has an invalid wire value');
+    }
+    if (json.containsKey('carryForwardFacts') && json['carryForwardFacts'] != null && (json['carryForwardFacts'] is! List || (json['carryForwardFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsHistoricalThinkingSnapshot field carryForwardFacts has an invalid wire value');
+    }
+    if (json.containsKey('needsRecheckFacts') && json['needsRecheckFacts'] != null && (json['needsRecheckFacts'] is! List || (json['needsRecheckFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsHistoricalThinkingSnapshot field needsRecheckFacts has an invalid wire value');
+    }
+    if (json.containsKey('discardedAssumptions') && json['discardedAssumptions'] != null && (json['discardedAssumptions'] is! List || (json['discardedAssumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsHistoricalThinkingSnapshot field discardedAssumptions has an invalid wire value');
+    }
     return RunArtifactsHistoricalThinkingSnapshot(
       continuityMode: (json['continuityMode'] as String?)?.trim() ?? "",
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
@@ -587,6 +942,46 @@ class DomainPolicyBundle {
       };
 
   factory DomainPolicyBundle.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'domainId',
+      'executionPolicy',
+      'slotSchema',
+      'dialoguePolicy',
+      'authorityPolicy',
+      'retrievalPolicy',
+      'answerPolicy',
+      'narrativePolicy',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('DomainPolicyBundle response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
+      throw const FormatException('DomainPolicyBundle field domainId has an invalid wire value');
+    }
+    if (json.containsKey('executionPolicy') && json['executionPolicy'] != null && (json['executionPolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field executionPolicy has an invalid wire value');
+    }
+    if (json.containsKey('slotSchema') && json['slotSchema'] != null && (json['slotSchema'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field slotSchema has an invalid wire value');
+    }
+    if (json.containsKey('dialoguePolicy') && json['dialoguePolicy'] != null && (json['dialoguePolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field dialoguePolicy has an invalid wire value');
+    }
+    if (json.containsKey('authorityPolicy') && json['authorityPolicy'] != null && (json['authorityPolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field authorityPolicy has an invalid wire value');
+    }
+    if (json.containsKey('retrievalPolicy') && json['retrievalPolicy'] != null && (json['retrievalPolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field retrievalPolicy has an invalid wire value');
+    }
+    if (json.containsKey('answerPolicy') && json['answerPolicy'] != null && (json['answerPolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field answerPolicy has an invalid wire value');
+    }
+    if (json.containsKey('narrativePolicy') && json['narrativePolicy'] != null && (json['narrativePolicy'] is! Map)) {
+      throw const FormatException('DomainPolicyBundle field narrativePolicy has an invalid wire value');
+    }
     return DomainPolicyBundle(
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       executionPolicy: (json['executionPolicy'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
@@ -644,6 +1039,46 @@ class AssistantProcessDisplayBlock {
       };
 
   factory AssistantProcessDisplayBlock.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'blockId',
+      'stepId',
+      'status',
+      'kind',
+      'title',
+      'body',
+      'items',
+      'references',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantProcessDisplayBlock response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('blockId') || json['blockId'] == null || (json['blockId'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field blockId has an invalid wire value');
+    }
+    if (json.containsKey('stepId') && json['stepId'] != null && (json['stepId'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field stepId has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field status has an invalid wire value');
+    }
+    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field kind has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field title has an invalid wire value');
+    }
+    if (json.containsKey('body') && json['body'] != null && (json['body'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayBlock field body has an invalid wire value');
+    }
+    if (json.containsKey('items') && json['items'] != null && (json['items'] is! List || (json['items'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantProcessDisplayBlock field items has an invalid wire value');
+    }
+    if (json.containsKey('references') && json['references'] != null && (json['references'] is! List || (json['references'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantProcessDisplayBlock field references has an invalid wire value');
+    }
     return AssistantProcessDisplayBlock(
       blockId: (json['blockId'] as String?)?.trim() ?? "",
       stepId: parseProcessStepIdStrict((json['stepId'] as String?)?.trim() ?? ""),
@@ -689,6 +1124,30 @@ class AssistantProcessDisplayState {
       };
 
   factory AssistantProcessDisplayState.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'activeStepId',
+      'summary',
+      'blocks',
+      'finalAnswerReady',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantProcessDisplayState response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('activeStepId') && json['activeStepId'] != null && (json['activeStepId'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayState field activeStepId has an invalid wire value');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AssistantProcessDisplayState field summary has an invalid wire value');
+    }
+    if (json.containsKey('blocks') && json['blocks'] != null && (json['blocks'] is! List || (json['blocks'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantProcessDisplayState field blocks has an invalid wire value');
+    }
+    if (json.containsKey('finalAnswerReady') && json['finalAnswerReady'] != null && (json['finalAnswerReady'] is! bool)) {
+      throw const FormatException('AssistantProcessDisplayState field finalAnswerReady has an invalid wire value');
+    }
     return AssistantProcessDisplayState(
       activeStepId: parseProcessStepIdStrict((json['activeStepId'] as String?)?.trim() ?? ""),
       summary: (json['summary'] as String?)?.trim() ?? "",
@@ -744,6 +1203,54 @@ class ProcessTimelineFrame {
       };
 
   factory ProcessTimelineFrame.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'frameId',
+      'stepId',
+      'status',
+      'order',
+      'headline',
+      'detail',
+      'references',
+      'understandingSnapshot',
+      'retrievalProcessing',
+      'answerProcessing',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('ProcessTimelineFrame response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('frameId') || json['frameId'] == null || (json['frameId'] is! String)) {
+      throw const FormatException('ProcessTimelineFrame field frameId has an invalid wire value');
+    }
+    if (json.containsKey('stepId') && json['stepId'] != null && (json['stepId'] is! String)) {
+      throw const FormatException('ProcessTimelineFrame field stepId has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('ProcessTimelineFrame field status has an invalid wire value');
+    }
+    if (json.containsKey('order') && json['order'] != null && (json['order'] is! num)) {
+      throw const FormatException('ProcessTimelineFrame field order has an invalid wire value');
+    }
+    if (json.containsKey('headline') && json['headline'] != null && (json['headline'] is! String)) {
+      throw const FormatException('ProcessTimelineFrame field headline has an invalid wire value');
+    }
+    if (json.containsKey('detail') && json['detail'] != null && (json['detail'] is! String)) {
+      throw const FormatException('ProcessTimelineFrame field detail has an invalid wire value');
+    }
+    if (json.containsKey('references') && json['references'] != null && (json['references'] is! List || (json['references'] as List).any((item) => item is! Map))) {
+      throw const FormatException('ProcessTimelineFrame field references has an invalid wire value');
+    }
+    if (json.containsKey('understandingSnapshot') && json['understandingSnapshot'] != null && (json['understandingSnapshot'] is! Map)) {
+      throw const FormatException('ProcessTimelineFrame field understandingSnapshot has an invalid wire value');
+    }
+    if (json.containsKey('retrievalProcessing') && json['retrievalProcessing'] != null && (json['retrievalProcessing'] is! Map)) {
+      throw const FormatException('ProcessTimelineFrame field retrievalProcessing has an invalid wire value');
+    }
+    if (json.containsKey('answerProcessing') && json['answerProcessing'] != null && (json['answerProcessing'] is! Map)) {
+      throw const FormatException('ProcessTimelineFrame field answerProcessing has an invalid wire value');
+    }
     return ProcessTimelineFrame(
       frameId: (json['frameId'] as String?)?.trim() ?? "",
       stepId: parseProcessStepIdStrict((json['stepId'] as String?)?.trim() ?? ""),
@@ -803,6 +1310,42 @@ class RetrievalProcessingSnapshot {
       };
 
   factory RetrievalProcessingSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'searchedDocumentCount',
+      'processedDocumentCount',
+      'acceptedDocumentCount',
+      'processingSummary',
+      'selectedKeyPoints',
+      'expansionReason',
+      'acceptedReferences',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RetrievalProcessingSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('searchedDocumentCount') && json['searchedDocumentCount'] != null && (json['searchedDocumentCount'] is! num)) {
+      throw const FormatException('RetrievalProcessingSnapshot field searchedDocumentCount has an invalid wire value');
+    }
+    if (json.containsKey('processedDocumentCount') && json['processedDocumentCount'] != null && (json['processedDocumentCount'] is! num)) {
+      throw const FormatException('RetrievalProcessingSnapshot field processedDocumentCount has an invalid wire value');
+    }
+    if (json.containsKey('acceptedDocumentCount') && json['acceptedDocumentCount'] != null && (json['acceptedDocumentCount'] is! num)) {
+      throw const FormatException('RetrievalProcessingSnapshot field acceptedDocumentCount has an invalid wire value');
+    }
+    if (json.containsKey('processingSummary') && json['processingSummary'] != null && (json['processingSummary'] is! String)) {
+      throw const FormatException('RetrievalProcessingSnapshot field processingSummary has an invalid wire value');
+    }
+    if (json.containsKey('selectedKeyPoints') && json['selectedKeyPoints'] != null && (json['selectedKeyPoints'] is! List || (json['selectedKeyPoints'] as List).any((item) => item is! String))) {
+      throw const FormatException('RetrievalProcessingSnapshot field selectedKeyPoints has an invalid wire value');
+    }
+    if (json.containsKey('expansionReason') && json['expansionReason'] != null && (json['expansionReason'] is! String)) {
+      throw const FormatException('RetrievalProcessingSnapshot field expansionReason has an invalid wire value');
+    }
+    if (json.containsKey('acceptedReferences') && json['acceptedReferences'] != null && (json['acceptedReferences'] is! List || (json['acceptedReferences'] as List).any((item) => item is! Map))) {
+      throw const FormatException('RetrievalProcessingSnapshot field acceptedReferences has an invalid wire value');
+    }
     return RetrievalProcessingSnapshot(
       searchedDocumentCount: (json['searchedDocumentCount'] as num?)?.toInt() ?? 0,
       processedDocumentCount: (json['processedDocumentCount'] as num?)?.toInt() ?? 0,
@@ -856,6 +1399,34 @@ class RetrievalProcessingReference {
       };
 
   factory RetrievalProcessingReference.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'title',
+      'destination',
+      'source',
+      'snippet',
+      'rank',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RetrievalProcessingReference response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('RetrievalProcessingReference field title has an invalid wire value');
+    }
+    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
+      throw const FormatException('RetrievalProcessingReference field destination has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('RetrievalProcessingReference field source has an invalid wire value');
+    }
+    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
+      throw const FormatException('RetrievalProcessingReference field snippet has an invalid wire value');
+    }
+    if (json.containsKey('rank') && json['rank'] != null && (json['rank'] is! num)) {
+      throw const FormatException('RetrievalProcessingReference field rank has an invalid wire value');
+    }
     return RetrievalProcessingReference(
       title: (json['title'] as String?)?.trim() ?? "",
       destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
@@ -901,6 +1472,34 @@ class SlotStateSnapshot {
       };
 
   factory SlotStateSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'domainId',
+      'slots',
+      'slotValues',
+      'missingSlots',
+      'updatedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SlotStateSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
+      throw const FormatException('SlotStateSnapshot field domainId has an invalid wire value');
+    }
+    if (json.containsKey('slots') && json['slots'] != null && (json['slots'] is! Map)) {
+      throw const FormatException('SlotStateSnapshot field slots has an invalid wire value');
+    }
+    if (json.containsKey('slotValues') && json['slotValues'] != null && (json['slotValues'] is! Map)) {
+      throw const FormatException('SlotStateSnapshot field slotValues has an invalid wire value');
+    }
+    if (json.containsKey('missingSlots') && json['missingSlots'] != null && (json['missingSlots'] is! List || (json['missingSlots'] as List).any((item) => item is! String))) {
+      throw const FormatException('SlotStateSnapshot field missingSlots has an invalid wire value');
+    }
+    if (json.containsKey('updatedAt') && json['updatedAt'] != null && (json['updatedAt'] is! String)) {
+      throw const FormatException('SlotStateSnapshot field updatedAt has an invalid wire value');
+    }
     return SlotStateSnapshot(
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       slots: (json['slots'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
@@ -976,6 +1575,47 @@ class SlotValueSnapshot {
       };
 
   factory SlotValueSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'status',
+      'value',
+      'source',
+      'confidence',
+      'updatedAt',
+      'note',
+      'candidates',
+      'evidenceIds',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('SlotValueSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('slotId') || json['slotId'] == null || (json['slotId'] is! String)) {
+      throw const FormatException('SlotValueSnapshot field slotId has an invalid wire value');
+    }
+    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
+      throw const FormatException('SlotValueSnapshot field status has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('SlotValueSnapshot field source has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('SlotValueSnapshot field confidence has an invalid wire value');
+    }
+    if (json.containsKey('updatedAt') && json['updatedAt'] != null && (json['updatedAt'] is! String)) {
+      throw const FormatException('SlotValueSnapshot field updatedAt has an invalid wire value');
+    }
+    if (json.containsKey('note') && json['note'] != null && (json['note'] is! String)) {
+      throw const FormatException('SlotValueSnapshot field note has an invalid wire value');
+    }
+    if (json.containsKey('candidates') && json['candidates'] != null && (json['candidates'] is! List || (json['candidates'] as List).any((item) => item is! String))) {
+      throw const FormatException('SlotValueSnapshot field candidates has an invalid wire value');
+    }
+    if (json.containsKey('evidenceIds') && json['evidenceIds'] != null && (json['evidenceIds'] is! List || (json['evidenceIds'] as List).any((item) => item is! String))) {
+      throw const FormatException('SlotValueSnapshot field evidenceIds has an invalid wire value');
+    }
     return SlotValueSnapshot(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       status: parseSlotValueStatusStrict((json['status'] as String?)?.trim() ?? "inferred"),
@@ -1042,6 +1682,46 @@ class RunArtifactsUnderstandingResolutionItem {
       };
 
   factory RunArtifactsUnderstandingResolutionItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'kind',
+      'title',
+      'detail',
+      'source',
+      'originalValue',
+      'resolvedValue',
+      'defaultApplied',
+      'visibleInUnderstanding',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsUnderstandingResolutionItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field kind has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field title has an invalid wire value');
+    }
+    if (json.containsKey('detail') && json['detail'] != null && (json['detail'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field detail has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field source has an invalid wire value');
+    }
+    if (json.containsKey('originalValue') && json['originalValue'] != null && (json['originalValue'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field originalValue has an invalid wire value');
+    }
+    if (json.containsKey('resolvedValue') && json['resolvedValue'] != null && (json['resolvedValue'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field resolvedValue has an invalid wire value');
+    }
+    if (json.containsKey('defaultApplied') && json['defaultApplied'] != null && (json['defaultApplied'] is! bool)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field defaultApplied has an invalid wire value');
+    }
+    if (json.containsKey('visibleInUnderstanding') && json['visibleInUnderstanding'] != null && (json['visibleInUnderstanding'] is! bool)) {
+      throw const FormatException('RunArtifactsUnderstandingResolutionItem field visibleInUnderstanding has an invalid wire value');
+    }
     return RunArtifactsUnderstandingResolutionItem(
       kind: (json['kind'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
@@ -1105,6 +1785,54 @@ class RunArtifactsUnderstandingSnapshot {
       };
 
   factory RunArtifactsUnderstandingSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'intentSummary',
+      'userFacingSummary',
+      'retrievalDesignNarrative',
+      'concernPoints',
+      'emotionSignal',
+      'resolutionItems',
+      'assumptions',
+      'mismatchSignal',
+      'carryForwardFacts',
+      'discardedAssumptions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifactsUnderstandingSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('intentSummary') && json['intentSummary'] != null && (json['intentSummary'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field intentSummary has an invalid wire value');
+    }
+    if (json.containsKey('userFacingSummary') && json['userFacingSummary'] != null && (json['userFacingSummary'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field userFacingSummary has an invalid wire value');
+    }
+    if (json.containsKey('retrievalDesignNarrative') && json['retrievalDesignNarrative'] != null && (json['retrievalDesignNarrative'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field retrievalDesignNarrative has an invalid wire value');
+    }
+    if (json.containsKey('concernPoints') && json['concernPoints'] != null && (json['concernPoints'] is! List || (json['concernPoints'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field concernPoints has an invalid wire value');
+    }
+    if (json.containsKey('emotionSignal') && json['emotionSignal'] != null && (json['emotionSignal'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field emotionSignal has an invalid wire value');
+    }
+    if (json.containsKey('resolutionItems') && json['resolutionItems'] != null && (json['resolutionItems'] is! List || (json['resolutionItems'] as List).any((item) => item is! Map))) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field resolutionItems has an invalid wire value');
+    }
+    if (json.containsKey('assumptions') && json['assumptions'] != null && (json['assumptions'] is! List || (json['assumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field assumptions has an invalid wire value');
+    }
+    if (json.containsKey('mismatchSignal') && json['mismatchSignal'] != null && (json['mismatchSignal'] is! String)) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field mismatchSignal has an invalid wire value');
+    }
+    if (json.containsKey('carryForwardFacts') && json['carryForwardFacts'] != null && (json['carryForwardFacts'] is! List || (json['carryForwardFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field carryForwardFacts has an invalid wire value');
+    }
+    if (json.containsKey('discardedAssumptions') && json['discardedAssumptions'] != null && (json['discardedAssumptions'] is! List || (json['discardedAssumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('RunArtifactsUnderstandingSnapshot field discardedAssumptions has an invalid wire value');
+    }
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
       userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
@@ -1236,6 +1964,78 @@ class RunArtifacts {
       };
 
   factory RunArtifacts.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'displayMarkdown',
+      'displayPlainText',
+      'presentationDocument',
+      'displayState',
+      'journey',
+      'processTimeline',
+      'understandingSnapshot',
+      'answerProcessing',
+      'historicalThinkingSnapshot',
+      'retrievalProcessing',
+      'evidenceLedger',
+      'answerEvidenceBindings',
+      'slotState',
+      'answerDecision',
+      'diagnostics',
+      'domainPolicyBundle',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('RunArtifacts response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('displayMarkdown') && json['displayMarkdown'] != null && (json['displayMarkdown'] is! String)) {
+      throw const FormatException('RunArtifacts field displayMarkdown has an invalid wire value');
+    }
+    if (json.containsKey('displayPlainText') && json['displayPlainText'] != null && (json['displayPlainText'] is! String)) {
+      throw const FormatException('RunArtifacts field displayPlainText has an invalid wire value');
+    }
+    if (json.containsKey('presentationDocument') && json['presentationDocument'] != null && (json['presentationDocument'] is! Map)) {
+      throw const FormatException('RunArtifacts field presentationDocument has an invalid wire value');
+    }
+    if (json.containsKey('displayState') && json['displayState'] != null && (json['displayState'] is! Map)) {
+      throw const FormatException('RunArtifacts field displayState has an invalid wire value');
+    }
+    if (json.containsKey('journey') && json['journey'] != null && (json['journey'] is! Map)) {
+      throw const FormatException('RunArtifacts field journey has an invalid wire value');
+    }
+    if (json.containsKey('processTimeline') && json['processTimeline'] != null && (json['processTimeline'] is! List || (json['processTimeline'] as List).any((item) => item is! Map))) {
+      throw const FormatException('RunArtifacts field processTimeline has an invalid wire value');
+    }
+    if (json.containsKey('understandingSnapshot') && json['understandingSnapshot'] != null && (json['understandingSnapshot'] is! Map)) {
+      throw const FormatException('RunArtifacts field understandingSnapshot has an invalid wire value');
+    }
+    if (json.containsKey('answerProcessing') && json['answerProcessing'] != null && (json['answerProcessing'] is! Map)) {
+      throw const FormatException('RunArtifacts field answerProcessing has an invalid wire value');
+    }
+    if (json.containsKey('historicalThinkingSnapshot') && json['historicalThinkingSnapshot'] != null && (json['historicalThinkingSnapshot'] is! Map)) {
+      throw const FormatException('RunArtifacts field historicalThinkingSnapshot has an invalid wire value');
+    }
+    if (json.containsKey('retrievalProcessing') && json['retrievalProcessing'] != null && (json['retrievalProcessing'] is! Map)) {
+      throw const FormatException('RunArtifacts field retrievalProcessing has an invalid wire value');
+    }
+    if (json.containsKey('evidenceLedger') && json['evidenceLedger'] != null && (json['evidenceLedger'] is! List || (json['evidenceLedger'] as List).any((item) => item is! Map))) {
+      throw const FormatException('RunArtifacts field evidenceLedger has an invalid wire value');
+    }
+    if (json.containsKey('answerEvidenceBindings') && json['answerEvidenceBindings'] != null && (json['answerEvidenceBindings'] is! List || (json['answerEvidenceBindings'] as List).any((item) => item is! Map))) {
+      throw const FormatException('RunArtifacts field answerEvidenceBindings has an invalid wire value');
+    }
+    if (json.containsKey('slotState') && json['slotState'] != null && (json['slotState'] is! Map)) {
+      throw const FormatException('RunArtifacts field slotState has an invalid wire value');
+    }
+    if (json.containsKey('answerDecision') && json['answerDecision'] != null && (json['answerDecision'] is! Map)) {
+      throw const FormatException('RunArtifacts field answerDecision has an invalid wire value');
+    }
+    if (json.containsKey('diagnostics') && json['diagnostics'] != null && (json['diagnostics'] is! Map)) {
+      throw const FormatException('RunArtifacts field diagnostics has an invalid wire value');
+    }
+    if (json.containsKey('domainPolicyBundle') && json['domainPolicyBundle'] != null && (json['domainPolicyBundle'] is! Map)) {
+      throw const FormatException('RunArtifacts field domainPolicyBundle has an invalid wire value');
+    }
     return RunArtifacts(
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",

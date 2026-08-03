@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	bindingdescriptor "quwoquan_service/services/product-ops-service/generated/product_ops/experiment"
+	experimentbinding "quwoquan_service/services/product-ops-service/generated/product_ops/experiment"
+	premiumpoolbinding "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry"
 )
 
 const productOpsAPIMessageTransportRoot = "product-ops-service-api"
@@ -17,10 +19,27 @@ func requireMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
+	binding, found := experimentbinding.ExternalProviderBindingFor(
 		environment,
 		runtimemessaging.RuntimeMessageTransportCapability,
 	)
+	premiumBinding, premiumFound := premiumpoolbinding.ExternalProviderBindingFor(
+		environment,
+		runtimemessaging.RuntimeMessageTransportCapability,
+	)
+	if premiumFound != found ||
+		premiumBinding.State != binding.State ||
+		premiumBinding.AdapterID != binding.AdapterID ||
+		premiumBinding.TimeoutMilliseconds != binding.TimeoutMilliseconds ||
+		!slices.Equal(
+			premiumBinding.RequiredRedisScenes,
+			binding.RequiredRedisScenes,
+		) {
+		return nil, fmt.Errorf(
+			"product-ops message transport bindings disagree for environment=%s",
+			environment,
+		)
+	}
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx, environment, found,
 		runtimemessaging.MessageTransportBinding{

@@ -15,8 +15,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
+	behaviorfactmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/messaging"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/persistence"
 )
 
@@ -100,17 +100,17 @@ func TestCircleBehaviorFactRealAppendReplayProjectionAndStream(t *testing.T) {
 	streamRelay := behaviorfactapp.NewOutboxRelay(
 		store,
 		store,
-		messaging.NewCircleBehaviorFactStreamPublisher(circleMessageTransport),
+		behaviorfactmessaging.NewCircleBehaviorFactStreamPublisher(circleMessageTransport),
 		"circle-behavior-fact-stream-test",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 2 {
 		t.Fatalf("behavior stream drain count=%d err=%v", count, err)
 	}
 	const group = "circle-behavior-api-test"
-	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, messaging.CircleBehaviorFactStream, group, "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, behaviorfactmessaging.CircleBehaviorFactStream, group, "0"); err != nil {
 		t.Fatal(err)
 	}
-	messages, err := redisRouter.Scene("general").XReadGroup(ctx, group, "reader", map[string]string{messaging.CircleBehaviorFactStream: ">"}, 10, 0)
+	messages, err := redisRouter.Scene("general").XReadGroup(ctx, group, "reader", map[string]string{behaviorfactmessaging.CircleBehaviorFactStream: ">"}, 10, 0)
 	if err != nil || len(messages) != 2 {
 		t.Fatalf("behavior stream messages=%d err=%v", len(messages), err)
 	}

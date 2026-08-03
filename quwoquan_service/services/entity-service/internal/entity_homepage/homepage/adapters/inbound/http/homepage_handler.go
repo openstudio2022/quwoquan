@@ -11,24 +11,54 @@ import (
 	"quwoquan_service/runtime/operation"
 	entitygenerated "quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
-	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
 )
 
 const homepagesPrefix = "/homepages/"
 
 type Handler struct {
-	service *application.HomepageService
-	reviews *reviewapp.Facade
+	service       *application.HomepageService
+	claims        claimRequestHTTPHandler
+	reviews       homepageReviewHTTPHandler
+	statusReports statusReportHTTPHandler
 }
 
 func NewHandler(service *application.HomepageService) *Handler {
 	return &Handler{service: service}
 }
 
-// WithReviewFacade 装配 HomepageReview 对象 facade（composition root 调用）。
-func (h *Handler) WithReviewFacade(facade *reviewapp.Facade) *Handler {
-	h.reviews = facade
+func (h *Handler) WithClaimRequestHandler(handler claimRequestHTTPHandler) *Handler {
+	h.claims = handler
 	return h
+}
+
+func (h *Handler) WithReviewHandler(handler homepageReviewHTTPHandler) *Handler {
+	h.reviews = handler
+	return h
+}
+
+func (h *Handler) WithStatusReportHandler(handler statusReportHTTPHandler) *Handler {
+	h.statusReports = handler
+	return h
+}
+
+type claimRequestHTTPHandler interface {
+	ListQueue(http.ResponseWriter, *http.Request)
+	Create(http.ResponseWriter, *http.Request, string)
+	Review(http.ResponseWriter, *http.Request, string, string)
+}
+
+type homepageReviewHTTPHandler interface {
+	List(http.ResponseWriter, *http.Request, string)
+	Create(http.ResponseWriter, *http.Request, string)
+	GetMine(http.ResponseWriter, *http.Request, string)
+	Update(http.ResponseWriter, *http.Request, string)
+	Delete(http.ResponseWriter, *http.Request, string)
+}
+
+type statusReportHTTPHandler interface {
+	ListQueue(http.ResponseWriter, *http.Request)
+	Create(http.ResponseWriter, *http.Request, string)
+	Review(http.ResponseWriter, *http.Request, string, string)
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -112,51 +142,19 @@ func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleClaimRequestQueue(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet || h.claims == nil {
 		writeRuntimeNotFound(w, r)
 		return
 	}
-	query := r.URL.Query()
-	status := query.Get("status")
-	if strings.TrimSpace(status) == "" {
-		status = "pending_review"
-	}
-	result, err := h.service.ListHomepageClaimRequests(
-		r.Context(),
-		query.Get("homepageId"),
-		status,
-		query.Get("cursor"),
-		parsePositiveInt(query.Get("limit"), 20),
-	)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	h.claims.ListQueue(w, r)
 }
 
 func (h *Handler) handleStatusReportQueue(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet || h.statusReports == nil {
 		writeRuntimeNotFound(w, r)
 		return
 	}
-	query := r.URL.Query()
-	status := query.Get("status")
-	if strings.TrimSpace(status) == "" {
-		status = "pending_review"
-	}
-	result, err := h.service.ListHomepageStatusReports(
-		r.Context(),
-		query.Get("homepageId"),
-		status,
-		query.Get("cursor"),
-		parsePositiveInt(query.Get("limit"), 20),
-	)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	h.statusReports.ListQueue(w, r)
 }
 
 func (h *Handler) handleSuggestCandidate(w http.ResponseWriter, r *http.Request) {
@@ -362,40 +360,17 @@ func (h *Handler) handleClaimRequests(
 	homepageID string,
 	segments []string,
 ) {
+	if h.claims == nil {
+		writeRuntimeNotFound(w, r)
+		return
+	}
 	if len(segments) == 2 && r.Method == http.MethodPost {
-		actorID, err := requiredPersonaActor(r)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		var input application.ClaimRequestInput
-		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, r, newBadRequest(err.Error()))
-			return
-		}
-		// requester 身份只来自可信 operation.Context，不接收 body 身份。
-		input.RequesterPersonaID = actorID
-		request, err := h.service.CreateHomepageClaimRequest(r.Context(), homepageID, input)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, request)
+		h.claims.Create(w, r, homepageID)
 		return
 	}
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {
-		var input application.ClaimReviewInput
-		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, r, newBadRequest(err.Error()))
-			return
-		}
 		claimRequestID := strings.TrimSuffix(segments[2], ":review")
-		request, err := h.service.ReviewHomepageClaimRequest(r.Context(), homepageID, claimRequestID, input)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, request)
+		h.claims.Review(w, r, homepageID, claimRequestID)
 		return
 	}
 	writeRuntimeNotFound(w, r)
@@ -407,43 +382,62 @@ func (h *Handler) handleStatusReports(
 	homepageID string,
 	segments []string,
 ) {
+	if h.statusReports == nil {
+		writeRuntimeNotFound(w, r)
+		return
+	}
 	if len(segments) == 2 && r.Method == http.MethodPost {
-		actorID, err := requiredPersonaActor(r)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		var input application.StatusReportInput
-		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, r, newBadRequest(err.Error()))
-			return
-		}
-		// reporter 身份只来自可信 operation.Context，不接收 body 身份。
-		input.ReporterPersonaID = actorID
-		report, err := h.service.CreateHomepageStatusReport(r.Context(), homepageID, input)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, report)
+		h.statusReports.Create(w, r, homepageID)
 		return
 	}
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {
-		var input application.StatusReportReviewInput
-		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, r, newBadRequest(err.Error()))
-			return
-		}
 		reportID := strings.TrimSuffix(segments[2], ":review")
-		report, err := h.service.ReviewHomepageStatusReport(r.Context(), homepageID, reportID, input)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, report)
+		h.statusReports.Review(w, r, homepageID, reportID)
 		return
 	}
 	writeRuntimeNotFound(w, r)
+}
+
+func (h *Handler) handleHomepageReviews(
+	w http.ResponseWriter,
+	r *http.Request,
+	homepageID string,
+	segments []string,
+) {
+	if h.reviews == nil {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	switch {
+	case len(segments) == 2 && r.Method == http.MethodGet:
+		h.reviews.List(w, r, homepageID)
+	case len(segments) == 2 && r.Method == http.MethodPost:
+		h.reviews.Create(w, r, homepageID)
+	case len(segments) == 3 && segments[2] == "mine" && r.Method == http.MethodGet:
+		h.reviews.GetMine(w, r, homepageID)
+	default:
+		writeRuntimeNotFound(w, r)
+	}
+}
+
+func (h *Handler) handleReviewByID(w http.ResponseWriter, r *http.Request) {
+	if h.reviews == nil {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	reviewID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/homepage-reviews/"), "/")
+	if reviewID == "" || strings.Contains(reviewID, "/") {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	switch r.Method {
+	case http.MethodPatch:
+		h.reviews.Update(w, r, reviewID)
+	case http.MethodDelete:
+		h.reviews.Delete(w, r, reviewID)
+	default:
+		writeRuntimeNotFound(w, r)
+	}
 }
 
 func decodeJSON(r *http.Request, target any) error {

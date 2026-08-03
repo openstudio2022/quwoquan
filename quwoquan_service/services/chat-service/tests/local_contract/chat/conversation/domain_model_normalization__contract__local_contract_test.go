@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
-	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
 
 	"gopkg.in/yaml.v3"
 )
@@ -49,7 +48,7 @@ func TestConversationPreviewTypesReferenceCanonicalMessageType(t *testing.T) {
 		filepath.Join(root, "contracts", "chat", "conversation", "fields.yaml"),
 		filepath.Join(root, "contracts", "chat", "chat_inbox_view", "fields.yaml"),
 		filepath.Join(root, "contracts", "chat", "conversation", "projections", "chat_conversation.yaml"),
-		filepath.Join(root, "contracts", "chat", "conversation", "projections", "chat_inbox.yaml"),
+		filepath.Join(root, "contracts", "chat", "chat_inbox_view", "projections", "chat_inbox.yaml"),
 	} {
 		contract := readChatContract(t, path)
 		if !strings.Contains(contract, "name: lastMessageType") ||
@@ -59,7 +58,7 @@ func TestConversationPreviewTypesReferenceCanonicalMessageType(t *testing.T) {
 	}
 }
 
-func TestMessageCardAndReceiptFactAreTypedOwnedObjects(t *testing.T) {
+func TestMessageCardIsTypedOwnedValue(t *testing.T) {
 	t.Parallel()
 
 	root := chatServiceContractRoot(t)
@@ -116,30 +115,6 @@ func TestMessageCardAndReceiptFactAreTypedOwnedObjects(t *testing.T) {
 		}
 	}
 
-	receiptObject := readChatContract(t, filepath.Join(
-		root, "contracts", "chat", "message_receipt_fact", "object.yaml",
-	))
-	for _, want := range []string{
-		"kind: append_only_fact",
-		"queries: named_reader",
-		"- append_only",
-		"messageId + userId 在全局唯一",
-	} {
-		if !strings.Contains(receiptObject, want) {
-			t.Fatalf("MessageReceiptFact object contract missing %q", want)
-		}
-	}
-
-	fact := messagemodel.MessageReceiptFact{
-		ID: "receipt-1", MessageID: "message-1", ConversationID: "chat-1", UserID: "persona-1",
-	}
-	raw, err := json.Marshal(fact)
-	if err != nil {
-		t.Fatalf("marshal MessageReceiptFact: %v", err)
-	}
-	if !strings.Contains(string(raw), `"conversationId":"chat-1"`) {
-		t.Fatalf("MessageReceiptFact wire identity drifted: %s", raw)
-	}
 }
 
 func chatServiceContractRoot(t *testing.T) string {

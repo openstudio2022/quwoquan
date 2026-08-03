@@ -27,11 +27,11 @@ String? validateUpload({
   }
 }
 
-ContentMediaType contentMediaTypeForCategory(MediaCategory category) {
+MediaType contentMediaTypeForCategory(MediaCategory category) {
   return switch (category) {
-    MediaCategory.chatVoice => ContentMediaType.audio,
-    MediaCategory.chatVideo => ContentMediaType.video,
-    MediaCategory.chatFile => ContentMediaType.file,
-    MediaCategory.chatImage => ContentMediaType.image,
+    MediaCategory.chatVoice => MediaType.audio,
+    MediaCategory.chatVideo => MediaType.video,
+    MediaCategory.chatFile => MediaType.file,
+    MediaCategory.chatImage => MediaType.image,
   };
 }

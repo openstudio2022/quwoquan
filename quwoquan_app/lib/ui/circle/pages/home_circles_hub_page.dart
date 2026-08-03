@@ -160,7 +160,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     required String categoryId,
     required String subCategoryId,
   }) {
-    return '${scope.wireValue}|$categoryId|$subCategoryId|recommended';
+    return '${scope.wireName}|$categoryId|$subCategoryId|recommended';
   }
 
   Future<void> _loadActiveFeed({bool loadMore = false}) async {
@@ -254,7 +254,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         circles: circlesById.values.toList(growable: false),
         items: itemsByPlacementId.values.toList(growable: false),
         loadedAt: DateTime.now(),
-        nextCursor: page.nextCursor,
+        nextCursor: page.cursor,
       );
       _feedPages[key] = resolved;
       if (mounted && requestGeneration == _bootstrapGeneration) {
@@ -448,11 +448,11 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     String? subCategoryId,
   }) => _circleFeedItems;
 
-  bool _supportsViewer(PostBaseDto post) {
+  bool _supportsViewer(ContentPostViewData post) {
     return post.supportsUnifiedViewer;
   }
 
-  bool _isVideoPost(PostBaseDto post) {
+  bool _isVideoPost(ContentPostViewData post) {
     return post.isVideoLike;
   }
 

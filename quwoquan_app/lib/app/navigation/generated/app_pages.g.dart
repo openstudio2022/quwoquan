@@ -107,6 +107,11 @@ abstract final class PageNames {
   static const String settingsPrivacy = 'settings_privacy';
   static const String startGroupChat = 'start_group_chat';
   static const String suggestHomepage = 'suggest_homepage';
+  static const String travelMap = 'travel_map';
+  static const String travelShare = 'travel_share';
+  static const String travelTemplates = 'travel_templates';
+  static const String travelTimeline = 'travel_timeline';
+  static const String travelTrips = 'travel_trips';
   static const String userProfile = 'user_profile';
   static const String welcome = 'welcome';
   static const String workBrowser = 'work_browser';
@@ -144,6 +149,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'homepage_picker', routeId: 'homepagePicker', pathTemplate: '/homepages/picker', collectPageAccess: true),
     AppPageDefinition(pageName: 'profile_personas', routeId: 'profilePersonas', pathTemplate: '/profile/personas', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_privacy', routeId: 'settingsPrivacy', pathTemplate: '/settings/privacy', collectPageAccess: true),
+    AppPageDefinition(pageName: 'travel_templates', routeId: 'travelTemplates', pathTemplate: '/travel/templates', collectPageAccess: true),
     AppPageDefinition(pageName: 'greeting_inbox', routeId: 'greetingInbox', pathTemplate: '/chat/greetings', collectPageAccess: true),
     AppPageDefinition(pageName: 'interest_match', routeId: 'interestMatch', pathTemplate: '/interest-match', collectPageAccess: true),
     AppPageDefinition(pageName: 'global_search_network', routeId: 'globalSearchNetworkResults', pathTemplate: '/search/network', collectPageAccess: true),
@@ -153,6 +159,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'profile_stats', routeId: 'profileStats', pathTemplate: '/profile/stats', collectPageAccess: true),
     AppPageDefinition(pageName: 'create_entry', routeId: 'createEntry', pathTemplate: '/create-entry', collectPageAccess: true),
     AppPageDefinition(pageName: 'profile_edit', routeId: 'profileEdit', pathTemplate: '/profile/edit', collectPageAccess: true),
+    AppPageDefinition(pageName: 'travel_trips', routeId: 'travelTrips', pathTemplate: '/travel/trips', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact', routeId: 'addContact', pathTemplate: '/add-contact', collectPageAccess: true),
     AppPageDefinition(pageName: 'my_qr_code', routeId: 'myQrCode', pathTemplate: '/me/qr-code', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant', routeId: 'assistant', pathTemplate: '/assistant', collectPageAccess: true),
@@ -168,6 +175,8 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'chat_transfer_ownership', routeId: 'chatTransferOwnership', pathTemplate: '/chat/{id}/transfer-ownership', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_status_report', routeId: 'homepageStatusReport', pathTemplate: '/homepages/{id}/status-report', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_introduction', routeId: 'homepageIntroduction', pathTemplate: '/homepages/{id}/introduction', collectPageAccess: true),
+    AppPageDefinition(pageName: 'travel_share', routeId: 'travelShare', pathTemplate: '/travel/share-snapshots/{id}', collectPageAccess: true),
+    AppPageDefinition(pageName: 'travel_timeline', routeId: 'travelTimeline', pathTemplate: '/travel/trips/{id}/timeline', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_member_search', routeId: 'chatMemberSearch', pathTemplate: '/chat/{id}/member-search', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_announcement', routeId: 'chatAnnouncement', pathTemplate: '/chat/{id}/announcement', collectPageAccess: true),
     AppPageDefinition(pageName: 'work_browser', routeId: 'workBrowser', pathTemplate: '/works/browser/{workId}', collectPageAccess: true),
@@ -175,6 +184,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'homepage_maintenance', routeId: 'homepageMaintenance', pathTemplate: '/homepages/{id}/manage', collectPageAccess: true),
     AppPageDefinition(pageName: 'rtc_incoming', routeId: 'rtcIncoming', pathTemplate: '/rtc/incoming/{callId}', collectPageAccess: true),
     AppPageDefinition(pageName: 'rtc_outgoing', routeId: 'rtcOutgoing', pathTemplate: '/rtc/outgoing/{callId}', collectPageAccess: true),
+    AppPageDefinition(pageName: 'travel_map', routeId: 'travelMap', pathTemplate: '/travel/trips/{id}/map', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_claim', routeId: 'homepageClaim', pathTemplate: '/homepages/{id}/claim', collectPageAccess: true),
     AppPageDefinition(pageName: 'location_place_landing', routeId: 'locationPlaceLanding', pathTemplate: '/locations/{placeId}', collectPageAccess: true),
     AppPageDefinition(pageName: 'chat_settings', routeId: 'chatSettings', pathTemplate: '/chat/{id}/settings', collectPageAccess: true),

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/commercial_transition.schema.json",
+  "title": "Research to commercial content transition receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "transitionRunId",
+    "researchReleaseId",
+    "researchManifestDigest",
+    "researchSourceDigest",
+    "commercialReleaseId",
+    "commercialManifestDigest",
+    "commercialSourceDigest",
+    "objectMigrations",
+    "environmentCleanup",
+    "unauthorizedReadbackCount",
+    "cleanupEvidenceRef",
+    "passed",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.commercial_transition"},
+    "transitionRunId": {"type": "string", "minLength": 1},
+    "researchReleaseId": {"type": "string", "minLength": 1},
+    "researchManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "researchSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commercialReleaseId": {"type": "string", "minLength": 1},
+    "commercialManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commercialSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "objectMigrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["researchAssetId", "objectRef", "action", "commercialAssetIds"],
+        "properties": {
+          "researchAssetId": {"type": "string", "minLength": 1},
+          "objectRef": {"type": "string", "minLength": 1},
+          "action": {"enum": ["verified_preserved", "replaced", "removed"]},
+          "commercialAssetIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "environmentCleanup": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["environment", "cachePurged", "mediaCopiesPurged", "signedUrlsRevoked", "unauthorizedReadbackCount", "cleanupReceiptRef", "readbackReceiptRef"],
+        "properties": {
+          "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+          "cachePurged": {"const": true},
+          "mediaCopiesPurged": {"const": true},
+          "signedUrlsRevoked": {"const": true},
+          "unauthorizedReadbackCount": {"const": 0},
+          "cleanupReceiptRef": {"type": "string", "minLength": 1},
+          "readbackReceiptRef": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "unauthorizedReadbackCount": {"const": 0},
+    "cleanupEvidenceRef": {"type": "string", "minLength": 1},
+    "passed": {"const": true},
+    "recordedAt": {"type": "string", "minLength": 1}
+  }
+}

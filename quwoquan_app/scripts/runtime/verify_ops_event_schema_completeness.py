@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证产品遥测九字段、目录、单出口与 SLS cutover 契约。"""
+"""验证产品遥测九字段、目录、单出口与四环境 Elasticsearch 契约。"""
 
 from __future__ import annotations
 
@@ -23,9 +23,10 @@ GOLDEN_METRIC_CATALOG = (
 )
 EVENT_STORAGE = PRODUCT_OPS_CONTRACT / "storage.yaml"
 APP_PAGES = METADATA / "_shared/app_pages.yaml"
-SLS_RESOURCES = (
+EVENT_ROLLUPS = PRODUCT_OPS_CONTRACT / "rollups.yaml"
+ELASTICSEARCH_ALERTS = (
     REPO_ROOT
-    / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+    / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
 )
 
 EXPECTED_COMMON_FIELDS = [
@@ -66,10 +67,12 @@ REQUIRED_EXPERIENCE_EVENTS = {
             "sampledFrames",
             "jankyFrames",
             "worstFrameMs",
+            "worstBuildFrameMs",
+            "worstRasterFrameMs",
             "jankThresholdMs",
             "result",
         },
-        "optional_extensions": set(),
+        "optional_extensions": {"surfaceId", "channelId"},
     },
     "page_first_usable": {
         "required_extensions": {"durationMs", "terminalState"},
@@ -565,32 +568,20 @@ def verify_app_single_egress(errors: list[str]) -> None:
             )
 
 
-def verify_sls_cutover(errors: list[str]) -> None:
-    expected_logstores = event_storage_logstore_retentions()
-    resource = load_yaml(SLS_RESOURCES)
-    spec = resource.get("spec", {})
-    rows = spec.get("logstores", [])
-    actual = {
-        row.get("name"): row.get("retentionDays")
-        for row in rows
-        if isinstance(row, dict)
-    }
-    if actual != expected_logstores:
-        errors.append(
-            "SLS logstore retention must match EventRecord storage contract "
-            f"{expected_logstores}, got {actual}"
-        )
-    credentials = spec.get("credentials", {})
-    if credentials.get("source") != "deploymentSecret" or not credentials.get(
-        "forbiddenInConfig"
-    ):
-        errors.append("SLS credentials must be deploymentSecret-only")
-    scheduled = spec.get("scheduledSql", {})
-    common = scheduled.get("common", {})
-    if common.get("delaySeconds") != 120 or common.get("exactlyOnce") is not True:
-        errors.append("Scheduled SQL must use 120s delay and Exactly-Once")
-    jobs = scheduled.get("jobs", [])
-    names = {row.get("rowKind") for row in jobs if isinstance(row, dict)}
+def verify_elasticsearch_single_track(errors: list[str]) -> None:
+    storage = load_yaml(EVENT_STORAGE)
+    backends = storage.get("environment_backends", {})
+    if set(backends) != {"alpha", "beta", "gamma", "prod"}:
+        errors.append("Elasticsearch bindings must cover alpha/beta/gamma/prod")
+    for environment, binding in backends.items():
+        if not isinstance(binding, dict) or binding.get("adapter") != "ext.obs.elasticsearch":
+            errors.append(f"{environment} must bind ext.obs.elasticsearch")
+    if storage.get("fallback") != "forbidden":
+        errors.append("Elasticsearch log sink fallback must be forbidden")
+
+    rollups = load_yaml(EVENT_ROLLUPS)
+    jobs = rollups.get("jobs", [])
+    names = {row.get("row_kind") for row in jobs if isinstance(row, dict)}
     required_names = {
         "event_dimensions",
         "performance",
@@ -603,36 +594,39 @@ def verify_sls_cutover(errors: list[str]) -> None:
     missing_names = required_names - names
     if missing_names:
         errors.append(
-            "Scheduled SQL must define event/product-action/performance/error/"
+            "Elasticsearch rollups must define event/product-action/performance/error/"
             "video_qoe/rtc_qoe/runtime jobs; missing "
             + ", ".join(sorted(missing_names))
         )
-    if not any("approx_set(sessionId)" in str(row.get("sql")) for row in jobs):
+    if not any(
+        any(
+            isinstance(measure, dict) and measure.get("name") == "sessionHll"
+            for measure in row.get("measures", [])
+        )
+        for row in jobs
+        if isinstance(row, dict)
+    ):
         errors.append("hourly aggregate must emit mergeable sessionHll")
     for row in jobs:
-        sql = str(row.get("sql"))
-        if row.get("rowKind") not in names or "AS rowKind" not in sql:
-            errors.append(f"Scheduled SQL rowKind discriminator missing: {row.get('name')}")
-        if "DISTINCT concat(_batchKey, ':', _batchIndex)" not in sql:
-            errors.append(f"Scheduled SQL batch dedup missing: {row.get('name')}")
-        if "approx_percentile(" in sql:
-            errors.append(
-                f"Scheduled SQL must use mergeable fixed histograms, not percentiles: {row.get('name')}"
-            )
-        for field in ("freshness", "generatedThrough", "lagSeconds"):
-            if field not in sql:
-                errors.append(f"Scheduled SQL waterline field missing ({field}): {row.get('name')}")
-    if any("AS __time__" not in str(row.get("sql")) for row in jobs):
-        errors.append("Scheduled SQL destination __time__ must be businessHour")
-    raw = next(
-        (row for row in rows if row.get("name") == "app-product-telemetry-raw"),
-        {},
-    )
-    indexes = raw.get("indexes", {}).get("fields", [])
+        if not isinstance(row, dict) or not row.get("row_kind"):
+            errors.append("Elasticsearch rollup row_kind discriminator missing")
+    common = rollups.get("common", {})
+    row_identity = common.get("row_identity", {})
+    if row_identity.get("fields") != ["_batchKey", "_batchIndex"]:
+        errors.append("Elasticsearch rollups must deduplicate canonical batch rows")
+    output = common.get("output", {})
+    for field in ("freshness_field", "generated_through_field", "lag_seconds_field"):
+        if not output.get(field):
+            errors.append(f"Elasticsearch rollup waterline field missing: {field}")
+    raw = storage.get("logstores", {}).get("raw", {})
+    indexes = raw.get("indexed_fields", [])
     if "_batchKey" not in indexes:
         errors.append("_batchKey exact index is required for timeout confirmation")
-    if "callStack" not in raw.get("indexes", {}).get("forbidden", []):
+    if "callStack" not in raw.get("non_indexed_fields", []):
         errors.append("callStack must remain unindexed")
+    alert_policy = load_yaml(ELASTICSEARCH_ALERTS).get("spec", {})
+    if alert_policy.get("adapter") != "ext.obs.elasticsearch":
+        errors.append("product telemetry alert policy must use Elasticsearch")
 
 
 def main() -> int:
@@ -643,7 +637,7 @@ def main() -> int:
         verify_experience_collection_wiring(errors)
         verify_pages(errors)
         verify_app_single_egress(errors)
-        verify_sls_cutover(errors)
+        verify_elasticsearch_single_track(errors)
     except (OSError, ValueError, yaml.YAMLError) as error:
         errors.append(str(error))
     if errors:
@@ -656,8 +650,8 @@ def main() -> int:
     print("  - ANR/first-usable/error outcome and golden metric coverage")
     print("  - encrypted actor outbox and no AppLog auto-upload")
     print(
-        "  - SLS retention matches EventRecord storage, HLL late merge and "
-        "Exactly-Once jobs"
+        "  - four-environment Elasticsearch storage, HLL late merge and "
+        "canonical row deduplication"
     )
     return 0
 

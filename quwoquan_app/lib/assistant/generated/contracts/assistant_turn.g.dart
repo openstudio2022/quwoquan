@@ -7,7 +7,6 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
@@ -15,7 +14,7 @@ import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.d
 import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_presentation_document.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_runtime.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantTurnAnswerProcessing {
   const AssistantTurnAnswerProcessing({
@@ -38,6 +37,30 @@ class AssistantTurnAnswerProcessing {
       };
 
   factory AssistantTurnAnswerProcessing.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'readinessSummary',
+      'keyFacts',
+      'missingDimensions',
+      'retrieveMoreReason',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnAnswerProcessing response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('readinessSummary') && json['readinessSummary'] != null && (json['readinessSummary'] is! String)) {
+      throw const FormatException('AssistantTurnAnswerProcessing field readinessSummary has an invalid wire value');
+    }
+    if (json.containsKey('keyFacts') && json['keyFacts'] != null && (json['keyFacts'] is! List || (json['keyFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnAnswerProcessing field keyFacts has an invalid wire value');
+    }
+    if (json.containsKey('missingDimensions') && json['missingDimensions'] != null && (json['missingDimensions'] is! List || (json['missingDimensions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnAnswerProcessing field missingDimensions has an invalid wire value');
+    }
+    if (json.containsKey('retrieveMoreReason') && json['retrieveMoreReason'] != null && (json['retrieveMoreReason'] is! String)) {
+      throw const FormatException('AssistantTurnAnswerProcessing field retrieveMoreReason has an invalid wire value');
+    }
     return AssistantTurnAnswerProcessing(
       readinessSummary: (json['readinessSummary'] as String?)?.trim() ?? "",
       keyFacts: _assistantStringList(json['keyFacts']),
@@ -82,6 +105,30 @@ class AssistantTurnAskUser {
       };
 
   factory AssistantTurnAskUser.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'prompt',
+      'required',
+      'suggestions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnAskUser response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('slotId') && json['slotId'] != null && (json['slotId'] is! String)) {
+      throw const FormatException('AssistantTurnAskUser field slotId has an invalid wire value');
+    }
+    if (json.containsKey('prompt') && json['prompt'] != null && (json['prompt'] is! String)) {
+      throw const FormatException('AssistantTurnAskUser field prompt has an invalid wire value');
+    }
+    if (json.containsKey('required') && json['required'] != null && (json['required'] is! bool)) {
+      throw const FormatException('AssistantTurnAskUser field required has an invalid wire value');
+    }
+    if (json.containsKey('suggestions') && json['suggestions'] != null && (json['suggestions'] is! List || (json['suggestions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnAskUser field suggestions has an invalid wire value');
+    }
     return AssistantTurnAskUser(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       prompt: (json['prompt'] as String?)?.trim() ?? "",
@@ -126,6 +173,30 @@ class AssistantTurnDecisionPayload {
       };
 
   factory AssistantTurnDecisionPayload.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'nextAction',
+      'confidence',
+      'reasoning',
+      'problemClass',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnDecisionPayload response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('nextAction') || json['nextAction'] == null || (json['nextAction'] is! String)) {
+      throw const FormatException('AssistantTurnDecisionPayload field nextAction has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('AssistantTurnDecisionPayload field confidence has an invalid wire value');
+    }
+    if (json.containsKey('reasoning') && json['reasoning'] != null && (json['reasoning'] is! String)) {
+      throw const FormatException('AssistantTurnDecisionPayload field reasoning has an invalid wire value');
+    }
+    if (json.containsKey('problemClass') && json['problemClass'] != null && (json['problemClass'] is! String)) {
+      throw const FormatException('AssistantTurnDecisionPayload field problemClass has an invalid wire value');
+    }
     return AssistantTurnDecisionPayload(
       nextAction: parseAssistantNextActionStrict((json['nextAction'] as String?)?.trim() ?? ''),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
@@ -163,6 +234,30 @@ class AssistantTurnDiagnostics {
       };
 
   factory AssistantTurnDiagnostics.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'emergedTags',
+      'failedChecks',
+      'parseStatus',
+      'notes',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnDiagnostics response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('emergedTags') && json['emergedTags'] != null && (json['emergedTags'] is! List || (json['emergedTags'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnDiagnostics field emergedTags has an invalid wire value');
+    }
+    if (json.containsKey('failedChecks') && json['failedChecks'] != null && (json['failedChecks'] is! List || (json['failedChecks'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnDiagnostics field failedChecks has an invalid wire value');
+    }
+    if (json.containsKey('parseStatus') && json['parseStatus'] != null && (json['parseStatus'] is! String)) {
+      throw const FormatException('AssistantTurnDiagnostics field parseStatus has an invalid wire value');
+    }
+    if (json.containsKey('notes') && json['notes'] != null && (json['notes'] is! List || (json['notes'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnDiagnostics field notes has an invalid wire value');
+    }
     return AssistantTurnDiagnostics(
       emergedTags: _assistantMapList(json['emergedTags']),
       failedChecks: _assistantStringList(json['failedChecks']),
@@ -223,6 +318,42 @@ class AssistantTurnEvidenceItem {
       };
 
   factory AssistantTurnEvidenceItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'text',
+      'claim',
+      'destination',
+      'title',
+      'source',
+      'snippet',
+      'evidenceId',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnEvidenceItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('text') && json['text'] != null && (json['text'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field text has an invalid wire value');
+    }
+    if (json.containsKey('claim') && json['claim'] != null && (json['claim'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field claim has an invalid wire value');
+    }
+    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
+      throw const FormatException('AssistantTurnEvidenceItem field destination has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field title has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field source has an invalid wire value');
+    }
+    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field snippet has an invalid wire value');
+    }
+    if (json.containsKey('evidenceId') && json['evidenceId'] != null && (json['evidenceId'] is! String)) {
+      throw const FormatException('AssistantTurnEvidenceItem field evidenceId has an invalid wire value');
+    }
     return AssistantTurnEvidenceItem(
       text: (json['text'] as String?)?.trim() ?? "",
       claim: (json['claim'] as String?)?.trim() ?? "",
@@ -264,6 +395,26 @@ class AssistantTurnFillGuidanceItem {
       };
 
   factory AssistantTurnFillGuidanceItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'slotId',
+      'reason',
+      'guidance',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnFillGuidanceItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('slotId') && json['slotId'] != null && (json['slotId'] is! String)) {
+      throw const FormatException('AssistantTurnFillGuidanceItem field slotId has an invalid wire value');
+    }
+    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
+      throw const FormatException('AssistantTurnFillGuidanceItem field reason has an invalid wire value');
+    }
+    if (json.containsKey('guidance') && json['guidance'] != null && (json['guidance'] is! String)) {
+      throw const FormatException('AssistantTurnFillGuidanceItem field guidance has an invalid wire value');
+    }
     return AssistantTurnFillGuidanceItem(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       reason: (json['reason'] as String?)?.trim() ?? "",
@@ -302,6 +453,34 @@ class AssistantTurnHistoricalThinkingSnapshot {
       };
 
   factory AssistantTurnHistoricalThinkingSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'continuityMode',
+      'mismatchSignal',
+      'carryForwardFacts',
+      'needsRecheckFacts',
+      'discardedAssumptions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnHistoricalThinkingSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('continuityMode') && json['continuityMode'] != null && (json['continuityMode'] is! String)) {
+      throw const FormatException('AssistantTurnHistoricalThinkingSnapshot field continuityMode has an invalid wire value');
+    }
+    if (json.containsKey('mismatchSignal') && json['mismatchSignal'] != null && (json['mismatchSignal'] is! String)) {
+      throw const FormatException('AssistantTurnHistoricalThinkingSnapshot field mismatchSignal has an invalid wire value');
+    }
+    if (json.containsKey('carryForwardFacts') && json['carryForwardFacts'] != null && (json['carryForwardFacts'] is! List || (json['carryForwardFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnHistoricalThinkingSnapshot field carryForwardFacts has an invalid wire value');
+    }
+    if (json.containsKey('needsRecheckFacts') && json['needsRecheckFacts'] != null && (json['needsRecheckFacts'] is! List || (json['needsRecheckFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnHistoricalThinkingSnapshot field needsRecheckFacts has an invalid wire value');
+    }
+    if (json.containsKey('discardedAssumptions') && json['discardedAssumptions'] != null && (json['discardedAssumptions'] is! List || (json['discardedAssumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnHistoricalThinkingSnapshot field discardedAssumptions has an invalid wire value');
+    }
     return AssistantTurnHistoricalThinkingSnapshot(
       continuityMode: (json['continuityMode'] as String?)?.trim() ?? "",
       mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
@@ -342,6 +521,22 @@ class AssistantTurnModelSelfScore {
       };
 
   factory AssistantTurnModelSelfScore.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'score',
+      'reason',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnModelSelfScore response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('score') && json['score'] != null && (json['score'] is! num)) {
+      throw const FormatException('AssistantTurnModelSelfScore field score has an invalid wire value');
+    }
+    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
+      throw const FormatException('AssistantTurnModelSelfScore field reason has an invalid wire value');
+    }
     return AssistantTurnModelSelfScore(
       score: (json['score'] as num?)?.toDouble() ?? 0,
       reason: (json['reason'] as String?)?.trim() ?? "",
@@ -375,6 +570,30 @@ class AssistantTurnReasoningBasisItem {
       };
 
   factory AssistantTurnReasoningBasisItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'text',
+      'claim',
+      'evidenceId',
+      'confidence',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnReasoningBasisItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('text') && json['text'] != null && (json['text'] is! String)) {
+      throw const FormatException('AssistantTurnReasoningBasisItem field text has an invalid wire value');
+    }
+    if (json.containsKey('claim') && json['claim'] != null && (json['claim'] is! String)) {
+      throw const FormatException('AssistantTurnReasoningBasisItem field claim has an invalid wire value');
+    }
+    if (json.containsKey('evidenceId') && json['evidenceId'] != null && (json['evidenceId'] is! String)) {
+      throw const FormatException('AssistantTurnReasoningBasisItem field evidenceId has an invalid wire value');
+    }
+    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
+      throw const FormatException('AssistantTurnReasoningBasisItem field confidence has an invalid wire value');
+    }
     return AssistantTurnReasoningBasisItem(
       text: (json['text'] as String?)?.trim() ?? "",
       claim: (json['claim'] as String?)?.trim() ?? "",
@@ -412,6 +631,30 @@ class AssistantTurnResult {
       };
 
   factory AssistantTurnResult.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'text',
+      'summary',
+      'interpretation',
+      'actionHints',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnResult response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('text') && json['text'] != null && (json['text'] is! String)) {
+      throw const FormatException('AssistantTurnResult field text has an invalid wire value');
+    }
+    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
+      throw const FormatException('AssistantTurnResult field summary has an invalid wire value');
+    }
+    if (json.containsKey('interpretation') && json['interpretation'] != null && (json['interpretation'] is! String)) {
+      throw const FormatException('AssistantTurnResult field interpretation has an invalid wire value');
+    }
+    if (json.containsKey('actionHints') && json['actionHints'] != null && (json['actionHints'] is! List || (json['actionHints'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnResult field actionHints has an invalid wire value');
+    }
     return AssistantTurnResult(
       text: (json['text'] as String?)?.trim() ?? "",
       summary: (json['summary'] as String?)?.trim() ?? "",
@@ -456,6 +699,30 @@ class AssistantTurnSelfCheck {
       };
 
   factory AssistantTurnSelfCheck.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'goalSatisfied',
+      'constraintSatisfied',
+      'safetyBoundarySatisfied',
+      'failedItems',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnSelfCheck response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('goalSatisfied') && json['goalSatisfied'] != null && (json['goalSatisfied'] is! bool)) {
+      throw const FormatException('AssistantTurnSelfCheck field goalSatisfied has an invalid wire value');
+    }
+    if (json.containsKey('constraintSatisfied') && json['constraintSatisfied'] != null && (json['constraintSatisfied'] is! bool)) {
+      throw const FormatException('AssistantTurnSelfCheck field constraintSatisfied has an invalid wire value');
+    }
+    if (json.containsKey('safetyBoundarySatisfied') && json['safetyBoundarySatisfied'] != null && (json['safetyBoundarySatisfied'] is! bool)) {
+      throw const FormatException('AssistantTurnSelfCheck field safetyBoundarySatisfied has an invalid wire value');
+    }
+    if (json.containsKey('failedItems') && json['failedItems'] != null && (json['failedItems'] is! List || (json['failedItems'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnSelfCheck field failedItems has an invalid wire value');
+    }
     return AssistantTurnSelfCheck(
       goalSatisfied: json['goalSatisfied'] == true,
       constraintSatisfied: json['constraintSatisfied'] == true,
@@ -494,6 +761,22 @@ class AssistantTurnToolCall {
       };
 
   factory AssistantTurnToolCall.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'toolName',
+      'arguments',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnToolCall response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('toolName') || json['toolName'] == null || (json['toolName'] is! String)) {
+      throw const FormatException('AssistantTurnToolCall field toolName has an invalid wire value');
+    }
+    if (!json.containsKey('arguments') || json['arguments'] == null || (json['arguments'] is! Map)) {
+      throw const FormatException('AssistantTurnToolCall field arguments has an invalid wire value');
+    }
     return AssistantTurnToolCall(
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       arguments: (json['arguments'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
@@ -539,6 +822,46 @@ class AssistantTurnUnderstandingResolutionItem {
       };
 
   factory AssistantTurnUnderstandingResolutionItem.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'kind',
+      'title',
+      'detail',
+      'source',
+      'originalValue',
+      'resolvedValue',
+      'defaultApplied',
+      'visibleInUnderstanding',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnUnderstandingResolutionItem response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field kind has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field title has an invalid wire value');
+    }
+    if (json.containsKey('detail') && json['detail'] != null && (json['detail'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field detail has an invalid wire value');
+    }
+    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field source has an invalid wire value');
+    }
+    if (json.containsKey('originalValue') && json['originalValue'] != null && (json['originalValue'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field originalValue has an invalid wire value');
+    }
+    if (json.containsKey('resolvedValue') && json['resolvedValue'] != null && (json['resolvedValue'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field resolvedValue has an invalid wire value');
+    }
+    if (json.containsKey('defaultApplied') && json['defaultApplied'] != null && (json['defaultApplied'] is! bool)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field defaultApplied has an invalid wire value');
+    }
+    if (json.containsKey('visibleInUnderstanding') && json['visibleInUnderstanding'] != null && (json['visibleInUnderstanding'] is! bool)) {
+      throw const FormatException('AssistantTurnUnderstandingResolutionItem field visibleInUnderstanding has an invalid wire value');
+    }
     return AssistantTurnUnderstandingResolutionItem(
       kind: (json['kind'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
@@ -602,6 +925,54 @@ class AssistantTurnUnderstandingSnapshot {
       };
 
   factory AssistantTurnUnderstandingSnapshot.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'intentSummary',
+      'userFacingSummary',
+      'retrievalDesignNarrative',
+      'concernPoints',
+      'emotionSignal',
+      'resolutionItems',
+      'assumptions',
+      'mismatchSignal',
+      'carryForwardFacts',
+      'discardedAssumptions',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnUnderstandingSnapshot response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('intentSummary') && json['intentSummary'] != null && (json['intentSummary'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field intentSummary has an invalid wire value');
+    }
+    if (json.containsKey('userFacingSummary') && json['userFacingSummary'] != null && (json['userFacingSummary'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field userFacingSummary has an invalid wire value');
+    }
+    if (json.containsKey('retrievalDesignNarrative') && json['retrievalDesignNarrative'] != null && (json['retrievalDesignNarrative'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field retrievalDesignNarrative has an invalid wire value');
+    }
+    if (json.containsKey('concernPoints') && json['concernPoints'] != null && (json['concernPoints'] is! List || (json['concernPoints'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field concernPoints has an invalid wire value');
+    }
+    if (json.containsKey('emotionSignal') && json['emotionSignal'] != null && (json['emotionSignal'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field emotionSignal has an invalid wire value');
+    }
+    if (json.containsKey('resolutionItems') && json['resolutionItems'] != null && (json['resolutionItems'] is! List || (json['resolutionItems'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field resolutionItems has an invalid wire value');
+    }
+    if (json.containsKey('assumptions') && json['assumptions'] != null && (json['assumptions'] is! List || (json['assumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field assumptions has an invalid wire value');
+    }
+    if (json.containsKey('mismatchSignal') && json['mismatchSignal'] != null && (json['mismatchSignal'] is! String)) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field mismatchSignal has an invalid wire value');
+    }
+    if (json.containsKey('carryForwardFacts') && json['carryForwardFacts'] != null && (json['carryForwardFacts'] is! List || (json['carryForwardFacts'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field carryForwardFacts has an invalid wire value');
+    }
+    if (json.containsKey('discardedAssumptions') && json['discardedAssumptions'] != null && (json['discardedAssumptions'] is! List || (json['discardedAssumptions'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnUnderstandingSnapshot field discardedAssumptions has an invalid wire value');
+    }
     return AssistantTurnUnderstandingSnapshot(
       intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
       userFacingSummary: (json['userFacingSummary'] as String?)?.trim() ?? "",
@@ -757,6 +1128,162 @@ class AssistantTurnOutput {
       };
 
   factory AssistantTurnOutput.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'contractId',
+      'decision',
+      'messageKind',
+      'userMarkdown',
+      'result',
+      'runtime',
+      'presentation',
+      'displayState',
+      'evidence',
+      'reasoningBasis',
+      'selfCheck',
+      'diagnostics',
+      'modelSelfScore',
+      'askUser',
+      'toolCalls',
+      'slotState',
+      'subagentPlan',
+      'understandingResult',
+      'taskGraph',
+      'orchestratorState',
+      'turnSynthesisState',
+      'skillRuns',
+      'aggregationState',
+      'journey',
+      'missingContextSlots',
+      'fillGuidance',
+      'followupPrompt',
+      'phaseId',
+      'actionCode',
+      'reasonCode',
+      'reasonShort',
+      'understandingSnapshot',
+      'retrievalProcessing',
+      'answerProcessing',
+      'historicalThinkingSnapshot',
+      'sessionPreferenceFacts',
+      'longTermPreferenceFacts',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantTurnOutput response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('contractId') || json['contractId'] == null || (json['contractId'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field contractId has an invalid wire value');
+    }
+    if (!json.containsKey('decision') || json['decision'] == null || (json['decision'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field decision has an invalid wire value');
+    }
+    if (!json.containsKey('messageKind') || json['messageKind'] == null || (json['messageKind'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field messageKind has an invalid wire value');
+    }
+    if (json.containsKey('userMarkdown') && json['userMarkdown'] != null && (json['userMarkdown'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field userMarkdown has an invalid wire value');
+    }
+    if (!json.containsKey('result') || json['result'] == null || (json['result'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field result has an invalid wire value');
+    }
+    if (json.containsKey('runtime') && json['runtime'] != null && (json['runtime'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field runtime has an invalid wire value');
+    }
+    if (json.containsKey('presentation') && json['presentation'] != null && (json['presentation'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field presentation has an invalid wire value');
+    }
+    if (json.containsKey('displayState') && json['displayState'] != null && (json['displayState'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field displayState has an invalid wire value');
+    }
+    if (json.containsKey('evidence') && json['evidence'] != null && (json['evidence'] is! List || (json['evidence'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field evidence has an invalid wire value');
+    }
+    if (json.containsKey('reasoningBasis') && json['reasoningBasis'] != null && (json['reasoningBasis'] is! List || (json['reasoningBasis'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field reasoningBasis has an invalid wire value');
+    }
+    if (json.containsKey('selfCheck') && json['selfCheck'] != null && (json['selfCheck'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field selfCheck has an invalid wire value');
+    }
+    if (json.containsKey('diagnostics') && json['diagnostics'] != null && (json['diagnostics'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field diagnostics has an invalid wire value');
+    }
+    if (json.containsKey('modelSelfScore') && json['modelSelfScore'] != null && (json['modelSelfScore'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field modelSelfScore has an invalid wire value');
+    }
+    if (json.containsKey('askUser') && json['askUser'] != null && (json['askUser'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field askUser has an invalid wire value');
+    }
+    if (json.containsKey('toolCalls') && json['toolCalls'] != null && (json['toolCalls'] is! List || (json['toolCalls'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field toolCalls has an invalid wire value');
+    }
+    if (json.containsKey('slotState') && json['slotState'] != null && (json['slotState'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field slotState has an invalid wire value');
+    }
+    if (json.containsKey('subagentPlan') && json['subagentPlan'] != null && (json['subagentPlan'] is! List || (json['subagentPlan'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field subagentPlan has an invalid wire value');
+    }
+    if (json.containsKey('understandingResult') && json['understandingResult'] != null && (json['understandingResult'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field understandingResult has an invalid wire value');
+    }
+    if (json.containsKey('taskGraph') && json['taskGraph'] != null && (json['taskGraph'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field taskGraph has an invalid wire value');
+    }
+    if (json.containsKey('orchestratorState') && json['orchestratorState'] != null && (json['orchestratorState'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field orchestratorState has an invalid wire value');
+    }
+    if (json.containsKey('turnSynthesisState') && json['turnSynthesisState'] != null && (json['turnSynthesisState'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field turnSynthesisState has an invalid wire value');
+    }
+    if (json.containsKey('skillRuns') && json['skillRuns'] != null && (json['skillRuns'] is! List || (json['skillRuns'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field skillRuns has an invalid wire value');
+    }
+    if (json.containsKey('aggregationState') && json['aggregationState'] != null && (json['aggregationState'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field aggregationState has an invalid wire value');
+    }
+    if (json.containsKey('journey') && json['journey'] != null && (json['journey'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field journey has an invalid wire value');
+    }
+    if (json.containsKey('missingContextSlots') && json['missingContextSlots'] != null && (json['missingContextSlots'] is! List || (json['missingContextSlots'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantTurnOutput field missingContextSlots has an invalid wire value');
+    }
+    if (json.containsKey('fillGuidance') && json['fillGuidance'] != null && (json['fillGuidance'] is! List || (json['fillGuidance'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field fillGuidance has an invalid wire value');
+    }
+    if (json.containsKey('followupPrompt') && json['followupPrompt'] != null && (json['followupPrompt'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field followupPrompt has an invalid wire value');
+    }
+    if (json.containsKey('phaseId') && json['phaseId'] != null && (json['phaseId'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field phaseId has an invalid wire value');
+    }
+    if (json.containsKey('actionCode') && json['actionCode'] != null && (json['actionCode'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field actionCode has an invalid wire value');
+    }
+    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field reasonCode has an invalid wire value');
+    }
+    if (json.containsKey('reasonShort') && json['reasonShort'] != null && (json['reasonShort'] is! String)) {
+      throw const FormatException('AssistantTurnOutput field reasonShort has an invalid wire value');
+    }
+    if (json.containsKey('understandingSnapshot') && json['understandingSnapshot'] != null && (json['understandingSnapshot'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field understandingSnapshot has an invalid wire value');
+    }
+    if (json.containsKey('retrievalProcessing') && json['retrievalProcessing'] != null && (json['retrievalProcessing'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field retrievalProcessing has an invalid wire value');
+    }
+    if (json.containsKey('answerProcessing') && json['answerProcessing'] != null && (json['answerProcessing'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field answerProcessing has an invalid wire value');
+    }
+    if (json.containsKey('historicalThinkingSnapshot') && json['historicalThinkingSnapshot'] != null && (json['historicalThinkingSnapshot'] is! Map)) {
+      throw const FormatException('AssistantTurnOutput field historicalThinkingSnapshot has an invalid wire value');
+    }
+    if (json.containsKey('sessionPreferenceFacts') && json['sessionPreferenceFacts'] != null && (json['sessionPreferenceFacts'] is! List || (json['sessionPreferenceFacts'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field sessionPreferenceFacts has an invalid wire value');
+    }
+    if (json.containsKey('longTermPreferenceFacts') && json['longTermPreferenceFacts'] != null && (json['longTermPreferenceFacts'] is! List || (json['longTermPreferenceFacts'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantTurnOutput field longTermPreferenceFacts has an invalid wire value');
+    }
     return AssistantTurnOutput(
       contractId: (json['contractId'] as String?)?.trim() ?? "",
       decision: json['decision'] is Map ? AssistantTurnDecisionPayload.fromJson((json['decision'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field decision is missing')),

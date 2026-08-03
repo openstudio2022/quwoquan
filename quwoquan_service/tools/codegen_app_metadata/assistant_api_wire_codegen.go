@@ -2,35 +2,41 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 )
 
-// generateAssistantCloudApiWireDart emits strongly-typed AssistantRepository wire views from
-// every assistant aggregate and projection consumed by the App.
-func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
-	path := filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "fields.yaml")
-	ff, err := readFields(path)
+func loadAssistantCloudAPISource(
+	metadataDir string,
+) (*fieldsFile, *serviceFile, *assistantEnumCatalog, error) {
+	ff := &fieldsFile{Entities: map[string]entityDef{}}
+	fieldPaths, err := assistantObjectDocumentPaths("fields.yaml")
 	if err != nil {
-		return err
+		return nil, nil, nil, fmt.Errorf("discover Assistant fields: %w", err)
 	}
-	sharedFields, err := readFields(filepath.Join(
+	fieldPaths = append(fieldPaths, filepath.Join(
 		metadataDir,
 		"assistant",
 		"_shared",
 		"types.yaml",
 	))
-	if err != nil {
-		return err
-	}
-	for name, entity := range sharedFields.Entities {
-		if _, exists := ff.Entities[name]; exists {
-			return fmt.Errorf("assistant wire entity %q declared more than once", name)
+	sort.Strings(fieldPaths)
+	for _, path := range fieldPaths {
+		additional, readErr := readFields(path)
+		if readErr != nil {
+			return nil, nil, nil, readErr
 		}
-		ff.Entities[name] = entity
+		for name, entity := range additional.Entities {
+			if _, exists := ff.Entities[name]; exists {
+				return nil, nil, nil, fmt.Errorf(
+					"assistant wire entity %q declared more than once",
+					name,
+				)
+			}
+			ff.Entities[name] = entity
+		}
 	}
 	enumCatalog, err := readAssistantEnumCatalog(filepath.Join(
 		metadataDir,
@@ -39,165 +45,83 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 		"enums.yaml",
 	))
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
-	svc, err := readService(filepath.Join(metadataDir, "assistant", "assistant", "assistant_run", "operations.yaml"))
+	operationPaths, err := assistantObjectDocumentPaths("operations.yaml")
 	if err != nil {
-		return err
+		return nil, nil, nil, fmt.Errorf("discover Assistant operations: %w", err)
 	}
-	for _, relativePath := range []string{
-		"assistant/assistant/assistant_learning_fact/fields.yaml",
-		"assistant/assistant/assistant_preference/fields.yaml",
-		"assistant/assistant/page_context/fields.yaml",
-		"assistant/assistant/assistant_entry_view/fields.yaml",
-		"assistant/assistant/assistant_task_view/fields.yaml",
-	} {
-		additional, readErr := readFields(filepath.Join(metadataDir, relativePath))
+	sort.Strings(operationPaths)
+	svc := &serviceFile{}
+	for _, path := range operationPaths {
+		additional, readErr := readService(path)
 		if readErr != nil {
-			return readErr
-		}
-		for name, entity := range additional.Entities {
-			if _, exists := ff.Entities[name]; exists {
-				return fmt.Errorf("assistant wire entity %q declared more than once", name)
-			}
-			ff.Entities[name] = entity
-		}
-	}
-	sessionFields, err := readFields(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_session",
-		"fields.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	const createSessionRequest = "AssistantCreateSessionRequest"
-	requestEntity, exists := sessionFields.Entities[createSessionRequest]
-	if !exists {
-		return fmt.Errorf(
-			"assistant session metadata is missing %s",
-			createSessionRequest,
-		)
-	}
-	if _, exists := ff.Entities[createSessionRequest]; exists {
-		return fmt.Errorf(
-			"assistant wire entity %q declared more than once",
-			createSessionRequest,
-		)
-	}
-	ff.Entities[createSessionRequest] = requestEntity
-	turnViewFields, err := readFields(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_turn_view",
-		"fields.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	for name, entity := range turnViewFields.Entities {
-		if _, exists := ff.Entities[name]; exists {
-			return fmt.Errorf("assistant wire entity %q declared more than once", name)
-		}
-		ff.Entities[name] = entity
-	}
-	preferenceService, err := readService(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_preference",
-		"operations.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	svc.APIRoutes = append(svc.APIRoutes, preferenceService.APIRoutes...)
-	learningService, err := readService(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_learning_fact",
-		"operations.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	svc.APIRoutes = append(svc.APIRoutes, learningService.APIRoutes...)
-	sessionService, err := readService(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_session",
-		"operations.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	foundCreateSession := false
-	for _, route := range sessionService.APIRoutes {
-		if route.Operation != "CreateAssistantSession" {
-			continue
-		}
-		svc.APIRoutes = append(svc.APIRoutes, route)
-		foundCreateSession = true
-		break
-	}
-	if !foundCreateSession {
-		return fmt.Errorf(
-			"assistant session metadata is missing CreateAssistantSession route",
-		)
-	}
-	turnViewService, err := readService(filepath.Join(
-		metadataDir,
-		"assistant",
-		"assistant",
-		"assistant_turn_view",
-		"operations.yaml",
-	))
-	if err != nil {
-		return err
-	}
-	svc.APIRoutes = append(svc.APIRoutes, turnViewService.APIRoutes...)
-	for _, relativePath := range []string{
-		"assistant/assistant/page_context/operations.yaml",
-		"assistant/assistant/assistant_entry_view/operations.yaml",
-		"assistant/assistant/assistant_task_view/operations.yaml",
-	} {
-		additional, readErr := readService(filepath.Join(metadataDir, relativePath))
-		if readErr != nil {
-			return readErr
+			return nil, nil, nil, readErr
 		}
 		svc.APIRoutes = append(svc.APIRoutes, additional.APIRoutes...)
 	}
-	names := collectAssistantWireEntities(ff, svc)
-	out := renderAssistantCloudApiWireDart(ff, names, enumCatalog)
-	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "assistant", "assistant_cloud_api_wire.g.dart")
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-		return err
+	return ff, svc, enumCatalog, nil
+}
+
+func assistantObjectDocumentPaths(fileName string) ([]string, error) {
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" || strings.ContainsAny(fileName, `/\\`) {
+		return nil, fmt.Errorf("invalid Assistant object document name %q", fileName)
 	}
-	writeFile(outPath, out)
-	return nil
+	paths := metadataDocumentPaths("assistant/assistant/", "/"+fileName)
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		relative, err := metadataDocumentPath(path)
+		if err != nil {
+			return nil, err
+		}
+		segments := strings.Split(filepath.ToSlash(relative), "/")
+		if len(segments) != 4 ||
+			segments[0] != "assistant" ||
+			segments[1] != "assistant" ||
+			segments[3] != fileName {
+			continue
+		}
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func collectAssistantWireEntities(ff *fieldsFile, svc *serviceFile) []string {
+	initial := make([]string, 0, len(svc.APIRoutes)*2)
+	for _, route := range svc.APIRoutes {
+		initial = append(initial, route.RequestEntity, route.ResponseEntity)
+	}
+	return collectAssistantWireEntityClosure(ff, initial)
+}
+
+func collectAssistantWireResponseEntities(
+	ff *fieldsFile,
+	svc *serviceFile,
+) []string {
+	initial := make([]string, 0, len(svc.APIRoutes))
+	for _, route := range svc.APIRoutes {
+		initial = append(initial, route.ResponseEntity)
+	}
+	return collectAssistantWireEntityClosure(ff, initial)
+}
+
+func collectAssistantWireEntityClosure(
+	ff *fieldsFile,
+	initial []string,
+) []string {
 	seen := map[string]bool{}
 	var names []string
 	add := func(name string) {
 		name = strings.TrimSpace(name)
-		if name == "" {
-			return
-		}
-		if !seen[name] {
+		if name != "" && !seen[name] {
 			seen[name] = true
 			names = append(names, name)
 		}
 	}
-	for _, route := range svc.APIRoutes {
-		add(route.RequestEntity)
-		add(route.ResponseEntity)
+	for _, name := range initial {
+		add(name)
 	}
 	expanded := map[string]bool{}
 	var visit func(string)
@@ -426,7 +350,10 @@ func assistantWireDartType(
 		}
 		return "DateTime"
 	case "timestamp":
-		return "String?"
+		if nullable {
+			return "String?"
+		}
+		return "String"
 	case "object", "jsonb":
 		if nullable {
 			return "Map<String, dynamic>?"
@@ -447,7 +374,11 @@ func assistantWireEmitEntityDart(
 	ent entityDef,
 ) {
 	fmt.Fprintf(b, "class %s {\n", name)
-	fmt.Fprintf(b, "  const %s({\n", name)
+	if len(ent.Fields) == 0 {
+		fmt.Fprintf(b, "  const %s();\n\n", name)
+	} else {
+		fmt.Fprintf(b, "  const %s({\n", name)
+	}
 	for _, f := range ent.Fields {
 		nul := assistantWireFieldNullable(f)
 		if nul {
@@ -474,7 +405,9 @@ func assistantWireEmitEntityDart(
 			fmt.Fprintf(b, "    required this.%s,\n", f.Name)
 		}
 	}
-	b.WriteString("  });\n\n")
+	if len(ent.Fields) > 0 {
+		b.WriteString("  });\n\n")
+	}
 	for _, f := range ent.Fields {
 		nul := assistantWireFieldNullable(f)
 		dt := assistantWireDartType(ff, enumCatalog, f, nul)
@@ -482,6 +415,7 @@ func assistantWireEmitEntityDart(
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(b, "  factory %s.fromJson(Map<String, dynamic> json) {\n", name)
+	assistantWireEmitJsonValidation(b, ff, enumCatalog, name, ent)
 	fmt.Fprintf(b, "    return %s(\n", name)
 	for _, f := range ent.Fields {
 		fmt.Fprintf(
@@ -513,6 +447,99 @@ func assistantWireEmitEntityDart(
 `)
 	}
 	b.WriteString("}\n")
+}
+
+func assistantWireEmitJsonValidation(
+	b *strings.Builder,
+	ff *fieldsFile,
+	enumCatalog *assistantEnumCatalog,
+	entityName string,
+	ent entityDef,
+) {
+	b.WriteString("    const allowedFields = <String>{\n")
+	for _, field := range ent.Fields {
+		fmt.Fprintf(b, "      '%s',\n", field.Name)
+	}
+	b.WriteString("    };\n")
+	b.WriteString("    final unknownFields = json.keys\n")
+	b.WriteString("        .where((key) => !allowedFields.contains(key))\n")
+	b.WriteString("        .toList(growable: false);\n")
+	b.WriteString("    if (unknownFields.isNotEmpty) {\n")
+	fmt.Fprintf(
+		b,
+		"      throw FormatException('%s response contains unknown fields: ${unknownFields.join(', ')}');\n",
+		entityName,
+	)
+	b.WriteString("    }\n")
+	for _, field := range ent.Fields {
+		condition := assistantWireJsonInvalidCondition(ff, enumCatalog, field)
+		if condition == "" {
+			continue
+		}
+		if assistantWireFieldNullable(field) {
+			fmt.Fprintf(
+				b,
+				"    if (json.containsKey('%s') && json['%s'] != null && (%s)) {\n",
+				field.Name,
+				field.Name,
+				condition,
+			)
+		} else {
+			fmt.Fprintf(
+				b,
+				"    if (!json.containsKey('%s') || json['%s'] == null || (%s)) {\n",
+				field.Name,
+				field.Name,
+				condition,
+			)
+		}
+		fmt.Fprintf(
+			b,
+			"      throw const FormatException('%s field %s has an invalid wire value');\n",
+			entityName,
+			field.Name,
+		)
+		b.WriteString("    }\n")
+	}
+}
+
+func assistantWireJsonInvalidCondition(
+	ff *fieldsFile,
+	enumCatalog *assistantEnumCatalog,
+	field fieldDef,
+) string {
+	accessor := "json['" + field.Name + "']"
+	typeName := strings.TrimSpace(field.Type)
+	if typeName == "enum" && assistantWireHasEnum(enumCatalog, field.EnumRef) {
+		return accessor + " is! String"
+	}
+	if _, isEntity := ff.Entities[typeName]; isEntity {
+		return accessor + " is! Map"
+	}
+	if inner, ok := assistantWireListElementType(typeName); ok {
+		invalidItemCondition := "false"
+		if _, isEntity := ff.Entities[inner]; isEntity || inner == "object" {
+			invalidItemCondition = "item is! Map"
+		} else if inner == "string" {
+			invalidItemCondition = "item is! String"
+		}
+		return accessor + " is! List || (" + accessor +
+			" as List).any((item) => " + invalidItemCondition + ")"
+	}
+	switch typeName {
+	case "string", "timestamp", "enum":
+		return accessor + " is! String"
+	case "bool":
+		return accessor + " is! bool"
+	case "int", "int64", "float":
+		return accessor + " is! num"
+	case "datetime":
+		return accessor + " is! String || DateTime.tryParse(" + accessor + " as String) == null"
+	case "object", "jsonb":
+		return accessor + " is! Map"
+	default:
+		return ""
+	}
 }
 
 func assistantWireFromJsonExpr(
@@ -647,6 +674,9 @@ func assistantWireFromJsonExpr(
 		return `(` + parsed + ` ?? (throw FormatException('required datetime field ` + n + ` is invalid')))`
 	case "timestamp":
 		// Single-track: only camelCase wire keys; no snake_case dual-read.
+		if !nul {
+			return `(json['` + n + `'] as String)`
+		}
 		return `json['` + n + `']?.toString()`
 	case "object", "jsonb":
 		if nul {

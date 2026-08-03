@@ -15,7 +15,7 @@ class ContactDiscoveryMatchView {
     required this.relationshipCapability,
   });
 
-  factory ContactDiscoveryMatchView.fromContract(
+  factory ContactDiscoveryMatchView.fromWire(
     ContactDiscoveryMatchResult result,
   ) {
     return ContactDiscoveryMatchView(
@@ -26,7 +26,7 @@ class ContactDiscoveryMatchView {
       avatarUrl: result.avatarUrl,
       avatarVersion: result.avatarVersion,
       region: result.region,
-      relationshipCapability: RelationshipCapabilityDto.fromContract(
+      relationshipCapability: RelationshipCapabilityDto.fromWire(
         result.relationshipCapability,
       ),
     );
@@ -71,16 +71,16 @@ class ContactDiscoveryResultView {
     matches: <ContactDiscoveryMatchView>[],
   );
 
-  factory ContactDiscoveryResultView.fromContract(
+  factory ContactDiscoveryResultView.fromWire(
     ContactDiscoveryResult result,
   ) {
     return ContactDiscoveryResultView(
       id: result.id,
-      status: result.status,
+      status: result.status.wireName,
       matchedPersonaIds: result.matchedPersonaIds,
       matchCount: result.matchCount,
       matches: result.matches
-          .map(ContactDiscoveryMatchView.fromContract)
+          .map(ContactDiscoveryMatchView.fromWire)
           .toList(growable: false),
     );
   }
@@ -115,7 +115,7 @@ class RemoteContactDiscoveryRepository implements ContactDiscoveryRepository {
     final result = await commandWriter.initiateContactDiscovery(
       InitiateContactDiscoveryCommand(hashedPhones: hashedPhones),
     );
-    return ContactDiscoveryResultView.fromContract(result);
+    return ContactDiscoveryResultView.fromWire(result);
   }
 
   @override
@@ -127,7 +127,7 @@ class RemoteContactDiscoveryRepository implements ContactDiscoveryRepository {
       if (result.id.isEmpty) {
         return null;
       }
-      return ContactDiscoveryResultView.fromContract(result);
+      return ContactDiscoveryResultView.fromWire(result);
     } on CloudException catch (e) {
       // 无历史记录时服务端返回 404，语义上等价于「尚未匹配」。
       if (e.type == CloudErrorType.notFound) {

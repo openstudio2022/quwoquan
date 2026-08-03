@@ -12,8 +12,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
+	placementmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/messaging"
 	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
 )
 
@@ -30,17 +30,22 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 	if err := projection.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
-	consumer := messaging.NewContentPostConsumer(
+	consumer := placementmessaging.NewContentPostConsumer(
 		circleMessageTransport, projection, projection, "circle-api-integration", nil,
 	)
 	values := map[string]string{
 		"eventId": "post-stream:PostPublished:2", "eventType": "PostPublished",
 		"aggregateType": "Post", "aggregateId": "post-stream", "aggregateVersion": "2",
-		"payload":    "{\"_id\":\"post-stream\",\"authorId\":\"persona-owner\",\"status\":\"published\"}",
+		"payload": "{\"postId\":\"post-stream\",\"authorId\":\"persona-owner\"," +
+			"\"status\":\"published\",\"visibility\":\"public\",\"moderationStatus\":\"approved\"," +
+			"\"contentType\":\"article\",\"contentIdentity\":\"work\",\"title\":\"Stream Post\"," +
+			"\"mediaUrls\":[\"https://media.example/post-stream.jpg\"]," +
+			"\"createdAt\":\"2026-07-14T09:00:00Z\",\"updatedAt\":\"2026-07-14T10:00:00Z\"," +
+			"\"publishedAt\":\"2026-07-14T09:30:00Z\"}",
 		"occurredAt": time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC).Format(time.RFC3339Nano),
 	}
 	for duplicate := 0; duplicate < 2; duplicate++ {
-		if _, err := redisRouter.Scene("general").XAdd(ctx, messaging.ContentPostLifecycleStream, values); err != nil {
+		if _, err := redisRouter.Scene("general").XAdd(ctx, placementmessaging.ContentPostLifecycleStream, values); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -51,6 +56,12 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 		"_id": "post-stream", "ownerPersonaId": "persona-owner", "state": "published", "postVersion": int64(2),
 	}); err != nil || count != 1 {
 		t.Fatalf("Post owner view count=%d err=%v", count, err)
+	}
+	if count, err := mongoDB.Collection("circle_feed_items").CountDocuments(ctx, bson.M{
+		"_id": "post-stream", "authorId": "persona-owner", "status": "published",
+		"postVersion": int64(2), "title": "Stream Post",
+	}); err != nil || count != 1 {
+		t.Fatalf("Circle feed item count=%d err=%v", count, err)
 	}
 	if count, err := mongoDB.Collection("circle_content_post_inbox").CountDocuments(ctx, bson.M{
 		"_id": "post-stream:PostPublished:2",
@@ -104,18 +115,18 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 
 	streamRelay := placementapp.NewOutboxRelay(
 		store, store,
-		messaging.NewCirclePostPlacementStreamPublisher(circleMessageTransport),
+		placementmessaging.NewCirclePostPlacementStreamPublisher(circleMessageTransport),
 		"circle-placement-api-integration-stream",
 	)
 	if count, err := streamRelay.Drain(ctx, 10); err != nil || count != 1 {
 		t.Fatalf("drain placement stream count=%d err=%v", count, err)
 	}
 	group := "placement-downstream-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, messaging.CirclePostPlacementStream, group, "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(ctx, placementmessaging.CirclePostPlacementStream, group, "0"); err != nil {
 		t.Fatal(err)
 	}
 	messages, err := redisRouter.Scene("general").XReadGroup(ctx, group, "reader",
-		map[string]string{messaging.CirclePostPlacementStream: ">"}, 10, 0)
+		map[string]string{placementmessaging.CirclePostPlacementStream: ">"}, 10, 0)
 	if err != nil || len(messages) != 1 {
 		t.Fatalf("placement stream messages=%d err=%v", len(messages), err)
 	}

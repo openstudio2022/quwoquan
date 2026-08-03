@@ -223,6 +223,25 @@ types:
         type: timestamp
         constraints:
           - NOT_NULL
+  GreetingRequestRecord:
+    fields:
+      - {name: id, type: string, constraints: [NOT_BLANK]}
+      - {name: requesterPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: requestMessage, type: string, constraints: [NULLABLE]}
+      - {name: intersectionRef, type: GreetingIntersectionRef, constraints: [NULLABLE]}
+      - {name: intersectionSnapshot, type: GreetingIntersectionSnapshot, constraints: [NULLABLE]}
+      - {name: status, type: enum, enum_ref: GreetingRequestStatus, constraints: [NOT_NULL]}
+      - {name: source, type: enum, enum_ref: GreetingRequestSource, constraints: [NOT_NULL]}
+      - {name: promotedConversationId, type: string, constraints: [NULLABLE]}
+      - {name: expireAt, type: timestamp, constraints: [NULLABLE]}
+      - {name: decisionAt, type: timestamp, constraints: [NULLABLE]}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  GreetingRequestSlice:
+    fields:
+      - {name: items, type: '[]GreetingRequestRecord', constraints: [NOT_NULL]}
+      - {name: nextCursor, type: string, constraints: [NULLABLE]}
   ListGreetingRequestsQuery:
     fields:
       - name: status
@@ -279,12 +298,9 @@ types:
         client_default: '''profile'''
         client_normalization: trim
       - name: intersectionRef
-        type: object
+        type: GreetingIntersectionRef
         constraints:
           - NULLABLE
-        client_dart_type: GreetingIntersectionRef?
-        client_wire: toWire
-        client_omit_empty: true
   CancelGreetingCommand:
     fields:
       - name: requestId

@@ -12,6 +12,7 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
 	deliveryrecommendation "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/recommendation"
+	postports "quwoquan_service/services/content-service/internal/content/post/application/ports"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
@@ -45,20 +46,68 @@ func buildRankedRecommendationGateway(
 	return client
 }
 
+func buildAuthorImpactProjectionReader(cfg config) postports.AuthorImpactProjectionReader {
+	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
+		log.Fatal("content-service requires recommendation-service feature profile reader")
+	}
+	tokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("recommendation feature profile auth config invalid: %v", err)
+	}
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		tokenConfig,
+		"content-service",
+		[]string{"recommendation.feature_profile.read"},
+	)
+	if err != nil {
+		log.Fatalf("recommendation feature profile credentials invalid: %v", err)
+	}
+	client, err := recinfra.NewAuthorImpactReaderClient(
+		cfg.RecModelService.URL,
+		credentials,
+	)
+	if err != nil {
+		log.Fatalf("recommendation feature profile client invalid: %v", err)
+	}
+	return client
+}
+
+func buildIntersectionProjectionReader(cfg config) *recinfra.IntersectionReaderClient {
+	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
+		log.Fatal("content-service requires recommendation-service intersection projection reader")
+	}
+	tokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("recommendation intersection projection auth config invalid: %v", err)
+	}
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		tokenConfig,
+		"content-service",
+		[]string{"recommendation.feature_profile.read"},
+	)
+	if err != nil {
+		log.Fatalf("recommendation intersection projection credentials invalid: %v", err)
+	}
+	client, err := recinfra.NewIntersectionReaderClient(
+		cfg.RecModelService.URL,
+		credentials,
+	)
+	if err != nil {
+		log.Fatalf("recommendation intersection projection client invalid: %v", err)
+	}
+	return client
+}
+
 // buildRecommendationSignalRuntime keeps the read cache and buffered write
 // path on one HotPath so their subject-closure policy cannot drift.
 func buildRecommendationSignalRuntime(
 	router *rtredis.Router,
 	subjectClosureGuard rtrec.SubjectClosureGuard,
 	logger *slog.Logger,
-	feedConfig feedRuntimeConfig,
 ) (*rtrec.SessionCache, *rtrec.BufferedHotPath) {
 	hotPath := rtrec.NewHotPath(
 		rtredis.NewRecAdapter(router.Scene("rec")),
 		rtrec.WithSubjectClosureGuard(subjectClosureGuard),
-		rtrec.WithRankedFeedWindowQuotaPolicy(
-			feedConfig.rankedWindowQuotaPolicy(),
-		),
 	)
 	return rtrec.NewSessionCache(hotPath, 2*time.Second, 10000),
 		rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))

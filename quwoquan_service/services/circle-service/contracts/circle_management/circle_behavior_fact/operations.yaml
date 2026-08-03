@@ -21,6 +21,7 @@ api_routes:
       mutation_target: CircleBehaviorFact
       invariant_target: CircleBehaviorFact
     request_entity: AppendCircleBehaviorFactCommand
+    response_body_kind: ack
     authorization:
       principal: public
       ownership_policy: authenticated_persona_or_derived_device_actor
@@ -48,8 +49,4 @@ api_routes:
     slo:
       latency_p95_ms: 300
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/behavior_fact_contracts.dart
-      response_type: void
-      response_decoder: decodeEmptyCircleBehaviorFactResponse
     request_body_kind: object

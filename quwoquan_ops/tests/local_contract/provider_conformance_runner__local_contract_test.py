@@ -224,6 +224,7 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                 evidence_path = provider_conformance_runner._execute_cell(
                     argparse.Namespace(
                         adapter_id="ext.llm.protocol_fixture",
+                        capability_id="assistant.model.generation",
                         environment="alpha",
                         layer="local_contract",
                         execute=True,

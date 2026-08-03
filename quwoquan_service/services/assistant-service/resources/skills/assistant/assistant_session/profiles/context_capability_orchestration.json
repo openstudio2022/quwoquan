@@ -1,0 +1,405 @@
+{
+  "contextProfiles": [
+    {
+      "profileId": "context.none",
+      "slotSchema": {},
+      "requirements": [],
+      "assetDigest": "sha256:653c3488a56855204e36e9bbdb3fff167dd8f4d3de2d39cccb43b5a68dd352d9"
+    },
+    {
+      "profileId": "context.local_life",
+      "slotSchema": {
+        "requiredSlots": ["location"],
+        "optionalSlots": ["budget"],
+        "carryOver": true,
+        "stateId": "local_life_context"
+      },
+      "requirements": [
+        {
+          "slotId": "location",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "budget",
+          "acceptedSourceKinds": ["conversation", "memory"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 64,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "omit"
+        }
+      ],
+      "assetDigest": "sha256:b86326fe665689bd6da18ab773ac9751c2e6b1fb9458ddbdb06de5508d5739c2"
+    },
+    {
+      "profileId": "context.travel_planning",
+      "slotSchema": {
+        "requiredSlots": ["destination", "travel_date"],
+        "optionalSlots": ["origin", "party_size", "budget"],
+        "carryOver": true,
+        "stateId": "travel_plan_context"
+      },
+      "requirements": [
+        {
+          "slotId": "destination",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "travel_date",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 96,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "trip_preferences",
+          "acceptedSourceKinds": ["conversation", "memory"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 256,
+          "resolverRef": "turn.preferences",
+          "fallbackPolicy": "omit"
+        }
+      ],
+      "assetDigest": "sha256:9d958f093a401375d8caa7fcc5583551b6f67b32b9b3ea3e6f593399c572d27c"
+    },
+    {
+      "profileId": "context.travel_transport",
+      "slotSchema": {
+        "requiredSlots": ["origin", "destination", "travel_date"],
+        "optionalSlots": ["party_size"],
+        "carryOver": true,
+        "stateId": "travel_transport_context"
+      },
+      "requirements": [
+        {
+          "slotId": "origin",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "destination",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "travel_date",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 96,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        }
+      ],
+      "assetDigest": "sha256:e6088e401b91cce7028111913f56e155cb5bc7a2508429ddfc3741a16f3c75e1"
+    },
+    {
+      "profileId": "context.weather",
+      "slotSchema": {
+        "requiredSlots": ["location"],
+        "optionalSlots": ["date"],
+        "carryOver": true,
+        "stateId": "weather_context"
+      },
+      "requirements": [
+        {
+          "slotId": "location",
+          "required": true,
+          "acceptedSourceKinds": ["conversation", "page", "device"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "clarify"
+        },
+        {
+          "slotId": "date",
+          "acceptedSourceKinds": ["conversation", "temporal"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 64,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "infer_current"
+        }
+      ],
+      "assetDigest": "sha256:5b184de93d16c02a83febc38ef8e6689ad33488ea736e524c1ce01b9ceaec287"
+    },
+    {
+      "profileId": "context.proactive",
+      "slotSchema": {},
+      "requirements": [
+        {
+          "slotId": "trigger",
+          "required": true,
+          "acceptedSourceKinds": ["trigger"],
+          "authority": "domain_canonical",
+          "sensitivity": "internal",
+          "freshnessSeconds": 3600,
+          "tokenBudget": 256,
+          "resolverRef": "trigger.envelope",
+          "fallbackPolicy": "block"
+        },
+        {
+          "slotId": "subscription_plan",
+          "acceptedSourceKinds": ["domain"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 512,
+          "resolverRef": "subscription.plan",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "interest_profile",
+          "acceptedSourceKinds": ["memory"],
+          "authority": "domain_canonical",
+          "sensitivity": "private",
+          "tokenBudget": 256,
+          "resolverRef": "user.interest_profile",
+          "fallbackPolicy": "omit"
+        }
+      ],
+      "assetDigest": "sha256:cc0b1ca508b0278531e75ea79edda64b1dbb34dc7f606fbf0b16b9164eec33d3"
+    },
+    {
+      "profileId": "context.travel_companion",
+      "slotSchema": {
+        "requiredSlots": [],
+        "optionalSlots": ["destination", "travel_date", "origin", "party_size", "budget", "trip_preferences", "trip_context", "trigger", "subscription_plan"],
+        "carryOver": true,
+        "stateId": "travel_companion_context"
+      },
+      "requirements": [
+        {
+          "slotId": "destination",
+          "acceptedSourceKinds": ["conversation", "page"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 128,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "travel_date",
+          "acceptedSourceKinds": ["conversation", "page", "temporal"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 96,
+          "resolverRef": "turn.slot",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "trip_preferences",
+          "acceptedSourceKinds": ["conversation", "memory"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "consentScopes": ["assistant.memory.preferences.read"],
+          "tokenBudget": 384,
+          "resolverRef": "turn.preferences",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "trip_context",
+          "acceptedSourceKinds": ["domain"],
+          "authority": "domain_canonical",
+          "sensitivity": "internal",
+          "consentScopes": ["travel.trip.read"],
+          "tokenBudget": 1536,
+          "resolverRef": "trip.current_context",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "conversation_context",
+          "acceptedSourceKinds": ["conversation"],
+          "authority": "domain_canonical",
+          "sensitivity": "internal",
+          "freshnessSeconds": 900,
+          "tokenBudget": 4096,
+          "resolverRef": "conversation.current_context",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "trigger",
+          "acceptedSourceKinds": ["trigger"],
+          "authority": "domain_canonical",
+          "sensitivity": "internal",
+          "freshnessSeconds": 3600,
+          "tokenBudget": 256,
+          "resolverRef": "trigger.envelope",
+          "fallbackPolicy": "omit"
+        },
+        {
+          "slotId": "subscription_plan",
+          "acceptedSourceKinds": ["domain"],
+          "authority": "user_declared",
+          "sensitivity": "private",
+          "tokenBudget": 512,
+          "resolverRef": "subscription.plan",
+          "fallbackPolicy": "omit"
+        }
+      ],
+      "assetDigest": "sha256:146026e4febbb3dddc14f440ab6f20c07303258e4112e70b83bc5b4ba9559807"
+    }
+  ],
+  "capabilityProfiles": [
+    {
+      "profileId": "capability.web2",
+      "toolPolicy": {
+        "allowedTools": ["web_search", "web_open", "web_find"],
+        "preferredTools": ["web_search"],
+        "maxToolCalls": 2
+      },
+      "assetDigest": "sha256:d634650e468169a2f55f74d7146b072578e4846c784bc24a5d12b815841a7699"
+    },
+    {
+      "profileId": "capability.web3",
+      "toolPolicy": {
+        "allowedTools": ["web_search", "web_open", "web_find"],
+        "preferredTools": ["web_search"],
+        "maxToolCalls": 3
+      },
+      "assetDigest": "sha256:7b2c1c48a5d84a4638bfacb7c4c8b212bff314c0c02d4ed3379136b21744c82f"
+    },
+    {
+      "profileId": "capability.app2",
+      "toolPolicy": {
+        "allowedTools": ["app_search"],
+        "preferredTools": ["app_search"],
+        "maxToolCalls": 2
+      },
+      "assetDigest": "sha256:32867d4531a6c245552206dc72b3a093298c370501d30e83765685345cb31b88"
+    },
+    {
+      "profileId": "capability.app2_device",
+      "toolPolicy": {
+        "allowedTools": ["app_search", "calendar_create_reminder"],
+        "preferredTools": ["app_search", "calendar_create_reminder"],
+        "maxToolCalls": 2,
+        "allowDeviceActionProposal": true
+      },
+      "assetDigest": "sha256:9e0263cccca92035f543a0e67e45c34bda1dd0013424d25069da17bbdded6fba"
+    },
+    {
+      "profileId": "capability.web_app3",
+      "toolPolicy": {
+        "allowedTools": ["web_search", "web_open", "web_find", "app_search"],
+        "preferredTools": ["web_search", "app_search"],
+        "maxToolCalls": 3
+      },
+      "assetDigest": "sha256:88d44eba2afca5014fca4e104f5c7821cf9bd414f68742d44d956346d511a38c"
+    },
+    {
+      "profileId": "capability.web_app3_device",
+      "toolPolicy": {
+        "allowedTools": ["web_search", "web_open", "web_find", "app_search"],
+        "preferredTools": ["web_search", "app_search"],
+        "maxToolCalls": 3,
+        "allowDeviceActionProposal": true
+      },
+      "assetDigest": "sha256:8faf2e7259da4cfecb8db7a0de7cca4c3b00e472c9953d1db392a342a8103616"
+    },
+    {
+      "profileId": "capability.app_web3_device",
+      "toolPolicy": {
+        "allowedTools": ["app_search", "web_search", "web_open", "web_find"],
+        "preferredTools": ["app_search", "web_search"],
+        "maxToolCalls": 3,
+        "allowDeviceActionProposal": true
+      },
+      "assetDigest": "sha256:2b5443b33fe31d7a51b949f603374cfc950e45a9a4970ca232e45de72225770e"
+    },
+    {
+      "profileId": "capability.travel_companion",
+      "toolPolicy": {
+        "allowedTools": ["app_search", "web_search", "web_open", "web_find", "calendar_create_reminder"],
+        "preferredTools": ["app_search", "web_search"],
+        "maxToolCalls": 8,
+        "allowDeviceActionProposal": true
+      },
+      "assetDigest": "sha256:f57bd12bef6e01126f07fd5ae9eb68ea053cdea714396e2b42c2464557fece4d"
+    }
+  ],
+  "orchestrationProfiles": [
+    {
+      "profileId": "orchestration.default",
+      "reasoningProfile": "balanced",
+      "definitionOfDone": ["answer_satisfies_user_goal"],
+      "checkpointPolicyRef": "checkpoint.standard",
+      "stopRules": ["goal_satisfied", "budget_exhausted", "blocked"],
+      "assetDigest": "sha256:32849b8c0231125c71e5f8d9d3e607ce236e14111ef7268d6f20af8a65242e41"
+    },
+    {
+      "profileId": "orchestration.travel_companion",
+      "reasoningProfile": "deep",
+      "definitionOfDone": [
+        "goal_and_constraints_are_explicit",
+        "eat_play_stay_transport_are_coherent",
+        "time_and_route_conflicts_are_checked",
+        "time_sensitive_facts_have_sources",
+        "shared_surface_privacy_is_preserved",
+        "plan_changes_are_expressed_as_revision_diff",
+        "answer_has_an_actionable_next_step"
+      ],
+      "subagentRefs": ["travel.plan_specialist", "travel.local_evidence_specialist", "travel.timeline_editor"],
+      "checkpointPolicyRef": "checkpoint.background_long",
+      "stopRules": ["definition_of_done_satisfied", "waiting_user_choice", "waiting_user_confirmation", "evidence_budget_exhausted", "blocked"],
+      "assetDigest": "sha256:29f69ffe8d99354316e65fb47144b70a3ba48a5d91921612d4a53b2011871d10"
+    }
+  ],
+  "triggerProfiles": [
+    {
+      "profileId": "trigger.none",
+      "triggerKinds": [],
+      "defaultDeliveryPolicyRef": "delivery.none",
+      "assetDigest": "sha256:4db22cb667b299863aef066aef01d5fd2359fc07ac8416c398f5a89e7576c389"
+    },
+    {
+      "profileId": "trigger.travel_companion",
+      "triggerKinds": ["schedule", "event", "context_change", "follow_up"],
+      "defaultDeliveryPolicyRef": "delivery.trip_relevant_members",
+      "assetDigest": "sha256:a1ff7ea601a57b5151d3f0ffa6aa326c92c7b8d63ba7fd9c7c393ac8a3b91ccd"
+    }
+  ],
+  "memoryProfiles": [
+    {
+      "profileId": "memory.none",
+      "readableKinds": [],
+      "suggestRememberKinds": [],
+      "forbiddenKinds": ["credentials", "private_shared_surface_data"],
+      "assetDigest": "sha256:fa71200e93daa25bb95c3b7b126bae4ace9924450227eb627e61253a2092f6ba"
+    },
+    {
+      "profileId": "memory.travel_companion",
+      "readableKinds": ["travel_pace", "mobility_needs", "food_constraints", "lodging_preferences", "transport_preferences"],
+      "suggestRememberKinds": ["travel_pace", "food_constraints", "lodging_preferences", "transport_preferences"],
+      "forbiddenKinds": ["credentials", "hotel_room_number", "continuous_precise_location", "participant_contact_details", "private_shared_surface_data"],
+      "assetDigest": "sha256:b7fc20ad94fb12435b20b0611b09f0031ac116fa8db3f8f0cf4cec6952ab104a"
+    }
+  ]
+}

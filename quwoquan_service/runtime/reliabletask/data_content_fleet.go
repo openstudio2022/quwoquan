@@ -112,7 +112,7 @@ type DataContentFleet struct {
 // Data content work. A content worker must never dispatch or re-index another
 // execution merely because its outbox happens to be due at the same time.
 type DataContentExecutionStore interface {
-	Store
+	TaskStore
 	DispatchDataContentExecution(
 		ctx context.Context,
 		executionID string,
@@ -129,6 +129,15 @@ type DataContentExecutionStore interface {
 		ctx context.Context,
 		executionID string,
 	) (DataContentExecutionPurgeResult, error)
+	CountDataContentOutboxes(
+		ctx context.Context,
+		executionID string,
+		stage string,
+	) (int64, error)
+	ListDataContentExecutionTasks(
+		ctx context.Context,
+		executionID string,
+	) ([]ReliableAsyncTask, error)
 }
 
 // DataContentExecutionPurgeResult reports only records owned by one discarded

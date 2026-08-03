@@ -38,7 +38,7 @@ final class WorksImmersiveViewerObservability {
     };
   }
 
-  static ContentType contentTypeForPost(PostBaseDto post) {
+  static ContentType contentTypeForPost(ContentPostViewData post) {
     final format = post.displayFormat;
     if (format == 'video') return ContentType.video;
     if (format == 'article') return ContentType.article;

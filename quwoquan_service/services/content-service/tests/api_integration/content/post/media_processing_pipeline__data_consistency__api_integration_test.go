@@ -27,15 +27,16 @@ import (
 
 	runtimemedia "quwoquan_service/runtime/media"
 	contentgenerated "quwoquan_service/services/content-service/generated/media/media_asset"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
-	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
-	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
-	mediaprocinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	"quwoquan_service/runtime/commandmeta"
+	mediaapp "quwoquan_service/services/content-service/internal/media/media_asset/application"
+	mediaprocessing "quwoquan_service/services/content-service/internal/media/media_asset/application/processing"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
+	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
+	mediaprocinfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
+	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocess "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
 	mediareprocessmodel "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/domain/model"
+	mediareprocesspersistence "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/infrastructure/persistence"
 	uploadsessionapp "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	uploadsessionstorage "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/objectstorage"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
@@ -83,7 +84,7 @@ func TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors(t *
 		before := harness.requireReadyImage(t, ctx, assetID)
 		beforeDescriptor := before.ImageProcessingDescriptor()
 
-		control := mediareprocess.NewService(harness.mediaStore, harness.mediaStore)
+		control := mediareprocess.NewService(harness.reprocessStore, harness.mediaStore)
 		run, _, err := control.Start(
 			commandmeta.WithIdempotencyKey(ctx, "reprocess-start-"+assetID),
 			mediareprocess.StartCommand{
@@ -96,7 +97,7 @@ func TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors(t *
 			t.Fatalf("start image reprocess run: %v", err)
 		}
 		worker := mediareprocess.NewWorker(
-			harness.mediaStore,
+			harness.reprocessStore,
 			harness.mediaStore,
 			harness.processor,
 			harness.service,
@@ -181,7 +182,8 @@ type mediaProcessingHarness struct {
 	s3Client         *s3.Client
 	presigner        *runtimemedia.S3PresignClient
 	gateway          *mediainfra.ObjectGateway
-	mediaStore       *persistence.MongoMediaStore
+	mediaStore       *mediaassetpersistence.MongoMediaStore
+	reprocessStore   *mediareprocesspersistence.MongoStore
 	service          *mediaapp.MediaService
 	uploads          *uploadsessionapp.UseCases
 	uploadHTTPClient *http.Client
@@ -247,9 +249,13 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 	// 独立数据库隔离本链路的 outbox/checkpoint，避免消费其它测试的媒体事实。
 	database := requireMongoDB(t).Client().Database("media_processing_e2e")
 	t.Cleanup(func() { _ = database.Drop(context.Background()) })
-	mediaStore := persistence.NewMongoMediaStore(database)
+	mediaStore := mediaassetpersistence.NewMongoMediaStore(database)
 	if err := mediaStore.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure media indexes: %v", err)
+	}
+	reprocessStore := mediareprocesspersistence.NewMongoStore(database)
+	if err := reprocessStore.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure media image reprocess indexes: %v", err)
 	}
 	uploadStore := uploadsessionpersistence.NewMongoStore(
 		database.Collection("media_upload_sessions"),
@@ -286,6 +292,7 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 		presigner:        presigner,
 		gateway:          gateway,
 		mediaStore:       mediaStore,
+		reprocessStore:   reprocessStore,
 		service:          service,
 		uploads:          uploads,
 		uploadHTTPClient: uploadAuthority.Client(),

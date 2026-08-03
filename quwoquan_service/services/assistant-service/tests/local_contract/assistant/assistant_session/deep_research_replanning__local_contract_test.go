@@ -7,6 +7,7 @@ import (
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
 
 type deepResearchModel struct {
@@ -77,6 +78,25 @@ func (m *deepResearchModel) Complete(
 
 type deepResearchTools struct {
 	requests []orchestration.ToolRequest
+}
+
+func (t *deepResearchTools) ModelToolDeclarations(
+	allowedToolNames []string,
+) []ports.ModelToolDefinition {
+	definitions := make([]ports.ModelToolDefinition, 0, len(allowedToolNames))
+	for _, name := range allowedToolNames {
+		if name != "web_search" && name != "web_open" {
+			continue
+		}
+		definitions = append(definitions, ports.ModelToolDefinition{
+			Name: name,
+			Parameters: map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+			},
+		})
+	}
+	return definitions
 }
 
 func (t *deepResearchTools) Execute(

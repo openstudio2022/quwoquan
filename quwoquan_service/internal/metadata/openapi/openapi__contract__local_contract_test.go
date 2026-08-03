@@ -412,6 +412,41 @@ func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T)
 	}
 }
 
+func TestGenerateUsesCanonicalResponseEntityAheadOfLegacyPageItemHint(t *testing.T) {
+	operation := queryOperation(
+		"content.post.ListPosts",
+		"ListPosts",
+		"content",
+		"content.post",
+		"/content/content/posts",
+		"LegacyPostCard",
+		"page",
+	)
+	operation.ResponseEntity = "PostListSlice"
+
+	snapshots, err := Generate(&graph.ContractGraph{Operations: []ast.Operation{operation}})
+	if err != nil {
+		t.Fatalf("generate OpenAPI snapshots: %v", err)
+	}
+	document := decodeSnapshot(t, snapshots[0])
+	response := operationAt(
+		t,
+		document,
+		"/content/content/posts",
+		"get",
+	)["responses"].(map[string]any)["200"].(map[string]any)
+	assertSchemaRef(
+		t,
+		response,
+		"content",
+		"#/components/schemas/PostListSlice",
+	)
+	schemas := document["components"].(map[string]any)["schemas"].(map[string]any)
+	if _, exists := schemas["ListPostsPage"]; exists {
+		t.Fatal("canonical response_entity must not be wrapped by the legacy page item track")
+	}
+}
+
 func TestGenerateIsDeterministicAcrossInputOrder(t *testing.T) {
 	operations := []ast.Operation{
 		queryOperation(

@@ -1,2 +1,10 @@
-backend: elasticsearch
+backend: elasticsearch+mongodb
 role: projection
+collections:
+  homepage_search_item_versions:
+    entity: HomepageSearchItemViewCheckpoint
+    role: checkpoint
+    description: Homepage 公开事件投影到 Elasticsearch 后的单调 sourceVersion 与 tombstone 水位。
+    indexes:
+      - name: idx_homepage_search_item_source_version
+        keys: {sourceVersion: 1}

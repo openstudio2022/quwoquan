@@ -1,0 +1,18 @@
+backend: mongodb
+role: authoritative
+collections:
+  trip_plan_content_links:
+    entity: TripPlanContentLink
+    role: authoritative
+    indexes:
+    - {name: uq_trip_plan_content_link_post, keys: {tripId: 1, postId: 1}, unique: true}
+    - {name: idx_trip_plan_content_link_item, keys: {tripId: 1, revisionNumber: 1, itemId: 1, status: 1, updatedAt: -1}}
+  trip_plan_content_link_command_receipts:
+    entity: TripPlanContentLinkCommandReceipt
+    role: authoritative
+  trip_plan_content_link_outbox:
+    entity: TripPlanContentLinkOutbox
+    role: append_only
+  trip_plan_content_link_outbox_sequences:
+    entity: TripPlanContentLinkOutbox
+    role: authoritative

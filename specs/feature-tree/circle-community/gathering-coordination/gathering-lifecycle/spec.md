@@ -89,10 +89,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 聚合尚未进入运行时且承接页尚不存在
+### OPEN-001 Gathering 承接页与端云验收尚未闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺 Circle API 生产 composition 与唯一 gatheringDetail 承接页，正式 App 仍不能完成发起与查看；Gathering metadata、生成模型、领域五态裁决和本地契约测试已存在。
+- 影响或价值：尚缺唯一 gatheringDetail 承接页及端云测试，正式 App 仍不能完成发起与查看；Circle API 生产 composition、自动过期 reconciler、真实 Mongo 事务与五态裁决已经落地。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

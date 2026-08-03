@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 class LocalChatSearchMessageRecord {
   static const int schema = 2;
@@ -42,13 +43,13 @@ class LocalChatSearchMessageRecord {
   final String recalledAt;
   final bool deleted;
 
-  /// 完整 canonical ChatMessageDto 投影；搜索列只负责索引，不得代替时间线事实。
+  /// 完整 canonical ChatMessageView 投影；搜索列只负责索引，不得代替时间线事实。
   final Map<String, Object?> messagePayload;
   final String? highlightText;
   final String? matchedField;
 
   factory LocalChatSearchMessageRecord.fromMessageDto(
-    MessageDto dto, {
+    ChatMessageViewData dto, {
     ConversationCacheRecord? conversation,
   }) {
     final conversationId = dto.conversationId.trim();
@@ -71,7 +72,7 @@ class LocalChatSearchMessageRecord {
           dto.recalledAt != null ||
           dto.status == 'recalled' ||
           dto.status == 'deleted',
-      messagePayload: Map<String, Object?>.from(dto.toMap()),
+      messagePayload: _messageViewDataToStorageMap(dto),
     );
   }
 
@@ -228,11 +229,11 @@ class LocalChatSearchMessageRecord {
     };
   }
 
-  MessageDto toMessageDto() {
+  ChatMessageViewData toMessageDto() {
     if (messagePayload.isNotEmpty) {
-      return MessageDto.fromMap(Map<String, dynamic>.from(messagePayload));
+      return _messageViewDataFromStorageMap(messagePayload);
     }
-    return MessageDto(
+    return ChatMessageViewData(
       id: messageId,
       conversationId: conversationId,
       seq: seq,
@@ -251,6 +252,201 @@ class LocalChatSearchMessageRecord {
           : DateTime.tryParse(timestamp.trim()),
     );
   }
+}
+
+Map<String, Object?> _messageViewDataToStorageMap(ChatMessageViewData message) {
+  return <String, Object?>{
+    'id': message.id,
+    'conversationId': message.conversationId,
+    'seq': message.seq,
+    'clientMsgId': message.clientMsgId,
+    'senderId': message.senderId,
+    'senderName': message.senderName,
+    'senderAvatar': message.senderAvatar,
+    'type': message.type,
+    'content': message.content,
+    'mediaAssetId': message.mediaAssetId,
+    'mediaDeliveryUrl': message.mediaDeliveryUrl,
+    'mediaType': message.mediaType,
+    'mediaContentType': message.mediaContentType,
+    'mediaFileSizeBytes': message.mediaFileSizeBytes,
+    'card': message.card?.toWire(),
+    'replyToMessageId': message.replyToMessageId,
+    'mentions': message.mentions,
+    'status': message.status,
+    'recalledAt': message.recalledAt?.toIso8601String(),
+    'timestamp': message.timestamp?.toIso8601String(),
+  };
+}
+
+ChatMessageViewData _messageViewDataFromStorageMap(Map<String, Object?> map) {
+  const allowed = <String>{
+    'id',
+    'conversationId',
+    'seq',
+    'clientMsgId',
+    'senderId',
+    'senderName',
+    'senderAvatar',
+    'type',
+    'content',
+    'mediaAssetId',
+    'mediaDeliveryUrl',
+    'mediaType',
+    'mediaContentType',
+    'mediaFileSizeBytes',
+    'card',
+    'replyToMessageId',
+    'mentions',
+    'status',
+    'recalledAt',
+    'timestamp',
+  };
+  final unknown = map.keys.toSet().difference(allowed);
+  if (unknown.isNotEmpty) {
+    throw FormatException(
+      'Cached chat message contains unknown fields: ${unknown.join(', ')}',
+    );
+  }
+  final mentions = map['mentions'];
+  if (mentions != null &&
+      (mentions is! List || mentions.any((value) => value is! String))) {
+    throw const FormatException('Cached chat message mentions are invalid');
+  }
+  return ChatMessageViewData(
+    id: _requiredStorageString(map, 'id'),
+    conversationId: _requiredStorageString(map, 'conversationId'),
+    seq: _requiredStorageInt(map, 'seq'),
+    clientMsgId: _requiredStorageString(map, 'clientMsgId'),
+    senderId: _requiredStorageString(map, 'senderId'),
+    senderName: _optionalStorageString(map, 'senderName'),
+    senderAvatar: _optionalStorageString(map, 'senderAvatar'),
+    type: _requiredStorageString(map, 'type'),
+    content: _optionalStorageString(map, 'content'),
+    mediaAssetId: _optionalStorageString(map, 'mediaAssetId'),
+    mediaDeliveryUrl: _optionalStorageString(map, 'mediaDeliveryUrl'),
+    mediaType: _optionalStorageString(map, 'mediaType'),
+    mediaContentType: _optionalStorageString(map, 'mediaContentType'),
+    mediaFileSizeBytes: _optionalStorageInt(map, 'mediaFileSizeBytes'),
+    card: _messageCardFromStorage(map['card']),
+    replyToMessageId: _optionalStorageString(map, 'replyToMessageId'),
+    mentions: mentions == null
+        ? null
+        : List<String>.unmodifiable((mentions as List).cast<String>()),
+    status: _requiredStorageString(map, 'status'),
+    recalledAt: _optionalStorageTimestamp(map, 'recalledAt'),
+    timestamp: _optionalStorageTimestamp(map, 'timestamp'),
+  );
+}
+
+MessageCard? _messageCardFromStorage(Object? value) {
+  if (value == null) return null;
+  if (value is! Map) {
+    throw const FormatException('Cached chat message card must be an object');
+  }
+  final map = <String, Object?>{
+    for (final entry in value.entries)
+      if (entry.key is String) entry.key as String: entry.value,
+  };
+  final attributes = map['attributes'];
+  if (attributes is! List) {
+    throw const FormatException(
+      'Cached chat message card attributes must be a list',
+    );
+  }
+  return MessageCard(
+    kind: MessageCardKind.fromWire(map['kind'], 'CachedChatMessage.card.kind'),
+    title: _requiredStorageString(map, 'title'),
+    objectRef: _messageCardObjectRefFromStorage(map['objectRef']),
+    subtitle: _optionalStorageString(map, 'subtitle'),
+    thumbnailUrl: _optionalStorageString(map, 'thumbnailUrl'),
+    deeplink: _optionalStorageString(map, 'deeplink'),
+    landingUrl: _optionalStorageString(map, 'landingUrl'),
+    shareText: _optionalStorageString(map, 'shareText'),
+    message: _optionalStorageString(map, 'message'),
+    attributes: List<MessageCardAttribute>.unmodifiable(
+      attributes.map((raw) {
+        if (raw is! Map) {
+          throw const FormatException(
+            'Cached chat message card attribute must be an object',
+          );
+        }
+        final attribute = <String, Object?>{
+          for (final entry in raw.entries)
+            if (entry.key is String) entry.key as String: entry.value,
+        };
+        return MessageCardAttribute(
+          name: _requiredStorageString(attribute, 'name'),
+          value: _requiredStorageString(attribute, 'value'),
+        );
+      }),
+    ),
+  );
+}
+
+MessageCardObjectRef? _messageCardObjectRefFromStorage(Object? value) {
+  if (value == null) return null;
+  if (value is! Map) {
+    throw const FormatException(
+      'Cached chat message card objectRef must be an object',
+    );
+  }
+  final map = <String, Object?>{
+    for (final entry in value.entries)
+      if (entry.key is String) entry.key as String: entry.value,
+  };
+  return MessageCardObjectRef(
+    objectTypeRef: _requiredStorageString(map, 'objectTypeRef'),
+    objectId: _requiredStorageString(map, 'objectId'),
+    routeId: _requiredStorageString(map, 'routeId'),
+  );
+}
+
+String _requiredStorageString(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! String) {
+    throw FormatException('Cached chat message $key must be a String');
+  }
+  return value;
+}
+
+String? _optionalStorageString(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('Cached chat message $key must be a String');
+  }
+  return value;
+}
+
+int _requiredStorageInt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! int) {
+    throw FormatException('Cached chat message $key must be an int');
+  }
+  return value;
+}
+
+int? _optionalStorageInt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! int) {
+    throw FormatException('Cached chat message $key must be an int');
+  }
+  return value;
+}
+
+DateTime? _optionalStorageTimestamp(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('Cached chat message $key must be a timestamp');
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    throw FormatException('Cached chat message $key must be a timestamp');
+  }
+  return parsed;
 }
 
 Map<String, Object?> _projectionMap(Map<String, Object?> map, String key) {

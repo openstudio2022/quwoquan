@@ -24,3 +24,64 @@ collections:
     indexes:
     - name: idx_recommendation_candidate_source_failure_updated
       keys: {updatedAt: 1}
+  recommendation_candidate_account_restrictions:
+    entity: RecommendationCandidateAccountRestriction
+    role: projection
+    description: UserSuspended/UserRestored 的可逆作者限制投影；只在账号未关闭期间保留 subjectIds，关闭时由 RecommendationSubjectClosureFact consumer 物理删除。
+    indexes:
+    - name: uq_recommendation_candidate_account_restriction
+      keys: {_id: 1}
+      unique: true
+    - name: idx_recommendation_candidate_restricted_subject
+      keys: {subjectIds: 1, restricted: 1}
+  recommendation_candidate_account_restriction_inbox:
+    entity: RecommendationCandidateAccountRestrictionInbox
+    role: inbox
+    description: UserSuspended/UserRestored 的 eventId+digest 幂等回执；不复制主体 payload。
+    indexes:
+    - name: uq_recommendation_candidate_account_restriction_event
+      keys: {_id: 1}
+      unique: true
+  recommendation_candidate_persona_relationships:
+    entity: RecommendationCandidatePersonaRelationshipProjection
+    role: projection
+    description: PersonaFollowStateChanged/PersonaBlocked/PersonaUnblocked 的对象本地有序投影，仅用于 following 候选资格与双向拉黑排除。
+    indexes:
+    - name: uq_recommendation_candidate_persona_relationship_direction
+      keys: {sourcePersonaId: 1, targetPersonaId: 1}
+      unique: true
+    - name: idx_recommendation_candidate_following_subject
+      keys: {sourcePersonaId: 1, following: 1, blocked: 1, targetPersonaId: 1}
+  recommendation_candidate_persona_relationship_inbox:
+    entity: RecommendationCandidatePersonaRelationshipInbox
+    role: inbox
+    description: Persona relationship stream 的 eventId 幂等回执；不复制 User 私有聚合。
+    indexes:
+    - name: uq_recommendation_candidate_persona_relationship_event
+      keys: {_id: 1}
+      unique: true
+streams:
+  events.user.persona_relationship.recommendation-candidate.dlq:
+    entity: RecommendationCandidateIndexView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Persona relationship 投影消费达到重试上限后的脱敏终止记录。
+  events.content.post_lifecycle.recommendation_candidate.dlq:
+    entity: RecommendationCandidateIndexView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Post lifecycle 候选投影消费达到重试上限后的脱敏终止记录。
+  events.ops.premium_pool_entry.recommendation_candidate.dlq:
+    entity: RecommendationCandidateIndexView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: PremiumPoolEntry 候选投影消费达到重试上限后的脱敏终止记录。
+  events.user.account.recommendation-candidate-restriction.dlq:
+    entity: RecommendationCandidateIndexView
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: 账号限制候选投影消费达到重试上限后的脱敏终止记录。

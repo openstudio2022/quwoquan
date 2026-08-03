@@ -100,32 +100,43 @@
 <a id="req-012"></a>
 ### REQ-012 页面错误只表达已确认事实，不猜测原因
 
-- 页面必须先根据 canonical error code 归入唯一用户恢复组，再由恢复组选择标题、说明与恢复动作；未知临时失败进入 `reloadLater`，不得推断为设备离线。
-- 只有系统已确认设备离线或无路由时才允许展示“网络未连接”；DNS、连接拒绝、TLS、客户端超时、5xx、可恢复响应异常和未知临时失败统一进入 `reloadLater`，同时在脱敏日志与遥测中保留原 canonical error code。
+- 页面必须先根据 canonical error code、transport status、failure kind 与 operation auth policy 归入唯一低基数用户恢复组，再由恢复组选择标题、说明与恢复动作；未知临时失败进入 `reloadLater`，不得推断为设备离线或服务故障。
+- 只有系统已确认设备离线或无路由时才允许进入 `connectNetwork`。DNS、连接拒绝、TLS 等未成功访问远端的事实进入 `connectionUnavailable`。
+- 客户端或上游超时进入 `requestTimedOut`，5xx 或已确认依赖不可用进入 `serviceUnavailable`，解析或契约响应异常进入 `invalidContent`。技术细节只在脱敏日志与遥测中保留。
+- 允许匿名或可选鉴权的 operation 发生 401 时进入 `guestSessionUnavailable` 并重试游客会话，不得要求用户登录；只有 required operation 或明确登录门禁的 401 才进入 `loginAgain`。
 - 取消或被新请求取代的操作静默吸收，不展示错误。
+- 页面加载恢复必须返回 generation-bound typed 终态 `content|canonicalEmpty|retainedContent|stillBlocked|superseded|cancelled`；共享错误组件将其收敛为 `recovered|stillBlocked|handedOff|superseded|cancelled`。Widget 不得在 await 后重读共享状态猜测恢复成功。
+- `stillBlocked` 是正常恢复终态：保持原错误页并记录 `still_blocked`，不得抛出异常或进入 bootstrap zone。只有 typed `recovered` 可记录恢复成功；未分类程序错误只记录 `recovery_unexpected_failure`，错误组件不重抛。
 - 成功空结果只有在 Remote envelope 明确携带 canonical empty outcome/reason 时使用空态，不伪装成失败；首页推荐、垂类与视频书内容区只显示次级灰色小字“内容加载完毕”，不得显示图标、错误标题或重试按钮。Following 保留独立“还没有关注动态”业务空态。
 - 已有缓存时保留内容，并使用非阻断“内容未更新”提示。
 - 整页错误只允许一个真实可执行的主操作；没有 handler 的动作不得显示。
 - 整页错误不得显示图标、插画、诊断折叠区或技术卡片；表单局部错误行同样不得显示错误图标，该限制仅不覆盖 `REQ-011` 的权限/登录门禁图标。所有 build mode 的用户 widget 与 semantics tree 均不得出现 operation、canonical error code、route、requestId、traceId、端口、内部域名、证书路径或堆栈。
 - operation、canonical error code、route、surface、requestId 与 traceId 只进入脱敏日志与遥测，不得以 debug build 作为向用户界面暴露技术字段的授权边界。
+- 整页错误、健康空内容和业务空态必须在扣除顶部/底部固定 chrome 与安全区后的真实可见内容区内居中；覆盖式底栏不得参与中心点计算，也不得以页面私有负偏移修正。无覆盖 chrome 的详情页继续按自身完整 body 居中。
 
 <a id="req-013"></a>
 ### REQ-013 用户恢复组合同唯一且按可执行下一步聚类
 
 | 恢复组 | 固定标题 | 固定说明 | 固定动作 |
 |---|---|---|---|
-| `connectNetwork` | 网络未连接 | 打开手机的 Wi‑Fi 或移动数据后，重新加载。 | 重新加载 |
-| `reloadLater` | 暂时无法加载 | 趣我圈暂时没有响应，请稍后重新加载。 | 重新加载 |
-| `loginAgain` | 需要重新登录 | 登录后，可以继续刚才的操作。 | 重新登录 |
-| `enablePermission` | 需要开启权限 | 在设置中允许此权限后，返回继续。 | 去设置 |
-| `waitThenReload` | 请稍等一下 | 操作有点频繁，`{n}` 秒后可以重新加载。 | 倒计时后重新加载 |
+| `connectNetwork` | 没有网络连接 | 连接 Wi-Fi 或移动网络后即可继续浏览。 | 重新加载 |
+| `connectionUnavailable` | 暂时无法访问服务 | 本次内容请求未能到达服务。 | 重新加载 |
+| `requestTimedOut` | 暂时无法访问服务 | 服务响应时间较长，这次请求已停止等待。 | 重新加载 |
+| `serviceUnavailable` | 暂时无法访问服务 | 服务暂时没有完成这次内容请求。 | 重新加载 |
+| `invalidContent` | 内容暂时无法显示 | 返回的内容不完整，暂时无法展示。 | 重新加载 |
+| `guestSessionUnavailable` | 暂时无法开始浏览 | 我们没能完成本次访客验证。 | 重新加载 |
+| `reloadLater` | 这次没能打开内容 | 遇到一个临时问题，我们已经记录。 | 重新加载 |
+| `loginAgain` | 登录已过期 | 重新登录后即可继续浏览。 | 去登录 |
+| `enablePermission` | 需要开启权限 | 允许此权限后即可继续。 | 去设置 |
+| `waitThenReload` | 操作有点频繁 | 还需要等待 `{n}` 秒。 | 倒计时后再试 |
 | `updateApp` | 需要更新应用 | 更新到最新版本后，可以继续使用。 | 立即更新 |
 | `noAccess` | 当前不能查看 | 你的账号暂时不能查看此内容。 | 返回 |
 | `contentGone` | 内容已不可用 | 内容已被删除或下架。 | 返回 |
-| `contentUnavailable` | 当前内容无法使用 | 返回后，可以继续查看其他内容。 | 返回 |
+| `contentUnavailable` | 当前内容无法使用 | 你还可以继续查看其他内容。 | 返回 |
 
 - 不透明 404 只能进入 `contentUnavailable`；只有明确 tombstone、删除或下架事实才进入 `contentGone`。
 - `updateApp` 只有在最低版本不满足且官方更新入口已验证时可用；普通 404 不得猜测为版本问题。
+- 标题描述结果、说明解释已确认的原因类别、动作只描述下一步；说明不得包含主动作完整文案，整页错误不得出现品牌名称或圈子跳转次级动作。
 - 用户文案禁止出现 DNS、TLS、CA、证书、host、端口、HTTP、解析、连接拒绝、上游、契约、响应格式和堆栈。
 
 <a id="req-014"></a>
@@ -135,7 +146,7 @@
 - 页面和区块使用共享低疲劳占位；视频保留同源封面，300ms 后显示紧凑进度，3 秒显示慢提示，6 秒进入恢复组终态。
 - cancel、supersede、返回与 dispose 必须终止旧 generation，旧结果不得回写。
 - 关键首屏无内容时只显示一个整页状态。有缓存时保留内容并显示一个非阻断提示。一个可选区块失败由区块呈现。两个以上失败由页面合并。
-- 多恢复组同时失败时只显示最高优先级：`updateApp → loginAgain → enablePermission → connectNetwork → waitThenReload → reloadLater → noAccess/contentUnavailable`；页面级状态可见时隐藏子区块 loading/error。
+- 多恢复组同时失败时只显示最高优先级：`updateApp → loginAgain/guestSessionUnavailable → enablePermission → connectNetwork → connectionUnavailable → requestTimedOut → serviceUnavailable → invalidContent → waitThenReload → reloadLater → noAccess/contentUnavailable`；页面级状态可见时隐藏子区块 loading/error。
 
 ## 4. 契约引用
 
@@ -180,6 +191,9 @@
 - WHEN 页面解析并呈现该失败。
 - THEN 标题、说明与唯一恢复动作均由 canonical error code 对应的用户恢复组决定，未知失败不得猜测为网络原因，技术诊断只在脱敏日志与遥测中保留原 canonical error code。
 - AND 取消操作不展示错误、成功空结果只展示空态、缓存回退不遮挡已有内容。
+- AND 离线、远端连接失败、超时、服务不可用、响应不可显示和游客会话失败分别呈现用户可理解且不重复的说明，页面不显示品牌名称、技术字段或圈子跳转动作。
+- AND 发布前自动验收在受控 API Edge 故障中验证整页错误只含一个主操作、文案属于已声明恢复组且不含品牌或技术字段；恢复同一环境后，用户在同一次 App 安装中执行该操作即可重新看到真实 release-bound 内容。
+- AND 首页、联系人等主壳页面的错误和合法空态在扣除底部导航及安全区后的可见内容区内上下均衡；详情页不受主壳偏移影响，动态字体或小屏内容过高时恢复动作仍可滚动到达。
 
 <a id="gwt-013"></a>
 ### GWT-013 同一恢复组在全 App 使用完全相同语义

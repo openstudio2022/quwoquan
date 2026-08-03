@@ -22,5 +22,10 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.default",
   "evaluationProfileRef": "evaluation.evidence_lookup",
-  "replayAssetRef": "assistant.replay.huawei_cloud_qa.v1"
+  "replayAssetRef": "assistant.replay.huawei_cloud_qa",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

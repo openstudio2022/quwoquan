@@ -28,7 +28,7 @@
     "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
     "releaseId": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
-    "readinessPhase": {"enum": ["consumer", "commercial"]},
+    "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "sourceImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "creatorImportReportRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "apiBaseUrl": {"type": "string", "pattern": "^https://"},
@@ -159,7 +159,7 @@
   "allOf": [
     {
       "if": {
-        "properties": {"readinessPhase": {"const": "commercial"}},
+        "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},
         "required": ["readinessPhase"]
       },
       "then": {

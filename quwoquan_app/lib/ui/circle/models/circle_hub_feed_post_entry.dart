@@ -5,7 +5,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子 Hub 帖子的强类型页面模型。
 ///
-/// 云侧公开内容事实由 [CircleFeedPostProjection] 提供；本类型只维护沉浸查看器
+/// 云侧公开内容事实由 [CircleFeedItemView] 提供；本类型只维护沉浸查看器
 /// 返回的会话内互动快照，不保存或向 UI 暴露动态 wire map。
 final class CircleHubFeedPostEntry {
   CircleHubFeedPostEntry._({
@@ -28,7 +28,7 @@ final class CircleHubFeedPostEntry {
   factory CircleHubFeedPostEntry.fromPost({
     required String circleId,
     String placementId = '',
-    required PostBaseDto post,
+    required ContentPostViewData post,
     bool pinned = false,
     bool featured = false,
     DateTime? pinnedAt,
@@ -64,14 +64,14 @@ final class CircleHubFeedPostEntry {
   }
 
   factory CircleHubFeedPostEntry.fromProjection({
-    required CircleFeedPostProjection projection,
+    required CircleFeedItemView projection,
     CircleFeedPostProjectionMapper mapper =
         const CircleFeedPostProjectionMapper(),
   }) {
     return CircleHubFeedPostEntry.fromPost(
       circleId: projection.circleId,
       placementId: projection.placementId,
-      post: mapper.toDto(projection.post),
+      post: mapper.toDto(projection),
       pinned: projection.pinned,
       featured: projection.featured,
       pinnedAt: projection.pinnedAt,
@@ -81,7 +81,7 @@ final class CircleHubFeedPostEntry {
 
   final String circleId;
   final String placementId;
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final PostReadPresentation presentation;
   final bool pinned;
   final bool featured;
@@ -143,7 +143,7 @@ final class CircleHubFeedPostEntry {
   }
 
   MediaViewerPostWireRow toMediaViewerWireRow() {
-    return MediaViewerPostWireRow.fromPostBase(
+    return MediaViewerPostWireRow.fromViewData(
       post,
       circleId: circleId,
       likeCount: likeCount,

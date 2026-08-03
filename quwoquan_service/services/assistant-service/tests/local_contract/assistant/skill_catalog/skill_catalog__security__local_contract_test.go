@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-004
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 package local_contract
 
 import (
@@ -28,17 +29,6 @@ func (source catalogSourceStub) ListCatalogItems(
 	context.Context,
 ) ([]model.Item, error) {
 	return append([]model.Item(nil), source.items...), source.err
-}
-
-type consentReaderStub struct {
-	read func(string) (map[string]string, error)
-}
-
-func (reader consentReaderStub) ListGrantedScopes(
-	_ context.Context,
-	accountID string,
-) (map[string]string, error) {
-	return reader.read(accountID)
 }
 
 func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
@@ -76,10 +66,18 @@ func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
 	if err := yaml.Unmarshal(payload, &document); err != nil {
 		t.Fatalf("parse SkillCatalog operations: %v", err)
 	}
-	if len(document.APIRoutes) != 1 {
-		t.Fatalf("SkillCatalog routes=%d, want 1", len(document.APIRoutes))
+	if len(document.APIRoutes) != 2 {
+		t.Fatalf("SkillCatalog routes=%d, want 2", len(document.APIRoutes))
 	}
-	route := document.APIRoutes[0]
+	var route, detailRoute = document.APIRoutes[0], document.APIRoutes[0]
+	for _, candidate := range document.APIRoutes {
+		if candidate.Operation == "ListSkills" {
+			route = candidate
+		}
+		if candidate.Operation == "GetSkillCatalogItem" {
+			detailRoute = candidate
+		}
+	}
 	if route.Operation != "ListSkills" || route.Actor != "account" ||
 		route.Commercial.Status != "ready" ||
 		route.Authorization.Principal != "account" ||
@@ -91,18 +89,24 @@ func TestListSkillsContractIsSingleTrackPrivateAccountReader(t *testing.T) {
 		route.Security.Visibility != "private" {
 		t.Fatalf("ListSkills authorization/commercial drifted: %+v", route)
 	}
-	if route.Privacy.Request != "SENSITIVE" || route.Privacy.Response != "SENSITIVE" {
+	if route.Privacy.Request != "SENSITIVE" || route.Privacy.Response != "PUBLIC" {
 		t.Fatalf("ListSkills privacy drifted: %+v", route.Privacy)
 	}
 	for _, code := range []string{
 		"ASSISTANT.USER.skill_catalog_unauthorized",
 		"ASSISTANT.USER.skill_catalog_invalid_argument",
-		"ASSISTANT.SYSTEM.skill_catalog_consent_unavailable",
 		"ASSISTANT.SYSTEM.skill_catalog_unavailable",
 	} {
 		if !contains(route.Errors, code) {
 			t.Fatalf("ListSkills missing object-owned error %s: %v", code, route.Errors)
 		}
+	}
+	if detailRoute.Operation != "GetSkillCatalogItem" ||
+		detailRoute.Commercial.Status != "ready" ||
+		detailRoute.Authorization.OwnershipPolicy != "requester_self" ||
+		detailRoute.Security.AnonymousPolicy != "deny" ||
+		!contains(detailRoute.Errors, "ASSISTANT.USER.skill_catalog_not_found") {
+		t.Fatalf("GetSkillCatalogItem contract drifted: %+v", detailRoute)
 	}
 
 	for _, oldFile := range []string{
@@ -156,14 +160,11 @@ func TestSkillCatalogStorageIsCanonicalResourceReaderProjection(t *testing.T) {
 	}
 }
 
-func TestListSkillsFailsClosedForIdentitySourceAndConsentFailures(t *testing.T) {
+func TestListSkillsFailsClosedForIdentityAndSourceFailures(t *testing.T) {
 	t.Parallel()
 	items := []model.Item{{SkillID: "weather", DisplayName: "天气助手"}}
-	workingConsent := consentReaderStub{read: func(string) (map[string]string, error) {
-		return map[string]string{}, nil
-	}}
 
-	service := application.NewQueryService(catalogSourceStub{items: items}, workingConsent)
+	service := application.NewQueryService(catalogSourceStub{items: items})
 	_, err := service.ListSkills(t.Context(), application.ListSkillsQuery{})
 	assertCatalogError(t, err, "ASSISTANT.USER.skill_catalog_unauthorized", 401)
 	for _, limit := range []int{0, -1, 101} {
@@ -179,32 +180,45 @@ func TestListSkillsFailsClosedForIdentitySourceAndConsentFailures(t *testing.T) 
 		)
 	}
 
-	_, err = application.NewQueryService(nil, workingConsent).ListSkills(
+	_, err = application.NewQueryService(nil).ListSkills(
 		t.Context(), application.ListSkillsQuery{AccountID: "account-a", Limit: 64},
 	)
 	assertCatalogError(t, err, "ASSISTANT.SYSTEM.skill_catalog_unavailable", 503)
 
 	_, err = application.NewQueryService(
 		catalogSourceStub{items: items, err: errors.New("manifest unavailable")},
-		workingConsent,
 	).ListSkills(t.Context(), application.ListSkillsQuery{AccountID: "account-a", Limit: 64})
 	assertCatalogError(t, err, "ASSISTANT.SYSTEM.skill_catalog_unavailable", 503)
-
-	_, err = application.NewQueryService(catalogSourceStub{items: items}, nil).ListSkills(
-		t.Context(), application.ListSkillsQuery{AccountID: "account-a", Limit: 64},
-	)
-	assertCatalogError(t, err, "ASSISTANT.SYSTEM.skill_catalog_consent_unavailable", 503)
-
-	_, err = application.NewQueryService(
-		catalogSourceStub{items: items},
-		consentReaderStub{read: func(string) (map[string]string, error) {
-			return nil, errors.New("consent unavailable")
-		}},
-	).ListSkills(t.Context(), application.ListSkillsQuery{AccountID: "account-a", Limit: 64})
-	assertCatalogError(t, err, "ASSISTANT.SYSTEM.skill_catalog_consent_unavailable", 503)
 }
 
-func TestListSkillsUsesOnlyRequestingAccountConsent(t *testing.T) {
+func TestGetSkillCatalogItemProgressivelyDisclosesActivePackageSchema(t *testing.T) {
+	t.Parallel()
+	items := []model.Item{{
+		SkillID:             "travel_companion",
+		DisplayName:         "贴身旅行管家",
+		ConfigurationSchema: []byte(`{"type":"object","additionalProperties":false}`),
+	}}
+	service := application.NewQueryService(catalogSourceStub{items: items})
+
+	detail, err := service.GetSkillCatalogItem(
+		t.Context(),
+		application.GetSkillCatalogItemQuery{
+			AccountID: "account-a",
+			SkillID:   "travel_companion",
+		},
+	)
+	if err != nil || detail.Item.SkillID != "travel_companion" ||
+		len(detail.ConfigurationSchema) == 0 {
+		t.Fatalf("GetSkillCatalogItem detail=%+v err=%v", detail, err)
+	}
+	_, err = service.GetSkillCatalogItem(
+		t.Context(),
+		application.GetSkillCatalogItemQuery{AccountID: "account-a", SkillID: "missing"},
+	)
+	assertCatalogError(t, err, "ASSISTANT.USER.skill_catalog_not_found", 404)
+}
+
+func TestListSkillsDoesNotMixAccountConsentIntoCatalog(t *testing.T) {
 	t.Parallel()
 	items := []model.Item{{
 		SkillID:         model.PersonalContentAccessSkillID,
@@ -212,17 +226,7 @@ func TestListSkillsUsesOnlyRequestingAccountConsent(t *testing.T) {
 		Description:     "允许读取个人内容。",
 		RequiresConsent: true,
 	}}
-	service := application.NewQueryService(
-		catalogSourceStub{items: items},
-		consentReaderStub{read: func(accountID string) (map[string]string, error) {
-			if accountID == "account-a" {
-				return map[string]string{
-					model.PersonalContentAccessSkillID: "read_own_content",
-				}, nil
-			}
-			return map[string]string{}, nil
-		}},
-	)
+	service := application.NewQueryService(catalogSourceStub{items: items})
 
 	owner, err := service.ListSkills(
 		t.Context(), application.ListSkillsQuery{AccountID: "account-a", Limit: 64},
@@ -236,27 +240,36 @@ func TestListSkillsUsesOnlyRequestingAccountConsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("foreign ListSkills: %v", err)
 	}
-	if !strings.Contains(owner.Items[0].Description, "read_own_content") {
-		t.Fatalf("owner scope missing: %+v", owner.Items[0])
-	}
-	if strings.Contains(foreign.Items[0].Description, "read_own_content") {
-		t.Fatalf("foreign account observed owner scope: %+v", foreign.Items[0])
+	if owner.Items[0].SkillID != foreign.Items[0].SkillID ||
+		owner.Items[0].Description != foreign.Items[0].Description ||
+		owner.Items[0].Description != "允许读取个人内容。" {
+		t.Fatalf("catalog mixed account state: owner=%+v foreign=%+v", owner.Items[0], foreign.Items[0])
 	}
 }
 
-func TestCanonicalCatalogSourceOwnsManifestAndBuiltInEntries(t *testing.T) {
-	items, err := resource.NewCatalogSource().ListCatalogItems(t.Context())
+func TestBuildSourceContainsOnlyDeclaredManifests(t *testing.T) {
+	items, err := resource.NewSourceBuilder().ListCatalogItems(t.Context())
 	if err != nil {
 		t.Fatalf("read canonical SkillCatalog source: %v", err)
 	}
-	for _, skillID := range []string{
-		"fallback_general_search",
+	if !hasSkill(items, "fallback_general_search") {
+		t.Fatal("build source misses fallback_general_search")
+	}
+	for _, item := range items {
+		if item.SkillID == "travel_companion" &&
+			(item.ConfigurationSchemaDigest == "" ||
+				len(item.ConfigurationSchema) == 0 ||
+				item.SetupTemplateRef == "" || item.ActivationMode != "hybrid") {
+			t.Fatalf("build source catalog metadata is incomplete: %+v", item)
+		}
+	}
+	for _, invented := range []string{
 		model.PersonalContentAccessSkillID,
 		"assistant_learning",
 		"assistant_navigation",
 	} {
-		if !hasSkill(items, skillID) {
-			t.Fatalf("canonical SkillCatalog missing %q", skillID)
+		if hasSkill(items, invented) {
+			t.Fatalf("build source invented undeclared catalog item %q", invented)
 		}
 	}
 }

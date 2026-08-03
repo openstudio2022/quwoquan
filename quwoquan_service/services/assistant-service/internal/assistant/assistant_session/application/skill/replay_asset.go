@@ -11,13 +11,11 @@ import (
 const MinimumReplayCasesPerSkill = 10
 
 type ReplayCorpus struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	Assets        []ReplayCorpusAsset `json:"assets"`
+	Assets []ReplayCorpusAsset `json:"assets"`
 }
 
 type ReplayCorpusAsset struct {
 	AssetID               string             `json:"assetId"`
-	CorpusVersion         string             `json:"corpusVersion"`
 	SkillID               string             `json:"skillId"`
 	SkillProfileDigest    string             `json:"skillReleaseDigest"`
 	EvaluationProfileRef  string             `json:"evaluationProfileRef"`
@@ -26,9 +24,10 @@ type ReplayCorpusAsset struct {
 }
 
 type ReplayCorpusCase struct {
-	CaseID   string `json:"caseId"`
-	Input    string `json:"input"`
-	Scenario string `json:"scenario"`
+	CaseID              string `json:"caseId"`
+	Input               string `json:"input"`
+	Scenario            string `json:"scenario"`
+	ClarificationSlotID string `json:"clarificationSlotId,omitempty"`
 }
 
 func DecodeReplayCorpus(raw []byte) (ReplayCorpus, error) {
@@ -38,10 +37,8 @@ func DecodeReplayCorpus(raw []byte) (ReplayCorpus, error) {
 	if err := decoder.Decode(&corpus); err != nil {
 		return ReplayCorpus{}, fmt.Errorf("decode replay corpus: %w", err)
 	}
-	if corpus.SchemaVersion != 1 || len(corpus.Assets) == 0 {
-		return ReplayCorpus{}, fmt.Errorf(
-			"replay corpus has unsupported schema or no assets",
-		)
+	if len(corpus.Assets) == 0 {
+		return ReplayCorpus{}, fmt.Errorf("replay corpus has no assets")
 	}
 	return corpus, nil
 }
@@ -98,16 +95,17 @@ func (asset ReplayCorpusAsset) Validate(manifest Manifest) error {
 		)
 	}
 	if strings.TrimSpace(asset.AssetID) == "" ||
-		strings.TrimSpace(asset.CorpusVersion) == "" ||
 		asset.AssetID != manifest.ReplayAssetRef ||
 		asset.SkillID != manifest.SkillID ||
 		asset.SkillProfileDigest != profileDigest ||
 		asset.EvaluationProfileRef != manifest.EvaluationProfileRef ||
 		asset.EvaluationAssetDigest != evaluation.AssetDigest {
 		return fmt.Errorf(
-			"replay asset %q is not bound to skill profile %q",
+			"replay asset %q is not bound to skill profile %q: declared %q expected %q",
 			asset.AssetID,
 			manifest.SkillID,
+			asset.SkillProfileDigest,
+			profileDigest,
 		)
 	}
 	if len(asset.Cases) < MinimumReplayCasesPerSkill {

@@ -7,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -237,8 +238,8 @@ class _AuthenticatedSession extends AuthSessionController {
   }
 }
 
-List<PostBaseDto> _stableFollowingArticles() {
-  return <PostBaseDto>[
+List<ContentPostViewData> _stableFollowingArticles() {
+  return <ContentPostViewData>[
     _stableFollowingArticlePost(
       id: 'web-dev',
       title: '给新同事的 Web 工程工具清单',
@@ -264,13 +265,13 @@ List<PostBaseDto> _stableFollowingArticles() {
   ];
 }
 
-PostBaseDto _stableFollowingArticlePost({
+ContentPostViewData _stableFollowingArticlePost({
   required String id,
   String title = '',
   required String body,
   String coverUrl = '',
 }) {
-  return postBaseDtoFromMap(<String, dynamic>{
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': id,
     '_id': id,
     'postId': id,
@@ -317,8 +318,8 @@ class _StableFollowingDiscoveryFeedMapNotifier
 const String _singleRecommendPostId = 'rec_single_post_1';
 const String _singleRecommendPostBody = '推荐流即时反馈验证正文内容片段';
 
-PostBaseDto _singleRecommendPost() {
-  return postBaseDtoFromMap(<String, dynamic>{
+ContentPostViewData _singleRecommendPost() {
+  return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'id': _singleRecommendPostId,
     '_id': _singleRecommendPostId,
     'postId': _singleRecommendPostId,
@@ -341,7 +342,7 @@ class _SingleRecommendPostFeedMapNotifier extends DiscoveryFeedMapNotifier {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': AsyncData(
         DiscoveryFeedState(
-          items: <PostBaseDto>[_singleRecommendPost()],
+          items: <ContentPostViewData>[_singleRecommendPost()],
           seenItemIds: const <String>[],
           nextCursor: null,
           isLoading: false,
@@ -352,7 +353,13 @@ class _SingleRecommendPostFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   // 禁用真实拉取：移除卡片后保持空态，避免 mock 仓储回填打散断言。
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 }
 
 Widget _buildAppWithSingleRecommendPost() {

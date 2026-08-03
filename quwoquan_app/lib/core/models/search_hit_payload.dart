@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 /// 全局搜索 [SearchHit] 的具名载荷（sealed），避免跨层持匿名 Map 作为业务状态。
@@ -83,7 +83,7 @@ final class SearchUserProfileHitView {
   final String displayName;
   final String? bio;
   final String connectionState;
-  final IntersectionReason? intersectionReason;
+  final CanonicalSearchIntersectionReason? intersectionReason;
 }
 
 final class SearchHitPayloadUserProfile extends SearchHitPayload {
@@ -102,11 +102,11 @@ final class SearchHitPayloadUserProfile extends SearchHitPayload {
   };
 }
 
-/// 圈子「圈子」命中（与 [CircleSearchItemView] 同源）。
+/// 圈子「圈子」命中（与 [CircleSearchHitViewData] 同源）。
 final class SearchHitPayloadCircleCircle extends SearchHitPayload {
   const SearchHitPayloadCircleCircle(this.item);
 
-  final CircleSearchItemView item;
+  final CircleSearchHitViewData item;
 
   @override
   Map<String, Object?> toWireMap() =>
@@ -116,7 +116,7 @@ final class SearchHitPayloadCircleCircle extends SearchHitPayload {
 final class SearchHitPayloadCircleGroup extends SearchHitPayload {
   const SearchHitPayloadCircleGroup(this.item);
 
-  final CircleSearchItemView item;
+  final CircleSearchHitViewData item;
 
   @override
   Map<String, Object?> toWireMap() =>
@@ -188,16 +188,16 @@ final class SearchHitPayloadLocationPlace extends SearchHitPayload {
 final class SearchHitPayloadLocationPoi extends SearchHitPayload {
   const SearchHitPayloadLocationPoi(this.item);
 
-  final LocationPoiDto item;
+  final LocationPoi item;
 
   @override
-  Map<String, Object?> toWireMap() => Map<String, Object?>.from(item.toMap());
+  Map<String, Object?> toWireMap() => item.toWire();
 }
 
 final class SearchHitPayloadSocialRelation extends SearchHitPayload {
   const SearchHitPayloadSocialRelation(this.item);
 
-  final SocialRelationSearchItemView item;
+  final SocialRelationSearchItemViewData item;
 
   @override
   Map<String, Object?> toWireMap() => <String, Object?>{

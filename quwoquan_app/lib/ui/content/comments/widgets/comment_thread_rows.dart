@@ -5,10 +5,7 @@ part of 'comment_thread_view.dart';
 
 /// 评论头像点击进入作者主页：携带评论快照作乐观首屏，
 /// referralSource 归因链由路由侧 authorProfile 语义承载。
-void _openCommentAuthorProfile(
-  BuildContext context,
-  ContentCommentListItem comment,
-) {
+void _openCommentAuthorProfile(BuildContext context, CommentViewData comment) {
   final authorId = comment.authorId.trim();
   if (authorId.isEmpty) return;
   context.push(
@@ -50,7 +47,7 @@ class _CommentThreadItem extends ConsumerWidget {
   });
 
   final String postId;
-  final ContentCommentListItem comment;
+  final CommentViewData comment;
   final bool isDark;
   final bool loadingReplies;
   final bool repliesExpanded;
@@ -59,7 +56,7 @@ class _CommentThreadItem extends ConsumerWidget {
   final bool highlighted;
   final String? highlightedReplyId;
   final GlobalKey Function(String replyId)? replyItemKeyFor;
-  final ValueChanged<ContentCommentListItem>? onReplySelected;
+  final ValueChanged<CommentViewData>? onReplySelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -97,10 +94,9 @@ class _CommentThreadItem extends ConsumerWidget {
             Expanded(child: _buildContent(context, ref)),
             SizedBox(width: AppSpacing.xs),
             _CommentReactionGroup(
-              likeSelected:
-                  comment.viewerReaction == ContentCommentReactionValue.like,
+              likeSelected: comment.viewerReaction == CommentReactionType.like,
               dislikeSelected:
-                  comment.viewerReaction == ContentCommentReactionValue.dislike,
+                  comment.viewerReaction == CommentReactionType.dislike,
               showDeleteAction: comment.canDelete,
               likeCount: comment.likeCount,
               dislikeCount: comment.dislikeCount,
@@ -176,11 +172,10 @@ class _CommentThreadItem extends ConsumerWidget {
     final canReplyToComment = comment.canReply && !comment.canDelete;
     // 交集关系标签：只渲染服务端事实投影（关注/互关），无事实不显示。
     final relationBadge = switch (comment.viewerRelation) {
-      ContentCommentViewerRelation.friend =>
-        ContentText.commentRelationFriendBadge,
-      ContentCommentViewerRelation.following =>
+      CommentViewerRelation.friend => ContentText.commentRelationFriendBadge,
+      CommentViewerRelation.following =>
         ContentText.commentRelationFollowingBadge,
-      ContentCommentViewerRelation.none => null,
+      CommentViewerRelation.none => null,
     };
     final hasBadges =
         comment.isPinned ||
@@ -268,7 +263,7 @@ class _CommentThreadItem extends ConsumerWidget {
   Future<void> _togglePin(
     BuildContext context,
     WidgetRef ref,
-    ContentCommentListItem comment,
+    CommentViewData comment,
   ) async {
     final willPin = !comment.isPinned;
     try {

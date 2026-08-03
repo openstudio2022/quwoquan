@@ -1,10 +1,10 @@
 // Package queryheatstore is the MongoDB persistence for the derived search-term
-// heat read model (rm_search_term_heat). It mines the raw query + feedback logs
-// (write source) with the pure queryheat algorithm and serves the result to the
-// ranking layer. DDD: the only driver-touching layer; the algorithm stays pure.
+// heat read model (rm_search_term_heat). It mines SearchRequestFact locally and
+// consumes SearchFeedbackFact through its typed reader; sibling collections are
+// never opened here. The pure queryheat algorithm remains storage agnostic.
 //
 // Single source: the heat read model is REBUILDABLE from the logs; it is never
-// a source of truth. TTL (storage.yaml derived_read_models.rm_search_term_heat)
+// a source of truth. TTL (storage.yaml collections.rm_search_term_heat)
 // recycles stale aggregates so the served heat always reflects a recent window.
 package queryheatstore
 
@@ -17,15 +17,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	feedbackapplication "quwoquan_service/services/search-service/internal/search/search_feedback_fact/application"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application/queryheat"
 )
 
 const (
-	queriesCollection  = "search_queries"
-	feedbackCollection = "search_feedback_events"
-	heatCollection     = "rm_search_term_heat"
+	queriesCollection = "search_queries"
+	heatCollection    = "rm_search_term_heat"
 
-	// HeatTTLSeconds — single source: storage.yaml derived_read_models
+	// HeatTTLSeconds — single source: storage.yaml collections
 	// .rm_search_term_heat.ttl.seconds (24h). Exported + pinned by a contract test.
 	HeatTTLSeconds = 86400
 
@@ -41,21 +41,29 @@ const (
 // Store builds + serves the rm_search_term_heat read model.
 type Store struct {
 	queries  *mongo.Collection
-	feedback *mongo.Collection
 	heat     *mongo.Collection
+	feedback feedbackapplication.HeatReader
 	cfg      queryheat.Config
 	logger   *slog.Logger
 }
 
 // NewStore wires the collections and ensures the read-model indexes + TTL.
-func NewStore(db *mongo.Database, cfg queryheat.Config, logger *slog.Logger) *Store {
+func NewStore(
+	db *mongo.Database,
+	feedback feedbackapplication.HeatReader,
+	cfg queryheat.Config,
+	logger *slog.Logger,
+) *Store {
+	if db == nil || feedback == nil {
+		panic("SearchTermHeatView requires MongoDB and SearchFeedbackFact reader")
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	s := &Store{
 		queries:  db.Collection(queriesCollection),
-		feedback: db.Collection(feedbackCollection),
 		heat:     db.Collection(heatCollection),
+		feedback: feedback,
 		cfg:      cfg,
 		logger:   logger,
 	}
@@ -92,13 +100,6 @@ type queryRow struct {
 	Query           string    `bson:"query"`
 	CreatedAt       time.Time `bson:"createdAt"`
 	ResultCount     int       `bson:"resultCount"`
-}
-
-type feedbackRow struct {
-	SearchRequestID string    `bson:"searchRequestId"`
-	EventType       string    `bson:"eventType"`
-	ObjectID        string    `bson:"objectId"`
-	CreatedAt       time.Time `bson:"createdAt"`
 }
 
 type heatRow struct {
@@ -170,22 +171,12 @@ func (s *Store) loadQueries(ctx context.Context, since time.Time) ([]queryheat.Q
 }
 
 func (s *Store) loadFeedback(ctx context.Context, since time.Time, termByRequest map[string]string) ([]queryheat.FeedbackRecord, error) {
-	cursor, err := s.feedback.Find(ctx,
-		bson.M{"createdAt": bson.M{"$gte": since}},
-		options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}).SetLimit(maxScan),
-	)
+	rows, err := s.feedback.ListHeatFeedback(ctx, since, maxScan)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
-
 	records := make([]queryheat.FeedbackRecord, 0, 256)
-	for cursor.Next(ctx) {
-		var row feedbackRow
-		if err := cursor.Decode(&row); err != nil {
-			s.logger.Warn("queryheatstore: decode feedback row failed", slog.String("error", err.Error()))
-			continue
-		}
+	for _, row := range rows {
 		term, ok := termByRequest[row.SearchRequestID]
 		if !ok || term == "" {
 			// The originating query is outside the window or unlogged; skip
@@ -199,7 +190,7 @@ func (s *Store) loadFeedback(ctx context.Context, since time.Time, termByRequest
 			CreatedAt:      row.CreatedAt,
 		})
 	}
-	return records, cursor.Err()
+	return records, nil
 }
 
 // RelatedTerms loads the hottest heat rows and narrows them to normalizedQuery

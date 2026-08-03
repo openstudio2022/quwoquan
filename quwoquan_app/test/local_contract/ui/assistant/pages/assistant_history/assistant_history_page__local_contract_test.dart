@@ -27,9 +27,9 @@ import 'package:hive/hive.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
+import 'package:quwoquan_app/cloud/services/notification/notification_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
@@ -685,17 +685,17 @@ class _RecordingAssistantRunFacet implements AssistantSessionRunFacet {
 class _RecordingLearningFactAppendFacet
     implements AssistantLearningFactAppendFacet {
   @override
-  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+  Future<AssistantLearningFactReceipt> appendUserFact({
     required AssistantLearningFactAppendCommand request,
   }) async {
-    return AssistantLearningFactAppendReceipt(
+    return AssistantLearningFactReceipt(
       eventId: request.eventId,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
       payloadDigest:
           '0000000000000000000000000000000000000000000000000000000000000000',
-      recordedAt: DateTime.now().toUtc(),
+      recordedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
 }
@@ -707,7 +707,7 @@ class _FakeAppMessageQuery implements AppMessageQuery {
     return AppMessage(
       messageId: query.messageId,
       userId: 'user_assistant_uat',
-      messageType: 'assistant',
+      messageType: NotificationType.assistant,
       source: 'assistant_turn',
       sourceId: 'atn_uat_personal',
       destination: const AppMessageDestination(
@@ -719,6 +719,7 @@ class _FakeAppMessageQuery implements AppMessageQuery {
       target: const AppMessageTarget(
         targetType: 'assistant_turn',
         targetId: 'atn_uat_personal',
+        query: AppMessageRouteQuery(),
       ),
       read: false,
       createdAt: DateTime.utc(2026, 7, 19),

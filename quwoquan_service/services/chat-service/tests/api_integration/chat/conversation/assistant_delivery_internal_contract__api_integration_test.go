@@ -13,8 +13,8 @@ import (
 )
 
 type assistantDeliveryMembershipResponse struct {
-	CreatorMember        bool `json:"creatorMember"`
-	AssistantSkillMember bool `json:"assistantSkillMember"`
+	CreatorMember   bool `json:"creatorMember"`
+	AssistantMember bool `json:"assistantMember"`
 }
 
 type assistantDeliveryMessageResponse struct {
@@ -35,7 +35,7 @@ func TestAssistantDeliveryInternalContractUsesExactMembershipAndIdempotency(
 	doPost(
 		t,
 		"/chat/conversations/"+conversationID+"/assistant",
-		`{"skillId":"general"}`,
+		``,
 		"user_test_001",
 		http.StatusOK,
 	)
@@ -48,7 +48,6 @@ func TestAssistantDeliveryInternalContractUsesExactMembershipAndIdempotency(
 
 	query := url.Values{
 		"creatorPersonaId": {"user_test_001"},
-		"assistantSkillId": {"general"},
 	}
 	membershipPath :=
 		serviceclients.ChatResolveAssistantDeliveryMembershipPath(
@@ -63,7 +62,7 @@ func TestAssistantDeliveryInternalContractUsesExactMembershipAndIdempotency(
 		http.StatusOK,
 		&membership,
 	)
-	if !membership.CreatorMember || !membership.AssistantSkillMember {
+	if !membership.CreatorMember || !membership.AssistantMember {
 		t.Fatalf("有效成员授权切片漂移: %+v", membership)
 	}
 
@@ -135,7 +134,7 @@ func TestAssistantDeliveryInternalContractUsesExactMembershipAndIdempotency(
 		http.StatusOK,
 		&membership,
 	)
-	if membership.AssistantSkillMember {
+	if membership.AssistantMember {
 		t.Fatalf("已移除助手仍被授权: %+v", membership)
 	}
 	internalAssistantRequest(

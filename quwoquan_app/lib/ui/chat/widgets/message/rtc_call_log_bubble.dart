@@ -1,6 +1,6 @@
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -15,7 +15,7 @@ final class RtcCallLogPresentation {
 
   bool get isVideo => callType == CallType.video;
 
-  factory RtcCallLogPresentation.fromCard(ChatMessageCardDto? card) {
+  factory RtcCallLogPresentation.fromCard(MessageCard? card) {
     final attributes = <String, String>{
       for (final attribute in card?.attributes ?? const [])
         attribute.name: attribute.value,
@@ -29,10 +29,10 @@ final class RtcCallLogPresentation {
       );
     }
     return RtcCallLogPresentation(
-      callType: CallType.fromString(callType),
+      callType: CallType.fromWire(callType, 'MessageCard.callType'),
       summary: CallSummary.describe(
         duration: Duration(milliseconds: durationMs),
-        endReason: EndReason.fromString(endReason),
+        endReason: EndReason.fromWire(endReason, 'MessageCard.endReason'),
         connected: durationMs > 0,
       ),
     );
@@ -46,7 +46,7 @@ class RtcCallLogBubble extends StatelessWidget {
     required this.onRedial,
   });
 
-  final ChatMessageCardDto? card;
+  final MessageCard? card;
   final VoidCallback? onRedial;
 
   @override

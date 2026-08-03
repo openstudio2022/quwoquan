@@ -9,6 +9,25 @@ from core.paths import execution_root
 
 _AUTO_DISCOVERY_REPORT = "auto_research_plan.json"
 
+# Every list-valued, per-entity evidence field emitted by the lane writers must
+# survive both the in-wave worker merge and the cross-wave execution merge.
+# Keeping the inventory here prevents video/article evidence from silently
+# disappearing when research_wave_size is smaller than the target set.
+AUTO_RESEARCH_MERGE_ROW_KEYS = (
+    "updated",
+    "issues",
+    "candidates",
+    "articleSourceDiscovery",
+    "imageCollections",
+    "homepageMediaCollections",
+    "homepageMediaAdvisories",
+    "sourceUnavailable",
+    "rescueEvents",
+    "videoFrames",
+    "videoDiscovery",
+    "videoProviderFunnels",
+)
+
 def _source_availability_summary(report: dict[str, Any], entity_ids: list[str]) -> dict[str, Any]:
     unavailable_by_entity: dict[str, list[DataIssue]] = {}
     for item in report.get("sourceUnavailable") or []:
@@ -146,16 +165,6 @@ def _write_auto_report_artifacts(execution_id: str, report: dict[str, Any]) -> N
     write_json(shared_dir / _AUTO_DISCOVERY_REPORT, report)
 
 def _merge_auto_reports(base: dict[str, Any], incoming: dict[str, Any]) -> None:
-    for key in (
-        "updated",
-        "issues",
-        "candidates",
-        "articleSourceDiscovery",
-        "imageCollections",
-        "homepageMediaCollections",
-        "homepageMediaAdvisories",
-        "sourceUnavailable",
-        "rescueEvents",
-    ):
+    for key in AUTO_RESEARCH_MERGE_ROW_KEYS:
         rows = incoming.get(key) if isinstance(incoming.get(key), list) else []
         base.setdefault(key, []).extend(rows)

@@ -251,23 +251,36 @@ type commercialDocument struct {
 }
 
 type runtimeEntrypointDocument struct {
-	Name        string `yaml:"name"`
-	RuntimeKind string `yaml:"kind"`
-	Phase       string `yaml:"phase"`
-	Application struct {
-		Kind         string `yaml:"kind"`
-		Facet        string `yaml:"facet"`
-		Method       string `yaml:"method"`
-		SessionOwner string `yaml:"session_owner"`
+	Name          string   `yaml:"name"`
+	RuntimeKind   string   `yaml:"kind"`
+	Phase         string   `yaml:"phase"`
+	SourceEvents  []string `yaml:"source_events"`
+	SourceObjects []string `yaml:"source_objects"`
+	Checkpoint    string   `yaml:"checkpoint"`
+	Rebuild       string   `yaml:"rebuild"`
+	Tombstone     string   `yaml:"tombstone"`
+	Idempotency   string   `yaml:"idempotency"`
+	Application   struct {
+		Kind        string `yaml:"kind"`
+		Facet       string `yaml:"facet"`
+		Method      string `yaml:"method"`
+		ObjectOwner string `yaml:"object_owner"`
 	} `yaml:"application"`
 }
 
 type routeDocument struct {
-	Method           string                    `yaml:"method"`
-	Path             string                    `yaml:"path"`
-	Operation        string                    `yaml:"operation"`
-	RequestEntity    string                    `yaml:"request_entity"`
-	RequestBodyKind  string                    `yaml:"request_body_kind"`
+	Method          string `yaml:"method"`
+	Path            string `yaml:"path"`
+	Operation       string `yaml:"operation"`
+	RequestEntity   string `yaml:"request_entity"`
+	RequestBodyKind string `yaml:"request_body_kind"`
+	Transport       string `yaml:"transport"`
+	Streaming       *struct {
+		ResumeRequestField  string   `yaml:"resume_request_field"`
+		ResumeResponseField string   `yaml:"resume_response_field"`
+		TerminalField       string   `yaml:"terminal_field"`
+		TerminalValues      []string `yaml:"terminal_values"`
+	} `yaml:"streaming"`
 	RequestBindings  *requestBindingsDocument  `yaml:"request_bindings"`
 	RequestConstants *requestConstantsDocument `yaml:"request_constants"`
 	PathParams       any                       `yaml:"path_params"`
@@ -478,6 +491,19 @@ func loadService(
 				MaximumBodyBytes: route.ResponseAdmission.MaximumBodyBytes,
 			}
 		}
+		transport := strings.ToLower(strings.TrimSpace(route.Transport))
+		if transport == "" {
+			transport = "json"
+		}
+		var streaming *ast.StreamingPolicy
+		if route.Streaming != nil {
+			streaming = &ast.StreamingPolicy{
+				ResumeRequestField:  strings.TrimSpace(route.Streaming.ResumeRequestField),
+				ResumeResponseField: strings.TrimSpace(route.Streaming.ResumeResponseField),
+				TerminalField:       strings.TrimSpace(route.Streaming.TerminalField),
+				TerminalValues:      trimStrings(route.Streaming.TerminalValues),
+			}
+		}
 		operations = append(operations, ast.Operation{
 			ID:                     object.ID + "." + localID,
 			LocalID:                localID,
@@ -499,6 +525,8 @@ func loadService(
 			ActorRequirement:       actor,
 			RequestEntity:          strings.TrimSpace(route.RequestEntity),
 			RequestBodyKind:        strings.TrimSpace(route.RequestBodyKind),
+			Transport:              transport,
+			Streaming:              streaming,
 			RequestBindings:        requestBindings,
 			RequestConstants:       requestConstants,
 			LegacyRequestKeys:      legacyRequestKeys,
@@ -600,7 +628,13 @@ func loadService(
 			ApplicationKind: applicationKind,
 			Facet:           strings.TrimSpace(entrypoint.Application.Facet),
 			FacadeMethod:    strings.TrimSpace(entrypoint.Application.Method),
-			SessionOwner:    strings.TrimSpace(entrypoint.Application.SessionOwner),
+			ObjectOwner:     strings.TrimSpace(entrypoint.Application.ObjectOwner),
+			SourceEvents:    trimStrings(entrypoint.SourceEvents),
+			SourceObjects:   trimStrings(entrypoint.SourceObjects),
+			Checkpoint:      strings.TrimSpace(entrypoint.Checkpoint),
+			Rebuild:         strings.TrimSpace(entrypoint.Rebuild),
+			Tombstone:       strings.TrimSpace(entrypoint.Tombstone),
+			Idempotency:     strings.TrimSpace(entrypoint.Idempotency),
 			SourcePath:      relativePath(metadataDir, path),
 		})
 	}

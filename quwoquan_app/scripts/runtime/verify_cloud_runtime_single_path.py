@@ -193,7 +193,9 @@ def _check_generated_purity(failures: list[str]) -> None:
         failures.append("generated typed operation client boundary is malformed")
         return
     client_source = operation_contracts[client_start:contracts_start]
-    method_count = len(re.findall(r"^\s+Future<", client_source, re.MULTILINE))
+    method_count = len(
+        re.findall(r"^\s+(?:Future|Stream)<", client_source, re.MULTILINE)
+    )
     encoder_count = client_source.count("requestEncoder:")
     if method_count == 0:
         failures.append("generated typed operation client has no ready methods")
@@ -262,7 +264,12 @@ def _check_migrated_adapters(
         adapter_paths.update(root.rglob("*.dart"))
 
     governed_methods: set[str] = set()
-    adapter_method_re = re.compile(r"\bclient\.([A-Za-z][A-Za-z0-9_]*)\(")
+    # Dart formatters may wrap fluent calls as `client\n  .operation(...)`.
+    # Treat that as the same typed owner without requiring formatting-specific
+    # one-line syntax.
+    adapter_method_re = re.compile(
+        r"\bclient\s*\.\s*([A-Za-z][A-Za-z0-9_]*)\s*\("
+    )
     for source_path in sorted(adapter_paths):
         source = source_path.read_text(encoding="utf-8")
         methods = adapter_method_re.findall(source)
@@ -297,7 +304,7 @@ def _check_migrated_adapters(
         client_source = operation_contracts[client_start:contracts_start]
         generated_methods = set(
             re.findall(
-                r"^\s+Future<[^\n]+>\s+([A-Za-z][A-Za-z0-9_]*)\(",
+                r"^\s+(?:Future|Stream)<[^\n]+>\s+([A-Za-z][A-Za-z0-9_]*)\(",
                 client_source,
                 re.MULTILINE,
             )
@@ -342,6 +349,10 @@ def _check_runtime_foundation(failures: list[str]) -> None:
             failures.append(f"generated executor missing runtime marker: {marker}")
     if "Future<TResponse> execute<TResponse>" in executor:
         failures.append("generated executor restored retired execute<T> ABI")
+    if "operation.commercialStatus != 'ready'" in executor:
+        failures.append(
+            "generated executor treats release evidence as a runtime feature flag"
+        )
 
     transport = FOUNDATION_FILES[2].read_text(encoding="utf-8")
     if "CloudErrorMapper.invalidResponse" not in transport:

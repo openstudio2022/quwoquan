@@ -1,0 +1,114 @@
+{
+  "presentationProfiles": [
+    {
+      "profileId": "presentation.default",
+      "iconToken": "sparkles",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:47898396b34c1cc3777f13752ac666c1d2eda870eb2dc690500db3a4530a3644"
+    },
+    {
+      "profileId": "presentation.airplane",
+      "iconToken": "airplane",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:863c581559cf7e656394a9a744e23f73efb313bfa303d6bd911ca177d1d61850"
+    },
+    {
+      "profileId": "presentation.calendar",
+      "iconToken": "calendar",
+      "templateRefs": [
+        "assistant.tool_confirmation",
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:dfd008afd2e722a2a7be5777c9ea3c12a8fd553dee2e3f14c3577c09bb464ea4"
+    },
+    {
+      "profileId": "presentation.checkmark",
+      "iconToken": "checkmark",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:a5f59a64068a865bd106e83d21f33eae0f03e007694d6f1c16444c93938481e5"
+    },
+    {
+      "profileId": "presentation.news",
+      "iconToken": "news",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:ed3abb80c411fed5d2a2f838fa281f9a62956d2181821fa8f5b4ca553063c06f"
+    },
+    {
+      "profileId": "presentation.chart",
+      "iconToken": "chart",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:cf6b23ef993f22025e909044517ada5c253cf6f24d6d2716a3081ac8e757085a"
+    },
+    {
+      "profileId": "presentation.weather",
+      "iconToken": "cloud_sun",
+      "templateRefs": [
+        "assistant.answer.default"
+      ],
+      "assetDigest": "sha256:cb982849cb957ccb3fb3d3988c26548af6a6efebb3c5f11e2ce174b6140142e3"
+    },
+    {
+      "profileId": "presentation.travel_companion",
+      "iconToken": "airplane",
+      "templateRefs": ["travel.route_map", "assistant.answer.default"],
+      "assetDigest": "sha256:69c49dd8dfbe90b933b7344f5134e6721117e72f8988c1eaf2a5cb606b862f0a"
+    }
+  ],
+  "evaluationProfiles": [
+    {
+      "profileId": "evaluation.general",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#general"
+      ],
+      "assetDigest": "sha256:8dd99fc36c91a506b734966bd19831a4779a48a60e5fc36b8d9b226fd1de2102"
+    },
+    {
+      "profileId": "evaluation.realtime_info",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#realtime_info"
+      ],
+      "assetDigest": "sha256:fa1ea7bd8977a517bb53e55288da28c1073d7c947405d91e1f6c0c6218940556"
+    },
+    {
+      "profileId": "evaluation.complex_reasoning",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#complex_reasoning"
+      ],
+      "assetDigest": "sha256:a7e047a5d3645ab054bb403a0918393a0144d6238a13c2e1db955686c1160cad"
+    },
+    {
+      "profileId": "evaluation.evidence_lookup",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#evidence_lookup"
+      ],
+      "assetDigest": "sha256:e58661a0fa20293956b2af9e3a5b88da4692f8f0a92066a2d3feff28a1001acb"
+    },
+    {
+      "profileId": "evaluation.task_execution",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#task_execution"
+      ],
+      "assetDigest": "sha256:ae3e3506e1473baed816396a1c1b34c34b25996d3a569e0bc519b4f29d3e6123"
+    },
+    {
+      "profileId": "evaluation.travel_companion",
+      "fixtureRefs": [
+        "assistant_skill_eval_scenarios#travel_companion",
+        "assistant_skill_eval_scenarios#shared_surface_privacy",
+        "assistant_skill_eval_scenarios#trip_revision",
+        "assistant_skill_eval_scenarios#trip_story"
+      ],
+      "assetDigest": "sha256:6a547548bbc1e52919433b0c45fde8deaabeed66f96f9495db517fb487f7010f"
+    }
+  ]
+}

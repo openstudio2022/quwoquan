@@ -496,7 +496,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   Future<void> _hydrateNativeTimingForTelemetry() async {
     try {
-      await AppStartupRuntime.instance.hydrateNativeProcessSegments(
+      await AppStartupRuntime.instance.beginNativeStartupAttempt(
         cancellationSignal: _disposeSignal.future,
       );
       if (mounted && !_routerShellFirstPainted) {
@@ -670,7 +670,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   Future<void> _hydrateNativeStartupSegments() async {
     try {
-      await AppStartupRuntime.instance.hydrateNativeProcessSegments(
+      await AppStartupRuntime.instance.beginNativeStartupAttempt(
         cancellationSignal: _disposeSignal.future,
       );
       if (mounted && !_routerShellFirstPainted) {

@@ -25,6 +25,9 @@ import (
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	chatcache "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	membershiphttp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/adapters/inbound/http"
+	membershipmodel "quwoquan_service/services/chat-service/internal/chat/conversation_membership/domain/model"
+	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
 )
 
 type delayedFailingGroupAvatarAssetizer struct {
@@ -204,6 +207,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	chatStorage := chatStoragePorts(chatStore)
+	membershipStore := membershippersistence.NewMongoStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	if syncPublisher == nil {
@@ -213,10 +217,10 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		redisRouter.Scene("realtime"),
 		redisRouter.Scene("general"),
 		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
-			members, err := chatStore.ListMembers(
+			members, err := membershipStore.ListMembers(
 				ctx,
 				conversationID,
-				application.ListMembersQuery{Limit: 512, Sort: application.MemberListSortJoinedAsc},
+				membershipmodel.ListQuery{Limit: 512, Sort: membershipmodel.ListSortJoinedAsc},
 			)
 			if err != nil {
 				return nil, err
@@ -304,14 +308,18 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		application.AllowRelationshipGateForTest(),
 		testMediaAssetDeliveryReader{},
 	)
-	inboxSvc := application.NewInboxService(chatStorage)
-	return chathttp.NewChatHandler(
+	inboxSvc := newTestInboxService()
+	chatHandler := chathttp.NewChatHandler(
 		conversationSvc,
 		messageSvc,
 		memberSvc,
 		inboxSvc,
 		userSyncService,
-	).Routes(), userSyncService, scheduler
+	)
+	routes := http.NewServeMux()
+	membershiphttp.NewHandler(memberSvc).Register(routes)
+	chatHandler.RegisterRoutes(routes)
+	return routes, userSyncService, scheduler
 }
 
 func doHandlerJSON(
@@ -1039,15 +1047,16 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		http.StatusOK,
 	)
 
-	chatStore := persistence.NewMongoChatStore(mongoDB)
+	membershipStore := membershippersistence.NewMongoStore(mongoDB)
 	for i := 0; i < 100; i++ {
+		chatStore := persistence.NewMongoChatStore(mongoDB)
 		conv, err := chatStore.FindConversationByID(context.Background(), convID)
 		if err != nil {
 			t.Fatalf("find conversation: %v", err)
 		}
-		members, err := chatStore.ListMembers(context.Background(), convID, application.ListMembersQuery{
+		members, err := membershipStore.ListMembers(context.Background(), convID, membershipmodel.ListQuery{
 			Limit: 200,
-			Sort:  application.MemberListSortJoinedAsc,
+			Sort:  membershipmodel.ListSortJoinedAsc,
 		})
 		if err != nil {
 			t.Fatalf("list members: %v", err)

@@ -17,6 +17,10 @@ type canonicalRunInput struct {
 	Text            string
 	SkillID         string
 	DomainID        string
+	PersonaID       string
+	SurfaceKind     string
+	SurfaceID       string
+	ContextSnapshot map[string]any
 	Trigger         assistant.AssistantTurnTrigger
 }
 
@@ -35,16 +39,27 @@ func (s *AssistantService) startCanonicalRunAndWait(
 	if err != nil {
 		return runruntime.Run{}, err
 	}
+	personaID := strings.TrimSpace(input.PersonaID)
+	if personaID == "" {
+		personaID = strings.TrimSpace(userID)
+	}
 	run, err := s.runCommands.Start(ctx, runruntime.StartCommand{
-		UserID:            strings.TrimSpace(userID),
-		SessionID:         strings.TrimSpace(sessionID),
-		ClientRequestID:   strings.TrimSpace(input.ClientRequestID),
-		TraceID:           strings.TrimSpace(input.ClientRequestID),
+		UserID:          strings.TrimSpace(userID),
+		PersonaID:       personaID,
+		SessionID:       strings.TrimSpace(sessionID),
+		ClientRequestID: strings.TrimSpace(input.ClientRequestID),
+		TraceID:         strings.TrimSpace(input.ClientRequestID),
+		RequestContext: runruntime.RequestContext{
+			SurfaceKind: strings.TrimSpace(input.SurfaceKind),
+			SurfaceID:   strings.TrimSpace(input.SurfaceID),
+			PersonaID:   personaID,
+		},
 		IntentKind:        "answer",
 		InputText:         strings.TrimSpace(input.Text),
 		RequestedSkillID:  strings.TrimSpace(input.SkillID),
 		RequestedDomainID: strings.TrimSpace(input.DomainID),
 		Trigger:           trigger,
+		ContextSnapshot:   cloneObject(input.ContextSnapshot),
 		ReasoningProfile:  generated.AssistantReasoningProfileBalanced,
 	})
 	if err != nil {
@@ -71,13 +86,23 @@ func (s *AssistantService) startCanonicalRunAndWait(
 func canonicalTriggerMap(
 	trigger assistant.AssistantTurnTrigger,
 ) (map[string]any, error) {
-	encoded, err := json.Marshal(trigger)
-	if err != nil {
-		return nil, err
+	result := map[string]any{"type": strings.TrimSpace(trigger.Type)}
+	if messageID := strings.TrimSpace(trigger.MessageID); messageID != "" {
+		// MessageID is intentionally excluded from the public AssistantTurn JSON
+		// body. This internal projection freezes the trusted event coordinate on
+		// AssistantRun without making it client-writable.
+		result["messageId"] = messageID
 	}
-	var result map[string]any
-	if err := json.Unmarshal(encoded, &result); err != nil {
-		return nil, err
+	if trigger.Envelope != nil {
+		encoded, err := json.Marshal(trigger.Envelope)
+		if err != nil {
+			return nil, err
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(encoded, &envelope); err != nil {
+			return nil, err
+		}
+		result["envelope"] = envelope
 	}
 	return result, nil
 }

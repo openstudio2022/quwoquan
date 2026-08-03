@@ -95,6 +95,15 @@ relationships:
   reference_fields:
   - lastMessageId
   target_object: chat.Message
+- access: command_facade
+  cardinality: 1:1
+  consistency: eventual
+  kind: reference
+  name: gathering
+  on_delete: retain
+  reference_fields:
+  - gatheringId
+  target_object: circle.Gathering
 local_identity_reasons:
   originRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference
@@ -110,6 +119,7 @@ business_rules:
   HTTP 创建命令不得提交 circleId 或 circleGroupId
 - CircleGroupMembership 的 active、left、removed、role_changed 与 CircleGroupArchived 仅由 durable projector
   写入对应 Conversation 成员、用户态与终态；圈群成员治理不接受 Chat HTTP 旁路
+- gatheringId 非空时必须一对一绑定 Gathering；仅接受 circle-service 受信任幂等投影命令，普通 CreateConversation 不得写入
 - 成员、用户状态与 Message 分别由其聚合维护
 - maxSeq 只由 MessageCommitted 事件单调推进，不由客户端提交
 - dissolved 为终态且通过 outbox 通知成员与投影收敛

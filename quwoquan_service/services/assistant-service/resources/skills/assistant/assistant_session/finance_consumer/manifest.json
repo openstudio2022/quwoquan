@@ -32,5 +32,10 @@
   "capabilityProfileRef": "capability.web3",
   "presentationProfileRef": "presentation.chart",
   "evaluationProfileRef": "evaluation.realtime_info",
-  "replayAssetRef": "assistant.replay.finance_consumer.v1"
+  "replayAssetRef": "assistant.replay.finance_consumer",
+  "catalogProfileRef": "catalog.general",
+  "inputProfileRef": "input.none",
+  "orchestrationProfileRef": "orchestration.default",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none"
 }

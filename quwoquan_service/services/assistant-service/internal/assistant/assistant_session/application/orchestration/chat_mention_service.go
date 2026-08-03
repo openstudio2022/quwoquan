@@ -14,10 +14,10 @@ type AssistantMentionedEvent struct {
 	ChatConversationID string
 	MessageID          string
 	Seq                int64
+	SenderAccountID    string
 	SenderID           string
 	Content            string
 	AssistantMemberID  string
-	AssistantSkillID   string
 }
 
 func WithChatGroundingClient(client ports.ChatGroundingClient) AssistantServiceOption {
@@ -28,10 +28,12 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 	evt.ChatConversationID = strings.TrimSpace(evt.ChatConversationID)
 	evt.MessageID = strings.TrimSpace(evt.MessageID)
 	evt.AssistantMemberID = strings.TrimSpace(evt.AssistantMemberID)
+	evt.SenderAccountID = strings.TrimSpace(evt.SenderAccountID)
 	evt.SenderID = strings.TrimSpace(evt.SenderID)
 	evt.Content = strings.TrimSpace(evt.Content)
 	if evt.ChatConversationID == "" ||
 		evt.AssistantMemberID == "" ||
+		evt.SenderAccountID == "" ||
 		evt.SenderID == "" ||
 		evt.Content == "" ||
 		(evt.MessageID == "" && evt.Seq <= 0) {
@@ -46,13 +48,12 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 			evt.ChatConversationID,
 			evt.SenderID,
 			evt.AssistantMemberID,
-			evt.AssistantSkillID,
 		)
 	if err != nil {
 		return fmt.Errorf("resolve chat assistant membership: %w", err)
 	}
 	if !membershipCurrent {
-		// 成员治理归 chat 域。事件领取后若小趣已被移除或技能身份已变更，
+		// 成员治理归 chat 域。事件领取后若小趣已被移除，
 		// 该历史 mention 已无权触发回复，返回 nil 让 durable consumer
 		// ack-and-drop，禁止进入 DLQ 后重放越权回复。
 		return nil
@@ -61,25 +62,30 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 		ctx,
 		evt.ChatConversationID,
 		evt.SenderID,
-		evt.AssistantSkillID,
 		evt.Seq,
 		channelpkg.GroupMention().ContextWindow().MessageLimit,
 	)
 	if err != nil {
 		return fmt.Errorf("list chat messages: %w", err)
 	}
-	summary := buildChatConversationGroundingPrompt(evt, messages)
+	contextSnapshot, err := buildChatConversationContextSnapshot(evt, messages)
+	if err != nil {
+		return err
+	}
 	mentionIdentity := assistantMentionClientRequestIdentity(evt)
-	session, err := s.CreateSession(ctx, evt.SenderID, assistant.CreateSessionInput{
+	session, err := s.CreateSession(ctx, evt.SenderAccountID, assistant.CreateSessionInput{
 		Summary:         "群聊 @小趣：" + evt.ChatConversationID,
 		ClientRequestID: mentionIdentity + ":session",
 	})
 	if err != nil {
 		return err
 	}
-	run, err := s.startCanonicalRunAndWait(ctx, evt.SenderID, session.SessionID, canonicalRunInput{
-		SkillID: strings.TrimSpace(evt.AssistantSkillID),
-		Text:    summary,
+	run, err := s.startCanonicalRunAndWait(ctx, evt.SenderAccountID, session.SessionID, canonicalRunInput{
+		Text:            evt.Content,
+		PersonaID:       evt.SenderID,
+		SurfaceKind:     "conversation",
+		SurfaceID:       evt.ChatConversationID,
+		ContextSnapshot: contextSnapshot,
 		Trigger: assistant.AssistantTurnTrigger{
 			Type:      "chat_assistant_mentioned",
 			MessageID: evt.MessageID,
@@ -102,7 +108,6 @@ func (s *AssistantService) HandleAssistantMentioned(ctx context.Context, evt Ass
 	return s.chatGrounding.SendMessage(ctx, ports.ChatGroundingSendMessageRequest{
 		ChatConversationID: evt.ChatConversationID,
 		CreatorPersonaID:   evt.SenderID,
-		AssistantSkillID:   evt.AssistantSkillID,
 		Type:               "text",
 		Content:            answer,
 		ClientMsgID:        "assistant-" + run.RunID,
@@ -125,48 +130,55 @@ func assistantMentionClientRequestIdentity(evt AssistantMentionedEvent) string {
 	)
 }
 
-func buildChatConversationGroundingPrompt(
+func buildChatConversationContextSnapshot(
 	evt AssistantMentionedEvent,
 	messages []ports.ChatGroundingMessage,
-) string {
-	var b strings.Builder
-	b.WriteString("用户在群聊中 @小趣，请基于最近话题回答。\n")
-	b.WriteString("触发消息：")
-	b.WriteString(evt.Content)
-	b.WriteString("\n最近消息：")
-	objectRefs := make([]ports.ChatGroundingObjectRef, 0, len(messages))
-	seenObjects := map[string]struct{}{}
+) (map[string]any, error) {
+	if len(messages) > channelpkg.GroupMention().ContextWindow().MessageLimit {
+		return nil, fmt.Errorf("chat grounding window exceeds channel policy")
+	}
+	items := make([]any, 0, len(messages))
 	for _, msg := range messages {
+		if strings.TrimSpace(msg.MessageID) == "" || msg.Seq <= 0 ||
+			strings.TrimSpace(msg.SenderID) == "" || strings.TrimSpace(msg.Type) == "" {
+			return nil, fmt.Errorf("chat grounding message identity is invalid")
+		}
+		item := map[string]any{
+			"messageId":       strings.TrimSpace(msg.MessageID),
+			"seq":             msg.Seq,
+			"senderPersonaId": strings.TrimSpace(msg.SenderID),
+			"type":            strings.TrimSpace(msg.Type),
+			"content":         strings.TrimSpace(msg.Content),
+			"mentions":        append([]string(nil), msg.Mentions...),
+		}
+		if name := strings.TrimSpace(msg.SenderName); name != "" {
+			item["senderDisplayName"] = name
+		}
 		if msg.ObjectRef != nil {
-			key := msg.ObjectRef.ObjectTypeRef + ":" + msg.ObjectRef.ObjectID
-			if _, exists := seenObjects[key]; !exists {
-				seenObjects[key] = struct{}{}
-				objectRefs = append(objectRefs, *msg.ObjectRef)
+			if strings.TrimSpace(msg.ObjectRef.ObjectTypeRef) == "" ||
+				strings.TrimSpace(msg.ObjectRef.ObjectID) == "" ||
+				strings.TrimSpace(msg.ObjectRef.RouteID) == "" {
+				return nil, fmt.Errorf("chat grounding object reference is invalid")
+			}
+			item["objectRef"] = map[string]any{
+				"objectTypeRef": strings.TrimSpace(msg.ObjectRef.ObjectTypeRef),
+				"objectId":      strings.TrimSpace(msg.ObjectRef.ObjectID),
+				"routeId":       strings.TrimSpace(msg.ObjectRef.RouteID),
 			}
 		}
-		content := strings.TrimSpace(msg.Content)
-		if content == "" {
-			continue
-		}
-		name := strings.TrimSpace(msg.SenderName)
-		if name == "" {
-			name = msg.SenderID
-		}
-		b.WriteString("\n- ")
-		b.WriteString(name)
-		b.WriteString(": ")
-		b.WriteString(content)
+		items = append(items, item)
 	}
-	if len(objectRefs) > 0 {
-		b.WriteString("\n会话内经成员权限过滤的对象引用：")
-		for _, ref := range objectRefs {
-			b.WriteString("\n- ")
-			b.WriteString(ref.ObjectTypeRef)
-			b.WriteString(":")
-			b.WriteString(ref.ObjectID)
-			b.WriteString(" route=")
-			b.WriteString(ref.RouteID)
-		}
-	}
-	return b.String()
+	return map[string]any{
+		"pageType": "conversation",
+		"pageObjects": []any{map[string]any{
+			"objectTypeRef": "chat.Conversation",
+			"objectId":      evt.ChatConversationID,
+		}},
+		"conversationContext": map[string]any{
+			"conversationId":   evt.ChatConversationID,
+			"triggerMessageId": evt.MessageID,
+			"triggerSeq":       evt.Seq,
+			"messages":         items,
+		},
+	}, nil
 }

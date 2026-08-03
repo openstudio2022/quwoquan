@@ -85,7 +85,10 @@ func (facade *CommandFacade) Create(ctx context.Context, command CreateCommand) 
 		return CommandResult{}, err
 	}
 	if err := facade.targets.RequireNavigable(ctx, command.TargetRef); err != nil {
-		return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("Gathering target is not navigable: " + err.Error())
+		if errors.Is(err, ports.ErrTargetNotNavigable) {
+			return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("Gathering target is not navigable: " + err.Error())
+		}
+		return CommandResult{}, gatheringerrors.AppErrorFromGatheringTargetUnavailable(err.Error())
 	}
 	gatheringID := stableID(actorID, current.IdempotencyKey)
 	digest, err := commandDigest(actorID, "create", command)
@@ -135,7 +138,7 @@ func (facade *CommandFacade) Join(ctx context.Context, command GatheringCommand)
 	if requested.JoinPolicy == model.JoinPolicyApproval || participantState(requested, actorID) == model.ParticipantStateJoined {
 		return resultFrom(requested, actorID, replayed), nil
 	}
-	if err := facade.conversations.AddMember(ctx, requested.ConversationID, actorID, "gathering:"+requested.ID+":join:"+actorID); err != nil {
+	if err := facade.conversations.ProjectParticipant(ctx, requested.ID, requested.CreatorPersonaID, actorID, "joined", membershipSourceSequence(requested.Version), "gathering:"+requested.ID+":join:"+actorID); err != nil {
 		return CommandResult{}, gatheringerrors.AppErrorFromGatheringConversationBindingFailed(err.Error())
 	}
 	confirmed, _, err := facade.mutate(ctx, actorID, current.IdempotencyKey+":confirm", "join-confirm", command, command.GatheringID, "GatheringParticipantStateChanged", func(existing *model.Gathering) (model.Gathering, error) {
@@ -145,7 +148,6 @@ func (facade *CommandFacade) Join(ctx context.Context, command GatheringCommand)
 		return model.ConfirmJoin(*existing, actorID, facade.now().UTC())
 	})
 	if err != nil {
-		_ = facade.conversations.RemoveMember(ctx, requested.ConversationID, actorID, "gathering:"+requested.ID+":join-compensate:"+actorID)
 		return CommandResult{}, err
 	}
 	return resultFrom(confirmed, actorID, replayed), nil
@@ -167,7 +169,7 @@ func (facade *CommandFacade) Approve(ctx context.Context, command ParticipantCom
 		return CommandResult{}, gatheringerrors.AppErrorFromGatheringPermissionDenied("Gathering creator is required")
 	}
 	participantID := strings.TrimSpace(command.ParticipantPersonaID)
-	if err := facade.conversations.AddMember(ctx, gathering.ConversationID, participantID, "gathering:"+gathering.ID+":approve:"+participantID); err != nil {
+	if err := facade.conversations.ProjectParticipant(ctx, gathering.ID, gathering.CreatorPersonaID, participantID, "joined", membershipSourceSequence(gathering.Version), "gathering:"+gathering.ID+":approve:"+participantID); err != nil {
 		return CommandResult{}, gatheringerrors.AppErrorFromGatheringConversationBindingFailed(err.Error())
 	}
 	approved, replayed, err := facade.mutate(ctx, actorID, current.IdempotencyKey, "approve", command, gathering.ID, "GatheringParticipantStateChanged", func(existing *model.Gathering) (model.Gathering, error) {
@@ -177,7 +179,6 @@ func (facade *CommandFacade) Approve(ctx context.Context, command ParticipantCom
 		return model.Approve(*existing, actorID, participantID, facade.now().UTC())
 	})
 	if err != nil {
-		_ = facade.conversations.RemoveMember(ctx, gathering.ConversationID, participantID, "gathering:"+gathering.ID+":approve-compensate:"+participantID)
 		return CommandResult{}, err
 	}
 	return resultFrom(approved, participantID, replayed), nil
@@ -197,7 +198,7 @@ func (facade *CommandFacade) Leave(ctx context.Context, command GatheringCommand
 	if err != nil {
 		return CommandResult{}, err
 	}
-	if err := facade.conversations.RemoveMember(ctx, left.ConversationID, actorID, "gathering:"+left.ID+":leave:"+actorID); err != nil {
+	if err := facade.conversations.ProjectParticipant(ctx, left.ID, left.CreatorPersonaID, actorID, "left", membershipSourceSequence(left.Version), "gathering:"+left.ID+":leave:"+actorID); err != nil {
 		return CommandResult{}, gatheringerrors.AppErrorFromGatheringConversationBindingFailed(err.Error())
 	}
 	return resultFrom(left, actorID, replayed), nil
@@ -232,7 +233,7 @@ func (facade *CommandFacade) ensureConversationBound(ctx context.Context, curren
 	if current.Status != model.StatusDraft && current.ConversationID != "" {
 		return current, nil
 	}
-	conversationID, err := facade.conversations.EnsureGroupConversation(ctx, current.ID, current.Title, current.CreatorPersonaID, "gathering:"+current.ID+":conversation")
+	conversationID, err := facade.conversations.EnsureGroupConversation(ctx, current.ID, current.Title, current.CreatorPersonaID, current.Capacity, "gathering:"+current.ID+":conversation")
 	if err != nil {
 		_, _, _ = facade.mutate(ctx, current.CreatorPersonaID, requestKey+":binding-failed", "binding-failed", current.ID, current.ID, "GatheringConversationBindingFailed", func(existing *model.Gathering) (model.Gathering, error) {
 			if existing == nil {
@@ -337,6 +338,10 @@ func stableID(actorID, key string) string {
 
 func receiptKey(actorID, key string) string {
 	return actorID + ":" + strings.TrimSpace(key)
+}
+
+func membershipSourceSequence(aggregateVersion int64) int64 {
+	return aggregateVersion * 10
 }
 
 func commandDigest(actorID, operationName string, payload any) (string, error) {

@@ -29,8 +29,8 @@ func IsGroupConversation(conv model.Conversation) bool {
 	return IsGroupConversationType(conv.Type)
 }
 
-func IsCircleBoundConversation(conv model.Conversation) bool {
-	// circleId only describes an origin. Only an explicit CircleGroup binding
-	// transfers membership/role/lifecycle authority away from Chat.
-	return strings.TrimSpace(conv.CircleGroupId) != ""
+func IsManagedConversation(conv model.Conversation) bool {
+	// circleId only describes an origin. Explicit CircleGroup or Gathering
+	// bindings transfer membership/role/lifecycle authority to the source object.
+	return strings.TrimSpace(conv.CircleGroupId) != "" || strings.TrimSpace(conv.GatheringId) != ""
 }

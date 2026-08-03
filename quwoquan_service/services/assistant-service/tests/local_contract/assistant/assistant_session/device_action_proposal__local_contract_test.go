@@ -6,12 +6,15 @@ import (
 	"testing"
 	"time"
 
+	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	assistantruntest "quwoquan_service/services/assistant-service/tests/support/assistantrun"
+	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
 type calendarDeviceActionModel struct {
@@ -93,8 +96,114 @@ func TestCalendarDeviceActionStopsAtExplicitConfirmation(t *testing.T) {
 	}
 }
 
+func TestToolBoundaryRechecksDynamicSkillAccessBeforeExecution(t *testing.T) {
+	model := &calendarDeviceActionModel{}
+	tools := &countingDeviceActionTools{}
+	revoked := errors.New("shared Skill placement was revoked")
+	runtime := orchestration.ReactRuntime{
+		Model: model,
+		Tools: tools,
+		PreToolUse: func(
+			context.Context,
+			assistant.AssistantTurn,
+			orchestration.SkillSelection,
+			string,
+			toolpkg.Metadata,
+		) error {
+			return revoked
+		},
+	}
+	_, err := runtime.Run(
+		t.Context(),
+		assistant.AssistantTurn{
+			TurnID: "arn_revoked_before_tool",
+			Input:  assistant.AssistantTurnInput{Text: "明早九点提醒我"},
+		},
+		orchestration.SkillSelection{
+			SkillID:      "calendar_task",
+			ToolPolicy:   []string{"calendar_create_reminder"},
+			MaxToolCalls: 1,
+		},
+	)
+	if !errors.Is(err, revoked) || tools.executions != 0 {
+		t.Fatalf("error=%v tool executions=%d", err, tools.executions)
+	}
+}
+
+func TestAgentLoopProjectsCanonicalConnectorCapabilityFailure(t *testing.T) {
+	tools := &countingDeviceActionTools{}
+	loop := orchestration.NewAgentLoop(
+		calendarDeviceActionSkillRuntime{},
+		orchestration.ReactRuntime{Model: &calendarDeviceActionModel{}, Tools: tools},
+		nil,
+	)
+	loop.Catalog = skillfixture.Loader{}
+	loop.ToolAccess = orchestration.ToolExecutionAccessPolicyFunc(func(
+		context.Context,
+		assistant.AssistantTurn,
+		orchestration.SkillSelection,
+		string,
+		toolpkg.Metadata,
+	) error {
+		return runerrors.AppErrorFromConnectorCapabilityRequired("calendar connection revoked")
+	})
+	frozen := testFrozenPolicySelection("assistant-default", "calendar_task", "calendar_task")
+	frozen.Template.AllowedTools = []string{"calendar_create_reminder"}
+	_, failure, err := loop.RunTurn(t.Context(), assistant.AssistantTurn{
+		TurnID: "arn_connector_revoked", SessionID: "session-connector-revoked",
+		UserID: "account-1", Input: assistant.AssistantTurnInput{Text: "明早九点提醒我"},
+		FrozenPolicySelection: frozen, TraceID: "trace-connector-revoked",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failure == nil || failure.Code != runerrors.ErrConnectorCapabilityRequired.Error() {
+		t.Fatalf("failure=%+v", failure)
+	}
+	if tools.executions != 0 {
+		t.Fatalf("revoked capability executed tool %d time(s)", tools.executions)
+	}
+}
+
+type countingDeviceActionTools struct {
+	executions int
+}
+
+func (tools *countingDeviceActionTools) ToolMetadata(
+	toolName string,
+) (toolpkg.Metadata, bool) {
+	if toolName != "calendar_create_reminder" {
+		return toolpkg.Metadata{}, false
+	}
+	return toolpkg.CalendarCreateReminderMetadata(), true
+}
+
+func (tools *countingDeviceActionTools) ModelToolDeclarations(
+	allowed []string,
+) []ports.ModelToolDefinition {
+	definitions := make([]ports.ModelToolDefinition, 0, len(allowed))
+	for _, name := range allowed {
+		definitions = append(definitions, ports.ModelToolDefinition{
+			Name: name,
+			Parameters: map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+			},
+		})
+	}
+	return definitions
+}
+
+func (tools *countingDeviceActionTools) Execute(
+	context.Context,
+	orchestration.ToolRequest,
+) (orchestration.ToolExecution, error) {
+	tools.executions++
+	return orchestration.ToolExecution{}, nil
+}
+
 func TestCalendarSkillAllowsOnlyCanonicalDeviceActionTool(t *testing.T) {
-	catalog, err := orchestration.LoadAssistantDomainSkillCatalog()
+	catalog, err := skillfixture.Load()
 	if err != nil {
 		t.Fatalf("load skill catalog: %v", err)
 	}
@@ -129,8 +238,27 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		runruntime.PolicyResolverFunc(func(
+			_ context.Context,
+			policyID string,
+			_ string,
+			_ string,
+			_ string,
+		) (runruntime.FrozenPolicySelection, error) {
+			selection, err := testRunPolicyResolver().ResolveFrozenPolicy(
+				t.Context(),
+				policyID,
+				"persona-device",
+				"calendar_task",
+				"calendar_task",
+			)
+			selection.Template.AllowedTools = []string{"calendar_create_reminder"}
+			return selection, err
+		}),
 	)
 	registry := toolpkg.BaseRegistry()
 	registry.RegisterDeviceAction(toolpkg.CalendarCreateReminderMetadata())
@@ -145,26 +273,11 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		},
 		nil,
 	)
+	loop.Catalog = skillfixture.Loader{}
 	worker := runruntime.NewDurableWorker(
 		runtime,
 		runtime,
-		orchestration.NewDurableRunExecutorWithPolicyResolver(
-			loop,
-			func(
-				context.Context,
-				runruntime.ExecutionRequest,
-			) (assistant.AssistantFrozenPolicySelection, error) {
-				selection := testFrozenPolicySelection(
-					"assistant-default",
-					"calendar_task",
-					"calendar_task",
-				)
-				selection.Template.AllowedTools = []string{
-					"calendar_create_reminder",
-				}
-				return selection, nil
-			},
-		),
+		orchestration.NewDurableRunExecutor(loop),
 		"calendar-device-action-worker",
 	)
 	workerContext, cancelWorker := context.WithCancel(t.Context())
@@ -181,8 +294,12 @@ func TestCalendarContinuationUsesRunIdentityAndRequiresNativeExecutionReceipt(
 		RequestedSkillID:  "calendar_task",
 		RequestedDomainID: "calendar_task",
 		SurfaceCapabilities: map[string]any{
-			"surfaceId":          "assistant_personal",
-			"supportedNodeKinds": []string{"confirmation_card", "action_group"},
+			"surfaceId": "assistant_personal",
+			"supportedNodeKinds": []string{
+				"confirmation_card",
+				"comparison_table",
+				"action_group",
+			},
 		},
 		ReasoningProfile: generated.AssistantReasoningProfileBalanced,
 	})
@@ -297,13 +414,19 @@ func waitForCalendarRunState(
 		time.Sleep(10 * time.Millisecond)
 	}
 	run, err := commands.Get(t.Context(), "user-calendar", runID)
-	t.Fatalf("run %s did not reach %s: state=%s err=%v", runID, expected, run.State, err)
+	t.Fatalf(
+		"run %s did not reach %s: state=%s terminal=%#v err=%v",
+		runID,
+		expected,
+		run.State,
+		run.TerminalSnapshot,
+		err,
+	)
 	return runruntime.Run{}
 }
 
 func calendarContinuationToken(presentation map[string]any) string {
-	nodes, _ := presentation["nodes"].([]map[string]any)
-	for _, node := range nodes {
+	for _, node := range presentationNodes(presentation["nodes"]) {
 		action, _ := node["action"].(map[string]any)
 		payload, _ := action["payload"].(map[string]any)
 		if token, _ := payload["continuationToken"].(string); token != "" {
@@ -311,4 +434,21 @@ func calendarContinuationToken(presentation map[string]any) string {
 		}
 	}
 	return ""
+}
+
+func presentationNodes(value any) []map[string]any {
+	switch nodes := value.(type) {
+	case []map[string]any:
+		return nodes
+	case []any:
+		result := make([]map[string]any, 0, len(nodes))
+		for _, node := range nodes {
+			if object, ok := node.(map[string]any); ok {
+				result = append(result, object)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }

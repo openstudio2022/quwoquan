@@ -28,6 +28,7 @@ const (
 
 type ElasticsearchConfig struct {
 	Endpoint               string
+	APIKey                 string
 	RawIndex               string
 	StartupDiagnosticIndex string
 	RuntimeLogIndex        string
@@ -53,6 +54,12 @@ func NewElasticsearchEventLogStore(
 	config ElasticsearchConfig,
 ) (*ElasticsearchEventLogStore, error) {
 	config.Endpoint = strings.TrimRight(strings.TrimSpace(config.Endpoint), "/")
+	config.APIKey = strings.TrimSpace(config.APIKey)
+	if len(config.APIKey) > 4096 || strings.IndexFunc(config.APIKey, func(r rune) bool {
+		return r < 0x21 || r > 0x7e
+	}) >= 0 {
+		return nil, fmt.Errorf("Elasticsearch API key is invalid")
+	}
 	if config.Timeout <= 0 || config.Timeout > 30*time.Second {
 		return nil, fmt.Errorf("Elasticsearch timeout must be within 1ms..30s")
 	}
@@ -785,6 +792,9 @@ func (s *ElasticsearchEventLogStore) request(
 		return 0, nil, fmt.Errorf("build Elasticsearch request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
+	if s.config.APIKey != "" {
+		request.Header.Set("Authorization", "ApiKey "+s.config.APIKey)
+	}
 	if reader != nil {
 		request.Header.Set("Content-Type", contentType)
 	}

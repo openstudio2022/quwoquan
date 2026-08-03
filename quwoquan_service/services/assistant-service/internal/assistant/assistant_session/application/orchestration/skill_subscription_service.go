@@ -8,195 +8,39 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-
 	rterr "quwoquan_service/runtime/errors"
-	rtid "quwoquan_service/runtime/id"
 	rtobs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
+	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
 
 const (
-	skillSubscriptionDeliveryLeaseTTL       = 5 * time.Minute
-	skillSubscriptionDeliverySlotTTL        = 48 * time.Hour
-	defaultSkillSubscriptionMaxPerDay       = 1
-	defaultSkillSubscriptionCooldownMinutes = 60
-	maxSkillSubscriptionDeliveriesPerDay    = 24
-	maxSkillSubscriptionCooldownMinutes     = 7 * 24 * 60
-	skillSubscriptionInitialRetryBackoff    = 5 * time.Minute
-	skillSubscriptionMaximumRetryBackoff    = time.Hour
+	skillSubscriptionDeliveryLeaseTTL    = 5 * time.Minute
+	skillSubscriptionDeliverySlotTTL     = 48 * time.Hour
+	skillSubscriptionInitialRetryBackoff = 5 * time.Minute
+	skillSubscriptionMaximumRetryBackoff = time.Hour
 )
 
-func (s *AssistantService) CreateSkillSubscription(ctx context.Context, userID string, input assistant.CreateSkillSubscriptionInput) (_ assistant.SkillSubscription, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.CreateSkillSubscription",
-		attribute.String("user.id", userID),
-		attribute.String("skill.id", input.SkillID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.subscriptions == nil {
-		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
-	}
-	normalized, err := s.normalizeSkillSubscriptionInput(userID, input, "")
-	if err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	if err := s.requireSkillSubscriptionDestinationAccess(
-		ctx,
-		normalized,
-	); err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	return s.subscriptions.CreateSkillSubscription(ctx, normalized)
-}
-
-func (s *AssistantService) UpsertSkillSubscription(ctx context.Context, userID string, input assistant.UpsertSkillSubscriptionInput) (_ assistant.SkillSubscription, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.UpsertSkillSubscription",
-		attribute.String("user.id", userID),
-		attribute.String("subscription.id", input.SubscriptionID),
-		attribute.String("skill.id", input.SkillID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.subscriptions == nil {
-		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
-	}
-	subscriptionID := strings.TrimSpace(input.SubscriptionID)
-	if subscriptionID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "subscriptionId 不能为空", "missing subscriptionId")
-	}
-	status, err := normalizeSubscriptionStatus(input.Status)
-	if err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	normalized, err := s.normalizeSkillSubscriptionInput(userID, assistant.CreateSkillSubscriptionInput{
-		SkillID:            input.SkillID,
-		DomainID:           input.DomainID,
-		TagRefs:            input.TagRefs,
-		SearchQueryPlan:    input.SearchQueryPlan,
-		Trigger:            input.Trigger,
-		Destination:        input.Destination,
-		CreatedByPersonaID: input.CreatedByPersonaID,
-	}, subscriptionID)
-	if err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	normalized.Status = status
-	if err := s.requireSkillSubscriptionDestinationAccess(
-		ctx,
-		normalized,
-	); err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	return s.subscriptions.UpsertSkillSubscription(ctx, normalized)
-}
-
-func (s *AssistantService) ListSkillSubscriptions(ctx context.Context, userID string, status string, limit int) (_ assistant.SkillSubscriptionListView, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListSkillSubscriptions",
-		attribute.String("user.id", userID),
-		attribute.String("subscription.status", status))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.subscriptions == nil {
-		return assistant.SkillSubscriptionListView{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return assistant.SkillSubscriptionListView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
-	}
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	items, err := s.subscriptions.ListSkillSubscriptions(ctx, userID, strings.TrimSpace(status), limit)
-	if err != nil {
-		return assistant.SkillSubscriptionListView{}, err
-	}
-	return assistant.SkillSubscriptionListView{Items: items}, nil
-}
-
-func (s *AssistantService) GetSkillSubscription(ctx context.Context, userID, subscriptionID string) (_ assistant.SkillSubscription, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetSkillSubscription",
-		attribute.String("subscription.id", subscriptionID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.subscriptions == nil {
-		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
-	}
-	return s.subscriptions.GetSkillSubscription(ctx, strings.TrimSpace(userID), strings.TrimSpace(subscriptionID))
-}
-
-func (s *AssistantService) UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID string, input assistant.UpdateSkillSubscriptionStatusInput) (_ assistant.SkillSubscription, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.UpdateSkillSubscriptionStatus",
-		attribute.String("subscription.id", subscriptionID),
-		attribute.String("subscription.status", input.Status))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if s.subscriptions == nil {
-		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
-	}
-	status, err := normalizeSubscriptionStatus(input.Status)
-	if err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	userID = strings.TrimSpace(userID)
-	subscriptionID = strings.TrimSpace(subscriptionID)
-	current, err := s.subscriptions.GetSkillSubscription(
-		ctx,
-		userID,
-		subscriptionID,
-	)
-	if err != nil {
-		return assistant.SkillSubscription{}, err
-	}
-	now := s.now().UTC()
-	var nextAttemptAt *time.Time
-	if status == assistant.SkillSubscriptionStatusActive &&
-		current.Status != assistant.SkillSubscriptionStatusActive {
-		next, ok := nextCronTrigger(current.Trigger.Cron, now)
-		if !ok {
-			return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-				rterr.ModuleAssistant,
-				"cron 无法计算下一次触发时间",
-				"cron has no trigger in the supported scheduling window",
-			)
-		}
-		nextAttemptAt = &next
-	}
-	return s.subscriptions.UpdateSkillSubscriptionStatus(
-		ctx,
-		userID,
-		subscriptionID,
-		status,
-		nextAttemptAt,
-		now,
-	)
-}
-
-func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input assistant.SkillSubscriptionCronTickInput) (_ assistant.SkillSubscriptionCronTickResult, err error) {
+func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input skillmodel.SkillSubscriptionCronTickInput) (_ skillmodel.SkillSubscriptionCronTickResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.TickSkillSubscriptionCron")
 	defer func() { rtobs.EndSpan(span, err) }()
 	defer func() { recordSubscriptionCronTick(err) }()
 
 	if s.subscriptions == nil {
-		return assistant.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
+		return skillmodel.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
 	if s.cache == nil {
-		return assistant.SkillSubscriptionCronTickResult{},
+		return skillmodel.SkillSubscriptionCronTickResult{},
 			skillgenerated.AppErrorFromSubscriptionDeliveryFailed(
 				"redis is required for proactive delivery leases and frequency control",
 			)
 	}
 	if s.deliveryPolicies == nil {
-		return assistant.SkillSubscriptionCronTickResult{},
+		return skillmodel.SkillSubscriptionCronTickResult{},
 			skillgenerated.AppErrorFromSubscriptionDeliveryFailed(
 				"assistant delivery policy reader is not configured",
 			)
@@ -205,7 +49,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	if raw := strings.TrimSpace(input.Now); raw != "" {
 		parsed, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
-			return assistant.SkillSubscriptionCronTickResult{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "now 无效", err.Error())
+			return skillmodel.SkillSubscriptionCronTickResult{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "now 无效", err.Error())
 		}
 		now = parsed.UTC()
 	}
@@ -215,9 +59,9 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 		1000,
 	)
 	if err != nil {
-		return assistant.SkillSubscriptionCronTickResult{}, err
+		return skillmodel.SkillSubscriptionCronTickResult{}, err
 	}
-	result := assistant.SkillSubscriptionCronTickResult{
+	result := skillmodel.SkillSubscriptionCronTickResult{
 		CreatedTurnIDs:    []string{},
 		CreatedMessageIDs: []string{},
 	}
@@ -238,7 +82,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 			)
 		if deliveryErr != nil {
 			if !began {
-				return assistant.SkillSubscriptionCronTickResult{},
+				return skillmodel.SkillSubscriptionCronTickResult{},
 					skillgenerated.AppErrorFromSubscriptionDeliveryFailed(
 						deliveryErr.Error(),
 					)
@@ -259,7 +103,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 					now,
 					nextAttemptAt,
 				); recordErr != nil {
-				return assistant.SkillSubscriptionCronTickResult{},
+				return skillmodel.SkillSubscriptionCronTickResult{},
 					skillgenerated.AppErrorFromSubscriptionDeliveryFailed(
 						fmt.Sprintf(
 							"delivery failed (%s) and audit persistence failed: %v",
@@ -296,145 +140,8 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	return result, nil
 }
 
-func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input assistant.CreateSkillSubscriptionInput, subscriptionID string) (assistant.SkillSubscription, error) {
-	userID = strings.TrimSpace(userID)
-	skillID := strings.TrimSpace(input.SkillID)
-	if skillID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "skillId 不能为空", "missing skillId")
-	}
-	trigger := input.Trigger
-	trigger.Type = strings.TrimSpace(trigger.Type)
-	if trigger.Type == "" {
-		trigger.Type = "cron"
-	}
-	if trigger.Type != "cron" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "M8 仅支持 cron trigger", "unsupported trigger type")
-	}
-	trigger.Cron = strings.TrimSpace(trigger.Cron)
-	if !isSupportedCron(trigger.Cron) {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "cron 表达式无效", "unsupported cron expression")
-	}
-	destination := input.Destination
-	createdByPersonaID := strings.TrimSpace(input.CreatedByPersonaID)
-	destination.DestinationType = assistant.SkillSubscriptionDestinationType(
-		strings.TrimSpace(string(destination.DestinationType)),
-	)
-	if destination.DestinationType == "" {
-		destination.DestinationType = assistant.SkillSubscriptionDestinationUser
-	}
-	destination.DestinationID = strings.TrimSpace(destination.DestinationID)
-	if destination.DestinationType == assistant.SkillSubscriptionDestinationUser && destination.DestinationID == "" {
-		destination.DestinationID = userID
-	}
-	if destination.DestinationID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"destinationId 不能为空",
-			"missing destination id",
-		)
-	}
-	if destination.DestinationType == assistant.SkillSubscriptionDestinationUser &&
-		destination.DestinationID != userID {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"用户投递目标必须与订阅 owner 一致",
-			"user destination must match the subscription owner",
-		)
-	}
-	destination.QuietHoursPolicy = strings.TrimSpace(
-		destination.QuietHoursPolicy,
-	)
-	if destination.QuietHoursPolicy == "" {
-		destination.QuietHoursPolicy = "inherit_user_setting"
-	}
-	if destination.QuietHoursPolicy != "inherit_user_setting" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"quietHoursPolicy 无效",
-			"unsupported quiet hours policy",
-		)
-	}
-	if destination.MaxPerDay == 0 {
-		destination.MaxPerDay = defaultSkillSubscriptionMaxPerDay
-	}
-	if destination.MaxPerDay < 1 ||
-		destination.MaxPerDay > maxSkillSubscriptionDeliveriesPerDay {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"maxPerDay 无效",
-			"maxPerDay is outside the supported range",
-		)
-	}
-	if destination.CooldownMinutes == 0 {
-		destination.CooldownMinutes = defaultSkillSubscriptionCooldownMinutes
-	}
-	if destination.CooldownMinutes < 1 ||
-		destination.CooldownMinutes > maxSkillSubscriptionCooldownMinutes {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"cooldownMinutes 无效",
-			"cooldownMinutes is outside the supported range",
-		)
-	}
-	switch destination.DestinationType {
-	case assistant.SkillSubscriptionDestinationUser,
-		assistant.SkillSubscriptionDestinationChatConversation:
-	default:
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "destinationType 无效", "unsupported destination type")
-	}
-	if destination.DestinationType == assistant.SkillSubscriptionDestinationChatConversation && createdByPersonaID == "" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"ChatConversation 投递缺少创建者 Persona",
-			"chat conversation destination requires the creator persona",
-		)
-	}
-	searchPlan := input.SearchQueryPlan
-	searchPlan.RawText = strings.TrimSpace(searchPlan.RawText)
-	searchPlan.Queries = compactStrings(searchPlan.Queries)
-	if len(searchPlan.Queries) == 0 && searchPlan.RawText != "" {
-		searchPlan.Queries = []string{searchPlan.RawText}
-	}
-	subscriptionID = strings.TrimSpace(subscriptionID)
-	if subscriptionID == "" {
-		generatedID, err := rtid.Generate(rtid.PrefixSkillSubscription)
-		if err != nil {
-			return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "生成订阅 ID 失败", err.Error())
-		}
-		subscriptionID = generatedID
-	}
-	now := s.now().UTC()
-	nextAttemptAt, ok := nextCronTrigger(trigger.Cron, now)
-	if !ok {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"cron 无法计算下一次触发时间",
-			"cron has no trigger in the supported scheduling window",
-		)
-	}
-	return assistant.SkillSubscription{
-		SubscriptionID:     subscriptionID,
-		Owner:              assistant.SkillSubscriptionOwner{OwnerType: "user", OwnerID: userID},
-		CreatedByUserID:    userID,
-		CreatedByPersonaID: createdByPersonaID,
-		SkillID:            skillID,
-		DomainID:           strings.TrimSpace(input.DomainID),
-		TagRefs:            compactStrings(input.TagRefs),
-		Status:             assistant.SkillSubscriptionStatusActive,
-		SearchQueryPlan:    searchPlan,
-		Trigger:            trigger,
-		Destination:        destination,
-		DeliveryState: assistant.SkillSubscriptionDeliveryState{
-			NextAttemptAt: &nextAttemptAt,
-		},
-		ClientRequestID: strings.TrimSpace(input.ClientRequestID),
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}, nil
-}
-
 func skillSubscriptionDeliveryID(
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	now time.Time,
 ) (string, bool) {
 	scheduledAt := now.UTC().Truncate(time.Minute)
@@ -459,11 +166,28 @@ func skillSubscriptionDeliveryID(
 		return pending, true
 	}
 	if subscription.DeliveryState.NextAttemptAt == nil &&
-		!cronMatchesMinute(subscription.Trigger.Cron, now) {
+		!subscriptionapplication.CronMatchesMinute(
+			subscription.Trigger.Cron,
+			subscription.Trigger.Timezone,
+			now,
+		) {
 		return "", false
 	}
 	return "assistant-proactive-" + subscription.SubscriptionID + "-" +
 		scheduledAt.Format("200601021504"), true
+}
+
+func skillSubscriptionDeliveryOccurredAt(deliveryID string) (time.Time, error) {
+	deliveryID = strings.TrimSpace(deliveryID)
+	separator := strings.LastIndex(deliveryID, "-")
+	if separator < 0 || separator == len(deliveryID)-1 {
+		return time.Time{}, fmt.Errorf("proactive delivery id has no scheduled coordinate")
+	}
+	occurredAt, err := time.Parse("200601021504", deliveryID[separator+1:])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse proactive delivery scheduled coordinate: %w", err)
+	}
+	return occurredAt.UTC(), nil
 }
 
 func skillSubscriptionRetryBackoff(failureCount int) time.Duration {
@@ -480,7 +204,7 @@ func skillSubscriptionRetryBackoff(failureCount int) time.Duration {
 
 func (s *AssistantService) deliverSkillSubscription(
 	ctx context.Context,
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	deliveryID string,
 	now time.Time,
 ) (
@@ -606,7 +330,6 @@ func (s *AssistantService) deliverSkillSubscription(
 		ctx,
 		current,
 		deliveryID,
-		now,
 	)
 	if err != nil {
 		return assistant.AssistantTurn{}, nil, false, true, err
@@ -635,7 +358,7 @@ func (s *AssistantService) deliverSkillSubscription(
 }
 
 func nextSkillSubscriptionScheduledAttempt(
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	now time.Time,
 	afterDelivery bool,
 ) (time.Time, bool) {
@@ -655,11 +378,15 @@ func nextSkillSubscriptionScheduledAttempt(
 	if earliest.After(after) {
 		after = earliest.Add(-time.Minute)
 	}
-	return nextCronTrigger(subscription.Trigger.Cron, after)
+	return subscriptionapplication.NextCronTrigger(
+		subscription.Trigger.Cron,
+		subscription.Trigger.Timezone,
+		after,
+	)
 }
 
 func skillSubscriptionCooldownActive(
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	now time.Time,
 ) bool {
 	if subscription.DeliveryState.LastDeliveredAt == nil {
@@ -698,7 +425,7 @@ func assistantDeliveryQuietHoursActive(
 
 func (s *AssistantService) subscriptionDestinationMembershipIsCurrent(
 	ctx context.Context,
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 ) (bool, error) {
 	switch subscription.Destination.DestinationType {
 	case "user":
@@ -708,7 +435,7 @@ func (s *AssistantService) subscriptionDestinationMembershipIsCurrent(
 			return false, nil
 		}
 		return true, nil
-	case assistant.SkillSubscriptionDestinationChatConversation:
+	case skillmodel.SkillSubscriptionDestinationChatConversation:
 		if s.chatGrounding == nil {
 			return false, fmt.Errorf(
 				"chat grounding client is required for proactive destination",
@@ -720,7 +447,6 @@ func (s *AssistantService) subscriptionDestinationMembershipIsCurrent(
 				subscription.Destination.DestinationID,
 				subscription.CreatedByPersonaID,
 				"",
-				subscription.SkillID,
 			)
 		if err != nil {
 			return false, fmt.Errorf(
@@ -737,31 +463,9 @@ func (s *AssistantService) subscriptionDestinationMembershipIsCurrent(
 	}
 }
 
-func (s *AssistantService) requireSkillSubscriptionDestinationAccess(
-	ctx context.Context,
-	subscription assistant.SkillSubscription,
-) error {
-	current, err := s.subscriptionDestinationMembershipIsCurrent(
-		ctx,
-		subscription,
-	)
-	if err != nil {
-		return skillgenerated.
-			AppErrorFromSubscriptionDestinationValidationUnavailable(
-				err.Error(),
-			)
-	}
-	if !current {
-		return skillgenerated.AppErrorFromSubscriptionDestinationForbidden(
-			"subscription creator or assistant skill is not a current chat conversation member",
-		)
-	}
-	return nil
-}
-
 func (s *AssistantService) reserveSkillSubscriptionDailySlot(
 	ctx context.Context,
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	deliveryID string,
 	now time.Time,
 ) (bool, error) {
@@ -825,11 +529,18 @@ func skillSubscriptionDeliveryErrorCode(err error) string {
 
 func (s *AssistantService) createProactiveTurnMessage(
 	ctx context.Context,
-	subscription assistant.SkillSubscription,
+	subscription skillmodel.SkillSubscription,
 	deliveryID string,
-	now time.Time,
 ) (assistant.AssistantTurn, ports.NotificationAppMessageReceipt, error) {
-	manifest, found := proactiveSkillManifest(subscription.SkillID)
+	triggerOccurredAt, err := skillSubscriptionDeliveryOccurredAt(deliveryID)
+	if err != nil {
+		return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, err
+	}
+	manifest, found, manifestErr := s.resolveSkillManifest(ctx, subscription.SkillID)
+	if manifestErr != nil {
+		return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, manifestErr
+	}
+	found = found && manifest.IsProactive()
 	if !found {
 		return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, fmt.Errorf(
 			"proactive skill %q has no activated package",
@@ -848,22 +559,25 @@ func (s *AssistantService) createProactiveTurnMessage(
 	// Context -> AgentLoop pipeline used by reactive runs.
 	userInput := strings.TrimSpace(subscription.SearchQueryPlan.RawText)
 	if userInput == "" {
-		userInput = strings.Join(compactStrings(subscription.SearchQueryPlan.Queries), " ")
+		userInput = strings.Join(subscriptionapplication.CompactStrings(subscription.SearchQueryPlan.Queries), " ")
 	}
 	run, err := s.startCanonicalRunAndWait(
 		ctx,
 		subscription.Owner.OwnerID,
 		session.SessionID,
 		canonicalRunInput{
-			SkillID:  subscription.SkillID,
-			DomainID: subscription.DomainID,
-			Text:     userInput,
+			SkillID:     subscription.SkillID,
+			DomainID:    subscription.DomainID,
+			Text:        userInput,
+			PersonaID:   subscription.CreatedByPersonaID,
+			SurfaceKind: proactiveSurfaceKind(subscription),
+			SurfaceID:   proactiveSurfaceID(subscription),
 			Trigger: assistant.AssistantTurnTrigger{
 				Type: "cron",
 				Envelope: &assistant.AssistantTriggerEnvelope{
 					Kind:              "schedule",
 					TriggerID:         deliveryID,
-					OccurredAt:        now.UTC(),
+					OccurredAt:        triggerOccurredAt,
 					SubscriptionRef:   subscription.SubscriptionID,
 					Reason:            "subscription_due",
 					DedupeKey:         deliveryID,
@@ -889,7 +603,7 @@ func (s *AssistantService) createProactiveTurnMessage(
 	}
 	title := strings.TrimSpace(manifest.DisplayName)
 	switch subscription.Destination.DestinationType {
-	case assistant.SkillSubscriptionDestinationChatConversation:
+	case skillmodel.SkillSubscriptionDestinationChatConversation:
 		if s.chatGrounding == nil {
 			return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, rterr.NewUnavailable(rterr.ModuleAssistant, "会话投递通道不可用", "chat grounding client is not configured")
 		}
@@ -897,7 +611,6 @@ func (s *AssistantService) createProactiveTurnMessage(
 		if err := s.chatGrounding.SendMessage(ctx, ports.ChatGroundingSendMessageRequest{
 			ChatConversationID: subscription.Destination.DestinationID,
 			CreatorPersonaID:   subscription.CreatedByPersonaID,
-			AssistantSkillID:   subscription.SkillID,
 			Type:               "text",
 			Content:            title + "\n" + answer,
 			ClientMsgID:        clientMsgID,
@@ -944,4 +657,19 @@ func (s *AssistantService) claimSubscriptionDelivery(
 		)
 	}
 	return acquired, nil
+}
+
+func proactiveSurfaceKind(subscription skillmodel.SkillSubscription) string {
+	if subscription.Destination.DestinationType ==
+		skillmodel.SkillSubscriptionDestinationChatConversation {
+		return "conversation"
+	}
+	return ""
+}
+
+func proactiveSurfaceID(subscription skillmodel.SkillSubscription) string {
+	if proactiveSurfaceKind(subscription) == "" {
+		return ""
+	}
+	return strings.TrimSpace(subscription.Destination.DestinationID)
 }

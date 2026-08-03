@@ -1,0 +1,35 @@
+domain: ASSISTANT
+aggregate: AssistantEntryView
+description: AssistantEntryView 身份、查询参数与投影读取错误。
+errors:
+- code: ASSISTANT.USER.entry_unauthorized
+  kind: USER
+  reason: entry_unauthorized
+  http_status: 401
+  emitted_by: [{surface: http, operations: [GetAssistantEntry]}]
+  recovery_action: surface
+  dart_const: entryUnauthorized
+  go_const: ErrEntryUnauthorized
+  l10n_key: assistant.error.entry_unauthorized
+  user_message: {zh: 请先登录后使用助手入口, en: Please sign in to use the assistant entry}
+- code: ASSISTANT.USER.entry_invalid_argument
+  kind: USER
+  reason: entry_invalid_argument
+  http_status: 400
+  emitted_by: [{surface: http, operations: [GetAssistantEntry]}]
+  recovery_action: surface
+  dart_const: entryInvalidArgument
+  go_const: ErrEntryInvalidArgument
+  l10n_key: assistant.error.entry_invalid_argument
+  user_message: {zh: 当前页面上下文无效, en: The current page context is invalid}
+- code: ASSISTANT.SYSTEM.entry_projection_unavailable
+  kind: SYSTEM
+  reason: entry_projection_unavailable
+  http_status: 503
+  emitted_by: [{surface: http, operations: [GetAssistantEntry]}]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: entryProjectionUnavailable
+  go_const: ErrEntryProjectionUnavailable
+  l10n_key: assistant.error.entry_projection_unavailable
+  user_message: {zh: 助手入口暂不可用，请稍后重试, en: Assistant entry is temporarily unavailable}

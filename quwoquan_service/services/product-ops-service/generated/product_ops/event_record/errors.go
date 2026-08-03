@@ -16,6 +16,7 @@ var (
 	ErrQueryWindowInvalid             = errors.New("OPS.USER.query_window_invalid")
 	ErrEventDrilldownForbidden        = errors.New("OPS.USER.event_drilldown_forbidden")
 	ErrLogstoreUnavailable            = errors.New("OPS.SYSTEM.logstore_unavailable")
+	ErrEventProjectionUnavailable     = errors.New("OPS.SYSTEM.event_projection_unavailable")
 	ErrRuntimeLogstoreUnavailable     = errors.New("OPS.SYSTEM.runtime_logstore_unavailable")
 	ErrStartupConfigurationInvalid    = errors.New("OPS.SYSTEM.startup_configuration_invalid")
 	ErrStartupInitializationFailed    = errors.New("OPS.SYSTEM.startup_initialization_failed")
@@ -59,6 +60,12 @@ func AppErrorFromEventDrilldownForbidden(debugMessage string) *rerrors.AppError 
 func AppErrorFromLogstoreUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLogstoreUnavailable.Error()))
 	return rerrors.NewAppError(code, "日志服务暂时不可用", debugMessage).WithMetadata("logstore_unavailable", 503).WithRecovery("retry", 5)
+}
+
+// AppErrorFromEventProjectionUnavailable returns *AppError for OPS.SYSTEM.event_projection_unavailable (user_message from errors.yaml).
+func AppErrorFromEventProjectionUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrEventProjectionUnavailable.Error()))
+	return rerrors.NewAppError(code, "产品事件运营投影暂时不可用", debugMessage).WithMetadata("event_projection_unavailable", 503).WithRecovery("retry", 2)
 }
 
 // AppErrorFromRuntimeLogstoreUnavailable returns *AppError for OPS.SYSTEM.runtime_logstore_unavailable (user_message from errors.yaml).

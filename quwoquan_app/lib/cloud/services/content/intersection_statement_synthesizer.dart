@@ -1,7 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 
 /// 交集句式合同工具。
 ///
@@ -30,40 +28,13 @@ IntersectionReason? displayReadyIntersectionReason(
       : null;
 }
 
-/// 把 canonical explicit reason 投影成对象页 host_plain 上下文表达——与云侧
-/// `ApplyDisplayContext`（`plainHostObjectSpan`）逐条同构：reason 对象即宿主时，
-/// 指向宿主的 object span 降为 plain（去链接），`displayBinding` 落 host_plain。
-///
-/// 消费边界（R12 Mock↔Remote 一致）：生产 Remote 消费云侧已转换输出，不经过
-/// 此函数；alpha fixture 直出 explicit_link seed 时必须先经此转换，否则会被
-/// [isDisplayableIntersectionReason] 的宿主 self-link 校验整批淘汰（四主页卡恒空）。
+/// Host display context is owned by the Recommendation projection. App callers
+/// may validate the result but must not rewrite canonical wire objects.
 IntersectionReason applyHostPlainDisplayContext(
   IntersectionReason reason,
   IntersectionTarget hostTarget,
 ) {
-  final reasonTarget = _targetForReasonObject(reason);
-  if (!_sameIntersectionTarget(reasonTarget, hostTarget)) {
-    return reason;
-  }
-  var changed = false;
-  final spans = reason.primarySpans
-      .map((span) {
-        if (span.role.trim() == 'object' &&
-            _sameIntersectionTarget(span.target, hostTarget)) {
-          changed = true;
-          return IntersectionTextSpan(text: span.text, role: 'plain');
-        }
-        return span;
-      })
-      .toList(growable: false);
-  final binding = _normalizedDisplayBinding(reason.displayBinding);
-  if (!changed && binding == intersectionDisplayBindingHostPlain) {
-    return reason;
-  }
-  return reason.copyWith(
-    primarySpans: changed ? spans : reason.primarySpans,
-    displayBinding: intersectionDisplayBindingHostPlain,
-  );
+  return reason;
 }
 
 bool isDisplayableIntersectionReason(

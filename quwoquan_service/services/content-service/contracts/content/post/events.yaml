@@ -10,7 +10,7 @@ events:
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
-  - _id
+  - postId
   - publishIntentId
   - localDraftId
   - authorId
@@ -34,10 +34,12 @@ events:
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
-  - _id
+  - postId
   - publishIntentId
   - localDraftId
   - authorId
+  - authorDisplayNameSnapshot
+  - authorAvatarUrlSnapshot
   - creatorProfileId
   - creatorArchetype
   - creatorProfileVersion
@@ -49,8 +51,26 @@ events:
   - visibility
   - moderationStatus
   - primaryHomepageId
+  - primaryHomepageSnapshot
+  - visitedAt
+  - assistantUsePolicy
+  - title
+  - body
+  - summary
+  - mediaUrls
+  - coverUrl
+  - thumbnailUrl
+  - videoUrl
+  - width
+  - height
+  - durationMs
+  - likeCount
+  - commentCount
+  - shareCount
+  - contentVertical
   - tagRefs
   - entityRefs
+  - createdAt
   - publishedAt
   - updatedAt
   - lastActiveAt
@@ -71,7 +91,7 @@ events:
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
-  - _id
+  - postId
   - authorId
   - contentType
   - contentIdentity
@@ -79,7 +99,7 @@ events:
   - moderationStatus
   - updatedAt
 - name: PostUpdated
-  description: 内容更新
+  description: 内容更新；携带 Circle/Search/Recommendation 可重建读投影所需的当前公开 Post 快照。
   producer: content-service
   consumers:
   - feed-projection
@@ -90,8 +110,10 @@ events:
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
-  - _id
+  - postId
   - authorId
+  - authorDisplayNameSnapshot
+  - authorAvatarUrlSnapshot
   - contentType
   - contentIdentity
   - status
@@ -99,10 +121,26 @@ events:
   - moderationStatus
   - title
   - body
+  - summary
+  - mediaUrls
+  - coverUrl
+  - thumbnailUrl
+  - videoUrl
+  - width
+  - height
+  - durationMs
+  - likeCount
+  - commentCount
+  - shareCount
+  - contentVertical
   - semanticMentions
   - tagRefs
   - entityRefs
   - primaryHomepageId
+  - primaryHomepageSnapshot
+  - visitedAt
+  - assistantUsePolicy
+  - createdAt
   - publishedAt
   - updatedAt
 - name: PostSettingsUpdated
@@ -112,20 +150,40 @@ events:
   - recommendation-engine
   - assistant-service
   - entity-service
+  - circle-service
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
-  - _id
+  - postId
   - authorId
+  - authorDisplayNameSnapshot
+  - authorAvatarUrlSnapshot
   - contentType
   - contentIdentity
   - status
   - visibility
   - moderationStatus
   - primaryHomepageId
+  - primaryHomepageSnapshot
+  - visitedAt
   - assistantUsePolicy
+  - title
+  - body
+  - summary
+  - mediaUrls
+  - coverUrl
+  - thumbnailUrl
+  - videoUrl
+  - width
+  - height
+  - durationMs
+  - likeCount
+  - commentCount
+  - shareCount
+  - contentVertical
   - tagRefs
   - entityRefs
+  - createdAt
   - publishedAt
   - updatedAt
 - name: PostPromotedToWork
@@ -136,24 +194,42 @@ events:
   - notification-service
   - assistant-service
   - entity-service
+  - circle-service
   channel: transactional_outbox
   payload_entity: Post
   payload_fields:
   - postId
   - authorId
+  - authorDisplayNameSnapshot
+  - authorAvatarUrlSnapshot
   - fromIdentity
   - toIdentity
   - previousContentType
   - contentType
   - title
   - summary
+  - body
+  - mediaUrls
+  - coverUrl
+  - thumbnailUrl
+  - videoUrl
+  - width
+  - height
+  - durationMs
+  - likeCount
+  - commentCount
+  - shareCount
+  - contentVertical
   - tagRefs
   - entityRefs
   - status
   - visibility
   - moderationStatus
   - primaryHomepageId
+  - primaryHomepageSnapshot
+  - visitedAt
   - assistantUsePolicy
+  - createdAt
   - publishedAt
   - updatedAt
   - promotedAt
@@ -211,7 +287,7 @@ events:
   - postId
   - purgedAt
 - name: PostImported
-  description: 签名 Data/PGC release 经 BulkImportFacade 汇入在线 command pipeline
+  description: 签名不可变 Data release 经 Post release importer 写入权威 Post 并发布生命周期事实
   producer: content-service
   consumers:
   - feed-projection

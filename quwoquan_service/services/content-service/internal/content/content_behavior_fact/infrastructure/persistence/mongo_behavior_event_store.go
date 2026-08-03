@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	behaviormodel "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model"
+	behaviorports "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -19,8 +21,8 @@ const (
 	behaviorEventTTLDays     = 30
 )
 
-type BehaviorEventStore = ports.BehaviorEventStore
-type RawBehaviorEvent = ports.RawBehaviorEvent
+type BehaviorEventStore = behaviorports.FactStore
+type RawBehaviorEvent = behaviormodel.Fact
 type WishlistEvent = ports.WishlistEvent
 
 // MongoBehaviorEventStore persists raw behavior events to MongoDB with TTL.
@@ -145,8 +147,9 @@ func (s *MongoBehaviorEventStore) ListUserFootprint(ctx context.Context, userID 
 	return out, nil
 }
 
-// MongoWishlistEventStore persists explicit want-to-go intent facts consumed by
-// MongoIntersectionSource.coWishlistedEntityReason.
+// MongoWishlistEventStore persists the Content-owned current wishlist state.
+// Recommendation consumes the same authoritative ContentBehaviorRecorded stream;
+// it never reads this collection.
 type MongoWishlistEventStore struct {
 	coll   *mongo.Collection
 	logger *slog.Logger

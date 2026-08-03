@@ -13,6 +13,7 @@ import (
 	conversationevent "quwoquan_service/services/chat-service/generated/chat/conversation/contract/event"
 	userstateevent "quwoquan_service/services/chat-service/generated/chat/conversation_user_state/contract/event"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	userstateapp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/application"
 )
 
 const (
@@ -24,6 +25,7 @@ type ConversationService struct {
 	transactions                      TransactionRunner
 	conversations                     ConversationStore
 	circleGroupConversations          CircleGroupConversationReader
+	gatheringConversations            GatheringConversationReader
 	circleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
 	members                           MemberStore
 	userStates                        UserStateStore
@@ -61,6 +63,7 @@ func NewConversationService(
 		transactions:                      storage.Transactions,
 		conversations:                     storage.Conversations,
 		circleGroupConversations:          storage.CircleGroupConversations,
+		gatheringConversations:            storage.GatheringConversations,
 		circleGroupChatBindingProjections: storage.CircleGroupChatBindingProjections,
 		members:                           storage.Members,
 		userStates:                        storage.UserStates,
@@ -81,11 +84,13 @@ type CreateConversationRequest struct {
 	Title                      string
 	CircleId                   string
 	CircleGroupId              string
+	GatheringId                string
 	EntityId                   string
 	OriginType                 string
 	OriginGreetingRequestID    string
 	OriginIntersectionSnapshot *model.GreetingIntersectionSnapshot
 	CircleGroupSourceEventID   string
+	GatheringSourceEventID     string
 	MaxGroupSize               int
 	CreatorId                  string
 	InitialMemberIds           []string
@@ -95,12 +100,13 @@ type CreateConversationRequest struct {
 // （重复创建返回既有会话），group 创建以 actor-scoped Idempotency-Key 回执
 // 保证重放返回首个会话；事件在同一事务写入 conversations_outbox。
 func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (*model.Conversation, error) {
-	if isCircleBoundCreateRequest(req) ||
+	if isManagedBindingCreateRequest(req) ||
 		strings.TrimSpace(req.EntityId) != "" ||
 		strings.TrimSpace(req.OriginType) != "" ||
-		strings.TrimSpace(req.CircleGroupSourceEventID) != "" {
-		return nil, generated.AppErrorFromCircleGroupBindingWriteForbidden(
-			"public CreateConversation must not supply circle binding or source fields",
+		strings.TrimSpace(req.CircleGroupSourceEventID) != "" ||
+		strings.TrimSpace(req.GatheringSourceEventID) != "" {
+		return nil, generated.AppErrorFromSourceManagedBindingWriteForbidden(
+			"public CreateConversation must not supply source binding fields",
 		)
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, req.CreatorId)
@@ -137,6 +143,74 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		return nil, mapConversationCreateIdempotencyError(err)
 	}
 	return created, nil
+}
+
+type GatheringConversationProvisioningRequest struct {
+	SourceEventID  string
+	GatheringID    string
+	OwnerPersonaID string
+	Title          string
+	MaxGroupSize   int
+}
+
+// ProvisionGatheringConversation creates the sole Chat Conversation bound to
+// one Gathering. The command receipt, Conversation, owner membership/UserState
+// and outbox facts commit atomically; replay returns the first binding.
+func (s *ConversationService) ProvisionGatheringConversation(
+	ctx context.Context,
+	req GatheringConversationProvisioningRequest,
+) (*model.Conversation, error) {
+	req.SourceEventID = strings.TrimSpace(req.SourceEventID)
+	req.GatheringID = strings.TrimSpace(req.GatheringID)
+	req.OwnerPersonaID = strings.TrimSpace(req.OwnerPersonaID)
+	req.Title = strings.TrimSpace(req.Title)
+	if req.SourceEventID == "" || req.GatheringID == "" || req.OwnerPersonaID == "" ||
+		req.Title == "" || req.MaxGroupSize < 2 || req.MaxGroupSize > maxGroupSizeLimit {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"相聚会话事实不完整",
+			"Gathering conversation projection requires event, gathering, owner, title and valid capacity",
+		)
+	}
+	if s.gatheringConversations == nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleChat,
+			"相聚会话投影不可用",
+			"Gathering conversation reader is not configured",
+		)
+	}
+	if existing, err := s.gatheringConversations.FindConversationByGatheringID(ctx, req.GatheringID); err == nil {
+		if existing.CreatorId != req.OwnerPersonaID || existing.MaxGroupSize != req.MaxGroupSize {
+			return nil, generated.AppErrorFromGatheringBindingConflict(
+				"existing Gathering conversation binding does not match source fact",
+			)
+		}
+		return existing, nil
+	} else if !isConversationNotFound(err) {
+		return nil, err
+	}
+
+	receiptKey := "system:gathering-provision:" + req.SourceEventID
+	internalCreate := CreateConversationRequest{
+		Type: conversationTypeGroup, Title: req.Title, GatheringId: req.GatheringID,
+		OriginType: "gathering", GatheringSourceEventID: req.SourceEventID,
+		MaxGroupSize: req.MaxGroupSize, CreatorId: req.OwnerPersonaID,
+	}
+	digest, err := chatCommandDigest("ProvisionGatheringConversation", internalCreate)
+	if err != nil {
+		return nil, err
+	}
+	var replayed model.Conversation
+	if found, err := replayChatCommand(
+		ctx, s.conversationCommands, receiptKey, "ProvisionGatheringConversation", digest, &replayed,
+	); err != nil {
+		return nil, err
+	} else if found {
+		return &replayed, nil
+	}
+	return s.createDirectConversation(ctx, internalCreate, true, &commandReceiptSpec{
+		ScopedKey: receiptKey, CommandName: "ProvisionGatheringConversation", CommandDigest: digest,
+	})
 }
 
 // replayCreateConversation reads the command receipt with the operation's
@@ -295,7 +369,7 @@ func (s *ConversationService) createDirectConversation(
 			)
 		}
 		peerID := initialMemberIds[0]
-		if existing, findErr := s.conversations.FindDirectConversationBetween(ctx, req.CreatorId, peerID); findErr == nil && existing != nil {
+		if existing, findErr := s.findDirectConversationBetween(ctx, req.CreatorId, peerID); findErr == nil && existing != nil {
 			return existing, nil
 		}
 		if !bypassRelationshipGate {
@@ -314,7 +388,7 @@ func (s *ConversationService) createDirectConversation(
 	if req.Type == conversationTypeGroup && len(initialMemberIds)+1 > maxGroupSize {
 		return nil, chatGroupFull("initial members exceed max group size")
 	}
-	if req.Type == conversationTypeGroup && !bypassRelationshipGate && !isCircleBoundCreateRequest(req) {
+	if req.Type == conversationTypeGroup && !bypassRelationshipGate && !isManagedBindingCreateRequest(req) {
 		if err := s.validateGroupInitialMembers(ctx, req.CreatorId, initialMemberIds); err != nil {
 			return nil, err
 		}
@@ -328,6 +402,7 @@ func (s *ConversationService) createDirectConversation(
 		CreatorId:                  req.CreatorId,
 		CircleId:                   req.CircleId,
 		CircleGroupId:              req.CircleGroupId,
+		GatheringId:                req.GatheringId,
 		EntityId:                   req.EntityId,
 		OriginType:                 originType,
 		OriginGreetingRequestID:    strings.TrimSpace(req.OriginGreetingRequestID),
@@ -420,6 +495,7 @@ func (s *ConversationService) createDirectConversation(
 				"creatorId":      req.CreatorId,
 				"circleId":       conv.CircleId,
 				"circleGroupId":  conv.CircleGroupId,
+				"gatheringId":    conv.GatheringId,
 				"entityId":       conv.EntityId,
 				"originType":     conv.OriginType,
 				"maxGroupSize":   conv.MaxGroupSize,
@@ -454,6 +530,18 @@ func (s *ConversationService) createDirectConversation(
 				"creatorId":           conv.CreatorId,
 				"sourceCircleEventId": req.CircleGroupSourceEventID,
 				"createdAt":           conv.CreatedAt.UTC(),
+			},
+		})
+	}
+	if conv.GatheringId != "" {
+		outboxEvents = append(outboxEvents, AggregateOutboxEvent{
+			EventID:   chatAggregateEventID(eventSeed, string(conversationevent.GatheringConversationProvisioned)),
+			EventType: string(conversationevent.GatheringConversationProvisioned), AggregateID: conv.ID,
+			ConversationID: conv.ID, ActorID: req.CreatorId,
+			Payload: map[string]any{
+				"conversationId": conv.ID, "gatheringId": conv.GatheringId,
+				"creatorId": conv.CreatorId, "sourceEventId": req.GatheringSourceEventID,
+				"createdAt": conv.CreatedAt.UTC(),
 			},
 		})
 	}
@@ -533,6 +621,21 @@ func (s *ConversationService) createDirectConversation(
 				return nil, findErr
 			}
 		}
+		if errors.Is(err, model.ErrGatheringConversationAlreadyBound) &&
+			strings.TrimSpace(conv.GatheringId) != "" && s.gatheringConversations != nil {
+			existing, findErr := s.gatheringConversations.FindConversationByGatheringID(ctx, conv.GatheringId)
+			if findErr == nil {
+				if existing.CreatorId != conv.CreatorId || existing.MaxGroupSize != conv.MaxGroupSize {
+					return nil, generated.AppErrorFromGatheringBindingConflict(
+						"concurrent Gathering conversation binding differs from source fact",
+					)
+				}
+				return existing, nil
+			}
+			if !isConversationNotFound(findErr) {
+				return nil, findErr
+			}
+		}
 		return nil, err
 	}
 	return conv, nil
@@ -561,7 +664,7 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "DissolveConversation"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "DissolveConversation"); err != nil {
 		return err
 	}
 	owner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
@@ -614,12 +717,12 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 	return nil
 }
 
-// isCircleBoundCreateRequest reports whether the create request targets a
-// circle-derived group (circle default group or circle self-built group),
-// whose membership is governed by circle join rather than hand-picked mutual
-// contacts. The 发起群聊 hand-pick flow never sets these fields.
-func isCircleBoundCreateRequest(req CreateConversationRequest) bool {
-	return strings.TrimSpace(req.CircleId) != "" || strings.TrimSpace(req.CircleGroupId) != ""
+// isManagedBindingCreateRequest reports whether the create request carries a
+// CircleGroup or Gathering source binding. Only the corresponding trusted
+// source projector may set these fields; the hand-picked group flow never may.
+func isManagedBindingCreateRequest(req CreateConversationRequest) bool {
+	return strings.TrimSpace(req.CircleId) != "" || strings.TrimSpace(req.CircleGroupId) != "" ||
+		strings.TrimSpace(req.GatheringId) != ""
 }
 
 func isConversationNotFound(err error) bool {
@@ -688,6 +791,9 @@ func inferGroupConversationOrigin(
 ) string {
 	hasCircleGroup := strings.TrimSpace(req.CircleGroupId) != ""
 	hasCircle := strings.TrimSpace(req.CircleId) != ""
+	if strings.TrimSpace(req.GatheringId) != "" {
+		return "gathering"
+	}
 	if hasCircleGroup || hasCircle {
 		if originType == "direct_init" {
 			originType = "circle_group"
@@ -731,7 +837,7 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 	if err != nil {
 		return nil, err
 	}
-	if err := rejectCircleGroupManaged(conv, "UpdateConversationTitle"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "UpdateConversationTitle"); err != nil {
 		return nil, err
 	}
 	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
@@ -826,7 +932,7 @@ func (s *ConversationService) CreateOrReuseDirect(
 			"creatorId and peerId required",
 		)
 	}
-	if existing, err := s.conversations.FindDirectConversationBetween(ctx, creatorID, peerID); err != nil {
+	if existing, err := s.findDirectConversationBetween(ctx, creatorID, peerID); err != nil {
 		return nil, err
 	} else if existing != nil {
 		return existing, nil
@@ -847,11 +953,37 @@ func (s *ConversationService) CreateOrReuseDirect(
 }
 
 func (s *ConversationService) HasDirectBetween(ctx context.Context, memberA, memberB string) (bool, error) {
-	conv, err := s.conversations.FindDirectConversationBetween(ctx, memberA, memberB)
+	conv, err := s.findDirectConversationBetween(ctx, memberA, memberB)
 	if err != nil {
 		return false, err
 	}
 	return conv != nil, nil
+}
+
+// findDirectConversationBetween composes the Conversation aggregate with the
+// ConversationMembership identity index without allowing Conversation storage
+// to read the membership collection directly.
+func (s *ConversationService) findDirectConversationBetween(
+	ctx context.Context,
+	memberA string,
+	memberB string,
+) (*model.Conversation, error) {
+	conversationIDs, err := s.members.ListSharedConversationIDs(ctx, memberA, memberB)
+	if err != nil || len(conversationIDs) == 0 {
+		return nil, err
+	}
+	conversations, err := s.conversations.FindConversationsByIDs(ctx, conversationIDs)
+	if err != nil {
+		return nil, err
+	}
+	for index := range conversations {
+		conversation := conversations[index]
+		if (conversation.Type == conversationTypeDirect || conversation.Type == conversationTypeEncrypted) &&
+			(conversation.Status == "" || conversation.Status == model.ConversationStatusActive) {
+			return &conversation, nil
+		}
+	}
+	return nil, nil
 }
 
 type ListConversationsRequest struct {
@@ -874,20 +1006,37 @@ func (s *ConversationService) ListConversationPage(
 	ctx context.Context,
 	req ListConversationsRequest,
 ) (model.ConversationPage, error) {
-	return s.conversations.ListConversationPageByUser(
-		ctx,
-		req.UserId,
-		req.Limit,
-		req.Cursor,
-	)
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	statePage, err := s.userStates.ListUserStatePage(ctx, req.UserId, limit, req.Cursor)
+	if err != nil {
+		return model.ConversationPage{}, err
+	}
+	conversationIDs := make([]string, 0, len(statePage.Items))
+	for _, state := range statePage.Items {
+		conversationIDs = append(conversationIDs, state.ConversationId)
+	}
+	conversations, err := s.conversations.FindConversationsByIDs(ctx, conversationIDs)
+	if err != nil {
+		return model.ConversationPage{}, err
+	}
+	byID := make(map[string]model.Conversation, len(conversations))
+	for _, conversation := range conversations {
+		byID[conversation.ID] = conversation
+	}
+	items := make([]model.Conversation, 0, len(conversationIDs))
+	for _, conversationID := range conversationIDs {
+		if conversation, exists := byID[conversationID]; exists &&
+			conversation.Status == model.ConversationStatusActive {
+			items = append(items, conversation)
+		}
+	}
+	return model.ConversationPage{Items: items, NextCursor: statePage.NextCursor}, nil
 }
 
-type UpdateSettingsRequest struct {
-	UserId         string
-	ConversationId string
-	Muted          *bool
-	Pinned         *bool
-}
+type UpdateSettingsRequest = userstateapp.UpdateSettingsRequest
 
 func (s *ConversationService) UpdateSettings(ctx context.Context, req UpdateSettingsRequest) error {
 	if _, _, err := requireActiveConversationMember(

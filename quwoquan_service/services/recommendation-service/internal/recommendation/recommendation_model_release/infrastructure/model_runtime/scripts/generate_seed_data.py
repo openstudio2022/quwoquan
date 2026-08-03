@@ -2,9 +2,9 @@
 """
 Bootstrap seed data for ML training pipeline dry-run.
 
-Generates synthetic but realistic data:
+Generates synthetic data only in an isolated ``*_dryrun`` database:
 - 200+ posts in rm_discovery_feed (varied contentType, tags, entityRefs)
-- 500+ learning events in rec_learning_events (impression + engagement)
+- canonical exposure facts with exactly attributed feedback facts
 - 5-10 user profiles in rm_recommend_feature
 
 Uses data engineering baselines (tag taxonomy, entity types, content types)
@@ -16,12 +16,13 @@ Usage:
 """
 import argparse
 import hashlib
+import json
 import os
 import random
 import sys
 from datetime import timedelta
 
-from time_utils import utc_iso, utc_now
+from time_utils import utc_now
 
 try:
     from pymongo import MongoClient
@@ -194,47 +195,79 @@ def generate_users(rng: random.Random, count: int = 8) -> list[dict]:
     return users
 
 
-def generate_events(
+def _snapshot_digest(user_snapshot: dict, item_snapshot: dict) -> str:
+    payload = json.dumps(
+        {"item": item_snapshot, "user": user_snapshot},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def generate_facts(
     rng: random.Random, posts: list[dict], users: list[dict],
     count: int = 600, scenario: str = "content_feed",
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     now = utc_now()
-    events = []
-    user_ids = [u["userId"] for u in users]
+    exposures: list[dict] = []
+    feedbacks: list[dict] = []
 
     for i in range(count):
-        user_id = rng.choice(user_ids)
+        user = rng.choice(users)
+        user_id = user["userId"]
         post = rng.choice(posts)
         occurred_at = now - timedelta(minutes=rng.randint(1, 10080))
-
-        is_impression = rng.random() < 0.45
-        if is_impression:
-            event = {
-                "eventType": "rec_impression",
-                "scenario": scenario,
+        snapshot_at = occurred_at - timedelta(seconds=rng.randint(0, 120))
+        exposure_id = _deterministic_id("exposure", i)
+        request_id = f"request-{_deterministic_id('request', i)}"
+        user_snapshot = dict(user["userFeatures"])
+        item_snapshot = {
+            "authorId": post["authorId"],
+            "contentType": post["contentType"],
+            "entityRefs": list(post["entityRefs"]),
+            "likeCount": post["likeCount"],
+            "publishHour": post["publishHour"],
+            "qualityScore": post["qualityScore"],
+            "recallPath": post["recallPath"],
+            "referralSource": rng.choice(REFERRAL_SOURCES),
+            "tagRefs": list(post["tagRefs"]),
+            "viewCount": post["viewCount"],
+        }
+        feature_digest = _snapshot_digest(user_snapshot, item_snapshot)
+        exposures.append(
+            {
+                "_id": exposure_id,
+                "sourceEventId": f"feed-page-delivered-{i}",
+                "deliveryPageId": f"delivery-page-{i}",
+                "requestId": request_id,
+                "windowId": f"window-{i}",
                 "userId": user_id,
+                "personaId": None,
+                "scenario": scenario,
+                "targetType": post["contentType"],
                 "targetId": post["postId"],
-                "occurredAt": utc_iso(occurred_at),
-                "createdAt": occurred_at,
-                "labels": {
-                    "sessionId": f"sess_{rng.randint(1, 100):03d}",
-                    "contentType": post["contentType"],
-                    "recallPath": post.get("recallPath", ""),
-                },
-                "context": {
-                    "score": round(rng.uniform(0.1, 1.0), 4),
-                    "authorId": post["authorId"],
-                    "tagRefs": post["tagRefs"][:5],
-                    "feedRequestId": f"req_{i:05d}",
-                    "referralSource": rng.choice(REFERRAL_SOURCES),
-                    "contentType": post["contentType"],
-                },
+                "ordinal": 0,
+                "modelBucket": "rule",
+                "modelChannel": None,
+                "modelReleaseId": None,
+                "featureSnapshotAt": snapshot_at,
+                "featureSnapshotDigest": feature_digest,
+                "rankingSnapshotDigest": hashlib.sha256(
+                    f"{request_id}:{post['postId']}:{feature_digest}".encode("utf-8")
+                ).hexdigest(),
+                "userFeatureSnapshot": user_snapshot,
+                "itemFeatureSnapshot": item_snapshot,
+                "exposedAt": occurred_at,
+                "recordedAt": occurred_at,
                 "_seedMarker": SEED_MARKER,
             }
-        else:
+        )
+
+        if rng.random() < 0.55:
             action = rng.choices(
                 ALL_ENGAGEMENT_ACTIONS,
-                weights=[0.35, 0.15, 0.10, 0.08, 0.08, 0.04, 0.10, 0.10],
+                weights=[0.35, 0.15, 0.10, 0.08, 0.08, 0.10, 0.14],
                 k=1,
             )[0]
             duration = 0.0
@@ -243,38 +276,35 @@ def generate_events(
             elif action in ("like", "share", "comment"):
                 duration = round(rng.uniform(5, 180), 1)
 
-            event = {
-                "eventType": "rec_engagement",
-                "scenario": scenario,
-                "userId": user_id,
-                "targetId": post["postId"],
-                "occurredAt": utc_iso(occurred_at),
-                "createdAt": occurred_at,
-                "labels": {
-                    "sessionId": f"sess_{rng.randint(1, 100):03d}",
-                    "contentType": post["contentType"],
-                    "recallPath": post.get("recallPath", ""),
-                    "action": action,
-                },
-                "context": {
-                    "score": round(rng.uniform(0.1, 1.0), 4),
-                    "authorId": post["authorId"],
-                    "tagRefs": post["tagRefs"][:5],
-                    "duration": duration,
-                    "feedRequestId": f"req_{i:05d}",
-                    "referralSource": rng.choice(REFERRAL_SOURCES),
-                    "contentType": post["contentType"],
-                },
-                "_seedMarker": SEED_MARKER,
-            }
-        events.append(event)
-    return events
+            feedbacks.append(
+                {
+                    "_id": _deterministic_id("feedback", i),
+                    "sourceEventId": f"content-behavior-{i}",
+                    "exposureId": exposure_id,
+                    "requestId": request_id,
+                    "userId": user_id,
+                    "personaId": None,
+                    "targetType": post["contentType"],
+                    "targetId": post["postId"],
+                    "feedbackType": action,
+                    "value": duration,
+                    "occurredAt": occurred_at,
+                    "recordedAt": occurred_at,
+                    "_seedMarker": SEED_MARKER,
+                }
+            )
+    return exposures, feedbacks
 
 
 def clean_seed_data(db):
     """Remove all seed-generated documents."""
     marker = {"_seedMarker": SEED_MARKER}
-    for coll_name in ["rm_discovery_feed", "rec_learning_events", "rm_recommend_feature"]:
+    for coll_name in [
+        "rm_discovery_feed",
+        "rm_recommend_feature",
+        "recommendation_exposure_facts",
+        "recommendation_feedback_facts",
+    ]:
         result = db[coll_name].delete_many(marker)
         print(f"  Cleaned {result.deleted_count} seed docs from {coll_name}", file=sys.stderr)
 
@@ -283,13 +313,16 @@ def main():
     p = argparse.ArgumentParser(description="Generate ML training seed data")
     p.add_argument("--scenario", default="content_feed")
     p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
-    p.add_argument("--db", default="quwoquan_content")
+    p.add_argument("--db", default="quwoquan_recommendation_dryrun")
     p.add_argument("--post-count", type=int, default=220)
-    p.add_argument("--event-count", type=int, default=600)
+    p.add_argument("--exposure-count", type=int, default=600)
     p.add_argument("--user-count", type=int, default=8)
     p.add_argument("--clean", action="store_true", help="Remove old seed data before generating")
     p.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     args = p.parse_args()
+
+    if not args.db.endswith("_dryrun"):
+        p.error("synthetic facts are restricted to an isolated *_dryrun database")
 
     client = MongoClient(args.mongodb_uri)
     db = client[args.db]
@@ -310,12 +343,23 @@ def main():
     if users:
         db["rm_recommend_feature"].insert_many(users)
 
-    print(f"[seed] Generating {args.event_count} learning events...", file=sys.stderr)
-    events = generate_events(rng, posts, users, args.event_count, args.scenario)
-    if events:
-        db["rec_learning_events"].insert_many(events)
+    print(
+        f"[seed] Generating {args.exposure_count} canonical exposure facts...",
+        file=sys.stderr,
+    )
+    exposures, feedbacks = generate_facts(
+        rng, posts, users, args.exposure_count, args.scenario
+    )
+    if exposures:
+        db["recommendation_exposure_facts"].insert_many(exposures)
+    if feedbacks:
+        db["recommendation_feedback_facts"].insert_many(feedbacks)
 
-    print(f"[seed] Done: {len(posts)} posts, {len(users)} users, {len(events)} events", file=sys.stderr)
+    print(
+        f"[seed] Done: {len(posts)} posts, {len(users)} users, "
+        f"{len(exposures)} exposures, {len(feedbacks)} feedback facts",
+        file=sys.stderr,
+    )
     return 0
 
 

@@ -93,6 +93,27 @@
   - 交付给下游的结果：可直接执行的行动，或明确不可执行的规划口径，形成该场景中本领域负责的终态。
   - 不负责：不定义行动键闭集，也不判定目标可达性。
 
+- [`JNY-009 / SCN-034`](../spec.md#scn-034)
+  - 本领域负责：提供小趣成员与共享场景引用，不绑定单一 Skill；管理员权限事实供 Assistant Placement 校验。
+  - 进入条件：Conversation 与小趣成员有效。
+  - 交付给下游的结果：typed surface/member/administrator 事实与 AssistantMentioned 事件。
+  - 不负责：不拥有 Skill 设置、Consent、Subscription 或 Placement。
+- [`JNY-013 / SCN-030`](../spec.md#scn-030)
+  - 本领域负责：提供可见群消息窗口与明确对象引用，并承载 Trip card/Placement 入口。
+  - 进入条件：成员可见 Conversation。
+  - 交付给下游的结果：带可见范围的会话上下文和共享回复位置。
+  - 不负责：不把消息当 Trip 当前计划。
+- [`JNY-013 / SCN-031`](../spec.md#scn-031)
+  - 本领域负责：按 Assistant/Travel 公开投递结果写入去重的变化提醒消息。
+  - 进入条件：相关成员与 Conversation 投递策略有效。
+  - 交付给下游的结果：可同步、可审计的提醒消息。
+  - 不负责：不计算 Revision diff 或频控。
+- [`JNY-013 / SCN-033`](../spec.md#scn-033)
+  - 本领域负责：承载分享快照卡片和旅行后持续 Conversation。
+  - 进入条件：分享对象可见且发送者有权限。
+  - 交付给下游的结果：typed object card 与消息 receipt。
+  - 不负责：不生成或发布游记。
+
 ## 4. 业务能力
 
 - [`chat-experience-optimization`](./chat-experience-optimization/spec.md)：统一趣聊入口、会话详情与群聊管理的交互和状态

@@ -8,13 +8,15 @@ import (
 
 	runtimeconfig "quwoquan_service/runtime/config"
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	skillcontextapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
 	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
 	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/assets"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/finance"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/modelprovider"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/providerbinding"
@@ -23,6 +25,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/searchclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/weather"
 	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
 func buildAgentLoop(
@@ -33,10 +36,13 @@ func buildAgentLoop(
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
 	publicWebEvidence *publicwebpersistence.MongoEvidenceStore,
 	publicWebBudget *publicwebpersistence.MongoRunBudgetGate,
-	runs ports.SessionRunStore,
-	subscriptions ports.SkillSubscriptionStore,
+	runs runruntime.Repository,
+	subscriptions subscriptionports.Store,
 	interests ports.ProactiveInterestReader,
 	consents consentports.Reader,
+	travelContext domainreader.TravelContextReader,
+	skillCatalog skillpkg.Loader,
+	promptAssets ports.PromptAssetResolver,
 ) (*orchestration.AgentLoop, error) {
 	model, err := buildModelProvider(
 		appEnv,
@@ -58,24 +64,31 @@ func buildAgentLoop(
 	if err != nil {
 		return nil, fmt.Errorf("search provider binding invalid: %w", err)
 	}
-	promptAssets, err := assets.NewDefaultPromptAssetLoader()
-	if err != nil {
-		return nil, fmt.Errorf("prompt asset loader unavailable: %w", err)
+	if promptAssets == nil {
+		return nil, fmt.Errorf("frozen Skill package prompt resolver is required")
 	}
 	loop := orchestration.NewAgentLoop(orchestration.ModelDrivenSkillRuntime{
-		Model: model,
+		Model:  model,
+		Loader: skillCatalog,
 	}, orchestration.ReactRuntime{
 		Model: model,
 		Tools: orchestration.DefaultToolCoordinator{
 			Registry: registry,
 		},
 	}, nil)
+	loop.Catalog = skillCatalog
 	loop.PromptAssets = promptAssets
-	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model}
+	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model, Loader: skillCatalog}
 	contextResolvers, err := skillcontextinfra.NewRuntimeRegistry(
 		runs,
 		subscriptions,
 		interests,
+		skillcontextapplication.RegisteredResolver{
+			ResolverRef: "trip.current_context",
+			Resolver: skillcontextinfra.TravelContextResolver{
+				Runs: runs, Travel: travelContext,
+			},
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("skill context resolver registry unavailable: %w", err)
@@ -98,7 +111,12 @@ func buildAgentLoop(
 			granted := map[string]struct{}{}
 			for _, consent := range active {
 				if consent.SkillID == skillID && consent.IsGranted() {
-					granted[strings.TrimSpace(consent.GrantedScope)] = struct{}{}
+					for _, rawScope := range consent.GrantedScopes {
+						scope := strings.TrimSpace(rawScope)
+						if scope != "" {
+							granted[scope] = struct{}{}
+						}
+					}
 				}
 			}
 			for _, scope := range requiredScopes {
@@ -131,9 +149,15 @@ func buildModelProvider(
 	if !ok {
 		return nil, fmt.Errorf("model binding has no completion endpoint")
 	}
-	apiKey, ok := binding.Secret("ASSISTANT_MODEL_API_KEY")
-	if !ok {
-		return nil, fmt.Errorf("model binding has no API key material")
+	apiKey := ""
+	if binding.AdapterID == providerbinding.ModelAdapterProtocolFixture {
+		apiKey = "nonprod-protocol-substitute"
+	} else {
+		var ok bool
+		apiKey, ok = binding.Secret("ASSISTANT_MODEL_API_KEY")
+		if !ok {
+			return nil, fmt.Errorf("model binding has no API key material")
+		}
 	}
 	backend, err := modelprovider.New(
 		modelprovider.Config{

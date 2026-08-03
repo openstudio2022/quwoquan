@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 /// 创作选点的跨边界编排：组合 Integration query 与端侧定位能力。
 final class CreateLocationCoordinator {
@@ -15,13 +16,13 @@ final class CreateLocationCoordinator {
   final LocationSearchReader searchReader;
   final LocationGateway locationGateway;
 
-  List<LocationPoiDto> _lastNearby = const <LocationPoiDto>[];
-  List<LocationPoiDto> _lastSearch = const <LocationPoiDto>[];
+  List<CreateLocationOption> _lastNearby = const <CreateLocationOption>[];
+  List<CreateLocationOption> _lastSearch = const <CreateLocationOption>[];
 
   Future<LocationAccessResult> ensureLocationAccess() =>
       locationGateway.ensureAccess();
 
-  Future<List<LocationPoiDto>> nearby({
+  Future<List<CreateLocationOption>> nearby({
     double? latitude,
     double? longitude,
   }) async {
@@ -29,11 +30,14 @@ final class CreateLocationCoordinator {
       final slice = await nearbyReader.getNearbyLocations(
         NearbyLocationQueryParams(latitude: latitude, longitude: longitude),
       );
-      if (slice.items.isNotEmpty) {
-        _lastNearby = slice.items;
-        _lastSearch = slice.items;
+      final items = slice.items
+          .map(CreateLocationOption.fromWire)
+          .toList(growable: false);
+      if (items.isNotEmpty) {
+        _lastNearby = items;
+        _lastSearch = items;
       }
-      return slice.items;
+      return items;
     } on CloudException catch (error) {
       if (error.statusCode == 429 && _lastNearby.isNotEmpty) {
         return _lastNearby;
@@ -42,7 +46,7 @@ final class CreateLocationCoordinator {
     }
   }
 
-  Future<List<LocationPoiDto>> search(
+  Future<List<CreateLocationOption>> search(
     String keyword, {
     double? latitude,
     double? longitude,
@@ -59,10 +63,13 @@ final class CreateLocationCoordinator {
           longitude: longitude,
         ),
       );
-      if (slice.items.isNotEmpty) {
-        _lastSearch = slice.items;
+      final items = slice.items
+          .map(CreateLocationOption.fromWire)
+          .toList(growable: false);
+      if (items.isNotEmpty) {
+        _lastSearch = items;
       }
-      return slice.items;
+      return items;
     } on CloudException catch (error) {
       if (error.statusCode == 429 && _lastSearch.isNotEmpty) {
         return _lastSearch;

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	entrypersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/infrastructure/persistence"
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	policyreleasepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/persistence"
@@ -18,11 +19,18 @@ import (
 	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
 	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimewiring"
+	taskpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/infrastructure/persistence"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	turnviewpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/infrastructure/persistence"
 	consentports "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/domain/ports"
 	consentpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_consent/infrastructure/persistence"
 	skillpackagepersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/infrastructure/persistence"
+	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
+	subscriptionpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/infrastructure/persistence"
+	placementports "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/domain/ports"
+	placementpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/infrastructure/persistence"
+	settingports "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/domain/ports"
+	settingpersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/infrastructure/persistence"
 )
 
 const dependencyProbeTimeout = runtimewiring.DependencyProbeTimeout
@@ -38,17 +46,22 @@ func validateRuntimeDependenciesConfig(cfg config) error {
 }
 
 type persistentDependencies struct {
-	subscriptionStore  sessionports.SkillSubscriptionStore
+	subscriptionStore  subscriptionports.Store
 	consentStore       consentports.Store
-	sessionRunStore    sessionports.SessionRunStore
+	settingStore       settingports.Store
+	placementStore     placementports.Store
+	sessionStore       sessionports.SessionStore
 	preferenceStore    preferenceports.Store
 	preferenceReader   preferenceports.Reader
 	turnViewReader     turnviewapplication.Reader
+	turnViewProjector  *turnviewapplication.Projector
+	entryViewReader    *entrypersistence.MongoReader
+	taskViewReader     *taskpersistence.MongoReader
 	policyReleaseStore *policyreleasepersistence.MongoStore
 	policyRolloutStore *policyrolloutpersistence.MongoStore
 	learningFactStore  *learningpersistence.MongoStore
 	learningProjection *learningprojection.MongoProjector
-	learningRunOwners  *learningpersistence.MongoRunOwnerReader
+	learningRunOwners  *runpersistence.MongoRunOwnerReader
 	runRepository      *runpersistence.MongoRunRepository
 	publicWebEvidence  *publicwebpersistence.MongoEvidenceStore
 	publicWebBudget    *publicwebpersistence.MongoRunBudgetGate
@@ -59,7 +72,13 @@ type persistentDependencies struct {
 }
 
 func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDependencies, error) {
-	inner, err := runtimewiring.OpenPersistentDependencies(ctx, cfg, func(db *mongo.Database) (preferenceports.Store, preferenceports.Reader, error) {
+	inner, err := runtimewiring.OpenPersistentDependencies(ctx, cfg, func(db *mongo.Database) (subscriptionports.Store, error) {
+		store := subscriptionpersistence.NewMongoStore(db)
+		if err := store.EnsureIndexes(ctx); err != nil {
+			return nil, err
+		}
+		return store, nil
+	}, func(db *mongo.Database) (preferenceports.Store, preferenceports.Reader, error) {
 		store := preferencepersistence.NewMongoStore(db)
 		if err := store.EnsureIndexes(ctx); err != nil {
 			return nil, nil, err
@@ -74,6 +93,16 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	if err := consentStore.EnsureSchema(ctx); err != nil {
 		_ = inner.Close(ctx)
 		return nil, dependencyError("postgres.skill_consents", "schema", err)
+	}
+	settingStore := settingpersistence.NewPgStore(inner.PostgresPool)
+	if err := settingStore.EnsureSchema(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError("postgres.skill_user_settings", "schema", err)
+	}
+	placementStore := placementpersistence.NewPgStore(inner.PostgresPool)
+	if err := placementStore.EnsureSchema(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError("postgres.skill_surface_placements", "schema", err)
 	}
 	policyReleaseStore := policyreleasepersistence.NewMongoStore(database)
 	if err := policyReleaseStore.EnsureIndexes(ctx); err != nil {
@@ -120,6 +149,27 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 			err,
 		)
 	}
+	turnViewStore := turnviewpersistence.NewMongoStore(database)
+	if err := turnViewStore.EnsureIndexes(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.assistant_turn_views",
+			"indexes",
+			err,
+		)
+	}
+	turnViewProjector := turnviewapplication.NewProjector(
+		runRepository,
+		turnViewStore,
+	)
+	if err := turnViewProjector.CatchUp(ctx); err != nil {
+		_ = inner.Close(ctx)
+		return nil, dependencyError(
+			"mongodb.assistant_turn_views",
+			"projection",
+			err,
+		)
+	}
 	publicWebEvidence := publicwebpersistence.NewMongoEvidenceStore(database)
 	if err := publicWebEvidence.EnsureIndexes(ctx); err != nil {
 		_ = inner.Close(ctx)
@@ -156,15 +206,20 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	return &persistentDependencies{
 		subscriptionStore:  inner.SubscriptionStore,
 		consentStore:       consentStore,
-		sessionRunStore:    inner.SessionRunStore,
+		settingStore:       settingStore,
+		placementStore:     placementStore,
+		sessionStore:       inner.SessionStore,
 		preferenceStore:    inner.PreferenceStore,
 		preferenceReader:   inner.PreferenceReader,
-		turnViewReader:     turnviewpersistence.NewMongoReader(database),
+		turnViewReader:     turnViewStore,
+		turnViewProjector:  turnViewProjector,
+		entryViewReader:    entrypersistence.NewMongoReader(database),
+		taskViewReader:     taskpersistence.NewMongoReader(database),
 		policyReleaseStore: policyReleaseStore,
 		policyRolloutStore: policyRolloutStore,
 		learningFactStore:  learningFactStore,
 		learningProjection: learningProjector,
-		learningRunOwners:  learningpersistence.NewMongoRunOwnerReader(database),
+		learningRunOwners:  runpersistence.NewMongoRunOwnerReader(database),
 		runRepository:      runRepository,
 		publicWebEvidence:  publicWebEvidence,
 		publicWebBudget:    publicWebBudget,

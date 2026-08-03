@@ -206,10 +206,10 @@ func (c *AssistantMentionedConsumer) processMessage(
 		ChatConversationID: durableFieldValue(msg.Fields, "conversationId"),
 		MessageID:          durableFieldValue(msg.Fields, "messageId"),
 		Seq:                int64Value(durableFieldValue(msg.Fields, "seq")),
+		SenderAccountID:    durableFieldValue(msg.Fields, "senderAccountId"),
 		SenderID:           firstNonEmpty(durableFieldValue(msg.Fields, "senderId"), durableFieldValue(msg.Fields, "actorId")),
 		Content:            durableFieldValue(msg.Fields, "content"),
 		AssistantMemberID:  durableFieldValue(msg.Fields, "assistantMemberId"),
-		AssistantSkillID:   durableFieldValue(msg.Fields, "assistantSkillId"),
 	})
 }
 

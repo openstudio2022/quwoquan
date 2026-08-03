@@ -1,0 +1,45 @@
+domain: RECOMMENDATION
+aggregate: RecommendationFeatureProfileView
+description: 推荐长期特征与作者影响投影内部 Reader 的对象级错误。
+errors:
+- code: RECOMMENDATION.USER.feature_profile_unauthorized
+  kind: USER
+  reason: feature_profile_unauthorized
+  http_status: 401
+  emitted_by:
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply]}
+  recovery_action: none
+  user_message: {zh: 服务身份无效, en: Invalid service identity}
+- code: RECOMMENDATION.USER.feature_profile_forbidden
+  kind: USER
+  reason: feature_profile_forbidden
+  http_status: 403
+  emitted_by:
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply]}
+  recovery_action: none
+  user_message: {zh: 服务身份无权读取推荐特征, en: Service identity cannot read recommendation features}
+- code: RECOMMENDATION.USER.feature_profile_invalid_argument
+  kind: USER
+  reason: feature_profile_invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply]}
+  recovery_action: none
+  user_message: {zh: 推荐特征查询参数无效, en: Invalid recommendation feature query}
+- code: RECOMMENDATION.USER.feature_profile_subject_closed
+  kind: USER
+  reason: feature_profile_subject_closed
+  http_status: 410
+  emitted_by:
+  - {surface: http, operations: [ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections]}
+  recovery_action: none
+  user_message: {zh: 推荐主体已关闭, en: Recommendation subject is closed}
+- code: RECOMMENDATION.SYSTEM.feature_profile_read_failed
+  kind: SYSTEM
+  reason: feature_profile_read_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply]}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  user_message: {zh: 推荐特征暂时不可用, en: Recommendation features are temporarily unavailable}

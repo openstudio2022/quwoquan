@@ -25,9 +25,6 @@ type feedRuntimeConfig struct {
 	MaxInflight                       int   `yaml:"max_inflight"`
 	MaximumRecallSources              int   `yaml:"maximum_recall_sources"`
 	MaximumUnterminatedCallsPerSource int   `yaml:"maximum_unterminated_calls_per_source"`
-	RankedWindowQuotaShardCount       int   `yaml:"ranked_window_quota_shard_count"`
-	RankedWindowMaximumLiveRecords    int   `yaml:"ranked_window_maximum_live_records_per_shard"`
-	RankedWindowMaximumLiveBytes      int64 `yaml:"ranked_window_maximum_live_bytes_per_shard"`
 	DeliveryPageQuotaShardCount       int   `yaml:"delivery_page_quota_shard_count"`
 	DeliveryPageMaximumLiveRecords    int   `yaml:"delivery_page_maximum_live_records_per_shard"`
 	DeliveryPageMaximumLiveBytes      int64 `yaml:"delivery_page_maximum_live_bytes_per_shard"`

@@ -55,7 +55,7 @@ class RemoteContentRepository
   }
 
   @override
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -88,7 +88,7 @@ class RemoteContentRepository
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
+  Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
     String? identity,
     String? type,

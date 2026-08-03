@@ -173,7 +173,7 @@ final class UploadedContentMedia {
 
   final String sessionId;
   final String assetId;
-  final ContentMediaProcessingStatus? assetProcessingStatus;
+  final MediaAssetStatus? assetProcessingStatus;
 }
 
 /// Application coordinator for the upload-session aggregate and its external
@@ -202,11 +202,11 @@ final class ContentMediaUploadCoordinator {
 
   Future<UploadedContentMedia> uploadPreparedSource({
     required PreparedContentMediaSource source,
-    required ContentMediaType mediaType,
+    required MediaType mediaType,
     required String mimeType,
     required ContentMediaStreamObjectUpload uploadStream,
-    ContentMediaAccessPolicy accessPolicy = ContentMediaAccessPolicy.ownerOnly,
-    ContentMediaCaptureMetadata? captureMetadata,
+    MediaAssetAccessPolicy accessPolicy = MediaAssetAccessPolicy.ownerOnly,
+    MediaCaptureMetadata? captureMetadata,
     ContentMediaUploadProgressCallback? onProgress,
     ContentMediaUploadCancellationSignal? cancellationSignal,
     ContentMediaPreparationCheckpoint? checkpoint,
@@ -309,7 +309,7 @@ final class ContentMediaUploadCoordinator {
       ),
     );
     if (result.mediaId != mediaID ||
-        result.status != ContentMediaProcessingStatus.deleted) {
+        result.status != MediaAssetStatus.deleted) {
       throw StateError('media discard response does not match checkpoint');
     }
     await onCheckpoint(
@@ -318,12 +318,12 @@ final class ContentMediaUploadCoordinator {
   }
 
   Future<UploadedContentMedia> _upload({
-    required ContentMediaType mediaType,
+    required MediaType mediaType,
     required String mimeType,
     required int fileSize,
     required String expectedSha256,
-    required ContentMediaAccessPolicy accessPolicy,
-    ContentMediaCaptureMetadata? captureMetadata,
+    required MediaAssetAccessPolicy accessPolicy,
+    MediaCaptureMetadata? captureMetadata,
     required ContentMediaPreparationCheckpoint checkpoint,
     Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
     onCheckpoint,
@@ -409,12 +409,12 @@ final class ContentMediaUploadCoordinator {
   }
 
   Future<UploadedContentMedia> _uploadWithoutTelemetry({
-    required ContentMediaType mediaType,
+    required MediaType mediaType,
     required String mimeType,
     required int fileSize,
     required String expectedSha256,
-    required ContentMediaAccessPolicy accessPolicy,
-    ContentMediaCaptureMetadata? captureMetadata,
+    required MediaAssetAccessPolicy accessPolicy,
+    MediaCaptureMetadata? captureMetadata,
     required ContentMediaPreparationCheckpoint checkpoint,
     Future<void> Function(ContentMediaPreparationCheckpoint checkpoint)?
     onCheckpoint,
@@ -431,7 +431,7 @@ final class ContentMediaUploadCoordinator {
       await onCheckpoint?.call(next);
     }
 
-    late ContentMediaUploadSessionCommandResult init;
+    late MediaUploadSessionCommandResult init;
     while (true) {
       final recovered = await _recoverCompletedSession(
         durable,
@@ -482,7 +482,7 @@ final class ContentMediaUploadCoordinator {
     }
     final sessionId = init.sessionId.trim();
     if (sessionId.isEmpty) throw StateError('media upload session is missing');
-    if (init.status == ContentMediaUploadStatus.completed) {
+    if (init.status == MediaUploadSessionStatus.completed) {
       final completed = _uploadedFromCompletedResult(sessionId, init);
       await persist(
         durable.copyWith(
@@ -539,8 +539,8 @@ final class ContentMediaUploadCoordinator {
 
   Future<UploadedContentMedia> _completeWithReconciliation({
     required String sessionId,
-    required ContentMediaAccessPolicy accessPolicy,
-    ContentMediaCaptureMetadata? captureMetadata,
+    required MediaAssetAccessPolicy accessPolicy,
+    MediaCaptureMetadata? captureMetadata,
     required String completeIdempotencyKey,
     CloudOperationCancellationSignal? operationCancellation,
     ContentMediaUploadCancellationSignal? cancellationSignal,
@@ -572,7 +572,7 @@ final class ContentMediaUploadCoordinator {
       if (session == null) {
         Error.throwWithStackTrace(lastError, lastStackTrace);
       }
-      if (session.status == ContentMediaUploadStatus.completed) {
+      if (session.status == MediaUploadSessionStatus.completed) {
         final assetId = (session.assetId ?? '').trim();
         if (assetId.isEmpty) {
           throw StateError(
@@ -581,7 +581,7 @@ final class ContentMediaUploadCoordinator {
         }
         return _uploadedFromAssetID(sessionId, assetId);
       }
-      if (session.status == ContentMediaUploadStatus.aborted) {
+      if (session.status == MediaUploadSessionStatus.aborted) {
         Error.throwWithStackTrace(lastError, lastStackTrace);
       }
       if (attempt < attempts) {
@@ -598,7 +598,7 @@ final class ContentMediaUploadCoordinator {
 
   UploadedContentMedia _uploadedFromCompletedResult(
     String sessionId,
-    ContentMediaUploadSessionCommandResult completed,
+    MediaUploadSessionCommandResult completed,
   ) {
     final assetId = (completed.assetId ?? '').trim();
     if (assetId.isEmpty) {
@@ -630,7 +630,7 @@ final class ContentMediaUploadCoordinator {
     );
   }
 
-  Future<ContentMediaUploadSessionSlice?> _readUploadSessionForReconciliation(
+  Future<MediaUploadSessionSlice?> _readUploadSessionForReconciliation(
     String sessionId,
   ) async {
     try {
@@ -667,7 +667,7 @@ final class ContentMediaUploadCoordinator {
     if (checkpoint.expiresAt?.toUtc() != session.expiresAt.toUtc()) {
       await onCheckpoint(checkpoint.copyWith(expiresAt: session.expiresAt));
     }
-    if (session.status == ContentMediaUploadStatus.completed) {
+    if (session.status == MediaUploadSessionStatus.completed) {
       final assetId = (session.assetId ?? '').trim();
       if (assetId.isEmpty) {
         throw StateError(
@@ -683,7 +683,7 @@ final class ContentMediaUploadCoordinator {
       );
       return _uploadedFromAssetID(sessionId, assetId);
     }
-    if (session.status == ContentMediaUploadStatus.aborted) {
+    if (session.status == MediaUploadSessionStatus.aborted) {
       await onCheckpoint(checkpoint.restartAfterAbort());
     }
     return null;
@@ -705,7 +705,7 @@ final class ContentMediaUploadCoordinator {
       checkpoint.copyWith(phase: ContentMediaPreparationPhase.cancelling),
     );
     final beforeAbort = await _readUploadSessionForReconciliation(sessionId);
-    if (beforeAbort?.status == ContentMediaUploadStatus.completed) {
+    if (beforeAbort?.status == MediaUploadSessionStatus.completed) {
       final assetId = (beforeAbort?.assetId ?? '').trim();
       if (assetId.isNotEmpty) {
         await onCheckpoint(
@@ -717,7 +717,7 @@ final class ContentMediaUploadCoordinator {
       }
       return;
     }
-    if (beforeAbort?.status == ContentMediaUploadStatus.aborted) {
+    if (beforeAbort?.status == MediaUploadSessionStatus.aborted) {
       await onCheckpoint(
         checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
       );
@@ -732,7 +732,7 @@ final class ContentMediaUploadCoordinator {
           idempotencyKey: checkpoint.abortIdempotencyKey,
         ),
       );
-      if (aborted.status == ContentMediaUploadStatus.completed) {
+      if (aborted.status == MediaUploadSessionStatus.completed) {
         final assetId = (aborted.assetId ?? '').trim();
         if (assetId.isNotEmpty) {
           await onCheckpoint(
@@ -744,7 +744,7 @@ final class ContentMediaUploadCoordinator {
           return;
         }
       }
-      if (aborted.status == ContentMediaUploadStatus.aborted) {
+      if (aborted.status == MediaUploadSessionStatus.aborted) {
         await onCheckpoint(
           checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
         );
@@ -759,7 +759,7 @@ final class ContentMediaUploadCoordinator {
       abortStackTrace = stackTrace;
     }
     final afterAbort = await _readUploadSessionForReconciliation(sessionId);
-    if (afterAbort?.status == ContentMediaUploadStatus.completed) {
+    if (afterAbort?.status == MediaUploadSessionStatus.completed) {
       final assetId = (afterAbort?.assetId ?? '').trim();
       if (assetId.isNotEmpty) {
         await onCheckpoint(
@@ -771,7 +771,7 @@ final class ContentMediaUploadCoordinator {
       }
       return;
     }
-    if (afterAbort?.status == ContentMediaUploadStatus.aborted) {
+    if (afterAbort?.status == MediaUploadSessionStatus.aborted) {
       await onCheckpoint(
         checkpoint.copyWith(phase: ContentMediaPreparationPhase.aborted),
       );
@@ -831,29 +831,29 @@ final class ContentMediaUploadCoordinator {
   }
 }
 
-String contentMediaMimeTypeForPath(String path, ContentMediaType mediaType) {
+String contentMediaMimeTypeForPath(String path, MediaType mediaType) {
   final lower = path.toLowerCase();
   return switch (mediaType) {
-    ContentMediaType.image when lower.endsWith('.png') => 'image/png',
-    ContentMediaType.image when lower.endsWith('.gif') => 'image/gif',
-    ContentMediaType.image when lower.endsWith('.webp') => 'image/webp',
-    ContentMediaType.image
+    MediaType.image when lower.endsWith('.png') => 'image/png',
+    MediaType.image when lower.endsWith('.gif') => 'image/gif',
+    MediaType.image when lower.endsWith('.webp') => 'image/webp',
+    MediaType.image
         when lower.endsWith('.heic') || lower.endsWith('.heif') =>
       'image/heic',
-    ContentMediaType.image => 'image/jpeg',
-    ContentMediaType.video when lower.endsWith('.mov') => 'video/quicktime',
-    ContentMediaType.video when lower.endsWith('.m4v') => 'video/x-m4v',
-    ContentMediaType.video => 'video/mp4',
-    ContentMediaType.audio when lower.endsWith('.aac') => 'audio/aac',
-    ContentMediaType.audio when lower.endsWith('.m4a') => 'audio/x-m4a',
-    ContentMediaType.audio when lower.endsWith('.mp4') => 'audio/mp4',
-    ContentMediaType.audio => 'audio/mpeg',
-    ContentMediaType.file => 'application/octet-stream',
+    MediaType.image => 'image/jpeg',
+    MediaType.video when lower.endsWith('.mov') => 'video/quicktime',
+    MediaType.video when lower.endsWith('.m4v') => 'video/x-m4v',
+    MediaType.video => 'video/mp4',
+    MediaType.audio when lower.endsWith('.aac') => 'audio/aac',
+    MediaType.audio when lower.endsWith('.m4a') => 'audio/x-m4a',
+    MediaType.audio when lower.endsWith('.mp4') => 'audio/mp4',
+    MediaType.audio => 'audio/mpeg',
+    MediaType.file => 'application/octet-stream',
   };
 }
 
 void validateContentMediaUploadPolicy({
-  required ContentMediaType mediaType,
+  required MediaType mediaType,
   required String mimeType,
   required int fileSize,
 }) {

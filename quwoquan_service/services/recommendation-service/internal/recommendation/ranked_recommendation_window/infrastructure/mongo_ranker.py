@@ -12,6 +12,7 @@ from generated.recommendation.recommendation_model_release.models.request_respon
     ModelScoreResponse,
 )
 from internal.recommendation.ranked_recommendation_window.domain.model import (
+    RecommendationObjectCard,
     RankedCandidate,
     RankingResult,
 )
@@ -24,7 +25,15 @@ from internal.recommendation.recommendation_model_release.application.rule_scori
 
 
 class CandidateReader(Protocol):
-    def list_for_ranking(self, *, scenario: str, limit: int) -> list[dict[str, Any]]: ...
+    def list_for_ranking(
+        self,
+        *,
+        subject_id: str,
+        scenario: str,
+        limit: int,
+    ) -> list[dict[str, Any]]: ...
+
+    def list_object_card_candidates(self, *, limit: int) -> list[dict[str, Any]]: ...
 
 
 class FeatureProfileReader(Protocol):
@@ -106,20 +115,48 @@ class MongoCandidateRanker:
         normalized_scenario = scenario.strip()
         if normalized_scenario not in {
             "content_feed",
+            "following",
             "premium_stream",
             "travel_photography",
         }:
             raise ValueError("unsupported recommendation ranking scenario")
+        profile = self._feature_profiles.read_for_scoring(subject_id.strip())
         documents = self._candidates.list_for_ranking(
+            subject_id=subject_id.strip(),
             scenario=normalized_scenario,
             limit=limit,
         )
+        negative_content_ids = {
+            str(value).strip()
+            for value in profile.get("negativeContentIds") or []
+            if str(value).strip()
+        }
+        hidden_author_ids = {
+            str(value).strip()
+            for value in profile.get("hiddenAuthorIds") or []
+            if str(value).strip()
+        }
+        hidden_content_types = {
+            str(value).strip()
+            for value in profile.get("hiddenContentTypes") or []
+            if str(value).strip()
+        }
+        documents = [
+            document
+            for document in documents
+            if str(document.get("contentId") or "").strip()
+            not in negative_content_ids
+            and str(document.get("authorId") or "").strip()
+            not in hidden_author_ids
+            and str(document.get("contentType") or "").strip()
+            not in hidden_content_types
+        ]
+        object_cards = self._object_cards(profile)
         candidates = [self._candidate(document, now) for document in documents]
         candidate_ids = [str(candidate.contentId or "").strip() for candidate in candidates]
         if any(not content_id for content_id in candidate_ids) or len(set(candidate_ids)) != len(candidate_ids):
             raise RuntimeError("candidate projection returned empty or duplicate contentId")
 
-        profile = self._feature_profiles.read_for_scoring(subject_id.strip())
         user_features = dict(profile.get("sparseFeatures") or {})
         user_features.update(
             {
@@ -235,4 +272,62 @@ class MongoCandidateRanker:
             ranking_snapshot_digest=ranking_snapshot_digest,
             user_feature_snapshot=user_snapshot,
             candidates=ranked_candidates,
+            object_cards=object_cards,
+        )
+
+    def _object_cards(
+        self,
+        profile: Mapping[str, Any],
+    ) -> tuple[RecommendationObjectCard, ...]:
+        sparse = dict(profile.get("sparseFeatures") or {})
+        affinities = {
+            key.removeprefix("entity:"): float(value)
+            for key, value in sparse.items()
+            if key.startswith("entity:")
+            and key.removeprefix("entity:").strip()
+            and isinstance(value, (int, float))
+            and math.isfinite(float(value))
+            and float(value) > 0
+        }
+        if not affinities:
+            return ()
+        selected: dict[str, tuple[float, RecommendationObjectCard]] = {}
+        for document in self._candidates.list_object_card_candidates(limit=400):
+            snapshot = document.get("primaryHomepageSnapshot")
+            if not isinstance(snapshot, Mapping):
+                continue
+            homepage_id = str(
+                document.get("primaryHomepageId") or snapshot.get("homepageId") or ""
+            ).strip()
+            entity_id = str(snapshot.get("canonicalEntityId") or "").strip()
+            title = str(snapshot.get("title") or "").strip()
+            score = affinities.get(entity_id, 0.0)
+            if not homepage_id or not entity_id or not title or score <= 0:
+                continue
+            tags = tuple(
+                dict.fromkeys(
+                    str(tag).strip()
+                    for tag in snapshot.get("tagRefs") or []
+                    if str(tag).strip()
+                )
+            )
+            card = RecommendationObjectCard(
+                object_kind="entity_homepage",
+                object_id=homepage_id,
+                title=title,
+                subtitle=(str(snapshot.get("subtitle") or "").strip() or None),
+                cover_url=(str(snapshot.get("coverUrl") or "").strip() or None),
+                tag_refs=tags,
+                reason_key="affinity",
+                recall_path="entity_card_affinity",
+            )
+            previous = selected.get(homepage_id)
+            if previous is None or score > previous[0]:
+                selected[homepage_id] = (score, card)
+        return tuple(
+            card
+            for _, card in sorted(
+                selected.values(),
+                key=lambda item: (-item[0], item[1].object_id),
+            )[:20]
         )

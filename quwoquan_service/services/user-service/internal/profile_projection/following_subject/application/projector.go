@@ -6,10 +6,19 @@ package following_subject
 import (
 	"context"
 	"fmt"
-
-	relmodel "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/model"
-	sfmodel "quwoquan_service/services/user-service/internal/relationship/subject_follow/domain/model"
+	"strings"
+	"time"
 )
+
+type FollowChangedEvent struct {
+	EventID         string
+	ViewerPersonaID string
+	SubjectType     string
+	SubjectID       string
+	Following       bool
+	OccurredAt      time.Time
+	SourceVersion   int64
+}
 
 // Projector 把已提交的关注事实投影为关注频道行。它被组合进两个 outbox
 // relay 的 publisher 链：投影失败会使 relay 不推进 checkpoint 并重试，
@@ -25,54 +34,31 @@ func NewProjector(store ProjectionStore) *Projector {
 	return &Projector{store: store}
 }
 
-// ApplyPersonaRelationship 消费 PersonaFollowStateChanged：source persona
-// 关注/取关 target persona。
-func (p *Projector) ApplyPersonaRelationship(ctx context.Context, event relmodel.OutboxEvent) error {
-	payload := event.Payload
-	if payload.SourcePersonaID == "" || payload.TargetPersonaID == "" {
-		return fmt.Errorf("following subject projector: invalid persona relationship event %s", event.EventID)
+// Apply consumes the object-owned typed projection event. Cross-object outbox
+// payloads are translated only in the cmd composition root.
+func (p *Projector) Apply(ctx context.Context, event FollowChangedEvent) error {
+	event.ViewerPersonaID = strings.TrimSpace(event.ViewerPersonaID)
+	event.SubjectType = strings.TrimSpace(event.SubjectType)
+	event.SubjectID = strings.TrimSpace(event.SubjectID)
+	if event.ViewerPersonaID == "" || event.SubjectType == "" ||
+		event.SubjectID == "" || event.SourceVersion <= 0 || event.OccurredAt.IsZero() {
+		return fmt.Errorf("following subject projector: invalid event %s", event.EventID)
 	}
-	if payload.Following {
+	if event.Following {
 		return p.store.UpsertFollow(
 			ctx,
-			payload.SourcePersonaID,
-			"persona",
-			payload.TargetPersonaID,
-			payload.OccurredAt,
-			payload.Version,
+			event.ViewerPersonaID,
+			event.SubjectType,
+			event.SubjectID,
+			event.OccurredAt,
+			event.SourceVersion,
 		)
 	}
 	return p.store.RemoveFollow(
 		ctx,
-		payload.SourcePersonaID,
-		"persona",
-		payload.TargetPersonaID,
-		payload.Version,
-	)
-}
-
-// ApplySubjectFollow 消费 SubjectFollowStateChanged：persona 关注/取关
-// homepage / circle / location 主体。
-func (p *Projector) ApplySubjectFollow(ctx context.Context, event sfmodel.OutboxEvent) error {
-	payload := event.Payload
-	if payload.PersonaID == "" || payload.SubjectID == "" {
-		return fmt.Errorf("following subject projector: invalid subject follow event %s", event.EventID)
-	}
-	if payload.State == sfmodel.StateFollowing {
-		return p.store.UpsertFollow(
-			ctx,
-			payload.PersonaID,
-			payload.SubjectType,
-			payload.SubjectID,
-			payload.OccurredAt,
-			payload.Version,
-		)
-	}
-	return p.store.RemoveFollow(
-		ctx,
-		payload.PersonaID,
-		payload.SubjectType,
-		payload.SubjectID,
-		payload.Version,
+		event.ViewerPersonaID,
+		event.SubjectType,
+		event.SubjectID,
+		event.SourceVersion,
 	)
 }

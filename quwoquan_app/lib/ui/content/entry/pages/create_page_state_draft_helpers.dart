@@ -80,6 +80,7 @@ extension _CreatePageStateDraftHelpers on _CreatePageState {
       id: nextId,
       updatedAtMs: now,
       state: state.copyWith(draftId: nextId),
+      publicationContinuation: _publicationContinuation,
     );
     try {
       ref.read(createEditorProvider.notifier).setDraftId(nextId);
@@ -135,6 +136,7 @@ extension _CreatePageStateDraftHelpers on _CreatePageState {
   }
 
   Future<void> _restoreDraft(CreateDraft draft) async {
+    _publicationContinuation = draft.publicationContinuation;
     var effectiveDraft = draft;
     if (draft.flowKind == CreateDraftFlowKind.video &&
         draft.state.videoThumbnail.trim().isEmpty &&
@@ -152,6 +154,7 @@ extension _CreatePageStateDraftHelpers on _CreatePageState {
             videoThumbnail: repairedThumbnail,
           ),
           sourceType: draft.sourceType,
+          publicationContinuation: draft.publicationContinuation,
         );
         await ref
             .read(createDraftStoreProvider.notifier)

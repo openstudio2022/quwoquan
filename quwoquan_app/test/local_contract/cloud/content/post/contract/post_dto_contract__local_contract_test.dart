@@ -309,9 +309,9 @@ void main() {
       });
     });
 
-    group('PostBaseDto polymorphism & postBaseDtoFromMap dispatch', () {
+    group('ContentPostViewData polymorphism & contentPostViewDataFromReadModelMap dispatch', () {
       test('dispatches image contentType to PhotoPostDto', () {
-        final dto = postBaseDtoFromMap({
+        final dto = contentPostViewDataFromReadModelMap({
           'id': 'x',
           'type': 'image',
           'publishedAt': '2025-01-01T00:00:00Z',
@@ -320,7 +320,7 @@ void main() {
       });
 
       test('dispatches video contentType to VideoPostDto', () {
-        final dto = postBaseDtoFromMap({
+        final dto = contentPostViewDataFromReadModelMap({
           'id': 'x',
           'type': 'video',
           'videoUrl': '',
@@ -331,7 +331,7 @@ void main() {
       });
 
       test('dispatches article contentType to ArticlePostDto', () {
-        final dto = postBaseDtoFromMap({
+        final dto = contentPostViewDataFromReadModelMap({
           'id': 'x',
           'type': 'article',
           'publishedAt': '2025-01-01T00:00:00Z',
@@ -340,7 +340,7 @@ void main() {
       });
 
       test('dispatches micro contentType to MicroPostDto', () {
-        final dto = postBaseDtoFromMap({
+        final dto = contentPostViewDataFromReadModelMap({
           'id': 'x',
           'type': 'micro',
           'publishedAt': '2025-01-01T00:00:00Z',
@@ -348,12 +348,12 @@ void main() {
         expect(dto, isA<MicroPostDto>());
       });
 
-      test('mixed list of PostBaseDto subtypes is type-safe', () {
+      test('mixed list of ContentPostViewData subtypes is type-safe', () {
         final rawList = _contractDiscoveryItems();
         final dtos = rawList
-            .map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap()))
+            .map((e) => contentPostViewDataFromReadModelMap(e.toDiscoveryWireMap()))
             .toList(growable: false);
-        expect(dtos, isA<List<PostBaseDto>>());
+        expect(dtos, isA<List<ContentPostViewData>>());
 
         final photos = dtos.whereType<PhotoPostDto>().toList();
         final videos = dtos.whereType<VideoPostDto>().toList();
@@ -378,10 +378,10 @@ void main() {
         );
       });
 
-      test('base fields accessible via PostBaseDto interface', () {
+      test('base fields accessible via ContentPostViewData interface', () {
         final dtos = _contractItemsOfType(
           'image',
-        ).map((e) => postBaseDtoFromMap(e.toDiscoveryWireMap())).toList();
+        ).map((e) => contentPostViewDataFromReadModelMap(e.toDiscoveryWireMap())).toList();
         for (final dto in dtos) {
           expect(dto.id, isNotEmpty);
           expect(dto.authorId, isNotEmpty);
@@ -425,7 +425,7 @@ void main() {
         'publishedAt': '2025-01-01T00:00:00Z',
       };
       final dto = PhotoPostDto.fromMap(raw);
-      final map = dto.toMap();
+      final map = dto.toPresentationMap();
       expect(map['width'], equals(1080));
       expect(map['height'], equals(720));
     });
@@ -468,10 +468,10 @@ void main() {
     });
 
     test(
-      'PostBaseDto: rejects photo contentType alias (canonical is image)',
+      'ContentPostViewData: rejects photo contentType alias (canonical is image)',
       () {
         expect(
-          () => postBaseDtoFromMap({
+          () => contentPostViewDataFromReadModelMap({
             'id': 'x',
             'type': 'photo',
             'publishedAt': '2025-01-01T00:00:00Z',
@@ -543,9 +543,9 @@ void main() {
       },
     );
 
-    test('postBaseDtoFromMap: unknown contentType is rejected explicitly', () {
+    test('contentPostViewDataFromReadModelMap: unknown contentType is rejected explicitly', () {
       expect(
-        () => postBaseDtoFromMap({
+        () => contentPostViewDataFromReadModelMap({
           'id': 'x',
           'type': 'unknown_type',
           'publishedAt': '2025-01-01T00:00:00Z',

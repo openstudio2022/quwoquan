@@ -11,6 +11,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
+from core.cursor_probe_classification import (
+    cursor_probe_attempt_has_5xx as _cursor_probe_attempt_has_5xx,
+    cursor_probe_attempt_is_auth as _cursor_probe_attempt_is_auth,
+    cursor_probe_attempt_is_bridge_disconnect as _cursor_probe_attempt_is_bridge_disconnect,
+    cursor_probe_is_startup_timeout as _cursor_probe_is_startup_timeout,
+    p95 as _p95,
+)
 
 from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
@@ -363,89 +370,6 @@ except Exception as exc:
         "attempts": attempts,
         "issues": issues,
     }
-
-
-def _cursor_probe_attempt_has_5xx(payload: Mapping[str, object]) -> bool:
-    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
-    candidates: list[Mapping[str, object]] = [payload]
-    candidates.extend(row for row in rows if isinstance(row, Mapping))
-    for row in candidates:
-        status = row.get("httpStatus")
-        try:
-            status_int = int(status) if status is not None else 0
-        except (TypeError, ValueError):
-            status_int = 0
-        if 500 <= status_int < 600:
-            return True
-        if str(row.get("errorClass") or "") == "InternalServerError":
-            return True
-        if str(row.get("errorCode") or "") == "internal":
-            return True
-    return False
-
-
-def _cursor_probe_attempt_is_auth(payload: Mapping[str, object]) -> bool:
-    try:
-        from core.cursor_credentials import is_cursor_auth_error
-    except Exception:  # noqa: BLE001
-        from cursor_credentials import is_cursor_auth_error  # type: ignore
-    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
-    candidates: list[Mapping[str, object]] = [payload]
-    candidates.extend(row for row in rows if isinstance(row, Mapping))
-    for row in candidates:
-        if is_cursor_auth_error(
-            str(row.get("error") or row.get("status") or ""),
-            code=str(row.get("errorCode") or ""),
-            status=row.get("httpStatus"),
-        ):
-            return True
-    return False
-
-
-def _cursor_probe_attempt_is_bridge_disconnect(payload: Mapping[str, object]) -> bool:
-    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
-    candidates: list[Mapping[str, object]] = [payload]
-    candidates.extend(row for row in rows if isinstance(row, Mapping))
-    markers = (
-        "connection refused",
-        "connecterror",
-        "connection reset",
-        "server disconnected",
-        "remoteprotocolerror",
-        "bridge request failed",
-        "exited before discovery",
-        "failed before discovery",
-    )
-    for row in candidates:
-        text = f"{row.get('errorClass') or ''} {row.get('error') or ''}".casefold()
-        if any(marker in text for marker in markers):
-            return True
-    return False
-
-
-def _cursor_probe_is_startup_timeout(payload: Mapping[str, object]) -> bool:
-    """探针终态是否是启动超时（subprocess.TimeoutExpired）。
-
-    冷启动期间子尝试可能短暂遇到 5xx/InternalServerError，但若整次探针最终在
-    预算内未拿到干净结论而是被超时切断，结论是 "startupTimeout"，不得据子尝试的
-    冷启动 5xx 把整次记为 true5xx——那是过度归因，会把"超时/延迟"问题误报成
-    "后端 5xx 不稳定"。timeout 单列，优先级高于 5xx。
-    """
-    if str(payload.get("status") or "") == "timeout":
-        return True
-    if str(payload.get("errorClass") or "") == "TimeoutExpired":
-        return True
-    if str(payload.get("errorCode") or "") == "timeout":
-        return True
-    return False
-
-
-def _p95(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95 + 0.999999) - 1))
-    return round(ordered[index], 4)
 
 
 def cursor_startup_probe_suite(

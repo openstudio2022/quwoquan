@@ -165,10 +165,21 @@ def check_sample_joiner_key():
             issues.append(
                 f"sample_joiner.py must not read mutable projection '{mutable_projection}'"
             )
-    if "build_training_samples(events, args.scenario)" not in content:
-        issues.append(
-            "sample_joiner.py main path does not consume build_training_samples"
+    if not all(
+        marker in content
+        for marker in (
+            'db["recommendation_exposure_facts"]',
+            'db["recommendation_feedback_facts"]',
+            "build_training_samples(",
+            "exposures,",
+            "feedbacks,",
         )
+    ):
+        issues.append(
+            "sample_joiner.py main path must join canonical exposure and feedback facts"
+        )
+    if "rec_learning_events" in content:
+        issues.append("sample_joiner.py must not read retired rec_learning_events")
     return issues
 
 

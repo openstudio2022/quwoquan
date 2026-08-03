@@ -1,0 +1,34 @@
+# Product Ops 在 Alpha/Beta/Gamma 的唯一 Elasticsearch workload。
+# 该片段只由 stackctl 本地环境入口装配；Prod renderer 不扫描本文件。
+services:
+  elasticsearch:
+    image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:f455c50fb82017dae23878c1b12fb2188dfb984723d62db2c5bd0c1f78e246f0"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      cluster.name: "quwoquan-${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-logs"
+      node.name: "${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-logs-0"
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      CLI_JAVA_OPTS: "${QWQ_COMPOSE_ELASTICSEARCH_CLI_JAVA_OPTS:-}"
+      ES_JAVA_OPTS: "${QWQ_COMPOSE_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}"
+    ports:
+      - "${QWQ_COMPOSE_ELASTICSEARCH_PORT:?QWQ_COMPOSE_ELASTICSEARCH_PORT is required}:9200"
+    volumes:
+      - product-ops-elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS 'http://localhost:9200/_ilm/status' >/dev/null || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 1200s
+      retries: 60
+
+  product-ops-service:
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  product-ops-elasticsearch-data:

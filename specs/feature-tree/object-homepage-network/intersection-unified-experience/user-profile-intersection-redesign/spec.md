@@ -65,7 +65,7 @@
 - canonical：`user/profile/fields.yaml`
 - canonical：`user/profile/ui_config.yaml`
 - canonical：`content/content/post/projections/author_impact_item.yaml`
-- canonical：`recommendation/recommendation/recommendation_model_release/projections/intersection_reason.yaml`
+- canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
 
 ## 5. 验收场景
 

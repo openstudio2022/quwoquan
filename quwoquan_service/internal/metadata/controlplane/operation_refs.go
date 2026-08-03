@@ -30,18 +30,18 @@ func HydrateOperationReferences(document map[string]any, contractGraph *graph.Co
 		if err != nil {
 			return fmt.Errorf("control-plane object_types[%d]: %w", index, err)
 		}
-		rawRefs, hasReferences := object["operation_refs"]
-		if !hasReferences {
-			continue
-		}
 		if rawOperations, hasOperations := object["operations"]; hasOperations {
-			operations, err := asSlice(rawOperations)
-			if err != nil || len(operations) > 0 {
+			operations, parseErr := asSlice(rawOperations)
+			if parseErr != nil || len(operations) > 0 {
 				return fmt.Errorf(
-					"control-plane object %q cannot declare operations and operation_refs together",
+					"control-plane object %q must use operation_refs; inline operations are a second truth source",
 					strings.TrimSpace(fmt.Sprint(object["object_type"])),
 				)
 			}
+		}
+		rawRefs, hasReferences := object["operation_refs"]
+		if !hasReferences {
+			continue
 		}
 		references, err := asSlice(rawRefs)
 		if err != nil {

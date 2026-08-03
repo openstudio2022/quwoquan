@@ -88,22 +88,13 @@ type config struct {
 	} `yaml:"postgres"`
 	Elasticsearch struct {
 		Endpoint               string `yaml:"endpoint"`
+		APIKey                 string `yaml:"api_key"`
 		RawIndex               string `yaml:"raw_index"`
 		StartupDiagnosticIndex string `yaml:"startup_diagnostic_index"`
 		RuntimeLogIndex        string `yaml:"runtime_log_index"`
 		AggregateIndex         string `yaml:"aggregate_index"`
 		TimeoutMS              int    `yaml:"timeout_ms"`
 	} `yaml:"elasticsearch"`
-	SLS struct {
-		Region                    string `yaml:"region"`
-		Endpoint                  string `yaml:"endpoint"`
-		Project                   string `yaml:"project"`
-		RawLogstore               string `yaml:"raw_logstore"`
-		StartupDiagnosticLogstore string `yaml:"startup_diagnostic_logstore"`
-		RuntimeLogstore           string `yaml:"runtime_logstore"`
-		AggregateLogstore         string `yaml:"aggregate_logstore"`
-		TimeoutMS                 int    `yaml:"timeout_ms"`
-	} `yaml:"sls"`
 	Redis struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
@@ -207,6 +198,9 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_ENDPOINT")); v != "" {
 		cfg.Elasticsearch.Endpoint = v
 	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_API_KEY")); v != "" {
+		cfg.Elasticsearch.APIKey = v
+	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_RAW_INDEX")); v != "" {
 		cfg.Elasticsearch.RawIndex = v
 	}
@@ -222,32 +216,6 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_TIMEOUT_MS")); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Elasticsearch.TimeoutMS = parsed
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_REGION")); v != "" {
-		cfg.SLS.Region = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_ENDPOINT")); v != "" {
-		cfg.SLS.Endpoint = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_PROJECT")); v != "" {
-		cfg.SLS.Project = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_RAW_LOGSTORE")); v != "" {
-		cfg.SLS.RawLogstore = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_STARTUP_DIAGNOSTIC_LOGSTORE")); v != "" {
-		cfg.SLS.StartupDiagnosticLogstore = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_RUNTIME_LOGSTORE")); v != "" {
-		cfg.SLS.RuntimeLogstore = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_AGGREGATE_LOGSTORE")); v != "" {
-		cfg.SLS.AggregateLogstore = v
-	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_SLS_TIMEOUT_MS")); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil {
-			cfg.SLS.TimeoutMS = parsed
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_REDIS_GENERAL_ADDR")); v != "" {
@@ -276,15 +244,6 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.Elasticsearch.Endpoint), "${") {
 		cfg.Elasticsearch.Endpoint = ""
-	}
-	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Endpoint), "${") {
-		cfg.SLS.Endpoint = ""
-	}
-	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Region), "${") {
-		cfg.SLS.Region = ""
-	}
-	if strings.HasPrefix(strings.TrimSpace(cfg.SLS.Project), "${") {
-		cfg.SLS.Project = ""
 	}
 }
 
@@ -337,12 +296,7 @@ func resolveLogSinkBinding(
 		return strings.TrimSpace(value), nil
 	}
 	switch descriptor.AdapterID {
-	case logsink.PostgresTelemetryLocalAdapterID:
-		if descriptor.TimeoutMilliseconds <= 0 {
-			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
-		}
-		return cfg, nil
-	case logsink.ElasticsearchLocalAdapterID:
+	case logsink.ElasticsearchAdapterID:
 		endpoint, err := requiredEndpoint("endpoint")
 		if err != nil {
 			return config{}, err
@@ -350,22 +304,6 @@ func resolveLogSinkBinding(
 		cfg.Elasticsearch.Endpoint = endpoint
 		cfg.Elasticsearch.TimeoutMS = descriptor.TimeoutMilliseconds
 		if cfg.Elasticsearch.TimeoutMS <= 0 {
-			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
-		}
-		return cfg, nil
-	case logsink.AliyunSLSAdapterID:
-		var err error
-		if cfg.SLS.Region, err = requiredEndpoint("region"); err != nil {
-			return config{}, err
-		}
-		if cfg.SLS.Endpoint, err = requiredEndpoint("endpoint"); err != nil {
-			return config{}, err
-		}
-		if cfg.SLS.Project, err = requiredEndpoint("project"); err != nil {
-			return config{}, err
-		}
-		cfg.SLS.TimeoutMS = descriptor.TimeoutMilliseconds
-		if cfg.SLS.TimeoutMS <= 0 {
 			return config{}, fmt.Errorf("runtime.log.sink binding has an invalid timeout")
 		}
 		return cfg, nil
@@ -390,7 +328,7 @@ func validateRuntimeConfigurationIdentity(cfg config, configVersion, imageVersio
 	return controlplane.ValidateImageIdentity(imageVersion)
 }
 
-func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
+func validateRequiredRuntimeConfig(cfg config, _ ...string) error {
 	if strings.TrimSpace(cfg.AccountSecurityAuthority.BaseURL) == "" {
 		return fmt.Errorf("account_security_authority.base_url is required")
 	}
@@ -434,19 +372,8 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
 		return fmt.Errorf("postgres.dsn is required")
 	}
-	environment := "prod"
-	if len(appEnv) > 0 && strings.TrimSpace(appEnv[0]) != "" {
-		environment = strings.TrimSpace(appEnv[0])
-	}
 	switch cfg.LogSinkAdapterID {
-	case logsink.PostgresTelemetryLocalAdapterID:
-		if postgresTelemetrySchema(environment) == "" {
-			return fmt.Errorf(
-				"postgres telemetry adapter is unsupported for environment=%s",
-				environment,
-			)
-		}
-	case logsink.ElasticsearchLocalAdapterID:
+	case logsink.ElasticsearchAdapterID:
 		for name, value := range map[string]string{
 			"endpoint":                 cfg.Elasticsearch.Endpoint,
 			"raw_index":                cfg.Elasticsearch.RawIndex,
@@ -464,23 +391,6 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 				"elasticsearch.timeout_ms must be within 1..10000",
 			)
 		}
-	case logsink.AliyunSLSAdapterID:
-		for name, value := range map[string]string{
-			"region":                      cfg.SLS.Region,
-			"endpoint":                    cfg.SLS.Endpoint,
-			"project":                     cfg.SLS.Project,
-			"raw_logstore":                cfg.SLS.RawLogstore,
-			"startup_diagnostic_logstore": cfg.SLS.StartupDiagnosticLogstore,
-			"runtime_logstore":            cfg.SLS.RuntimeLogstore,
-			"aggregate_logstore":          cfg.SLS.AggregateLogstore,
-		} {
-			if strings.TrimSpace(value) == "" {
-				return fmt.Errorf("sls.%s is required", name)
-			}
-		}
-		if cfg.SLS.TimeoutMS <= 0 || cfg.SLS.TimeoutMS > 10000 {
-			return fmt.Errorf("sls.timeout_ms must be within 1..10000")
-		}
 	default:
 		return fmt.Errorf(
 			"runtime.log.sink selects unsupported adapter=%s",
@@ -494,19 +404,6 @@ func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
 		return err
 	}
 	return nil
-}
-
-// postgresTelemetrySchema 返回 Alpha/Beta 本地替身的固定 schema。后端选择只由
-// generated runtime.log.sink Binding 驱动，禁止通过 ad-hoc 环境变量动态切换。
-func postgresTelemetrySchema(appEnv string) string {
-	switch strings.ToLower(strings.TrimSpace(appEnv)) {
-	case "integration", "alpha":
-		return "telemetry_local_integration"
-	case "beta-integration", "beta_integration", "beta":
-		return "telemetry_local_beta"
-	default:
-		return ""
-	}
 }
 
 func buildRedisRouter(cfg config) (*rtredis.Router, map[string]string, error) {

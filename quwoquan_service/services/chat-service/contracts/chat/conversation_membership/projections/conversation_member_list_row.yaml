@@ -1,0 +1,24 @@
+read_model: ConversationMemberListRow
+description: ConversationMembership Reader 对会话成员的唯一公开行投影。
+source_entities:
+- ConversationMembership
+consumers:
+- app
+fields:
+- name: userId
+  type: string
+- name: userHandle
+  type: string
+- name: displayName
+  type: string
+- name: avatarUrl
+  type: string
+- name: role
+  type: string
+- name: memberType
+  type: string
+- name: joinedAt
+  type: timestamp
+  nullable: true
+- name: isCurrentUser
+  type: bool

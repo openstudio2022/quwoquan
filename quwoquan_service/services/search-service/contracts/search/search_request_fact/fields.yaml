@@ -96,6 +96,36 @@ fields:
     ops_exposure: read
     role: append_only_fact
 types:
+  SearchTermHeatItem:
+    description: SearchTermHeatView 对 App 公开的最小只读切片，不暴露内部频次、CTR 或对象集合。
+    fields:
+      - name: query
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: relevance
+        type: float64
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  SearchTermHeatSlice:
+    description: SearchTermHeatView 的有界 App 列表响应。
+    fields:
+      - name: items
+        type: '[]SearchTermHeatItem'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
   UserAccountClosedProjectionInbox:
     description: Search 已原子应用 UserAccountClosed 的不可逆幂等凭据，不保存账号或 persona 原值。
     fields:

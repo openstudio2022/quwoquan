@@ -50,3 +50,24 @@ func TestMaterializeProdReleaseBindingsEnableRealProvidersWhenMaterialsPresent(t
 		t.Fatalf("Push remote Provider must be enabled: %#v", resolved.Integration.ExternalInteraction.Push)
 	}
 }
+
+func TestLocalCaptureSMSBindingIsSelectedByEachNonprodEnvironment(t *testing.T) {
+	for _, environment := range []string{"alpha", "beta", "gamma"} {
+		resolved, err := integrationconfig.MaterializeReleaseExternalInteractionBindings(
+			integrationconfig.Config{Environment: environment},
+			platformconfig.MapRuntimeConfigProvider{Values: map[string]string{
+				"INTEGRATION_SMS_ENDPOINT":           "https://sms-provider-substitute:9443/v1/provider/sms/send",
+				"INTEGRATION_SMS_TOKEN":              "target-token",
+				"INTEGRATION_SMS_SUBSTITUTE_CA_FILE": "/run/secrets/sms-provider-substitute/ca.crt",
+			}},
+		)
+		if err != nil {
+			t.Fatalf("%s local-capture Provider materialization failed: %v", environment, err)
+		}
+		sms := resolved.Integration.ExternalInteraction.SMS
+		if sms.Provider != "ext.sms.local_capture" ||
+			!sms.Enabled || sms.CAFile == "" {
+			t.Fatalf("unexpected %s local-capture SMS binding: %#v", environment, sms)
+		}
+	}
+}

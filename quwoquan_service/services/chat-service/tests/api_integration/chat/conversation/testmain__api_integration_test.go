@@ -28,12 +28,22 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
+	inboxhttp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/adapters/inbound/http"
+	inboxapp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/application"
+	inboxpersistence "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/infrastructure/persistence"
 	chathttp "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	chatcache "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	membershiphttp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/adapters/inbound/http"
+	membershippersistence "quwoquan_service/services/chat-service/internal/chat/conversation_membership/infrastructure/persistence"
+	userstatehttp "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/adapters/inbound/http"
+	userstatepersistence "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/infrastructure/persistence"
+	messagehttp "quwoquan_service/services/chat-service/internal/chat/message/adapters/inbound/http"
 	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
+	receipthttp "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/adapters/inbound/http"
+	receiptpersistence "quwoquan_service/services/chat-service/internal/chat/message_receipt_fact/infrastructure/persistence"
 )
 
 var (
@@ -47,6 +57,8 @@ var (
 	testMessageOutboxRelay     *application.MessageOutboxRelay
 	testMessageService         *application.MessageService
 	testAggregateOutboxRelays  []*application.AggregateOutboxRelay
+	testInboxViewProjector     *inboxapp.Projector
+	testInboxViewStore         *inboxpersistence.MongoStore
 	testGroupAvatarMedia       application.GroupAvatarAssetizer
 	testUserSyncPublisher      application.UserSyncPublisher
 	testGroupAvatarScheduler   *application.ReliableGroupAvatarTaskScheduler
@@ -72,6 +84,8 @@ var collections = []string{
 	"conversation_user_states_outbox",
 	"chat_aggregate_outbox_sequences",
 	"chat_projection_checkpoints",
+	"chat_inbox_views",
+	"chat_inbox_view_checkpoints",
 	"circle_group_membership_projection_states",
 	"circle_group_chat_binding_projection_states",
 	"circle_group_chat_sync_failures",
@@ -225,6 +239,20 @@ func TestMain(m *testing.M) {
 	if err := chatStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to ensure chat aggregate indexes: " + err.Error())
 	}
+	membershipStore := membershippersistence.NewMongoStore(mongoDB)
+	if err := membershipStore.EnsureIndexes(ctx); err != nil {
+		panic("failed to ensure ConversationMembership indexes: " + err.Error())
+	}
+	if err := userstatepersistence.NewMongoStore(mongoDB).EnsureIndexes(ctx); err != nil {
+		panic("failed to ensure ConversationUserState indexes: " + err.Error())
+	}
+	testInboxViewStore = inboxpersistence.NewMongoStore(mongoDB)
+	if err := testInboxViewStore.EnsureIndexes(ctx); err != nil {
+		panic("failed to ensure ChatInboxView indexes: " + err.Error())
+	}
+	if err := receiptpersistence.NewMongoStore(mongoDB).EnsureIndexes(ctx); err != nil {
+		panic("failed to ensure MessageReceiptFact indexes: " + err.Error())
+	}
 	chatStorage := chatStoragePorts(chatStore)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 
@@ -238,7 +266,7 @@ func TestMain(m *testing.M) {
 		redisRouter.Scene("realtime"),
 		redisRouter.Scene("general"),
 		mq.NewMemberRecipientResolver(func(ctx context.Context, conversationID string) ([]string, error) {
-			members, err := chatStore.ListMembers(
+			members, err := membershipStore.ListMembers(
 				ctx,
 				conversationID,
 				application.ListMembersQuery{Limit: 512, Sort: application.MemberListSortJoinedAsc},
@@ -282,6 +310,26 @@ func TestMain(m *testing.M) {
 			"chat-api-integration-user-state",
 		),
 	}
+	userStateStore := userstatepersistence.NewMongoStore(mongoDB)
+	testInboxViewProjector = inboxapp.NewProjector(
+		testInboxViewStore,
+		testInboxViewStore,
+		testInboxSnapshotSource{conversations: chatStore, states: userStateStore},
+		testInboxMembershipReader{store: membershipStore},
+		testInboxStateAdvancer{store: userStateStore},
+		map[string]inboxapp.EventSource{
+			"message": testInboxMessageSource{source: chatStore},
+			"conversation": testInboxAggregateSource{
+				source: chatStorage.ConversationCommands.(*persistence.MongoAggregateCommandStore),
+			},
+			"membership": testInboxAggregateSource{
+				source: chatStorage.MembershipCommands.(*persistence.MongoAggregateCommandStore),
+			},
+			"user_state": testInboxAggregateSource{
+				source: chatStorage.UserStateCommands.(*persistence.MongoAggregateCommandStore),
+			},
+		},
+	)
 	const testAvatarCDNBase = "https://127.0.0.1:18081"
 	application.ConfigureGroupAvatarCDNBase(testAvatarCDNBase)
 	if err := runtimemedia.EnsureDefaultGroupAvatarFile(testChatMediaRoot); err != nil {
@@ -378,7 +426,7 @@ func TestMain(m *testing.M) {
 		groupAvatarScheduler,
 		application.WithRelationshipGate(testRelationshipGate),
 	)
-	inboxSvc := application.NewInboxService(chatStorage)
+	inboxSvc := newTestInboxService()
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
 		redisRouter.Scene("general"),
 		chatStorage,
@@ -392,17 +440,25 @@ func TestMain(m *testing.M) {
 		panic("failed to start user avatar consumer: " + err.Error())
 	}
 
-	chatRoutes := chathttp.NewChatHandler(
+	chatHandler := chathttp.NewChatHandler(
 		conversationSvc,
 		messageSvc,
 		memberSvc,
 		inboxSvc,
 		userSyncService,
-	).Routes()
-	mux := http.NewServeMux()
-	mux.Handle("/media/", testDerivedMediaFileServer(testChatMediaRoot))
-	mux.Handle("/", chatRoutes)
-	testHandler = mux
+	)
+	chatRoutes := http.NewServeMux()
+	inboxhttp.NewHandler(testInboxViewStore).Register(chatRoutes)
+	membershiphttp.NewHandler(memberSvc).Register(chatRoutes)
+	userstatehttp.NewHandler(messageSvc, conversationSvc).Register(chatRoutes)
+	messagehttp.NewHandler(messageSvc).Register(chatRoutes)
+	chatRoutes.HandleFunc(
+		"GET /chat/conversations/{conversationId}/messages/{messageId}/receipts",
+		receipthttp.NewHandler(messageSvc).GetReceipts,
+	)
+	chatHandler.RegisterRoutes(chatRoutes)
+	chatRoutes.Handle("/media/", testDerivedMediaFileServer(testChatMediaRoot))
+	testHandler = chatRoutes
 
 	code := m.Run()
 

@@ -91,7 +91,9 @@
 ### REQ-007 环境构建、安装与运行证据必须绑定同一启动清单
 
 - 每次受支持构建必须生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 immutable effective launch manifest；构建、安装、启动与发布证据不满足 canonical target/environment、摘要或 transport 约束时必须 fail closed。
-- iOS/Android 开发启动只支持 `quwoquan_app/run.sh -d <device>`；它必须把完整 handoff、entrypoint 和全部 `--dart-define` 直接交给 Flutter CLI，使冷启动、Hot Reload 与 Hot Restart 消费同一配置。裸 `flutter run` 必须在 Xcode/Gradle backend 安装前返回唯一恢复动作，禁止 native build phase 临时补入环境 defines。
+- `quwoquan_app/run.sh -d <device>` 是显式设备选择与 transport 准备入口。裸 `flutter run` 和 IDE 直接 Flutter Debug 也必须由 Xcode/Gradle backend 在安装前按 `QWQ_ENVIRONMENT=alpha|beta|gamma` 选择同一份 canonical handoff，默认 Alpha。
+- 两条路径都必须把完整 handoff、entrypoint 和全部 runtime defines 交给 Flutter resident compiler，使冷启动、Hot Reload 与 Hot Restart 消费同一环境、target 与 digest。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
+- 本地 Debug 安装前必须执行只读的 release-bound App 内容预检；active candidate、commercial readiness、rollback/replay lifecycle、首页、视频书、Creator/头像或媒体任一证据不成立时 fail closed，并只输出首个 typed blocker。该严格预检不改变正式 App 的网络恢复语义，普通运行期网络或服务故障仍进入安全 Shell 内的页面级恢复。
 - Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 必须内嵌 effective launch manifest 摘要；启动失败标记、runtime probe 和制品 provenance 必须回报同一摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
 - Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌清单摘要与发布 handoff 一致，才可从 component-ready 推进到 deployable。
@@ -122,7 +124,7 @@
 - THEN Android 在创建 Flutter Engine 和注册插件前由原生 gate 进入恢复页；无确认致命异常时 gate 只进入 Flutter 主 Activity且不显示恢复页。
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
-- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 均为 `launchMode=canonical_launcher` 且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
+- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchMode` 均与本次入口绑定为 `canonical_launcher` 或 `direct_flutter_run`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
 - AND 首帧立即提供网页版。有新版且存在当前平台可安装通道时，Android 经官网 HTTPS 端点下载正式签名 APK，公众 iOS 继续使用 PWA/网页版。已最新、没有合规原生通道或检查未完成时提供网页版且不存在启动重试。
 
 <a id="gwt-003"></a>
@@ -173,6 +175,6 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：Prod 真实 SLS、Android/iPhone 受保护真机与可供销毁的账号尚未就绪，无法补齐恢复异常断网补报的真实环境证据。
+- 影响或价值：Prod 真实 Elasticsearch Log sink Provider、Android/iPhone 受保护真机与可供销毁的账号尚未就绪，无法补齐恢复异常断网补报的真实环境证据。
 - 完成判定：`GWT-003` 在受保护真机上证明端侧加密队列、服务接收、损坏记录安全处置和断网补报；旧 `/ops/startup-events` 不承载恢复异常。
-- 依赖：Prod SLS 权限、受保护 Android/iPhone 设备与可销毁账号。
+- 依赖：Prod Elasticsearch Log sink endpoint、受保护认证材料与 Provider receipt，受保护 Android/iPhone 设备与可销毁账号。

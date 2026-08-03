@@ -1,0 +1,204 @@
+read_model: IntersectionReason
+description: "交集理由（B1 契约，跨会话基建真相源）。\n云侧推荐管线据「实时推荐结果 + 交集来源」预生成结构化交集理由随 feed / 对象详情下发；\n端只读展示，禁止本地拼装文案（全局验收\
+  \ G2）。\n挂载点共用同一结构：feed item、对象推荐卡、对象页交集卡（你和这里的交集 / 你们的交集）、内容卡交集线索。\n\n闭集枚举（端按字符串解析）：\n  kind:      §23\
+  \ 一等字段，交集 kind 真相源（registry.kinds.kind / intersectionKind，如 sharedFollowees / sameSchool / coVisitedEntity）；\n\
+  \             端查 IntersectionKindMetadata 表得 iconKey/objectKind/dimensions/actionHints/tone/vertical，禁止端再\
+  \ intersectionKindOf 推导。\n  vertical:  §23.4 垂类正交标注（general | travel_photography | campus，缺省 general）；与\
+  \ kind 注册表 vertical 对齐。\n  dimension: identity | location | content | interest | relationship（5 源闭集，稳定用户语言来源）\n\
+  \  source:    tagRef | geoTagRef | entityRef | relationship | contact\n  actionType: follow | join |\
+  \ add_contact | view_object\n  relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用；禁止再承载对象类型语义）\n\
+  \  objectKind: person | circle | school | place | enterprise | route | photo_spot | gear（对象类型闭集，统一品牌蓝角标真相源；§22.2\
+  \ 旅行摄影扩展）\n  intersectionClass: fact | affinity（fact = 可向用户说明的事实交集；affinity = 算法概率推荐，不伪装事实）\n  weightTier:\
+  \ light | heavy（内容卡交集轻/重等级，云侧离散产出；无 reason 即无交集，70/20/10 只能作为有效候选曝光节奏，不能覆盖业务对象绑定）\n  displayBinding:\
+  \ explicit_link | host_implicit | host_plain | hidden\n    explicit_link = 独立列表或跨对象证据，primarySpans 必须包含带\
+  \ typed target 的 object span；\n    host_implicit = 内容卡/视频书/内容详情/命中对象自身的搜索结果，当前宿主对象作为上下文宾语，不渲染可点击 self-target；\n\
+  \    host_plain = 用户/实体/圈子主页可展示当前宿主名，但宿主名只能是 plain span，不可点击 self-target；\n    hidden = 证据、actor、action、typed\
+  \ target 任一不足，云侧清空 primaryText/primarySpans 不下发展示句。\n\n展示字段（统一视觉系统消费）：\n  avatarUrl / displayName 用于头像\
+  \ + 名字卡（端只读，禁止本地拼装）。\n  confidenceLabel 仅对 affinity 展示\"推荐认识/可能合得来\"等克制文案。\n  freshAt / expiresAt 为保鲜期锚点（ISO8601\
+  \ 字符串，过期由后端重算，端只读）。\n  modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。\n  intersectionPoints 是交集点列表真相源；摘要数字必须由同一\
+  \ snapshot 下可见点派生，\n  不得成为第二套事实来源。\n  connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如\"北京大学、摄影把你们连在一起\"\
+  ），\n  对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。\n  primaryText 是主交集结论句（蓝色，云侧产出，端只读直出），统一采用「上下文主谓宾一句话」格式：\n \
+  \   主语[关系限定 + 代表人 + 人数] + 谓语[行为动词] + 宾语[typed object 或当前宿主上下文]。\n    当宾语等于当前内容/主页宿主对象时，宾语由 Query Slice\
+  \ 的 host context 承载，禁止渲染可点击 self-target；\n    仅 `displayBinding=explicit_link` 时在句内展示可点击 typed object\
+  \ span。表达规范见\n    specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#display-contract\
+  \ （REQ-007 / §17；事实通道禁止朋友/好友/收藏/同趣词，affinity 明确标注推荐）。\n  primaryTextL10nKey 是命中\
+  \ statementTemplates 模板的本地化资源键；端按同名槽位回填译文，缺省继续直出 primaryText。\n  首页内容卡人数句额外遵守「可点开交集人数」原则：N 表示同一证据快照下可枚举、可点击的交集人列表；\n\
+  \    representativeActor 只表达其中关系最密切、最能解释推荐的代表人，不要求\
+  \ N 人同属同一来源。\n    代表关系优先级为：联系人/共同联系人 > 你关注的人/共同关注的人 > 同圈圈友 > 你曾互动过其内容的用户。\n    count 点击后的列表必须由 actorEvidence\
+  \ 完整承载，逐人说明来源（如联系人、你关注的人、某圈圈友）\n    及其在当前对象上的动作；actorEvidenceCompleteness != complete 时，端不得把人数 N 渲染成完整列表入口。\n\
+  \    首页内容卡不得使用\"都来这里互动过\"等泛化句；若有动作证据，应具象为\"赞过\"、\"赞过和评论过\"、\"赞过、评论过并转发过\"等动作摘要，\n    禁止把\"2赞 1评 1转\"\
+  这类数字统计直接暴露为主结论句。\n  secondaryText 是副交集辅助说明（灰色）；仅列表入口（我的交集 / 为什么推荐TA / 打动）可作辅助说明，\n    紧凑 surface（首页内容卡\
+  \ / spotlight）严格单句、不展示副句（REQ-007 §17.2）。\n  端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。\n  本契约已零兼容删除\
+  \ displayText / label / sharedCount（§18.1 一次性收口）：紧凑结论句唯一来源为 primaryText，\n  证据组结构化字段（count / sampleText\
+  \ / sampleAvatarUrls / 证据名词）一律由 IntersectionPoint 承载，\n  禁止在 reason 级恢复任何第二文案/计数通道。\n  本契约已零兼容收敛 recommendationTraceId（Phase\
+  \ 0 漂移收口 §20）：交集证据快照/追踪 id 的唯一字段为\n  pointSummarySnapshotId（不再保留 recommendationTraceId 字段与别名）；导航级 recommendationTraceId\
+  \ 仍属于\n  entity/entity_homepage/homepage 的 object_page_context 上下文，与本 reason 无关，不得在此恢复同名字段。\n\n类型视觉（零发版扩展位）：\n  iconKey 是语义图标名，端持一份 glyph 兜底表；tone 是云侧指派的色板 token 名（registry.visualToneByIconKey 值域，如 tea / sage / stone），端持 light/dark 成对调色板并按主题取色，未认识的 tone 一律回落中性色，不得让新色号在旧版本上不可读。\n  typeVisual 是类型图标的远程资源引用（IntersectionVisual，assetKind=icon，imageUrl 指向随数据发布进 payload/media/icon 的 alpha 蒙版图）；端用 BlendMode.srcIn 以 tone 着色，加载中/失败一律退回 iconKey glyph。\n  三者共同保证「新增交集类型及其图标、配色」不需要发端。\n"
+consumers:
+- app
+- recommendation-service
+- content-service
+fields:
+- name: kind
+  type: string
+  default: ''''''
+- name: vertical
+  type: string
+  default: '''general'''
+- name: dimension
+  type: string
+  default: ''''''
+- name: tagRefs
+  type: '[]string'
+- name: relationKind
+  type: string
+  default: ''''''
+- name: objectKind
+  type: string
+  default: ''''''
+- name: relationObjectId
+  type: string
+  default: ''''''
+- name: strength
+  type: float64
+  default: '0.0'
+- name: primaryText
+  type: string
+  default: ''''''
+- name: primaryTextL10nKey
+  type: string
+  default: ''''''
+- name: displayBinding
+  type: string
+  default: '''explicit_link'''
+- name: secondaryText
+  type: string
+  default: ''''''
+- name: weightTier
+  type: string
+  default: ''''''
+- name: actionType
+  type: string
+  default: ''''''
+- name: actionTargetId
+  type: string
+  default: ''''''
+- name: source
+  type: string
+  default: ''''''
+- name: intersectionId
+  type: string
+  default: ''''''
+- name: intersectionClass
+  type: string
+  default: '''fact'''
+- name: avatarUrl
+  type: string
+  default: ''''''
+- name: displayName
+  type: string
+  default: ''''''
+- name: confidenceLabel
+  type: string
+  default: ''''''
+- name: modelReasonBucket
+  type: string
+  default: ''''''
+- name: freshAt
+  type: string
+  default: ''''''
+- name: expiresAt
+  type: string
+  default: ''''''
+- name: intersectionPoints
+  type: '[]IntersectionPoint'
+- name: pointSummarySnapshotId
+  type: string
+  default: ''''''
+- name: actorEvidenceTotalCount
+  type: int
+  default: '0'
+- name: actorEvidenceCompleteness
+  type: string
+  default: '''unknown'''
+- name: actorEvidence
+  type: '[]IntersectionActorEvidence'
+- name: factPointCount
+  type: int
+  default: '0'
+- name: recommendedPointCount
+  type: int
+  default: '0'
+- name: totalPointCount
+  type: int
+  default: '0'
+- name: dimensionPointSummary
+  type: '[]IntersectionDimensionTally'
+- name: pointClassLabel
+  type: string
+  default: ''''''
+- name: connectionSummary
+  type: string
+  default: ''''''
+- name: lastRecommendedAt
+  type: string
+  default: ''''''
+- name: seenAt
+  type: string
+  default: ''''''
+- name: rankState
+  type: string
+  default: '''fresh'''
+- name: primarySpans
+  type: '[]IntersectionTextSpan'
+- name: sampleVisuals
+  type: '[]IntersectionVisual'
+- name: representativeActor
+  type: IntersectionRepresentativeActor
+  nullable: true
+- name: actionHints
+  type: '[]IntersectionActionHint'
+- name: lifecycleState
+  type: string
+  default: ''''''
+- name: previousStrength
+  type: float64
+  default: '0.0'
+- name: strengthDelta
+  type: float64
+  default: '0.0'
+- name: edgeWeight
+  type: float64
+  default: '0.0'
+- name: iconKey
+  type: string
+  default: ''''''
+- name: tone
+  type: string
+  default: ''''''
+- name: typeVisual
+  type: IntersectionVisual
+  nullable: true
+- name: objectVisual
+  type: IntersectionVisual
+  nullable: true
+- name: timeBucket
+  type: string
+  default: ''''''
+- name: dedupeKey
+  type: string
+  default: ''''''
+- name: anchorUserWeight
+  type: float64
+  default: '0.0'
+- name: mutualCount
+  type: int
+  default: '0'
+- name: moment
+  type: string
+  default: '''current'''
+- name: subjectId
+  type: string
+  default: ''''''
+- name: subjectContext
+  type: string
+  default: ''''''

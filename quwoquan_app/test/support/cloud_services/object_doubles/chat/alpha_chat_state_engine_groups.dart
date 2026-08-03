@@ -152,7 +152,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
           .where((id) => id.isNotEmpty)
           .toList(growable: false);
 
-  void inviteAssistant({required String conversationId, String? skillId}) {
+  void inviteAssistant({required String conversationId}) {
     final members = _ensureMembers(conversationId);
     if (members.any((member) => _text(member['memberType']) == 'assistant')) {
       return;
@@ -164,8 +164,6 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
       'avatarUrl': avatarFor('fixture_assistant_primary'),
       'role': 'member',
       'memberType': 'assistant',
-      if ((skillId ?? '').trim().isNotEmpty)
-        'assistantSkillId': skillId!.trim(),
       'isCurrentUser': false,
       'joinedAt': _now().toIso8601String(),
     });

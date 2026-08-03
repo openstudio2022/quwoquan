@@ -144,6 +144,17 @@ types:
         type: timestamp
         constraints:
           - NOT_NULL
+  CircleMembershipPageSlice:
+    description: CircleMembershipReader 的稳定游标分页结果。
+    fields:
+      - name: items
+        type: '[]CircleMembershipSlice'
+        constraints:
+          - NOT_NULL
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
   PersonaCircleSlice:
     description: PersonaCircleReader 返回的公开 Circle 摘要投影；它不是 Circle 聚合且不暴露存储字段名。
     fields:
@@ -253,6 +264,17 @@ types:
         type: timestamp
         constraints:
           - NOT_NULL
+  PersonaCirclePageSlice:
+    description: PersonaCircleReader 的稳定游标分页结果。
+    fields:
+      - name: items
+        type: '[]PersonaCircleSlice'
+        constraints:
+          - NOT_NULL
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
   UpdateCircleMembershipRoleRequest:
     description: 管理员变更目标 membership 角色的强类型命令。
     fields:
@@ -461,10 +483,8 @@ types:
         client_dart_type: String
         client_normalization: trim
       - name: role
-        type: string
+        type: enum
         enum_ref: CircleMemberRole
-        client_dart_type: CircleMembershipRole
-        client_wire: canonicalEnum
   DecideCircleMembershipCommand:
     fields:
       - name: circleId

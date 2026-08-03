@@ -19,11 +19,6 @@ type CommitReceipt struct {
 	Replayed     bool
 }
 
-type AssignmentStats struct {
-	VariantCounts    map[string]int
-	AssignedSubjects int
-}
-
 type AggregateStore interface {
 	Load(context.Context, string) (model.Experiment, error)
 	LoadRevision(context.Context, string, int64) (model.Experiment, error)
@@ -33,13 +28,4 @@ type AggregateStore interface {
 
 type CatalogReader interface {
 	List(context.Context) ([]model.Experiment, error)
-}
-
-type AssignmentSink interface {
-	Append(context.Context, model.AssignmentFact) (model.AssignmentFact, bool, error)
-}
-
-type AssignmentReader interface {
-	Get(context.Context, string, int64, string) (model.AssignmentFact, error)
-	Stats(context.Context, string, int64) (AssignmentStats, error)
 }

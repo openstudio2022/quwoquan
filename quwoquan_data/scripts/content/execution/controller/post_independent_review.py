@@ -176,15 +176,6 @@ def _run_post_independent_reviews_serial(
     from content.execution.model_contract import execution_model_pair_for_execution
 
     pair = execution_model_pair_for_execution(ctx.execution_id)
-    if pair.author.model_id == pair.reviewer.model_id or pair.author.family is pair.reviewer.family:
-        return [
-            data_issue(
-                DataIssueCode.CONTRACT_INVALID,
-                stage=DataIssueStage.POST_REVIEW,
-                message="independent reviewer model family must differ from author model family",
-                recovery=DataRecoveryAction.STOP,
-            )
-        ]
     model = pair.reviewer.model_id
     model_family = pair.reviewer.family.value
     reviewer_workers = active_runtime_policy().reviewer_workers

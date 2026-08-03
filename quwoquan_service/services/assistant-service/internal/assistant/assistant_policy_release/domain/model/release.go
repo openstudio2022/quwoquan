@@ -70,7 +70,10 @@ func Stage(input Release, now time.Time) (Release, error) {
 		return Release{}, ErrDigestMismatch
 	}
 	normalized.AggregateVersion = 1
-	normalized.StagedAt = now.UTC()
+	// MongoDB persists BSON datetimes at millisecond precision. Normalize the
+	// aggregate before both the first response and durable receipt are produced
+	// so an idempotent replay is byte-identical to the original command result.
+	normalized.StagedAt = now.UTC().Truncate(time.Millisecond)
 	return normalized, nil
 }
 

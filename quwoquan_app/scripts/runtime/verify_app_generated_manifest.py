@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,8 +34,19 @@ ALLOWED_PREFIXES = (
     "lib/cloud/user/generated/",
     "packages/quwoquan_cloud_contracts/lib/src/generated/",
     "packages/quwoquan_cloud_contracts/lib/src/rtc/",
+    "packages/quwoquan_cloud_contracts/lib/generated/",
 )
 GENERATOR_ROOT = SERVICE / "tools/codegen_app_metadata"
+DOMAIN_OWNER_PATTERN = re.compile(
+    r"^packages/quwoquan_cloud_contracts/lib/src/"
+    r"(?P<domain>[a-z][a-z0-9_]*)/(?P=domain)_operation_contracts\.g\.dart$"
+)
+
+
+def is_allowed_generated_path(relative: str) -> bool:
+    return relative.startswith(ALLOWED_PREFIXES) or bool(
+        DOMAIN_OWNER_PATTERN.fullmatch(relative)
+    )
 
 
 def load_json(path: Path) -> dict:
@@ -72,7 +84,7 @@ def validate_manifest(app_root: Path, manifest: dict, lock: dict) -> set[str]:
             not relative
             or relative.startswith("/")
             or ".." in Path(relative).parts
-            or not relative.startswith(ALLOWED_PREFIXES)
+            or not is_allowed_generated_path(relative)
         ):
             raise AssertionError(f"非法 App generated output path: {relative}")
         if relative in seen:
@@ -106,19 +118,76 @@ def discover_generated_files() -> set[str]:
             normalized = header.lower()
             if "generated" in normalized and "do not edit" in normalized:
                 discovered.add(path.relative_to(APP).as_posix())
+    domain_root = APP / "packages/quwoquan_cloud_contracts/lib/src"
+    for path in domain_root.glob("*/*_operation_contracts.g.dart"):
+        relative = path.relative_to(APP).as_posix()
+        if not DOMAIN_OWNER_PATTERN.fullmatch(relative):
+            continue
+        header = path.read_text(encoding="utf-8", errors="replace")[:300]
+        normalized = header.lower()
+        if "generated" in normalized and "do not edit" in normalized:
+            discovered.add(relative)
     return discovered
 
 
 def verify_rebuild(committed: dict) -> None:
-    with tempfile.TemporaryDirectory(prefix="qwq-app-codegen-") as temp:
+    output_root = ROOT / ".qwq_output/env/repo/local/app-codegen/cache"
+    output_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="qwq-app-codegen-",
+        dir=output_root,
+    ) as temp:
+        contract_view = Path(temp) / "service-contract-view"
         temp_app = Path(temp) / "quwoquan_app"
         temp_manifest = temp_app / "tool/cloud_codegen/generated_manifest.json"
+        build_view = subprocess.run(
+            [
+                sys.executable,
+                "scripts/contracts/build_service_contract_view.py",
+                "--output",
+                str(contract_view),
+            ],
+            cwd=SERVICE,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        if build_view.returncode != 0:
+            raise AssertionError(
+                "App generated clean rebuild 无法构建服务契约视图:\n"
+                f"{build_view.stdout}\n{build_view.stderr}"
+            )
+        check_graph = subprocess.run(
+            [
+                "go",
+                "run",
+                "./tools/qwq_contract",
+                "check",
+                "--metadata-dir",
+                str(contract_view),
+                "--profile",
+                "commercial",
+                "--input",
+                str(GRAPH),
+            ],
+            cwd=SERVICE,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        if check_graph.returncode != 0:
+            raise AssertionError(
+                "App generated clean rebuild 的服务契约视图与固定 Graph 不一致:\n"
+                f"{check_graph.stdout}\n{check_graph.stderr}"
+            )
         command = [
             "go",
             "run",
             "./tools/codegen_app_metadata",
             "--metadata-dir",
-            "contracts/metadata",
+            str(contract_view),
             "--contract-graph",
             str(GRAPH),
             "--contract-graph-lock",

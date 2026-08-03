@@ -12,28 +12,24 @@ ROOT = Path(__file__).resolve().parents[3]
 
 class RtcMediaQoeObservabilityContractTest(unittest.TestCase):
     def test_rtc_qoe_rollup_and_release_alerts_share_low_cardinality_facts(self) -> None:
-        resource = yaml.safe_load(
+        rollups = yaml.safe_load(
             (
                 ROOT
-                / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
             ).read_text(encoding="utf-8")
         )
-        jobs = {
-            item["name"]: item for item in resource["spec"]["scheduledSql"]["jobs"]
-        }
-        job = jobs["app-product-telemetry-rtc-qoe-hourly"]
-        self.assertEqual(job["rowKind"], "rtc_qoe")
-        self.assertIn(
-            "callType,result,mediaConnected,networkQuality,disconnectReason,failReasonCode",
-            job["sql"],
-        )
-        self.assertIn("connectTimeHistogram", job["sql"])
-        self.assertIn("reconnectCount", job["sql"])
-        self.assertNotIn("callId", job["sql"])
-        self.assertNotIn("userId", job["sql"])
-        self.assertNotIn("sessionId", job["sql"])
+        job = next(item for item in rollups["jobs"] if item["row_kind"] == "rtc_qoe")
+        for dimension in ("callType", "result", "mediaConnected", "networkQuality", "disconnectReason", "failReasonCode"):
+            self.assertIn(dimension, job["dimensions"])
+        measures = {item["name"] for item in job["measures"]}
+        self.assertIn("connectTimeHistogram", measures)
+        self.assertIn("reconnectCount", measures)
+        self.assertNotIn("callId", job["dimensions"])
+        self.assertNotIn("userId", job["dimensions"])
+        self.assertNotIn("sessionId", job["dimensions"])
 
-        alerts = {item["name"]: item for item in resource["spec"]["alerts"]}
+        alert_policy = yaml.safe_load((ROOT / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml").read_text(encoding="utf-8"))["spec"]
+        alerts = {item["name"]: item for item in alert_policy["alerts"]}
         for name in (
             "product-rtc-media-connect-rate-low",
             "product-rtc-media-connect-p95-high",
@@ -46,13 +42,9 @@ class RtcMediaQoeObservabilityContractTest(unittest.TestCase):
             "connectRate < 0.98",
             alerts["product-rtc-media-connect-rate-low"]["condition"],
         )
-        self.assertIn(
-            "result<>'abandoned'",
-            alerts["product-rtc-media-connect-rate-low"]["query"],
-        )
-        self.assertIn(
-            "result<>'abandoned' AND mediaConnected='true'",
-            alerts["product-rtc-media-connect-rate-low"]["query"],
+        self.assertEqual(
+            alerts["product-rtc-media-connect-rate-low"]["filter"],
+            {"excludeResult": "abandoned", "connected": True},
         )
         self.assertIn(
             "p95Ms > 3000",
@@ -96,9 +88,9 @@ class RtcMediaQoeObservabilityContractTest(unittest.TestCase):
             "livekit_quality_score_bucket",
             media_alerts["LiveKitMedianQualityLow"]["expr"],
         )
-        self.assertIn(
-            "result='connection_lost'",
-            alerts["product-rtc-unexpected-disconnect-rate-high"]["query"],
+        self.assertEqual(
+            alerts["product-rtc-unexpected-disconnect-rate-high"]["filter"]["result"],
+            "connection_lost",
         )
 
         alert_drill = yaml.safe_load(

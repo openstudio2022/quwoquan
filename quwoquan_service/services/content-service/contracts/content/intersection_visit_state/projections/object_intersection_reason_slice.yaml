@@ -1,0 +1,8 @@
+read_model: ObjectIntersectionReasonSlice
+description: 当前可信 persona 与指定公开对象的有界交集结果；items 只引用 RecommendationFeatureProfileView 的 canonical IntersectionReason。
+source_entities: [RecommendationFeatureProfileView]
+consumers: [app]
+fields:
+  - {name: items, type: '[]IntersectionReason', nullable: false}
+  - {name: objectId, type: string, nullable: false}
+  - {name: objectType, type: string, nullable: false}

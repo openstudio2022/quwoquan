@@ -55,11 +55,7 @@ api_routes:
         - name: scope
           field: scope
           required: false
-    response_entity: RecentSearchEntryView
-    client_contract:
-      dart_import: ../search/recent_search_contracts.dart
-      response_type: RecentSearchEntrySlice
-      response_decoder: decodeRecentSearchEntrySlice
+    response_entity: RecentSearchEntrySlice
     security:
       auth_mode: required
       principal: persona
@@ -115,11 +111,7 @@ api_routes:
 
 '
     request_entity: UpsertRecentSearchCommand
-    response_entity: RecentSearchEntryView
-    client_contract:
-      dart_import: ../search/recent_search_contracts.dart
-      response_type: RecentSearchEntry
-      response_decoder: decodeRecentSearchEntry
+    response_entity: RecentSearchEntryWire
     security:
       auth_mode: required
       principal: persona
@@ -172,10 +164,8 @@ api_routes:
         - name: entryId
           field: entryId
     description: 删除单条最近搜索记录；目标已不存在时按 no-op receipt 重放安全处理
-    client_contract:
-      dart_import: ../search/recent_search_contracts.dart
-      response_type: void
-      response_decoder: decodeRecentSearchAck
+    response_entity: RecentSearchCommandAck
+    response_body_kind: ack
     security:
       auth_mode: required
       principal: persona
@@ -230,10 +220,8 @@ api_routes:
         - name: scope
           field: scope
           required: false
-    client_contract:
-      dart_import: ../search/recent_search_contracts.dart
-      response_type: void
-      response_decoder: decodeRecentSearchAck
+    response_entity: RecentSearchCommandAck
+    response_body_kind: ack
     security:
       auth_mode: required
       principal: persona

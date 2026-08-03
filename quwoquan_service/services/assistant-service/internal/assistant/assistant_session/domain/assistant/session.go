@@ -60,6 +60,7 @@ type AssistantTriggerEnvelope struct {
 type AssistantRunRequestContext struct {
 	ClientSessionID string `json:"-" bson:"clientSessionId,omitempty"`
 	PageID          string `json:"-" bson:"pageId,omitempty"`
+	SurfaceKind     string `json:"-" bson:"surfaceKind,omitempty"`
 	SurfaceID       string `json:"-" bson:"surfaceId,omitempty"`
 	RouteID         string `json:"-" bson:"routeId,omitempty"`
 	OperationID     string `json:"-" bson:"operationId,omitempty"`
@@ -71,6 +72,7 @@ func (c AssistantRunRequestContext) Normalized() AssistantRunRequestContext {
 	return AssistantRunRequestContext{
 		ClientSessionID: strings.TrimSpace(c.ClientSessionID),
 		PageID:          strings.TrimSpace(c.PageID),
+		SurfaceKind:     strings.TrimSpace(c.SurfaceKind),
 		SurfaceID:       strings.TrimSpace(c.SurfaceID),
 		RouteID:         strings.TrimSpace(c.RouteID),
 		OperationID:     strings.TrimSpace(c.OperationID),

@@ -1,16 +1,18 @@
 package feed
 
 import (
-	"context"
+	"fmt"
 	"strings"
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	recpolicy "quwoquan_service/runtime/recpolicy"
-	"quwoquan_service/services/content-service/internal/content/post/application/identity"
+	transport "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 )
 
-// ObjectCardView 是随 feed envelope 下发的混合对象卡（B4 阶段一插卡模式）。
-// 契约真相源：services/content-service/contracts/content/post/projections/feed_object_card.yaml。
+// ObjectCardView 是 Content 在 Post hydration 后写入 FeedDeliveryPage 并随
+// feed envelope 交付的展示快照。候选身份、标题、标签、理由与召回路径均来自
+// Recommendation 的不可变 RankedRecommendationWindow；Content 只按当前页面
+// 长度计算 anchorIndex，不再读取任何推荐、Entity 或 User 私有存储。
 type ObjectCardView struct {
 	ObjectKind  string   `json:"objectKind"`
 	ObjectID    string   `json:"objectId"`
@@ -23,80 +25,97 @@ type ObjectCardView struct {
 	AnchorIndex int      `json:"anchorIndex"`
 }
 
-// ObjectCardProvider 提供 viewer 个性化的对象卡候选（S0 仅实体主页卡）。
-// 读路径只消费物化读模型/特征投影，禁止同步打分或跨服务调用；失败/为空时
-// feed 主体不受影响（对象卡是增强位，fail-open 到无卡）。
-type ObjectCardProvider interface {
-	ObjectCards(ctx context.Context, userID string, limit int) ([]ObjectCardView, error)
-}
-
-// WithObjectCardProvider 注入对象卡召回器与策略读取器。策略（enabled/everyN/
-// maxCards/allowedKinds）经热加载 recpolicy 读取，运营可配可回滚。
-func WithObjectCardProvider(provider ObjectCardProvider, policy func() recpolicy.ObjectCardConfig) FeedServiceOption {
-	return func(s *FeedService) {
-		s.objectCards = provider
-		s.objectCardPolicy = policy
+// WithObjectCardPolicy 注入 Content 拥有的页面布局策略。它只决定当前已 hydrate
+// 页面中的展示间隔和上限，不能召回、补全或重新排序对象卡。
+func WithObjectCardPolicy(policy func() recpolicy.ObjectCardConfig) FeedServiceOption {
+	return func(service *FeedService) {
+		service.objectCardPolicy = policy
 	}
 }
 
-// resolveObjectCards 按策略装配本页对象卡：每 everyN 条内容后插一张
-// （anchorIndex = everyN, 2*everyN, ...），单页不超过 maxCards，且 anchor
-// 不越过本页内容长度（尾部不悬挂对象卡）。任何失败都静默降级为无卡。
-func (s *FeedService) resolveObjectCards(
-	ctx context.Context,
-	userID string,
+// resolveObjectCards 把 Recommendation 窗口中已经冻结的 typed 对象卡映射为
+// Content 展示快照。非法跨域载荷必须使推荐请求 fail-closed，禁止退化成成功空卡。
+func (service *FeedService) resolveObjectCards(
+	candidates []transport.RecommendationObjectCard,
 	itemCount int,
-) []ObjectCardView {
-	if s.objectCards == nil || s.objectCardPolicy == nil || itemCount <= 0 {
-		return nil
+) ([]ObjectCardView, error) {
+	if service == nil || service.objectCardPolicy == nil ||
+		itemCount <= 0 || len(candidates) == 0 {
+		return nil, nil
 	}
-	// 对象卡是 viewer 个性化增强位：匿名（含规范化后的匿名 fallback 身份）不注入。
-	trimmedUser := strings.TrimSpace(userID)
-	if trimmedUser == "" || trimmedUser == identity.AnonymousFallbackPersonaID {
-		return nil
+	policy := service.objectCardPolicy()
+	if !policy.Enabled || policy.EveryN <= 0 || policy.MaxCards <= 0 {
+		return nil, nil
 	}
-	cfg := s.objectCardPolicy()
-	if !cfg.Enabled || cfg.EveryN <= 0 || cfg.MaxCards <= 0 {
-		return nil
-	}
-	maxAnchored := itemCount / cfg.EveryN
+	maxAnchored := itemCount / policy.EveryN
 	if maxAnchored <= 0 {
-		return nil
+		return nil, nil
 	}
-	limit := cfg.MaxCards
-	if maxAnchored < limit {
-		limit = maxAnchored
-	}
-	cards, err := s.objectCards.ObjectCards(ctx, userID, limit)
-	if err != nil {
-		// fail-open 到无卡，但失败必须可观测（N1-2：provider 静默吞错→零观测）。
-		rtrec.RecordObjectCardsProviderError()
-		return nil
-	}
-	if len(cards) == 0 {
-		return nil
-	}
-	allowed := make(map[string]bool, len(cfg.AllowedKinds))
-	for _, kind := range cfg.AllowedKinds {
-		allowed[kind] = true
-	}
-	out := make([]ObjectCardView, 0, limit)
-	for _, card := range cards {
-		if len(out) >= limit {
-			break
+	limit := min(policy.MaxCards, maxAnchored)
+	allowedKinds := make(map[string]struct{}, len(policy.AllowedKinds))
+	for _, kind := range policy.AllowedKinds {
+		normalized := strings.TrimSpace(kind)
+		if normalized != "" {
+			allowedKinds[normalized] = struct{}{}
 		}
-		if strings.TrimSpace(card.ObjectID) == "" || !allowed[card.ObjectKind] {
+	}
+
+	result := make([]ObjectCardView, 0, limit)
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		kind := strings.TrimSpace(candidate.ObjectKind)
+		objectID := strings.TrimSpace(candidate.ObjectId)
+		title := strings.TrimSpace(candidate.Title)
+		reason := strings.TrimSpace(candidate.ReasonKey)
+		recallPath := strings.TrimSpace(candidate.RecallPath)
+		if kind == "" || objectID == "" || title == "" || reason == "" || recallPath == "" {
+			return nil, fmt.Errorf("ranked recommendation object card is incomplete")
+		}
+		if _, duplicate := seen[objectID]; duplicate {
+			return nil, fmt.Errorf("ranked recommendation object card identity is duplicated")
+		}
+		seen[objectID] = struct{}{}
+		if _, allowed := allowedKinds[kind]; !allowed {
 			continue
 		}
-		card.AnchorIndex = (len(out) + 1) * cfg.EveryN
-		if card.AnchorIndex > itemCount {
+		tags := make([]string, 0, len(candidate.TagRefs))
+		seenTags := make(map[string]struct{}, len(candidate.TagRefs))
+		for _, rawTag := range candidate.TagRefs {
+			tag := strings.TrimSpace(rawTag)
+			if tag == "" {
+				return nil, fmt.Errorf("ranked recommendation object card tag is empty")
+			}
+			if _, duplicate := seenTags[tag]; duplicate {
+				return nil, fmt.Errorf("ranked recommendation object card tag is duplicated")
+			}
+			seenTags[tag] = struct{}{}
+			tags = append(tags, tag)
+		}
+		anchor := (len(result) + 1) * policy.EveryN
+		if anchor > itemCount || len(result) >= limit {
 			break
 		}
-		out = append(out, card)
+		result = append(result, ObjectCardView{
+			ObjectKind:  kind,
+			ObjectID:    objectID,
+			Title:       title,
+			Subtitle:    strings.TrimSpace(optionalRecommendationText(candidate.Subtitle)),
+			CoverURL:    strings.TrimSpace(optionalRecommendationText(candidate.CoverUrl)),
+			TagRefs:     tags,
+			ReasonText:  reason,
+			RecallPath:  recallPath,
+			AnchorIndex: anchor,
+		})
 	}
-	if len(out) == 0 {
-		return nil
+	if len(result) > 0 {
+		rtrec.RecordObjectCardsAssembled(len(result))
 	}
-	rtrec.RecordObjectCardsAssembled(len(out))
-	return out
+	return result, nil
+}
+
+func optionalRecommendationText(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

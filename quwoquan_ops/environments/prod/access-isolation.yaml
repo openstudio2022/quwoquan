@@ -156,7 +156,7 @@ prevalidation:
       - turn
       - apns
       - fcm
-      - aliyun-sls
+      - managed-elasticsearch
       - commercial-login
       - external-model-provider
     reason: 外部 Provider、SFU/TURN 与正式数据面必须由独立受控证据验收。

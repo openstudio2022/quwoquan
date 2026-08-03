@@ -11,9 +11,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
 	recentsearch "quwoquan_service/services/search-service/internal/search/recent_search_state/application"
 	"quwoquan_service/services/search-service/internal/search/recommendation_signal_fact/infrastructure/searchsignals"
+	"quwoquan_service/services/search-service/internal/search/search_feedback_fact/infrastructure/feedbackstore"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/queryheatstore"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/querylogstore"
 )
@@ -26,11 +26,6 @@ type storageMeta struct {
 			Seconds int `yaml:"seconds"`
 		} `yaml:"ttl"`
 	} `yaml:"collections"`
-	DerivedReadModels map[string]struct {
-		TTL struct {
-			Seconds int `yaml:"seconds"`
-		} `yaml:"ttl"`
-	} `yaml:"derived_read_models"`
 }
 
 type redisKeyspaceMeta struct {
@@ -96,7 +91,7 @@ func TestStorageTTLMatchesMetadata(t *testing.T) {
 	if got := feedbackMeta.Collections["search_feedback_events"].TTL.Seconds; got != feedbackstore.FeedbackTTLSeconds {
 		t.Fatalf("search_feedback_events TTL drift: metadata=%d infra=%d", got, feedbackstore.FeedbackTTLSeconds)
 	}
-	if got := meta.DerivedReadModels["rm_search_term_heat"].TTL.Seconds; got != queryheatstore.HeatTTLSeconds {
+	if got := meta.Collections["rm_search_term_heat"].TTL.Seconds; got != queryheatstore.HeatTTLSeconds {
 		t.Fatalf("rm_search_term_heat TTL drift: metadata=%d infra=%d", got, queryheatstore.HeatTTLSeconds)
 	}
 	recentMeta := loadRecentStorageMeta(t)

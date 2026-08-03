@@ -11,12 +11,14 @@ import fcntl
 import hashlib
 import json
 import os
+import queue
 import re
 import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -42,6 +44,11 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     acquire_consumer_lease,
     release_consumer_lease,
 )
+from quwoquan_ops.cli.lib.local_controlled_edge_fault import (
+    CONTROLLED_EDGE_SERVICES,
+    ControlledEdgeFault,
+    begin_controlled_edge_fault,
+)
 from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
@@ -66,8 +73,31 @@ CORE_READBACK_TARGET = (
     "test/user_acceptance/patrol/environment/"
     "app_core_readback__user_acceptance_test.dart"
 )
+FEED_LOAD_TARGET = (
+    "test/user_acceptance/patrol/discovery/"
+    "feed_load__user_acceptance_test.dart"
+)
+FEED_CONTENT_EVIDENCE_PREFIX = "QWQ_FEED_CONTENT_EVIDENCE "
+CONTROLLED_EDGE_FAULT_TARGET = (
+    "test/user_acceptance/patrol/discovery/"
+    "feed_controlled_edge_recovery__user_acceptance_test.dart"
+)
+CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX = (
+    "QWQ_APP_CONTENT_EDGE_RESTORE_REQUEST "
+)
+CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX = "QWQ_APP_CONTENT_FAULT_EVIDENCE "
+CONTROLLED_EDGE_FAULT_COPY_KEYS = frozenset(
+    {
+        "connectionUnavailable",
+        "requestTimedOut",
+        "serviceUnavailable",
+        "guestSessionUnavailable",
+    }
+)
 RELEASE_APP_UAT_DEFINES = (
     ("data_release_id", "DATA_RELEASE_ID"),
+    ("data_release_class", "DATA_RELEASE_CLASS"),
+    ("product_lifecycle_state", "PRODUCT_LIFECYCLE_STATE"),
     ("data_release_homepage_id", "DATA_RELEASE_HOMEPAGE_ID"),
     ("data_release_homepage_title", "DATA_RELEASE_HOMEPAGE_TITLE"),
     ("data_release_article_work_id", "DATA_RELEASE_ARTICLE_WORK_ID"),
@@ -241,6 +271,96 @@ def _requires_native_video_playback_signals(device: dict[str, Any]) -> bool:
 
 def _read_video_playback_evidence(patrol_log: Path) -> dict[str, bool]:
     return read_native_video_playback_evidence(patrol_log)
+
+
+def _read_feed_content_evidence(patrol_log: Path) -> dict[str, Any]:
+    if not patrol_log.is_file():
+        return {}
+    for line in reversed(patrol_log.read_text(encoding="utf-8").splitlines()):
+        marker = line.find(FEED_CONTENT_EVIDENCE_PREFIX)
+        if marker < 0:
+            continue
+        encoded = line[marker + len(FEED_CONTENT_EVIDENCE_PREFIX) :].strip()
+        try:
+            payload = json.loads(encoded)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        environment = str(payload.get("environment") or "").strip()
+        visible_keys = payload.get("visibleCardKeys")
+        visible_count = payload.get("visibleCardCount")
+        if (
+            environment not in {"alpha", "beta", "gamma"}
+            or not isinstance(visible_keys, list)
+            or not visible_keys
+            or any(not isinstance(item, str) or not item for item in visible_keys)
+            or len(set(visible_keys)) != len(visible_keys)
+            or visible_count != len(visible_keys)
+        ):
+            return {}
+        return {
+            "environment": environment,
+            "visibleCardCount": visible_count,
+            "visibleCardKeys": visible_keys,
+        }
+    return {}
+
+
+def _read_controlled_edge_fault_evidence(patrol_log: Path) -> dict[str, Any]:
+    if not patrol_log.is_file():
+        return {}
+    for line in reversed(patrol_log.read_text(encoding="utf-8").splitlines()):
+        marker = line.find(CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX)
+        if marker < 0:
+            continue
+        encoded = line[
+            marker + len(CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX) :
+        ].strip()
+        try:
+            payload = json.loads(encoded)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        environment = str(payload.get("environment") or "").strip()
+        copy_key = str(payload.get("copyKey") or "").strip()
+        recovered_count = payload.get("recoveredVisibleCardCount")
+        if (
+            environment not in {"alpha", "beta", "gamma"}
+            or copy_key not in CONTROLLED_EDGE_FAULT_COPY_KEYS
+            or payload.get("singlePrimaryAction") is not True
+            or payload.get("forbiddenBrandAbsent") is not True
+            or payload.get("technicalDetailsAbsent") is not True
+            or payload.get("blockedRetryCount") != 5
+            or payload.get("blockingErrorRetained") is not True
+            or payload.get("sameInstallRecovery") is not True
+            or not isinstance(recovered_count, int)
+            or recovered_count <= 0
+        ):
+            return {}
+        return {
+            "environment": environment,
+            "copyKey": copy_key,
+            "singlePrimaryAction": True,
+            "forbiddenBrandAbsent": True,
+            "technicalDetailsAbsent": True,
+            "blockedRetryCount": 5,
+            "blockingErrorRetained": True,
+            "sameInstallRecovery": True,
+            "recoveredVisibleCardCount": recovered_count,
+        }
+    return {}
+
+
+def _is_feed_load_target(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return target.endswith(FEED_LOAD_TARGET)
+
+
+def _is_controlled_edge_fault_target(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return target.endswith(CONTROLLED_EDGE_FAULT_TARGET)
 
 
 def _local_target_for_environment_alias(env_name: str) -> str:
@@ -597,22 +717,26 @@ def _prepare_android_local_port_reverse(
     }
 
 
-def _acquire_android_patrol_consumer_lease(
+def _acquire_patrol_consumer_lease(
     args: argparse.Namespace,
     device: dict[str, Any],
     android_port_reverse: dict[str, Any],
     command_env: dict[str, str],
-) -> tuple[str, str, str] | None:
-    """Bind one Android Patrol build to the active local runtime ports."""
+) -> tuple[str, str, str, str] | None:
+    """Bind one Android or iOS Simulator Patrol build to its local runtime."""
 
     target_platform = str(device.get("targetPlatform", "")).strip().lower()
-    if not (
-        _is_local_target(args.env_name) and target_platform.startswith("android")
+    is_android = target_platform.startswith("android")
+    is_ios_simulator = target_platform == "ios" and bool(device.get("emulator", False))
+    if not _is_local_target(args.env_name) or not (
+        is_android or is_ios_simulator
     ):
         return None
     device_id = str(device.get("id", "")).strip()
-    mappings = android_port_reverse.get("mappings")
-    if not device_id or not isinstance(mappings, list):
+    if not device_id:
+        raise RuntimeError("GATE_BLOCK: Patrol consumer device identity is missing")
+    mappings = android_port_reverse.get("mappings") if is_android else []
+    if is_android and not isinstance(mappings, list):
         raise RuntimeError(
             "GATE_BLOCK: Android Patrol must install local port reverse before "
             "acquiring its runtime consumer lease",
@@ -624,27 +748,35 @@ def _acquire_android_patrol_consumer_lease(
             if isinstance(mapping, dict) and int(mapping.get("devicePort") or 0) > 0
         }
     )
-    if not ports:
+    if is_android and not ports:
         raise RuntimeError(
             "GATE_BLOCK: Android Patrol local runtime consumer lease has no ports",
         )
     target_name = _local_target_for_environment_alias(args.env_name)
     consumer = f"environment-patrol-{os.getpid()}-{sanitize_device_id(device_id)}"
-    acquire_consumer_lease(
+    lease = acquire_consumer_lease(
         target=target_name,
         device=device_id,
         consumer=consumer,
-        package_name="com.quwoquan.quwoquan_app",
+        package_name=(
+            "com.quwoquan.quwoquan_app"
+            if is_android
+            else "com.example.quwoquanApp"
+        ),
         ports=ports,
+        platform="android" if is_android else "ios-simulator",
     )
     command_env.update(
         {
             "QWQ_RUN_CONSUMER_ID": consumer,
             "QWQ_CONSUMER_LEASE_ACQUIRED": "1",
-            "QWQ_ANDROID_LOCAL_PORTS": ",".join(str(port) for port in ports),
         }
     )
-    return target_name, device_id, consumer
+    if is_android:
+        command_env["QWQ_ANDROID_LOCAL_PORTS"] = ",".join(
+            str(port) for port in ports
+        )
+    return target_name, device_id, consumer, str(lease["leaseId"])
 
 
 def _reset_release_uat_device_state(
@@ -849,6 +981,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--platform", choices=("android", "ios", "all"), default="all")
     parser.add_argument("--device-id", action="append", default=[])
+    parser.add_argument(
+        "--stackctl-controlled-edge-fault",
+        action="store_true",
+        help=(
+            "Internal app-content-uat mode: stop the receipt-bound local API Edge "
+            "and restore it when the Patrol recovery handshake is observed."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -1147,6 +1287,7 @@ def run_command(
     timeout_seconds: int | None = None,
     log_path: Path | None = None,
     secret_values: tuple[str, ...] = (),
+    output_line_handler: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     process: subprocess.Popen[str] | None = None
@@ -1160,10 +1301,90 @@ def run_command(
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        output, _ = process.communicate(timeout=timeout_seconds)
-        output = output or ""
-        exit_code = process.returncode
-        timed_out = False
+        if output_line_handler is None:
+            output, _ = process.communicate(timeout=timeout_seconds)
+            output = output or ""
+            exit_code = process.returncode
+            timed_out = False
+        else:
+            output_queue: queue.Queue[str | None] = queue.Queue()
+
+            def read_output() -> None:
+                assert process is not None and process.stdout is not None
+                try:
+                    for line in process.stdout:
+                        output_queue.put(line)
+                finally:
+                    output_queue.put(None)
+
+            reader = threading.Thread(target=read_output, daemon=True)
+            reader.start()
+            deadline = (
+                time.monotonic() + timeout_seconds
+                if timeout_seconds is not None
+                else None
+            )
+            chunks: list[str] = []
+            handler_error: Exception | None = None
+            timed_out = False
+            stream_ended = False
+            while not stream_ended:
+                if deadline is not None and time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                wait_seconds = (
+                    min(0.25, max(0.01, deadline - time.monotonic()))
+                    if deadline is not None
+                    else 0.25
+                )
+                try:
+                    line = output_queue.get(timeout=wait_seconds)
+                except queue.Empty:
+                    if process.poll() is not None and not reader.is_alive():
+                        break
+                    continue
+                if line is None:
+                    stream_ended = True
+                    continue
+                chunks.append(line)
+                try:
+                    output_line_handler(line)
+                except Exception as error:  # noqa: BLE001
+                    handler_error = error
+                    break
+            if timed_out or handler_error is not None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+            else:
+                process.wait()
+            reader.join(timeout=10)
+            while True:
+                try:
+                    line = output_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if line is not None:
+                    chunks.append(line)
+            output = "".join(chunks)
+            if handler_error is not None:
+                output += f"\ncontrolled output handler failed: {handler_error}\n"
+                exit_code = 2
+            elif timed_out:
+                exit_code = 124
+            else:
+                exit_code = int(process.returncode or 0)
+            if process.stdout is not None:
+                process.stdout.close()
     except subprocess.TimeoutExpired:
         if process is not None:
             output = _terminate_process_group(process)
@@ -1860,6 +2081,10 @@ def main() -> int:
         ),
         "persistedDeviceSession": _uses_persisted_device_session(args),
         "candidateDigest": str(getattr(args, "candidate_digest", "") or "").strip(),
+        "controlledEdgeFault": {
+            "requested": bool(getattr(args, "stackctl_controlled_edge_fault", False)),
+            "receipt": {},
+        },
         "controlledSubjectDigest": _account_enforcement_subject_digest(args),
         "hasCurrentOwnerIdentity": bool(_resolved_owner_id(args)),
         "hasCurrentPersonaIdentity": bool(_resolved_persona_id(args)),
@@ -1873,6 +2098,30 @@ def main() -> int:
         "deviceInventoryPath": "",
         "evidenceRoot": "",
     }
+    if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
+        controlled_edge_issues: list[str] = []
+        if not _is_controlled_edge_fault_target(args):
+            controlled_edge_issues.append(
+                "controlled edge fault requires the canonical feed recovery Patrol target"
+            )
+        if _local_target_for_environment_alias(args.env_name) not in {
+            "alpha-local",
+            "beta-local",
+            "gamma-local",
+        }:
+            controlled_edge_issues.append(
+                "controlled edge fault accepts only Alpha/Beta/Gamma local targets"
+            )
+        if len([item for item in args.device_id if str(item).strip()]) != 1:
+            controlled_edge_issues.append(
+                "controlled edge fault requires exactly one explicit device"
+            )
+        if controlled_edge_issues:
+            report["status"] = "gate_block"
+            report["failureReason"] = "; ".join(controlled_edge_issues)
+            report["endedAt"] = utc_now()
+            write_report(report_path, report)
+            return 2
     if _is_account_enforcement_target(args):
         account_enforcement_issues = []
         if args.dry_run:
@@ -2095,9 +2344,9 @@ def main() -> int:
             dart_define_file=secret_define_path,
         )
         command_env = _device_command_env(args, device)
-        consumer_lease: tuple[str, str, str] | None = None
+        consumer_lease: tuple[str, str, str, str] | None = None
         if not args.dry_run:
-            consumer_lease = _acquire_android_patrol_consumer_lease(
+            consumer_lease = _acquire_patrol_consumer_lease(
                 args,
                 device,
                 android_port_reverse,
@@ -2137,22 +2386,104 @@ def main() -> int:
                 "outputSummary": "dry-run",
                 "logPath": repo_relative(log_path),
             }
+            if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
+                report["controlledEdgeFault"]["receipt"] = {
+                    "status": "planned",
+                    "target": _local_target_for_environment_alias(args.env_name),
+                    "services": list(CONTROLLED_EDGE_SERVICES),
+                }
         else:
-            try:
-                result = run_command(
-                    command,
-                    cwd=APP_DIR,
-                    env=command_env,
-                    timeout_seconds=args.timeout_seconds,
-                    log_path=run_dir / "patrol.log",
-                    secret_values=(
-                        args.test_auth_token.strip(),
-                        args.test_refresh_token.strip(),
-                        _resolved_owner_id(args),
-                        _resolved_persona_id(args),
-                    ),
+            controlled_fault: ControlledEdgeFault | None = None
+            restore_request_count = 0
+            restore_error = ""
+
+            def handle_controlled_edge_output(line: str) -> None:
+                nonlocal restore_request_count
+                marker = line.find(CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX)
+                if marker < 0:
+                    return
+                encoded = line[
+                    marker + len(CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX) :
+                ].strip()
+                try:
+                    payload = json.loads(encoded)
+                except json.JSONDecodeError as error:
+                    raise RuntimeError(
+                        "controlled edge restore request is not valid JSON"
+                    ) from error
+                if (
+                    not isinstance(payload, dict)
+                    or payload.get("environment") != runtime_env
+                    or payload.get("observed") is not True
+                    or payload.get("blockedRetryCount") != 5
+                ):
+                    raise RuntimeError(
+                        "controlled edge restore request identity is invalid"
+                    )
+                restore_request_count += 1
+                if restore_request_count != 1 or controlled_fault is None:
+                    raise RuntimeError(
+                        "controlled edge restore request must occur exactly once"
+                    )
+                report["controlledEdgeFault"]["receipt"] = (
+                    controlled_fault.restore()
                 )
+
+            try:
+                if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
+                    controlled_fault = begin_controlled_edge_fault(
+                        _local_target_for_environment_alias(args.env_name)
+                    )
+                    report["controlledEdgeFault"]["receipt"] = (
+                        controlled_fault.receipt()
+                    )
+                try:
+                    result = run_command(
+                        command,
+                        cwd=APP_DIR,
+                        env=command_env,
+                        timeout_seconds=args.timeout_seconds,
+                        log_path=run_dir / "patrol.log",
+                        secret_values=(
+                            args.test_auth_token.strip(),
+                            args.test_refresh_token.strip(),
+                            _resolved_owner_id(args),
+                            _resolved_persona_id(args),
+                        ),
+                        output_line_handler=(
+                            handle_controlled_edge_output
+                            if controlled_fault is not None
+                            else None
+                        ),
+                    )
+                except Exception as error:  # noqa: BLE001
+                    result = {
+                        "command": _redact_command(command),
+                        "cwd": str(APP_DIR),
+                        "exitCode": 2,
+                        "timedOut": False,
+                        "durationMs": 0,
+                        "outputSummary": f"controlled edge UAT failed: {error}",
+                        "logPath": repo_relative(run_dir / "patrol.log"),
+                    }
+            except Exception as error:  # noqa: BLE001
+                result = {
+                    "command": _redact_command(command),
+                    "cwd": str(APP_DIR),
+                    "exitCode": 2,
+                    "timedOut": False,
+                    "durationMs": 0,
+                    "outputSummary": f"controlled edge setup failed: {error}",
+                    "logPath": repo_relative(run_dir / "patrol.log"),
+                }
             finally:
+                if controlled_fault is not None and not controlled_fault.restored:
+                    try:
+                        report["controlledEdgeFault"]["receipt"] = (
+                            controlled_fault.restore()
+                        )
+                    except Exception as error:  # noqa: BLE001
+                        restore_error = str(error)
                 if consumer_lease is not None:
                     release_consumer_lease(
                         target=consumer_lease[0],
@@ -2161,6 +2492,19 @@ def main() -> int:
                     )
                 if secret_define_path is not None:
                     secret_define_path.unlink(missing_ok=True)
+            if restore_error:
+                result["exitCode"] = 2
+                result["outputSummary"] = (
+                    str(result.get("outputSummary") or "")
+                    + "\ncontrolled edge fail-safe restore failed: "
+                    + restore_error
+                ).strip()
+            if controlled_fault is not None and restore_request_count != 1:
+                result["exitCode"] = 1
+                result["outputSummary"] = (
+                    str(result.get("outputSummary") or "")
+                    + "\ncontrolled edge UAT did not emit exactly one restore request"
+                ).strip()
         after_screenshot = (
             capture_device_screenshot(device, run_dir / "after.png")
             if result["exitCode"] == 0 and not args.dry_run
@@ -2181,6 +2525,23 @@ def main() -> int:
         runtime_recovery_evidence = _read_runtime_recovery_evidence(
             raw_log_path,
         )
+        feed_content_evidence = _read_feed_content_evidence(raw_log_path)
+        controlled_edge_fault_evidence = _read_controlled_edge_fault_evidence(
+            raw_log_path
+        )
+        controlled_edge_log = (
+            raw_log_path.read_text(encoding="utf-8")
+            if raw_log_path.is_file()
+            else ""
+        )
+        controlled_edge_runtime_errors = [
+            token
+            for token in (
+                "[bootstrap] source=zone_guarded exception=",
+                "feed recovery did not leave blocking error",
+            )
+            if token in controlled_edge_log
+        ]
         account_enforcement_phase = _account_enforcement_phase(args)
         account_enforcement_evidence = _read_account_enforcement_evidence(
             raw_log_path,
@@ -2196,11 +2557,44 @@ def main() -> int:
                 str(result.get("outputSummary") or "")
                 + "\nruntime recovery UAT did not emit a complete passed evidence marker"
             ).strip()
+        if (
+            _is_feed_load_target(args)
+            and not args.dry_run
+            and not feed_content_evidence
+        ):
+            result["exitCode"] = 1
+            result["outputSummary"] = (
+                str(result.get("outputSummary") or "")
+                + "\nfeed UAT did not emit a release-bound visible-card evidence marker"
+            ).strip()
         if _is_account_enforcement_target(args) and not account_enforcement_evidence:
             result["exitCode"] = 1
             result["outputSummary"] = (
                 str(result.get("outputSummary") or "")
                 + "\naccount-enforcement UAT did not emit its exact passed evidence marker"
+            ).strip()
+        controlled_edge_receipt = report["controlledEdgeFault"].get("receipt")
+        if (
+            _is_controlled_edge_fault_target(args)
+            and bool(getattr(args, "stackctl_controlled_edge_fault", False))
+            and not args.dry_run
+            and (
+                not controlled_edge_fault_evidence
+                or not isinstance(controlled_edge_receipt, dict)
+                or controlled_edge_receipt.get("status") != "restored"
+                or bool(controlled_edge_runtime_errors)
+            )
+        ):
+            result["exitCode"] = 1
+            result["outputSummary"] = (
+                str(result.get("outputSummary") or "")
+                + "\ncontrolled edge UAT lacks complete copy and same-install recovery evidence"
+                + (
+                    "; forbidden runtime errors="
+                    + ",".join(controlled_edge_runtime_errors)
+                    if controlled_edge_runtime_errors
+                    else ""
+                )
             ).strip()
         result["evidence"] = {
             "runDirectory": repo_relative(run_dir),
@@ -2210,12 +2604,26 @@ def main() -> int:
             "videoPlayback": _read_video_playback_evidence(
                 run_dir / "patrol.log",
             ),
+            "feedContent": feed_content_evidence,
+            "controlledEdgeFault": controlled_edge_fault_evidence,
+            "controlledEdgeFaultReceipt": controlled_edge_receipt or {},
             "beforeScreenshot": before_screenshot,
             "afterScreenshot": after_screenshot,
             "failureScreenshot": failure_screenshot,
             "localTlsTrust": tls_trust,
             "androidPortReverse": android_port_reverse,
             "releaseUatStateReset": release_uat_state_reset,
+            "consumerLease": (
+                {
+                    "target": consumer_lease[0],
+                    "deviceId": consumer_lease[1],
+                    "consumer": consumer_lease[2],
+                    "leaseId": consumer_lease[3],
+                    "releasedAfterRun": True,
+                }
+                if consumer_lease is not None
+                else {"status": "not-required"}
+            ),
             "runtimeRecovery": runtime_recovery_evidence,
             "accountEnforcement": account_enforcement_evidence,
         }
@@ -2234,6 +2642,7 @@ def main() -> int:
                     "remoteApi": report["remoteApiEvidence"],
                     "runtimeRecovery": runtime_recovery_evidence,
                     "accountEnforcement": account_enforcement_evidence,
+                    "controlledEdgeFault": controlled_edge_fault_evidence,
                 },
             }
         )

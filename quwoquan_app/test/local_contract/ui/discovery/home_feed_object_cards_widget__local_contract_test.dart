@@ -50,7 +50,7 @@ MicroPostDto _post(int index) {
 class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _ObjectCardsFeedMapNotifier(this.posts, this.cards);
 
-  final List<PostBaseDto> posts;
+  final List<ContentPostViewData> posts;
   final List<FeedObjectCardDto> cards;
 
   @override
@@ -63,7 +63,13 @@ class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 
   @override
-  Future<void> load(String channelId, {bool force = false}) async {}
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async => const DiscoveryFeedLoadResult(
+    terminal: DiscoveryFeedLoadTerminal.content,
+    generation: 0,
+  );
 }
 
 class _NoopMediaDownloadCache extends MediaDownloadCache {
@@ -71,7 +77,7 @@ class _NoopMediaDownloadCache extends MediaDownloadCache {
   Future<String?> getCachedFilePath(String url) async => null;
 }
 
-Widget _buildFeed(List<PostBaseDto> posts, List<FeedObjectCardDto> cards) {
+Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCardDto> cards) {
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
@@ -102,7 +108,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final posts = List<PostBaseDto>.generate(3, _post);
+    final posts = List<ContentPostViewData>.generate(3, _post);
     final cards = <FeedObjectCardDto>[
       FeedObjectCardDto(
         objectKind: 'entity_homepage',
@@ -130,7 +136,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final posts = List<PostBaseDto>.generate(2, _post);
+    final posts = List<ContentPostViewData>.generate(2, _post);
     await tester.pumpWidget(_buildFeed(posts, const <FeedObjectCardDto>[]));
     await tester.pump();
 

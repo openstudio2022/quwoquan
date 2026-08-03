@@ -45,10 +45,7 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/content_behavior_contracts.dart
-      response_type: void
-      response_decoder: decodeEmptyContentBehaviorsResponse
+    response_body_kind: ack
     description: 行为批量上报；Post 仅作为 contentId 引用，不拥有行为事实。
     security:
       auth_mode: required

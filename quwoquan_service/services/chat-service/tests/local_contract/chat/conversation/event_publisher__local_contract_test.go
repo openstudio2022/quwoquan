@@ -7,6 +7,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
+	membershipevent "quwoquan_service/services/chat-service/generated/chat/conversation_membership/contract/event"
 	messageevent "quwoquan_service/services/chat-service/generated/chat/message/contract/event"
 )
 
@@ -86,6 +87,67 @@ func TestAssistantMentionDurableStreamUsesDedicatedGeneralTransport(t *testing.T
 	}
 	if len(realtimeMessages) != 0 {
 		t.Fatalf("realtime transport must not contain durable assistant mentions: %#v", realtimeMessages)
+	}
+}
+
+func TestAssistantMembershipDurableStreamCarriesAccountAndPersonaIdentity(t *testing.T) {
+	ctx := context.Background()
+	redis := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		redis,
+		redis,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := NewEventPublisherWithTransport(
+		transport,
+		NewMemberRecipientResolver(func(context.Context, string) ([]string, error) {
+			return []string{"persona-owner"}, nil
+		}),
+	)
+	if err := publisher.PublishRecordedDomainEvent(
+		ctx,
+		"membership-event-1",
+		membershipevent.ConversationMemberAdded,
+		"conversation-1",
+		"persona-owner",
+		map[string]any{
+			"memberId":           "assistant-membership-1",
+			"memberType":         "assistant",
+			"invitedBy":          "persona-owner",
+			"invitedByAccountId": "account-owner",
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.XGroupCreateMkStream(
+		ctx,
+		AssistantMembershipStream,
+		"placement-projector",
+		"0",
+	); err != nil {
+		t.Fatal(err)
+	}
+	messages, err := redis.XReadGroup(
+		ctx,
+		"placement-projector",
+		"worker",
+		map[string]string{AssistantMembershipStream: ">"},
+		1,
+		0,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 ||
+		messages[0].Values["eventId"] != "membership-event-1" ||
+		messages[0].Values["invitedByAccountId"] != "account-owner" ||
+		messages[0].Values["invitedBy"] != "persona-owner" ||
+		messages[0].Values["occurredAt"] == "" {
+		t.Fatalf("assistant membership durable event=%#v", messages)
 	}
 }
 

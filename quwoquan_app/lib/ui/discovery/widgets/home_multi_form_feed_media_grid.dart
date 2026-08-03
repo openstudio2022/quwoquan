@@ -403,7 +403,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     required this.onTap,
   });
 
-  final PostBaseDto dto;
+  final ContentPostViewData dto;
   final bool isDark;
   final bool initialize;
   final bool autoPlay;
@@ -422,10 +422,8 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     final resolver = endpointConfig == null
         ? null
         : MediaDeliveryResolver(endpointConfig);
-    final post = dto;
-    final VideoPostDto? videoDto = post is VideoPostDto ? post : null;
-    final mediaAssetId = videoDto?.mediaAssetId?.trim() ?? '';
-    final mediaAssetVersion = videoDto?.mediaAssetVersion ?? 0;
+    final mediaAssetId = dto.mediaAssetId?.trim() ?? '';
+    final mediaAssetVersion = dto.mediaAssetVersion ?? 0;
     final videoReference = resolver?.tryResolve(
       dto.mediaVideoUrl,
       kind: MediaDeliveryKind.video,
@@ -435,7 +433,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     final adaptiveReference = mediaAssetId.isEmpty || mediaAssetVersion <= 0
         ? null
         : resolver?.tryResolve(
-            videoDto?.hlsCmafMasterManifestUrl,
+            dto.hlsCmafMasterManifestUrl,
             kind: MediaDeliveryKind.video,
             assetId: mediaAssetId,
             version: mediaAssetVersion,
@@ -464,7 +462,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 deliveryReference: videoReference,
                 adaptiveDeliveryReference: adaptiveReference,
                 adaptiveDescriptorVersion:
-                    videoDto?.hlsCmafDescriptorVersion ?? 0,
+                    dto.hlsCmafDescriptorVersion ?? 0,
                 thumbnailReference: coverReference,
                 initialize: initialize,
                 autoPlay: autoPlay,

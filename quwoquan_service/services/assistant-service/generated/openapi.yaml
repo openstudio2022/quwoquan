@@ -22,7 +22,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ListConsentsResponse'
+                                $ref: '#/components/schemas/SkillConsentListSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -265,12 +265,6 @@ paths:
                   required: true
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RestoreAssistantPreferenceRequest'
             responses:
                 "200":
                     description: OK
@@ -303,12 +297,6 @@ paths:
                   required: true
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RevokeAssistantPreferenceRequest'
             responses:
                 "200":
                     description: OK
@@ -380,12 +368,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AssistantRunCommandRequest'
             responses:
                 "200":
                     description: OK
@@ -412,7 +394,7 @@ paths:
                 facet: AssistantRunEventTransport
                 method: streamEvents
                 reader: AssistantRunEventReader
-                slice: AssistantStreamEvent
+                slice: AssistantStreamEventWire
             parameters:
                 - name: runId
                   in: path
@@ -430,7 +412,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AssistantStreamEvent'
+                                $ref: '#/components/schemas/AssistantStreamEventWire'
                 default:
                     description: Runtime failure
                     content:
@@ -506,12 +488,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AssistantRunCommandRequest'
             responses:
                 "200":
                     description: OK
@@ -816,6 +792,125 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /assistant/skill-placements/{surfaceKind}/{surfaceId}:
+        get:
+            operationId: GetSkillSurfacePlacement
+            x-contract-operation-id: assistant.skill_surface_placement.GetSkillSurfacePlacement
+            x-object-id: assistant.skill_surface_placement
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillSurfacePlacementQueryFacade
+                method: getPlacement
+                reader: SkillSurfacePlacementReader
+                slice: SkillSurfacePlacement
+            parameters:
+                - name: surfaceKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: surfaceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillSurfacePlacement'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        put:
+            operationId: PutSkillSurfacePlacement
+            x-contract-operation-id: assistant.skill_surface_placement.PutSkillSurfacePlacement
+            x-object-id: assistant.skill_surface_placement
+            x-actor: account
+            x-application:
+                kind: command
+                facet: SkillSurfacePlacementCommandFacade
+                method: putPlacement
+                aggregateOwner: SkillSurfacePlacement
+            parameters:
+                - name: surfaceKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: surfaceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PutSkillSurfacePlacementRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillSurfacePlacement'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skill-settings:
+        get:
+            operationId: ListSkillUserSettings
+            x-contract-operation-id: assistant.skill_user_setting.ListSkillUserSettings
+            x-object-id: assistant.skill_user_setting
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillUserSettingQueryFacade
+                method: listSettings
+                reader: SkillUserSettingReader
+                slice: SkillUserSettingListSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillUserSettingListSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /assistant/skill-subscriptions:
         get:
             operationId: ListSkillSubscriptions
@@ -1002,6 +1097,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /assistant/skills/{skillId}:
+        get:
+            operationId: GetSkillCatalogItem
+            x-contract-operation-id: assistant.skill_catalog.GetSkillCatalogItem
+            x-object-id: assistant.skill_catalog
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillCatalogQueryFacade
+                method: getSkillCatalogItem
+                reader: SkillCatalogReader
+                slice: AssistantSkillCatalogItemDetailView
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantSkillCatalogItemDetailView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /assistant/skills/{skillId}/consent:
         post:
             operationId: GrantSkillConsent
@@ -1026,14 +1154,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/GrantSkillConsentRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GrantSkillConsentReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1065,8 +1197,88 @@ paths:
                   schema:
                     type: string
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RevokeSkillConsentReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/skills/{skillId}/setting:
+        get:
+            operationId: GetSkillUserSetting
+            x-contract-operation-id: assistant.skill_user_setting.GetSkillUserSetting
+            x-object-id: assistant.skill_user_setting
+            x-actor: account
+            x-application:
+                kind: query
+                facet: SkillUserSettingQueryFacade
+                method: getSetting
+                reader: SkillUserSettingReader
+                slice: SkillUserSetting
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SkillUserSetting'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        put:
+            operationId: PutSkillUserSetting
+            x-contract-operation-id: assistant.skill_user_setting.PutSkillUserSetting
+            x-object-id: assistant.skill_user_setting
+            x-actor: account
+            x-application:
+                kind: command
+                facet: SkillUserSettingCommandFacade
+                method: putSetting
+                aggregateOwner: SkillUserSetting
+            parameters:
+                - name: skillId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PutSkillUserSettingRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PutSkillUserSettingReceipt'
                 default:
                     description: Runtime failure
                     content:
@@ -1505,11 +1717,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantPreferenceListView
             x-contract-placeholder: true
-        AssistantRunCommandRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantRunCommandRequest
-            x-contract-placeholder: true
         AssistantRunEnvelope:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1524,6 +1731,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantSessionListView
+            x-contract-placeholder: true
+        AssistantSkillCatalogItemDetailView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantSkillCatalogItemDetailView
             x-contract-placeholder: true
         AssistantSkillCatalogListView:
             type: object
@@ -1540,10 +1752,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantSteerRunRequest
             x-contract-placeholder: true
-        AssistantStreamEvent:
+        AssistantStreamEventWire:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantStreamEvent
+            x-contract-entity: AssistantStreamEventWire
             x-contract-placeholder: true
         AssistantTaskSlice:
             type: object
@@ -1560,35 +1772,45 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateAssistantSkillSubscriptionCommand
             x-contract-placeholder: true
+        GrantSkillConsentReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GrantSkillConsentReceipt
+            x-contract-placeholder: true
         GrantSkillConsentRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GrantSkillConsentRequest
-            x-contract-placeholder: true
-        ListConsentsResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ListConsentsResponse
             x-contract-placeholder: true
         PageContextReceipt:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PageContextReceipt
             x-contract-placeholder: true
+        PutSkillSurfacePlacementRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PutSkillSurfacePlacementRequest
+            x-contract-placeholder: true
+        PutSkillUserSettingReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PutSkillUserSettingReceipt
+            x-contract-placeholder: true
+        PutSkillUserSettingRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: PutSkillUserSettingRequest
+            x-contract-placeholder: true
         ReportPageContextCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportPageContextCommand
             x-contract-placeholder: true
-        RestoreAssistantPreferenceRequest:
+        RevokeSkillConsentReceipt:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RestoreAssistantPreferenceRequest
-            x-contract-placeholder: true
-        RevokeAssistantPreferenceRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RevokeAssistantPreferenceRequest
+            x-contract-entity: RevokeSkillConsentReceipt
             x-contract-placeholder: true
         RollbackSkillPackageCommand:
             type: object
@@ -1599,6 +1821,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SetAssistantPreferenceRequest
+            x-contract-placeholder: true
+        SkillConsentListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillConsentListSlice
             x-contract-placeholder: true
         SkillPackageActivation:
             type: object
@@ -1629,6 +1856,21 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SkillSubscriptionListView
+            x-contract-placeholder: true
+        SkillSurfacePlacement:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillSurfacePlacement
+            x-contract-placeholder: true
+        SkillUserSetting:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillUserSetting
+            x-contract-placeholder: true
+        SkillUserSettingListSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillUserSettingListSlice
             x-contract-placeholder: true
         UpdateAssistantSkillSubscriptionStatusCommand:
             type: object

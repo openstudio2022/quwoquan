@@ -60,10 +60,9 @@ api_routes:
       path:
         - name: postId
           field: postId
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentCommandResult
-      response_decoder: decodeContentCommentCommandResult
+    response_entity: CommentCommandResult
+    response_body: CommentCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -120,10 +119,9 @@ api_routes:
           field: postId
         - name: commentId
           field: commentId
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentCommandResult
-      response_decoder: decodeContentCommentCommandResult
+    response_entity: CommentCommandResult
+    response_body: CommentCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -183,10 +181,9 @@ api_routes:
           field: postId
         - name: commentId
           field: commentId
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentCommandResult
-      response_decoder: decodeContentCommentCommandResult
+    response_entity: CommentCommandResult
+    response_body: CommentCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -246,10 +243,9 @@ api_routes:
           field: postId
         - name: commentId
           field: commentId
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentCommandResult
-      response_decoder: decodeContentCommentCommandResult
+    response_entity: CommentCommandResult
+    response_body: CommentCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -309,10 +305,9 @@ api_routes:
       path:
         - name: commentId
           field: commentId
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentCommandResult
-      response_decoder: decodeContentCommentCommandResult
+    response_entity: CommentCommandResult
+    response_body: CommentCommandResult
+    response_body_kind: object
     security:
       auth_mode: required
       principal: persona
@@ -372,17 +367,13 @@ api_routes:
     response_entity: CommentPageSlice
     response_body: CommentPageSlice
     response_body_kind: page
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentPageSlice
-      response_decoder: decodeContentCommentPageSlice
     description: '一级评论 named page reader；仅 BSON projection，不返回 Comment aggregate。
 
       sort=hot（默认，hotScore 投影分驱动）或 latest；置顶段永远在前；仅返回 active。
 
       投影组合 authorIpLocation 快照、authorLiked（Post 作者赞过事实）与
 
-      viewerRelation（viewer→评论作者关注/互关事实，来自 persona_follow_projection）。
+      viewerRelation（viewer→评论作者关注/互关事实，来自 Comment 对 PersonaRelationship 事件维护的对象本地具名投影）。
 
 '
     security:
@@ -444,10 +435,6 @@ api_routes:
     response_entity: ReplyPageSlice
     response_body: ReplyPageSlice
     response_body_kind: page
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentCommentReplyPageSlice
-      response_decoder: decodeContentCommentReplyPageSlice
     description: 二级回复 named page reader；仅 BSON projection，不返回 Comment aggregate。
     security:
       auth_mode: optional
@@ -503,10 +490,6 @@ api_routes:
     response_entity: AuthorCommentPageSlice
     response_body: AuthorCommentPageSlice
     response_body_kind: page
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentAuthorCommentPageSlice
-      response_decoder: decodeContentAuthorCommentPageSlice
     description: 当前 persona 发出的评论 named page reader。
     security:
       auth_mode: required
@@ -562,10 +545,6 @@ api_routes:
     response_entity: ReceivedCommentPageSlice
     response_body: ReceivedCommentPageSlice
     response_body_kind: page
-    client_contract:
-      dart_import: ../content/comment_contracts.dart
-      response_type: ContentReceivedCommentPageSlice
-      response_decoder: decodeContentReceivedCommentPageSlice
     description: 当前 persona 作为被引用 Post 作者收到的评论 named page reader。
     security:
       auth_mode: required

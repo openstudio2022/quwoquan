@@ -1,0 +1,41 @@
+kind: aggregate_root
+description: >-
+  账号对单个官方 Skill 的显式启用状态、schema-bound 配置、记忆策略和 Connector
+  引用聚合。对象不存在时由 active SkillPackageRelease 决定响应式 Skill 的缺省可用性；
+  本对象不拥有授权、主动触发或 Connector 凭证。
+identity:
+  fields: [id]
+  version_field: revision
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: accountOwner
+  on_delete: cascade
+  reference_fields: [accountId]
+  target_object: user.UserAccount
+local_identity_reasons:
+  skillId: >-
+    active SkillPackageRelease 内的稳定 Skill key；通过 typed catalog reader 校验，
+    不作为本聚合 Store 身份或授权事实
+capabilities: [commandable, queryable, idempotent_commands]
+taggable: false
+vector_enabled: false
+business_rules:
+- 同一 accountId + skillId 最多一个设置；不存在记录表示采用 active package 缺省，不持久化隐式 enabled 行
+- status 只控制个人响应式 Skill 是否可路由，不修改 SkillConsent 或 SkillSubscription
+- configurationData 必须通过 active package 中 configurationSchemaDigest 对应 schema 校验；digest 变化时不得静默迁移
+- connectorConnectionRefs 只保存不透明引用；能力是否可用仍须在每个 Run 安全边界与 Consent、Connector grant 和 runtime availability 求交
+- memoryPolicy 不能扩大 package MemoryProfile 或平台隐私上限；共享 surface 永远不得读取个人记忆设置
+- 每次写入使用 expectedRevision CAS，并将聚合、幂等回执和审计事件在同一事务提交
+lifecycle:
+  state_field: status
+  states: [enabled, disabled]
+  optimistic_concurrency: revision
+  idempotency: command_receipt

@@ -13,6 +13,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/skill"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
@@ -42,11 +43,11 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 			"conv-e2e",
 		):
 			_ = json.NewEncoder(w).Encode(struct {
-				CreatorMember        bool `json:"creatorMember"`
-				AssistantSkillMember bool `json:"assistantSkillMember"`
+				CreatorMember   bool `json:"creatorMember"`
+				AssistantMember bool `json:"assistantMember"`
 			}{
-				CreatorMember:        true,
-				AssistantSkillMember: assistantPresent,
+				CreatorMember:   true,
+				AssistantMember: assistantPresent,
 			})
 			return
 		case serviceclients.ChatListAssistantGroundingMessagesPath(
@@ -108,6 +109,11 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		},
 		nil,
 	)
+	loop.Catalog = skillpkg.StaticLoader{Manifests: []skillpkg.Manifest{{
+		SkillID:     "fallback_general_search",
+		DomainID:    "fallback_general_search",
+		DisplayName: "通用搜索助手",
+	}}}
 	runCommands := runruntime.NewCommandService(
 		integrationRunRepository,
 		runruntime.SessionAuthorizerFunc(func(
@@ -117,39 +123,16 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		) error {
 			return nil
 		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
 		time.Now,
 		nil,
+		integrationRunPolicyResolver(),
 	)
 	runWorker := runruntime.NewDurableWorker(
 		integrationRunRepository,
 		integrationRunRepository,
-		orchestration.NewDurableRunExecutorWithPolicyResolver(
-			loop,
-			func(
-				_ context.Context,
-				request runruntime.ExecutionRequest,
-			) (assistant.AssistantFrozenPolicySelection, error) {
-				skillID := request.RequestedSkillID
-				if skillID == "" {
-					skillID = "general"
-				}
-				return assistant.AssistantFrozenPolicySelection{
-					PolicyID:        "assistant-default",
-					ReleaseDigest:   integrationPolicyReleaseDigest,
-					Cohort:          "control",
-					RolloutRevision: 1,
-					RuleID:          "chat-mention-api-integration",
-					Template: assistant.AssistantFrozenPolicyTemplate{
-						TemplateID:      "chat-mention-api-integration",
-						SkillID:         skillID,
-						DomainID:        "assistant",
-						PromptPolicy:    "answer the grounded chat mention",
-						AllowedTools:    []string{},
-						SearchIntensity: "medium",
-					},
-				}, nil
-			},
-		),
+		orchestration.NewDurableRunExecutor(loop),
 		"api-integration-chat-mention-worker",
 	)
 	workerContext, cancelWorker := context.WithCancel(ctx)
@@ -157,6 +140,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	go runWorker.Run(workerContext)
 	service := newIntegrationAssistantService(
 		orchestration.WithAgentLoop(loop),
+		orchestration.WithSkillCatalog(loop.Catalog),
 		orchestration.WithRunCommandService(runCommands),
 		orchestration.WithChatGroundingClient(chatGrounding),
 	)
@@ -173,10 +157,10 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-12",
 		"seq":               "12",
+		"senderAccountId":   "account-a",
 		"senderId":          "user-a",
 		"content":           "@小趣 总结一下这段路线讨论",
 		"assistantMemberId": "assistant",
-		"assistantSkillId":  "general",
 	}); err != nil {
 		t.Fatalf("XAdd: %v", err)
 	}
@@ -221,10 +205,10 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-13",
 		"seq":               "13",
+		"senderAccountId":   "account-a",
 		"senderId":          "user-a",
 		"content":           "@小趣 这条不应回复",
 		"assistantMemberId": "assistant",
-		"assistantSkillId":  "general",
 	}); err != nil {
 		t.Fatalf("XAdd removed-member event: %v", err)
 	}
@@ -247,12 +231,20 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 type integrationChatMentionSkillRuntime struct{}
 
 func (integrationChatMentionSkillRuntime) SelectSkill(
-	context.Context,
-	assistant.AssistantTurn,
+	_ context.Context,
+	turn assistant.AssistantTurn,
 ) (orchestration.SkillSelection, error) {
+	skillID := turn.SkillID
+	if skillID == "" {
+		skillID = "fallback_general_search"
+	}
+	domainID := turn.DomainID
+	if domainID == "" {
+		domainID = "assistant"
+	}
 	return orchestration.SkillSelection{
-		SkillID:  "general",
-		DomainID: "assistant",
+		SkillID:  skillID,
+		DomainID: domainID,
 	}, nil
 }
 

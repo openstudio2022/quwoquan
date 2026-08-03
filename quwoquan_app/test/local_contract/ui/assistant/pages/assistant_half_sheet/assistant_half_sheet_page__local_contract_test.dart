@@ -404,7 +404,7 @@ class _RecordingPersonalizationFacet implements AssistantPersonalizationFacet {
     return const PageContextReceipt(
       accepted: true,
       contextKey: 'ctx_uat',
-      expiresAt: null,
+      expiresAt: '2026-08-02T12:05:00Z',
     );
   }
 

@@ -58,6 +58,17 @@
   - 交付给下游的结果：维护 Homepage 及其聚合读模型，解析稳定主页引用并交付可导航对象页，形成该场景中本领域负责的终态。
   - 不负责：不拥有内容正文、圈子、账号或聊天会话事实。
 
+- [`JNY-013 / SCN-030`](../spec.md#scn-030)
+  - 本领域负责：提供 Place/Entity 公开事实、状态和引用供计划与来源比较。
+  - 进入条件：对象可见且 Reader authority 有效。
+  - 交付给下游的结果：typed entity/place reference 与 freshness。
+  - 不负责：不拥有 Trip Item 或 Assistant Context。
+- [`JNY-013 / SCN-032`](../spec.md#scn-032)
+  - 本领域负责：解析 Moment/Post 所关联的地点实体并提供地图展示所需公开事实。
+  - 进入条件：地点引用有效且符合可见范围。
+  - 交付给下游的结果：地点引用、粗粒度地图语义和失效状态。
+  - 不负责：不保存连续轨迹或 Moment。
+
 ## 4. 业务能力
 
 - [`homepage-claim-maintain-and-offline`](./homepage-claim-maintain-and-offline/spec.md)：提供主页从候选、发布、认领维护到现实对象消亡后软下线并保留记录的完整治理链路。

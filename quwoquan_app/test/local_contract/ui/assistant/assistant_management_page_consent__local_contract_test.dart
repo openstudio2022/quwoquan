@@ -28,36 +28,42 @@ class _AssistantConsentFacet implements AssistantSkillConsentFacet {
   int listCallCount = 0;
 
   @override
-  Future<AssistantSkillConsent> grantSkillConsent({
+  Future<SkillConsent> grantSkillConsent({
     required String skillId,
-    String grantedScope = kPersonalContentAccessSkillId,
+    required List<String> grantedScopes,
     required String clientRequestId,
   }) async {
     _granted = true;
-    return AssistantSkillConsent(
+    return SkillConsent(
+      id: 'consent:$skillId',
+      accountId: 'owner',
       skillId: skillId,
-      grantedScope: grantedScope,
+      grantedScopes: grantedScopes,
+      grantedAt: DateTime.utc(2026, 3, 12, 10).toIso8601String(),
+      revokedAt: null,
       granted: true,
-      updatedAt: DateTime.utc(2026, 3, 12, 10),
     );
   }
 
   @override
-  Future<List<AssistantSkillConsent>> listConsents() async {
+  Future<List<SkillConsent>> listConsents() async {
     listCallCount += 1;
     if (listFailuresRemaining > 0) {
       listFailuresRemaining -= 1;
       throw StateError('consent unavailable');
     }
     if (!_granted) {
-      return const <AssistantSkillConsent>[];
+      return const <SkillConsent>[];
     }
-    return <AssistantSkillConsent>[
-      AssistantSkillConsent(
+    return <SkillConsent>[
+      SkillConsent(
+        id: 'consent:$kPersonalContentAccessSkillId',
+        accountId: 'owner',
         skillId: kPersonalContentAccessSkillId,
-        grantedScope: kPersonalContentAccessSkillId,
+        grantedScopes: const <String>[kPersonalContentAccessScope],
+        grantedAt: DateTime.utc(2026, 3, 12, 9).toIso8601String(),
+        revokedAt: null,
         granted: true,
-        updatedAt: DateTime.utc(2026, 3, 12, 9),
       ),
     ];
   }

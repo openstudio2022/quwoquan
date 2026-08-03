@@ -12,14 +12,14 @@ final class RemoteCallMediaControlWriter implements CallMediaControlWriter {
   final RtcCallInvocationContextFactory invocationContext;
 
   @override
-  Future<CallSessionDto> toggleMute(RtcToggleMuteCommand command) =>
+  Future<CallSession> toggleMute(RtcToggleMuteCommand command) =>
       client.rtcCallSessionToggleMute(
         command,
         context: invocationContext(RtcRequestPageIds.toggleMute, command: true),
       );
 
   @override
-  Future<CallSessionDto> toggleCamera(RtcToggleCameraCommand command) =>
+  Future<CallSession> toggleCamera(RtcToggleCameraCommand command) =>
       client.rtcCallSessionToggleCamera(
         command,
         context: invocationContext(

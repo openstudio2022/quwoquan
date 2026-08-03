@@ -104,7 +104,7 @@ def test_curl_layer_content_failure_does_not_open_breaker(monkeypatch):
 
 
 def test_stage_no_progress_timeout_runtime_policy_contract(monkeypatch):
-    assert stage_no_progress_timeout_seconds() == 900.0
+    assert stage_no_progress_timeout_seconds() == 1800.0
     monkeypatch.setattr(
         network_breaker,
         "active_runtime_policy",

@@ -70,7 +70,7 @@ type AuthService struct {
 	shardDirectory           *ShardDirectory
 	carrierPhoneResolver     CarrierPhoneResolver
 	otp                      OtpCodeStore
-	authenticationChallenges *challengeapp.AuthenticationChallengeCommandFacade
+	authenticationChallenges challengeapp.CommandFacet
 	otpCodeSealer            OTPCodeSealer
 	otpCodeGenerator         func() (string, error)
 	externalClient           ExternalInteractionClient
@@ -221,7 +221,7 @@ func WithOtpCodeStore(store OtpCodeStore) AuthServiceOption {
 }
 
 func WithAuthenticationChallenges(
-	facade *challengeapp.AuthenticationChallengeCommandFacade,
+	facade challengeapp.CommandFacet,
 ) AuthServiceOption {
 	return func(s *AuthService) {
 		if facade != nil {

@@ -9,22 +9,22 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	ErrSkillCatalogConsentUnavailable = errors.New("ASSISTANT.SYSTEM.skill_catalog_consent_unavailable")
-	ErrSkillCatalogInvalidArgument    = errors.New("ASSISTANT.USER.skill_catalog_invalid_argument")
-	ErrSkillCatalogUnauthorized       = errors.New("ASSISTANT.USER.skill_catalog_unauthorized")
-	ErrSkillCatalogUnavailable        = errors.New("ASSISTANT.SYSTEM.skill_catalog_unavailable")
+	ErrSkillCatalogInvalidArgument = errors.New("ASSISTANT.USER.skill_catalog_invalid_argument")
+	ErrSkillCatalogNotFound        = errors.New("ASSISTANT.USER.skill_catalog_not_found")
+	ErrSkillCatalogUnauthorized    = errors.New("ASSISTANT.USER.skill_catalog_unauthorized")
+	ErrSkillCatalogUnavailable     = errors.New("ASSISTANT.SYSTEM.skill_catalog_unavailable")
 )
-
-// AppErrorFromSkillCatalogConsentUnavailable returns *AppError for ASSISTANT.SYSTEM.skill_catalog_consent_unavailable (user_message from errors.yaml).
-func AppErrorFromSkillCatalogConsentUnavailable(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_catalog_consent_unavailable")
-	return rterr.NewAppError(code, "授权状态暂时无法读取，请稍后重试", debugMessage).WithMetadata("skill_catalog_consent_unavailable", 503).WithRecovery("retry", 3)
-}
 
 // AppErrorFromSkillCatalogInvalidArgument returns *AppError for ASSISTANT.USER.skill_catalog_invalid_argument (user_message from errors.yaml).
 func AppErrorFromSkillCatalogInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_catalog_invalid_argument")
 	return rterr.NewAppError(code, "技能目录请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromSkillCatalogNotFound returns *AppError for ASSISTANT.USER.skill_catalog_not_found (user_message from errors.yaml).
+func AppErrorFromSkillCatalogNotFound(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_catalog_not_found")
+	return rterr.NewAppError(code, "这个技能当前不可用", debugMessage).WithMetadata("skill_catalog_not_found", 404).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSkillCatalogUnauthorized returns *AppError for ASSISTANT.USER.skill_catalog_unauthorized (user_message from errors.yaml).

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
@@ -148,7 +150,52 @@ void main() {
       expect(sent, isTrue);
       expect(writer.lastCommand?.mentions, contains('assistant'));
     });
+
+    test(
+      'markConversationRead ignores completion after provider disposal',
+      () async {
+        final repository = _DelayedReadReceiptRepository();
+        final container = ProviderContainer(
+          overrides: [
+            chatRepositoryCompositionProvider.overrideWithValue(repository),
+          ],
+        );
+        final notifier = container.read(
+          chatMessageProvider('fixture_conv_direct').notifier,
+        );
+        await notifier.loadMessages();
+
+        final pending = notifier.markConversationRead();
+        await repository.started.future;
+        container.dispose();
+        repository.complete();
+
+        expect(await pending, isFalse);
+      },
+    );
   });
+}
+
+class _DelayedReadReceiptRepository extends MockChatRepository {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _completion = Completer<void>();
+
+  @override
+  Future<void> markAsRead({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await _completion.future;
+  }
+
+  void complete() {
+    if (!_completion.isCompleted) {
+      _completion.complete();
+    }
+  }
 }
 
 class _TrackingMessageWriter implements ChatMessageCommandWriter {

@@ -6,19 +6,23 @@
 
 ## 1. 能力目标
 
-让推荐和搜索使用服务端权威分桶并把实际流量归因到同一实验事实；未绑定线上流量的控制面操作必须 fail-closed。
+让 Product Ops 以公开命令原子发布唯一实验策略，让推荐和搜索消费同一
+`ExperimentPolicyActivated` durable fact 完成服务端权威分桶，并把实际流量归因到同一实验事实。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
+- Product Ops Experiment 聚合的创建、rollout、不可变 revision 与事务 outbox
+- `ExperimentPolicyActivated` 是 recommendation/search 唯一的 runtime policy 分发轨
 - runtime/experiments 统一 hash resolver 与 recommendation/search 复用
 - 推荐曝光/行为和搜索查询事实携带服务端权威 experimentBucket
-- Product Ops Experiment/ExperimentAssignmentFact 未绑定 runtime 前 commercial blocked 且 Portal 无入口
+- 空环境必须经已授权的公开 command 创建首个策略，禁止数据库 seed、服务私有配置或隐式 fallback
+- Alpha/Beta/Gamma 使用 target-scoped 受管非生产 operator port；Prod 只接受正式 OIDC operator
 
 ### Out of Scope
 
-- Product Ops 控制面向 runtime 的 durable policy 发布与 assignment 回写；该能力启用前须另行冻结规格和 gamma 对账
+- Portal 产品交互与生产 rollout 审批流程；它们不能成为 runtime policy 的第二来源
 
 ## 3. Journey / Scenario 贡献
 
@@ -42,19 +46,20 @@
 
 - 推荐 recpolicy 与搜索实验复用 runtime/experiments 的单一 AssignBucket 实现。
 - runtime assignment policy 的唯一运行身份由完整策略内容确定性生成 `sha256` 摘要；缺失、禁用或非法策略直接失败，禁止静态版本、not-found 哨兵与隐式 control/50:50 fallback。
-- Product Ops `experimentRevision` 仅冻结 Experiment 聚合的并发修订号，作为尚未接入热路径的 immutable assignment fact 历史键；它不是 runtime 策略身份，不得成为第二 resolver 或覆盖内容摘要。
+- Product Ops `experimentRevision` 冻结 Experiment 聚合的并发修订号和 immutable assignment fact 历史键；它不是 runtime 策略身份，不得成为第二 resolver 或覆盖内容摘要。
 - 推荐实际曝光/行为、搜索查询事实记录服务端权威 experimentBucket，可用于效果归因。
-- 未绑定线上流量的 Product Ops Experiment/ExperimentAssignmentFact 操作保持 default-deny。
-- Portal 不暴露实验目录、rollout 或 assignment 统计，避免将离线控制面事实冒充线上结果。
-- verify_experiment_single_track.py 阻断第二 resolver、热路径回接冻结 assignment API 或 Portal 入口回归。
+- 首个策略和后续 rollout 只经 Product Ops 公开 command、PostgreSQL 聚合与事务 outbox 生效；Search/Recommendation 禁止私有策略 seed。
+- Alpha/Beta/Gamma 的 operator substitute 仅限对应 local target 和短时 scope；Prod、release 与未知环境必须配置真实 OIDC 并 fail-closed。
+- Portal 是否提供入口不改变 Product Ops contract、权限、审计与 production approval 要求。
+- verify_experiment_single_track.py 阻断第二 resolver、私有 runtime config、直接存储 seed 或 assignment write API 回归。
 
 <a id="req-002"></a>
 ### REQ-002 分桶口径唯一：`experimentBucket` 维度定义复用 `event-schema-governance`，不得各端各自维护第二套桶映射
 
 - 分桶口径唯一：`experimentBucket` 维度定义复用 `event-schema-governance`，不得各端各自维护第二套桶映射。
 - 分桶算法唯一：推荐与搜索必须复用 `runtime/experiments`；禁止业务服务调用未绑定线上热路径的 assignment 接口形成第二套分桶。
-- runtime 策略身份唯一：只接受策略内容摘要；搜索的 bucket 权重必须来自 search-service canonical runtime config，缺失或权重不闭合时启动/请求 fail-closed。
-- 控制面 fail-closed：未接入实际线上流量的实验控制面必须 default-deny 且无 Portal 入口，不得把离线 assignment 事实冒充线上实验结果。
+- runtime 策略身份唯一：只接受 `ExperimentPolicyActivated` 内容摘要；搜索和推荐不得从服务私有 config 读取 bucket 权重，策略缺失或权重不闭合时 readiness/请求 fail-closed。
+- 控制面 fail-closed：缺少有效 operator、scope、幂等键、revision、outbox 或 consumer 投影时不产生策略成功回执；Prod 不得使用非生产 operator substitute。
 - 实验指标必须复用 `analytics-metric-dictionary` 主口径，不得绕过字典直接进 dashboard。
 
 ## 6. 契约与依赖
@@ -72,6 +77,6 @@
 - WHEN 参与者发起“experiment bucketing and rollout 能力”对应动作。
 - THEN 推荐 recpolicy 与搜索实验复用 runtime/experiments 的单一 AssignBucket 实现。
 - THEN 推荐实际曝光/行为、搜索查询事实记录服务端权威 experimentBucket，可用于效果归因。
-- THEN 未绑定线上流量的 Product Ops Experiment/ExperimentAssignmentFact 操作保持 default-deny。
-- THEN Portal 不暴露实验目录、rollout 或 assignment 统计，避免将离线控制面事实冒充线上结果。
-- THEN verify_experiment_single_track.py 阻断第二 resolver、热路径回接冻结 assignment API 或 Portal 入口回归。
+- THEN 空环境经 Product Ops 公开 command 创建首个策略，事务 outbox 发布唯一 `ExperimentPolicyActivated`，Search/Recommendation 投影同一 revision 后才 ready。
+- THEN Alpha/Beta/Gamma 只接受 target-scoped 短时非生产 operator；Prod 只接受正式 OIDC operator。
+- THEN verify_experiment_single_track.py 阻断第二 resolver、私有 runtime config、直接存储 seed 或 assignment write API 回归。

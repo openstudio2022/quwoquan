@@ -1,2 +1,24 @@
 backend: mongodb
 role: projection
+collections:
+  chat_inbox_views:
+    entity: ChatInboxView
+    role: projection
+    description: Persona 与 Conversation 复合身份的唯一物化收件箱视图；查询不得回扫 Conversation、Message 或 ConversationUserState。
+    indexes:
+    - name: uq_chat_inbox_views_identity
+      keys:
+        userId: 1
+        conversationId: 1
+      unique: true
+    - name: idx_chat_inbox_views_page
+      keys:
+        userId: 1
+        tombstoned: 1
+        pinned: -1
+        lastMessageTime: -1
+        conversationId: 1
+  chat_inbox_view_checkpoints:
+    entity: ChatInboxView
+    role: projection
+    description: 各 typed source 独立的 durable checkpoint；重建与在线投影共用同一单调水位语义。

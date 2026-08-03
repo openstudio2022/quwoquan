@@ -64,6 +64,7 @@
         "modelFamily": {
           "type": "string",
           "enum": [
+            "auto",
             "claude",
             "composer",
             "gemini",
@@ -81,6 +82,7 @@
         "reviewModelFamily": {
           "type": "string",
           "enum": [
+            "auto",
             "claude",
             "composer",
             "gemini",

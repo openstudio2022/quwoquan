@@ -58,6 +58,11 @@ def configure_test_auth_environment() -> None:
                         "pool": {},
                     },
                 },
+                "ranked_window": {
+                    "quota_shard_count": 256,
+                    "maximum_live_records_per_shard": 128,
+                    "maximum_live_bytes_per_shard": 134217728,
+                },
             },
             ensure_ascii=False,
             separators=(",", ":"),

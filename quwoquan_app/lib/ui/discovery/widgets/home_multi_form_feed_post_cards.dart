@@ -26,7 +26,7 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
   final Key cardContainerKey;
   final Key moreButtonKey;
   final bool wideLayout;
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final bool inlineImageCarousel;
   final ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal;
@@ -489,7 +489,7 @@ class _FollowingArticleCard extends StatelessWidget {
     required this.onMoreTap,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final bool isDark;
   final int summaryLineLimit;
   final VoidCallback onTap;
@@ -549,9 +549,7 @@ class _FollowingArticleCard extends StatelessWidget {
   }
 
   String get _articleTemplateLabel {
-    final templateId = item is ArticlePostDto
-        ? (item as ArticlePostDto).articleTemplate
-        : '';
+    final templateId = item.type == 'article' ? item.articleTemplate : '';
     switch (templateId) {
       case 'ritual':
         return '礼记';
@@ -727,7 +725,7 @@ class _AuthorMetaLine extends StatelessWidget {
     required this.color,
   });
 
-  final PostBaseDto item;
+  final ContentPostViewData item;
   final String fallbackText;
   final Color color;
 

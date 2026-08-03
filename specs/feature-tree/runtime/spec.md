@@ -98,6 +98,22 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
   - 交付给下游的结果：提供启动、导航、传输、外部 Provider、错误恢复和环境装配机制，不持有业务对象事实，供 `discovery-content` 继续处理。
   - 不负责：不推断或改写业务对象语义，不以 fallback 伪造业务成功。
 
+- [`JNY-009 / SCN-034`](../spec.md#scn-034)
+  - 本领域负责：提供 Connector/Provider/native continuation 的 typed capability、环境 Binding 与 conformance readiness。
+  - 进入条件：目标 capability 在当前环境可用且授权成立。
+  - 交付给下游的结果：结构化 readiness、invocation/native receipt 或可恢复 unavailable。
+  - 不负责：不拥有 Skill/Run 或用户业务事实。
+- [`JNY-013 / SCN-030`](../spec.md#scn-030)
+  - 本领域负责：提供 Public Web、地图、日历/提醒和旅行外链的受控运行边界。
+  - 进入条件：网络、Connector 和 surface policy 允许。
+  - 交付给下游的结果：带来源/能力状态的 observation 或 receipt。
+  - 不负责：不规划 Trip、不预订支付。
+- [`JNY-013 / SCN-031`](../spec.md#scn-031)
+  - 本领域负责：为主动提醒提供受管 Provider、后台执行与真实投递能力。
+  - 进入条件：Trigger/Subscription 已由 Assistant 验证。
+  - 交付给下游的结果：可追踪投递或结构化失败。
+  - 不负责：不决定提醒内容和受众。
+
 ## 4. 业务能力
 
 - [`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。

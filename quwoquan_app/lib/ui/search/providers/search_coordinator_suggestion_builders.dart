@@ -198,13 +198,7 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
               facet: selectionFacet,
             ),
           );
-      final remoteEntry = RecentSearchEntryView(
-        entryId: remoteContractEntry.entryId,
-        query: remoteContractEntry.query,
-        scope: SearchScope.fromWire(remoteContractEntry.scope),
-        facet: remoteContractEntry.facet,
-        updatedAt: remoteContractEntry.updatedAt ?? now,
-      );
+      final remoteEntry = RecentSearchEntryView.fromWire(remoteContractEntry);
       if (!_isMounted || !identical(store, _localStore)) {
         return;
       }

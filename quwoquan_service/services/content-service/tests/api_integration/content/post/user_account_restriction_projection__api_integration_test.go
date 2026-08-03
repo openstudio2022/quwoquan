@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-
 	accountrestriction "quwoquan_service/runtime/accountrestriction"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	accountclosureapp "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/application"
@@ -41,7 +39,6 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 			postID, terminalID, unrelatedID,
 		}}})
 		_, _ = db.Collection("comments").DeleteMany(ctx, bson.M{"_id": commentID})
-		_, _ = db.Collection("rm_discovery_feed").DeleteMany(ctx, bson.M{"postId": postID})
 		_, _ = db.Collection("content_user_account_restrictions").DeleteMany(ctx, bson.M{})
 		_, _ = db.Collection("content_user_account_restriction_inbox").DeleteMany(ctx, bson.M{"_id": bson.M{"$in": eventIDs}})
 		_, _ = db.Collection("content_user_account_restriction_watermarks").DeleteMany(ctx, bson.M{})
@@ -79,13 +76,6 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 	}); err != nil {
 		t.Fatalf("seed restriction comment: %v", err)
 	}
-	if _, err := db.Collection("rm_discovery_feed").InsertOne(ctx, bson.M{
-		"postId": postID, "authorId": personaID, "status": "published",
-		"visibility": "public", "contentType": "article", "publishedAt": baseTime,
-	}); err != nil {
-		t.Fatalf("seed restriction recommendation candidate: %v", err)
-	}
-
 	closureStore, err := accountclosure.NewMongoStore(
 		db,
 		accountClosureIntegrationDigestor(t),
@@ -115,11 +105,11 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 		baseTime,
 	)
 	result, err := projection.Apply(ctx, suspension)
-	if err != nil || result.Replayed || result.Stale || result.Affected != 4 {
+	if err != nil || result.Replayed || result.Stale || result.Affected != 3 {
 		t.Fatalf("apply content suspension: result=%+v err=%v", result, err)
 	}
 	replay, err := projection.Apply(ctx, suspension)
-	if err != nil || !replay.Replayed || replay.Stale || replay.Affected != 4 {
+	if err != nil || !replay.Replayed || replay.Stale || replay.Affected != 3 {
 		t.Fatalf("replay content suspension: result=%+v err=%v", replay, err)
 	}
 	conflict := suspension
@@ -139,13 +129,11 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 	if _, found, err := postReader.FindPostDetail(ctx, postports.NewPostID(postID)); err != nil || found {
 		t.Fatalf("restricted Post remained in public detail: found=%v err=%v", found, err)
 	}
-	commentReader := persistence.NewMongoCommentDataAdapter(db)
+	commentReader := newMongoCommentDataAdapter(t, db)
 	page, err := commentReader.ListByPost(ctx, unrelatedID, commentports.PageRequest{Limit: 20})
 	if err != nil || len(page.Items) != 0 || page.Total != 0 {
 		t.Fatalf("restricted Comment remained public: page=%+v err=%v", page, err)
 	}
-	assertAccountRestrictedProjectionField(t, db, "rm_discovery_feed", bson.M{"postId": postID}, true)
-
 	restoration := contentAccountRestrictionEvent(
 		"event_content_restore",
 		accountrestriction.UserRestoredEventName,
@@ -156,7 +144,7 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 		baseTime.Add(time.Minute),
 	)
 	result, err = projection.Apply(ctx, restoration)
-	if err != nil || result.Replayed || result.Stale || result.Affected != 4 {
+	if err != nil || result.Replayed || result.Stale || result.Affected != 3 {
 		t.Fatalf("apply content restoration: result=%+v err=%v", result, err)
 	}
 	if _, found, err := postReader.FindPublishedFeedPost(ctx, postports.NewPostID(postID)); err != nil || !found {
@@ -193,7 +181,6 @@ func TestContentAccountRestrictionProjectionIsReversibleMonotonicAndHidesPublicR
 	if _, found, err := postReader.FindPublishedFeedPost(ctx, postports.NewPostID(postID)); err != nil || !found {
 		t.Fatalf("stale suspension reverted restored visibility: found=%v err=%v", found, err)
 	}
-	assertAccountRestrictedProjectionField(t, db, "rm_discovery_feed", bson.M{"postId": postID}, false)
 }
 
 func contentAccountRestrictionEvent(
@@ -215,29 +202,5 @@ func contentAccountRestrictionEvent(
 		PersonaIDs: []string{personaID}, AccountState: state,
 		AuthEpoch: authEpoch, DecisionRef: "decision_" + eventID,
 		OccurredAt: occurredAt.UTC(),
-	}
-}
-
-func assertAccountRestrictedProjectionField(
-	t *testing.T,
-	db *mongo.Database,
-	collection string,
-	filter bson.M,
-	want bool,
-) {
-	t.Helper()
-	var document struct {
-		AccountRestricted bool `bson:"accountRestricted"`
-	}
-	if err := db.Collection(collection).FindOne(t.Context(), filter).Decode(&document); err != nil {
-		t.Fatalf("read %s restriction projection: %v", collection, err)
-	}
-	if document.AccountRestricted != want {
-		t.Fatalf(
-			"%s accountRestricted=%v, want %v",
-			collection,
-			document.AccountRestricted,
-			want,
-		)
 	}
 }

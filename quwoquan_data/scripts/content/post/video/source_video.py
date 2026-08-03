@@ -137,10 +137,12 @@ class SourcedVideoEvidence:
             "original_authorized",
             "replaced_with_licensed_track",
             "no_audio",
+            "unverified",
         }
         if self.audio_rights_status not in allowed_audio:
             issues.append("sourceVideo audioRightsStatus is not publishable")
         allowed_admission = {
+            "research_release",
             "commercial_release",
             "risk_accepted_attribution_only",
         }
@@ -148,7 +150,8 @@ class SourcedVideoEvidence:
             issues.append("sourceVideo publicationAdmission is not publishable")
         if (
             self.commercial_authorization_status == "not_verified"
-            and self.publication_admission != "risk_accepted_attribution_only"
+            and self.publication_admission
+            not in {"research_release", "risk_accepted_attribution_only"}
         ):
             issues.append(
                 "sourceVideo not_verified authorization requires risk acceptance"
@@ -164,6 +167,13 @@ class SourcedVideoEvidence:
         ):
             issues.append(
                 "sourceVideo commercial release requires verified authorization proof"
+            )
+        if (
+            self.audio_rights_status == "unverified"
+            and self.publication_admission != "research_release"
+        ):
+            issues.append(
+                "sourceVideo unverified audio is restricted to research_release"
             )
         return tuple(issues)
 

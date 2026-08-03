@@ -21,14 +21,17 @@ class PublishSettings {
     this.entityNames = const <String>[],
     this.assistantUsePolicy = 'inherit',
     this.captureDisclosure = kDefaultCaptureDisclosure,
-    this.captureMetadata = MediaCaptureMetadata.empty,
+    this.captureMetadata = ExtractedMediaCaptureMetadata.empty,
   });
 
   final bool isPublic;
   final String locationName;
 
-  /// 选中 POI（codegen [LocationPoiDto]）；未选位置时为 null。
-  final LocationPoiDto? locationPoi;
+  /// 选中的页面位置数据；未选位置时为 null。
+  ///
+  /// Cloud wire 只在 `CreateLocationOption.fromWire` 边界进入页面模型，草稿不会
+  /// 持久化生成契约对象，避免形成第二套 wire decoder。
+  final CreateLocationOption? locationPoi;
 
   /// 由 [locationPoi] 解析出的行政区标签路径（`Topic/地理/行政区/...`）。
   ///
@@ -53,28 +56,28 @@ class PublishSettings {
 
   /// 创作者允许上报的拍摄元数据分组。默认四组全开。
   ///
-  /// 关闭某组后，[MediaCaptureMetadata.discloseOnly] 会在离开端侧前裁剪该组，
+  /// 关闭某组后，[ExtractedMediaCaptureMetadata.discloseOnly] 会在离开端侧前裁剪该组，
   /// 服务端据此撤回该组已派生的 tagRef 与交集事实。
-  final Set<MediaCaptureDisclosureGroup> captureDisclosure;
+  final Set<CaptureMetadataDisclosureGroup> captureDisclosure;
 
-  /// 从首张素材解析出的拍摄事实，未解析到时为 [MediaCaptureMetadata.empty]。
+  /// 从首张素材解析出的拍摄事实，未解析到时为 [ExtractedMediaCaptureMetadata.empty]。
   ///
   /// 刻意不进 [toMap]：草稿不落 GPS 与拍摄时间这两项 PII，重新打开草稿时从素材
   /// 重新解析。落盘一份等于在本地多存一处 PII 副本，且撤回披露时要多清一处。
-  final MediaCaptureMetadata captureMetadata;
+  final ExtractedMediaCaptureMetadata captureMetadata;
 
   /// 按当前披露设置裁剪后的拍摄事实。这是唯一允许离开端侧的形态。
-  MediaCaptureMetadata get disclosedCaptureMetadata =>
+  ExtractedMediaCaptureMetadata get disclosedCaptureMetadata =>
       captureMetadata.discloseOnly(captureDisclosure);
 
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
     final vis = (map['visibility']?.toString() ?? 'public').toLowerCase();
-    LocationPoiDto? poi;
+    CreateLocationOption? poi;
     final locRaw = map['location'];
     if (locRaw is Map && locRaw.isNotEmpty) {
       final m = Map<String, dynamic>.from(locRaw);
-      final parsed = LocationPoiDto.fromMap(m);
+      final parsed = CreateLocationOption.fromMap(m);
       final hasCoords = parsed.latitude != 0 || parsed.longitude != 0;
       final hasLabel =
           parsed.name.trim().isNotEmpty ||
@@ -134,12 +137,12 @@ class PublishSettings {
   ///
   /// 键缺失表示草稿早于本能力，按默认全开处理；显式空数组表示创作者关掉了全部分组，
   /// 必须原样尊重，不能回退成默认值。
-  static Set<MediaCaptureDisclosureGroup> _captureDisclosureFromMap(
+  static Set<CaptureMetadataDisclosureGroup> _captureDisclosureFromMap(
     Object? raw,
   ) {
     if (raw is! List) return kDefaultCaptureDisclosure;
     return raw
-        .map((item) => MediaCaptureDisclosureGroup.fromWire(item.toString()))
+        .map((item) => CaptureMetadataDisclosureGroup.fromWire(item.toString()))
         .nonNulls
         .toSet();
   }
@@ -211,7 +214,7 @@ class PublishSettings {
   PublishSettings copyWith({
     bool? isPublic,
     String? locationName,
-    LocationPoiDto? locationPoi,
+    CreateLocationOption? locationPoi,
     String? geoTagRef,
     DateTime? visitedAt,
     List<String>? circleIds,
@@ -223,8 +226,8 @@ class PublishSettings {
     List<String>? entityRefs,
     List<String>? entityNames,
     String? assistantUsePolicy,
-    Set<MediaCaptureDisclosureGroup>? captureDisclosure,
-    MediaCaptureMetadata? captureMetadata,
+    Set<CaptureMetadataDisclosureGroup>? captureDisclosure,
+    ExtractedMediaCaptureMetadata? captureMetadata,
     bool clearHomepage = false,
     bool clearLocationPoi = false,
     bool clearVisitedAt = false,
@@ -264,14 +267,26 @@ class CreateLocationOption {
   });
 
   /// 从 Integration Location typed projection 构造页面选项。
-  factory CreateLocationOption.from(LocationPoiDto dto) => CreateLocationOption(
-    id: dto.id,
-    name: dto.name,
-    latitude: dto.latitude,
-    longitude: dto.longitude,
-    address: dto.address ?? '',
-    distanceMeters: dto.distanceMeters,
-  );
+  factory CreateLocationOption.fromWire(LocationPoi wire) =>
+      CreateLocationOption(
+        id: wire.id,
+        name: wire.name,
+        latitude: wire.latitude,
+        longitude: wire.longitude,
+        address: wire.address ?? '',
+        distanceMeters: wire.distanceMeters,
+      );
+
+  /// 草稿本地 codec；只解析 App 自有 ViewData，不承担 Cloud wire 解码。
+  factory CreateLocationOption.fromMap(Map<String, dynamic> map) =>
+      CreateLocationOption(
+        id: (map['id'] ?? '').toString().trim(),
+        name: (map['name'] ?? '').toString().trim(),
+        latitude: (map['latitude'] as num?)?.toDouble() ?? 0,
+        longitude: (map['longitude'] as num?)?.toDouble() ?? 0,
+        address: (map['address'] ?? '').toString().trim(),
+        distanceMeters: (map['distanceMeters'] as num?)?.toInt(),
+      );
 
   final String id;
   final String name;
@@ -287,19 +302,23 @@ class CreateLocationOption {
     longitude: 0,
   );
 
-  LocationPoiDto toLocationPoiDto() {
-    final syntheticId = id.trim().isNotEmpty
-        ? id.trim()
-        : 'local_${latitude}_$longitude';
-    return LocationPoiDto(
-      id: syntheticId,
-      name: name,
-      latitude: latitude,
-      longitude: longitude,
-      address: address.isEmpty ? null : address,
-      distanceMeters: distanceMeters,
-    );
-  }
+  CreateLocationOption copyWith({String? name}) => CreateLocationOption(
+    id: id,
+    name: name ?? this.name,
+    latitude: latitude,
+    longitude: longitude,
+    address: address,
+    distanceMeters: distanceMeters,
+  );
+
+  Map<String, dynamic> toMap() => <String, dynamic>{
+    'id': id,
+    'name': name,
+    'latitude': latitude,
+    'longitude': longitude,
+    if (address.isNotEmpty) 'address': address,
+    if (distanceMeters != null) 'distanceMeters': distanceMeters,
+  };
 
   Map<String, dynamic> toLocationMap() => <String, dynamic>{
     'latitude': latitude,

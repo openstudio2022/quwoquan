@@ -8,7 +8,7 @@ import (
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	profileinteractiongenerated "quwoquan_service/services/content-service/generated/content/profile_interaction_read_fact"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	activityports "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/ports"
 	readfactmodel "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/domain/model"
 	readfactports "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/domain/ports"

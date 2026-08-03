@@ -73,11 +73,7 @@ api_routes:
       reader: CircleDiscoveryReader
       slice: CircleDiscoveryPageSlice
     description: 群组 / 主页列表（分类 + 推荐）
-    response_entity: Circle
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CirclePageSlice
-      response_decoder: decodeCirclePageSlice
+    response_entity: CirclePageSlice
     request_entity: CircleListQuery
     request_body_kind: none
   - method: GET
@@ -144,10 +140,6 @@ api_routes:
       slice: CircleDiscoveryFeedPageSlice
     description: 圈子频道聚合流；服务端唯一解释 category/subCategory/scope/sort/cursor/limit，按稳定 keyset 排序一次返回圈子卡片和强类型帖子投影。anonymous mine 返回安全空切片，不泄漏成员关系。
     response_entity: CircleDiscoveryFeedPageSlice
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleDiscoveryFeedPageSlice
-      response_decoder: decodeCircleDiscoveryFeedPageSlice
     request_entity: CircleDiscoveryFeedQuery
     request_body_kind: none
   - method: GET
@@ -209,10 +201,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleSearchResultSlice
-      response_decoder: decodeCircleSearchResultSlice
     request_entity: CircleSearchQuery
     request_body_kind: none
   - method: POST
@@ -263,10 +251,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_contracts.dart
-      response_type: CircleCommandResult
-      response_decoder: decodeCircleCommandResult
     request_body_kind: object
   - method: GET
     path: /circles/{circleId}
@@ -316,10 +300,6 @@ api_routes:
       slice: CircleDetailSlice
     description: 群组主页详情
     response_entity: Circle
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleProjection
-      response_decoder: decodeCircleProjection
     request_entity: CircleDetailQuery
     request_body_kind: none
   - method: PATCH
@@ -376,10 +356,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_contracts.dart
-      response_type: CircleCommandResult
-      response_decoder: decodeCircleCommandResult
     request_entity: UpdateCircleCommand
     request_body_kind: object
   - method: DELETE
@@ -435,10 +411,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_contracts.dart
-      response_type: CircleCommandResult
-      response_decoder: decodeCircleCommandResult
     request_entity: ArchiveCircleCommand
     request_body_kind: none
   - method: GET
@@ -505,10 +477,6 @@ api_routes:
     slo:
       latency_p95_ms: 600
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleFeedPageSlice
-      response_decoder: decodeCircleFeedPageSlice
     request_entity: CircleFeedQuery
     request_body_kind: none
   - method: GET
@@ -559,10 +527,6 @@ api_routes:
     slo:
       latency_p95_ms: 350
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleStatsSlice
-      response_decoder: decodeCircleStatsSlice
     request_entity: CircleStatsQuery
     request_body_kind: none
   - method: GET
@@ -613,10 +577,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_query_contracts.dart
-      response_type: CircleImpactSlice
-      response_decoder: decodeCircleImpactSlice
     request_entity: CircleImpactQuery
     request_body_kind: none
   - method: PATCH
@@ -674,10 +634,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/circle_contracts.dart
-      response_type: CircleCommandResult
-      response_decoder: decodeCircleCommandResult
     request_body_kind: object
   - method: POST
     path: /internal/circle/account-closure/dead-letters:recover

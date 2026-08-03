@@ -10,60 +10,26 @@ source_entities:
 - Homepage
 consumers:
 - app
-client_projection:
-  dart_class: HomepageIntroduction
-  base_class: ''
-  output_path: cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart
-  dart_imports:
-  - homepage_introduction_section.g.dart
-  - homepage_related_group_summary.g.dart
-  - homepage_source.g.dart
-  fields:
-  - name: homepageId
-    dart_type: String
-    nullable: false
-    source: homepageId
-    default: ''''''
-  - name: displayName
-    dart_type: String
-    nullable: false
-    source: displayName
-    default: ''''''
-  - name: homepageType
-    dart_type: String
-    nullable: false
-    source: homepageType
-    default: ''''''
-  - name: coverUrl
-    dart_type: String
-    nullable: true
-    source: coverUrl
-  - name: summary
-    dart_type: String
-    nullable: false
-    source: summary
-    default: ''''''
-  - name: sections
-    dart_type: List<HomepageIntroductionSection>
-    nullable: false
-    source: sections
-    list_element_dart_class: HomepageIntroductionSection
-  - name: relatedObjects
-    dart_type: List<HomepageRelatedGroupSummary>
-    nullable: false
-    source: relatedObjects
-    list_element_dart_class: HomepageRelatedGroupSummary
-  - name: primarySource
-    dart_type: HomepageSource
-    nullable: true
-    source: primarySource
-    map_from_string_key_class: HomepageSource
-  - name: sourceUrls
-    dart_type: List<String>
-    nullable: false
-    source: sourceUrls
-  - name: updatedAt
-    dart_type: String
-    nullable: false
-    source: updatedAt
-    default: ''''''
+fields:
+- name: homepageId
+  type: string
+- name: displayName
+  type: string
+- name: homepageType
+  type: string
+- name: coverUrl
+  type: string
+  nullable: true
+- name: summary
+  type: string
+- name: sections
+  type: '[]HomepageIntroductionSection'
+- name: relatedObjects
+  type: '[]HomepageRelatedGroupSummary'
+- name: primarySource
+  type: HomepageSource
+  nullable: true
+- name: sourceUrls
+  type: '[]string'
+- name: updatedAt
+  type: string

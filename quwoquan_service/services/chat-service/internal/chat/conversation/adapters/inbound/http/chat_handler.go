@@ -12,18 +12,12 @@ import (
 	"quwoquan_service/services/chat-service/generated/chat/conversation"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
-	membershipapplication "quwoquan_service/services/chat-service/internal/chat/conversation_membership/application"
-	userstateapplication "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/application"
-	messageapplication "quwoquan_service/services/chat-service/internal/chat/message/application"
 )
 
 type ChatHandler struct {
 	conversationService *application.ConversationService
 	messageService      *application.MessageService
 	memberService       *application.MemberService
-	membershipUseCases  *membershipapplication.UseCases
-	messageUseCases     *messageapplication.UseCases
-	userStateUseCases   *userstateapplication.UseCases
 	inboxService        *application.InboxService
 	userSyncService     *runtimesync.Service
 }
@@ -39,9 +33,6 @@ func NewChatHandler(
 		conversationService: conversationService,
 		messageService:      messageService,
 		memberService:       memberService,
-		membershipUseCases:  membershipapplication.NewUseCases(memberService),
-		messageUseCases:     messageapplication.NewUseCases(messageService),
-		userStateUseCases:   userstateapplication.NewUseCases(messageService, conversationService),
 		inboxService:        inboxService,
 		userSyncService:     userSyncService,
 	}
@@ -49,6 +40,17 @@ func NewChatHandler(
 
 func (h *ChatHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	return mux
+}
+
+// RegisterRoutes composes Conversation-owned routes into a service-level mux.
+// Object-specific adapters are registered on the same mux so Go's route
+// specificity selects their canonical path before this adapter's final guard.
+func (h *ChatHandler) RegisterRoutes(mux *http.ServeMux) {
+	if mux == nil {
+		panic("chat route mux is required")
+	}
 	mux.HandleFunc("/healthz", h.handleHealthz)
 	mux.HandleFunc("POST /user/sync", h.handlePullUserSync)
 	mux.HandleFunc("PATCH /chat/conversations/{conversationId}", h.handleUpdateConversationTitle)
@@ -57,11 +59,8 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /chat/message-home", h.handleListMessageHome)
 	mux.HandleFunc("GET /chat/contact-home", h.handleListContactHome)
 	mux.HandleFunc("GET /chat/groups/{conversationId}/home", h.handleGetGroupHome)
-	mux.HandleFunc("PATCH /chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
-	mux.HandleFunc("PUT /chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /chat/conversations/{conversationId}", h.handleDissolveConversation)
 	RegisterGeneratedRoutes(mux, h)
-	return mux
 }
 
 // InternalRoutes exposes only the service-to-service conversation boundary.
@@ -156,6 +155,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		InitialMemberIds []string        `json:"initialMemberIds"`
 		CircleID         json.RawMessage `json:"circleId"`
 		CircleGroupID    json.RawMessage `json:"circleGroupId"`
+		GatheringID      json.RawMessage `json:"gatheringId"`
 		EntityID         json.RawMessage `json:"entityId"`
 		OriginType       json.RawMessage `json:"originType"`
 		BindingType      json.RawMessage `json:"bindingType"`
@@ -167,6 +167,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 	}
 	if len(body.CircleID) != 0 ||
 		len(body.CircleGroupID) != 0 ||
+		len(body.GatheringID) != 0 ||
 		len(body.EntityID) != 0 ||
 		len(body.OriginType) != 0 ||
 		len(body.BindingType) != 0 ||
@@ -174,8 +175,8 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		writeHTTPError(
 			w,
 			r,
-			generated.AppErrorFromCircleGroupBindingWriteForbidden(
-				"public CreateConversation must not submit circle binding or source fields",
+			generated.AppErrorFromSourceManagedBindingWriteForbidden(
+				"public CreateConversation must not submit source binding fields",
 			),
 		)
 		return
@@ -221,345 +222,6 @@ func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *ht
 		return
 	}
 	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
-}
-
-// ── Messages ─────────────────────────────────────────────────────────────────
-
-func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages", "conversationId")
-	limit := queryInt(r, "limit", 20)
-	afterSeq := queryInt64(r, "afterSeq", 0)
-	beforeSeq := queryInt64(r, "beforeSeq", 0)
-
-	msgs, err := h.messageUseCases.List(r.Context(), application.ListMessagesRequest{
-		ConversationId: convId, ViewerID: resolvePersonaID(r),
-		Limit: limit + 1, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-
-	hasNextPage := len(msgs) > limit
-	if hasNextPage {
-		msgs = msgs[:limit]
-	}
-	items := make([]map[string]any, 0, len(msgs))
-	for i := range msgs {
-		items = append(items, messageToWire(msgs[i]))
-	}
-	response := map[string]any{"items": items}
-	if hasNextPage {
-		response["nextBeforeSeq"] = msgs[len(msgs)-1].Message.Seq
-	}
-	writeJSON(w, http.StatusOK, response)
-}
-
-func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages", "conversationId")
-	var body struct {
-		Type                      string                          `json:"type"`
-		Content                   string                          `json:"content"`
-		MediaAssetID              string                          `json:"mediaAssetId"`
-		Card                      *application.MessageCardCommand `json:"card"`
-		ReplyToMessageId          string                          `json:"replyToMessageId"`
-		Mentions                  []string                        `json:"mentions"`
-		ClientMsgId               string                          `json:"clientMsgId"`
-		PersonaContextVersion     int64                           `json:"personaContextVersion"`
-		SenderDisplayNameSnapshot string                          `json:"senderDisplayNameSnapshot"`
-		SenderAvatarUrlSnapshot   string                          `json:"senderAvatarUrlSnapshot"`
-	}
-	if err := readStrictJSON(r, &body); err != nil {
-		writeHTTPError(w, r, generated.AppErrorFromMessageInvalid(err.Error()))
-		return
-	}
-
-	senderID := resolvePersonaID(r)
-	if senderID == "" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(
-			rterr.ModuleChat,
-			"缺少 X-Client-Persona-Id",
-			"missing X-Client-Persona-Id",
-		))
-		return
-	}
-	resp, err := h.messageUseCases.Send(r.Context(), application.SendMessageRequest{
-		ConversationId: convId, SenderId: senderID,
-		PersonaContextVersion:     body.PersonaContextVersion,
-		SenderDisplayNameSnapshot: strings.TrimSpace(body.SenderDisplayNameSnapshot),
-		SenderAvatarUrlSnapshot:   strings.TrimSpace(body.SenderAvatarUrlSnapshot), Type: body.Type,
-		Content: body.Content, MediaAssetID: body.MediaAssetID, Card: body.Card,
-		ReplyToMessageId: body.ReplyToMessageId, Mentions: body.Mentions, ClientMsgId: body.ClientMsgId,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, resp)
-}
-
-func (h *ChatHandler) handleRecallMessage(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/recall", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/recall", "messageId")
-
-	err := h.messageUseCases.Recall(r.Context(), convId, msgId, resolvePersonaID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "recalled"})
-}
-
-func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/sync", "conversationId")
-	var body struct {
-		LastSeq int64 `json:"lastSeq"`
-		Limit   int   `json:"limit"`
-	}
-	if err := readStrictJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
-		return
-	}
-
-	resp, err := h.messageUseCases.Sync(r.Context(), application.SyncMessagesRequest{
-		ConversationId: convId, ViewerID: resolvePersonaID(r), LastSeq: body.LastSeq, Limit: body.Limit,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	items := make([]map[string]any, 0, len(resp.Messages))
-	for i := range resp.Messages {
-		items = append(items, messageToWire(resp.Messages[i]))
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"messages": items,
-		"hasMore":  resp.HasMore,
-	})
-}
-
-func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/read", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/read", "messageId")
-
-	err := h.userStateUseCases.MarkAsRead(r.Context(), application.MarkAsReadRequest{
-		ConversationId: convId, MessageId: msgId, UserId: resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleGetReceipts(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "conversationId")
-	msgId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/messages/{messageId}/receipts", "messageId")
-	_ = convId
-
-	receipts, err := h.messageService.GetReceipts(r.Context(), convId, msgId, resolvePersonaID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": receipts})
-}
-
-// ── Members ──────────────────────────────────────────────────────────────────
-
-func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members", "conversationId")
-	cursor := r.URL.Query().Get("cursor")
-	limit := queryInt(r, "limit", 20)
-	role := r.URL.Query().Get("role")
-	query := r.URL.Query().Get("query")
-
-	sort := application.NormalizeMemberListSort(r.URL.Query().Get("sort"))
-	members, err := h.membershipUseCases.List(r.Context(), application.ListMembersRequest{
-		ConversationId: convId,
-		ViewerId:       resolvePersonaID(r),
-		Cursor:         cursor,
-		Limit:          limit + 1,
-		Role:           role,
-		Query:          query,
-		Sort:           string(sort),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	hasNextPage := len(members) > limit
-	if hasNextPage {
-		members = members[:limit]
-	}
-	items := make([]map[string]any, 0, len(members))
-	currentUserID := resolvePersonaID(r)
-	for _, member := range members {
-		items = append(items, conversationMemberToWire(member, currentUserID))
-	}
-	response := map[string]any{"items": items}
-	if hasNextPage {
-		last := members[len(members)-1]
-		switch sort {
-		case application.MemberListSortDisplayNameAsc:
-			response["nextCursor"] = application.EncodeMemberListNextCursorDisplayName(
-				last.DisplayName,
-				last.UserId,
-			)
-		default:
-			response["nextCursor"] = application.EncodeMemberListNextCursorJoined(
-				last.JoinedAt,
-				last.ID,
-			)
-		}
-	}
-	writeJSON(w, http.StatusOK, response)
-}
-
-func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members", "conversationId")
-	var body struct {
-		UserIds []string `json:"userIds"`
-	}
-	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
-		return
-	}
-
-	err := h.membershipUseCases.Add(r.Context(), application.AddMembersRequest{
-		ConversationId: convId, UserIds: body.UserIds, InvitedBy: resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "conversationId")
-	userId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/members/{userId}", "userId")
-
-	// 治理语义：操作者只能是已认证身份，不再缺省为被移除人；
-	// 自愿退出走 LeaveConversation。
-	err := h.membershipUseCases.Remove(r.Context(), application.RemoveMemberRequest{
-		ConversationId: convId,
-		UserId:         userId,
-		OperatorId:     resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleLeaveConversation(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/leave", "conversationId")
-
-	err := h.membershipUseCases.Leave(r.Context(), application.LeaveConversationRequest{
-		ConversationId: convId,
-		UserId:         resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleInviteAssistant(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/assistant", "conversationId")
-	var body struct {
-		SkillId string `json:"skillId"`
-	}
-	_ = readJSON(r, &body)
-
-	err := h.membershipUseCases.InviteAssistant(r.Context(), application.InviteAssistantRequest{
-		ConversationId: convId, SkillId: body.SkillId, InvitedBy: resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleRemoveAssistant(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/assistant", "conversationId")
-
-	err := h.membershipUseCases.RemoveAssistant(r.Context(), application.RemoveAssistantRequest{
-		ConversationId: convId,
-		RemovedBy:      resolvePersonaID(r),
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/settings", "conversationId")
-	var body struct {
-		Muted  *bool `json:"muted"`
-		Pinned *bool `json:"pinned"`
-	}
-	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
-		return
-	}
-
-	err := h.userStateUseCases.UpdateSettings(r.Context(), application.UpdateSettingsRequest{
-		UserId: resolvePersonaID(r), ConversationId: convId, Muted: body.Muted, Pinned: body.Pinned,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/owner", "conversationId")
-	var body struct {
-		NewOwnerId string `json:"newOwnerId"`
-	}
-	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
-		return
-	}
-	err := h.membershipUseCases.TransferOwnership(r.Context(), application.TransferOwnershipRequest{
-		ConversationId: convId,
-		OperatorId:     resolvePersonaID(r),
-		NewOwnerId:     body.NewOwnerId,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-}
-
-func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Request) {
-	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}/admins", "conversationId")
-	var body struct {
-		AdminIds []string `json:"adminIds"`
-	}
-	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
-		return
-	}
-	err := h.membershipUseCases.UpdateAdmins(r.Context(), application.UpdateGroupAdminsRequest{
-		ConversationId: convId,
-		OperatorId:     resolvePersonaID(r),
-		AdminIds:       body.AdminIds,
-	})
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.Request) {
@@ -691,35 +353,6 @@ const (
 	conversationTimestampPageLimit = 500
 	batchGetConversationsLimit     = 100
 )
-
-// ── Inbox ────────────────────────────────────────────────────────────────────
-
-func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
-	userId := resolvePersonaID(r)
-	cursor := r.URL.Query().Get("cursor")
-	limit := queryInt(r, "limit", 50)
-
-	page, err := h.inboxService.ListInboxPage(r.Context(), application.ListInboxRequest{
-		UserId: userId, Cursor: cursor, Limit: limit,
-	})
-	if err != nil {
-		if errors.Is(err, conversationmodel.ErrInvalidInboxCursor) {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(
-				rterr.ModuleChat,
-				"invalid inbox cursor",
-				"inbox cursor must be an opaque keyset token",
-			))
-			return
-		}
-		writeHTTPError(w, r, err)
-		return
-	}
-	response := map[string]any{"items": h.flattenInboxItems(r.Context(), page.Items)}
-	if page.NextCursor != "" {
-		response["nextCursor"] = page.NextCursor
-	}
-	writeJSON(w, http.StatusOK, response)
-}
 
 func (h *ChatHandler) handleListMessageHome(w http.ResponseWriter, r *http.Request) {
 	userId := resolvePersonaID(r)

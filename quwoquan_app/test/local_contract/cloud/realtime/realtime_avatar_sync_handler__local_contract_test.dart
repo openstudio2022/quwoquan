@@ -156,9 +156,9 @@ class _ResyncChatRepository extends MockChatRepository {
   }
 
   @override
-  Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
-    return <ConversationDto>[
-      ConversationDto.fromMap(<String, dynamic>{
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) async {
+    return <ConversationViewData>[
+      ConversationViewData.fromMap(<String, dynamic>{
         'id': 'conv_001',
         'type': 'group',
         'title': '群聊',

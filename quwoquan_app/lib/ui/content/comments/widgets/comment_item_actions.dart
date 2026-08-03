@@ -9,7 +9,7 @@ Future<void> showCommentItemActionsSheet(
   BuildContext context,
   WidgetRef ref, {
   required String postId,
-  required ContentCommentListItem comment,
+  required CommentViewData comment,
 }) async {
   final action = await showAppActionSheet<_CommentItemAction>(
     context,
@@ -58,7 +58,7 @@ Future<void> showCommentItemActionsSheet(
 Future<void> _reportComment(
   BuildContext context,
   WidgetRef ref,
-  ContentCommentListItem comment,
+  CommentViewData comment,
 ) async {
   final reason = await showContentReportReasonSheet(context);
   if (reason == null || !context.mounted) return;
@@ -97,7 +97,7 @@ Future<void> _submitCommentReport(
   BuildContext context,
   WidgetRef ref, {
   required String commentId,
-  required ContentReportReason reason,
+  required ReportReason reason,
 }) async {
   final journeyTracker = ref.read(journeyEventTrackerProvider);
   final startedAt = DateTime.now();
@@ -107,7 +107,7 @@ Future<void> _submitCommentReport(
         .createReport(
           CreateContentReportCommand(
             targetId: commentId,
-            targetType: ContentReportTargetType.comment,
+            targetType: ReportTargetType.comment,
             reason: reason,
           ),
         );

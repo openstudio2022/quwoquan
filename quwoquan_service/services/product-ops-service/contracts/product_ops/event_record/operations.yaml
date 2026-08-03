@@ -1,6 +1,6 @@
 commercial_defaults:
   status: blocked
-  block_reason: Gamma Elasticsearch substitute and Prod SLS evidence are required before commercial readiness
+  block_reason: Alpha/Beta/Gamma/Prod Elasticsearch evidence is required before commercial readiness
   gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
   target_story: event-schema-governance
 externalDependencies:
@@ -89,7 +89,7 @@ api_routes:
     ownership_policy: ops_runtime_log_reader
   commercial:
     status: blocked
-    block_reason: Gamma Elasticsearch aggregate and Prod SLS aggregate evidence are required before commercial readiness
+    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch aggregate evidence is required before commercial readiness
     gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   reliability:
@@ -162,7 +162,7 @@ api_routes:
     ownership_policy: ops_runtime_log_reader
   commercial:
     status: blocked
-    block_reason: Gamma Elasticsearch raw index and Prod SLS raw logstore evidence are required before commercial readiness
+    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch raw-index evidence is required before commercial readiness
     gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   reliability:
@@ -321,7 +321,7 @@ api_routes:
     ownership_policy: ops_telemetry_reader
   commercial:
     status: blocked
-    block_reason: Gamma Elasticsearch aggregate and Prod SLS aggregate evidence are required before commercial readiness
+    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch aggregate evidence is required before commercial readiness
     gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   reliability:
@@ -394,7 +394,7 @@ api_routes:
     ownership_policy: audited_ops_telemetry_drilldown
   commercial:
     status: blocked
-    block_reason: Gamma Elasticsearch raw index and Prod SLS raw logstore evidence are required before commercial readiness
+    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch raw-index evidence is required before commercial readiness
     gap_id: OPS_EVENT_RECORD_PROVIDER_EVIDENCE
     target_story: app-cloud-business-object-commercial-closure
   reliability:
@@ -456,7 +456,7 @@ api_routes:
     ownership_policy: ops_telemetry_reader
   commercial:
     status: blocked
-    block_reason: Gamma Elasticsearch 与 Prod SLS 的 24h series readback、告警和恢复证据仍待收口
+    block_reason: Alpha/Beta/Gamma/Prod Elasticsearch 的 24h series readback、告警和恢复证据仍待收口
     gap_id: OPS_RTC_MEDIA_QOE_PROVIDER_READBACK
     target_story: realtime-call-media-infrastructure
   reliability:
@@ -507,6 +507,145 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
+- method: GET
+  path: /control-plane/product/metrics/l1l4
+  operation: ListL1L4MetricSnapshots
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  request_bindings:
+    query:
+    - {name: environment, field: environment, required: false}
+    - {name: service, field: service, required: false}
+    - {name: pageName, field: pageName, required: false}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_l1l4_metrics, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [scope, l1, l2, l3, l4, generatedAt, sources]
+  application: {kind: query, facet: EventRecordMetricQueryFacade, method: listL1L4MetricSnapshots, reader: L1L4MetricSnapshotReader, slice: L1L4MetricSnapshot}
+- method: GET
+  path: /control-plane/product/metrics/red-routes
+  operation: GetServiceRouteRED
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  request_bindings:
+    query: [{name: service, field: service, required: true}]
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_service_route_red, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [items, window, source]
+  application: {kind: query, facet: EventRecordMetricQueryFacade, method: getServiceRouteRED, reader: ServiceRouteREDReader, slice: ServiceRouteREDSlice}
+- method: GET
+  path: /control-plane/product/growth/overview
+  operation: GetGrowthOverview
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  request_bindings:
+    query: [{name: days, field: days, required: false}]
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_growth_overview, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [days, series, pv, uv, wau, mau, retention, source]
+  application: {kind: query, facet: EventRecordMetricQueryFacade, method: getGrowthOverview, reader: GrowthOverviewReader, slice: GrowthOverview}
+- method: GET
+  path: /control-plane/product/experience/pages
+  operation: GetPageExperience
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  request_bindings:
+    query:
+    - {name: from, field: from, required: false}
+    - {name: to, field: to, required: false}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.USER.query_window_invalid, OPS.SYSTEM.logstore_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_page_experience, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [items, source]
+  application: {kind: query, facet: EventRecordMetricQueryFacade, method: getPageExperience, reader: PageExperienceReader, slice: PageExperienceSlice}
+- method: GET
+  path: /control-plane/product/workflows
+  operation: ListProductWorkflows
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.event_projection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_workflows, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: EventRecordControlPlaneQueryFacade, method: listProductWorkflows, reader: ProductWorkflowReader, slice: ProductWorkflowSlice}
+- method: GET
+  path: /control-plane/product/audits
+  operation: ListProductAudits
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.event_projection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_audits, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: EventRecordControlPlaneQueryFacade, method: listProductAudits, reader: ProductAuditReader, slice: ProductAuditSlice}
+- method: GET
+  path: /control-plane/product/approvals
+  operation: ListProductApprovals
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.event_projection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_approvals, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [items]
+  application: {kind: query, facet: EventRecordControlPlaneQueryFacade, method: listProductApprovals, reader: ProductApprovalReader, slice: ProductApprovalSlice}
+- method: GET
+  path: /control-plane/product/projections/summary
+  operation: GetProductProjectionSummary
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.event_projection_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_projection_summary, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [workflowCount, approvalCount, auditCount, pendingDualReview, activeObjectTypes, l1l4Cards]
+  application: {kind: query, facet: EventRecordControlPlaneQueryFacade, method: getProductProjectionSummary, reader: ProductProjectionSummaryReader, slice: ProductProjectionSummary}
+- method: GET
+  path: /control-plane/product/triage/summary
+  operation: GetProductTriageSummary
+  actor: account
+  security: {auth_mode: required, principal: admin, token_transport: bearer, anonymous_policy: deny, visibility: private}
+  authorization: {principal: operator, scopes: [ops.product.dashboard.read], ownership_policy: operator_scope}
+  reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.SYSTEM.event_projection_unavailable, OPS.SYSTEM.logstore_unavailable]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: ops_product_triage_summary, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 3000, availability_percent: 99.5}
+  commercial: {status: ready}
+  response_fields: [projectionSummary, eventSummary, visitSummary, topEventHotspots, recentEvents, backlogCandidates, runtimeReady, source]
+  application: {kind: query, facet: EventRecordControlPlaneQueryFacade, method: getProductTriageSummary, reader: ProductTriageSummaryReader, slice: ProductTriageSummary}
 consumers:
 - name: app
   capabilities:
@@ -518,6 +657,15 @@ consumers:
   - read_event_summary
   - read_event_drilldown
   - read_rtc_media_qoe_summary
+  - read_l1_l4_metric_snapshots
+  - read_service_route_red
+  - read_growth_overview
+  - read_page_experience
+  - read_product_workflows
+  - read_product_audits
+  - read_product_approvals
+  - read_product_projection_summary
+  - read_product_triage_summary
 contract_test:
   mock_strategy:
     app_side:

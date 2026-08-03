@@ -41,7 +41,7 @@ api_routes:
       method: listCircleGroups
       reader: CircleGroupReader
       slice: CircleGroupPageSlice
-    response_entity: CircleGroupSlice
+    response_entity: CircleGroupPageSlice
     authorization:
       principal: persona
       ownership_policy: active_circle_member
@@ -67,10 +67,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupPageSlice
-      response_decoder: decodeCircleGroupPageSlice
     request_entity: CircleGroupListQuery
     request_body_kind: none
   - method: GET
@@ -105,7 +101,7 @@ api_routes:
       method: searchCircleGroups
       reader: CircleGroupSearchReader
       slice: CircleGroupPageSlice
-    response_entity: CircleGroupSlice
+    response_entity: CircleGroupPageSlice
     authorization:
       principal: persona
       ownership_policy: active_circle_member
@@ -131,10 +127,6 @@ api_routes:
     slo:
       latency_p95_ms: 500
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupPageSlice
-      response_decoder: decodeCircleGroupPageSlice
     request_entity: CircleGroupSearchQuery
     request_body_kind: none
   - method: POST
@@ -188,10 +180,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupCommandResult
-      response_decoder: decodeCircleGroupCommandResult
     request_body_kind: object
   - method: GET
     path: /circles/{circleId}/groups/{groupId}
@@ -240,10 +228,6 @@ api_routes:
     slo:
       latency_p95_ms: 350
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupSlice
-      response_decoder: decodeCircleGroupSlice
     request_entity: CircleGroupQuery
     request_body_kind: none
   - method: PATCH
@@ -304,10 +288,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupCommandResult
-      response_decoder: decodeCircleGroupCommandResult
     request_body_kind: object
   - method: DELETE
     path: /circles/{circleId}/groups/{groupId}
@@ -360,10 +340,6 @@ api_routes:
     slo:
       latency_p95_ms: 700
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../circle/group_contracts.dart
-      response_type: CircleGroupCommandResult
-      response_decoder: decodeCircleGroupCommandResult
     request_entity: ArchiveCircleGroupCommand
     request_body_kind: none
 contract_test:

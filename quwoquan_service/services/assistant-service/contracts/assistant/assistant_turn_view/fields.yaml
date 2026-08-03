@@ -10,6 +10,7 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+  reference: true
 - name: sessionId
   source: sessionId
   type: string
@@ -132,6 +133,12 @@ fields:
   ops_exposure: read
   role: projection
 types:
+  AssistantTurnListQuery:
+    description: 以 sessionId 和可选 keyset cursor 读取 owner 的终态轮次切片。
+    fields:
+    - {name: sessionId, source: sessionId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: cursor, source: cursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
   AssistantTurnSummaryView:
     description: 会话轮次摘要（transcript 与过程/引用恢复主体）
     fields:

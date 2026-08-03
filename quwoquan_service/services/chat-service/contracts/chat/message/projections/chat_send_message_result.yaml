@@ -9,5 +9,5 @@ fields:
   type: string
 - name: seq
   type: int64
-- name: sentAt
+- name: timestamp
   type: timestamp

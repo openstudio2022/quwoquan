@@ -339,9 +339,9 @@ final class _FixedCallQuery implements CallQuery {
   final CallStatus status;
 
   @override
-  Future<CallSessionDto> getCall(RtcGetCallQuery query) async {
+  Future<CallSession> getCall(RtcGetCallQuery query) async {
     final timestamp = DateTime.utc(2026, 7, 20);
-    return CallSessionDto(
+    return CallSession(
       callId: callId,
       status: status,
       initiatorId: 'user-caller',

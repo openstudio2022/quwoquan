@@ -66,10 +66,6 @@ api_routes:
       - labelEn
       - aliases
       - ancestors
-    client_contract:
-      dart_import: ../tag/tag_catalog_contracts.dart
-      response_type: TagResolve
-      response_decoder: decodeTagResolve
     request_entity: ResolveTagQuery
     request_body_kind: none
   - method: GET
@@ -125,10 +121,6 @@ api_routes:
     response_entity: TagChildrenSlice
     response_fields:
       - items
-    client_contract:
-      dart_import: ../tag/tag_catalog_contracts.dart
-      response_type: TagChildrenSlice
-      response_decoder: decodeTagChildrenSlice
     request_entity: ListTagChildrenQuery
     request_body_kind: none
   - method: GET
@@ -396,10 +388,6 @@ api_routes:
       - taxonomyReleaseId
       - valid
       - invalid
-    client_contract:
-      dart_import: ../tag/tag_catalog_contracts.dart
-      response_type: TagValidationResult
-      response_decoder: decodeTagValidationResult
   - method: GET
     path: /tag/search
     operation: SearchTags

@@ -73,6 +73,33 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "app_launch_manifest")
 
+    def test_direct_platform_builds_preflight_before_digesting_content_binding(
+        self,
+    ) -> None:
+        ios = (APP_DIR / "scripts/ios/prepare_dart_defines.sh").read_text(
+            encoding="utf-8"
+        )
+        ios_direct = ios[ios.index('if [[ -z "$LAUNCH_MODE"') : ios.index("fi\n\nif [[ -z \"$ENV_NAME\"")]
+        self.assertLess(
+            ios_direct.index("app-debug-preflight"),
+            ios_direct.index("build_launcher_handoff.py"),
+        )
+        self.assertIn('--content-release-id "$QWQ_CONTENT_RELEASE_ID"', ios_direct)
+
+        android = (APP_DIR / "android/app/build.gradle.kts").read_text(
+            encoding="utf-8"
+        )
+        android_direct = android[
+            android.index("fun buildCanonicalDirectDebugHandoff") : android.index(
+                "fun handoffString"
+            )
+        ]
+        self.assertLess(
+            android_direct.index('"app-debug-preflight"'),
+            android_direct.index('"--content-release-id"'),
+        )
+        self.assertNotIn("handoff[handoffKey]", android_direct)
+
     def test_each_metadata_target_builds_one_canonical_handoff(self) -> None:
         contract = load_launch_manifest_contract()
         for target, environment in contract["target_environment"].items():
@@ -93,6 +120,74 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
                     ),
                 )
 
+    def test_direct_flutter_run_requires_release_bound_content_identity(self) -> None:
+        missing = subprocess.run(
+            [
+                "python3",
+                str(HANDOFF_BUILDER),
+                "--env",
+                "alpha",
+                "--target",
+                "alpha-local",
+                "--launch-mode",
+                "direct_flutter_run",
+            ],
+            cwd=APP_DIR,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn(
+            "effective launch content binding is required for launch mode direct_flutter_run",
+            missing.stdout,
+        )
+
+        digest = "sha256:" + "a" * 64
+        complete = subprocess.run(
+            [
+                "python3",
+                str(HANDOFF_BUILDER),
+                "--env",
+                "alpha",
+                "--target",
+                "alpha-local",
+                "--launch-mode",
+                "direct_flutter_run",
+                "--content-release-id",
+                "release-alpha",
+                "--content-manifest-digest",
+                digest,
+                "--content-readiness-receipt-digest",
+                digest,
+            ],
+            cwd=APP_DIR,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        handoff = json.loads(complete.stdout)
+        self.assertEqual(handoff["contentReleaseId"], "release-alpha")
+
+    def test_content_binding_is_inside_effective_manifest_digest(self) -> None:
+        digest = "sha256:" + "b" * 64
+        handoff = _build_handoff(
+            "alpha",
+            "alpha-local",
+            "--content-release-id",
+            "release-alpha",
+            "--content-manifest-digest",
+            digest,
+            "--content-readiness-receipt-digest",
+            digest,
+        )
+        effective = handoff["effectiveLaunchManifest"]
+        self.assertIsInstance(effective, dict)
+        effective["contentReleaseId"] = "release-tampered"
+        self.assertIn(
+            "effectiveLaunchManifestDigest does not match canonical metadata",
+            validate_handoff_against_metadata(handoff),
+        )
     def test_metadata_is_the_only_target_environment_authority(self) -> None:
         contract = load_launch_manifest_contract(LAUNCH_MANIFEST_METADATA)
         handoff = _build_handoff("alpha", "alpha-local")

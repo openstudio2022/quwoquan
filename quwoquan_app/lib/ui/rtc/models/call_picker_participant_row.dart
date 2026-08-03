@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
+import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 
 /// 通话选人列表行（由 Chat 域 DTO 映射，避免 UI 持有 `Map<String, dynamic>`）。
 class CallPickerParticipantRow {
@@ -13,7 +13,7 @@ class CallPickerParticipantRow {
   final String displayName;
   final String? avatarUrl;
 
-  factory CallPickerParticipantRow.fromContact(ChatContactRowDto c) {
+  factory CallPickerParticipantRow.fromContact(ChatContactRowViewData c) {
     return CallPickerParticipantRow(
       userId: c.userId,
       displayName: c.displayName,
@@ -21,7 +21,7 @@ class CallPickerParticipantRow {
     );
   }
 
-  factory CallPickerParticipantRow.fromMember(ChatConversationMemberDto m) {
+  factory CallPickerParticipantRow.fromMember(ConversationMemberListRow m) {
     return CallPickerParticipantRow(
       userId: m.userId,
       displayName: m.displayName,

@@ -1,8 +1,8 @@
 """build_validate 的独立审阅结论必须走配额门，而不是见错即停整批。
 
 审阅是逐对象结论：审阅未过的对象应按丢弃处理，只要达标对象数仍满足配额，
-批次就必须继续推进到 publish。只有审阅装配前置条件（reviewer 与 author 同模型族）
-属于批次级事实，不可被过采候选池吸收。
+    批次就必须继续推进到 publish。审阅装配前置条件属于批次级事实，不可被过采
+    候选池吸收。
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_review_failures_block_when_quota_is_short__functional__local_contract(
     assert result.fallback_stage == "build_homepage"
 
 
-def test_reviewer_model_family_conflict_always_blocks__functional__local_contract(
+def test_reviewer_binding_precondition_always_blocks__functional__local_contract(
     monkeypatch,
 ) -> None:
     """批次级装配错误不可被过采吸收，即使配额已满也必须阻断。"""
@@ -146,7 +146,7 @@ def test_reviewer_model_family_conflict_always_blocks__functional__local_contrac
     ctx, _ = _arrange(
         monkeypatch,
         verdicts=[verdict],
-        precondition=["independent reviewer model family must differ from author model family"],
+        precondition=["independent reviewer frozen model binding is invalid"],
     )
 
     result = stage_download_build._run_build_validate(ctx)

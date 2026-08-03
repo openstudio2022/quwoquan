@@ -67,6 +67,45 @@ def test_ios_install_and_verify_bind_target_device_fingerprint_and_lease(
     assert Path(verified["receipt"]) == receipt
 
 
+def test_ios_install_can_defer_endpoint_probe_for_app_startup(
+    tmp_path: Path,
+) -> None:
+    root = _root_certificate(tmp_path)
+    receipt = tmp_path / "device-trust.json"
+    with (
+        mock.patch.object(subject, "verify_certificate"),
+        mock.patch.object(subject, "resolve_managed_device", return_value="SIM-1"),
+        mock.patch.object(subject, "root_certificate_path", return_value=root),
+        mock.patch.object(
+            subject.ssl,
+            "PEM_cert_to_DER_cert",
+            return_value=b"managed-root",
+        ),
+        mock.patch.object(subject, "_receipt_path", return_value=receipt),
+        mock.patch.object(
+            subject,
+            "_install_ios",
+            return_value="system-root-installed; endpoint-probe-deferred",
+        ) as install_ios,
+    ):
+        installed = subject.install_device_trust(
+            target="alpha-local",
+            platform_name="ios-simulator",
+            device="SIM-1",
+            lease_id="direct-debug",
+            endpoint_probe=False,
+        )
+
+    install_ios.assert_called_once_with(
+        "alpha-local",
+        "SIM-1",
+        root,
+        endpoint_probe=False,
+    )
+    assert installed["endpointProbe"] == "deferred"
+    assert installed["systemTrustStore"] is True
+
+
 def test_android_physical_device_and_android_14_fail_closed() -> None:
     with mock.patch.object(
         subject,
@@ -90,6 +129,46 @@ def test_android_physical_device_and_android_14_fail_closed() -> None:
                 "emulator-5554",
                 Path("/tmp/root.crt"),
             )
+
+
+def test_android_startup_can_record_unprovisioned_system_store(
+    tmp_path: Path,
+) -> None:
+    root = _root_certificate(tmp_path)
+    receipt = tmp_path / "device-trust.json"
+    with (
+        mock.patch.object(subject, "verify_certificate"),
+        mock.patch.object(subject, "resolve_managed_device", return_value="emulator-5554"),
+        mock.patch.object(subject, "root_certificate_path", return_value=root),
+        mock.patch.object(
+            subject.ssl,
+            "PEM_cert_to_DER_cert",
+            return_value=b"managed-root",
+        ),
+        mock.patch.object(subject, "_receipt_path", return_value=receipt),
+        mock.patch.object(
+            subject,
+            "_install_android",
+            side_effect=subject.AndroidSystemTrustUnavailable("system store is locked"),
+        ),
+    ):
+        installed = subject.install_device_trust(
+            target="alpha-local",
+            platform_name="android-emulator",
+            device="emulator-5554",
+            lease_id="direct-debug",
+            allow_unprovisioned_system_trust=True,
+        )
+        with pytest.raises(subject.LocalDeviceTrustError, match="identity mismatch"):
+            subject.verify_device_trust(
+                target="alpha-local",
+                platform_name="android-emulator",
+                device="emulator-5554",
+            )
+
+    assert installed["status"] == "launch-degraded"
+    assert installed["systemTrustStore"] is False
+    assert "unprovisioned" in installed["verification"]
 
 
 def test_release_removes_only_requested_lease_and_never_resets_keychain(

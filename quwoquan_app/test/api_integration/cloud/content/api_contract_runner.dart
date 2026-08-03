@@ -165,7 +165,7 @@ void main() {
       expect(body.containsKey('cursor'), isTrue);
 
       final items = (body['items'] as List)
-          .map((e) => contentPostDtoFromReadModelMap(e as Map<String, dynamic>))
+          .map((e) => contentPostViewDataFromReadModelMap(e as Map<String, dynamic>))
           .toList();
       expect(items, isNotEmpty);
 
@@ -225,7 +225,7 @@ void main() {
       expect(resp.statusCode, 200);
 
       final items = (jsonDecode(resp.body)['items'] as List)
-          .map((e) => contentPostDtoFromReadModelMap(e as Map<String, dynamic>))
+          .map((e) => contentPostViewDataFromReadModelMap(e as Map<String, dynamic>))
           .whereType<PhotoPostDto>()
           .toList();
 
@@ -270,7 +270,7 @@ void main() {
       final items = (body['items'] as List)
           .map(
             (item) =>
-                contentPostDtoFromReadModelMap(item as Map<String, dynamic>),
+                contentPostViewDataFromReadModelMap(item as Map<String, dynamic>),
           )
           .toList(growable: false);
       expect(items, isNotEmpty, reason: 'video book feed must not be empty');

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/release_asset_admission.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "releaseId",
+    "releaseClass",
+    "productLifecycleState",
+    "containsUnverifiedAssets",
+    "rightsStatusCounts",
+    "authorizationRequiredAssetIds",
+    "researchAcceptedCount",
+    "commercialAcceptedCount",
+    "carrierCounts",
+    "articleMediaCoverage",
+    "sourceAssetCounts",
+    "assets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.release_asset_admission"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "releaseClass": {"enum": ["research", "commercial"]},
+    "productLifecycleState": {"enum": ["research", "commercial"]},
+    "containsUnverifiedAssets": {"type": "boolean"},
+    "rightsStatusCounts": {
+      "type": "object",
+      "required": ["verified", "unverified", "restricted", "unknown"],
+      "additionalProperties": false,
+      "properties": {
+        "verified": {"type": "integer", "minimum": 0},
+        "unverified": {"type": "integer", "minimum": 0},
+        "restricted": {"type": "integer", "minimum": 0},
+        "unknown": {"type": "integer", "minimum": 0}
+      }
+    },
+    "authorizationRequiredAssetIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "researchAcceptedCount": {"type": "integer", "minimum": 0},
+    "commercialAcceptedCount": {"type": "integer", "minimum": 0},
+    "carrierCounts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["carrier", "objectCount", "assetCount", "researchAcceptedCount", "commercialAcceptedCount"],
+        "additionalProperties": false,
+        "properties": {
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "objectCount": {"type": "integer", "minimum": 0},
+          "assetCount": {"type": "integer", "minimum": 0},
+          "researchAcceptedCount": {"type": "integer", "minimum": 0},
+          "commercialAcceptedCount": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "articleMediaCoverage": {
+      "type": "object",
+      "required": ["articleCount", "illustratedCount", "textOnlyCount", "illustratedRate", "textOnlyRate"],
+      "additionalProperties": false,
+      "properties": {
+        "articleCount": {"type": "integer", "minimum": 0},
+        "illustratedCount": {"type": "integer", "minimum": 0},
+        "textOnlyCount": {"type": "integer", "minimum": 0},
+        "illustratedRate": {"type": "number", "minimum": 0, "maximum": 1},
+        "textOnlyRate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "sourceAssetCounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "displayName", "provider", "plannedAssetCount", "discoveredAssetCount",
+          "downloadedAssetCount", "acceptedAssetCount", "rejectedAssetCount",
+          "verifiedAssetCount", "unverifiedAssetCount", "restrictedAssetCount", "unknownAssetCount"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {"type": "string", "minLength": 1},
+          "provider": {"type": "string", "minLength": 1},
+          "plannedAssetCount": {"type": "integer", "minimum": 0},
+          "discoveredAssetCount": {"type": "integer", "minimum": 0},
+          "downloadedAssetCount": {"type": "integer", "minimum": 0},
+          "acceptedAssetCount": {"type": "integer", "minimum": 0},
+          "rejectedAssetCount": {"type": "integer", "minimum": 0},
+          "verifiedAssetCount": {"type": "integer", "minimum": 0},
+          "unverifiedAssetCount": {"type": "integer", "minimum": 0},
+          "restrictedAssetCount": {"type": "integer", "minimum": 0},
+          "unknownAssetCount": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "assetId", "objectRef", "acquisitionStatus", "rightsStatus",
+          "authorizationRequired", "distributionDecision", "sourceUrl", "platform",
+          "creator", "capturedAt", "contentSha256", "license", "termsUrl",
+          "authorizationProof", "rightsIssues", "generated"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {"type": "string", "minLength": 1},
+          "objectRef": {"type": "string", "minLength": 1},
+          "acquisitionStatus": {"enum": ["acquired", "failed", "blocked"]},
+          "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+          "authorizationRequired": {"type": "boolean"},
+          "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+          "sourceUrl": {"type": "string", "pattern": "^https://"},
+          "platform": {"type": "string", "minLength": 1},
+          "creator": {"type": "string", "minLength": 1},
+          "capturedAt": {"type": "string", "minLength": 1},
+          "contentSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "license": {"type": "string", "minLength": 1},
+          "termsUrl": {"type": "string"},
+          "authorizationProof": {"type": "string"},
+          "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "generated": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"releaseClass": {"const": "commercial"}}},
+      "then": {
+        "properties": {
+          "productLifecycleState": {"const": "commercial"},
+          "containsUnverifiedAssets": {"const": false},
+          "authorizationRequiredAssetIds": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"productLifecycleState": {"const": "research"}}}
+    }
+  ]
+}

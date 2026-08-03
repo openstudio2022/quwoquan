@@ -1,6 +1,3 @@
-import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_card_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -11,29 +8,21 @@ class ProfileCredentialSummaryData {
     required this.isBound,
   });
 
-  factory ProfileCredentialSummaryData.fromMap(Map<String, dynamic> map) {
-    return ProfileCredentialSummaryData(
-      credentialType: map['credentialType']?.toString() ?? '',
-      displayLabel: map['displayLabel']?.toString() ?? '',
-      isBound: map['isBound'] as bool? ?? false,
-    );
-  }
-
-  factory ProfileCredentialSummaryData.fromCredentialRow(
-    OwnerCredentialRowDto row,
+  factory ProfileCredentialSummaryData.fromCredential(
+    CredentialBindingView row,
   ) {
     return ProfileCredentialSummaryData(
-      credentialType: row.credentialType,
-      displayLabel: row.displayLabel,
+      credentialType: row.credentialType.wireName,
+      displayLabel: row.displayLabel ?? '',
       isBound: row.isActive,
     );
   }
 
-  factory ProfileCredentialSummaryData.fromProjection(
-    ProfileCredentialSummaryProjection projection,
+  factory ProfileCredentialSummaryData.fromWire(
+    ProfileCredentialSummaryWire projection,
   ) {
     return ProfileCredentialSummaryData(
-      credentialType: projection.credentialType,
+      credentialType: projection.credentialType.wireName,
       displayLabel: projection.displayLabel,
       isBound: projection.isBound,
     );
@@ -59,40 +48,7 @@ class ProfileQrCardData {
     this.expiresAt,
   });
 
-  factory ProfileQrCardData.fromMap(Map<String, dynamic> map) {
-    final qrPayload = map['qrPayload']?.toString() ?? '';
-    if (qrPayload.isEmpty) {
-      throw StateError('Profile QR card qrPayload is required');
-    }
-    return ProfileQrCardData(
-      publicProfileUrl: map['publicProfileUrl']?.toString() ?? '',
-      qrPayload: qrPayload,
-      qrTokenId: map['qrTokenId']?.toString() ?? '',
-      avatarUrl: map['avatarUrl']?.toString() ?? '',
-      displayName: map['displayName']?.toString() ?? '',
-      region: map['region']?.toString() ?? '',
-      shareText: map['shareText']?.toString() ?? '',
-      expiresAt: _dateTimeFromAny(map['expiresAt']),
-    );
-  }
-
-  factory ProfileQrCardData.fromWire(ProfileQrCardWireDto wire) {
-    if (wire.qrPayload.isEmpty) {
-      throw StateError('Profile QR card qrPayload is required');
-    }
-    return ProfileQrCardData(
-      publicProfileUrl: wire.publicProfileUrl,
-      qrPayload: wire.qrPayload,
-      qrTokenId: wire.qrTokenId,
-      avatarUrl: wire.avatarUrl,
-      displayName: wire.displayName,
-      region: wire.region,
-      shareText: wire.shareText,
-      expiresAt: wire.expiresAt,
-    );
-  }
-
-  factory ProfileQrCardData.fromProjection(ProfileQrCardProjection projection) {
+  factory ProfileQrCardData.fromWire(ProfileQrCardWire projection) {
     if (projection.qrPayload.isEmpty) {
       throw StateError('Profile QR card qrPayload is required');
     }
@@ -100,10 +56,10 @@ class ProfileQrCardData {
       publicProfileUrl: projection.publicProfileUrl,
       qrPayload: projection.qrPayload,
       qrTokenId: projection.qrTokenId,
-      avatarUrl: projection.avatarUrl,
+      avatarUrl: projection.avatarUrl ?? '',
       displayName: projection.displayName,
-      region: projection.region,
-      shareText: projection.shareText,
+      region: projection.region ?? '',
+      shareText: projection.shareText ?? '',
       expiresAt: projection.expiresAt,
     );
   }
@@ -158,111 +114,49 @@ class ProfileEditSnapshotData {
     this.qrCard,
   });
 
-  factory ProfileEditSnapshotData.fromMap(Map<String, dynamic> map) {
-    final phoneCredential = map['phoneCredential'];
-    final qrCard = map['qrCard'];
-    return ProfileEditSnapshotData(
-      ownerUserId: map['ownerUserId']?.toString() ?? '',
-      personaId: map['personaId']?.toString() ?? '',
-      avatarUrl: map['avatarUrl']?.toString() ?? '',
-      avatarAssetId: map['avatarAssetId']?.toString() ?? '',
-      avatarVersion: (map['avatarVersion'] as num?)?.toInt() ?? 0,
-      backgroundUrl: map['backgroundUrl']?.toString() ?? '',
-      backgroundAssetId: map['backgroundAssetId']?.toString() ?? '',
-      nickname: map['nickname']?.toString() ?? '',
-      gender: map['gender']?.toString() ?? 'unspecified',
-      birthDate: map['birthDate']?.toString() ?? '',
-      region: map['region']?.toString() ?? '',
-      regionTagRef: map['regionTagRef']?.toString() ?? '',
-      userHandle: map['userHandle']?.toString() ?? '',
-      bio: map['bio']?.toString() ?? '',
-      occupationTagRef: map['occupationTagRef']?.toString() ?? '',
-      interestTagRefs: _stringList(map['interestTagRefs']),
-      phoneCredential: phoneCredential is Map<String, dynamic>
-          ? ProfileCredentialSummaryData.fromMap(phoneCredential)
-          : phoneCredential is Map
-          ? ProfileCredentialSummaryData.fromMap(
-              Map<String, dynamic>.from(phoneCredential),
-            )
-          : null,
-      qrCard: qrCard is Map<String, dynamic>
-          ? ProfileQrCardData.fromMap(qrCard)
-          : qrCard is Map
-          ? ProfileQrCardData.fromMap(Map<String, dynamic>.from(qrCard))
-          : null,
-    );
-  }
-
-  factory ProfileEditSnapshotData.fromWire(ProfileEditSnapshotWireDto wire) {
-    return ProfileEditSnapshotData(
-      ownerUserId: wire.ownerUserId,
-      personaId: wire.personaId,
-      avatarUrl: wire.avatarUrl,
-      avatarAssetId: wire.avatarAssetId,
-      avatarVersion: wire.avatarVersion,
-      backgroundUrl: wire.backgroundUrl,
-      backgroundAssetId: wire.backgroundAssetId,
-      nickname: wire.nickname.isEmpty ? wire.displayName : wire.nickname,
-      gender: wire.gender,
-      birthDate: wire.birthDate,
-      region: wire.region,
-      regionTagRef: wire.regionTagRef,
-      userHandle: wire.userHandle,
-      bio: wire.bio,
-      occupationTagRef: wire.occupationTagRef,
-      interestTagRefs: wire.interestTagRefs,
-      phoneCredential: wire.phoneCredential == null
-          ? null
-          : ProfileCredentialSummaryData.fromMap(wire.phoneCredential!),
-      qrCard: wire.qrCard == null
-          ? null
-          : ProfileQrCardData.fromMap(wire.qrCard!),
-    );
-  }
-
-  factory ProfileEditSnapshotData.fromProjection(
-    ProfileEditSnapshotProjection projection,
-  ) {
+  factory ProfileEditSnapshotData.fromWire(ProfileEditSnapshotWire projection) {
     return ProfileEditSnapshotData(
       ownerUserId: projection.ownerUserId,
       personaId: projection.personaId,
-      avatarUrl: projection.avatarUrl,
-      avatarAssetId: projection.avatarAssetId,
+      avatarUrl: projection.avatarUrl ?? '',
+      avatarAssetId: projection.avatarAssetId ?? '',
       avatarVersion: projection.avatarVersion,
-      backgroundUrl: projection.backgroundUrl,
-      backgroundAssetId: projection.backgroundAssetId,
+      backgroundUrl: projection.backgroundUrl ?? '',
+      backgroundAssetId: projection.backgroundAssetId ?? '',
       nickname: projection.nickname.isEmpty
           ? projection.displayName
           : projection.nickname,
-      gender: projection.gender,
-      birthDate: projection.birthDate,
-      region: projection.region,
-      regionTagRef: projection.regionTagRef,
+      gender: projection.gender?.wireName ?? 'unspecified',
+      birthDate: projection.birthDate == null
+          ? ''
+          : _dateOnly(projection.birthDate!),
+      region: projection.region ?? '',
+      regionTagRef: projection.regionTagRef ?? '',
       userHandle: projection.userHandle,
-      bio: projection.bio,
-      occupationTagRef: projection.occupationTagRef,
-      interestTagRefs: projection.interestTagRefs,
+      bio: projection.bio ?? '',
+      occupationTagRef: projection.occupationTagRef ?? '',
+      interestTagRefs: projection.interestTagRefs ?? const <String>[],
       phoneCredential: projection.phoneCredential == null
           ? null
-          : ProfileCredentialSummaryData.fromProjection(
-              projection.phoneCredential!,
-            ),
+          : ProfileCredentialSummaryData.fromWire(projection.phoneCredential!),
       qrCard: projection.qrCard == null
           ? null
-          : ProfileQrCardData.fromProjection(projection.qrCard!),
+          : ProfileQrCardData.fromWire(projection.qrCard!),
     );
   }
 
   factory ProfileEditSnapshotData.fromProfile({
     required PersonaProfileViewData profile,
-    List<OwnerCredentialRowDto> credentials = const <OwnerCredentialRowDto>[],
+    List<CredentialBindingView> credentials = const <CredentialBindingView>[],
   }) {
     final phoneCredential = credentials
-        .where((row) => row.credentialType == 'phone')
+        .where((row) => row.credentialType == CredentialType.phone)
         .followedBy(
-          credentials.where((row) => row.credentialType == 'carrier_phone'),
+          credentials.where(
+            (row) => row.credentialType == CredentialType.carrierPhone,
+          ),
         )
-        .cast<OwnerCredentialRowDto?>()
+        .cast<CredentialBindingView?>()
         .firstWhere((row) => row != null, orElse: () => null);
     final occupationTagRef = profile.identityTags
         .where((tag) => tag.startsWith('Audience/用户/职业/'))
@@ -292,7 +186,7 @@ class ProfileEditSnapshotData {
       interestTagRefs: interestTags,
       phoneCredential: phoneCredential == null
           ? null
-          : ProfileCredentialSummaryData.fromCredentialRow(phoneCredential),
+          : ProfileCredentialSummaryData.fromCredential(phoneCredential),
     );
   }
 
@@ -324,29 +218,7 @@ class ProfileEditSnapshotData {
   }
 }
 
-List<String> _stringList(Object? value) {
-  if (value is Iterable) {
-    return value
-        .map((item) => item.toString().trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-  }
-  if (value is String && value.trim().isNotEmpty) {
-    return value
-        .split(',')
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-  }
-  return const <String>[];
-}
-
-DateTime? _dateTimeFromAny(Object? value) {
-  if (value is DateTime) {
-    return value;
-  }
-  if (value is String && value.trim().isNotEmpty) {
-    return DateTime.tryParse(value.trim());
-  }
-  return null;
-}
+String _dateOnly(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';

@@ -3,6 +3,7 @@ events:
   producer: chat-service
   consumers:
   - projection-workers
+  - assistant-service
   channel: transactional_outbox
   payload_entity: ConversationMembership
   payload_fields:
@@ -12,8 +13,8 @@ events:
   - displayName
   - memberType
   - role
-  - assistantSkillId
   - invitedBy
+  - invitedByAccountId
   - memberCount
   - joinedAt
 - name: ConversationMemberRemoved
@@ -25,6 +26,7 @@ events:
   producer: chat-service
   consumers:
   - projection-workers
+  - assistant-service
   channel: transactional_outbox
   payload_entity: ConversationMembership
   payload_fields:
@@ -32,8 +34,8 @@ events:
   - memberId
   - userId
   - memberType
-  - assistantSkillId
   - removedBy
+  - removedByAccountId
   - memberCount
 - name: ConversationMemberLeft
   description: '成员自愿退出群聊（与被移出 ConversationMemberRemoved 语义区分）。事务提交后向剩余

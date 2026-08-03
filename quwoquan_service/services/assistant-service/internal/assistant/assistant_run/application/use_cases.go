@@ -8,39 +8,24 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
+	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
 )
 
 type StartInput struct {
 	ClientRequestID     string                `json:"clientRequestId"`
-	Intent              StartIntent           `json:"intent"`
+	Intent              rundomain.Intent      `json:"intent"`
 	ContextSnapshot     map[string]any        `json:"contextSnapshot"`
 	ReasoningProfile    string                `json:"reasoningProfile"`
 	DefinitionOfDone    DefinitionOfDoneInput `json:"definitionOfDone"`
 	SurfaceCapabilities map[string]any        `json:"surfaceCapabilities"`
-}
-
-type StartIntent struct {
-	Kind               string                    `json:"kind"`
-	Answer             *AnswerIntent             `json:"answer"`
-	Search             *SearchIntent             `json:"search"`
-	CreationAssistance *CreationAssistanceIntent `json:"creationAssistance"`
-}
-
-type AnswerIntent struct {
-	Text string `json:"text"`
-}
-
-type SearchIntent struct {
-	Query string `json:"query"`
-}
-
-type CreationAssistanceIntent struct {
-	DraftTitle   string `json:"draftTitle"`
-	DraftSummary string `json:"draftSummary"`
+	// TrustedPersonaID is injected from the verified transport principal after
+	// JSON decoding. It is never accepted as a public command field.
+	TrustedPersonaID      string                    `json:"-"`
+	TrustedRequestContext runruntime.RequestContext `json:"-"`
 }
 
 type DefinitionOfDoneInput struct {
@@ -74,19 +59,35 @@ type SteerInput struct {
 
 type UseCases struct {
 	runs                *runruntime.CommandService
-	preferenceSnapshots sessionports.PreferenceSnapshotReader
+	preferenceSnapshots PreferenceSnapshotReader
+	contextResolver     *ContextResolver
 }
 
-func NewUseCases(
-	runs *runruntime.CommandService,
-	preferenceSnapshots ...sessionports.PreferenceSnapshotReader,
-) *UseCases {
+type PreferenceSnapshotReader interface {
+	ResolveActiveSnapshots(
+		context.Context,
+		string,
+		string,
+	) ([]preferencemodel.Snapshot, []preferencemodel.Snapshot, error)
+}
+
+type UseCaseOption func(*UseCases)
+
+func WithPreferenceSnapshots(reader PreferenceSnapshotReader) UseCaseOption {
+	return func(useCases *UseCases) { useCases.preferenceSnapshots = reader }
+}
+
+func WithContextResolver(resolver *ContextResolver) UseCaseOption {
+	return func(useCases *UseCases) { useCases.contextResolver = resolver }
+}
+
+func NewUseCases(runs *runruntime.CommandService, options ...UseCaseOption) *UseCases {
 	if runs == nil {
 		panic("assistant run command service is required")
 	}
 	useCases := &UseCases{runs: runs}
-	if len(preferenceSnapshots) > 0 {
-		useCases.preferenceSnapshots = preferenceSnapshots[0]
+	for _, option := range options {
+		option(useCases)
 	}
 	return useCases
 }
@@ -101,9 +102,12 @@ func (s *UseCases) Start(
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(sessionID) == "" {
 		return runruntime.Run{}, invalidArgument("missing run owner or session")
 	}
-	text, err := input.Intent.primaryText()
+	if strings.TrimSpace(input.TrustedPersonaID) == "" {
+		return runruntime.Run{}, invalidArgument("missing trusted run persona")
+	}
+	text, err := input.Intent.PrimaryText()
 	if err != nil {
-		return runruntime.Run{}, err
+		return runruntime.Run{}, invalidArgument(err.Error())
 	}
 	profile := generated.AssistantReasoningProfileBalanced
 	if raw := strings.TrimSpace(input.ReasoningProfile); raw != "" {
@@ -124,14 +128,28 @@ func (s *UseCases) Start(
 			return runruntime.Run{}, mapRunError(err)
 		}
 	}
+	contextSnapshot := input.ContextSnapshot
+	if s.contextResolver != nil {
+		contextSnapshot, err = s.contextResolver.Resolve(
+			ctx,
+			userID,
+			input.TrustedPersonaID,
+			input.ContextSnapshot,
+		)
+		if err != nil {
+			return runruntime.Run{}, mapRunError(err)
+		}
+	}
 	run, err := s.runs.Start(ctx, runruntime.StartCommand{
 		UserID:                  userID,
+		PersonaID:               input.TrustedPersonaID,
 		SessionID:               sessionID,
 		ClientRequestID:         input.ClientRequestID,
 		TraceID:                 traceID,
+		RequestContext:          input.TrustedRequestContext,
 		IntentKind:              strings.TrimSpace(input.Intent.Kind),
 		InputText:               text,
-		ContextSnapshot:         input.ContextSnapshot,
+		ContextSnapshot:         contextSnapshot,
 		SurfaceCapabilities:     input.SurfaceCapabilities,
 		SessionPreferenceFacts:  sessionPreferences,
 		LongTermPreferenceFacts: longTermPreferences,
@@ -255,43 +273,6 @@ func (s *UseCases) EventsAfter(
 	return events, mapRunError(err)
 }
 
-func (intent StartIntent) primaryText() (string, error) {
-	switch strings.TrimSpace(intent.Kind) {
-	case "answer":
-		if intent.Answer == nil ||
-			intent.Search != nil ||
-			intent.CreationAssistance != nil ||
-			strings.TrimSpace(intent.Answer.Text) == "" {
-			return "", invalidArgument("invalid answer intent")
-		}
-		return strings.TrimSpace(intent.Answer.Text), nil
-	case "search":
-		if intent.Search == nil ||
-			intent.Answer != nil ||
-			intent.CreationAssistance != nil ||
-			strings.TrimSpace(intent.Search.Query) == "" {
-			return "", invalidArgument("invalid search intent")
-		}
-		return strings.TrimSpace(intent.Search.Query), nil
-	case "creation_assistance":
-		if intent.CreationAssistance == nil ||
-			intent.Answer != nil ||
-			intent.Search != nil {
-			return "", invalidArgument("invalid creation assistance intent")
-		}
-		text := strings.TrimSpace(
-			intent.CreationAssistance.DraftTitle + "\n" +
-				intent.CreationAssistance.DraftSummary,
-		)
-		if text == "" {
-			return "", invalidArgument("empty creation assistance intent")
-		}
-		return text, nil
-	default:
-		return "", invalidArgument("unknown assistant run intent")
-	}
-}
-
 func mapRunError(err error) error {
 	if err == nil {
 		return nil
@@ -313,6 +294,36 @@ func mapRunError(err error) error {
 		)
 		appErr.HTTPStatus = http.StatusNotFound
 		return appErr
+	case errors.Is(err, runruntime.ErrSkillPackageUnavailable):
+		appErr := rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleAssistant, rterr.KindSystem, "run_skill_package_unavailable"),
+			"助手技能包暂不可用，请稍后重试",
+			err.Error(),
+		)
+		appErr.HTTPStatus = http.StatusServiceUnavailable
+		return appErr
+	case errors.Is(err, runruntime.ErrSkillDisabled):
+		appErr := rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleAssistant, rterr.KindUser, "run_skill_disabled"),
+			"该技能在当前场景未启用，请检查个人或群聊技能设置",
+			err.Error(),
+		)
+		appErr.HTTPStatus = http.StatusConflict
+		return appErr
+	case errors.Is(err, runruntime.ErrSkillSettingUnavailable):
+		appErr := rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleAssistant, rterr.KindSystem, "skill_setting_storage_unavailable"),
+			"技能设置服务暂不可用，个人技能按失败关闭处理",
+			err.Error(),
+		)
+		appErr.HTTPStatus = http.StatusServiceUnavailable
+		return appErr
+	case errors.Is(err, runruntime.ErrPolicyUnavailable):
+		return runerrors.AppErrorFromRunPolicyUnavailable(err.Error())
+	case errors.Is(err, ErrIntersectionEvidenceNotFound):
+		return runerrors.AppErrorFromIntersectionEvidenceNotFound(err.Error())
+	case errors.Is(err, ErrIntersectionEvidenceUnavailable):
+		return runerrors.AppErrorFromIntersectionEvidenceUnavailable(err.Error())
 	case errors.Is(err, runruntime.ErrRevisionConflict),
 		errors.Is(err, runruntime.ErrLeaseConflict),
 		errors.Is(err, runruntime.ErrJournalGap),

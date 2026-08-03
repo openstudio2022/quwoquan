@@ -15,10 +15,6 @@ api_routes:
     authorization:
       ownership_policy: reporter
       principal: persona
-    client_contract:
-      dart_import: ../content/report_commands.dart
-      response_decoder: decodeEmptyCloudResponse
-      response_type: void
     commercial:
       status: ready
     description: 提交举报
@@ -55,6 +51,7 @@ api_routes:
       trace: true
     request_entity: CreateContentReportCommand
     request_body_kind: object
+    response_body_kind: ack
   - actor: persona
     application:
       facet: ReportQueryFacet
@@ -65,10 +62,6 @@ api_routes:
     authorization:
       ownership_policy: reporter
       principal: persona
-    client_contract:
-      dart_import: ../content/report_queries.dart
-      response_decoder: decodeContentMyReportPage
-      response_type: ContentMyReportPage
     commercial:
       status: ready
     description: 当前 persona 查看自己提交的举报及生命周期进度
@@ -96,9 +89,9 @@ api_routes:
       max_attempts: 2
       retry_mode: idempotent
       timeout_ms: 1500
-    response_body: MyReportItemSlice
+    response_body: MyReportPageSlice
     response_body_kind: page
-    response_entity: MyReportItemSlice
+    response_entity: MyReportPageSlice
     security:
       anonymous_policy: deny
       auth_mode: required

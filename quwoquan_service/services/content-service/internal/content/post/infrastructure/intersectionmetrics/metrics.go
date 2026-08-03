@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
+	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 )
 
 const (

@@ -1,0 +1,8 @@
+description: TripPlanContentLink 采用与归属变化事件。
+events:
+- name: TripPlanContentLinkChanged
+  producer: travel-service
+  consumers: [trip-timeline-projector, trip-map-projector, content-service]
+  channel: transactional_outbox
+  payload_entity: TripPlanContentLink
+  payload_fields: [_id, tripId, postId, version, revisionNumber, targetKind, dayIndex, itemId, visibility, sourceVersion, status, updatedAt]

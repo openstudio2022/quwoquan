@@ -185,7 +185,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Future<void> _refreshNativeSegmentsWithoutBlockingWelcome() async {
     try {
-      await AppStartupRuntime.instance.hydrateNativeProcessSegments(
+      await AppStartupRuntime.instance.beginNativeStartupAttempt(
         cancellationSignal: _disposedCompleter.future,
       );
       if (mounted && !_terminal) {

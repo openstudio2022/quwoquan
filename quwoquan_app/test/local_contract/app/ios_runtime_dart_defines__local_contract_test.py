@@ -21,6 +21,7 @@ from verify_startup_environment_matrix import _validate_runtime_evidence
 SCRIPT = APP_DIR / "scripts/ios/prepare_dart_defines.sh"
 BUILD_WRAPPER = APP_DIR / "scripts/ios/xcode_backend_build.sh"
 HANDOFF_BUILDER = APP_DIR / "scripts/device/build_launcher_handoff.py"
+STACKCTL_PYTHON_RESOLVER = APP_DIR / "scripts/ios/resolve_stackctl_python.sh"
 RUNTIME_TARGETS = {
     "alpha": "alpha-local",
     "beta": "beta-local",
@@ -55,6 +56,17 @@ def _build_handoff(
         "--launch-mode",
         launch_mode,
     ]
+    if launch_mode in {"canonical_launcher", "direct_flutter_run"}:
+        command.extend(
+            [
+                "--content-release-id",
+                f"release-{environment}",
+                "--content-manifest-digest",
+                "sha256:" + "1" * 64,
+                "--content-readiness-receipt-digest",
+                "sha256:" + "2" * 64,
+            ]
+        )
     result = subprocess.run(
         command,
         cwd=APP_DIR,
@@ -81,6 +93,17 @@ def _apply_handoff_identity(
     env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
         handoff["effectiveLaunchManifestDigest"]
     )
+    for environment_key, handoff_key in (
+        ("QWQ_CONTENT_RELEASE_ID", "contentReleaseId"),
+        ("QWQ_CONTENT_MANIFEST_DIGEST", "contentManifestDigest"),
+        (
+            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
+            "contentReadinessReceiptDigest",
+        ),
+    ):
+        value = str(handoff.get(handoff_key) or "")
+        if value:
+            env[environment_key] = value
     return handoff
 
 
@@ -98,7 +121,95 @@ def _decode_export(stdout: str) -> dict[str, str]:
     return values
 
 
+def _write_preflight_python(directory: Path) -> Path:
+    executable = directory / "preflight-python"
+    preflight = json.dumps(
+        {
+            "status": "passed",
+            "releaseId": "release-test",
+            "manifestDigest": "sha256:" + "1" * 64,
+            "readinessReceiptDigest": "sha256:" + "2" * 64,
+        }
+    )
+    executable.write_text(
+        "#!/usr/bin/env bash\n"
+        "for argument in \"$@\"; do\n"
+        "  if [[ \"$argument\" == \"app-debug-preflight\" ]]; then\n"
+        f"    printf '%s\\n' {shlex.quote(preflight)}\n"
+        "    exit 0\n"
+        "  fi\n"
+        "done\n"
+        f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    return executable
+
+
+def _write_blocked_preflight_python(directory: Path) -> Path:
+    executable = directory / "blocked-preflight-python"
+    preflight = json.dumps(
+        {
+            "status": "gate_block",
+            "details": [
+                "target startup status is not running: stopped",
+                "api-edge is not ready: network_error",
+            ],
+        }
+    )
+    executable.write_text(
+        "#!/usr/bin/env bash\n"
+        "for argument in \"$@\"; do\n"
+        "  if [[ \"$argument\" == \"app-debug-preflight\" ]]; then\n"
+        f"    printf '%s\\n' {shlex.quote(preflight)}\n"
+        "    exit 2\n"
+        "  fi\n"
+        "done\n"
+        f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    return executable
+
+
 class IosRuntimeDartDefinesContractTest(unittest.TestCase):
+    def test_xcode_stackctl_python_resolver_skips_incompatible_path_python(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            invalid_python = temporary_root / "bin" / "python3"
+            invalid_python.parent.mkdir()
+            invalid_python.write_text(
+                "#!/usr/bin/env bash\nexit 1\n",
+                encoding="utf-8",
+            )
+            invalid_python.chmod(0o755)
+            compatible_python = (
+                temporary_root / "python-cache" / "quwoquan-data" / "bin" / "python3"
+            )
+            compatible_python.parent.mkdir(parents=True)
+            compatible_python.symlink_to(Path(sys.executable))
+            env = dict(os.environ)
+            env.pop("QWQ_IOS_STACKCTL_PYTHON", None)
+            env["PATH"] = (
+                str(invalid_python.parent) + os.pathsep + env["PATH"]
+            )
+            env["QWQ_PYTHON_CACHE_ROOT"] = str(temporary_root / "python-cache")
+            result = subprocess.run(
+                ["bash", str(STACKCTL_PYTHON_RESOLVER)],
+                cwd=APP_DIR.parent,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                Path(result.stdout.strip()).resolve(),
+                compatible_python.resolve(),
+            )
+
     def test_all_environment_packages_produce_complete_defines(self) -> None:
         flutter_define = base64.b64encode(b"FLUTTER_VERSION=test").decode("ascii")
         for env_name in ("alpha", "beta", "gamma", "prod"):
@@ -120,6 +231,10 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "xcode_build")
                 self.assertTrue(REQUIRED_KEYS.issubset(values))
                 self.assertEqual(values["FLUTTER_VERSION"], "test")
+                self.assertIn(
+                    "export FLUTTER_TARGET=lib/main_prod.dart",
+                    result.stdout,
+                )
                 self.assertIn(f"env={env_name}", result.stderr)
 
     def test_xcode_build_writes_native_recovery_manifest(self) -> None:
@@ -203,10 +318,74 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         self.assertIn("canonical runtime handoff is required", result.stderr)
         self.assertIn("./run.sh -d <device>", result.stderr)
 
-    def test_direct_ios_simulator_debug_builds_canonical_alpha_handoff(
+    def test_direct_ios_debug_selects_canonical_nonprod_handoff(self) -> None:
+        flutter_define = base64.b64encode(b"FLUTTER_VERSION=test").decode("ascii")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            preflight_python = _write_preflight_python(Path(temporary_directory))
+            for environment in ("alpha", "beta", "gamma"):
+                with self.subTest(environment=environment):
+                    env = dict(os.environ)
+                    for key in (
+                        "QWQ_APP_RUNTIME_ENV",
+                        "QWQ_APP_LAUNCH_MODE",
+                        "QWQ_LAUNCH_TARGET",
+                        "QWQ_DART_DEFINES_DIGEST",
+                        "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+                        "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+                    ):
+                        env.pop(key, None)
+                    env["QWQ_ENVIRONMENT"] = environment
+                    env["QWQ_IOS_STACKCTL_PYTHON"] = str(preflight_python)
+                    env["DART_DEFINES"] = flutter_define
+                    env["CONFIGURATION"] = "Debug"
+                    env["PLATFORM_NAME"] = "iphoneos"
+                    build_dir = Path(temporary_directory) / environment
+                    env["TARGET_BUILD_DIR"] = str(build_dir)
+                    env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+                    result = subprocess.run(
+                        ["bash", str(SCRIPT)],
+                        cwd=APP_DIR,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    values = _decode_export(result.stdout)
+                    self.assertEqual(values["APP_RUNTIME_ENV"], environment)
+                    self.assertEqual(
+                        values["QWQ_APP_LAUNCH_MODE"],
+                        "direct_flutter_run",
+                    )
+                    self.assertEqual(values["FLUTTER_VERSION"], "test")
+                    self.assertTrue(REQUIRED_KEYS.issubset(values))
+                    self.assertIn(
+                        f"direct Debug uses canonical {environment}-local handoff",
+                        result.stderr,
+                    )
+                    with (
+                        build_dir / "Runner.app" / "QWQNativeRuntime.plist"
+                    ).open("rb") as stream:
+                        native_manifest = plistlib.load(stream)
+                    self.assertEqual(
+                        native_manifest["contentReleaseId"],
+                        "release-test",
+                    )
+                    self.assertRegex(
+                        native_manifest["contentManifestDigest"],
+                        r"^sha256:[0-9a-f]{64}$",
+                    )
+                    self.assertRegex(
+                        native_manifest["contentReadinessReceiptDigest"],
+                        r"^sha256:[0-9a-f]{64}$",
+                    )
+                    self.assertRegex(
+                        native_manifest["effectiveLaunchManifestDigest"],
+                        r"^sha256:[0-9a-f]{64}$",
+                    )
+
+    def test_direct_ios_debug_reports_the_first_runtime_readiness_blocker(
         self,
     ) -> None:
-        flutter_define = base64.b64encode(b"FLUTTER_VERSION=test").decode("ascii")
         env = dict(os.environ)
         for key in (
             "QWQ_APP_RUNTIME_ENV",
@@ -215,30 +394,33 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             "QWQ_DART_DEFINES_DIGEST",
             "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
             "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+            "DART_DEFINES",
         ):
             env.pop(key, None)
-        env["DART_DEFINES"] = flutter_define
-        env["CONFIGURATION"] = "Debug"
-        env["PLATFORM_NAME"] = "iphonesimulator"
-        env["TARGET_DEVICE_IDENTIFIER"] = (
-            "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
-        )
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        values = _decode_export(result.stdout)
-        self.assertEqual(values["APP_RUNTIME_ENV"], "alpha")
-        self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "direct_flutter_run")
-        self.assertEqual(values["FLUTTER_VERSION"], "test")
-        self.assertTrue(REQUIRED_KEYS.issubset(values))
-        self.assertIn("direct Debug uses canonical alpha-local handoff", result.stderr)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(
+                _write_blocked_preflight_python(Path(temporary_directory))
+            )
+            env["CONFIGURATION"] = "Debug"
+            env["PLATFORM_NAME"] = "iphoneos"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
 
-    def test_direct_debug_does_not_synthesize_non_alpha_handoff(self) -> None:
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "first blocker: target startup status is not running: stopped",
+            result.stderr,
+        )
+        self.assertNotIn("target content is not ready", result.stderr)
+        self.assertIn("retry the same flutter run command", result.stderr)
+
+    def test_flutter_run_define_synthesizes_beta_debug_handoff(self) -> None:
         runtime_env = base64.b64encode(b"APP_RUNTIME_ENV=beta").decode("ascii")
         env = dict(os.environ)
         for key in (
@@ -251,18 +433,24 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         ):
             env.pop(key, None)
         env["DART_DEFINES"] = runtime_env
-        env["CONFIGURATION"] = "Debug"
-        env["PLATFORM_NAME"] = "iphonesimulator"
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("canonical launch mode is required", result.stderr)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(
+                _write_preflight_python(Path(temporary_directory))
+            )
+            env["CONFIGURATION"] = "Debug"
+            env["PLATFORM_NAME"] = "iphoneos"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        values = _decode_export(result.stdout)
+        self.assertEqual(values["APP_RUNTIME_ENV"], "beta")
+        self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "direct_flutter_run")
+        self.assertIn("canonical beta-local handoff", result.stderr)
 
     def test_release_without_canonical_launcher_fails_closed(self) -> None:
         env = dict(os.environ)
@@ -351,9 +539,9 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             ):
                 env.pop(key, None)
             env["CONFIGURATION"] = "Debug"
-            env["PLATFORM_NAME"] = "iphonesimulator"
-            env["TARGET_DEVICE_IDENTIFIER"] = (
-                "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
+            env["PLATFORM_NAME"] = "iphoneos"
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(
+                _write_preflight_python(Path(temporary_directory))
             )
             env["FLUTTER_ROOT"] = str(flutter_root)
             result = subprocess.run(
@@ -385,7 +573,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             marker = Path(temporary_directory) / "backend-env"
             backend.write_text(
                 "#!/bin/sh\n"
-                f"printf '%s\\n' \"$QWQ_IOS_DART_DEFINES_READY\" > {shlex.quote(str(marker))}\n",
+                f"printf '%s|%s\\n' \"$QWQ_IOS_DART_DEFINES_READY\" \"$FLUTTER_TARGET\" > {shlex.quote(str(marker))}\n",
                 encoding="utf-8",
             )
             env = dict(os.environ)
@@ -400,7 +588,10 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(marker.read_text(encoding="utf-8").strip(), "1")
+            self.assertEqual(
+                marker.read_text(encoding="utf-8").strip(),
+                "1|lib/main_prod.dart",
+            )
 
     def test_flutter_run_define_selects_environment_without_xcode_variable(self) -> None:
         runtime_env = base64.b64encode(b"APP_RUNTIME_ENV=beta").decode("ascii")

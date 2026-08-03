@@ -84,7 +84,12 @@ class _PublicationTaskCard extends StatelessWidget {
     final statusColor = switch (publicationState) {
       ContentPostPublicationState.rejected => AppColors.error,
       ContentPostPublicationState.pendingReview => AppColors.warning,
-      ContentPostPublicationState.published => AppColors.success,
+      ContentPostPublicationState.published =>
+        intent.blocked
+            ? AppColors.error
+            : intent.retryCount > 0
+            ? AppColors.warning
+            : AppColors.success,
       null =>
         intent.blocked
             ? AppColors.error
@@ -186,11 +191,12 @@ class _PublicationTaskActions extends StatelessWidget {
     final requiresMediaPreparation = intent.requiresMediaPreparation;
     final requiresMediaCancellation = intent.requiresMediaCancellation;
     final isRejected = publicationState == ContentPostPublicationState.rejected;
-    final canRetry = requiresMediaCancellation
+    final canRetry =
+        requiresMediaCancellation ||
+            publicationState == ContentPostPublicationState.published
         ? intent.blocked || intent.retryCount > 0
         : !requiresMediaPreparation &&
-              publicationState != ContentPostPublicationState.rejected &&
-              publicationState != ContentPostPublicationState.published;
+              publicationState != ContentPostPublicationState.rejected;
     final canRemove =
         publicationState == ContentPostPublicationState.rejected ||
         (publicationState == null && !requiresMediaCancellation);

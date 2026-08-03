@@ -17,7 +17,9 @@ errors:
     - CreateConversation
     - ListConversations
     - ListSelectableGroupConversations
+    - ProjectGatheringConversation
     - RecoverChatAccountClosureDeadLetter
+    - chat.conversation_membership.ProjectGatheringConversationMembership
     - chat.conversation_membership.ResolveAssistantDeliveryMembership
     - chat.message.ListAssistantGroundingMessages
     - chat.message.SendAssistantDeliveryMessage
@@ -28,7 +30,7 @@ errors:
   user_message:
     zh: 请求参数无效
     en: Request parameters are invalid
-- code: CHAT.USER.circle_group_binding_write_forbidden
+- code: CHAT.USER.source_managed_binding_write_forbidden
   kind: USER
   reason: invalid_argument
   emitted_by:
@@ -37,11 +39,26 @@ errors:
     - CreateConversation
   http_status: 400
   recovery_action: surface
-  dart_const: circleGroupBindingWriteForbidden
-  go_const: ErrCircleGroupBindingWriteForbidden
+  dart_const: sourceManagedBindingWriteForbidden
+  go_const: ErrSourceManagedBindingWriteForbidden
   user_message:
-    zh: 圈群绑定只能由系统创建
-    en: Circle group bindings can only be created by the system
+    zh: 来源对象绑定只能由所属领域创建
+    en: Source-managed bindings can only be created by their owning domain
+- code: CHAT.USER.gathering_binding_conflict
+  kind: USER
+  reason: gathering_binding_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ProjectGatheringConversation
+    - chat.conversation_membership.ProjectGatheringConversationMembership
+  http_status: 409
+  recovery_action: surface
+  dart_const: gatheringBindingConflict
+  go_const: ErrGatheringBindingConflict
+  user_message:
+    zh: 相聚会话绑定冲突
+    en: Gathering conversation binding conflicts with the source fact
 - code: CHAT.USER.conversation_not_found
   kind: USER
   reason: not_found
@@ -52,6 +69,7 @@ errors:
     - GetConversation
     - GetGroupHome
     - ListSelectableGroupContactMembers
+    - chat.conversation_membership.ProjectGatheringConversationMembership
     - UpdateAnnouncement
     - UpdateConversationTitle
     - UpdateGroupGovernanceSettings
@@ -87,13 +105,13 @@ errors:
     - DissolveConversation
     - GetConversation
     - GetGroupHome
-    - GetReceipts
+    - chat.message_receipt_fact.GetReceipts
     - ListContactHome
     - ListContacts
     - ListConversationTimestamps
     - ListConversations
     - ListGroupCandidates
-    - ListInbox
+    - chat.chat_inbox_view.ListInbox
     - ListMessageHome
     - ListSelectableGroupContactMembers
     - ListSelectableGroupConversations
@@ -131,7 +149,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
-    - GetReceipts
+    - chat.message_receipt_fact.GetReceipts
     - chat.conversation_user_state.MarkAsRead
     - chat.message.RecallMessage
   http_status: 404
@@ -294,7 +312,7 @@ errors:
   - surface: http
     operations:
     - CreateConversation
-    - GetReceipts
+    - chat.message_receipt_fact.GetReceipts
     - chat.conversation_user_state.MarkAsRead
     - chat.message.ListAssistantGroundingMessages
     - chat.message.RecallMessage
@@ -358,7 +376,7 @@ errors:
   user_message:
     zh: 只有群主或管理员可以执行该操作
     en: Only the group owner or an admin can perform this action
-- code: CHAT.USER.circle_group_managed_by_circle
+- code: CHAT.USER.source_managed_conversation
   kind: USER
   reason: conflict
   emitted_by:
@@ -377,11 +395,11 @@ errors:
     - chat.conversation_membership.UpdateGroupAdmins
   http_status: 409
   recovery_action: surface
-  dart_const: circleGroupManagedByCircle
-  go_const: ErrCircleGroupManagedByCircle
+  dart_const: sourceManagedConversation
+  go_const: ErrSourceManagedConversation
   user_message:
-    zh: 该群成员与角色由圈群管理，请在群组管理页操作
-    en: This group is managed by its circle group. Use group management instead.
+    zh: 该会话由来源对象管理，请从来源对象操作
+    en: This conversation is managed by its source object. Use the source object instead.
 - code: CHAT.SYSTEM.circle_group_binding_conflict
   kind: SYSTEM
   reason: projection_conflict
@@ -452,16 +470,17 @@ errors:
     - DissolveConversation
     - GetConversation
     - GetGroupHome
-    - GetReceipts
+    - chat.message_receipt_fact.GetReceipts
     - ListContactHome
     - ListContacts
     - ListConversationTimestamps
     - ListConversations
     - ListGroupCandidates
-    - ListInbox
+    - chat.chat_inbox_view.ListInbox
     - ListMessageHome
     - ListSelectableGroupContactMembers
     - ListSelectableGroupConversations
+    - ProjectGatheringConversation
     - RecoverChatAccountClosureDeadLetter
     - UpdateAnnouncement
     - UpdateConversationTitle
@@ -473,6 +492,7 @@ errors:
     - chat.conversation_membership.RemoveAssistant
     - chat.conversation_membership.RemoveMember
     - chat.conversation_membership.ResolveAssistantDeliveryMembership
+    - chat.conversation_membership.ProjectGatheringConversationMembership
     - chat.conversation_membership.TransferOwnership
     - chat.conversation_membership.UpdateGroupAdmins
     - chat.conversation_user_state.MarkAsRead

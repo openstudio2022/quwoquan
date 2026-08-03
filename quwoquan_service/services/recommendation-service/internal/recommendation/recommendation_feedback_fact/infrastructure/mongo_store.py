@@ -9,6 +9,12 @@ from pymongo.errors import DuplicateKeyError
 from internal.recommendation.recommendation_feedback_fact.application.appender import FeedbackFact
 
 
+def _bson_datetime(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(
+        microsecond=(value.microsecond // 1000) * 1000
+    )
+
+
 class MongoFeedbackFactStore:
     def __init__(self, database: Any) -> None:
         self._facts = database["recommendation_feedback_facts"]
@@ -48,8 +54,8 @@ class MongoFeedbackFactStore:
             "targetId": fact.target_id,
             "feedbackType": fact.feedback_type,
             "value": fact.value,
-            "occurredAt": fact.occurred_at,
-            "recordedAt": fact.recorded_at,
+            "occurredAt": _bson_datetime(fact.occurred_at),
+            "recordedAt": _bson_datetime(fact.recorded_at),
         }
 
     @staticmethod

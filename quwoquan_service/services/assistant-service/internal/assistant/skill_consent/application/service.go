@@ -55,7 +55,8 @@ func (facade *QueryFacade) List(
 
 func (facade *CommandFacade) Grant(
 	ctx context.Context,
-	idempotencyKey, accountID, skillID, grantedScope string,
+	idempotencyKey, accountID, skillID string,
+	grantedScopes []string,
 ) (_ model.MutationResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
@@ -68,7 +69,7 @@ func (facade *CommandFacade) Grant(
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
 	command, err := model.NewGrantCommand(
-		accountID, skillID, grantedScope, idempotencyKey, facade.now(),
+		accountID, skillID, grantedScopes, idempotencyKey, facade.now(),
 	)
 	if err != nil {
 		return model.MutationResult{}, err

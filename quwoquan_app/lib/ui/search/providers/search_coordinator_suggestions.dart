@@ -212,34 +212,36 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
         ? responseHits
               .where((hit) => hit.objectType == SearchObjectType.circleGroup)
               .map((hit) => hit.asCircleGroupItem)
-              .whereType<CircleSearchItemView>()
+              .whereType<CircleSearchHitViewData>()
               .toList(growable: false)
-        : const <CircleSearchItemView>[];
+        : const <CircleSearchHitViewData>[];
     final locationSuggestions = responseHits
         .where(
           (hit) =>
               hit.objectType == SearchObjectType.integrationLocationPoi ||
               hit.objectType == SearchObjectType.locationPlace,
         )
-        .map(
-          (hit) =>
-              hit.asLocationPoiItem ??
-              switch (hit.asLocationPlaceItem) {
-                final item? => LocationPoiDto(
-                  id: item.placeId,
-                  name: item.name,
-                  address: item.address,
-                ),
-                null => null,
-              },
-        )
-        .whereType<LocationPoiDto>()
+        .map((hit) {
+          final poi = hit.asLocationPoiItem;
+          if (poi != null) {
+            return SearchLocationSuggestionViewData.fromWire(poi);
+          }
+          final place = hit.asLocationPlaceItem;
+          return place == null
+              ? null
+              : SearchLocationSuggestionViewData(
+                  id: place.placeId,
+                  name: place.name,
+                  address: place.address,
+                );
+        })
+        .whereType<SearchLocationSuggestionViewData>()
         .where((item) => item.name.trim().isNotEmpty)
         .toList(growable: false);
     final followedPeopleSuggestions = responseHits
         .where((hit) => hit.objectType == SearchObjectType.userProfile)
         .map((hit) => hit.asSocialRelationItem)
-        .whereType<SocialRelationSearchItemView>()
+        .whereType<SocialRelationSearchItemViewData>()
         .where(
           (item) =>
               item.relationshipCapability.canOpenConversation ||

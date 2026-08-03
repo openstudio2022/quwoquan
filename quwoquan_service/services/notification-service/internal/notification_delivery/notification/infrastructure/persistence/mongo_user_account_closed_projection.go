@@ -12,14 +12,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
+	jobapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 const (
-	UserAccountClosedInboxCollection       = "notification_user_account_closed_inbox"
-	UserAccountClosedFailureCollection     = "notification_user_account_closed_failures"
-	closedAccountDeliveryJobCollection     = "notification_delivery_jobs"
-	closedAccountDeliveryReceiptCollection = "notification_delivery_jobs_command_receipts"
-	closedAccountDeliveryOutboxCollection  = "notification_delivery_jobs_outbox"
+	UserAccountClosedInboxCollection   = "notification_user_account_closed_inbox"
+	UserAccountClosedFailureCollection = "notification_user_account_closed_failures"
 
 	userAccountClosedFailureRetention = 7 * 24 * time.Hour
 )
@@ -48,39 +46,34 @@ type userAccountClosedCleanupResult struct {
 // MongoUserAccountClosedProjection 只清理 notification-service 自有 Mongo
 // 投影。事件 inbox 与全部业务变更在同一事务提交，不访问 User 数据库。
 type MongoUserAccountClosedProjection struct {
-	db               *mongo.Database
-	appMessages      *mongo.Collection
-	deliveryJobs     *mongo.Collection
-	recipients       *mongo.Collection
-	commandReceipts  *mongo.Collection
-	deliveryOutbox   *mongo.Collection
-	restrictions     *mongo.Collection
-	restrictionInbox *mongo.Collection
-	inbox            *mongo.Collection
-	failures         *mongo.Collection
+	db                *mongo.Database
+	appMessages       *mongo.Collection
+	restrictions      *mongo.Collection
+	restrictionInbox  *mongo.Collection
+	inbox             *mongo.Collection
+	failures          *mongo.Collection
+	deliveryLifecycle jobapplication.AccountLifecycle
 }
 
 var _ application.UserAccountClosedProjection = (*MongoUserAccountClosedProjection)(nil)
 
 func NewMongoUserAccountClosedProjection(
 	db *mongo.Database,
+	deliveryLifecycle jobapplication.AccountLifecycle,
 ) (*MongoUserAccountClosedProjection, error) {
-	if db == nil {
+	if db == nil || deliveryLifecycle == nil {
 		return nil, errors.New(
 			"notification UserAccountClosed projection requires MongoDB",
 		)
 	}
 	return &MongoUserAccountClosedProjection{
-		db:               db,
-		appMessages:      db.Collection("app_messages"),
-		deliveryJobs:     db.Collection(closedAccountDeliveryJobCollection),
-		recipients:       db.Collection("notification_delivery_job_recipients"),
-		commandReceipts:  db.Collection(closedAccountDeliveryReceiptCollection),
-		deliveryOutbox:   db.Collection(closedAccountDeliveryOutboxCollection),
-		restrictions:     db.Collection("notification_user_account_restrictions"),
-		restrictionInbox: db.Collection("notification_user_account_restriction_inbox"),
-		inbox:            db.Collection(UserAccountClosedInboxCollection),
-		failures:         db.Collection(UserAccountClosedFailureCollection),
+		db:                db,
+		appMessages:       db.Collection("app_messages"),
+		restrictions:      db.Collection("notification_user_account_restrictions"),
+		restrictionInbox:  db.Collection("notification_user_account_restriction_inbox"),
+		inbox:             db.Collection(UserAccountClosedInboxCollection),
+		failures:          db.Collection(UserAccountClosedFailureCollection),
+		deliveryLifecycle: deliveryLifecycle,
 	}, nil
 }
 
@@ -136,39 +129,6 @@ func (projection *MongoUserAccountClosedProjection) EnsureIndexes(
 	); err != nil {
 		return fmt.Errorf(
 			"ensure notification account cleanup message index: %w",
-			err,
-		)
-	}
-	if _, err := projection.deliveryJobs.Indexes().CreateMany(
-		ctx,
-		[]mongo.IndexModel{
-			{
-				Keys: bson.D{{Key: "recipientIds", Value: 1}},
-				Options: options.Index().
-					SetName("idx_notification_delivery_jobs_recipient_cleanup"),
-			},
-			{
-				Keys: bson.D{{Key: "targetPersonaId", Value: 1}},
-				Options: options.Index().
-					SetName("idx_notification_delivery_jobs_persona_cleanup"),
-			},
-		},
-	); err != nil {
-		return fmt.Errorf(
-			"ensure notification account cleanup delivery indexes: %w",
-			err,
-		)
-	}
-	if _, err := projection.recipients.Indexes().CreateOne(
-		ctx,
-		mongo.IndexModel{
-			Keys: bson.D{{Key: "recipientId", Value: 1}},
-			Options: options.Index().
-				SetName("idx_notification_delivery_recipients_cleanup"),
-		},
-	); err != nil {
-		return fmt.Errorf(
-			"ensure notification account cleanup recipient index: %w",
 			err,
 		)
 	}
@@ -289,33 +249,13 @@ func (projection *MongoUserAccountClosedProjection) cleanupClosedSubjects(
 		return userAccountClosedCleanupResult{}, err
 	}
 
-	jobClauses := bson.A{
-		bson.M{"recipientIds": bson.M{"$in": subjects}},
-		bson.M{"destinationRef": bson.M{"$in": subjects}},
-		bson.M{"targetPersonaId": bson.M{"$in": subjects}},
-	}
-	if len(messageIDs) > 0 {
-		jobClauses = append(
-			jobClauses,
-			bson.M{"aggregateId": bson.M{"$in": messageIDs}},
-			bson.M{"notificationId": bson.M{"$in": messageIDs}},
-		)
-	}
-	jobFilter := bson.M{"$or": jobClauses}
-	jobIDs, err := collectStringDocumentIDs(
+	deliveryResult, err := projection.deliveryLifecycle.CloseAccount(
 		ctx,
-		projection.deliveryJobs,
-		jobFilter,
-	)
-	if err != nil {
-		return userAccountClosedCleanupResult{}, err
-	}
-
-	anonymized, err := projection.anonymizeDeliveryAudit(
-		ctx,
-		event,
-		jobIDs,
-		messageIDs,
+		jobapplication.AccountClosure{
+			EventID:         event.EventID,
+			SubjectIDs:      subjects,
+			NotificationIDs: messageIDs,
+		},
 	)
 	if err != nil {
 		return userAccountClosedCleanupResult{}, err
@@ -327,42 +267,6 @@ func (projection *MongoUserAccountClosedProjection) cleanupClosedSubjects(
 	if err != nil {
 		return userAccountClosedCleanupResult{},
 			fmt.Errorf("delete closed-account app messages: %w", err)
-	}
-	var deletedJobs int64
-	if len(jobIDs) > 0 {
-		jobResult, deleteErr := projection.deliveryJobs.DeleteMany(
-			ctx,
-			bson.M{"_id": bson.M{"$in": jobIDs}},
-		)
-		if deleteErr != nil {
-			return userAccountClosedCleanupResult{},
-				fmt.Errorf(
-					"delete closed-account notification delivery jobs: %w",
-					deleteErr,
-				)
-		}
-		deletedJobs = jobResult.DeletedCount
-	}
-
-	recipientClauses := bson.A{
-		bson.M{"recipientId": bson.M{"$in": subjects}},
-	}
-	if len(jobIDs) > 0 {
-		recipientClauses = append(
-			recipientClauses,
-			bson.M{"notificationId": bson.M{"$in": jobIDs}},
-		)
-	}
-	recipientResult, err := projection.recipients.DeleteMany(
-		ctx,
-		bson.M{"$or": recipientClauses},
-	)
-	if err != nil {
-		return userAccountClosedCleanupResult{},
-			fmt.Errorf(
-				"delete closed-account delivery recipient projection: %w",
-				err,
-			)
 	}
 	if _, err := projection.restrictions.DeleteMany(
 		ctx,
@@ -383,9 +287,9 @@ func (projection *MongoUserAccountClosedProjection) cleanupClosedSubjects(
 	}
 	return userAccountClosedCleanupResult{
 		DeletedAppMessages:       messageResult.DeletedCount,
-		DeletedDeliveryJobs:      deletedJobs,
-		DeletedRecipientRecords:  recipientResult.DeletedCount,
-		AnonymizedAuditDocuments: anonymized,
+		DeletedDeliveryJobs:      deliveryResult.DeletedJobs,
+		DeletedRecipientRecords:  deliveryResult.DeletedRecipientRecords,
+		AnonymizedAuditDocuments: deliveryResult.AnonymizedAuditRecords,
 	}, nil
 }
 

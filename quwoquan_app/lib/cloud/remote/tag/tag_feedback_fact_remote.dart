@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef TagInvocationContextFactory =
@@ -16,7 +17,9 @@ final class RemoteTagFeedbackAdapter implements TagFeedbackCommandWriter {
   final TagInvocationContextFactory invocationContext;
 
   @override
-  Future<TagFeedbackAck> reportTagFeedback(ReportTagFeedbackCommand command) {
+  Future<TagFeedbackResultView> reportTagFeedback(
+    ReportTagFeedbackCommand command,
+  ) {
     return client.tagTagFeedbackFactReportTagFeedback(
       command,
       context: invocationContext(TagRequestPageIds.reportTagFeedback),

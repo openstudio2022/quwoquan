@@ -11,13 +11,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
+	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
 )
 
 // TestReportOutboxOpensModerationCase 验证举报 → 审核闭环：
@@ -35,7 +36,7 @@ func TestReportOutboxOpensModerationCase(t *testing.T) {
 
 	postID := publishModerationTargetPost(t, "被举报的正文内容")
 
-	reportRepo, err := persistence.NewPGReportStore(suite.PG)
+	reportRepo, err := reportpersistence.NewPGReportStore(suite.PG)
 	if err != nil {
 		t.Fatalf("init pg report store: %v", err)
 	}
@@ -137,7 +138,7 @@ func TestReportPostRevisionDecodeFailureDoesNotAdvanceCheckpoint(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert malformed Post revision: %v", err)
 	}
-	reportRepo, err := persistence.NewPGReportStore(suite.PG)
+	reportRepo, err := reportpersistence.NewPGReportStore(suite.PG)
 	if err != nil {
 		t.Fatalf("init pg report store: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 		t.Fatalf("read initial Post revision: found=%v err=%v", found, err)
 	}
 
-	reportRepo, err := persistence.NewPGReportStore(suite.PG)
+	reportRepo, err := reportpersistence.NewPGReportStore(suite.PG)
 	if err != nil {
 		t.Fatalf("init pg report store: %v", err)
 	}
@@ -375,7 +376,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	if delivered, err := moderationRelay.Drain(context.Background(), 100); err != nil || delivered != 3 {
 		t.Fatalf("moderation outbox did not apply rejection: delivered=%d err=%v", delivered, err)
 	}
-	postStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	postStore := newMongoPostStore(mongoDB.Collection("posts"))
 	rejected, found, err := postStore.Load(context.Background(), postID)
 	if err != nil || !found {
 		t.Fatalf("load rejected Post: found=%v err=%v", found, err)

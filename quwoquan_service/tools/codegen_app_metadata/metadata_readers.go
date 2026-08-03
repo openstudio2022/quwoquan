@@ -103,9 +103,40 @@ func readProjection(path string) (*projectionFile, error) {
 				}
 				field.DartType = dartType
 			}
+			inferCanonicalProjectionDecoderBinding(field)
 		}
 	}
 	return &parsed, nil
+}
+
+// inferCanonicalProjectionDecoderBinding derives the Dart object decoder from
+// the canonical projection field type. Object-local fields remain the only
+// field-shape truth; client_projection carries output placement only.
+func inferCanonicalProjectionDecoderBinding(field *projectionFieldDef) {
+	if field == nil {
+		return
+	}
+	dartType := normalizeDartType(field.DartType)
+	if strings.HasPrefix(dartType, "List<") && strings.HasSuffix(dartType, ">") {
+		element := strings.TrimSpace(strings.TrimSuffix(
+			strings.TrimPrefix(dartType, "List<"),
+			">",
+		))
+		if isDartIdentifier(element) && element != "String" {
+			field.ListElementDartClass = element
+		}
+		return
+	}
+	if strings.TrimSpace(field.EnumRef) != "" {
+		return
+	}
+	switch dartType {
+	case "", "String", "DateTime", "int", "double", "bool", "Map<String, dynamic>":
+		return
+	}
+	if isDartIdentifier(dartType) {
+		field.MapFromStringKeyClass = dartType
+	}
 }
 
 func readValidatedProjection(
@@ -205,14 +236,15 @@ func readProjectionBinding(path string) (*projectionBinding, error) {
 }
 
 func projectionWireTypeToDart(raw string) (string, error) {
-	switch strings.TrimSpace(raw) {
+	canonical := strings.TrimSpace(raw)
+	switch canonical {
 	case "string", "enum", "date", "time", "tag_ref":
 		return "String", nil
 	case "timestamp", "datetime":
 		return "DateTime", nil
 	case "int", "int32", "int64":
 		return "int", nil
-	case "float", "double", "number":
+	case "float", "float32", "float64", "double", "number":
 		return "double", nil
 	case "bool", "boolean":
 		return "bool", nil
@@ -220,9 +252,17 @@ func projectionWireTypeToDart(raw string) (string, error) {
 		return "List<String>", nil
 	case "map", "json", "object":
 		return "Map<String, dynamic>", nil
-	default:
-		return "", fmt.Errorf("unsupported projection wire type %q", raw)
 	}
+	if strings.HasPrefix(canonical, "[]") {
+		item := strings.TrimSpace(strings.TrimPrefix(canonical, "[]"))
+		if isDartIdentifier(item) {
+			return "List<" + item + ">", nil
+		}
+	}
+	if isDartIdentifier(canonical) {
+		return canonical, nil
+	}
+	return "", fmt.Errorf("unsupported projection wire type %q", raw)
 }
 
 // collectProjectionReadModelDartClass 建立 projection read_model -> client_projection.dart_class

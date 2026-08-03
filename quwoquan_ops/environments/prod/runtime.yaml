@@ -2,6 +2,21 @@
   "schema": "environment-runtime",
   "environment": "prod",
   "dataReleaseTarget": "prod-hosted",
+  "productLifecycleState": "research",
+  "researchContentIsolation": {
+    "identityWhitelistRequired": true,
+    "anonymousContentAccess": false,
+    "anonymousMediaAccess": false,
+    "publicContentDistribution": false,
+    "sharingDisabled": true,
+    "exportDisabled": true,
+    "searchIndexingDisabled": true,
+    "internalAppSignatureRequired": true,
+    "researchBadgeRequired": true,
+    "shortLivedSignedMediaUrlsRequired": true,
+    "signedMediaUrlMaxTtlSeconds": 900,
+    "mediaAccessAuditLogRequired": true
+  },
   "urlRoles": {
     "api": {"scheme": "https", "host": "api.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod"},
     "realtime": {"scheme": "wss", "host": "api.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod"},

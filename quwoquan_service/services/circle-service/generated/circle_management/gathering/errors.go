@@ -17,6 +17,7 @@ var (
 	ErrGatheringParticipantStateInvalid   = errors.New("CIRCLE.USER.gathering_participant_state_invalid")
 	ErrGatheringIdempotencyConflict       = errors.New("CIRCLE.USER.gathering_idempotency_conflict")
 	ErrGatheringConversationBindingFailed = errors.New("CIRCLE.DEPENDENCY.gathering_conversation_binding_failed")
+	ErrGatheringTargetUnavailable         = errors.New("CIRCLE.DEPENDENCY.gathering_target_unavailable")
 	ErrGatheringStorageFailed             = errors.New("CIRCLE.SYSTEM.gathering_storage_failed")
 )
 
@@ -60,6 +61,12 @@ func AppErrorFromGatheringIdempotencyConflict(debugMessage string) *rerrors.AppE
 func AppErrorFromGatheringConversationBindingFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringConversationBindingFailed.Error()))
 	return rerrors.NewAppError(code, "相聚会话暂时未就绪，请重试", debugMessage).WithMetadata("gathering_conversation_binding_failed", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromGatheringTargetUnavailable returns *AppError for CIRCLE.DEPENDENCY.gathering_target_unavailable (user_message from errors.yaml).
+func AppErrorFromGatheringTargetUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringTargetUnavailable.Error()))
+	return rerrors.NewAppError(code, "目标对象暂时不可验证，请重试", debugMessage).WithMetadata("gathering_target_unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromGatheringStorageFailed returns *AppError for CIRCLE.SYSTEM.gathering_storage_failed (user_message from errors.yaml).

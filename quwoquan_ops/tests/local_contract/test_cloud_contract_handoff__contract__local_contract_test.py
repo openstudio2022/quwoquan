@@ -190,7 +190,37 @@ class CloudContractHandoffTest(unittest.TestCase):
             lock["appExposedOperations"][0]["responseAdmission"],
             {"maximumBodyBytes": 2097152},
         )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["transport"],
+            "json",
+        )
         self.assertFalse((self.root / "leases/app-cloud-handoff.lock").exists())
+
+    def test_preserves_sse_transport_as_generated_abi(self) -> None:
+        self._write_graph()
+        graph = json.loads(self.graph.read_text(encoding="utf-8"))
+        graph["operations"][0]["transport"] = "sse"
+        graph["operations"][0]["streaming"] = {
+            "resumeRequestField": "resumeToken",
+            "resumeResponseField": "eventId",
+            "terminalField": "eventType",
+            "terminalValues": ["completed"],
+        }
+        self.graph.write_text(
+            json.dumps(graph, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(handoff.accept(self._args()), 0)
+        lock = json.loads(self.lock.read_text(encoding="utf-8"))
+        self.assertEqual(
+            lock["appExposedOperations"][0]["transport"],
+            "sse",
+        )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["streaming"]["resumeResponseField"],
+            "eventId",
+        )
 
     def test_ambiguous_surface_binding_fails_without_guessing(self) -> None:
         self._write_graph(duplicate=True)

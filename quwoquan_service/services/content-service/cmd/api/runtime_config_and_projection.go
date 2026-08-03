@@ -21,8 +21,13 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
 )
 
-func contentReleaseWorkload() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD")), "content-release")
+func contentSliceWorkload() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("QWQ_WORKLOAD"))) {
+	case "content-release", "content-commercial":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -173,7 +178,7 @@ func preflightConfig(cfg config, appEnv string) error {
 	if cfg.ES.Enabled && len(cfg.ES.Endpoints) == 0 {
 		return fmt.Errorf("%s content runtime enables search projection but has no es.endpoints/SEARCH_ES_ENDPOINTS", appEnv)
 	}
-	if appEnv != "alpha" && cfg.Embedding.Enabled && !contentReleaseWorkload() {
+	if appEnv != "alpha" && cfg.Embedding.Enabled && !contentSliceWorkload() {
 		if _, err := resolveContentEmbeddingGateway(appEnv); err != nil {
 			return fmt.Errorf("%s content runtime embedding binding: %w", appEnv, err)
 		}
@@ -435,8 +440,6 @@ func hostname() string {
 
 // projectorAdapter bridges content read-model projectors to ports.Projector.
 type projectorAdapter struct {
-	discovery *recinfra.DiscoveryFeedProjector
-	recommend *recinfra.RecommendFeatureProjector
 	embedding *recinfra.EmbeddingProjector
 	search    *searchindex.Projector
 	place     *placeindex.PlaceProjector
@@ -449,16 +452,6 @@ func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEve
 		AggregateID:   event.AggregateID,
 		Payload:       event.Payload,
 		OccurredAt:    event.OccurredAt,
-	}
-	if a.discovery != nil {
-		if err := a.discovery.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
-	}
-	if a.recommend != nil {
-		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
-			return err
-		}
 	}
 	if a.embedding != nil {
 		if err := a.embedding.Project(ctx, projectorEvent); err != nil {

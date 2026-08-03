@@ -48,7 +48,7 @@ class PersonalContentAccessState {
       granted: false,
       isHydrating: true,
       isSyncing: false,
-      grantedScope: kPersonalContentAccessSkillId,
+      grantedScope: kPersonalContentAccessScope,
       source: 'bootstrap',
     );
   }
@@ -74,7 +74,7 @@ class PersonalContentAccessNotifier
       final consents = await ref
           .read(assistantSkillConsentFacetProvider)
           .listConsents();
-      final current = consents.cast<AssistantSkillConsent?>().firstWhere(
+      final current = consents.cast<SkillConsent?>().firstWhere(
         (item) => item?.skillId == kPersonalContentAccessSkillId,
         orElse: () => null,
       );
@@ -82,7 +82,7 @@ class PersonalContentAccessNotifier
         state = state.copyWith(
           granted: false,
           isHydrating: false,
-          grantedScope: kPersonalContentAccessSkillId,
+          grantedScope: kPersonalContentAccessScope,
           source: 'repository',
           updatedAt: null,
           clearError: true,
@@ -90,11 +90,14 @@ class PersonalContentAccessNotifier
         return;
       }
       state = state.copyWith(
-        granted: current.granted,
+        granted:
+            current.granted == true &&
+            current.revokedAt == null &&
+            current.grantedScopes.contains(kPersonalContentAccessScope),
         isHydrating: false,
-        grantedScope: current.grantedScope,
+        grantedScope: kPersonalContentAccessScope,
         source: 'repository',
-        updatedAt: current.updatedAt,
+        updatedAt: DateTime.tryParse(current.grantedAt)?.toUtc(),
         clearError: true,
       );
     } catch (error) {
@@ -115,13 +118,16 @@ class PersonalContentAccessNotifier
             .read(assistantSkillConsentFacetProvider)
             .grantSkillConsent(
               skillId: kPersonalContentAccessSkillId,
-              grantedScope: kPersonalContentAccessSkillId,
+              grantedScopes: const <String>[kPersonalContentAccessScope],
               clientRequestId: const Uuid().v4(),
             );
         state = state.copyWith(
-          granted: consent.granted,
-          grantedScope: consent.grantedScope,
-          updatedAt: consent.updatedAt,
+          granted:
+              consent.granted == true &&
+              consent.revokedAt == null &&
+              consent.grantedScopes.contains(kPersonalContentAccessScope),
+          grantedScope: kPersonalContentAccessScope,
+          updatedAt: DateTime.tryParse(consent.grantedAt)?.toUtc(),
           source: 'repository',
           isHydrating: false,
           isSyncing: false,
@@ -137,7 +143,7 @@ class PersonalContentAccessNotifier
           );
       state = state.copyWith(
         granted: false,
-        grantedScope: kPersonalContentAccessSkillId,
+        grantedScope: kPersonalContentAccessScope,
         clearUpdatedAt: true,
         source: 'repository',
         isHydrating: false,

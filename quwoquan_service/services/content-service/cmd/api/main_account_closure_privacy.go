@@ -13,8 +13,10 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
+	closurestream "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/adapters/inbound/stream"
+	closureapp "quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/application"
 	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
-	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -120,7 +122,7 @@ func startAccountClosureRuntime(
 	}
 	consumer, err := accountclosure.NewConsumer(
 		redis,
-		processor,
+		closurestream.NewHandler(closureapp.NewIngress(processor)),
 		store,
 		"content-service-"+instanceID,
 		logger,

@@ -13,7 +13,7 @@ abstract interface class ProfileQuery {
 
   Future<UserProfileStatsViewData> getUserStats(String userId);
 
-  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
+  Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
     required String query,
     int limit = CloudApiDefaults.pageLimit,
   });

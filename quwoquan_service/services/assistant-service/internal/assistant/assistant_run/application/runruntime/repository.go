@@ -25,6 +25,15 @@ type CommandReceipt struct {
 	CreatedAt     time.Time `bson:"createdAt"`
 }
 
+// TerminalRunRecord is the typed, ordered source consumed by read-model
+// projectors. SourceCursor fields belong to the AssistantRun store ordering;
+// consumers persist them as opaque checkpoints and never query its collection.
+type TerminalRunRecord struct {
+	Run             Run
+	SourceUpdatedAt time.Time
+	SourceRunID     string
+}
+
 // Repository atomically persists an aggregate snapshot and ordered journal
 // events with optimistic CAS. Stream reconnect replays EventsAfter before
 // returning the latest snapshot.

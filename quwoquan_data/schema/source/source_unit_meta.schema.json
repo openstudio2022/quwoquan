@@ -120,6 +120,7 @@
       "enum": [
         "licensed_adaptation",
         "factual_reference_only",
+        "rights_audit_only",
         "blocked"
       ]
     },
@@ -128,6 +129,7 @@
         "licensed_adaptation",
         "factual_reference_only",
         "attribution_no_watermark",
+        "rights_audit_only",
         "blocked"
       ]
     },
@@ -197,10 +199,10 @@
           "const": "sourced-video-attribution"
         },
         "sourceUseMode": {
-          "const": "licensed_adaptation"
+          "enum": ["licensed_adaptation", "rights_audit_only"]
         },
         "rightsMode": {
-          "const": "attribution_no_watermark"
+          "enum": ["attribution_no_watermark", "rights_audit_only"]
         },
         "researchLane": {
           "const": "video"

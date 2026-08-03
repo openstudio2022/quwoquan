@@ -63,10 +63,9 @@ api_routes:
       - referralId
       - occurredAt
       - replayed
-    client_contract:
-      dart_import: ../content/outbound_share_contracts.dart
-      response_type: ContentOutboundShareFactResult
-      response_decoder: decodeContentOutboundShareFactResult
+    response_entity: OutboundShareFactResult
+    response_body: OutboundShareFactResult
+    response_body_kind: object
     security:
       auth_mode: optional
       principal: owner

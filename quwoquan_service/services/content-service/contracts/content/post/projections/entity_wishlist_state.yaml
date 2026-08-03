@@ -1,18 +1,10 @@
 read_model: EntityWishlistState
-description: 'GetEntityWishlistState 的私有单对象读模型。它只回答当前登录用户是否
-
-  对指定 canonical object 保留显式「想去」意图，不承载写入语义。
-
-  '
-consumers:
-- app
-source_entities:
-- ContentBehaviorFact
-client_projection:
-  dart_class: EntityWishlistState
-  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/entity_wishlist_state.dart
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/entity_wishlist_state.dart
+description: >-
+  当前登录 persona 对 canonical object 的显式想去状态，只读自 ContentBehaviorFact
+  所拥有的 entity_wishlist_events，不承载写入语义。
+source_entities: [ContentBehaviorFact]
+consumers: [app]
 fields:
-- {name: objectId}
-- {name: objectKind}
-- {name: wishlisted}
+  - {name: objectId, type: string, nullable: false}
+  - {name: objectKind, type: string, nullable: false}
+  - {name: wishlisted, type: bool, nullable: false}

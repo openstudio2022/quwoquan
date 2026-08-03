@@ -126,7 +126,7 @@ def scan_repository(root: Path) -> list[str]:
                 continue
             candidates = [service_root / "deploy"]
             candidates.extend(
-                service_root / "environments" / environment
+                service_root / "environments" / environment / "deploy"
                 for environment in ("alpha", "beta", "gamma")
             )
             for candidate_root in candidates:

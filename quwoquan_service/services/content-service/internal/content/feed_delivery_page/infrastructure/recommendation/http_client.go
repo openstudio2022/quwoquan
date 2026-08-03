@@ -79,19 +79,22 @@ func (client *HTTPClient) Create(
 
 func (client *HTTPClient) GetPage(
 	ctx context.Context,
-	windowID string,
-	fromOrdinal int,
-	limit int,
+	request transport.GetRankedRecommendationPageQuery,
 ) (transport.RankedRecommendationPage, error) {
 	path := strings.Replace(
 		transport.GetRankedRecommendationPagePath,
 		"{windowId}",
-		url.PathEscape(strings.TrimSpace(windowID)),
+		url.PathEscape(strings.TrimSpace(request.WindowId)),
 		1,
 	)
 	query := url.Values{}
-	query.Set("fromOrdinal", strconv.Itoa(fromOrdinal))
-	query.Set("limit", strconv.Itoa(limit))
+	query.Set("subjectId", strings.TrimSpace(request.SubjectId))
+	if request.FromOrdinal != nil {
+		query.Set("fromOrdinal", strconv.Itoa(*request.FromOrdinal))
+	}
+	if request.Limit != nil {
+		query.Set("limit", strconv.Itoa(*request.Limit))
+	}
 	return client.do(
 		ctx,
 		transport.GetRankedRecommendationPageMethod,
@@ -257,6 +260,33 @@ func validatePage(page transport.RankedRecommendationPage) error {
 		}
 		seenOrdinals[item.Ordinal] = struct{}{}
 		seenContent[contentID] = struct{}{}
+	}
+	if len(page.ObjectCards) > 20 {
+		return fmt.Errorf("ranked recommendation page has too many object cards")
+	}
+	seenObjectCards := make(map[string]struct{}, len(page.ObjectCards))
+	for _, card := range page.ObjectCards {
+		objectID := strings.TrimSpace(card.ObjectId)
+		if strings.TrimSpace(card.ObjectKind) == "" || objectID == "" ||
+			strings.TrimSpace(card.Title) == "" || strings.TrimSpace(card.ReasonKey) == "" ||
+			strings.TrimSpace(card.RecallPath) == "" {
+			return fmt.Errorf("ranked recommendation object card is invalid")
+		}
+		if _, duplicate := seenObjectCards[objectID]; duplicate {
+			return fmt.Errorf("ranked recommendation object card identity is duplicated")
+		}
+		seenObjectCards[objectID] = struct{}{}
+		seenTags := make(map[string]struct{}, len(card.TagRefs))
+		for _, rawTag := range card.TagRefs {
+			tag := strings.TrimSpace(rawTag)
+			if tag == "" {
+				return fmt.Errorf("ranked recommendation object card tag is empty")
+			}
+			if _, duplicate := seenTags[tag]; duplicate {
+				return fmt.Errorf("ranked recommendation object card tag is duplicated")
+			}
+			seenTags[tag] = struct{}{}
+		}
 	}
 	if page.NextOrdinal != nil && (*page.NextOrdinal < 0 || len(page.Items) == 0) {
 		return fmt.Errorf("ranked recommendation continuation is invalid")

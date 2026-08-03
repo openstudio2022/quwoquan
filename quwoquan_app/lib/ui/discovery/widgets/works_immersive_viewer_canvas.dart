@@ -13,7 +13,7 @@ class _WorksTopChromeTheme {
   final Color mutedForegroundColor;
 }
 
-/// Work Browser 顶部栏（V1.0）：极简，仅「返回」与「更多」。
+/// Work Browser 顶部栏：极简，仅「返回」与「更多」。
 /// 禁止媒体类型指示、页码、形态 tab；媒体筛选入口收敛到「更多」菜单。
 /// 顶栏空白区保留横滑手势用于宿主一级 tab 切换（首页嵌入态）。
 class _WorksPrimaryTopBar extends StatelessWidget {
@@ -105,7 +105,7 @@ class _WorksVideoCanvas extends StatefulWidget {
     required this.onActiveSessionChanged,
   });
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final List<_WorksVideoDeliveryItem> items;
   final int initialEpisodeIndex;
   final bool isVisible;
@@ -677,7 +677,7 @@ class _WorksArticleCanvas extends StatelessWidget {
     this.onOverflowNext,
   });
 
-  final PostBaseDto post;
+  final ContentPostViewData post;
   final ContentArticleRender article;
   final String timeLine;
   final ArticlePaperTexture paperTexture;

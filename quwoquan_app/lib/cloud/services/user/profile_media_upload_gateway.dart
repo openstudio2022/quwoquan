@@ -39,12 +39,12 @@ class ContentProfileMediaUploadGateway implements ProfileMediaUploadGateway {
     final source = await _sourceReader.prepare(path);
     final uploaded = await _coordinator.uploadPreparedSource(
       source: source,
-      mediaType: ContentMediaType.image,
+      mediaType: MediaType.image,
       mimeType: _profileImageContentType(path),
       uploadStream: _uploadStream,
       accessPolicy: switch (target) {
         ProfileMediaTarget.avatar ||
-        ProfileMediaTarget.cover => ContentMediaAccessPolicy.ownerOnly,
+        ProfileMediaTarget.cover => MediaAssetAccessPolicy.ownerOnly,
       },
     );
     return ProfileMediaUploadResult(assetId: uploaded.assetId);

@@ -15,6 +15,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.read]
     reliability:
       timeout_ms: 5000
       cancellation: supported
@@ -105,11 +106,7 @@ api_routes:
           field: homepageId
     description: 发起主页认领申请；同一 persona 对同一主页仅允许一条 pending_review 申请
     request_entity: CreateHomepageClaimRequestCommand
-    response_entity: HomepageClaimRequest
-    client_contract:
-      dart_import: ../entity/homepage_commands.dart
-      response_type: HomepageClaimRequestView
-      response_decoder: decodeHomepageClaimRequestView
+    response_entity: HomepageClaimRequestView
     security:
       auth_mode: required
       principal: persona
@@ -133,6 +130,7 @@ api_routes:
     authorization:
       principal: operator
       ownership_policy: entity_governance_operator
+      scopes: [ops.case.write]
     reliability:
       timeout_ms: 5000
       cancellation: supported

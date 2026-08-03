@@ -179,6 +179,27 @@ configs:
   rollout: progressive
   sensitive: false
   default: false
+- key: sys.recommendation-service.ranked_window.quota_shard_count
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 256
+- key: sys.recommendation-service.ranked_window.maximum_live_records_per_shard
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 128
+- key: sys.recommendation-service.ranked_window.maximum_live_bytes_per_shard
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 134217728
 - key: sys.recommendation-service.service.http.addr
   type: string
   scope: workload

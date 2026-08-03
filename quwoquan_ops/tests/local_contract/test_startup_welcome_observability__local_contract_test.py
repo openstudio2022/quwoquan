@@ -48,9 +48,11 @@ class StartupWelcomeObservabilityContractTest(unittest.TestCase):
         thresholds = (
             REPO_ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
         ).read_text(encoding="utf-8")
-        sls = (
+        elasticsearch_contract = (
             REPO_ROOT
-            / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+            / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
+        ).read_text(encoding="utf-8") + (
+            REPO_ROOT / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
         ).read_text(encoding="utf-8")
 
         for alert in (
@@ -61,15 +63,15 @@ class StartupWelcomeObservabilityContractTest(unittest.TestCase):
             "StartupTelemetryJournalDrop",
         ):
             self.assertIn(alert, alerts)
-        for sls_contract in (
-            "app-product-telemetry-performance-hourly",
-            "eventType:app_startup",
+        for elasticsearch_contract_token in (
+            "row_kind: performance",
+            "eventType: app_startup",
             "product-startup-content-p95-high",
-            "condition: p95Ms > 3000",
+            "p95Ms > 3000",
             "product-startup-error-rate-high",
-            "condition: errorRate > 0.001",
+            "errorRate > 0.001",
         ):
-            self.assertIn(sls_contract, sls)
+            self.assertIn(elasticsearch_contract_token, elasticsearch_contract)
         for threshold in (
             "shell_first_paint_target_ms: 3000",
             "welcome_exit_hard_ms: 6000",

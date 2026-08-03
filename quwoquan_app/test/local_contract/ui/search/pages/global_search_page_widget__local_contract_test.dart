@@ -9,10 +9,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/application/search/search_operation_ports.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -120,7 +120,7 @@ Widget _buildApp({
         AlphaSearchFeedbackWriter(),
       ),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
-      assistantXiaoquSearchFacetProvider.overrideWithValue(
+      assistantSearchRunFacetProvider.overrideWithValue(
         _FakeAssistantRepository(),
       ),
       chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
@@ -306,7 +306,7 @@ void main() {
     final localEntry = container.read(provider).recentSearches.single;
     await coordinator.removeRecentSearch(localEntry.entryId);
     recentSearches.completeUpsert(
-      RecentSearchEntry(
+      RecentSearchEntryWire(
         entryId: 'recent-canonical-delete-race',
         query: '并发删除',
         scope: SearchScope.all.wireValue,
@@ -996,30 +996,43 @@ class _DelayedHomepageRepository extends MockHomepageRepository {
   }
 }
 
-class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
+class _FakeAssistantRepository implements AssistantSearchRunFacet {
   @override
-  Future<AssistantSearchResultView> searchXiaoquResults({
+  Future<AssistantRunTerminalSnapshotView> executeAssistantSearch({
     required String query,
+    required String sessionClientRequestId,
+    required String runClientRequestId,
     SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
-    return AssistantSearchResultView(
-      queryEcho: query,
-      summary: '$query 的推荐结果',
-      searchIntensity: searchIntensity,
-      citations: <AssistantSearchCitationView>[
-        AssistantSearchCitationView(
-          citationId: 'citation_1',
-          objectType: 'content.post',
-          objectId: 'post_1',
-          title: '冰雪旅行推荐',
-          snippet: '适合冬季出行的内容推荐',
-          sourceDomain: '小趣搜',
-          destination: CitationDestination(
-            kind: CitationDestinationKind.internal,
-            objectTypeRef: 'content.post',
-            objectId: 'post_1',
-          ),
+    return AssistantRunTerminalSnapshotView(
+      answerText: '$query 的推荐结果',
+      processes: <AssistantRunVisibleProcessView>[
+        AssistantRunVisibleProcessView(
+          processId: 'search-process-1',
+          scope: 'public_web',
+          stage: 'retrieval',
+          actionCode: 'search',
+          status: 'completed',
+          order: 1,
+          summary: '已整理公开线索',
+          skillId: 'web_search',
+          domainId: 'search',
+          searchedDocumentCount: 1,
+          processedDocumentCount: 1,
+          acceptedDocumentCount: 1,
+          acceptedReferences: <AssistantRunVisibleReferenceView>[
+            AssistantRunVisibleReferenceView(
+              title: '冰雪旅行推荐',
+              snippet: '适合冬季出行的内容推荐',
+              source: '小趣搜',
+              destination: CitationDestination(
+                kind: CitationDestinationKind.internal,
+                objectTypeRef: 'content.post',
+                objectId: 'post_1',
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1029,12 +1042,12 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
 final class _DelayedRecentSearchFacet
     implements RecentSearchQuery, RecentSearchCommandWriter {
   final Completer<void> upsertStarted = Completer<void>();
-  final Completer<RecentSearchEntry> _upsertResult =
-      Completer<RecentSearchEntry>();
+  final Completer<RecentSearchEntryWire> _upsertResult =
+      Completer<RecentSearchEntryWire>();
   final List<String> deletedEntryIds = <String>[];
-  RecentSearchEntry? _entry;
+  RecentSearchEntryWire? _entry;
 
-  void completeUpsert(RecentSearchEntry entry) {
+  void completeUpsert(RecentSearchEntryWire entry) {
     _upsertResult.complete(entry);
   }
 
@@ -1045,13 +1058,13 @@ final class _DelayedRecentSearchFacet
     final entry = _entry;
     return RecentSearchEntrySlice(
       items: entry == null
-          ? const <RecentSearchEntry>[]
-          : <RecentSearchEntry>[entry],
+          ? const <RecentSearchEntryWire>[]
+          : <RecentSearchEntryWire>[entry],
     );
   }
 
   @override
-  Future<RecentSearchEntry> upsertRecentSearch(
+  Future<RecentSearchEntryWire> upsertRecentSearch(
     UpsertRecentSearchCommand command,
   ) async {
     if (!upsertStarted.isCompleted) {

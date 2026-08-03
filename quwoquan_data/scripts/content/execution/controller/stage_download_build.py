@@ -395,15 +395,15 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     # 审阅结论逐对象写回 5.review/review.json，配额判定据此重算：
     # 审阅未过的对象按丢弃处理，只要达标对象数仍满足配额，批次即可准出。
     reviewed = homepage_quota_verdict(ctx)
-    if reviewed.qualified_count <= 0:
+    if not reviewed.passed:
         issues = reviewed.blocking_issues() or [
-            "homepage independent review left no qualified objects"
+            "homepage independent review did not satisfy the approved quota"
         ]
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
-            f"主页独立审阅后无合格对象（达标 {reviewed.qualified_count}/{reviewed.approved_quota}）:\n  - "
+            f"主页独立审阅后未达配额（达标 {reviewed.qualified_count}/{reviewed.approved_quota}）:\n  - "
             + "\n  - ".join(issues[:10]),
             fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
             issue_records=stage_issues(
@@ -415,11 +415,10 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
         )
     for line in reviewed.discard_summary():
         print(f"[build_validate] 审阅丢弃 {line}")
-    milestone = "达标" if reviewed.passed else "部分达标可发布"
     return StageResult(
         ExecutionStage.BUILD_VALIDATE,
         AUTO,
         StageStatus.DONE,
-        f"主页采纳门与独立审阅{milestone} "
+        "主页采纳门与独立审阅达标 "
         f"{reviewed.qualified_count}/{reviewed.approved_quota}",
     )

@@ -1,7 +1,9 @@
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
-    show AssistantIntersectionEvidenceRef;
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        AssistantIntersectionEvidenceRef,
+        AssistantPageContextType,
+        AssistantReferralSource;
 
 /// 打开私助时的来源。
 enum AssistantSource {

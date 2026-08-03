@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/auth/auth_policy.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_appearance.dart';
 import 'package:quwoquan_app/core/errors/ui_error_models.dart';
@@ -15,6 +16,7 @@ final class AppUserRecoveryContract {
     required UiErrorCategory category,
     bool allowOpenSettings = false,
     bool verifiedUpdateAvailable = false,
+    String? sourceOperationId,
   }) {
     final status = error is CloudException
         ? error.statusCode
@@ -29,15 +31,15 @@ final class AppUserRecoveryContract {
         failure?.nature == RuntimeFailureNature.requiresPermission) {
       return AppUserRecoveryGroup.enablePermission;
     }
-    if (category == UiErrorCategory.authRequired ||
-        failure?.kind == RuntimeFailureKind.auth ||
-        status == 401 ||
-        (error is CloudException &&
-            error.type == CloudErrorType.unauthorized)) {
-      return AppUserRecoveryGroup.loginAgain;
-    }
     if (code == RuntimeFailureCodes.appNetworkOffline) {
       return AppUserRecoveryGroup.connectNetwork;
+    }
+    if (_isAuthenticationFailure(error, failure, status)) {
+      if (category != UiErrorCategory.authRequired &&
+          _isGuestCapableOperation(sourceOperationId)) {
+        return AppUserRecoveryGroup.guestSessionUnavailable;
+      }
+      return AppUserRecoveryGroup.loginAgain;
     }
     if (status == 429 ||
         failure?.kind == RuntimeFailureKind.rateLimited ||
@@ -57,6 +59,25 @@ final class AppUserRecoveryContract {
         (error is CloudException && error.type == CloudErrorType.notFound)) {
       return AppUserRecoveryGroup.contentUnavailable;
     }
+    if (failure?.kind == RuntimeFailureKind.timeout ||
+        status == 504 ||
+        (error is CloudException && error.type == CloudErrorType.timeout)) {
+      return AppUserRecoveryGroup.requestTimedOut;
+    }
+    if (_isConnectionUnavailable(error, failure, code)) {
+      return AppUserRecoveryGroup.connectionUnavailable;
+    }
+    if ((status != null && status >= 500) ||
+        failure?.kind == RuntimeFailureKind.unavailable ||
+        (error is CloudException && error.type == CloudErrorType.server)) {
+      return AppUserRecoveryGroup.serviceUnavailable;
+    }
+    if (failure?.kind == RuntimeFailureKind.contract ||
+        failure?.kind == RuntimeFailureKind.parsing ||
+        (error is CloudException &&
+            error.type == CloudErrorType.invalidResponse)) {
+      return AppUserRecoveryGroup.invalidContent;
+    }
     return AppUserRecoveryGroup.reloadLater;
   }
 
@@ -68,6 +89,51 @@ final class AppUserRecoveryContract {
       AppUserRecoveryGroup.connectNetwork => const AppUserRecoveryCopy(
         title: SearchText.recoveryConnectNetworkTitle,
         message: SearchText.recoveryConnectNetworkMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: SearchText.reload,
+        ),
+        recoveryAction: RuntimeRecoveryAction.retry,
+      ),
+      AppUserRecoveryGroup.connectionUnavailable => const AppUserRecoveryCopy(
+        title: SearchText.recoveryConnectionUnavailableTitle,
+        message: SearchText.recoveryConnectionUnavailableMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: SearchText.reload,
+        ),
+        recoveryAction: RuntimeRecoveryAction.retry,
+      ),
+      AppUserRecoveryGroup.requestTimedOut => const AppUserRecoveryCopy(
+        title: SearchText.recoveryRequestTimedOutTitle,
+        message: SearchText.recoveryRequestTimedOutMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: SearchText.reload,
+        ),
+        recoveryAction: RuntimeRecoveryAction.retry,
+      ),
+      AppUserRecoveryGroup.serviceUnavailable => const AppUserRecoveryCopy(
+        title: SearchText.recoveryServiceUnavailableTitle,
+        message: SearchText.recoveryServiceUnavailableMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: SearchText.reload,
+        ),
+        recoveryAction: RuntimeRecoveryAction.retry,
+      ),
+      AppUserRecoveryGroup.invalidContent => const AppUserRecoveryCopy(
+        title: SearchText.recoveryInvalidContentTitle,
+        message: SearchText.recoveryInvalidContentMessage,
+        action: UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: SearchText.reload,
+        ),
+        recoveryAction: RuntimeRecoveryAction.retry,
+      ),
+      AppUserRecoveryGroup.guestSessionUnavailable => const AppUserRecoveryCopy(
+        title: SearchText.recoveryGuestSessionUnavailableTitle,
+        message: SearchText.recoveryGuestSessionUnavailableMessage,
         action: UiErrorAction(
           type: UiErrorActionType.retry,
           label: SearchText.reload,
@@ -252,6 +318,34 @@ final class AppUserRecoveryContract {
       if (code.isNotEmpty) return code;
     }
     return failure?.code.trim() ?? '';
+  }
+
+  static bool _isAuthenticationFailure(
+    Object error,
+    RuntimeFailureBase? failure,
+    int? status,
+  ) {
+    return failure?.kind == RuntimeFailureKind.auth ||
+        status == 401 ||
+        (error is CloudException && error.type == CloudErrorType.unauthorized);
+  }
+
+  static bool _isGuestCapableOperation(String? sourceOperationId) {
+    final operationId = sourceOperationId?.trim() ?? '';
+    final mode = AuthApiPolicy.operationToAuthMode[operationId];
+    return mode == 'public' || mode == 'optional';
+  }
+
+  static bool _isConnectionUnavailable(
+    Object error,
+    RuntimeFailureBase? failure,
+    String code,
+  ) {
+    if (failure?.kind != RuntimeFailureKind.network &&
+        !(error is CloudException && error.type == CloudErrorType.network)) {
+      return false;
+    }
+    return code != RuntimeFailureCodes.appNetworkOffline;
   }
 
   static bool _isExplicitlyGone({required String code, required int? status}) {

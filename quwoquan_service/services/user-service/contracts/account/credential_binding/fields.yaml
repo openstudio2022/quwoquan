@@ -101,6 +101,18 @@ fields:
     description: CredentialBinding 聚合内部 CAS 版本
     role: authoritative_state
 types:
+  CredentialBindingView:
+    description: 当前账号可见的脱敏凭证行；不包含 SECRET credentialKey。
+    fields:
+      - {name: id, type: string, constraints: [NOT_BLANK]}
+      - {name: credentialType, type: enum, enum_ref: CredentialType, constraints: [NOT_NULL]}
+      - {name: displayLabel, type: string, constraints: [NULLABLE]}
+      - {name: isActive, type: boolean, constraints: [NOT_NULL]}
+      - {name: boundAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: version, type: int64, constraints: [NOT_NULL]}
+  ListCredentialsSlice:
+    fields:
+      - {name: credentials, type: '[]CredentialBindingView', constraints: [NOT_NULL]}
   CredentialBindingCommandResult:
     description: 凭证绑定/解绑命令的稳定提交回执。
     fields:

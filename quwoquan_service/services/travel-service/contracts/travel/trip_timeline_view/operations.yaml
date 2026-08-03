@@ -1,0 +1,33 @@
+description: TripTimelineView projector 与成员只读 Reader。
+commercial_defaults:
+  status: blocked
+  block_reason: 缺 durable event relay、真实 Mongo 重建、App 时间线与双端 UAT
+  gap_id: TRAVEL_TRIP_TIMELINE_COMMERCIAL_CLOSURE
+  target_story: trip-shared-timeline
+api_routes:
+- method: GET
+  path: /travel/trips/{tripId}/timeline
+  operation: GetTripTimeline
+  actor: persona
+  request_bindings: {path: [{name: tripId, field: tripId}]}
+  request_entity: GetTripTimelineQuery
+  security: {auth_mode: required}
+  application: {kind: query, facet: TripTimelineQueryFacet, method: getTripTimeline, reader: TripTimelineViewReader, slice: TripTimelineView}
+  response_entity: TripTimelineView
+  authorization: {principal: persona, scopes: [travel.trip.read], ownership_policy: active_trip_member}
+  reliability: {timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [TRAVEL.USER.trip_not_found, TRAVEL.USER.trip_permission_denied, TRAVEL.DEPENDENCY.trip_timeline_projection_unavailable, TRAVEL.SYSTEM.trip_timeline_projection_failed]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: travel_trip_timeline_get, trace: true, attributes: [outcome, freshness]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  request_body_kind: none
+runtime_entrypoints:
+- name: ProjectTripTimeline
+  kind: projector
+  phase: event_projection
+  source_events: [travel.TripPlanCreated, travel.TripPlanRevised, travel.TripPlanLifecycleChanged, travel.TripPlanRevisionAppended, travel.TripMomentChanged, travel.TripPlanContentLinkChanged]
+  checkpoint: per_trip_source_event_receipt_and_source_digest
+  rebuild: load_current_trip_revision_and_active_shared_references
+  tombstone: delete_view_keep_projection_checkpoint
+  idempotency: event_id
+  application: {kind: command, facet: TripTimelineViewProjector, method: apply, object_owner: TripTimelineView}

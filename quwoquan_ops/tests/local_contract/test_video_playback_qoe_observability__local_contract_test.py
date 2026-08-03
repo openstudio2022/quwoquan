@@ -11,42 +11,51 @@ class VideoPlaybackQoeObservabilityContractTest(unittest.TestCase):
     def test_qoe_aggregate_and_alerts_keep_low_cardinality_dimensions(self) -> None:
         path = (
             REPO_ROOT
-            / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
+            / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
         )
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        jobs = {item["name"]: item for item in document["spec"]["scheduledSql"]["jobs"]}
-        qoe_job = jobs["app-product-telemetry-video-qoe-hourly"]
+        qoe_job = next(item for item in document["jobs"] if item["row_kind"] == "video_qoe")
+        measures = {item["name"] for item in qoe_job["measures"]}
 
-        self.assertEqual(qoe_job["rowKind"], "video_qoe")
-        self.assertIn("playbackMode,result", qoe_job["sql"])
-        self.assertIn("seekEvidenceSource", qoe_job["sql"])
-        self.assertIn("devicePlatform", qoe_job["sql"])
-        self.assertIn("networkClass", qoe_job["sql"])
-        self.assertIn("effectivePlaybackMs", qoe_job["sql"])
-        self.assertIn("nativeFirstFrameSuccessCount", qoe_job["sql"])
-        self.assertIn("rebufferSessionCount", qoe_job["sql"])
-        self.assertIn("terminalFailureCount", qoe_job["sql"])
-        self.assertIn("seekFailureCount", qoe_job["sql"])
-        self.assertIn("seekCommandHistogram", qoe_job["sql"])
-        self.assertIn("seekSettleHistogram", qoe_job["sql"])
-        self.assertNotIn("approx_percentile(", qoe_job["sql"])
-        self.assertIn("droppedFrames", qoe_job["sql"])
-        self.assertIn("processedVideoFrames", qoe_job["sql"])
-        self.assertIn("audioUnderrunCount", qoe_job["sql"])
-        self.assertIn("rendererMode", qoe_job["sql"])
-        self.assertIn("decoderQueueMode", qoe_job["sql"])
-        self.assertNotIn("sessionId", qoe_job["sql"])
-        self.assertNotIn("postId", qoe_job["sql"])
-        raw_logstore = next(
-            item
-            for item in document["spec"]["logstores"]
-            if item["name"] == "app-product-telemetry-raw"
+        self.assertIn("playbackMode", qoe_job["dimensions"])
+        self.assertIn("result", qoe_job["dimensions"])
+        self.assertIn("seekEvidenceSource", qoe_job["dimensions"])
+        self.assertIn("devicePlatform", qoe_job["dimensions"])
+        self.assertIn("networkClass", qoe_job["dimensions"])
+        for measure in (
+            "effectivePlaybackMs",
+            "nativeFirstFrameSuccessCount",
+            "rebufferSessionCount",
+            "terminalFailureCount",
+            "seekFailureCount",
+            "seekCommandHistogram",
+            "seekSettleHistogram",
+            "droppedFrames",
+            "processedVideoFrames",
+            "audioUnderrunCount",
+        ):
+            self.assertIn(measure, measures)
+        self.assertIn("rendererMode", qoe_job["dimensions"])
+        self.assertIn("decoderQueueMode", qoe_job["dimensions"])
+        self.assertNotIn("sessionId", qoe_job["dimensions"])
+        self.assertNotIn("postId", qoe_job["dimensions"])
+        storage = yaml.safe_load(
+            (
+                REPO_ROOT
+                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
+            ).read_text(encoding="utf-8")
         )
-        indexed_fields = set(raw_logstore["indexes"]["fields"])
+        indexed_fields = set(storage["logstores"]["raw"]["indexed_fields"])
         self.assertIn("devicePlatform", indexed_fields)
         self.assertIn("effectivePlaybackMs", indexed_fields)
 
-        alerts = {item["name"]: item for item in document["spec"]["alerts"]}
+        alert_policy = yaml.safe_load(
+            (
+                REPO_ROOT
+                / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
+            ).read_text(encoding="utf-8")
+        )["spec"]
+        alerts = {item["name"]: item for item in alert_policy["alerts"]}
         for alert_name in (
             "product-video-ready-p95-high",
             "product-video-rebuffer-rate-high",

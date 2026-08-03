@@ -1,0 +1,28 @@
+{
+  "skillId": "travel_companion",
+  "displayName": "贴身旅行管家",
+  "description": "把吃、玩、住、行、同行协作、现场变化和随拍整理为持续生长的共同旅行时间线。",
+  "domainId": "travel",
+  "problemClass": "complex_reasoning",
+  "tagRefs": ["travel", "trip_plan", "trip_timeline", "shared_trip"],
+  "executionTarget": "hybrid",
+  "routingHints": ["旅行", "旅游", "行程", "安排 行程", "规划 行程", "攻略", "酒店", "住宿", "美食", "餐厅", "路线", "交通", "地铁", "公交", "航班", "火车", "导航", "搭子", "同行", "领队", "导游", "集合", "随拍", "游记", "行程变化"],
+  "catalogProfileRef": "catalog.travel_companion",
+  "activationProfileRef": "activation.hybrid.shared",
+  "inputProfileRef": "input.travel_companion",
+  "contextProfileRef": "context.travel_companion",
+  "capabilityProfileRef": "capability.travel_companion",
+  "orchestrationProfileRef": "orchestration.travel_companion",
+  "triggerProfileRef": "trigger.travel_companion",
+  "memoryProfileRef": "memory.travel_companion",
+  "presentationProfileRef": "presentation.travel_companion",
+  "evaluationProfileRef": "evaluation.travel_companion",
+  "replayAssetRef": "assistant.replay.travel_companion",
+  "promptAssets": ["travel_companion.system", "assistant.evidence_discipline"],
+  "examples": [
+    "组织一个杭州七日自由行并在群内持续同步",
+    "把某一天随拍挂到行程点并生成时间线",
+    "行程变化后向相关成员解释差异和下一步",
+    "结束后生成可编辑的地图游记草稿"
+  ]
+}

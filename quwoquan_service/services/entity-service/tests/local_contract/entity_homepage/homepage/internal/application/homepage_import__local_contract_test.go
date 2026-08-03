@@ -168,28 +168,12 @@ func TestReconcileImportedHomepagesPreservesClaimedEdits(t *testing.T) {
 		t.Fatalf("seed upsert: %v", err)
 	}
 	id := report.Created[0]
-	claim, err := svc.CreateHomepageClaimRequest(ctx, id, application.ClaimRequestInput{
-		RequesterPersonaID: "fixture_operator",
-		ClaimTier:          "business",
-		ContactPhone:       "13800000000",
-	})
-	if err != nil {
-		t.Fatalf("claim request: %v", err)
-	}
 	if err := svc.ApplyClaimRequestedProjection(
 		ctx,
 		"test-import-claim-requested",
 		id,
 	); err != nil {
 		t.Fatalf("project pending claim: %v", err)
-	}
-	if _, err := svc.ReviewHomepageClaimRequest(
-		ctx,
-		id,
-		claim.ClaimRequestID,
-		application.ClaimReviewInput{Status: "approved"},
-	); err != nil {
-		t.Fatalf("approve claim: %v", err)
 	}
 	if err := svc.ApplyClaimReviewedProjection(
 		ctx,

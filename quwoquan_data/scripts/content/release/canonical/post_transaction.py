@@ -416,11 +416,11 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(f"post asset 权利审计字段不完整：{asset_id}")
             effective_license_name = license_name or "unknown"
             if (
-                rights_audit_status is RightsAuditStatus.UNVERIFIED
+                rights_audit_status is not RightsAuditStatus.VERIFIED
                 and not rights_audit_issues
             ):
                 raise ObjectTransactionError(
-                    f"post asset 未核实权利状态缺审计问题：{asset_id}"
+                    f"post asset 非 verified 权利状态缺审计问题：{asset_id}"
                 )
             snapshot_payload = {
                 "schema": "quwoquan_data.asset_rights_snapshot",

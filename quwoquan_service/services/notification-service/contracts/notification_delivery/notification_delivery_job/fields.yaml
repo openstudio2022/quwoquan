@@ -517,6 +517,7 @@ types:
         constraints:
           - PK
           - NOT_NULL
+          - NOT_BLANK
         classification: INTERNAL
         log_policy: hash
         api_exposure: read
@@ -525,6 +526,7 @@ types:
         type: string
         constraints:
           - NOT_NULL
+          - NOT_BLANK
         classification: PRIVATE
         log_policy: hash
         api_exposure: read
@@ -533,6 +535,7 @@ types:
         type: string
         constraints:
           - NOT_NULL
+          - NOT_BLANK
         classification: INTERNAL
         log_policy: allow
         api_exposure: read

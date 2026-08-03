@@ -107,11 +107,10 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   _installRootIsolateErrorListener();
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
-    if (CloudRuntimeConfig.shouldLoadNativeRuntimePackage) {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
-        await NativeRuntimeConfigBridge.readRuntimePackage(),
-      );
-    }
+    await AppStartupRuntime.instance.beginNativeStartupAttempt();
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      await NativeRuntimeConfigBridge.readRuntimePackage(),
+    );
     CloudRuntimeConfig.validateRequiredEndpoints();
     _configureStartupTelemetry();
     AppStartupRuntime.instance.markConfigurationValidated();

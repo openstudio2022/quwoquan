@@ -972,7 +972,6 @@ class _ContractSeedHttpServer {
             'avatarUrl': member['avatarUrl'] ?? '',
             'role': member['role'] ?? 'member',
             'memberType': member['memberType'] ?? 'user',
-            'assistantSkillId': member['assistantSkillId'],
             'joinedAt': member['joinedAt'],
             'isCurrentUser': member['isCurrentUser'] ?? false,
           },

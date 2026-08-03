@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/application/content/post/post_publication_continuation_registry.dart';
 import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
@@ -95,6 +96,9 @@ final class PostPublicationIntentQueueNotifier
         throw PostPublicationQueuedException(command.publishIntentId);
       }
     }
+    final publicationContinuation =
+        existing?.publicationContinuation ??
+        await _publicationContinuationForDraft(command.localDraftId);
     final now = DateTime.now().toUtc();
     final intent = LocalPostPublicationIntent(
       command: command,
@@ -106,6 +110,7 @@ final class PostPublicationIntentQueueNotifier
       preparedMediaAssets:
           existing?.preparedMediaAssets ??
           const <ContentMediaPreparationCheckpoint>[],
+      publicationContinuation: publicationContinuation,
     );
     _replace(intent);
     await _persist();
@@ -135,7 +140,7 @@ final class PostPublicationIntentQueueNotifier
     await _persist();
   }
 
-  Future<ContentPostPublicationReceipt> submit({
+  Future<PostPublicationReceipt> submit({
     required SubmitContentPostPublicationCommand command,
     required String authorPersonaId,
     Iterable<String> circleIds = const <String>[],
@@ -150,6 +155,9 @@ final class PostPublicationIntentQueueNotifier
       );
     }
     var intent = _intentForDraft(command.localDraftId);
+    final publicationContinuation =
+        intent?.publicationContinuation ??
+        await _publicationContinuationForDraft(command.localDraftId);
     if (intent == null) {
       intent = LocalPostPublicationIntent(
         command: command,
@@ -157,6 +165,7 @@ final class PostPublicationIntentQueueNotifier
         circleIds: _normalizedCircleIds(circleIds),
         createdAt: DateTime.now().toUtc(),
         nextAttemptAt: DateTime.now().toUtc(),
+        publicationContinuation: publicationContinuation,
       );
       _replace(intent);
       await _persist();
@@ -173,6 +182,14 @@ final class PostPublicationIntentQueueNotifier
         blocked: false,
         clearLastErrorCode: true,
         clearBlockReason: true,
+        publicationContinuation: publicationContinuation,
+      );
+      _replace(intent);
+      await _persist();
+    } else if (intent.publicationContinuation == null &&
+        publicationContinuation != null) {
+      intent = intent.copyWith(
+        publicationContinuation: publicationContinuation,
       );
       _replace(intent);
       await _persist();
@@ -366,8 +383,7 @@ final class PostPublicationIntentQueueNotifier
     final intent = _intentForDraft(localDraftId);
     if (intent == null ||
         intent.requiresMediaPreparation ||
-        intent.publicationState == ContentPostPublicationState.rejected ||
-        intent.publicationState == ContentPostPublicationState.published) {
+        intent.publicationState == ContentPostPublicationState.rejected) {
       return;
     }
     _replace(
@@ -511,7 +527,7 @@ final class PostPublicationIntentQueueNotifier
     }
   }
 
-  Future<ContentPostPublicationReceipt> _submitPublication(
+  Future<PostPublicationReceipt> _submitPublication(
     LocalPostPublicationIntent intent,
   ) async {
     final activePersona = await ref.read(activePersonaContextProvider.future);
@@ -578,12 +594,12 @@ final class PostPublicationIntentQueueNotifier
         throw const _PostPublicationPermanentException();
       }
       switch (asset.status) {
-        case ContentMediaProcessingStatus.ready:
+        case MediaAssetStatus.ready:
           continue;
-        case ContentMediaProcessingStatus.processing:
+        case MediaAssetStatus.processing:
           throw const _PostPublicationMediaProcessingException();
-        case ContentMediaProcessingStatus.rejected:
-        case ContentMediaProcessingStatus.deleted:
+        case MediaAssetStatus.rejected:
+        case MediaAssetStatus.deleted:
           throw const _PostPublicationMediaRejectedException();
       }
     }
@@ -646,6 +662,9 @@ final class PostPublicationIntentQueueNotifier
     if (intent.publicationState != ContentPostPublicationState.published) {
       throw const _PostPublicationPermanentException();
     }
+    if (!await _applyPublicationContinuation(intent)) {
+      return;
+    }
     try {
       await ref
           .read(createDraftStoreProvider.notifier)
@@ -697,6 +716,66 @@ final class PostPublicationIntentQueueNotifier
       );
     }
     await _persist();
+  }
+
+  Future<bool> _applyPublicationContinuation(
+    LocalPostPublicationIntent intent,
+  ) async {
+    final continuation = intent.publicationContinuation;
+    if (continuation == null) {
+      return true;
+    }
+    try {
+      await ref
+          .read(postPublicationContinuationRegistryProvider)
+          .apply(
+            continuation: continuation,
+            receipt: _receiptFromIntent(intent),
+          );
+      return true;
+    } on PostPublicationContinuationRejectedException catch (error) {
+      developer.log(
+        'Published Post continuation rejected',
+        name: 'PostPublicationIntentQueue',
+        error: error.reason,
+      );
+      await _markFailed(
+        intent,
+        PostPublicationContinuationRejectedException.errorCode,
+        false,
+        blockReason: LocalPostPublicationBlockReason.continuationRejected,
+      );
+      return false;
+    } on CloudException catch (error) {
+      final retryable = _isRetryable(error);
+      await _markFailed(
+        intent,
+        error.code ?? error.runtimeFailure.code,
+        retryable,
+        retryAfter: _retryAfter(error),
+        blockReason: retryable
+            ? null
+            : LocalPostPublicationBlockReason.remoteFailure,
+      );
+      return false;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Published Post continuation queued for retry',
+        name: 'PostPublicationIntentQueue',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _markFailed(intent, error.runtimeType.toString(), true);
+      return false;
+    }
+  }
+
+  Future<CreateDraftPublicationContinuationRef?>
+  _publicationContinuationForDraft(String localDraftId) async {
+    final draft = await ref
+        .read(createDraftRepositoryProvider)
+        .loadDraft(localDraftId);
+    return draft?.publicationContinuation;
   }
 
   Future<void> _markFailed(
@@ -839,10 +918,8 @@ final class PostPublicationIntentQueueNotifier
     });
   }
 
-  ContentPostPublicationReceipt _receiptFromIntent(
-    LocalPostPublicationIntent intent,
-  ) {
-    return ContentPostPublicationReceipt(
+  PostPublicationReceipt _receiptFromIntent(LocalPostPublicationIntent intent) {
+    return PostPublicationReceipt(
       publishIntentId: intent.command.publishIntentId,
       localDraftId: intent.command.localDraftId,
       postId: intent.postId!,
@@ -853,7 +930,7 @@ final class PostPublicationIntentQueueNotifier
   }
 
   ContentPostPublicationState _acceptedPublicationState(
-    ContentPostPublicationReceipt receipt,
+    PostPublicationReceipt receipt,
     LocalPostPublicationIntent intent,
   ) {
     final state = switch (receipt.state.trim()) {

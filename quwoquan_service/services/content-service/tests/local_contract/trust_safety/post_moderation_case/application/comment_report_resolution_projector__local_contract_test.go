@@ -7,7 +7,7 @@ import (
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/comment"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
+	"quwoquan_service/runtime/commandmeta"
 	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )
 

@@ -11,6 +11,9 @@ import (
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
+	externalmodel "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/domain/model"
+	deadletterdomain "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/domain"
+	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
 type ExternalInteractionStore interface {
@@ -19,15 +22,14 @@ type ExternalInteractionStore interface {
 	reliabletask.IdempotentDLQRecoveryStore
 	reliabletask.RetentionCleanupStore
 	reliabletask.MetricsStore
-	ListDeadTasks(
-		ctx context.Context,
-		taskTypes []string,
-		limit int,
-	) ([]reliabletask.DeadTaskRecord, error)
 	FindLatestTaskOutboxByAggregateID(
 		ctx context.Context,
 		aggregateID string,
 	) (reliabletask.TaskOutboxRecord, bool, error)
+	ListExternalInteractionDeadLetterFacts(
+		ctx context.Context,
+		requestID string,
+	) ([]deadletterdomain.Fact, error)
 }
 
 type ExternalInteractionService struct {
@@ -137,6 +139,20 @@ func NewExternalInteractionService(
 }
 
 func (s *ExternalInteractionService) Submit(ctx context.Context, req reliabletask.ExternalInteractionRequest) (reliabletask.ExternalInteractionAccepted, error) {
+	if _, err := externalmodel.NewSubmitRequest(externalmodel.SubmitRequest{
+		RequestID:      req.RequestID,
+		Operation:      req.Operation,
+		Tenant:         req.Tenant,
+		Environment:    req.Env,
+		IdempotencyKey: req.IdempotencyKey,
+		PayloadRef:     req.PayloadRef,
+		PayloadDigest:  req.PayloadDigest,
+		Sensitivity:    req.Sensitivity,
+		ExpiresAt:      req.ExpiresAt,
+	}, s.now()); err != nil {
+		return reliabletask.ExternalInteractionAccepted{},
+			externalgenerated.AppErrorFromInvalidExternalRequest(err.Error())
+	}
 	if _, enabled := s.policies[req.Operation]; !enabled {
 		return reliabletask.ExternalInteractionAccepted{}, fmt.Errorf(
 			"external interaction operation %s is disabled",
@@ -144,7 +160,7 @@ func (s *ExternalInteractionService) Submit(ctx context.Context, req reliabletas
 		)
 	}
 	if req.Operation == reliabletask.ExternalInteractionOperationPush {
-		if err := ValidatePushDeliveryRequest(req); err != nil {
+		if err := pushapp.ValidatePushDeliveryRequest(req); err != nil {
 			return reliabletask.ExternalInteractionAccepted{},
 				externalgenerated.AppErrorFromInvalidExternalRequest(err.Error())
 		}
@@ -265,49 +281,22 @@ func (s *ExternalInteractionService) ListDeadLetters(ctx context.Context, reques
 	if requestID == "" {
 		return nil, fmt.Errorf("requestId is required")
 	}
-	taskTypes := make([]string, 0, len(s.policies))
-	for operation := range s.policies {
-		taskTypes = append(
-			taskTypes,
-			reliabletask.TaskTypeForExternalInteraction(operation),
-		)
-	}
-	sort.Strings(taskTypes)
-	deadTasks, err := s.store.ListDeadTasks(ctx, taskTypes, 0)
+	facts, err := s.store.ListExternalInteractionDeadLetterFacts(ctx, requestID)
 	if err != nil {
 		return nil, err
 	}
-	attempts, err := s.ListAttempts(ctx, requestID)
-	if err != nil {
-		return nil, err
-	}
-	latestAttemptByTask := make(map[string]reliabletask.ProviderAttemptRecord)
-	for _, attempt := range attempts {
-		current, found := latestAttemptByTask[attempt.TaskID]
-		if !found || attempt.CreatedAt.After(current.CreatedAt) {
-			latestAttemptByTask[attempt.TaskID] = attempt
-		}
-	}
-	out := make([]ExternalDeadLetter, 0)
-	for _, task := range deadTasks {
-		if task.AggregateID != requestID {
-			continue
-		}
-		attempt := latestAttemptByTask[task.TaskID]
-		finalError := "external interaction retry budget exhausted"
-		if task.LastFailure != nil && strings.TrimSpace(task.LastFailure.Message) != "" {
-			finalError = strings.TrimSpace(task.LastFailure.Message)
-		}
+	out := make([]ExternalDeadLetter, 0, len(facts))
+	for _, fact := range facts {
 		out = append(out, ExternalDeadLetter{
-			DeadLetterID:   "dead-letter-" + task.TaskID,
-			TaskID:         task.TaskID,
-			RequestID:      task.AggregateID,
-			Operation:      strings.TrimPrefix(task.TaskType, reliabletask.ExternalInteractionTaskPrefix),
-			Provider:       attempt.Provider,
-			FinalError:     finalError,
-			Retryable:      false,
-			RecoveryAction: "manual_recover",
-			CreatedAt:      task.UpdatedAt.UTC().Format(time.RFC3339),
+			DeadLetterID:   fact.DeadLetterID,
+			TaskID:         fact.TaskID,
+			RequestID:      fact.RequestID,
+			Operation:      fact.Operation,
+			Provider:       fact.Provider,
+			FinalError:     fact.FinalError,
+			Retryable:      fact.Retryable,
+			RecoveryAction: fact.RecoveryAction,
+			CreatedAt:      fact.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	return out, nil

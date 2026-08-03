@@ -26,7 +26,7 @@ func TestReadProjectionDoesNotInferAppDtoForBackendOnlyProjection(t *testing.T) 
 	}
 }
 
-func TestReadProjectionAcceptsFieldNamesForExternalAppDto(t *testing.T) {
+func TestReadProjectionDoesNotRetainExternalAppDtoForCanonicalProjection(t *testing.T) {
 	metadataDir := initializeTestContractGraph(t)
 	path := filepath.Join(
 		metadataDir,
@@ -39,13 +39,59 @@ func TestReadProjectionAcceptsFieldNamesForExternalAppDto(t *testing.T) {
 
 	projection, err := readProjection(path)
 	if err != nil {
-		t.Fatalf("external projection field references rejected: %v", err)
+		t.Fatalf("canonical projection rejected: %v", err)
 	}
-	if projection.ClientProjection.ExternalDartPath == "" {
-		t.Fatal("external projection lost its canonical Dart owner")
+	if projection.ClientProjection.ExternalDartPath != "" {
+		t.Fatalf("canonical projection retained external Dart owner %q", projection.ClientProjection.ExternalDartPath)
 	}
 	if len(projection.ClientProjection.Fields) != 0 {
-		t.Fatalf("external fields were reinterpreted as generated fields: %#v", projection.ClientProjection.Fields)
+		t.Fatalf("canonical fields were reinterpreted by legacy DTO generator: %#v", projection.ClientProjection.Fields)
+	}
+}
+
+func TestProjectionWireTypeToDartSupportsCanonicalNamedValueObjects(t *testing.T) {
+	for wireType, expected := range map[string]string{
+		"float64":                  "double",
+		"HomepageSource":           "HomepageSource",
+		"[]HomepageContentPreview": "List<HomepageContentPreview>",
+		"[]IntersectionTextSpan":   "List<IntersectionTextSpan>",
+	} {
+		actual, err := projectionWireTypeToDart(wireType)
+		if err != nil {
+			t.Fatalf("projection type %s rejected: %v", wireType, err)
+		}
+		if actual != expected {
+			t.Fatalf("projection type %s = %s, want %s", wireType, actual, expected)
+		}
+	}
+}
+
+func TestReadProjectionDoesNotReintroduceLegacyNestedDecoderBindings(t *testing.T) {
+	metadataDir := initializeTestContractGraph(t)
+	path := filepath.Join(
+		metadataDir,
+		"entity",
+		"entity_homepage",
+		"homepage",
+		"projections",
+		"object_page_bundle.yaml",
+	)
+
+	projection, err := readProjection(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.ClientProjection.ExternalDartPath != "" {
+		t.Fatalf(
+			"canonical projection retained external Dart owner %q",
+			projection.ClientProjection.ExternalDartPath,
+		)
+	}
+	if len(projection.ClientProjection.Fields) != 0 {
+		t.Fatalf(
+			"canonical fields were reinterpreted by legacy nested decoder: %#v",
+			projection.ClientProjection.Fields,
+		)
 	}
 }
 
@@ -97,7 +143,7 @@ func TestRenderStandaloneDtoUsesCanonicalNameAsWireKey(t *testing.T) {
 func TestSpecializedDtoRenderersUseCanonicalNameAsWireKey(t *testing.T) {
 	projection := clientProjection{
 		DartClass: "ProjectedDto",
-		BaseClass: "PostBaseDto",
+		BaseClass: "ContentPostViewData",
 		Fields: []projectionFieldDef{
 			{Name: "id", Source: "postId", DartType: "String"},
 		},
@@ -124,7 +170,7 @@ func TestRenderTypedPostDtoNestedProjectionEmitsStringKeyMapHelper(
 ) {
 	projection := clientProjection{
 		DartClass: "ProjectedPostDto",
-		BaseClass: "PostBaseDto",
+		BaseClass: "ContentPostViewData",
 		Fields: []projectionFieldDef{
 			{
 				Name:                  "sourceAttribution",

@@ -4,7 +4,7 @@ import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart'
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
 ContentShareTemplate buildDiscoveryShareTemplate({
-  required PostBaseDto post,
+  required ContentPostViewData post,
   required DiscoveryPresentationWire? wire,
   required bool enableIdentityTemplate,
 }) {

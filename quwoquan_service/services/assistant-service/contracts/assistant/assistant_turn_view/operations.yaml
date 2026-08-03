@@ -9,6 +9,8 @@ api_routes:
   path: /assistant/sessions/{sessionId}/turns
   operation: ListSessionTurns
   actor: persona
+  request_entity: AssistantTurnListQuery
+  request_body_kind: none
   commercial:
     status: blocked
     block_reason: AssistantTurnView 独立读侧已通过 local_contract 与真实 Mongo API integration，尚缺候选绑定的四环境 Remote UAT、SLI/SLO 读回和回滚证据

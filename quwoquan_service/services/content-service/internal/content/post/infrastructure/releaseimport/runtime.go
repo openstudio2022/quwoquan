@@ -50,7 +50,6 @@ func Run() {
 	redisAddr := flag.String("redis-addr", "", "canonical Redis address for post lifecycle projection")
 	redisDB := flag.Int("redis-db", 0, "canonical Redis database for post lifecycle projection")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
-	entitiesDB := flag.String("entities-db", "quwoquan_entity", "target db for entities")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
 	mode := flag.String("mode", "upsert", "apply mode: upsert|sync|reset-source")
@@ -87,7 +86,6 @@ func Run() {
 		)
 	}
 	postFilter := ToSet(desired.DesiredRefs.Posts)
-	entityFilter := ToSet(desired.DesiredRefs.Entities)
 	creatorFilter := ToSet(desired.DesiredRefs.Creators)
 	objectRoot, err := ReleaseObjectRoot(*releaseRoot)
 	if err != nil {
@@ -131,11 +129,7 @@ func Run() {
 	if err != nil {
 		log.Fatalf("derive imported post bindings: %v", err)
 	}
-	entities, err := LoadEntities(objectRoot, entityFilter)
-	if err != nil {
-		log.Fatalf("load entities: %v", err)
-	}
-	log.Printf("[import] env=%s loaded posts=%d entities=%d", *env, len(posts), len(entities))
+	log.Printf("[import] env=%s loaded posts=%d", *env, len(posts))
 
 	if *dryRun {
 		log.Printf("[import] dry-run: not writing mongo")
@@ -148,7 +142,7 @@ func Run() {
 			"manifestDigest": releaseBinding.ManifestDigest,
 			"mode":           *mode,
 			"deletePolicy":   *deletePolicy,
-			"counts":         bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
+			"counts":         bson.M{"postsLoaded": len(posts)},
 			"postBindings":   postBindings,
 			"auditEvents":    []string{"DataReleasePrepared"},
 		})
@@ -164,8 +158,6 @@ func Run() {
 
 	postsColl := client.Database(*postsDB).Collection("posts")
 	EnsureSparseUnique(ctx, postsColl, "postRef", "idx_post_ref")
-	entityColl := client.Database(*entitiesDB).Collection("entities")
-	EnsureUnique(ctx, entityColl, "entityRef", "idx_entity_ref")
 
 	now := time.Now().UTC()
 	opts := NormalizeImportOptions(ImportOptions{
@@ -176,43 +168,24 @@ func Run() {
 		SourceOwner:       *sourceOwner,
 		ProjectionVersion: now.UnixMilli(),
 	})
+	deletedPostIDs, err := MissingImportedPostIDs(ctx, postsColl, posts, opts)
+	if err != nil {
+		log.Fatalf("resolve missing posts: %v", err)
+	}
 	np, err := UpsertPostsWithOptions(ctx, postsColl, posts, now, opts)
 	if err != nil {
 		log.Fatalf("upsert posts: %v", err)
 	}
-	ne, err := UpsertEntitiesWithOptions(ctx, entityColl, entities, now, opts)
-	if err != nil {
-		log.Fatalf("upsert entities: %v", err)
-	}
 	tp, err := ApplyMissingPostPolicy(ctx, postsColl, posts, now, opts)
 	if err != nil {
 		log.Fatalf("apply missing post policy: %v", err)
-	}
-	te, err := ApplyMissingEntityPolicy(ctx, entityColl, entities, now, opts)
-	if err != nil {
-		log.Fatalf("apply missing entity policy: %v", err)
-	}
-
-	// 同写发现流 ReadModel（rm_discovery_feed），让冷启动内容进入 tag/hot/explore 等召回通道；
-	// 与在线 DiscoveryFeedProjector / BulkImport 路径字段一致（sourceTaskId + conditionProfile）。
-	feedColl := client.Database(*postsDB).Collection("rm_discovery_feed")
-	if err := recinfra.NewDiscoveryFeedProjector(client.Database(*postsDB)).EnsureIndexes(ctx); err != nil {
-		log.Fatalf("ensure discovery feed indexes: %v", err)
-	}
-	condByEntity := ConditionProfileIndex(entities)
-	nf, err := UpsertDiscoveryFeedWithOptions(ctx, feedColl, posts, condByEntity, now, opts)
-	if err != nil {
-		log.Fatalf("upsert discovery feed: %v", err)
-	}
-	tf, err := ApplyMissingFeedPolicy(ctx, feedColl, posts, now, opts)
-	if err != nil {
-		log.Fatalf("apply missing feed policy: %v", err)
 	}
 	candidateEvents, err := PublishImportedPostLifecycle(
 		ctx,
 		strings.TrimSpace(*redisAddr),
 		*redisDB,
 		posts,
+		deletedPostIDs,
 		opts,
 		now,
 	)
@@ -221,8 +194,8 @@ func Run() {
 	}
 	stateColl := client.Database(*postsDB).Collection("data_release_state")
 	if err := UpsertReleaseState(ctx, stateColl, *env, opts, now, bson.M{
-		"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,
-		"postsRemoved": tp, "entitiesRemoved": te, "feedRemoved": tf,
+		"postsUpserted": np,
+		"postsRemoved":  tp,
 	}); err != nil {
 		log.Fatalf("upsert release state: %v", err)
 	}
@@ -236,9 +209,9 @@ func Run() {
 		"mode":           opts.Mode,
 		"deletePolicy":   opts.DeletePolicy,
 		"counts": bson.M{
-			"postsLoaded": len(posts), "entitiesLoaded": len(entities),
-			"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,
-			"postsRemoved": tp, "entitiesRemoved": te, "feedRemoved": tf,
+			"postsLoaded":              len(posts),
+			"postsUpserted":            np,
+			"postsRemoved":             tp,
 			"candidateEventsPublished": candidateEvents,
 		},
 		"postBindings": postBindings,
@@ -247,8 +220,8 @@ func Run() {
 	}); err != nil {
 		log.Fatalf("write import report: %v", err)
 	}
-	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d entities=%d discoveryFeed=%d candidateEvents=%d removed posts=%d entities=%d feed=%d",
-		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, np, ne, nf, candidateEvents, tp, te, tf)
+	log.Printf("[import] OK env=%s release=%s mode=%s deletePolicy=%s upserted posts=%d lifecycleEvents=%d removed posts=%d",
+		*env, opts.ReleaseID, opts.Mode, opts.DeletePolicy, np, candidateEvents, tp)
 }
 
 // EnsureUnique 幂等建唯一索引（已存在则忽略）。
@@ -309,6 +282,7 @@ func PublishImportedPostLifecycle(
 	redisAddr string,
 	redisDB int,
 	posts []PostDoc,
+	deletedPostIDs []string,
 	opts ImportOptions,
 	occurredAt time.Time,
 ) (int, error) {
@@ -331,9 +305,20 @@ func PublishImportedPostLifecycle(
 	}
 	publisher := postmessaging.NewPostLifecycleStreamPublisher(router.Scene("general"))
 	for _, post := range posts {
+		contentIdentity, err := canonicalImportedContentIdentity(post.ContentIdentity)
+		if err != nil {
+			return 0, fmt.Errorf("%s: %w", post.PostRef, err)
+		}
 		entityRefs := post.NormalizedEntityRefs
 		if len(entityRefs) == 0 {
 			entityRefs = post.EntityRefs
+		}
+		media := ImportedMediaFields(importedPostAssets(post))
+		body := post.ArticleMarkdown
+		summary := post.ArticleDigest
+		if post.ContentType == "image" {
+			body = post.Body
+			summary = post.Body
 		}
 		payload, err := json.Marshal(bson.M{
 			"postId":           RuntimePostID(post.PostRef),
@@ -341,10 +326,22 @@ func PublishImportedPostLifecycle(
 			"visibility":       "public",
 			"moderationStatus": importedModerationStatus,
 			"contentType":      post.ContentType,
+			"contentIdentity":  contentIdentity,
 			"authorId":         post.AuthorID,
+			"title":            post.Title,
+			"body":             body,
+			"summary":          summary,
+			"mediaUrls":        media.MediaURLs,
+			"coverUrl":         media.CoverURL,
+			"thumbnailUrl":     media.ThumbnailURL,
+			"videoUrl":         media.VideoURL,
+			"width":            media.Width,
+			"height":           media.Height,
+			"durationMs":       media.DurationMs,
 			"tagRefs":          post.TagRefs,
 			"entityRefs":       entityRefs,
 			"contentVertical":  post.Angle,
+			"createdAt":        post.CreatedAt,
 			"publishedAt":      post.PublishedAt,
 			"updatedAt":        post.UpdatedAt,
 			"releaseId":        opts.ReleaseID,
@@ -365,7 +362,77 @@ func PublishImportedPostLifecycle(
 			return 0, fmt.Errorf("%s: %w", post.PostRef, err)
 		}
 	}
-	return len(posts), nil
+	for _, postID := range deletedPostIDs {
+		postID = strings.TrimSpace(postID)
+		if postID == "" {
+			return 0, fmt.Errorf("deleted post lifecycle identity is empty")
+		}
+		payload, err := json.Marshal(bson.M{
+			"postId":      postID,
+			"releaseId":   opts.ReleaseID,
+			"sourceOwner": opts.SourceOwner,
+			"deletedAt":   occurredAt,
+		})
+		if err != nil {
+			return 0, fmt.Errorf("encode imported post deletion %s: %w", postID, err)
+		}
+		if err := publisher.Publish(ctx, postports.OutboxEvent{
+			EventID:          fmt.Sprintf("data-release:%s:%s:PostDeleted", opts.ReleaseID, postID),
+			EventType:        "PostDeleted",
+			AggregateType:    "Post",
+			AggregateID:      postID,
+			AggregateVersion: opts.ProjectionVersion,
+			Payload:          payload,
+			OccurredAt:       occurredAt,
+		}); err != nil {
+			return 0, fmt.Errorf("%s: %w", postID, err)
+		}
+	}
+	return len(posts) + len(deletedPostIDs), nil
+}
+
+// MissingImportedPostIDs freezes the exact deletion set before the Content
+// owner applies its local tombstone/hard-delete policy. The same identities are
+// then published as PostDeleted so Recommendation can remove stale candidates.
+func MissingImportedPostIDs(
+	ctx context.Context,
+	coll *mongo.Collection,
+	posts []PostDoc,
+	opts ImportOptions,
+) ([]string, error) {
+	opts = NormalizeImportOptions(opts)
+	if !missingPolicyEnabled(opts) || opts.DeletePolicy == "none" {
+		return nil, nil
+	}
+	cursor, err := coll.Find(ctx, bson.M{
+		"sourceOwner": opts.SourceOwner,
+		"postRef":     bson.M{"$nin": desiredPostRefs(posts)},
+		"$or": bson.A{
+			bson.M{"lifecycleStatus": bson.M{"$ne": "tombstone"}},
+			bson.M{"deletedByReleaseId": bson.M{"$ne": opts.ReleaseID}},
+		},
+	}, options.Find().SetProjection(bson.M{"_id": 1}).SetSort(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	identities := make([]string, 0)
+	for cursor.Next(ctx) {
+		var document struct {
+			ID string `bson:"_id"`
+		}
+		if err := cursor.Decode(&document); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(document.ID) == "" {
+			return nil, fmt.Errorf("imported Post has an empty runtime identity")
+		}
+		identities = append(identities, document.ID)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+	return identities, nil
 }
 
 func sourceHash(v any) string {

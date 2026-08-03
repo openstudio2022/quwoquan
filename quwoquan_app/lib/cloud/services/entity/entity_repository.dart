@@ -1,13 +1,11 @@
+import 'package:quwoquan_app/application/entity/homepage_operation_ports.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/homepage_introduction.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/services/entity/homepage_contract_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/entity/homepage_contract_projection.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 part 'entity_introduction_repository.dart';
@@ -51,7 +49,7 @@ abstract interface class HomepageCommandWriter {
     required HomepageSuggestionDraft draft,
   });
 
-  Future<HomepageClaimRequestRecord> createHomepageClaimRequest({
+  Future<HomepageClaimRequestView> createHomepageClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
   });
@@ -61,7 +59,7 @@ abstract interface class HomepageCommandWriter {
     required HomepageBasicDraft draft,
   });
 
-  Future<HomepageStatusReportRecord> createHomepageStatusReport({
+  Future<HomepageStatusReportView> createHomepageStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
   });

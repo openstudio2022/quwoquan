@@ -186,7 +186,7 @@ class _GroupResultCardModel {
     final isCircle = hit.objectType == SearchObjectType.circleCircle;
     final view =
         (isCircle ? hit.asCircleCircleItem : hit.asCircleGroupItem) ??
-        CircleSearchItemView(
+        CircleSearchHitViewData(
           circleId: hit.objectId,
           name: hit.title,
           description: hit.snippet,

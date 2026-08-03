@@ -1,4 +1,11 @@
 description: RecommendationSubjectClosureFact 仅消费用户域不可逆关闭事件。
 api_routes: []
+runtime_entrypoints:
+- name: AppendRecommendationSubjectClosure
+  kind: subscription
+  phase: event_ingest
+  source_events: [user.UserAccountClosed]
+  idempotency: event_id
+  application: {kind: command, facet: RecommendationSubjectClosureFactAppender, method: append, object_owner: RecommendationSubjectClosureFact}
 consumers:
 - {name: user-account-closed-stream, channel: events.user.account, source_event: UserAccountClosed, capabilities: [record_subject_closure, block_subject_revival]}

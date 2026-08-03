@@ -78,7 +78,7 @@ FollowingSubjectResult _seedSubject({
     subjectId: id,
     subjectType: type,
     displayName: displayName,
-    targetRouteId: type.wireValue,
+    targetRouteId: type.wireName,
     targetObjectId: id,
     followedAt: DateTime.utc(2026, 5, 20, 8),
     unreadChangeCount: unread ? 2 : 0,

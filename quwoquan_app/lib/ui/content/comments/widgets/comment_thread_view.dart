@@ -13,10 +13,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show
-        ContentReportReason,
-        ContentReportTargetType,
-        CreateContentReportCommand;
+    show ReportReason, ReportTargetType, CreateContentReportCommand;
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -24,6 +21,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/content/comments/models/comment_view_data.dart';
 import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 part 'comment_thread_rows.dart';
@@ -43,7 +41,7 @@ class CommentThreadView extends ConsumerStatefulWidget {
 
   final String postId;
   final ScrollController? scrollController;
-  final ValueChanged<ContentCommentListItem>? onReplySelected;
+  final ValueChanged<CommentViewData>? onReplySelected;
 
   /// 深链定位目标一级评论 id：列表加载后自动滚动到该评论并短暂高亮
   /// （我的-互动 / 通知中心点进评论使用）。
@@ -222,13 +220,12 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     _reportHighlightMiss(replyId, key);
   }
 
-  ({ContentCommentListItem? parent, ContentCommentListItem? reply})
-  _locateReply(
+  ({CommentViewData? parent, CommentViewData? reply}) _locateReply(
     CommentState state, {
     required String replyId,
     required String? parentId,
   }) {
-    ContentCommentListItem? parent;
+    CommentViewData? parent;
     for (final comment in state.comments) {
       for (final item in comment.replyPreview) {
         if (item.id == replyId) {

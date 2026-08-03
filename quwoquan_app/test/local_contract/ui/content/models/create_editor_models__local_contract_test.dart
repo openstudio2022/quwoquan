@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
@@ -107,7 +106,7 @@ void main() {
       final payload = PublishSettings(
         isPublic: false,
         locationName: '成都',
-        locationPoi: LocationPoiDto(
+        locationPoi: const CreateLocationOption(
           id: 't_poi',
           name: '',
           latitude: 30.6,

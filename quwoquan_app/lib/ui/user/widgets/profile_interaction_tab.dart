@@ -24,7 +24,11 @@ import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';
 import 'package:quwoquan_app/ui/user/widgets/share_interaction/share_interaction_list.dart';
 import 'package:quwoquan_app/ui/user/utils/profile_comment_detail_route.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide InteractionDirection;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as cloud_contracts
+    show InteractionDirection;
 
 part 'profile_interaction_tab_widgets.dart';
 part 'profile_interaction_tab_inline_actions.dart';
@@ -105,18 +109,17 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
             ContentProfileInteractionPageQuery(
               personaId: widget.userId,
               type: switch (subTab) {
-                InteractionSubTab.likes => ContentProfileInteractionType.like,
-                InteractionSubTab.comments =>
-                  ContentProfileInteractionType.comment,
-                InteractionSubTab.shares => ContentProfileInteractionType.share,
+                InteractionSubTab.likes => InteractionActivityType.like,
+                InteractionSubTab.comments => InteractionActivityType.comment,
+                InteractionSubTab.shares => InteractionActivityType.share,
               },
             ),
             direction: direction == InteractionDirection.received
-                ? ContentProfileInteractionDirection.received
-                : ContentProfileInteractionDirection.sent,
+                ? cloud_contracts.InteractionDirection.received
+                : cloud_contracts.InteractionDirection.sent,
           );
       final items = page.items
-          .map(ProfileInteractionActivityViewData.fromContentActivity)
+          .map(ProfileInteractionActivityViewData.fromWire)
           .toList(growable: false);
 
       if (mounted) {

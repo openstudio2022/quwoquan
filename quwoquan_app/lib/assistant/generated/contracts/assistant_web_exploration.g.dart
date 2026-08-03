@@ -2,7 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class AssistantDocumentLinkWire {
   const AssistantDocumentLinkWire({
@@ -22,6 +22,26 @@ class AssistantDocumentLinkWire {
       };
 
   factory AssistantDocumentLinkWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'linkId',
+      'title',
+      'target',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantDocumentLinkWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('linkId') || json['linkId'] == null || (json['linkId'] is! String)) {
+      throw const FormatException('AssistantDocumentLinkWire field linkId has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantDocumentLinkWire field title has an invalid wire value');
+    }
+    if (!json.containsKey('target') || json['target'] == null || (json['target'] is! Map)) {
+      throw const FormatException('AssistantDocumentLinkWire field target has an invalid wire value');
+    }
     return AssistantDocumentLinkWire(
       linkId: (json['linkId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
@@ -76,6 +96,54 @@ class AssistantSourceLedgerEntryWire {
       };
 
   factory AssistantSourceLedgerEntryWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'sourceId',
+      'targetId',
+      'origin',
+      'parentSourceId',
+      'runId',
+      'skillId',
+      'normalizedUrl',
+      'redirectChain',
+      'contentDigest',
+      'fetchedAt',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantSourceLedgerEntryWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('sourceId') || json['sourceId'] == null || (json['sourceId'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field sourceId has an invalid wire value');
+    }
+    if (json.containsKey('targetId') && json['targetId'] != null && (json['targetId'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field targetId has an invalid wire value');
+    }
+    if (!json.containsKey('origin') || json['origin'] == null || (json['origin'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field origin has an invalid wire value');
+    }
+    if (json.containsKey('parentSourceId') && json['parentSourceId'] != null && (json['parentSourceId'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field parentSourceId has an invalid wire value');
+    }
+    if (!json.containsKey('runId') || json['runId'] == null || (json['runId'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field runId has an invalid wire value');
+    }
+    if (json.containsKey('skillId') && json['skillId'] != null && (json['skillId'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field skillId has an invalid wire value');
+    }
+    if (!json.containsKey('normalizedUrl') || json['normalizedUrl'] == null || (json['normalizedUrl'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field normalizedUrl has an invalid wire value');
+    }
+    if (json.containsKey('redirectChain') && json['redirectChain'] != null && (json['redirectChain'] is! List || (json['redirectChain'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field redirectChain has an invalid wire value');
+    }
+    if (!json.containsKey('contentDigest') || json['contentDigest'] == null || (json['contentDigest'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field contentDigest has an invalid wire value');
+    }
+    if (!json.containsKey('fetchedAt') || json['fetchedAt'] == null || (json['fetchedAt'] is! String)) {
+      throw const FormatException('AssistantSourceLedgerEntryWire field fetchedAt has an invalid wire value');
+    }
     return AssistantSourceLedgerEntryWire(
       sourceId: (json['sourceId'] as String?)?.trim() ?? "",
       targetId: (json['targetId'] as String?)?.trim() ?? "",
@@ -126,6 +194,22 @@ class AssistantWebTargetWire {
       };
 
   factory AssistantWebTargetWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'kind',
+      'value',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantWebTargetWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('kind') || json['kind'] == null || (json['kind'] is! String)) {
+      throw const FormatException('AssistantWebTargetWire field kind has an invalid wire value');
+    }
+    if (!json.containsKey('value') || json['value'] == null || (json['value'] is! String)) {
+      throw const FormatException('AssistantWebTargetWire field value has an invalid wire value');
+    }
     return AssistantWebTargetWire(
       kind: parseAssistantWebTargetKindStrict((json['kind'] as String?)?.trim() ?? ''),
       value: (json['value'] as String?)?.trim() ?? "",
@@ -183,6 +267,62 @@ class AssistantWebDocumentWire {
       };
 
   factory AssistantWebDocumentWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'documentId',
+      'targetId',
+      'target',
+      'source',
+      'title',
+      'contentText',
+      'contentDigest',
+      'contentType',
+      'fetchedAt',
+      'links',
+      'artifactRef',
+      'untrusted',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantWebDocumentWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('documentId') || json['documentId'] == null || (json['documentId'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field documentId has an invalid wire value');
+    }
+    if (json.containsKey('targetId') && json['targetId'] != null && (json['targetId'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field targetId has an invalid wire value');
+    }
+    if (!json.containsKey('target') || json['target'] == null || (json['target'] is! Map)) {
+      throw const FormatException('AssistantWebDocumentWire field target has an invalid wire value');
+    }
+    if (!json.containsKey('source') || json['source'] == null || (json['source'] is! Map)) {
+      throw const FormatException('AssistantWebDocumentWire field source has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field title has an invalid wire value');
+    }
+    if (json.containsKey('contentText') && json['contentText'] != null && (json['contentText'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field contentText has an invalid wire value');
+    }
+    if (!json.containsKey('contentDigest') || json['contentDigest'] == null || (json['contentDigest'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field contentDigest has an invalid wire value');
+    }
+    if (json.containsKey('contentType') && json['contentType'] != null && (json['contentType'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field contentType has an invalid wire value');
+    }
+    if (!json.containsKey('fetchedAt') || json['fetchedAt'] == null || (json['fetchedAt'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field fetchedAt has an invalid wire value');
+    }
+    if (json.containsKey('links') && json['links'] != null && (json['links'] is! List || (json['links'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantWebDocumentWire field links has an invalid wire value');
+    }
+    if (json.containsKey('artifactRef') && json['artifactRef'] != null && (json['artifactRef'] is! String)) {
+      throw const FormatException('AssistantWebDocumentWire field artifactRef has an invalid wire value');
+    }
+    if (json.containsKey('untrusted') && json['untrusted'] != null && (json['untrusted'] is! bool)) {
+      throw const FormatException('AssistantWebDocumentWire field untrusted has an invalid wire value');
+    }
     return AssistantWebDocumentWire(
       documentId: (json['documentId'] as String?)?.trim() ?? "",
       targetId: (json['targetId'] as String?)?.trim() ?? "",

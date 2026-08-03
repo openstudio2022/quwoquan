@@ -9,6 +9,20 @@ from pydantic import BaseModel, ConfigDict
 
 
 
+class RecommendationObjectCard(BaseModel):
+    """排序窗口内冻结的个性化对象卡；Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
+    objectKind: str
+    objectId: str
+    title: str
+    subtitle: str | None = None
+    coverUrl: str | None = None
+    tagRefs: list[str]
+    reasonKey: str
+    recallPath: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class RankedRecommendationItem(BaseModel):
     """排序窗口中不可变序位的一项候选。"""
     ordinal: int
@@ -30,6 +44,16 @@ class CreateRankedRecommendationWindowCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class GetRankedRecommendationPageQuery(BaseModel):
+    """读取稳定窗口页的内部强类型查询；subjectId 只用于推导隐私摘要 key 并校验窗口 owner，不进入响应。"""
+    subjectId: str
+    windowId: str
+    fromOrdinal: int | None = None
+    limit: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class RankedRecommendationPage(BaseModel):
     """稳定窗口的一页排序结果。"""
     windowId: str
@@ -42,6 +66,7 @@ class RankedRecommendationPage(BaseModel):
     featureSnapshotAt: datetime
     userFeatureSnapshot: dict[str, Any]
     items: list[RankedRecommendationItem]
+    objectCards: list[RecommendationObjectCard]
     nextOrdinal: int | None = None
     expiresAt: datetime
 

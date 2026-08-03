@@ -1,0 +1,18 @@
+backend: mongodb
+role: authoritative
+collections:
+  trip_guide_assignments:
+    entity: TripGuideAssignment
+    role: authoritative
+    indexes:
+    - {name: uq_trip_guide_assignment_task, keys: {tripId: 1, taskKey: 1}, unique: true}
+    - {name: idx_trip_guide_assignment_assignee_status, keys: {assigneePersonaId: 1, status: 1, updatedAt: -1}}
+  trip_guide_assignment_command_receipts:
+    entity: TripGuideAssignmentCommandReceipt
+    role: authoritative
+  trip_guide_assignment_outbox:
+    entity: TripGuideAssignmentOutbox
+    role: append_only
+  trip_guide_assignment_outbox_sequences:
+    entity: TripGuideAssignmentOutbox
+    role: authoritative

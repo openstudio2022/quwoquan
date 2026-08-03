@@ -40,10 +40,10 @@ func TestAssistantMentionedConsumerProcessesAndAcks(t *testing.T) {
 		"conversationId":    "conv-1",
 		"messageId":         "msg-1",
 		"seq":               "12",
+		"senderAccountId":   "account-a",
 		"senderId":          "user-a",
 		"content":           "@小趣 总结",
 		"assistantMemberId": "assistant",
-		"assistantSkillId":  "general",
 	}); err != nil {
 		t.Fatalf("XAdd: %v", err)
 	}
@@ -59,7 +59,9 @@ func TestAssistantMentionedConsumerProcessesAndAcks(t *testing.T) {
 		t.Fatalf("events=%d, want 1", len(handler.events))
 	}
 	got := handler.events[0]
-	if got.ChatConversationID != "conv-1" || got.Seq != 12 || got.AssistantMemberID != "assistant" {
+	if got.ChatConversationID != "conv-1" || got.Seq != 12 ||
+		got.SenderAccountID != "account-a" || got.SenderID != "user-a" ||
+		got.AssistantMemberID != "assistant" {
 		t.Fatalf("event=%#v", got)
 	}
 	pending, err := redis.XReadGroup(ctx, AssistantMentionedConsumerGroup, "worker-1", map[string]string{AssistantMentionedStream: "0"}, 10, 0)
@@ -89,6 +91,7 @@ func TestAssistantMentionedConsumerDeadLettersFailedMessage(t *testing.T) {
 		"conversationId":    "conv-1",
 		"messageId":         "msg-1",
 		"seq":               "12",
+		"senderAccountId":   "account-a",
 		"senderId":          "user-a",
 		"content":           "@小趣 总结",
 		"assistantMemberId": "assistant",
@@ -179,6 +182,7 @@ func TestAssistantMentionedConsumerDeduplicatesByChatConversationMessage(t *test
 			"conversationId":    "conv-1",
 			"messageId":         "msg-1",
 			"seq":               "12",
+			"senderAccountId":   "account-a",
 			"senderId":          "user-a",
 			"content":           "@小趣 总结",
 			"assistantMemberId": "assistant",

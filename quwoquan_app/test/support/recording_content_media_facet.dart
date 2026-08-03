@@ -10,7 +10,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     this.failUploadSessionRead = false,
     this.failCompleteWithoutCommit = false,
     this.uploadExpirations = const <DateTime>[],
-    this.completedAssetStatus = ContentMediaProcessingStatus.ready,
+    this.completedAssetStatus = MediaAssetStatus.ready,
   });
 
   final bool loseFirstCompleteResponse;
@@ -18,7 +18,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   final bool failUploadSessionRead;
   final bool failCompleteWithoutCommit;
   final List<DateTime> uploadExpirations;
-  final ContentMediaProcessingStatus completedAssetStatus;
+  final MediaAssetStatus completedAssetStatus;
   final List<InitContentMediaUploadCommand> initCommands =
       <InitContentMediaUploadCommand>[];
   final List<String> initIdempotencyKeys = <String>[];
@@ -47,7 +47,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   int _sequence = 0;
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> initUpload(
+  Future<MediaUploadSessionCommandResult> initUpload(
     InitContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -55,12 +55,12 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
         _sessionByInitIdempotencyKey[context.idempotencyKey];
     if (existingSessionId != null) {
       final assetId = _assetBySession[existingSessionId];
-      return ContentMediaUploadSessionCommandResult(
+      return MediaUploadSessionCommandResult(
         sessionId: existingSessionId,
         assetId: assetId,
         status: assetId == null
-            ? ContentMediaUploadStatus.pending
-            : ContentMediaUploadStatus.completed,
+            ? MediaUploadSessionStatus.pending
+            : MediaUploadSessionStatus.completed,
         uploadUrl: assetId == null
             ? Uri.parse('https://upload.quwoquan.test/$existingSessionId')
             : null,
@@ -78,10 +78,10 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     _sessionByInitIdempotencyKey[context.idempotencyKey] = sessionId;
     _uploadBySession[sessionId] = command;
     _expiresAtBySession[sessionId] = expiresAt;
-    return ContentMediaUploadSessionCommandResult(
+    return MediaUploadSessionCommandResult(
       sessionId: sessionId,
       assetId: null,
-      status: ContentMediaUploadStatus.pending,
+      status: MediaUploadSessionStatus.pending,
       uploadUrl: Uri.parse('https://upload.quwoquan.test/$sessionId'),
       expiresAt: expiresAt,
       replayed: false,
@@ -89,7 +89,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> completeUpload(
+  Future<MediaUploadSessionCommandResult> completeUpload(
     CompleteContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -102,9 +102,9 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       throw StateError('simulated pending complete failure');
     }
     final index = command.sessionId.split('_').last;
-    final prefix = upload.mediaType == ContentMediaType.video
+    final prefix = upload.mediaType == MediaType.video
         ? 'video'
-        : upload.mediaType == ContentMediaType.image
+        : upload.mediaType == MediaType.image
         ? 'image'
         : upload.mediaType.name;
     final assetId = '${prefix}_asset_$index';
@@ -113,10 +113,10 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
         _lostCompleteResponses.add(command.sessionId)) {
       throw StateError('simulated lost complete response');
     }
-    return ContentMediaUploadSessionCommandResult(
+    return MediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: assetId,
-      status: ContentMediaUploadStatus.completed,
+      status: MediaUploadSessionStatus.completed,
       uploadUrl: null,
       expiresAt: _expiresAtBySession[command.sessionId]!,
       replayed: false,
@@ -125,7 +125,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaUploadSessionCommandResult> abortUpload(
+  Future<MediaUploadSessionCommandResult> abortUpload(
     AbortContentMediaUploadCommand command,
     ContentMediaUploadCommandContext context,
   ) async {
@@ -133,10 +133,10 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     abortedSessions.add(command.sessionId);
     final completedAssetId = _assetBySession[command.sessionId];
     if (completedAssetId != null) {
-      return ContentMediaUploadSessionCommandResult(
+      return MediaUploadSessionCommandResult(
         sessionId: command.sessionId,
         assetId: completedAssetId,
-        status: ContentMediaUploadStatus.completed,
+        status: MediaUploadSessionStatus.completed,
         uploadUrl: null,
         expiresAt: _expiresAtBySession[command.sessionId]!,
         replayed: true,
@@ -144,10 +144,10 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     }
     _assetBySession.remove(command.sessionId);
     _abortedSessions.add(command.sessionId);
-    return ContentMediaUploadSessionCommandResult(
+    return MediaUploadSessionCommandResult(
       sessionId: command.sessionId,
       assetId: null,
-      status: ContentMediaUploadStatus.aborted,
+      status: MediaUploadSessionStatus.aborted,
       uploadUrl: null,
       expiresAt: _expiresAtBySession[command.sessionId]!,
       replayed: false,
@@ -155,7 +155,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectManualCover(
+  Future<MediaCoverSelectionResult> selectManualCover(
     SelectManualContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   ) async {
@@ -163,9 +163,9 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     selectedManualCovers.add(command);
     final coverAssetId = command.coverAssetId ?? command.mediaId;
     final url = Uri.parse('https://cdn.quwoquan.test/$coverAssetId.jpg');
-    return ContentMediaCoverSelectionResult(
+    return MediaCoverSelectionResult(
       mediaId: command.mediaId,
-      coverStrategy: 'manual',
+      coverStrategy: MediaCoverStrategy.manual,
       manualCoverAssetId: command.coverAssetId,
       coverFrameTimeMs: command.coverFrameTimeMs,
       thumbnailUrl: url,
@@ -174,7 +174,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaCoverSelectionResult> selectAutoCover(
+  Future<MediaCoverSelectionResult> selectAutoCover(
     SelectAutoContentMediaCoverCommand command,
     ContentMediaAssetCommandContext context,
   ) async {
@@ -183,9 +183,9 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     final url = Uri.parse(
       'https://cdn.quwoquan.test/${command.mediaId}_cover.jpg',
     );
-    return ContentMediaCoverSelectionResult(
+    return MediaCoverSelectionResult(
       mediaId: command.mediaId,
-      coverStrategy: 'first_frame',
+      coverStrategy: MediaCoverStrategy.firstFrame,
       manualCoverAssetId: null,
       coverFrameTimeMs: 0,
       thumbnailUrl: url,
@@ -194,9 +194,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaAssetSlice> getMediaAsset(
-    GetContentMediaAssetQuery query,
-  ) async {
+  Future<MediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query) async {
     String? session;
     for (final entry in _assetBySession.entries) {
       if (entry.value == query.mediaId) {
@@ -208,20 +206,20 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       throw StateError('media asset not found');
     }
     final upload = _uploadBySession[session]!;
-    return ContentMediaAssetSlice(
+    return MediaAssetSlice(
       assetId: query.mediaId,
       version: 1,
       mediaType: upload.mediaType,
       mimeType: upload.mimeType,
       fileSize: upload.fileSize,
       status: completedAssetStatus,
-      accessPolicy: ContentMediaAccessPolicy.ownerOnly,
+      accessPolicy: MediaAssetAccessPolicy.ownerOnly,
       cdnUrl: Uri.parse('https://cdn.quwoquan.test/${query.mediaId}'),
     );
   }
 
   @override
-  Future<ContentMediaAssetDiscardResult> discardMediaAsset(
+  Future<MediaAssetDiscardResult> discardMediaAsset(
     DiscardContentMediaAssetCommand command,
     ContentMediaAssetCommandContext context,
   ) async {
@@ -232,15 +230,15 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
         _lostDiscardResponses.add(command.mediaId)) {
       throw StateError('simulated lost discard response');
     }
-    return ContentMediaAssetDiscardResult(
+    return MediaAssetDiscardResult(
       mediaId: command.mediaId,
-      status: ContentMediaProcessingStatus.deleted,
+      status: MediaAssetStatus.deleted,
       replayed: replayed,
     );
   }
 
   @override
-  Future<ContentMediaUploadSessionSlice> getUploadSession(
+  Future<MediaUploadSessionSlice> getUploadSession(
     GetContentMediaUploadSessionQuery query,
   ) async {
     if (failUploadSessionRead) {
@@ -249,7 +247,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
     final upload = _uploadBySession[query.sessionId];
     if (upload == null) throw StateError('upload session not found');
     final assetId = _assetBySession[query.sessionId];
-    return ContentMediaUploadSessionSlice(
+    return MediaUploadSessionSlice(
       sessionId: query.sessionId,
       version: assetId == null ? 1 : 2,
       assetId: assetId,
@@ -257,10 +255,10 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
       mimeType: upload.mimeType,
       fileSize: upload.fileSize,
       status: _abortedSessions.contains(query.sessionId)
-          ? ContentMediaUploadStatus.aborted
+          ? MediaUploadSessionStatus.aborted
           : assetId == null
-          ? ContentMediaUploadStatus.pending
-          : ContentMediaUploadStatus.completed,
+          ? MediaUploadSessionStatus.pending
+          : MediaUploadSessionStatus.completed,
       createdAt: DateTime.utc(2030),
       updatedAt: DateTime.utc(2030),
       expiresAt: _expiresAtBySession[query.sessionId]!,
@@ -268,7 +266,7 @@ final class RecordingContentMediaFacet implements ContentMediaFacet {
   }
 
   @override
-  Future<ContentMediaOriginalAccessGrant> requestOriginalAccess(
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
     RequestContentMediaOriginalAccessCommand command,
   ) => throw UnsupportedError('not used by this local-contract fixture');
 }

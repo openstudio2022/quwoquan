@@ -36,6 +36,7 @@ export 'widgets/app_modal_presenter.dart';
 export 'widgets/app_modal_surface.dart';
 export 'widgets/app_list_page_semantics.dart';
 export 'widgets/app_search_field.dart';
+export 'widgets/app_terminal_viewport.dart';
 export 'widgets/error_states/app_error_states.dart';
 export 'widgets/app_request_feedback.dart';
 export 'widgets/ios_selection_page_components.dart';

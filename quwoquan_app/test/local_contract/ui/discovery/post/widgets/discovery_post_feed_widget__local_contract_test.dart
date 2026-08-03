@@ -7,7 +7,6 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -60,11 +59,12 @@ void main() {
         final feed = feedAsync!.value;
         expect(feed, isNotNull);
         expect(feed!.items, isNotEmpty);
-        expect(feed.items.first, isA<PhotoPostDto>());
+        expect(feed.items.first, isA<ContentPostViewData>());
+        expect(feed.items.first.type, 'image');
       },
     );
 
-    test('load(video) returns VideoPostDto items', () async {
+    test('load(video) returns canonical video presentation items', () async {
       final container = _container(MockContentRepository());
       addTearDown(container.dispose);
 
@@ -73,7 +73,8 @@ void main() {
       final feed = container.read(discoveryFeedMapProvider)['video']?.value;
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
-      expect(feed.items.first, isA<VideoPostDto>());
+      expect(feed.items.first, isA<ContentPostViewData>());
+      expect(feed.items.first.type, 'video');
     });
 
     test('load error is captured in feed state without throwing', () async {
@@ -110,7 +111,7 @@ void main() {
       expect(feed.appendError, isNull);
     });
 
-    test('推荐初始成功空响应转为本地服务不可用阻塞态且不伪造 wire 字段', () async {
+    test('推荐初始空响应缺 canonical empty envelope 时转为本地协议阻塞态', () async {
       final analytics = _CapturingAnalyticsService();
       final container = _container(
         _EmptyDiscoveryFeedContentRepository(),
@@ -125,8 +126,8 @@ void main() {
       expect(feed!.items, isEmpty);
       expect(feed.blockingError, isA<RuntimeFailure>());
       final failure = feed.blockingError! as RuntimeFailure;
-      expect(failure.kind, RuntimeFailureKind.unavailable);
-      expect(failure.code, ContentErrorCode.requiredDependencyUnavailable.code);
+      expect(failure.kind, RuntimeFailureKind.contract);
+      expect(failure.code, RuntimeFailureCodes.appContractInvalidResponse);
       expect(feed.feedRequestId, isNull);
       expect(feed.nextCursor, isNull);
       expect(feed.staleDataError, isNull);
@@ -138,7 +139,7 @@ void main() {
       );
       expect(reported.properties['source'], 'localConsistency');
       expect(reported.properties['sourceCode'], failure.code);
-      expect(reported.properties['failureKind'], 'unavailable');
+      expect(reported.properties['failureKind'], 'contract');
       expect(reported.properties, isNot(contains('requestId')));
       expect(reported.properties, isNot(contains('traceId')));
     });
@@ -309,7 +310,7 @@ void main() {
       },
     );
 
-    test('推荐刷新返回空页时保留缓存并转为非阻断一致性失败', () async {
+    test('推荐刷新返回非法空页时保留缓存并转为非阻断协议失败', () async {
       final container = _container(_EmptyRefreshContentRepository());
       addTearDown(container.dispose);
       final notifier = container.read(discoveryFeedMapProvider.notifier);
@@ -330,7 +331,7 @@ void main() {
       expect(after.staleDataError, isA<RuntimeFailure>());
       expect(
         (after.staleDataError! as RuntimeFailure).kind,
-        RuntimeFailureKind.unavailable,
+        RuntimeFailureKind.contract,
       );
       expect(after.appendError, isNull);
     });
@@ -770,7 +771,7 @@ class _FailingContentRepository extends MockContentRepository {
   }
 
   @override
-  Future<List<PostBaseDto>> listDiscoveryFeed({
+  Future<List<ContentPostViewData>> listDiscoveryFeed({
     required String category,
     String? identity,
     String? type,
@@ -818,7 +819,7 @@ class _EmptyCacheFallbackContentRepository extends MockContentRepository {
     DateTime? deadlineAt,
   }) async {
     return DiscoveryFeedPage(
-      items: const <PostBaseDto>[],
+      items: const <ContentPostViewData>[],
       cacheFallbackError: StateError('remote_refresh_failed'),
       cacheAgeMs: 3000,
     );
@@ -843,12 +844,12 @@ class _EmptyDiscoveryFeedContentRepository extends MockContentRepository {
   }) async {
     if (category == 'following' || channelId == 'following') {
       return const DiscoveryFeedPage(
-        items: <PostBaseDto>[],
-        outcome: ContentDiscoveryFeedOutcome.empty,
-        emptyReason: ContentDiscoveryFeedEmptyReason.followingEmpty,
+        items: <ContentPostViewData>[],
+        outcome: ContentFeedOutcome.empty,
+        emptyReason: ContentFeedEmptyReason.followingEmpty,
       );
     }
-    return const DiscoveryFeedPage(items: <PostBaseDto>[]);
+    return const DiscoveryFeedPage(items: <ContentPostViewData>[]);
   }
 }
 
@@ -870,12 +871,12 @@ class _EmptyContinuationContentRepository extends MockContentRepository {
   }) async {
     if (cursor != null) {
       return DiscoveryFeedPage(
-        items: const <PostBaseDto>[],
+        items: const <ContentPostViewData>[],
         feedRequestId: feedRequestId,
         policyDigest:
             'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        outcome: ContentDiscoveryFeedOutcome.empty,
-        emptyReason: ContentDiscoveryFeedEmptyReason.continuationEnd,
+        outcome: ContentFeedOutcome.empty,
+        emptyReason: ContentFeedEmptyReason.continuationEnd,
       );
     }
     final page = await super.listDiscoveryFeedPage(
@@ -897,7 +898,7 @@ class _EmptyContinuationContentRepository extends MockContentRepository {
       nextCursor: 'continuation-1',
       feedRequestId: page.feedRequestId,
       policyDigest: page.policyDigest,
-      outcome: ContentDiscoveryFeedOutcome.content,
+      outcome: ContentFeedOutcome.content,
     );
   }
 }
@@ -1017,7 +1018,7 @@ class _EmptyRefreshContentRepository extends MockContentRepository {
   }) async {
     _requestCount += 1;
     if (_requestCount > 1) {
-      return const DiscoveryFeedPage(items: <PostBaseDto>[]);
+      return const DiscoveryFeedPage(items: <ContentPostViewData>[]);
     }
     return super.listDiscoveryFeedPage(
       category: category,
@@ -1309,7 +1310,7 @@ class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
   PostInteractionState build() => const PostInteractionState();
 
   @override
-  void applyConfirmedPosts(Iterable<PostBaseDto> posts) {
+  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );

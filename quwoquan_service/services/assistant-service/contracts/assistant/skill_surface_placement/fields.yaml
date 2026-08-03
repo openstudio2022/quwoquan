@@ -1,0 +1,26 @@
+description: 群聊或圈子的小趣共享 Skill 策略聚合与命令输入。
+fields:
+- {name: id, source: id, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: surfaceKind, source: surfaceKind, type: enum, enum_ref: SkillSurfaceKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: surfaceId, source: surfaceId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none, role: authoritative_state}
+- {name: policy, source: policy, type: enum, enum_ref: SkillSurfacePlacementPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: disabledSkillIds, source: disabledSkillIds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: SkillSurfacePlacementStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdByAccountId, source: createdByAccountId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: updatedByAccountId, source: updatedByAccountId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+unique_constraints:
+- columns: [surfaceKind, surfaceId]
+  description: 每个 Conversation/Circle 只有一个小趣共享 Skill Placement
+types:
+  PutSkillSurfacePlacementRequest:
+    description: surface 管理员保存共享 Skill 策略；expectedRevision=0 仅允许创建。
+    fields:
+    - {name: surfaceKind, source: path.surfaceKind, type: enum, enum_ref: SkillSurfaceKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: surfaceId, source: path.surfaceId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: policy, source: policy, type: enum, enum_ref: SkillSurfacePlacementPolicy, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: disabledSkillIds, source: disabledSkillIds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: status, source: status, type: enum, enum_ref: SkillSurfacePlacementStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}

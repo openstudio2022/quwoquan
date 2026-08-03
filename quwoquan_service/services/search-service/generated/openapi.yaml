@@ -149,7 +149,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SearchTermHeatView'
+                                $ref: '#/components/schemas/SearchTermHeatSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -183,7 +183,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RecentSearchEntryView'
+                                $ref: '#/components/schemas/RecentSearchEntrySlice'
                 default:
                     description: Runtime failure
                     content:
@@ -221,7 +221,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RecentSearchEntryView'
+                                $ref: '#/components/schemas/RecentSearchEntryWire'
                 default:
                     description: Runtime failure
                     content:
@@ -307,10 +307,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CanonicalSearchQuery
             x-contract-placeholder: true
-        RecentSearchEntryView:
+        RecentSearchEntrySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RecentSearchEntryView
+            x-contract-entity: RecentSearchEntrySlice
+            x-contract-placeholder: true
+        RecentSearchEntryWire:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecentSearchEntryWire
             x-contract-placeholder: true
         ReportSearchFeedbackCommand:
             type: object
@@ -332,10 +337,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SearchResponseView
             x-contract-placeholder: true
-        SearchTermHeatView:
+        SearchTermHeatSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SearchTermHeatView
+            x-contract-entity: SearchTermHeatSlice
             x-contract-placeholder: true
         UpsertRecentSearchCommand:
             type: object

@@ -5,6 +5,11 @@ fields:
 - {name: lastSubscriptionId, source: lastSubscriptionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 types:
+  ListAssistantTasksQuery:
+    description: 读取当前账号任务投影的有界可选状态查询。
+    fields:
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: status, source: status, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
   AssistantTaskItemView:
     description: 一项由事实投影出的助手任务。
     fields:

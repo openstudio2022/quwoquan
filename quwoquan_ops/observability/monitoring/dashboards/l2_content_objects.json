@@ -158,7 +158,7 @@
         "gridPos": { "h": 6, "w": 24, "x": 0, "y": 48 },
         "options": {
           "mode": "markdown",
-          "content": "页面黄金指标来自 SLS `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`content_report` 覆盖首页、沉浸浏览器与用户主页三条真实举报入口，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-content-report-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
+          "content": "页面黄金指标来自 Elasticsearch `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`content_report` 覆盖首页、沉浸浏览器与用户主页三条真实举报入口，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-content-report-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
         }
       },
       {
@@ -242,12 +242,12 @@
         ]
       },
       {
-        "title": "Publication funnel SLS authority",
+        "title": "Publication funnel Elasticsearch authority",
         "type": "text",
         "gridPos": { "h": 6, "w": 24, "x": 0, "y": 70 },
         "options": {
           "mode": "markdown",
-          "content": "权威小时漏斗为 SLS `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
+          "content": "权威小时漏斗为 Elasticsearch `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
         }
       },
       {
@@ -270,12 +270,12 @@
         ]
       },
       {
-        "title": "Article reader SLS authority",
+        "title": "Article reader Elasticsearch authority",
         "type": "text",
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 76 },
         "options": {
           "mode": "markdown",
-          "content": "权威小时聚合为 SLS `app-product-telemetry-article-reader-lifecycle-hourly`（`rowKind=article_reader_lifecycle`）。`enter/exit/error/recovery` 全量采样，`dwell` 为 10% 采样；错误和恢复按 canonical `errorCode/recoveryAction` 下钻，`objectId` 仅存在于 raw 明细，`sessionId` 只生成 approximate distinct-session HLL；两者绝不进入 Prometheus label 或小时维度。SLO：成功 enter P95 ≤ 1.2s、enter 后错误率 < 1%；告警为 `product-article-reader-enter-p95-high`、`product-article-reader-error-rate-high`、`product-article-reader-recovery-failure`。"
+          "content": "权威小时聚合为 Elasticsearch `app-product-telemetry-article-reader-lifecycle-hourly`（`rowKind=article_reader_lifecycle`）。`enter/exit/error/recovery` 全量采样，`dwell` 为 10% 采样；错误和恢复按 canonical `errorCode/recoveryAction` 下钻，`objectId` 仅存在于 raw 明细，`sessionId` 只生成 approximate distinct-session HLL；两者绝不进入 Prometheus label 或小时维度。SLO：成功 enter P95 ≤ 1.2s、enter 后错误率 < 1%；告警为 `product-article-reader-enter-p95-high`、`product-article-reader-error-rate-high`、`product-article-reader-recovery-failure`。"
         }
       }
     ]

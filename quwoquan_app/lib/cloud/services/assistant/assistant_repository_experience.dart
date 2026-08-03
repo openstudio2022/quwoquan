@@ -15,67 +15,25 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
       context,
       userAction: userAction,
     );
-    const path = AssistantApiMetadata.reportPageContextPath;
-    try {
-      final response = await _httpClient.post(
-        _assistantUri(path),
-        headers: <String, String>{
-          ..._headersForPersonalAssistantDialog(
-            operationId: AssistantApiMetadata.reportPageContextOperation,
-            clientPageId: AssistantRequestPageIds.reportPageContext,
-          ),
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(
-          ReportPageContextCommand(contextSnapshot: snapshot).toJson(),
-        ),
-      );
-      final receipt = PageContextReceipt.fromJson(
-        _decodeAssistantObject(
-          response,
-          operationId: AssistantApiMetadata.reportPageContextOperation,
-        ),
-      );
-      if (!receipt.accepted) {
-        throw const FormatException('page context was not accepted');
-      }
-      return receipt;
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
+    final receipt = await _core.reportPageContext(snapshot);
+    if (!receipt.accepted) {
+      throw const FormatException('page context was not accepted');
     }
+    return receipt;
   }
 
   @override
   Future<AssistantEntryResponse> getAssistantEntry({
     required AssistantOpenContext context,
   }) async {
-    const path = AssistantApiMetadata.getAssistantEntryPath;
-    try {
-      final uri = _assistantGetUri(path, <String, String>{
-        'pageType': assistantPageTypeForSource(context.source).wireName,
-        if ((context.entityId ?? '').trim().isNotEmpty)
-          'objectId': context.entityId!.trim(),
-      });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.getAssistantEntryOperation,
-          clientPageId: AssistantRequestPageIds.getAssistantEntry,
-        ),
-      );
-      return AssistantEntryResponse.fromJson(
-        _decodeAssistantObject(
-          response,
-          operationId: AssistantApiMetadata.getAssistantEntryOperation,
-        ),
-      );
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
-    }
+    return _core.getEntry(
+      query: AssistantEntryQuery(
+        pageType: assistantPageTypeForSource(context.source).wireName,
+        objectId: (context.entityId ?? '').trim().isEmpty
+            ? null
+            : context.entityId!.trim(),
+      ),
+    );
   }
 
   @override
@@ -83,43 +41,15 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
     int limit = kAssistantListPageDefaultLimit,
     String? status,
   }) async {
-    const path = AssistantApiMetadata.listAssistantTasksPath;
-    try {
-      final uri = _assistantGetUri(path, <String, String>{
-        'limit': '$limit',
-        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
-      });
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listAssistantTasksOperation,
-          clientPageId: AssistantRequestPageIds.listAssistantTasks,
-        ),
-      );
-      final slice = AssistantTaskSlice.fromJson(
-        _decodeAssistantObject(
-          response,
-          operationId: AssistantApiMetadata.listAssistantTasksOperation,
-        ),
-      );
-      return slice.items
-          .where((row) => row.taskId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
-    }
-  }
-
-  @override
-  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
-    int limit = kAssistantSkillCatalogDefaultLimit,
-  }) async {
-    final catalog = await _skillCatalog.listSkills(limit: limit);
-    return catalog.items
-        .where((row) => row.skillId.isNotEmpty)
+    final normalizedStatus = status?.trim();
+    final slice = await _core.listTasks(
+      limit: limit,
+      status: normalizedStatus == null || normalizedStatus.isEmpty
+          ? null
+          : normalizedStatus,
+    );
+    return slice.items
+        .where((row) => row.taskId.isNotEmpty)
         .take(limit)
         .toList(growable: false);
   }

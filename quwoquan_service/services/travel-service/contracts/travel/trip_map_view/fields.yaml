@@ -1,0 +1,43 @@
+description: TripMapView 安全语义 route_map 数据。
+fields:
+- {name: tripId, type: string, constraints: [PK, NOT_NULL], role: projection, reference: true}
+- {name: currentRevisionId, type: string, constraints: [NOT_NULL], role: projection, reference: true}
+- {name: currentRevisionNumber, type: int64, constraints: [NOT_NULL], role: projection}
+- {name: stops, type: '[]TripMapStopSlice', constraints: [NOT_NULL], role: projection}
+- {name: routeSegments, type: '[]TripMapRouteSegmentSlice', constraints: [NOT_NULL], role: projection}
+- {name: momentMarkers, type: '[]TripMapMomentMarkerSlice', constraints: [NOT_NULL], role: projection}
+- {name: sourceMomentIds, type: '[]string', constraints: [NOT_NULL], role: projection, reference: true}
+- {name: sourceContentLinkIds, type: '[]string', constraints: [NOT_NULL], role: projection, reference: true}
+- {name: sourceDigest, type: string, constraints: [NOT_NULL], role: projection}
+- {name: sourceEventId, type: string, constraints: [NOT_NULL], role: projection}
+- {name: projectedAt, type: timestamp, constraints: [NOT_NULL], role: projection}
+types:
+  GetTripMapQuery:
+    fields:
+    - {name: tripId, type: string, constraints: [NOT_BLANK], client_dart_type: String}
+  TripMapPlaceRef:
+    fields:
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  TripMapStopSlice:
+    fields:
+    - {name: stopId, type: string, constraints: [NOT_NULL]}
+    - {name: sequence, type: int, constraints: [NOT_NULL]}
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NOT_NULL]}
+    - {name: title, type: string, constraints: [NOT_NULL]}
+    - {name: placeRef, type: object, object_ref: TripMapPlaceRef, constraints: [NOT_NULL]}
+    - {name: momentIds, type: '[]string', constraints: [NOT_NULL]}
+    - {name: contentLinkIds, type: '[]string', constraints: [NOT_NULL]}
+  TripMapRouteSegmentSlice:
+    fields:
+    - {name: segmentId, type: string, constraints: [NOT_NULL]}
+    - {name: sequence, type: int, constraints: [NOT_NULL]}
+    - {name: fromStopId, type: string, constraints: [NOT_NULL]}
+    - {name: toStopId, type: string, constraints: [NOT_NULL]}
+  TripMapMomentMarkerSlice:
+    fields:
+    - {name: momentId, type: string, constraints: [NOT_NULL]}
+    - {name: dayIndex, type: int, constraints: [NOT_NULL]}
+    - {name: itemId, type: string, constraints: [NULLABLE]}
+    - {name: placeRef, type: object, object_ref: TripMapPlaceRef, constraints: [NOT_NULL]}

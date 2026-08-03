@@ -19,7 +19,7 @@ final class RemoteContentPostPublicationWriter
   final ContentPostPublicationInvocationContextFactory invocationContext;
 
   @override
-  Future<ContentPostPublicationReceipt> submitPostPublication(
+  Future<PostPublicationReceipt> submitPostPublication(
     SubmitContentPostPublicationCommand command,
   ) => client.contentPostSubmitPostPublication(
     command,

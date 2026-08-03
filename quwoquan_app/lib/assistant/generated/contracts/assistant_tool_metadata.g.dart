@@ -2,7 +2,197 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+class AssistantToolCapabilityPolicyWire {
+  const AssistantToolCapabilityPolicyWire({
+    this.capabilityKey = "",
+    this.connectorRequirement = "none",
+    this.consentScopes = const <String>[],
+    this.allowedSurfaceKinds = const <String>[],
+    this.recheckAtExecution = false,
+  });
+
+  final String capabilityKey;
+  final String connectorRequirement;
+  final List<String> consentScopes;
+  final List<String> allowedSurfaceKinds;
+  final bool recheckAtExecution;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'capabilityKey': capabilityKey,
+        'connectorRequirement': connectorRequirement,
+        'consentScopes': consentScopes,
+        'allowedSurfaceKinds': allowedSurfaceKinds,
+        'recheckAtExecution': recheckAtExecution,
+      };
+
+  factory AssistantToolCapabilityPolicyWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'capabilityKey',
+      'connectorRequirement',
+      'consentScopes',
+      'allowedSurfaceKinds',
+      'recheckAtExecution',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolCapabilityPolicyWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('capabilityKey') && json['capabilityKey'] != null && (json['capabilityKey'] is! String)) {
+      throw const FormatException('AssistantToolCapabilityPolicyWire field capabilityKey has an invalid wire value');
+    }
+    if (json.containsKey('connectorRequirement') && json['connectorRequirement'] != null && (json['connectorRequirement'] is! String)) {
+      throw const FormatException('AssistantToolCapabilityPolicyWire field connectorRequirement has an invalid wire value');
+    }
+    if (json.containsKey('consentScopes') && json['consentScopes'] != null && (json['consentScopes'] is! List || (json['consentScopes'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolCapabilityPolicyWire field consentScopes has an invalid wire value');
+    }
+    if (json.containsKey('allowedSurfaceKinds') && json['allowedSurfaceKinds'] != null && (json['allowedSurfaceKinds'] is! List || (json['allowedSurfaceKinds'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolCapabilityPolicyWire field allowedSurfaceKinds has an invalid wire value');
+    }
+    if (json.containsKey('recheckAtExecution') && json['recheckAtExecution'] != null && (json['recheckAtExecution'] is! bool)) {
+      throw const FormatException('AssistantToolCapabilityPolicyWire field recheckAtExecution has an invalid wire value');
+    }
+    return AssistantToolCapabilityPolicyWire(
+      capabilityKey: (json['capabilityKey'] as String?)?.trim() ?? "",
+      connectorRequirement: (json['connectorRequirement'] as String?)?.trim() ?? "none",
+      consentScopes: _assistantStringList(json['consentScopes']),
+      allowedSurfaceKinds: _assistantStringList(json['allowedSurfaceKinds']),
+      recheckAtExecution: json['recheckAtExecution'] == true,
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class AssistantToolCapabilityPolicyWireFields {
+  static const String capabilityKey = 'capabilityKey';
+  static const String connectorRequirement = 'connectorRequirement';
+  static const String consentScopes = 'consentScopes';
+  static const String allowedSurfaceKinds = 'allowedSurfaceKinds';
+  static const String recheckAtExecution = 'recheckAtExecution';
+}
+
+class AssistantToolConfirmationDisplayFieldWire {
+  const AssistantToolConfirmationDisplayFieldWire({
+    required this.inputKey,
+    required this.label,
+  });
+
+  final String inputKey;
+  final String label;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'inputKey': inputKey,
+        'label': label,
+      };
+
+  factory AssistantToolConfirmationDisplayFieldWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'inputKey',
+      'label',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolConfirmationDisplayFieldWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('inputKey') || json['inputKey'] == null || (json['inputKey'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationDisplayFieldWire field inputKey has an invalid wire value');
+    }
+    if (!json.containsKey('label') || json['label'] == null || (json['label'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationDisplayFieldWire field label has an invalid wire value');
+    }
+    return AssistantToolConfirmationDisplayFieldWire(
+      inputKey: (json['inputKey'] as String?)?.trim() ?? "",
+      label: (json['label'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class AssistantToolConfirmationDisplayFieldWireFields {
+  static const String inputKey = 'inputKey';
+  static const String label = 'label';
+}
+
+class AssistantToolConfirmationPolicyWire {
+  const AssistantToolConfirmationPolicyWire({
+    this.templateRef = "",
+    this.title = "",
+    this.description = "",
+    this.completionSummary = "",
+    this.displayFields = const <AssistantToolConfirmationDisplayFieldWire>[],
+  });
+
+  final String templateRef;
+  final String title;
+  final String description;
+  final String completionSummary;
+  final List<AssistantToolConfirmationDisplayFieldWire> displayFields;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'templateRef': templateRef,
+        'title': title,
+        'description': description,
+        'completionSummary': completionSummary,
+        'displayFields': displayFields.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory AssistantToolConfirmationPolicyWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'templateRef',
+      'title',
+      'description',
+      'completionSummary',
+      'displayFields',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolConfirmationPolicyWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('templateRef') && json['templateRef'] != null && (json['templateRef'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationPolicyWire field templateRef has an invalid wire value');
+    }
+    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationPolicyWire field title has an invalid wire value');
+    }
+    if (json.containsKey('description') && json['description'] != null && (json['description'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationPolicyWire field description has an invalid wire value');
+    }
+    if (json.containsKey('completionSummary') && json['completionSummary'] != null && (json['completionSummary'] is! String)) {
+      throw const FormatException('AssistantToolConfirmationPolicyWire field completionSummary has an invalid wire value');
+    }
+    if (json.containsKey('displayFields') && json['displayFields'] != null && (json['displayFields'] is! List || (json['displayFields'] as List).any((item) => item is! Map))) {
+      throw const FormatException('AssistantToolConfirmationPolicyWire field displayFields has an invalid wire value');
+    }
+    return AssistantToolConfirmationPolicyWire(
+      templateRef: (json['templateRef'] as String?)?.trim() ?? "",
+      title: (json['title'] as String?)?.trim() ?? "",
+      description: (json['description'] as String?)?.trim() ?? "",
+      completionSummary: (json['completionSummary'] as String?)?.trim() ?? "",
+      displayFields: (json['displayFields'] as List?)?.whereType<Map>().map((item) => AssistantToolConfirmationDisplayFieldWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantToolConfirmationDisplayFieldWire>[],
+    );
+  }
+}
+
+class AssistantToolConfirmationPolicyWireFields {
+  static const String templateRef = 'templateRef';
+  static const String title = 'title';
+  static const String description = 'description';
+  static const String completionSummary = 'completionSummary';
+  static const String displayFields = 'displayFields';
+}
 
 class AssistantToolRecoveryPolicyWire {
   const AssistantToolRecoveryPolicyWire({
@@ -22,6 +212,26 @@ class AssistantToolRecoveryPolicyWire {
       };
 
   factory AssistantToolRecoveryPolicyWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'action',
+      'disruptionLevel',
+      'userVisibleSummary',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolRecoveryPolicyWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('action') && json['action'] != null && (json['action'] is! String)) {
+      throw const FormatException('AssistantToolRecoveryPolicyWire field action has an invalid wire value');
+    }
+    if (json.containsKey('disruptionLevel') && json['disruptionLevel'] != null && (json['disruptionLevel'] is! String)) {
+      throw const FormatException('AssistantToolRecoveryPolicyWire field disruptionLevel has an invalid wire value');
+    }
+    if (json.containsKey('userVisibleSummary') && json['userVisibleSummary'] != null && (json['userVisibleSummary'] is! String)) {
+      throw const FormatException('AssistantToolRecoveryPolicyWire field userVisibleSummary has an invalid wire value');
+    }
     return AssistantToolRecoveryPolicyWire(
       action: parseToolRecoveryActionStrict((json['action'] as String?)?.trim() ?? "fail_turn"),
       disruptionLevel: parseToolDisruptionLevelStrict((json['disruptionLevel'] as String?)?.trim() ?? "partial"),
@@ -57,6 +267,30 @@ class AssistantToolResiliencePolicyWire {
       };
 
   factory AssistantToolResiliencePolicyWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'timeoutMs',
+      'maxAttempts',
+      'retryBackoffMs',
+      'loopDetectionWindow',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolResiliencePolicyWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (json.containsKey('timeoutMs') && json['timeoutMs'] != null && (json['timeoutMs'] is! num)) {
+      throw const FormatException('AssistantToolResiliencePolicyWire field timeoutMs has an invalid wire value');
+    }
+    if (json.containsKey('maxAttempts') && json['maxAttempts'] != null && (json['maxAttempts'] is! num)) {
+      throw const FormatException('AssistantToolResiliencePolicyWire field maxAttempts has an invalid wire value');
+    }
+    if (json.containsKey('retryBackoffMs') && json['retryBackoffMs'] != null && (json['retryBackoffMs'] is! num)) {
+      throw const FormatException('AssistantToolResiliencePolicyWire field retryBackoffMs has an invalid wire value');
+    }
+    if (json.containsKey('loopDetectionWindow') && json['loopDetectionWindow'] != null && (json['loopDetectionWindow'] is! num)) {
+      throw const FormatException('AssistantToolResiliencePolicyWire field loopDetectionWindow has an invalid wire value');
+    }
     return AssistantToolResiliencePolicyWire(
       timeoutMs: (json['timeoutMs'] as num?)?.toInt() ?? 5000,
       maxAttempts: (json['maxAttempts'] as num?)?.toInt() ?? 1,
@@ -88,6 +322,8 @@ class AssistantToolMetadataWire {
     this.environmentScopes = const <String>[],
     this.serverInjectedInputs = const <String>[],
     this.readOnly = true,
+    this.capability = const AssistantToolCapabilityPolicyWire(),
+    this.confirmation = const AssistantToolConfirmationPolicyWire(),
     this.resilience = const AssistantToolResiliencePolicyWire(),
     this.recovery = const AssistantToolRecoveryPolicyWire(),
   });
@@ -105,6 +341,8 @@ class AssistantToolMetadataWire {
   final List<String> environmentScopes;
   final List<String> serverInjectedInputs;
   final bool readOnly;
+  final AssistantToolCapabilityPolicyWire capability;
+  final AssistantToolConfirmationPolicyWire confirmation;
   final AssistantToolResiliencePolicyWire resilience;
   final AssistantToolRecoveryPolicyWire recovery;
 
@@ -122,11 +360,89 @@ class AssistantToolMetadataWire {
         'environmentScopes': environmentScopes,
         'serverInjectedInputs': serverInjectedInputs,
         'readOnly': readOnly,
+        'capability': capability.toJson(),
+        'confirmation': confirmation.toJson(),
         'resilience': resilience.toJson(),
         'recovery': recovery.toJson(),
       };
 
   factory AssistantToolMetadataWire.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'toolName',
+      'displayName',
+      'description',
+      'namespace',
+      'placement',
+      'inputSchema',
+      'outputSchema',
+      'requiresConfirmation',
+      'idempotency',
+      'sensitivity',
+      'environmentScopes',
+      'serverInjectedInputs',
+      'readOnly',
+      'capability',
+      'confirmation',
+      'resilience',
+      'recovery',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolMetadataWire response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('toolName') || json['toolName'] == null || (json['toolName'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field toolName has an invalid wire value');
+    }
+    if (json.containsKey('displayName') && json['displayName'] != null && (json['displayName'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field displayName has an invalid wire value');
+    }
+    if (json.containsKey('description') && json['description'] != null && (json['description'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field description has an invalid wire value');
+    }
+    if (!json.containsKey('namespace') || json['namespace'] == null || (json['namespace'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field namespace has an invalid wire value');
+    }
+    if (json.containsKey('placement') && json['placement'] != null && (json['placement'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field placement has an invalid wire value');
+    }
+    if (json.containsKey('inputSchema') && json['inputSchema'] != null && (json['inputSchema'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field inputSchema has an invalid wire value');
+    }
+    if (json.containsKey('outputSchema') && json['outputSchema'] != null && (json['outputSchema'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field outputSchema has an invalid wire value');
+    }
+    if (json.containsKey('requiresConfirmation') && json['requiresConfirmation'] != null && (json['requiresConfirmation'] is! bool)) {
+      throw const FormatException('AssistantToolMetadataWire field requiresConfirmation has an invalid wire value');
+    }
+    if (json.containsKey('idempotency') && json['idempotency'] != null && (json['idempotency'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field idempotency has an invalid wire value');
+    }
+    if (json.containsKey('sensitivity') && json['sensitivity'] != null && (json['sensitivity'] is! String)) {
+      throw const FormatException('AssistantToolMetadataWire field sensitivity has an invalid wire value');
+    }
+    if (json.containsKey('environmentScopes') && json['environmentScopes'] != null && (json['environmentScopes'] is! List || (json['environmentScopes'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolMetadataWire field environmentScopes has an invalid wire value');
+    }
+    if (json.containsKey('serverInjectedInputs') && json['serverInjectedInputs'] != null && (json['serverInjectedInputs'] is! List || (json['serverInjectedInputs'] as List).any((item) => item is! String))) {
+      throw const FormatException('AssistantToolMetadataWire field serverInjectedInputs has an invalid wire value');
+    }
+    if (json.containsKey('readOnly') && json['readOnly'] != null && (json['readOnly'] is! bool)) {
+      throw const FormatException('AssistantToolMetadataWire field readOnly has an invalid wire value');
+    }
+    if (json.containsKey('capability') && json['capability'] != null && (json['capability'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field capability has an invalid wire value');
+    }
+    if (json.containsKey('confirmation') && json['confirmation'] != null && (json['confirmation'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field confirmation has an invalid wire value');
+    }
+    if (json.containsKey('resilience') && json['resilience'] != null && (json['resilience'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field resilience has an invalid wire value');
+    }
+    if (json.containsKey('recovery') && json['recovery'] != null && (json['recovery'] is! Map)) {
+      throw const FormatException('AssistantToolMetadataWire field recovery has an invalid wire value');
+    }
     return AssistantToolMetadataWire(
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       displayName: (json['displayName'] as String?)?.trim() ?? "",
@@ -141,6 +457,8 @@ class AssistantToolMetadataWire {
       environmentScopes: _assistantStringList(json['environmentScopes']),
       serverInjectedInputs: _assistantStringList(json['serverInjectedInputs']),
       readOnly: json['readOnly'] != false,
+      capability: json['capability'] is Map ? AssistantToolCapabilityPolicyWire.fromJson((json['capability'] as Map).cast<String, dynamic>()) : const AssistantToolCapabilityPolicyWire(),
+      confirmation: json['confirmation'] is Map ? AssistantToolConfirmationPolicyWire.fromJson((json['confirmation'] as Map).cast<String, dynamic>()) : const AssistantToolConfirmationPolicyWire(),
       resilience: json['resilience'] is Map ? AssistantToolResiliencePolicyWire.fromJson((json['resilience'] as Map).cast<String, dynamic>()) : const AssistantToolResiliencePolicyWire(),
       recovery: json['recovery'] is Map ? AssistantToolRecoveryPolicyWire.fromJson((json['recovery'] as Map).cast<String, dynamic>()) : const AssistantToolRecoveryPolicyWire(),
     );
@@ -168,6 +486,8 @@ class AssistantToolMetadataWireFields {
   static const String environmentScopes = 'environmentScopes';
   static const String serverInjectedInputs = 'serverInjectedInputs';
   static const String readOnly = 'readOnly';
+  static const String capability = 'capability';
+  static const String confirmation = 'confirmation';
   static const String resilience = 'resilience';
   static const String recovery = 'recovery';
 }

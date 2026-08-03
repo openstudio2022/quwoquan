@@ -89,16 +89,16 @@ class AppearanceSettingsSnapshot {
   factory AppearanceSettingsSnapshot.fromContract(
     contracts.AppearanceSettingsView view,
   ) => AppearanceSettingsSnapshot(
-    themeMode: AppearanceThemeMode.fromWire(view.themeMode.wireValue),
+    themeMode: AppearanceThemeMode.fromWire(view.themeMode),
     fontSizePreset: AppearanceFontSizePreset.fromWire(
-      view.fontSizePreset.wireValue,
+      view.fontSizePreset,
     ),
-    source: AppearanceSettingsSource.fromWire(view.source.wireValue),
+    source: AppearanceSettingsSource.fromWire(view.source),
     ownerDefaultThemeMode: AppearanceThemeMode.fromWire(
-      view.ownerDefaultThemeMode.wireValue,
+      view.ownerDefaultThemeMode,
     ),
     ownerDefaultFontSizePreset: AppearanceFontSizePreset.fromWire(
-      view.ownerDefaultFontSizePreset.wireValue,
+      view.ownerDefaultFontSizePreset,
     ),
     hasPersonaOverride: view.hasPersonaOverride,
     version: view.version,

@@ -16,6 +16,7 @@ import (
 	"quwoquan_service/services/chat-service/generated/chat/conversation"
 	messageevent "quwoquan_service/services/chat-service/generated/chat/message/contract/event"
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	messageapp "quwoquan_service/services/chat-service/internal/chat/message/application"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
 	messageports "quwoquan_service/services/chat-service/internal/chat/message/domain/ports"
 )
@@ -79,59 +80,12 @@ func NewMessageService(
 	}
 }
 
-type SendMessageRequest struct {
-	ConversationId            string
-	SenderId                  string
-	PersonaContextVersion     int64
-	SenderDisplayNameSnapshot string
-	SenderAvatarUrlSnapshot   string
-	Type                      string
-	Content                   string
-	MediaAssetID              string
-	Card                      *MessageCardCommand
-	ReplyToMessageId          string
-	Mentions                  []string
-	ClientMsgId               string
-}
-
-type MessageCardCommand struct {
-	Kind         string                        `json:"kind"`
-	Title        string                        `json:"title"`
-	ObjectRef    *MessageCardObjectRefCommand  `json:"objectRef"`
-	Subtitle     string                        `json:"subtitle"`
-	ThumbnailURL string                        `json:"thumbnailUrl"`
-	DeepLink     string                        `json:"deeplink"`
-	LandingURL   string                        `json:"landingUrl"`
-	ShareText    string                        `json:"shareText"`
-	Message      string                        `json:"message"`
-	Attributes   []MessageCardAttributeCommand `json:"attributes"`
-}
-
-type MessageCardObjectRefCommand struct {
-	ObjectTypeRef string `json:"objectTypeRef"`
-	ObjectID      string `json:"objectId"`
-	RouteID       string `json:"routeId"`
-}
-
-type MessageCardAttributeCommand struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type SendMessageResponse struct {
-	MessageId string `json:"messageId"`
-	Seq       int64  `json:"seq"`
-	Timestamp string `json:"timestamp"`
-}
-
-type AssistantDeliveryMessageRequest struct {
-	ConversationID   string
-	CreatorPersonaID string
-	AssistantSkillID string
-	Type             string
-	Content          string
-	ClientMsgID      string
-}
+type SendMessageRequest = messageapp.SendMessageRequest
+type MessageCardCommand = messageapp.MessageCardCommand
+type MessageCardObjectRefCommand = messageapp.MessageCardObjectRefCommand
+type MessageCardAttributeCommand = messageapp.MessageCardAttributeCommand
+type SendMessageResponse = messageapp.SendMessageResponse
+type AssistantDeliveryMessageRequest = messageapp.AssistantDeliveryMessageRequest
 
 func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest) (resp *SendMessageResponse, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SendMessage",
@@ -211,9 +165,9 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 				Payload: map[string]any{
 					"conversationId":     req.ConversationId,
 					"senderId":           req.SenderId,
+					"senderAccountId":    req.SenderAccountID,
 					"content":            msg.Content,
 					"assistantMemberId":  assistantMember.UserId,
-					"assistantSkillId":   assistantMember.AssistantSkillId,
 					"triggerClientMsgId": req.ClientMsgId,
 				},
 			})
@@ -250,7 +204,6 @@ func (s *MessageService) ListAssistantGroundingMessages(
 	ctx context.Context,
 	conversationID string,
 	creatorPersonaID string,
-	assistantSkillID string,
 	beforeSeq int64,
 	limit int,
 ) ([]MessageSlice, error) {
@@ -258,7 +211,6 @@ func (s *MessageService) ListAssistantGroundingMessages(
 		ctx,
 		conversationID,
 		creatorPersonaID,
-		assistantSkillID,
 	); err != nil {
 		return nil, err
 	}
@@ -278,7 +230,6 @@ func (s *MessageService) SendAssistantDeliveryMessage(
 		ctx,
 		req.ConversationID,
 		req.CreatorPersonaID,
-		req.AssistantSkillID,
 	); err != nil {
 		return nil, err
 	}
@@ -295,7 +246,6 @@ func (s *MessageService) requireAssistantDeliveryMembership(
 	ctx context.Context,
 	conversationID string,
 	creatorPersonaID string,
-	assistantSkillID string,
 ) error {
 	membership, err := resolveAssistantDeliveryMembership(
 		ctx,
@@ -303,14 +253,13 @@ func (s *MessageService) requireAssistantDeliveryMembership(
 		conversationID,
 		creatorPersonaID,
 		"",
-		assistantSkillID,
 	)
 	if err != nil {
 		return err
 	}
-	if !membership.CreatorMember || !membership.AssistantSkillMember {
+	if !membership.CreatorMember || !membership.AssistantMember {
 		return generated.AppErrorFromBlocked(
-			"assistant delivery requires current creator and assistant skill membership",
+			"assistant delivery requires current creator and assistant membership",
 		)
 	}
 	return nil
@@ -850,19 +799,8 @@ func (s *MessageService) RecallMessage(ctx context.Context, conversationId, mess
 	return nil
 }
 
-type ListMessagesRequest struct {
-	ConversationId string
-	ViewerID       string
-	Limit          int
-	AfterSeq       int64
-	BeforeSeq      int64
-	Cursor         string
-}
-
-type MessageSlice struct {
-	Message messagemodel.Message
-	Media   *messageports.MediaAssetDeliverySlice
-}
+type ListMessagesRequest = messageapp.ListMessagesRequest
+type MessageSlice = messageapp.MessageSlice
 
 func (s *MessageService) ListMessages(ctx context.Context, req ListMessagesRequest) (_ []MessageSlice, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.ListMessages",
@@ -916,17 +854,8 @@ func (s *MessageService) hydrateMessageSlices(
 	return slices, nil
 }
 
-type SyncMessagesRequest struct {
-	ConversationId string
-	ViewerID       string
-	LastSeq        int64
-	Limit          int
-}
-
-type SyncMessagesResponse struct {
-	Messages []MessageSlice `json:"-"`
-	HasMore  bool           `json:"hasMore"`
-}
+type SyncMessagesRequest = messageapp.SyncMessagesRequest
+type SyncMessagesResponse = messageapp.SyncMessagesResponse
 
 func (s *MessageService) SyncMessages(ctx context.Context, req SyncMessagesRequest) (_ *SyncMessagesResponse, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SyncMessages",

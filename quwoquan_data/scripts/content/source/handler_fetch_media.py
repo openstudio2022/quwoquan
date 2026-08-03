@@ -34,6 +34,7 @@ class EntityMediaClosureInput:
     sources: tuple[Mapping[str, Any], ...]
     image_specs: tuple[Mapping[str, Any], ...]
     pending_images: tuple[dict[str, Any], ...]
+    provider_asset_counts: tuple[Mapping[str, Any], ...]
     existing_image_source_dirs: frozenset[Path]
     written_source_dirs: frozenset[Path]
     written_rejected_source_dirs: frozenset[Path]
@@ -285,6 +286,7 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
         spec.image_lane_selected
         or spec.homepage_media_selected
         or spec.video_lane_selected
+        or bool(spec.provider_asset_counts)
     ):
         rights_issues = [
             *data_issues(
@@ -337,8 +339,22 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
                 "rejectedForQuality": image_quality_issues,
                 "rejectedByCategory": rejected_by_category,
                 "nonBlockingImageIssues": fetch_issues if not blocking_issues else [],
+                "sourceAssetCounts": [dict(row) for row in spec.provider_asset_counts],
             },
             next_step="quality_analysis",
+        )
+    for row in spec.provider_asset_counts:
+        print(
+            "[download] Source assets: "
+            f"displayName={row.get('displayName') or '?'} "
+            f"provider={row.get('provider') or 'unknown'} "
+            f"assets={int(row.get('acceptedAssetCount') or 0)} "
+            f"planned={int(row.get('plannedAssetCount') or 0)} "
+            f"discovered={int(row.get('discoveredAssetCount') or 0)} "
+            f"downloaded={int(row.get('downloadedAssetCount') or 0)} "
+            f"accepted={int(row.get('acceptedAssetCount') or 0)} "
+            f"rejected={int(row.get('rejectedAssetCount') or 0)}",
+            flush=True,
         )
     print(
         f"[download] Entity done {spec.entity_index}/{spec.entity_count}: {spec.entity_id} "

@@ -48,6 +48,8 @@ type appExposedOperation struct {
 	ResponseAdmission    *appResponseAdmissionPolicy `json:"responseAdmission"`
 	RequestEntity        string                      `json:"requestEntity"`
 	RequestBodyKind      string                      `json:"requestBodyKind"`
+	Transport            string                      `json:"transport"`
+	Streaming            *appStreamingPolicy         `json:"streaming"`
 	RequestBindings      *appRequestBindings         `json:"requestBindings"`
 	RequestConstants     *appRequestConstants        `json:"requestConstants"`
 	ResponseBody         string                      `json:"responseBody"`
@@ -108,6 +110,13 @@ type appPaginationPolicy struct {
 
 type appResponseAdmissionPolicy struct {
 	MaximumBodyBytes int `json:"maximumBodyBytes"`
+}
+
+type appStreamingPolicy struct {
+	ResumeRequestField  string   `json:"resumeRequestField"`
+	ResumeResponseField string   `json:"resumeResponseField"`
+	TerminalField       string   `json:"terminalField"`
+	TerminalValues      []string `json:"terminalValues"`
 }
 
 type appConcurrencyPolicy struct {

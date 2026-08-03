@@ -1,0 +1,72 @@
+description: 账号 Connector 连接、能力授权与命令输入。
+fields:
+- {name: connectionId, source: connectionId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: connectorId, source: connectorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: status, source: status, type: enum, enum_ref: ConnectorConnectionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: credentialRef, source: credentialRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: grantReceiptDigest, source: grantReceiptDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: freshnessAt, source: freshnessAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: revokedAt, source: revokedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+unique_constraints:
+- {columns: [accountId, connectorId], description: 每账号每 Connector 只维护一个当前连接聚合，撤权后重连沿同聚合提升 revision}
+types:
+  ConnectorConnectionView:
+    description: App/Assistant 可读取的脱敏连接视图；不含 account、credentialRef 或 grant receipt digest。
+    fields:
+    - {name: connectionId, source: connectionId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: none}
+    - {name: connectorId, source: connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: status, source: status, type: enum, enum_ref: ConnectorConnectionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: freshnessAt, source: freshnessAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: revokedAt, source: revokedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+    - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
+  ListConnectorConnectionsQuery:
+    fields:
+    - {name: limit, source: limit, type: int, constraints: [NULLABLE, POSITIVE, MAX_100], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  GetConnectorConnectionQuery:
+    fields:
+    - {name: connectionId, source: path.connectionId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+  ConnectorConnectionListSlice:
+    fields:
+    - {name: items, source: items, type: '[]ConnectorConnectionView', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+  CreateConnectorConnectionRequest:
+    description: 消费 ConnectorAuthorization 已验证的一次性 grant receipt 创建或重连；不含 proof、callback 或 credential。
+    fields:
+    - {name: connectorId, source: connectorId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: requestedCapabilities, source: requestedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: write, ops_exposure: none}
+    - {name: grantReceiptRef, source: grantReceiptRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+  ConnectorConnectionMutationReceipt:
+    fields:
+    - {name: connection, source: connection, type: ConnectorConnectionView, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
+    - {name: replayed, source: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  RevokeConnectorConnectionRequest:
+    fields:
+    - {name: connectionId, source: path.connectionId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  ResolveConnectorCapabilityGrantRequest:
+    description: Assistant 等受信服务在每个工具安全边界提交的最小授权求交输入；不得包含 token、credential 或 Connector Provider 参数。
+    fields:
+    - {name: accountId, source: accountId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: write, reference: true}
+    - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: allow, api_exposure: none, ops_exposure: write}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: write}
+    - {name: connectionRefs, source: connectionRefs, type: '[]string', constraints: [NOT_NULL], classification: PRIVATE, log_policy: metadata_only, api_exposure: none, ops_exposure: write}
+  ConnectorCapabilityGrantDecision:
+    description: 不含 secret 的动态 capability 决策；allowed=false 是合法业务结果，不用异常伪装。
+    fields:
+    - {name: allowed, source: allowed, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: connectionId, source: connectionId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: connectorId, source: connectorId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: freshnessAt, source: freshnessAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: reason, source: reason, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}

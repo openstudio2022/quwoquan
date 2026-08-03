@@ -23,19 +23,25 @@ import (
 	circleports "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/ports"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/cache"
 	circlepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/circle/persistence"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
+	behaviorfacthttp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/adapters/inbound/http"
 	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/persistence"
+	filehttp "quwoquan_service/services/circle-service/internal/circle_management/circle_file/adapters/inbound/http"
 	fileapp "quwoquan_service/services/circle-service/internal/circle_management/circle_file/application"
 	fileports "quwoquan_service/services/circle-service/internal/circle_management/circle_file/domain/ports"
+	filemessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/messaging"
 	filepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/persistence"
+	grouphttp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/adapters/inbound/http"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
 	grouppersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/persistence"
+	groupmembershiphttp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/adapters/inbound/http"
 	groupmembershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/application"
 	groupmembershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/infrastructure/persistence"
+	membershiphttp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/adapters/inbound/http"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
 	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
+	placementhttp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/http"
 	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
 	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
@@ -222,7 +228,7 @@ func TestMain(m *testing.M) {
 	fileCommands := fileapp.NewCommandFacade(fileStore, fileReaders, readyMediaAssetReader{})
 	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
 	fileStreamRelay = fileapp.NewOutboxRelay(
-		fileStore, fileStore, messaging.NewCircleFileStreamPublisher(circleMessageTransport), "circle-file-stream",
+		fileStore, fileStore, filemessaging.NewCircleFileStreamPublisher(circleMessageTransport), "circle-file-stream",
 	)
 	placementCommands := placementapp.NewCommandFacade(placementStore, placementports.PolicyReaders{
 		Circles: placementReaders, Groups: placementReaders,
@@ -238,11 +244,14 @@ func TestMain(m *testing.M) {
 	)
 	groupMembershipQueries := groupmembershipapp.NewQueryFacade(groupMembershipReaders, groupMembershipReaders)
 
-	testHandler = httpadapter.NewCircleHandler(
-		circleService, circleCommands, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
-		groupMembershipCommands, groupMembershipQueries,
-		membershipCommands, membershipQueries, placementCommands,
-	).Routes()
+	testHandler = composeCircleObjectRoutes(
+		httpadapter.NewCircleHandler(circleService, circleCommands).Routes(),
+		filehttp.NewHandler(fileCommands, fileQueries), behaviorfacthttp.NewHandler(behaviorFactWriter),
+		grouphttp.NewHandler(groupCommands, groupQueries),
+		groupmembershiphttp.NewHandler(groupMembershipCommands, groupMembershipQueries),
+		membershiphttp.NewHandler(membershipCommands, membershipQueries),
+		placementhttp.NewHandler(placementCommands),
+	)
 
 	code := m.Run()
 
@@ -253,6 +262,52 @@ func TestMain(m *testing.M) {
 	_ = redisRouter.Close()
 	_ = integrationRedis.Close(ctx)
 	os.Exit(code)
+}
+
+func composeCircleObjectRoutes(
+	fallback http.Handler,
+	files *filehttp.Handler,
+	behaviors *behaviorfacthttp.Handler,
+	groups *grouphttp.Handler,
+	groupMemberships *groupmembershiphttp.Handler,
+	memberships *membershiphttp.Handler,
+	placements *placementhttp.Handler,
+) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/circles/behaviors" {
+			behaviors.ServeHTTP(writer, request)
+			return
+		}
+		if strings.HasPrefix(request.URL.Path, "/personas/") {
+			memberships.ServePersonaCircles(writer, request)
+			return
+		}
+		if strings.HasPrefix(request.URL.Path, "/circles/") {
+			parts := strings.Split(strings.Trim(strings.TrimPrefix(request.URL.Path, "/circles/"), "/"), "/")
+			if len(parts) >= 2 {
+				circleID, rest := parts[0], parts[2:]
+				switch parts[1] {
+				case "memberships":
+					memberships.ServeCircleRoute(writer, request, circleID, rest)
+					return
+				case "groups":
+					if len(rest) >= 2 && rest[1] == "memberships" {
+						groupMemberships.ServeCircleGroupRoute(writer, request, circleID, rest[0], rest[2:])
+					} else {
+						groups.ServeCircleRoute(writer, request, circleID, rest)
+					}
+					return
+				case "files":
+					files.ServeCircleRoute(writer, request, circleID, rest)
+					return
+				case "post-placements":
+					placements.ServeCircleRoute(writer, request, circleID, rest)
+					return
+				}
+			}
+		}
+		fallback.ServeHTTP(writer, request)
+	})
 }
 
 func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
@@ -271,7 +326,7 @@ func cleanCollections(t *testing.T) {
 		return
 	}
 	for _, coll := range []string{
-		"circles", "circle_memberships", "circle_files", "circle_groups", "posts",
+		"circles", "circle_memberships", "circle_files", "circle_groups", "circle_feed_items",
 		"circle_membership_command_receipts", "circle_membership_outbox",
 		"circle_membership_outbox_sequences", "circle_membership_projection_checkpoints",
 		"circle_membership_projection_inbox",

@@ -43,7 +43,7 @@ errors:
   reason: query_window_invalid
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, GetEventSummary, GetEventDrilldown]}
+  - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, GetEventSummary, GetEventDrilldown, ListL1L4MetricSnapshots, GetServiceRouteRED, GetGrowthOverview, GetPageExperience]}
   recovery_action: absorb
   dart_const: queryWindowInvalid
   go_const: ErrQueryWindowInvalid
@@ -67,7 +67,7 @@ errors:
   reason: logstore_unavailable
   http_status: 503
   emitted_by:
-  - {surface: http, operations: [ReportEventBatch, GetEventSummary, GetEventDrilldown, GetRtcMediaQoeSummary]}
+  - {surface: http, operations: [ReportEventBatch, GetEventSummary, GetEventDrilldown, GetRtcMediaQoeSummary, ListL1L4MetricSnapshots, GetServiceRouteRED, GetGrowthOverview, GetPageExperience, GetProductTriageSummary]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: logstoreUnavailable
@@ -75,6 +75,19 @@ errors:
   user_message:
     zh: 日志服务暂时不可用
     en: Telemetry storage is temporarily unavailable.
+- code: OPS.SYSTEM.event_projection_unavailable
+  kind: SYSTEM
+  reason: event_projection_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ListProductWorkflows, ListProductAudits, ListProductApprovals, GetProductProjectionSummary, GetProductTriageSummary]}
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: eventProjectionUnavailable
+  go_const: ErrEventProjectionUnavailable
+  user_message:
+    zh: 产品事件运营投影暂时不可用
+    en: The product event operations projection is temporarily unavailable.
 - code: OPS.SYSTEM.runtime_logstore_unavailable
   kind: SYSTEM
   reason: runtime_logstore_unavailable

@@ -1,2 +1,7 @@
-backend: elasticsearch
+backend: elasticsearch+mongodb
 role: projection
+collections:
+  circle_search_item_view_checkpoints:
+    entity: CircleSearchItemView
+    role: projection
+    description: Circle typed outbox 的 durable consumer checkpoint；失败不推进，重放只覆盖同一稳定 document identity。

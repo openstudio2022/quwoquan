@@ -70,7 +70,9 @@ class _SettingsAccountSecurityPageState
               }
               return _buildCredentials(
                 isDark,
-                snapshot.data!.items.where((item) => item.isActive).toList(),
+                snapshot.data!.credentials
+                    .where((item) => item.isActive)
+                    .toList(),
               );
             },
           ),
@@ -102,7 +104,9 @@ class _SettingsAccountSecurityPageState
                     for (var index = 0; index < items.length; index++) ...[
                       SettingsInsetNavigationRow(
                         isDark: isDark,
-                        label: _credentialLabel(items[index].credentialType),
+                        label: _credentialLabel(
+                          items[index].credentialType.wireName,
+                        ),
                         trailingText:
                             items[index].displayLabel ??
                             SettingsText.settingsCredentialBound,
@@ -284,7 +288,9 @@ class _SettingsAccountSecurityPageState
       await ref
           .read(appCredentialBindingCommandWriterProvider)
           .unbindCredential(
-            UnbindCredentialCommand(credentialType: credential.credentialType),
+            UnbindCredentialCommand(
+              credentialType: credential.credentialType.wireName,
+            ),
           );
       if (!mounted) return;
       setState(_reload);

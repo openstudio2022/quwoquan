@@ -374,11 +374,11 @@ def build_entity_object_transaction_package(
                 if str(issue).strip()
             ]
             if (
-                rights_audit_status is RightsAuditStatus.UNVERIFIED
+                rights_audit_status is not RightsAuditStatus.VERIFIED
                 and not rights_audit_issues
             ):
                 raise ObjectTransactionError(
-                    f"asset {asset_id} 未核实权利状态缺审计问题"
+                    f"asset {asset_id} 非 verified 权利状态缺审计问题"
                 )
             attribution = f"{str(raw.get('caption') or asset_id)}，" + (
                 f"作者：{author}，许可：{effective_license_name}"

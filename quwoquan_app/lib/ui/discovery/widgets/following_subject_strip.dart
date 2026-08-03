@@ -19,14 +19,13 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-final followingSubjectsProvider = FutureProvider<List<FollowingSubjectResult>>((
-  ref,
-) async {
-  final slice = await ref
-      .watch(followingSubjectQueryProvider)
-      .listFollowingSubjects(ListFollowingSubjectsQuery(limit: 20));
-  return slice.items;
-});
+final followingSubjectsProvider =
+    FutureProvider<List<FollowingSubjectItemView>>((ref) async {
+      final slice = await ref
+          .watch(followingSubjectQueryProvider)
+          .listFollowingSubjects(ListFollowingSubjectsQuery(limit: 20));
+      return slice.items;
+    });
 
 class FollowingSubjectStrip extends ConsumerWidget {
   const FollowingSubjectStrip({
@@ -36,7 +35,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
   });
 
   final bool isDark;
-  final void Function(FollowingSubjectResult item)? onSubjectOpen;
+  final void Function(FollowingSubjectItemView item)? onSubjectOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -117,7 +116,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                         final item = items[index];
                         return FollowingSubjectAvatarTile(
                           key: ValueKey<String>(
-                            'following-subject-${item.subjectType.wireValue}-${item.subjectId}',
+                            'following-subject-${item.subjectType.wireName}-${item.subjectId}',
                           ),
                           item: item,
                           isDark: isDark,
@@ -141,7 +140,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
   void _openSubject(
     BuildContext context,
     WidgetRef ref,
-    FollowingSubjectResult item,
+    FollowingSubjectItemView item,
   ) {
     if (onSubjectOpen != null) {
       onSubjectOpen!(item);
@@ -180,7 +179,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                 ? 'open_subject_with_unread'
                 : 'open_subject',
             pageName: 'HomePage',
-            targetType: item.subjectType.wireValue,
+            targetType: item.subjectType.wireName,
             targetKey: item.subjectId,
           ),
     );
@@ -209,7 +208,7 @@ class FollowingSubjectAvatarTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final FollowingSubjectResult item;
+  final FollowingSubjectItemView item;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -232,7 +231,7 @@ class FollowingSubjectAvatarTile extends StatelessWidget {
                   bottom: -AppSpacing.two,
                   child: _FollowingSubjectTypeBadge(
                     key: ValueKey<String>(
-                      'following-subject-type-${item.subjectType.wireValue}-${item.subjectId}',
+                      'following-subject-type-${item.subjectType.wireName}-${item.subjectId}',
                     ),
                     type: item.subjectType,
                     isDark: isDark,
@@ -352,12 +351,14 @@ class FollowingSubjectUnreadDot extends StatelessWidget {
 class _FollowingSubjectAvatar extends StatelessWidget {
   const _FollowingSubjectAvatar({required this.item, required this.isDark});
 
-  final FollowingSubjectResult item;
+  final FollowingSubjectItemView item;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final url = item.avatarUrl.isNotEmpty ? item.avatarUrl : item.coverUrl;
+    final avatarUrl = item.avatarUrl?.trim() ?? '';
+    final coverUrl = item.coverUrl?.trim() ?? '';
+    final url = avatarUrl.isNotEmpty ? avatarUrl : coverUrl;
     final radius = item.subjectType == FollowSubjectKind.persona
         ? AppSpacing.radiusTwentyEight
         : AppSpacing.radiusTen;

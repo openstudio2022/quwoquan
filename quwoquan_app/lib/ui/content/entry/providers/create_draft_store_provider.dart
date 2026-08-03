@@ -64,6 +64,8 @@ String _draftFingerprints(List<CreateDraft> drafts) {
           draft.state.imagePaths.join('|'),
           draft.state.videoPath,
           draft.state.videoThumbnail,
+          draft.publicationContinuation?.operationId ?? '',
+          draft.publicationContinuation?.sourceEntityRef ?? '',
           draft.state.isOneTapMovie,
           draft.state.oneTapMoviePath,
           draft.state.oneTapMovieEffectId,

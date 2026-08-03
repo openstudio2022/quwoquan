@@ -37,8 +37,11 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
 
         registry = governance.load_registry()
         self.assertEqual(registry["schema"], "derived-external-capabilities")
-        self.assertEqual(len(registry["capabilities"]), 14)
-        self.assertGreaterEqual(len(registry["adapters"]), 14)
+        self.assertGreater(len(registry["capabilities"]), 0)
+        self.assertGreaterEqual(
+            len(registry["adapters"]),
+            len(registry["capabilities"]),
+        )
 
     def test_capability_identity_and_owner_come_from_object_operations(self) -> None:
         registry = governance.load_registry()
@@ -100,6 +103,11 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
 
     def test_non_prod_bindings_are_enabled_and_prod_forbids_substitutes(self) -> None:
         bindings = governance.load_bindings()
+        registry = governance.load_registry()
+        adapter_status = {
+            (item["capability_id"], item["adapter_id"]): item["implementation_status"]
+            for item in registry["adapters"]
+        }
         self.assertEqual(
             governance.NONPROD_ENVIRONMENTS,
             ("alpha", "beta", "gamma"),
@@ -118,6 +126,11 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                     self.assertEqual(
                         binding["state"],
                         "enabled",
+                        (environment, service_id, capability_id),
+                    )
+                    self.assertIn(
+                        adapter_status[(capability_id, binding["adapter"])],
+                        governance.READY_IMPLEMENTATION_STATUSES | {"sandbox"},
                         (environment, service_id, capability_id),
                     )
 
@@ -206,7 +219,10 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             if capability["capability_id"] == "runtime.message.transport"
         )
         self.assertEqual(runtime_transport["owner"], "chat.chat.conversation")
-        self.assertEqual(len(runtime_transport["binding_roots"]), 13)
+        self.assertEqual(
+            len(runtime_transport["binding_roots"]),
+            len({root["root_id"] for root in runtime_transport["binding_roots"]}),
+        )
         self.assertEqual(
             {
                 root["descriptor_owner"]
@@ -225,6 +241,7 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                 "rtc-service",
                 "search-service",
                 "tag-service",
+                "travel-service",
                 "user-service",
             },
         )
@@ -309,9 +326,16 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
 
     def test_compiler_and_composition_are_closed(self) -> None:
         compiled, issues = governance.load_and_compile()
+        registry = governance.load_registry()
         self.assertEqual(issues, [])
-        self.assertEqual(compiled["capabilityCount"], 14)
-        self.assertEqual(compiled["adapterCount"], 17)
+        self.assertEqual(compiled["capabilityCount"], len(registry["capabilities"]))
+        self.assertEqual(compiled["adapterCount"], len(registry["adapters"]))
+        self.assertTrue(
+            {
+                "chat.conversation.membership.read",
+                "circle.membership.self.read",
+            }.issubset(compiled["capabilityOwners"])
+        )
         self.assertEqual(
             governance.composition_issues(governance.load_registry(), compiled), []
         )

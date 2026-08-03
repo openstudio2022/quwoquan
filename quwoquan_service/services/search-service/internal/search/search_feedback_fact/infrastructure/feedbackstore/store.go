@@ -29,6 +29,7 @@ type Store struct {
 }
 
 var _ feedbackapplication.Sink = (*Store)(nil)
+var _ feedbackapplication.HeatReader = (*Store)(nil)
 
 func NewStore(db *mongo.Database) *Store {
 	return &Store{
@@ -157,6 +158,118 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 		return fmt.Errorf("ensure search feedback signal delivery indexes: %w", err)
 	}
 	return nil
+}
+
+// DeleteClosedSubjects is SearchFeedbackFact's account-closure port. It owns
+// facts, idempotency receipts, and pending signal deliveries as one privacy
+// boundary; callers never receive collection handles.
+func (s *Store) DeleteClosedSubjects(
+	ctx context.Context,
+	subjects []string,
+	requestIDs []string,
+) (int64, int64, int64, error) {
+	clauses := bson.A{bson.M{"viewerId": bson.M{"$in": subjects}}}
+	if len(requestIDs) > 0 {
+		clauses = append(
+			clauses,
+			bson.M{"searchRequestId": bson.M{"$in": requestIDs}},
+		)
+	}
+	filter := bson.M{"$or": clauses}
+	cursor, err := s.feedback.Find(
+		ctx,
+		filter,
+		options.Find().SetProjection(bson.M{"_id": 1}),
+	)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("scan closed-account search feedback: %w", err)
+	}
+	var rows []struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		_ = cursor.Close(ctx)
+		return 0, 0, 0, fmt.Errorf("decode closed-account search feedback: %w", err)
+	}
+	if err := cursor.Close(ctx); err != nil {
+		return 0, 0, 0, fmt.Errorf("close search feedback cursor: %w", err)
+	}
+	factIDs := make([]bson.ObjectID, 0, len(rows))
+	for _, row := range rows {
+		factIDs = append(factIDs, row.ID)
+	}
+	var deletedDeliveries int64
+	if len(factIDs) > 0 {
+		deliveryResult, deleteErr := s.signalDeliveries.DeleteMany(
+			ctx,
+			bson.M{"feedbackFactId": bson.M{"$in": factIDs}},
+		)
+		if deleteErr != nil {
+			return 0, 0, 0, fmt.Errorf(
+				"delete closed-account search feedback deliveries: %w",
+				deleteErr,
+			)
+		}
+		deletedDeliveries = deliveryResult.DeletedCount
+	}
+	receiptResult, err := s.receipts.DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("delete closed-account search feedback receipts: %w", err)
+	}
+	factResult, err := s.feedback.DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("delete closed-account search feedback: %w", err)
+	}
+	return factResult.DeletedCount, receiptResult.DeletedCount, deletedDeliveries, nil
+}
+
+func (s *Store) ListHeatFeedback(
+	ctx context.Context,
+	since time.Time,
+	limit int64,
+) ([]feedbackapplication.HeatFeedback, error) {
+	if limit <= 0 {
+		return []feedbackapplication.HeatFeedback{}, nil
+	}
+	cursor, err := s.feedback.Find(
+		ctx,
+		bson.M{"createdAt": bson.M{"$gte": since.UTC()}},
+		options.Find().
+			SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+			SetLimit(limit).
+			SetProjection(bson.M{
+				"searchRequestId": 1,
+				"eventType":       1,
+				"objectId":        1,
+				"createdAt":       1,
+			}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list SearchFeedbackFact heat source: %w", err)
+	}
+	defer cursor.Close(ctx)
+	rows := make([]feedbackapplication.HeatFeedback, 0, 256)
+	for cursor.Next(ctx) {
+		var row struct {
+			SearchRequestID string    `bson:"searchRequestId"`
+			EventType       string    `bson:"eventType"`
+			ObjectID        string    `bson:"objectId"`
+			CreatedAt       time.Time `bson:"createdAt"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, fmt.Errorf("decode SearchFeedbackFact heat source: %w", err)
+		}
+		rows = append(rows, feedbackapplication.HeatFeedback{
+			SearchRequestID: row.SearchRequestID,
+			EventType:       row.EventType,
+			ObjectID:        row.ObjectID,
+			CreatedAt:       row.CreatedAt,
+		})
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("scan SearchFeedbackFact heat source: %w", err)
+	}
+	return rows, nil
 }
 
 func dropIndexIfExists(

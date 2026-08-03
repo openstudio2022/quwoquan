@@ -11,7 +11,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
+	filemessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_file/infrastructure/messaging"
 )
 
 func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
@@ -163,11 +163,11 @@ func TestCircleFileRealMongoTransactionReplayReaderBOLAAndStream(t *testing.T) {
 		t.Fatalf("CircleFile stream drain count=%d err=%v", count, err)
 	}
 	const consumerGroup = "circle-file-api-test"
-	if err := redisRouter.Scene("general").XGroupCreateMkStream(context.Background(), messaging.CircleFileStream, consumerGroup, "0"); err != nil {
+	if err := redisRouter.Scene("general").XGroupCreateMkStream(context.Background(), filemessaging.CircleFileStream, consumerGroup, "0"); err != nil {
 		t.Fatal(err)
 	}
 	messages, err := redisRouter.Scene("general").XReadGroup(
-		context.Background(), consumerGroup, "reader", map[string]string{messaging.CircleFileStream: ">"}, 10, 0,
+		context.Background(), consumerGroup, "reader", map[string]string{filemessaging.CircleFileStream: ">"}, 10, 0,
 	)
 	if err != nil || len(messages) != 4 || messages[0].Values["aggregateType"] != "CircleFile" {
 		t.Fatalf("CircleFile stream envelope drift: messages=%#v err=%v", messages, err)

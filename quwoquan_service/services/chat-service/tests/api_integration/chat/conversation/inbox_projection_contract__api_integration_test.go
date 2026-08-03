@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/operation"
+	inboxapp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/application"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
 )
@@ -15,13 +16,12 @@ import (
 func newInboxProjectionEnv(t *testing.T) (
 	*application.InboxService,
 	*application.MessageService,
-	*application.InboxProjector,
+	*inboxapp.Projector,
 ) {
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	chatStorage := chatStoragePorts(chatStore)
-	checkpoints := persistence.NewMongoProjectionCheckpointStore(mongoDB)
-	inboxSvc := application.NewInboxService(chatStorage)
+	inboxSvc := newTestInboxService()
 	msgSvc := application.NewMessageService(
 		chatStorage,
 		noopConversationCache{},
@@ -29,8 +29,7 @@ func newInboxProjectionEnv(t *testing.T) (
 		application.AllowRelationshipGateForTest(),
 		testMediaAssetDeliveryReader{},
 	)
-	projector := application.NewInboxProjector(chatStore, checkpoints, chatStore, chatStore)
-	return inboxSvc, msgSvc, projector
+	return inboxSvc, msgSvc, testInboxViewProjector
 }
 
 type noopConversationCache struct{}
@@ -39,7 +38,7 @@ func (noopConversationCache) InvalidateConversation(context.Context, string) err
 	return nil
 }
 
-func drainInboxProjector(t *testing.T, projector *application.InboxProjector) {
+func drainInboxProjector(t *testing.T, projector *inboxapp.Projector) {
 	t.Helper()
 	for range 10 {
 		count, err := projector.Drain(context.Background(), 100)
@@ -161,6 +160,7 @@ func TestInbox_MarkAsReadCommandResetsUnreadAndAdvancesWatermark(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("MarkAsRead: %v", err)
 	}
+	drainInboxProjector(t, projector)
 
 	unread, readSeq, found := inboxUnread(t, inboxSvc, readerId, convId)
 	if !found {
@@ -212,6 +212,7 @@ func TestInbox_MarkAsReadStaleWatermarkIsNoop(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("MarkAsRead stale: %v", err)
 	}
+	drainInboxProjector(t, projector)
 
 	_, readSeq, _ := inboxUnread(t, inboxSvc, readerId, convId)
 	if readSeq != 2 {

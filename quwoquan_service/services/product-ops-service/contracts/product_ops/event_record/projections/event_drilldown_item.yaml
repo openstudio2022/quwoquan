@@ -1,7 +1,7 @@
 read_model: EventDrilldownItem
 description: 单条脱敏 EventRecord 原始明细。可选 QoE 字段仅在 eventType=rtc_media_qoe
   时出现；result 是 RTC 终态，不使用页面 terminalState 代替。
-storage_backend: aliyun_sls
+storage_backend: elasticsearch
 projection_mode: authoritative_query
 source_entities:
 - EventRecord

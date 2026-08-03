@@ -5,7 +5,6 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -33,7 +32,7 @@ enum _CirclePostManagementAction { pin, feature, remove }
 
 /// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格。
 ///
-/// 主数据为 [CircleHubFeedPostEntry]：内容事实读取 [PostBaseDto]，展示字段读取
+/// 主数据为 [CircleHubFeedPostEntry]：内容事实读取 [ContentPostViewData]，展示字段读取
 /// metadata 生成的 typed presentation，互动结果写回页面模型快照。
 class SectionCreations extends ConsumerStatefulWidget {
   const SectionCreations({

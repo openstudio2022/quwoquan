@@ -1,0 +1,27 @@
+kind: aggregate_root
+description: 由同一 Trip Timeline/Map 冻结生成的隐私裁剪分享快照；不复制成员、联系方式、实时位置或 Connector 数据。
+identity:
+  fields: [_id]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- {name: trip_plan, kind: reference, cardinality: 'N:1', consistency: strong, access: named_reader, on_delete: retain, reference_fields: [tripId], target_object: travel.TripPlan}
+- {name: source_revision, kind: reference, cardinality: 'N:1', consistency: strong, access: named_reader, on_delete: retain, reference_fields: [sourceRevisionId], target_object: travel.TripPlanRevision}
+- {name: created_by_persona, kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: tombstone, reference_fields: [createdByPersonaId], target_object: user.Persona}
+local_identity_reasons:
+  itemId: TripPlanRevision 内 owned item 的范围筛选键，不是独立 aggregate identity
+  momentIds: TripMoment 集合筛选键，只能在已授权 Trip 与 Revision 范围内解释
+capabilities: [commandable, queryable, idempotent_commands]
+business_rules:
+- 快照只从同一 sourceRevisionId/sourceDigest 的 Timeline 与 Map 生成，创建后不可修改
+- public 快照必须移除成员、联系方式、住宿地点与标题、非公开 Moment、实时位置和 Connector 数据
+- full/day/item/route/moment_collection 范围由服务端裁剪，客户端不能上传快照正文
+- 创建命令、幂等回执与 TripShareSnapshotCreated outbox 必须原子提交
+lifecycle:
+  state_field: status
+  states: [active]
+  optimistic_concurrency: version
+  idempotency: command_receipt

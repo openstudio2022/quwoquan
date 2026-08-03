@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -18,7 +17,7 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
     final projection = await editSnapshotQuery.getProfileEditSnapshot(
       GetProfileEditSnapshotQuery(),
     );
-    return ProfileEditSnapshotData.fromProjection(projection);
+    return ProfileEditSnapshotData.fromWire(projection);
   }
 
   @override
@@ -26,11 +25,11 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
     final projection = await publicProfileQuery.getProfileQrCard(
       GetProfileQrCardQuery(),
     );
-    return ProfileQrCardData.fromProjection(projection);
+    return ProfileQrCardData.fromWire(projection);
   }
 
   @override
-  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+  Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) async {
@@ -39,17 +38,11 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
       throw ArgumentError.value(token, 'token', 'qr token required');
     }
     final normalizedHandle = handle.trim();
-    final projection = await publicProfileQuery.resolveProfileQrToken(
+    return publicProfileQuery.resolveProfileQrToken(
       ResolveProfileQrTokenQuery(
         qr: normalizedToken,
         handle: normalizedHandle.isEmpty ? null : normalizedHandle,
       ),
-    );
-    return ProfileQrResolveWireDto(
-      personaId: projection.personaId,
-      userHandle: projection.userHandle,
-      publicProfileUrl: projection.publicProfileUrl,
-      scanStatus: projection.scanStatus,
     );
   }
 }

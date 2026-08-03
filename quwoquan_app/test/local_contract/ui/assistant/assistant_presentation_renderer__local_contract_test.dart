@@ -96,7 +96,109 @@ void main() {
     expect(find.text('未知跳转'), findsNothing);
     expect(actions, hasLength(1));
   });
+
+  testWidgets('route_map 仅渲染 canonical 地点引用、路线和随拍标记', (tester) async {
+    final document = _travelDocument(
+      nodes: <AssistantPresentationNodeWire>[
+        AssistantPresentationNodeWire(
+          nodeId: 'root',
+          kind: AssistantPresentationNodeKind.routeMap,
+          title: '第二天路线',
+          data: _routeMapData(),
+          accessibility: const AssistantPresentationAccessibilityWire(
+            semanticLabel: '第二天旅行路线图',
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(_host(document));
+    await tester.pump();
+
+    expect(find.text('第二天路线'), findsOneWidget);
+    expect(find.text('灵隐寺'), findsOneWidget);
+    expect(find.text('西湖'), findsOneWidget);
+    expect(find.text('1'), findsNWidgets(2));
+    expect(find.bySemanticsLabel('第二天旅行路线图'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('route_map 拒绝任意 URL 或 Provider 参数并确定性降级', (tester) async {
+    final unsafeData = _routeMapData()..['providerUrl'] = 'https://maps.test';
+    final document = _travelDocument(
+      nodes: <AssistantPresentationNodeWire>[
+        AssistantPresentationNodeWire(
+          nodeId: 'root',
+          kind: AssistantPresentationNodeKind.routeMap,
+          title: '不安全路线',
+          data: unsafeData,
+        ),
+      ],
+    );
+    final reasons = <String>[];
+    await tester.pumpWidget(
+      _host(document, onFallback: (reason, _) => reasons.add(reason)),
+    );
+    await tester.pump();
+
+    expect(find.text('## 完整旅行答案\n请按原始行程出发。'), findsOneWidget);
+    expect(find.text('不安全路线'), findsNothing);
+    expect(reasons, <String>['invalid_route_map']);
+  });
 }
+
+Map<String, dynamic> _routeMapData() => <String, dynamic>{
+  'tripId': 'trip_hangzhou',
+  'revisionId': 'revision_2',
+  'sourceDigest':
+      'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+  'stops': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'placeRef': <String, dynamic>{
+        'objectTypeRef': 'entity.Place',
+        'objectId': 'lingyin_temple',
+      },
+      'dayIndex': 2,
+      'order': 0,
+      'itemId': 'item_lingyin',
+      'title': '灵隐寺',
+    },
+    <String, dynamic>{
+      'placeRef': <String, dynamic>{
+        'objectTypeRef': 'entity.Place',
+        'objectId': 'west_lake',
+      },
+      'dayIndex': 2,
+      'order': 1,
+      'itemId': 'item_west_lake',
+      'title': '西湖',
+    },
+  ],
+  'segments': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'fromPlaceRef': <String, dynamic>{
+        'objectTypeRef': 'entity.Place',
+        'objectId': 'lingyin_temple',
+      },
+      'toPlaceRef': <String, dynamic>{
+        'objectTypeRef': 'entity.Place',
+        'objectId': 'west_lake',
+      },
+      'modeToken': 'transit',
+      'order': 0,
+    },
+  ],
+  'markers': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'momentId': 'moment_lingyin',
+      'placeRef': <String, dynamic>{
+        'objectTypeRef': 'entity.Place',
+        'objectId': 'lingyin_temple',
+      },
+      'dayIndex': 2,
+      'itemId': 'item_lingyin',
+    },
+  ],
+};
 
 Widget _host(
   AssistantPresentationDocumentWire document, {

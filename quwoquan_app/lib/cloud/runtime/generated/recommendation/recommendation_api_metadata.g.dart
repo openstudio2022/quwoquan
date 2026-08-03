@@ -16,6 +16,11 @@ class RecommendationApiMetadata {
     'BatchScoreRecommendationCandidates': '/internal/recommendation/model-releases:batch-score',
     'CreateRankedRecommendationWindow': '/internal/recommendation/ranked-pages',
     'GetRankedRecommendationPage': '/internal/recommendation/ranked-pages/{windowId}',
+    'GetRecommendationAuthorImpact': '/internal/recommendation/authors/{authorId}/impact',
+    'GetRecommendationIntersectionSupply': '/internal/recommendation/intersection-supply/{supplyKey}',
+    'ListRecommendationAuthorImpactEvidence': '/internal/recommendation/authors/{authorId}/impact/{impactId}/evidence',
+    'ListRecommendationObjectIntersections': '/internal/recommendation/subjects/{subjectId}/objects/{objectType}/{objectId}/intersections',
+    'ListRecommendationSubjectIntersections': '/internal/recommendation/subjects/{subjectId}/intersections',
     'ScoreRecommendationCandidates': '/internal/recommendation/model-releases:score',
     'StageRecommendationModelRelease': '/internal/recommendation/model-releases:stage',
   };
@@ -25,6 +30,11 @@ class RecommendationApiMetadata {
     'BatchScoreRecommendationCandidates': 'POST',
     'CreateRankedRecommendationWindow': 'POST',
     'GetRankedRecommendationPage': 'GET',
+    'GetRecommendationAuthorImpact': 'GET',
+    'GetRecommendationIntersectionSupply': 'GET',
+    'ListRecommendationAuthorImpactEvidence': 'GET',
+    'ListRecommendationObjectIntersections': 'GET',
+    'ListRecommendationSubjectIntersections': 'GET',
     'ScoreRecommendationCandidates': 'POST',
     'StageRecommendationModelRelease': 'POST',
   };
@@ -35,6 +45,11 @@ class RecommendationApiMetadata {
     'BatchScoreRecommendationCandidates': 'required',
     'CreateRankedRecommendationWindow': 'required',
     'GetRankedRecommendationPage': 'required',
+    'GetRecommendationAuthorImpact': 'required',
+    'GetRecommendationIntersectionSupply': 'required',
+    'ListRecommendationAuthorImpactEvidence': 'required',
+    'ListRecommendationObjectIntersections': 'required',
+    'ListRecommendationSubjectIntersections': 'required',
     'ScoreRecommendationCandidates': 'required',
     'StageRecommendationModelRelease': 'required',
   };
@@ -51,6 +66,11 @@ class RecommendationApiMetadata {
   static const String batchScoreRecommendationCandidatesOperation = 'BatchScoreRecommendationCandidates';
   static const String createRankedRecommendationWindowOperation = 'CreateRankedRecommendationWindow';
   static const String getRankedRecommendationPageOperation = 'GetRankedRecommendationPage';
+  static const String getRecommendationAuthorImpactOperation = 'GetRecommendationAuthorImpact';
+  static const String getRecommendationIntersectionSupplyOperation = 'GetRecommendationIntersectionSupply';
+  static const String listRecommendationAuthorImpactEvidenceOperation = 'ListRecommendationAuthorImpactEvidence';
+  static const String listRecommendationObjectIntersectionsOperation = 'ListRecommendationObjectIntersections';
+  static const String listRecommendationSubjectIntersectionsOperation = 'ListRecommendationSubjectIntersections';
   static const String scoreRecommendationCandidatesOperation = 'ScoreRecommendationCandidates';
   static const String stageRecommendationModelReleaseOperation = 'StageRecommendationModelRelease';
 
@@ -61,6 +81,39 @@ class RecommendationApiMetadata {
   static String getRankedRecommendationPagePath({required String windowId}) {
     return _fillPath(getRankedRecommendationPagePathTemplate, <String, String>{
       'windowId': windowId,
+    });
+  }
+  static const String getRecommendationAuthorImpactPathTemplate = '/internal/recommendation/authors/{authorId}/impact';
+  static String getRecommendationAuthorImpactPath({required String authorId}) {
+    return _fillPath(getRecommendationAuthorImpactPathTemplate, <String, String>{
+      'authorId': authorId,
+    });
+  }
+  static const String getRecommendationIntersectionSupplyPathTemplate = '/internal/recommendation/intersection-supply/{supplyKey}';
+  static String getRecommendationIntersectionSupplyPath({required String supplyKey}) {
+    return _fillPath(getRecommendationIntersectionSupplyPathTemplate, <String, String>{
+      'supplyKey': supplyKey,
+    });
+  }
+  static const String listRecommendationAuthorImpactEvidencePathTemplate = '/internal/recommendation/authors/{authorId}/impact/{impactId}/evidence';
+  static String listRecommendationAuthorImpactEvidencePath({required String authorId, required String impactId}) {
+    return _fillPath(listRecommendationAuthorImpactEvidencePathTemplate, <String, String>{
+      'authorId': authorId,
+      'impactId': impactId,
+    });
+  }
+  static const String listRecommendationObjectIntersectionsPathTemplate = '/internal/recommendation/subjects/{subjectId}/objects/{objectType}/{objectId}/intersections';
+  static String listRecommendationObjectIntersectionsPath({required String subjectId, required String objectType, required String objectId}) {
+    return _fillPath(listRecommendationObjectIntersectionsPathTemplate, <String, String>{
+      'subjectId': subjectId,
+      'objectType': objectType,
+      'objectId': objectId,
+    });
+  }
+  static const String listRecommendationSubjectIntersectionsPathTemplate = '/internal/recommendation/subjects/{subjectId}/intersections';
+  static String listRecommendationSubjectIntersectionsPath({required String subjectId}) {
+    return _fillPath(listRecommendationSubjectIntersectionsPathTemplate, <String, String>{
+      'subjectId': subjectId,
     });
   }
   static const String scoreRecommendationCandidatesPath = '/internal/recommendation/model-releases:score';

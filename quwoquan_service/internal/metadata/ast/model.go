@@ -71,15 +71,15 @@ type EnvironmentEvidence struct {
 }
 
 type Object struct {
-	ID             string          `json:"id"`
-	Domain         string          `json:"domain"`
-	Name           string          `json:"name"`
-	Kind           ObjectKind      `json:"kind"`
-	KindExplicit   bool            `json:"kindExplicit"`
-	AggregateOwner string          `json:"aggregateOwner,omitempty"`
-	StorageBackend string          `json:"storageBackend,omitempty"`
-	SourcePath     string          `json:"sourcePath"`
-	Members        []Member        `json:"members,omitempty"`
+	ID             string     `json:"id"`
+	Domain         string     `json:"domain"`
+	Name           string     `json:"name"`
+	Kind           ObjectKind `json:"kind"`
+	KindExplicit   bool       `json:"kindExplicit"`
+	AggregateOwner string     `json:"aggregateOwner,omitempty"`
+	StorageBackend string     `json:"storageBackend,omitempty"`
+	SourcePath     string     `json:"sourcePath"`
+	Members        []Member   `json:"members,omitempty"`
 }
 
 type Member struct {
@@ -90,10 +90,10 @@ type Member struct {
 	AggregateOwner string     `json:"aggregateOwner,omitempty"`
 }
 
-// RuntimeEntrypoint models an object-owned invocation seam that is part of a
-// service's request pipeline but is not an HTTP API operation. It keeps
-// middleware/session ownership in ContractGraph without inventing a second
-// transport route or exposing the entrypoint to App/OpenAPI generators.
+// RuntimeEntrypoint models an object-owned typed invocation seam that is not an
+// HTTP API operation.  Middleware, event projectors/subscriptions, atomic
+// internal append ports and external ports all use this one non-HTTP track;
+// none of them is exposed to App/OpenAPI generators.
 type RuntimeEntrypoint struct {
 	ID              string        `json:"id"`
 	LocalID         string        `json:"localId"`
@@ -104,7 +104,13 @@ type RuntimeEntrypoint struct {
 	ApplicationKind OperationKind `json:"applicationKind"`
 	Facet           string        `json:"facet"`
 	FacadeMethod    string        `json:"facadeMethod"`
-	SessionOwner    string        `json:"sessionOwner"`
+	ObjectOwner     string        `json:"objectOwner"`
+	SourceEvents    []string      `json:"sourceEvents,omitempty"`
+	SourceObjects   []string      `json:"sourceObjects,omitempty"`
+	Checkpoint      string        `json:"checkpoint,omitempty"`
+	Rebuild         string        `json:"rebuild,omitempty"`
+	Tombstone       string        `json:"tombstone,omitempty"`
+	Idempotency     string        `json:"idempotency,omitempty"`
 	SourcePath      string        `json:"sourcePath"`
 }
 
@@ -129,6 +135,8 @@ type Operation struct {
 	ActorRequirement       string                   `json:"actorRequirement,omitempty"`
 	RequestEntity          string                   `json:"requestEntity,omitempty"`
 	RequestBodyKind        string                   `json:"requestBodyKind,omitempty"`
+	Transport              string                   `json:"transport"`
+	Streaming              *StreamingPolicy         `json:"streaming,omitempty"`
 	RequestBindings        *RequestBindings         `json:"requestBindings,omitempty"`
 	RequestConstants       *RequestConstants        `json:"requestConstants,omitempty"`
 	LegacyRequestKeys      []string                 `json:"-"`
@@ -153,6 +161,13 @@ type Operation struct {
 	Telemetry              TelemetryPolicy          `json:"telemetry"`
 	SLO                    SLOPolicy                `json:"slo"`
 	ClientContract         *ClientContract          `json:"clientContract,omitempty"`
+}
+
+type StreamingPolicy struct {
+	ResumeRequestField  string   `json:"resumeRequestField"`
+	ResumeResponseField string   `json:"resumeResponseField"`
+	TerminalField       string   `json:"terminalField"`
+	TerminalValues      []string `json:"terminalValues"`
 }
 
 // RequestBindings records the non-body wire positions of a request. The body

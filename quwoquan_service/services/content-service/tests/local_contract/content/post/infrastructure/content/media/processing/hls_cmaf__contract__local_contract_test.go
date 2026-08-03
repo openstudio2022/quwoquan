@@ -2,7 +2,7 @@
 package processing_test
 
 import (
-	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media/processing"
+	. "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media/processing"
 	"testing"
 )
 

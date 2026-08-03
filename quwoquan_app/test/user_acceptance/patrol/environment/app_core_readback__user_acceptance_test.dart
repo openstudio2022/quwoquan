@@ -20,6 +20,10 @@ import '../../../support/patrol/patrol_environment_harness.dart';
 
 const _videoWorkId = String.fromEnvironment('VIDEO_PLAYBACK_CANARY_WORK_ID');
 const _releaseId = String.fromEnvironment('DATA_RELEASE_ID');
+const _releaseClass = String.fromEnvironment('DATA_RELEASE_CLASS');
+const _productLifecycleState = String.fromEnvironment(
+  'PRODUCT_LIFECYCLE_STATE',
+);
 const _homepageId = String.fromEnvironment('DATA_RELEASE_HOMEPAGE_ID');
 const _homepageTitle = String.fromEnvironment('DATA_RELEASE_HOMEPAGE_TITLE');
 const _articleWorkId = String.fromEnvironment('DATA_RELEASE_ARTICLE_WORK_ID');
@@ -126,6 +130,8 @@ void main() {
 void _expectReleaseInputs() {
   final required = <String, String>{
     'DATA_RELEASE_ID': _releaseId,
+    'DATA_RELEASE_CLASS': _releaseClass,
+    'PRODUCT_LIFECYCLE_STATE': _productLifecycleState,
     'DATA_RELEASE_HOMEPAGE_ID': _homepageId,
     'DATA_RELEASE_HOMEPAGE_TITLE': _homepageTitle,
     'DATA_RELEASE_ARTICLE_WORK_ID': _articleWorkId,
@@ -143,6 +149,17 @@ void _expectReleaseInputs() {
       reason: '${entry.key} must bind this UAT to one immutable release',
     );
   }
+  expect(
+    _releaseClass,
+    anyOf('research', 'commercial'),
+    reason: 'release class must be explicit and governed',
+  );
+  expect(
+    _productLifecycleState,
+    _releaseClass,
+    reason:
+        'App readback must preserve the release lifecycle without inference',
+  );
 }
 
 Future<void> _expectReleaseSurface(

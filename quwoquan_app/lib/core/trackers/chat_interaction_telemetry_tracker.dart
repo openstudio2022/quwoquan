@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/trackers/runtime_failure_telemetry_dimensions.
 /// 群聊商业漏斗的唯一端侧写入器。
 ///
 /// 只暴露 metadata 枚举的动作、结果和分桶；会话、消息、成员等业务标识不得进入
-/// telemetry payload，避免严格 `/ops/events` 协议与 SLS 分析维度漂移。
+/// telemetry payload，避免严格 `/ops/events` 协议与服务端分析维度漂移。
 enum ChatInteractionAction {
   candidateSourceOpen,
   candidateSourceSelect,

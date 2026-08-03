@@ -386,10 +386,9 @@ api_routes:
       - imageContentProfile
       - imageDerivativePolicyVersion
       - cdnUrl
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaAssetSlice
-      response_decoder: decodeContentMediaAssetSlice
+    response_entity: MediaAssetSlice
+    response_body: MediaAssetSlice
+    response_body_kind: object
     security:
       auth_mode: optional
       principal: public
@@ -441,10 +440,9 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaAssetDiscardResult
-      response_decoder: decodeContentMediaAssetDiscardResult
+    response_entity: MediaAssetDiscardResult
+    response_body: MediaAssetDiscardResult
+    response_body_kind: object
     request_bindings:
       path:
         - name: mediaId
@@ -505,10 +503,9 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaCoverSelectionResult
-      response_decoder: decodeContentMediaCoverSelectionResult
+    response_entity: MediaCoverSelectionResult
+    response_body: MediaCoverSelectionResult
+    response_body_kind: object
     request_bindings:
       path:
         - name: mediaId
@@ -572,10 +569,9 @@ api_routes:
     slo:
       latency_p95_ms: 800
       availability_percent: 99.9
-    client_contract:
-      dart_import: ../content/media_contracts.dart
-      response_type: ContentMediaCoverSelectionResult
-      response_decoder: decodeContentMediaCoverSelectionResult
+    response_entity: MediaCoverSelectionResult
+    response_body: MediaCoverSelectionResult
+    response_body_kind: object
     request_entity: SelectManualContentMediaCoverCommand
     request_bindings:
       path:

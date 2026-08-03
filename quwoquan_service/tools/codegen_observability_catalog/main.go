@@ -263,7 +263,7 @@ func validate(value catalog) error {
 			len(item.Producers) == 0 ||
 			len(item.AttributeAllowlist) == 0 ||
 			len(item.CorrelationKeys) == 0 ||
-			item.Backend != "runtime-sls" ||
+			item.Backend != "elasticsearch" ||
 			item.RetentionDays != value.Limits.RawRetentionDays ||
 			item.Sampling == "" ||
 			item.Alert == "" ||

@@ -12,98 +12,98 @@ import (
 )
 
 type Style struct {
-	Tone           generated.AssistantPresentationTone
-	Density        generated.AssistantPresentationDensity
-	Emphasis       string
-	Variant        string
-	Alignment      string
-	SpacingRole    string
-	AspectRatio    float64
-	ResponsiveSpan int
+	Tone           generated.AssistantPresentationTone    `json:"tone"`
+	Density        generated.AssistantPresentationDensity `json:"density"`
+	Emphasis       string                                 `json:"emphasis"`
+	Variant        string                                 `json:"variant"`
+	Alignment      string                                 `json:"alignment"`
+	SpacingRole    string                                 `json:"spacingRole"`
+	AspectRatio    float64                                `json:"aspectRatio"`
+	ResponsiveSpan int                                    `json:"responsiveSpan"`
 }
 
 type MediaRef struct {
-	MediaAssetID  string
-	Alt           string
-	Width         int
-	Height        int
-	ProvenanceRef string
+	MediaAssetID  string `json:"mediaAssetId"`
+	Alt           string `json:"alt"`
+	Width         int    `json:"width"`
+	Height        int    `json:"height"`
+	ProvenanceRef string `json:"provenanceRef"`
 }
 
 type ActionIntent struct {
-	IntentID             string
-	Operation            string
-	ObjectTypeRef        string
-	ObjectID             string
-	Payload              map[string]any
-	RequiresConfirmation bool
+	IntentID             string         `json:"intentId"`
+	Operation            string         `json:"operation"`
+	ObjectTypeRef        string         `json:"objectTypeRef"`
+	ObjectID             string         `json:"objectId"`
+	Payload              map[string]any `json:"payload"`
+	RequiresConfirmation bool           `json:"requiresConfirmation"`
 }
 
 type Accessibility struct {
-	SemanticLabel        string
-	SemanticHint         string
-	ExcludeFromSemantics bool
+	SemanticLabel        string `json:"semanticLabel"`
+	SemanticHint         string `json:"semanticHint"`
+	ExcludeFromSemantics bool   `json:"excludeFromSemantics"`
 }
 
 type Node struct {
-	NodeID        string
-	ParentNodeID  string
-	Order         int
-	Kind          generated.AssistantPresentationNodeKind
-	Title         string
-	Body          string
-	Data          map[string]any
-	Binding       map[string]string
-	Style         Style
-	Media         *MediaRef
-	Action        *ActionIntent
-	Accessibility Accessibility
+	NodeID        string                                  `json:"nodeId"`
+	ParentNodeID  string                                  `json:"parentNodeId"`
+	Order         int                                     `json:"order"`
+	Kind          generated.AssistantPresentationNodeKind `json:"kind"`
+	Title         string                                  `json:"title"`
+	Body          string                                  `json:"body"`
+	Data          map[string]any                          `json:"data"`
+	Binding       map[string]string                       `json:"binding"`
+	Style         Style                                   `json:"style"`
+	Media         *MediaRef                               `json:"media,omitempty"`
+	Action        *ActionIntent                           `json:"action,omitempty"`
+	Accessibility Accessibility                           `json:"accessibility"`
 }
 
 type ResponsiveVariant struct {
-	VariantID         string
-	RequiredNodeKinds []generated.AssistantPresentationNodeKind
-	ViewportClass     string
-	Density           generated.AssistantPresentationDensity
+	VariantID         string                                    `json:"variantId"`
+	RequiredNodeKinds []generated.AssistantPresentationNodeKind `json:"requiredNodeKinds"`
+	ViewportClass     string                                    `json:"viewportClass"`
+	Density           generated.AssistantPresentationDensity    `json:"density"`
 }
 
 type Template struct {
-	TemplateID           string
-	SkillID              string
-	InputSchema          map[string]any
-	RootNodeID           string
-	Nodes                []Node
-	ResponsiveVariants   []ResponsiveVariant
-	AllowedActionIntents []string
-	FallbackMarkdown     string
-	Accessibility        map[string]any
-	AssetDigest          string
+	TemplateID           string              `json:"templateId"`
+	SkillID              string              `json:"skillId"`
+	InputSchema          map[string]any      `json:"inputSchema"`
+	RootNodeID           string              `json:"rootNodeId"`
+	Nodes                []Node              `json:"nodes"`
+	ResponsiveVariants   []ResponsiveVariant `json:"responsiveVariants"`
+	AllowedActionIntents []string            `json:"allowedActionIntents"`
+	FallbackMarkdown     string              `json:"fallbackMarkdown"`
+	Accessibility        map[string]any      `json:"accessibility"`
+	AssetDigest          string              `json:"assetDigest"`
 }
 
 type Selection struct {
-	TemplateRef string
-	Data        map[string]any
+	TemplateRef string         `json:"templateRef"`
+	Data        map[string]any `json:"data"`
 }
 
 type SurfaceCapabilities struct {
-	SupportedNodeKinds map[generated.AssistantPresentationNodeKind]bool
-	ViewportClass      string
-	Density            generated.AssistantPresentationDensity
+	SupportedNodeKinds map[generated.AssistantPresentationNodeKind]bool `json:"supportedNodeKinds"`
+	ViewportClass      string                                           `json:"viewportClass"`
+	Density            generated.AssistantPresentationDensity           `json:"density"`
 }
 
 type Document struct {
-	TemplateRef       string
-	TemplateDigest    string
-	Revision          int64
-	RootNodeID        string
-	Nodes             []Node
-	DataDigest        string
-	SelectedVariant   string
-	FallbackMarkdown  string
-	FallbackPlainText string
-	CommittedAt       time.Time
-	UseFallback       bool
-	FallbackReason    string
+	TemplateRef       string    `json:"templateRef"`
+	TemplateDigest    string    `json:"templateDigest"`
+	Revision          int64     `json:"revision"`
+	RootNodeID        string    `json:"rootNodeId"`
+	Nodes             []Node    `json:"nodes"`
+	DataDigest        string    `json:"dataDigest"`
+	SelectedVariant   string    `json:"selectedVariant"`
+	FallbackMarkdown  string    `json:"fallbackMarkdown"`
+	FallbackPlainText string    `json:"fallbackPlainText"`
+	CommittedAt       time.Time `json:"committedAt"`
+	UseFallback       bool      `json:"-"`
+	FallbackReason    string    `json:"-"`
 }
 
 type ActionPolicy interface {

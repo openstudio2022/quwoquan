@@ -115,12 +115,12 @@ func userAccountClosedDLQFields(
 	errorDigest string,
 	attempts int64,
 ) []runtimemessaging.DurableField {
-	values := durableFieldValues(message.Fields)
+	values := runtimemessaging.DurableFieldMap(message.Fields)
 	eventName := strings.TrimSpace(values["eventName"])
 	if eventName == "" {
 		eventName = "unknown"
 	}
-	return durableFieldsFromValues(map[string]string{
+	return runtimemessaging.DurableFieldsFromMap(map[string]string{
 		"deadLetterId":    irreversiblyIdentifyUserAccountMessage(message.ID),
 		"sourceStream":    UserAccountEventStream,
 		"sourceStreamId":  message.ID,

@@ -10,12 +10,14 @@ import (
 	conversationevent "quwoquan_service/services/chat-service/generated/chat/conversation/contract/event"
 	membershipevent "quwoquan_service/services/chat-service/generated/chat/conversation_membership/contract/event"
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
+	membershipapp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/application"
 )
 
 type MemberService struct {
 	transactions                      TransactionRunner
 	conversations                     ConversationStore
 	members                           MemberStore
+	roster                            ConversationRosterProjector
 	userStates                        UserStateStore
 	circleGroupMembershipProjections  CircleGroupMembershipProjectionStore
 	circleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
@@ -87,6 +89,7 @@ func NewMemberService(
 		transactions:                      storage.Transactions,
 		conversations:                     storage.Conversations,
 		members:                           storage.Members,
+		roster:                            storage.RosterProjection,
 		userStates:                        storage.UserStates,
 		circleGroupMembershipProjections:  storage.CircleGroupMembershipProjections,
 		circleGroupChatBindingProjections: storage.CircleGroupChatBindingProjections,
@@ -123,15 +126,7 @@ func (s *MemberService) ListContactIntersectionSummaries(
 	)
 }
 
-type ListMembersRequest struct {
-	ConversationId string
-	ViewerId       string
-	Cursor         string
-	Limit          int
-	Role           string
-	Query          string
-	Sort           string
-}
+type ListMembersRequest = membershipapp.ListMembersRequest
 
 func (s *MemberService) ListMembers(ctx context.Context, req ListMembersRequest) ([]model.ConversationMember, error) {
 	if viewerID := strings.TrimSpace(req.ViewerId); viewerID != "" {
@@ -156,17 +151,13 @@ func (s *MemberService) GetMember(ctx context.Context, conversationId, userId st
 	return s.members.FindMember(ctx, conversationId, userId)
 }
 
-type AssistantDeliveryMembershipView struct {
-	CreatorMember        bool `json:"creatorMember"`
-	AssistantSkillMember bool `json:"assistantSkillMember"`
-}
+type AssistantDeliveryMembershipView = membershipapp.AssistantDeliveryMembershipView
 
 func (s *MemberService) ResolveAssistantDeliveryMembership(
 	ctx context.Context,
 	conversationID string,
 	creatorPersonaID string,
 	assistantMemberID string,
-	assistantSkillID string,
 ) (AssistantDeliveryMembershipView, error) {
 	return resolveAssistantDeliveryMembership(
 		ctx,
@@ -174,7 +165,6 @@ func (s *MemberService) ResolveAssistantDeliveryMembership(
 		conversationID,
 		creatorPersonaID,
 		assistantMemberID,
-		assistantSkillID,
 	)
 }
 
@@ -184,19 +174,15 @@ func resolveAssistantDeliveryMembership(
 	conversationID string,
 	creatorPersonaID string,
 	assistantMemberID string,
-	assistantSkillID string,
 ) (AssistantDeliveryMembershipView, error) {
 	conversationID = strings.TrimSpace(conversationID)
 	creatorPersonaID = strings.TrimSpace(creatorPersonaID)
 	assistantMemberID = strings.TrimSpace(assistantMemberID)
-	assistantSkillID = strings.TrimSpace(assistantSkillID)
-	if conversationID == "" ||
-		creatorPersonaID == "" ||
-		assistantSkillID == "" {
+	if conversationID == "" || creatorPersonaID == "" {
 		return AssistantDeliveryMembershipView{}, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
-			"会话、创建者 Persona 与助手 Skill 均不能为空",
-			"conversation, creator persona and assistant skill are required",
+			"会话与创建者 Persona 均不能为空",
+			"conversation and creator persona are required",
 		)
 	}
 
@@ -216,12 +202,8 @@ func resolveAssistantDeliveryMembership(
 		conversationID,
 	)
 	if err == nil {
-		view.AssistantSkillMember =
-			(assistantMemberID == "" ||
-				strings.TrimSpace(assistantMember.UserId) ==
-					assistantMemberID) &&
-				strings.TrimSpace(assistantMember.AssistantSkillId) ==
-					assistantSkillID
+		view.AssistantMember = assistantMemberID == "" ||
+			strings.TrimSpace(assistantMember.UserId) == assistantMemberID
 	} else if !errors.Is(err, model.ErrMemberNotFound) {
 		return AssistantDeliveryMembershipView{}, err
 	}
@@ -280,7 +262,7 @@ func (s *MemberService) validateAddedMembers(
 	operatorID string,
 	memberIDs []string,
 ) error {
-	if IsCircleBoundConversation(conv) {
+	if IsManagedConversation(conv) {
 		return nil
 	}
 	if s.relationships == nil {
@@ -301,18 +283,14 @@ func (s *MemberService) validateAddedMembers(
 	return nil
 }
 
-type AddMembersRequest struct {
-	ConversationId string
-	UserIds        []string
-	InvitedBy      string
-}
+type AddMembersRequest = membershipapp.AddMembersRequest
 
 func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) error {
 	conv, _, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.InvitedBy)
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "AddMembers"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "AddMembers"); err != nil {
 		return err
 	}
 	userIDs := dedupeUserIDs(req.UserIds)
@@ -409,7 +387,7 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 				return err
 			}
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		events := make([]AggregateOutboxEvent, 0, len(membersToCreate)+1)
@@ -461,18 +439,14 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	return nil
 }
 
-type TransferOwnershipRequest struct {
-	ConversationId string
-	OperatorId     string
-	NewOwnerId     string
-}
+type TransferOwnershipRequest = membershipapp.TransferOwnershipRequest
 
 func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwnershipRequest) error {
 	conv, currentOwner, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "TransferOwnership"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "TransferOwnership"); err != nil {
 		return err
 	}
 	if currentOwner.Role != "owner" {
@@ -519,7 +493,7 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 		if err := s.members.UpdateMemberRole(txCtx, req.ConversationId, req.NewOwnerId, "owner"); err != nil {
 			return err
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
 			return err
 		}
 		events := []AggregateOutboxEvent{{
@@ -555,18 +529,14 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 	return nil
 }
 
-type UpdateGroupAdminsRequest struct {
-	ConversationId string
-	OperatorId     string
-	AdminIds       []string
-}
+type UpdateGroupAdminsRequest = membershipapp.UpdateGroupAdminsRequest
 
 func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAdminsRequest) error {
 	conv, operator, err := s.requireActiveConversationMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "UpdateGroupAdmins"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "UpdateGroupAdmins"); err != nil {
 		return err
 	}
 	if operator.Role != "owner" {
@@ -650,7 +620,7 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 				},
 			})
 		}
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, nil); err != nil {
 			return err
 		}
 		rosterEvent, rosterErr := s.rosterUpdatedEvent(
@@ -670,11 +640,7 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 	return nil
 }
 
-type RemoveMemberRequest struct {
-	ConversationId string
-	UserId         string
-	OperatorId     string
-}
+type RemoveMemberRequest = membershipapp.RemoveMemberRequest
 
 func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberRequest) error {
 	operatorID := strings.TrimSpace(req.OperatorId)
@@ -682,7 +648,7 @@ func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberReques
 	if err != nil {
 		return err
 	}
-	if err := rejectCircleGroupManaged(conv, "RemoveMember"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "RemoveMember"); err != nil {
 		return err
 	}
 	targetID := strings.TrimSpace(req.UserId)
@@ -741,7 +707,7 @@ func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberReques
 			return err
 		}
 		newCount = count
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		events := []AggregateOutboxEvent{{
@@ -784,10 +750,7 @@ func (s *MemberService) RemoveMember(ctx context.Context, req RemoveMemberReques
 	return nil
 }
 
-type LeaveConversationRequest struct {
-	ConversationId string
-	UserId         string
-}
+type LeaveConversationRequest = membershipapp.LeaveConversationRequest
 
 // LeaveConversation 是成员自愿退出群聊（left 语义，区别于被移出 removed）。
 // 群主必须先 TransferOwnership；已不在群为 no-op 并重放原回执。
@@ -814,7 +777,7 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
 		return chatConversationDissolved("conversation is not active")
 	}
-	if err := rejectCircleGroupManaged(conv, "LeaveConversation"); err != nil {
+	if err := rejectSourceManagedConversation(conv, "LeaveConversation"); err != nil {
 		return err
 	}
 	scopedKey, err := scopedChatIdempotencyKey(ctx, userID)
@@ -858,7 +821,7 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 			return err
 		}
 		newCount = count
-		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.roster.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		events := []AggregateOutboxEvent{{

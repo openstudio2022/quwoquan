@@ -3,7 +3,8 @@
 
 enum ChatErrorCode {
   invalidArgument('CHAT.USER.invalid_argument', '请求参数无效', 400),
-  circleGroupBindingWriteForbidden('CHAT.USER.circle_group_binding_write_forbidden', '圈群绑定只能由系统创建', 400),
+  sourceManagedBindingWriteForbidden('CHAT.USER.source_managed_binding_write_forbidden', '来源对象绑定只能由所属领域创建', 400),
+  gatheringBindingConflict('CHAT.USER.gathering_binding_conflict', '相聚会话绑定冲突', 409),
   conversationNotFound('CHAT.USER.conversation_not_found', '会话不存在', 404),
   unauthorized('CHAT.USER.unauthorized', '请先登录', 401),
   messageNotFound('CHAT.USER.message_not_found', '消息不存在', 404),
@@ -21,7 +22,7 @@ enum ChatErrorCode {
   groupMemberNotMutual('CHAT.USER.group_member_not_mutual', '只能邀请互相关注的好友加入群聊', 403),
   groupMemberBlocked('CHAT.USER.group_member_blocked', '存在已屏蔽的成员，无法发起群聊', 403),
   groupGovernanceForbidden('CHAT.USER.group_governance_forbidden', '只有群主或管理员可以执行该操作', 403),
-  circleGroupManagedByCircle('CHAT.USER.circle_group_managed_by_circle', '该群成员与角色由圈群管理，请在群组管理页操作', 409),
+  sourceManagedConversation('CHAT.USER.source_managed_conversation', '该会话由来源对象管理，请从来源对象操作', 409),
   circleGroupBindingConflict('CHAT.SYSTEM.circle_group_binding_conflict', '圈群会话绑定状态异常，请稍后重试', 0),
   groupFull('CHAT.USER.group_full', '群成员已达上限', 400),
   conversationDissolved('CHAT.USER.conversation_dissolved', '该群聊已解散', 409),
@@ -49,7 +50,8 @@ class ChatErrorMessages {
 
   static const Map<ChatErrorCode, String> zh = <ChatErrorCode, String>{
     ChatErrorCode.invalidArgument: '请求参数无效',
-    ChatErrorCode.circleGroupBindingWriteForbidden: '圈群绑定只能由系统创建',
+    ChatErrorCode.sourceManagedBindingWriteForbidden: '来源对象绑定只能由所属领域创建',
+    ChatErrorCode.gatheringBindingConflict: '相聚会话绑定冲突',
     ChatErrorCode.conversationNotFound: '会话不存在',
     ChatErrorCode.unauthorized: '请先登录',
     ChatErrorCode.messageNotFound: '消息不存在',
@@ -67,7 +69,7 @@ class ChatErrorMessages {
     ChatErrorCode.groupMemberNotMutual: '只能邀请互相关注的好友加入群聊',
     ChatErrorCode.groupMemberBlocked: '存在已屏蔽的成员，无法发起群聊',
     ChatErrorCode.groupGovernanceForbidden: '只有群主或管理员可以执行该操作',
-    ChatErrorCode.circleGroupManagedByCircle: '该群成员与角色由圈群管理，请在群组管理页操作',
+    ChatErrorCode.sourceManagedConversation: '该会话由来源对象管理，请从来源对象操作',
     ChatErrorCode.circleGroupBindingConflict: '圈群会话绑定状态异常，请稍后重试',
     ChatErrorCode.groupFull: '群成员已达上限',
     ChatErrorCode.conversationDissolved: '该群聊已解散',
@@ -77,7 +79,8 @@ class ChatErrorMessages {
 
   static const Map<ChatErrorCode, String> en = <ChatErrorCode, String>{
     ChatErrorCode.invalidArgument: 'Request parameters are invalid',
-    ChatErrorCode.circleGroupBindingWriteForbidden: 'Circle group bindings can only be created by the system',
+    ChatErrorCode.sourceManagedBindingWriteForbidden: 'Source-managed bindings can only be created by their owning domain',
+    ChatErrorCode.gatheringBindingConflict: 'Gathering conversation binding conflicts with the source fact',
     ChatErrorCode.conversationNotFound: 'Conversation not found',
     ChatErrorCode.unauthorized: 'Please sign in',
     ChatErrorCode.messageNotFound: 'Message not found',
@@ -95,7 +98,7 @@ class ChatErrorMessages {
     ChatErrorCode.groupMemberNotMutual: 'Only mutually-followed friends can be invited to a group',
     ChatErrorCode.groupMemberBlocked: 'Cannot start a group while some members are blocked',
     ChatErrorCode.groupGovernanceForbidden: 'Only the group owner or an admin can perform this action',
-    ChatErrorCode.circleGroupManagedByCircle: 'This group is managed by its circle group. Use group management instead.',
+    ChatErrorCode.sourceManagedConversation: 'This conversation is managed by its source object. Use the source object instead.',
     ChatErrorCode.circleGroupBindingConflict: 'The circle group chat binding is inconsistent. Please try again later.',
     ChatErrorCode.groupFull: 'The group has reached its member limit',
     ChatErrorCode.conversationDissolved: 'This group has been dissolved',
