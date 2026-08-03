@@ -17,6 +17,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
     aliases:
     - 横店影视文化旅游区
+    - Hengdian World Studios
     selectionPriority: 1
   - name: 卢宅
     canonicalName: 东阳卢宅

@@ -1135,6 +1135,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
     aliases:
     - 西湖风景名胜区
+    - West Lake Hangzhou
     selectionPriority: 1
   - name: 灵隐寺
     canonicalName: 灵隐寺

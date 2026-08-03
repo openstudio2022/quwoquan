@@ -369,6 +369,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
     aliases:
     - 乌镇古镇
+    - Wuzhen Water Town
     selectionPriority: 1
   - name: 茅盾故居
     canonicalName: 乌镇茅盾故居
