@@ -4,7 +4,7 @@
 
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_preference_snapshot.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_preference/domain/assistant_preference_snapshot.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_run/domain/skill_run.dart';
