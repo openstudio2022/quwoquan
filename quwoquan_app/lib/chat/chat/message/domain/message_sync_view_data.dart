@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 
 /// App-owned message synchronization result.
 ///

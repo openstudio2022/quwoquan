@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';

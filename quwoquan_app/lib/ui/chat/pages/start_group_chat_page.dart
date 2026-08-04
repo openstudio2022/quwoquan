@@ -28,15 +28,15 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
+import 'package:quwoquan_app/chat/chat/conversation_membership/domain/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_member_wizard_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.dart';
-import 'package:quwoquan_app/ui/chat/utils/chat_contact_initials.dart';
-import 'package:quwoquan_app/ui/chat/utils/chat_pinyin_match.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/chat_contact_initials.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/chat_pinyin_match.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:uuid/uuid.dart';
 

@@ -1,6 +1,6 @@
 import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
-import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

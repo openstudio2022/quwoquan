@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable, ProviderOrFamily;

@@ -1,5 +1,5 @@
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
-import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
+import 'package:quwoquan_app/chat/chat/conversation_membership/domain/start_group_pickable_member.dart';
 
 List<StartGroupPickableMember> selectableFromChatMembers(
   List<ConversationMemberListRow> members, {

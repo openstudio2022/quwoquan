@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/voice_message_observability.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
-import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/chat_message_media_view_data.dart';
 
 /// Orchestrates: record result → upload → send voice message.
 enum VoiceSendStatus { idle, uploading, sending, completed, failed }

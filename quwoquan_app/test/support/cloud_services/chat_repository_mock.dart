@@ -1,7 +1,7 @@
 // Test-only ChatRepository double. Production and all App environments use Remote.
-import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';

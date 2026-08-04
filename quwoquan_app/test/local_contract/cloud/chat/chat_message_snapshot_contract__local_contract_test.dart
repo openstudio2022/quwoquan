@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 
 void main() {
   test('ChatMessageViewData 只消费 generated 公开消息投影字段', () {

@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_sync_view_data.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_sync_view_data.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 

@@ -1,7 +1,7 @@
 import "package:quwoquan_app/cloud/services/chat/chat_view_data.dart";
 import 'dart:async';
 
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';

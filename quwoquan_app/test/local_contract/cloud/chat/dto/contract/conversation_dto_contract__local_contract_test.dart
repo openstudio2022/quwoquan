@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
+import 'package:quwoquan_app/chat/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 void main() {

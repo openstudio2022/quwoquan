@@ -6,7 +6,7 @@ import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
-import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
+import 'package:quwoquan_app/chat/chat/message/domain/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';

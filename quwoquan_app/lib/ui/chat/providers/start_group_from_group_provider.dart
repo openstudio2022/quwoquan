@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
+import 'package:quwoquan_app/chat/chat/conversation_membership/domain/start_group_pickable_member.dart';
 
 enum StartGroupSource { group, circle }
 
