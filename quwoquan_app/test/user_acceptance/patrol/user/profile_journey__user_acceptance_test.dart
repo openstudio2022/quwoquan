@@ -22,7 +22,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';

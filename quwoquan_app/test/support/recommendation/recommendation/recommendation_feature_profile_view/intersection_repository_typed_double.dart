@@ -1,12 +1,12 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
-import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_fact_items.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
 
-import '../object_scenario_seed_reader.dart';
+import '../../../cloud_services/object_doubles/object_scenario_seed_reader.dart';
 import '../../../fixtures/intersection_fixtures.dart';
 
 /// local_contract 交集读写替身。

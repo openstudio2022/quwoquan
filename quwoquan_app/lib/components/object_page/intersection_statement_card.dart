@@ -1,12 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 
 // Barrel re-export：消费者继续 import 本文件即可访问单行模型 / 渲染（[IntersectionStatementItem]
 // / [IntersectionStatementRow] / [IntersectionStatementHighlight]）；拆分（R03）对
 // object_page / circle_shell / 时间线等消费者零改动。
-export 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+export 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 
 class IntersectionStatementCard extends StatefulWidget {
   const IntersectionStatementCard({

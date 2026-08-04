@@ -1,4 +1,4 @@
-import '../generated/recommendation/intersection_kind_metadata.g.dart';
+import '../../../../cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 
 /// 交集动作 `actionKey` 端侧闭集常量与路由分类。
 ///

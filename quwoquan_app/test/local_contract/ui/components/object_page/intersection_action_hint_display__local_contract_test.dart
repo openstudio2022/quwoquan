@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
-import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// T2：`isDisplayableIntersectionActionHint` 诚实红线判据契约（§24.10 + M0.7 dispatch）。

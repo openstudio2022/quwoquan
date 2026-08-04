@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_fact_items.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';

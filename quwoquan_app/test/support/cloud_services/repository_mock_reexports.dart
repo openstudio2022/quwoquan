@@ -19,7 +19,7 @@ export '../circle/circle_management/circle_membership/circle_membership_typed_do
 export '../circle/circle_management/circle_post_placement/circle_post_placement_typed_double.dart';
 export 'object_doubles/content/alpha_comment_facets.dart';
 export 'object_doubles/content/alpha_filter_catalog_query.dart';
-export 'object_doubles/content/alpha_intersection_repository.dart';
+export '../recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 export 'object_doubles/content/alpha_media_facets.dart';
 export 'object_doubles/content/alpha_outbound_share_writer.dart';
 export 'object_doubles/content/alpha_post_publication_writer.dart';

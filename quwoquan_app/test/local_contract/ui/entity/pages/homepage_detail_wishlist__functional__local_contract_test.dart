@@ -9,7 +9,7 @@ import 'package:quwoquan_app/application/entity/homepage_view_data.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import '../../../../support/cloud_services/behavior_repository_double.dart';
-import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';

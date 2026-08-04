@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
-import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
-import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_fact_items.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// T2：未知展示值可降级，但未登记 action dispatch 必须 fail-closed。

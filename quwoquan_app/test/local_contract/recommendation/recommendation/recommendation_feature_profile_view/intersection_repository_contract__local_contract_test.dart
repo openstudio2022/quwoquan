@@ -4,8 +4,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 
-import '../../../support/cloud_services/content/alpha_intersection_repository.dart';
-import '../../../support/fixtures/intersection_fixtures.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// 交集统一体验 · Alpha fixture 本地契约。
 ///

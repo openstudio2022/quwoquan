@@ -28,7 +28,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ObjectPageRolloutContext;
 
 import '../../../../support/cloud_services/behavior_repository_double.dart';
-import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 
 Override _homepageFacetOverride(MockHomepageRepository repository) {
   return homepageFacetSetProvider.overrideWithValue(repository);

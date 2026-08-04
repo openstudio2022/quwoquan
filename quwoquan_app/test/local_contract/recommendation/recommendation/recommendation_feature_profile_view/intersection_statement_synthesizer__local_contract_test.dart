@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 
-import '../../../support/fixtures/intersection_fixtures.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// SVO displayBinding 展示合同与 canonical host projection 边界。
 ///

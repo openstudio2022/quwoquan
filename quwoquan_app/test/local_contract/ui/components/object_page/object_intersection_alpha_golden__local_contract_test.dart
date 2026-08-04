@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 
-import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 
 void main() {
   setUpAll(() async {

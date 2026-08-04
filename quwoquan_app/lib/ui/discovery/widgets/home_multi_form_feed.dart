@@ -28,7 +28,7 @@ import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -78,7 +78,7 @@ import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/home_feed_scroll_anchor_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_intersection_spotlight_rail.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/home_intersection_spotlight_rail.dart';
 
 part 'home_multi_form_feed_scroll.dart';
 part 'home_multi_form_feed_channel_config.dart';

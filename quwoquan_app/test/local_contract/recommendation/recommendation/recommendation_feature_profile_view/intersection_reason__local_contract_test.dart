@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/fixtures/intersection_fixtures.dart';
+import '../../../../support/fixtures/intersection_fixtures.dart';
 
 /// Canonical IntersectionReason wire contract.
 ///

@@ -3,7 +3,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 
 /// 对象页统一交集卡（V5 · primaryText 单通道事实列表）。
 ///

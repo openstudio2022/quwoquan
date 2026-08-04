@@ -3,10 +3,10 @@ import '../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
-import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/home_intersection_spotlight_rail.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/home_intersection_spotlight_rail.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 首页交集 spotlight 落地面契约：

@@ -29,8 +29,8 @@ import '../../../../support/harness/profile_shell_scroll_utils.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
-import '../../../../support/cloud_services/object_doubles/content/alpha_intersection_repository.dart';
-import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
+import '../../../../support/user/account/user_account/user_account_profile_typed_double.dart';
 
 /// 互动 Tab：切换后渲染 ProfileInteractionTab，二级子页（赞/评论/分享）可见。
 class _NoNetworkHttpOverrides extends HttpOverrides {}

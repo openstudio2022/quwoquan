@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import '../../../../support/fixtures/intersection_fixtures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart';
 
 void main() {
   test('聚集对象只接受 canonical gathering wire 值', () {

@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
+import '../../../../support/recommendation/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';

@@ -6,7 +6,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
+import 'package:quwoquan_app/recommendation/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
 
 void main() {
   group('IntersectionActionKeys', () {
