@@ -12,8 +12,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_eval_scenario_fixtures.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_session_page.dart';
-import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/personal_assistant_session_page.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/application/personal_assistant_stream_controller.dart';
 
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
   'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',

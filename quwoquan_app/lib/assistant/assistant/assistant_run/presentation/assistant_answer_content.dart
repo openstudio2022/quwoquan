@@ -13,7 +13,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assi
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/presentation/assistant_presentation_renderer.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_presentation_renderer.dart';
 
 part 'assistant_answer_content_segments.dart';
 

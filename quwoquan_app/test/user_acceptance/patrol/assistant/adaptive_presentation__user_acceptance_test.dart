@@ -6,7 +6,7 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/presentation/assistant_presentation_renderer.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_presentation_renderer.dart';
 
 void main() {
   patrolTest(

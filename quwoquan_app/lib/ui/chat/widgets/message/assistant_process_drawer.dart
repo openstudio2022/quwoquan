@@ -1,1 +1,1 @@
-export 'package:quwoquan_app/ui/assistant/widgets/message/assistant_process_drawer.dart';
+export 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_process_drawer.dart';

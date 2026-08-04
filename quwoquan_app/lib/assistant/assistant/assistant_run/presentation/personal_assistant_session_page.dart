@@ -27,11 +27,11 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
-import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/application/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_session/presentation/assistant_session_empty_state.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_session/presentation/assistant_session_inline_error.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_session/presentation/assistant_history_sheet.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
 
 class PersonalAssistantSessionPage extends ConsumerStatefulWidget {

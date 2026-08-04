@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/regenerate_options_popup.dart';
 
 class AssistantAnswerToolbar extends StatelessWidget {
   const AssistantAnswerToolbar({

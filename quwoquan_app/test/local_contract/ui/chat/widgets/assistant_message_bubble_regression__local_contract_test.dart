@@ -11,10 +11,10 @@ import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/pers
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_timeline_turn_codec.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_message_bubble.dart';
 
 Widget _bubbleHarness(
   Map<String, dynamic> message, {

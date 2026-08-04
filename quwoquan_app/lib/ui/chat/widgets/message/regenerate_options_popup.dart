@@ -1,1 +1,1 @@
-export 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
+export 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/regenerate_options_popup.dart';

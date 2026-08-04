@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/application/personal_assistant_stream_controller.dart';
 
 class AssistantSessionInlineError extends StatelessWidget {
   const AssistantSessionInlineError({

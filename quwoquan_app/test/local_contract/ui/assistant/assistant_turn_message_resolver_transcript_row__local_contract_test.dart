@@ -4,7 +4,7 @@ import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/pers
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/assistant/assistant_turn_view/domain/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
+import 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_turn_message_resolver.dart';
 import 'package:test/test.dart';
 
 void main() {

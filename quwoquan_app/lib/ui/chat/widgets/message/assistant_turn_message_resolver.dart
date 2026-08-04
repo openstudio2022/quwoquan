@@ -1,1 +1,1 @@
-export 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
+export 'package:quwoquan_app/assistant/assistant/assistant_run/presentation/assistant_turn_message_resolver.dart';
