@@ -2,8 +2,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_schema.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_sheet.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_user_setting/presentation/assistant_skill_setup_schema.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_user_setting/presentation/assistant_skill_setup_sheet.dart';
 
 void main() {
   testWidgets('renders package schema and saves only validated values', (

@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_setup_schema.dart';
+import 'package:quwoquan_app/assistant/assistant/skill_user_setting/presentation/assistant_skill_setup_schema.dart';
 
 final class AssistantSkillConsentScopePresentation {
   const AssistantSkillConsentScopePresentation({
