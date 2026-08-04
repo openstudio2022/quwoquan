@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/user/phone_number_wire.dart';
+import 'package:quwoquan_app/user/account/credential_binding/domain/phone_number_wire.dart';
 
 void main() {
   group('mainland phone command wire', () {

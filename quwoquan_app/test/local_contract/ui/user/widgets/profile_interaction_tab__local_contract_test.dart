@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart'
     hide InteractionDirection;
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';

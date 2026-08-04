@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/user/services/contact_hash_service.dart';
+import 'package:quwoquan_app/user/relationship/contact_discovery_record/adapters/contact_hash_service.dart';
 
 /// 端云一致哈希契约：与服务端 `phonematch__local_contract_test.go` 共享同一锁定向量，
 /// 任一端规范化/哈希漂移都会在 CI 立刻暴露（手机号原文永不出库、不上行）。

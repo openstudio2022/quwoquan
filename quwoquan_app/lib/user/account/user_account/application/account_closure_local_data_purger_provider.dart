@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger.dart';
+import 'package:quwoquan_app/user/account/user_account/application/account_closure_local_data_purger.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';

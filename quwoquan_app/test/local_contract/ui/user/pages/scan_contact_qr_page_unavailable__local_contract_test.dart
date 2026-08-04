@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/pages/scan_contact_qr_page.dart';
-import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
+import 'package:quwoquan_app/user/account/user_account/adapters/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/object_doubles/user/profile/alpha_user_profile_repository.dart';
 

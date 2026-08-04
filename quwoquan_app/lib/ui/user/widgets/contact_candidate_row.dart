@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/domain/contact_candidate_vm.dart';
 
 /// 添加联系人候选行：头像 + 昵称/副标题 + 能力位驱动的「添加 / 回关 / 已添加」按钮。
 /// 搜索结果页、手机通讯录页共用（单一渲染真相源）。

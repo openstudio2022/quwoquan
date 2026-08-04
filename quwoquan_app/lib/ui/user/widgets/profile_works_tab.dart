@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';

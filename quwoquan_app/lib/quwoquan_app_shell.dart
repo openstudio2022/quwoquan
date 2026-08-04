@@ -22,7 +22,7 @@ import 'package:quwoquan_app/app/startup_init_scheduler.dart';
 import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
 import 'package:quwoquan_app/app/startup/startup_state_machine.dart';
 import 'package:quwoquan_app/app/startup_welcome_appearance.dart';
-import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
+import 'package:quwoquan_app/user/account/user_account/application/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';

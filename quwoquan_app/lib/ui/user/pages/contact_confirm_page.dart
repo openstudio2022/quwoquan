@@ -21,7 +21,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/domain/contact_candidate_vm.dart';
 
 /// 添加联系人确认页：展示目标用户资料与来源，统一以 follow 语义完成「添加」。
 class ContactConfirmPage extends ConsumerStatefulWidget {

@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 

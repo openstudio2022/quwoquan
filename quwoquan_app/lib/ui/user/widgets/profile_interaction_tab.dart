@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';

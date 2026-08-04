@@ -23,8 +23,8 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
-import 'package:quwoquan_app/ui/user/services/contact_hash_service.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/domain/contact_candidate_vm.dart';
+import 'package:quwoquan_app/user/relationship/contact_discovery_record/adapters/contact_hash_service.dart';
 import 'package:quwoquan_app/ui/user/widgets/contact_candidate_row.dart';
 
 enum _PhoneContactsStatus {

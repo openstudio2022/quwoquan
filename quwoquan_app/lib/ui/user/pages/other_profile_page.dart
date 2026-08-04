@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

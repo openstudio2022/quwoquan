@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 
 RelationshipCapabilityViewData _cap(

@@ -18,8 +18,8 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
-import 'package:quwoquan_app/ui/user/services/qr_payload_parser.dart';
+import 'package:quwoquan_app/user/account/user_account/adapters/contact_qr_image_analyzer.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/qr_payload_parser.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ProfileQrResolveWire;
 

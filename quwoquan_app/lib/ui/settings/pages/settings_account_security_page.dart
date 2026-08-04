@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/application/user/account/account_closure_local_data_purger_provider.dart';
+import 'package:quwoquan_app/user/account/user_account/application/account_closure_local_data_purger_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';

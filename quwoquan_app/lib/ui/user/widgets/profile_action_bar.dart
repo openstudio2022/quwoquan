@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
+import 'package:quwoquan_app/rtc/rtc/call_session/application/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 
 /// 用户主页首屏 CTA：mine = 管理分身 / 编辑资料；other = 关注 / 私信。
 ///

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
-import 'package:quwoquan_app/cloud/services/user/phone_number_wire.dart';
+import 'package:quwoquan_app/user/account/credential_binding/domain/phone_number_wire.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_legal_config.dart';

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/domain/contact_candidate_vm.dart';
 
 /// 「添加」按钮态由关系能力位驱动，UI 不自枚举 relationState（与 follow 语义对齐）。
 void main() {

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';

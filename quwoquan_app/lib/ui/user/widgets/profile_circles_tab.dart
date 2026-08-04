@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/circle_compact_card.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

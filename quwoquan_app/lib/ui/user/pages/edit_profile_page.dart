@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
-import 'package:quwoquan_app/cloud/services/user/phone_number_wire.dart';
+import 'package:quwoquan_app/user/account/credential_binding/domain/phone_number_wire.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';

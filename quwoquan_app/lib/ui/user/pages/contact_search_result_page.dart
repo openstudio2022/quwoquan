@@ -20,7 +20,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/user/models/contact_candidate_vm.dart';
+import 'package:quwoquan_app/user/relationship/persona_relationship/domain/contact_candidate_vm.dart';
 import 'package:quwoquan_app/ui/user/widgets/contact_candidate_row.dart';
 
 /// 添加联系人搜索结果页：趣我圈号(精确)/昵称(模糊) 查找 + 能力位驱动添加。

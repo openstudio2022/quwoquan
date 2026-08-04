@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/user/services/qr_payload_parser.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/qr_payload_parser.dart';
 
 /// 名片 payload 解析契约：端侧只提取 handle + qr token，交云侧 ResolveProfileQrToken
 /// 校验落地，禁止自解析直跳他人主页。

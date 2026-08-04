@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/user/account/user_account/domain/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
 class CreationVisibilityPopup extends StatelessWidget {
